@@ -78,7 +78,8 @@ public class TokenExchangeGrantHandler(
     /// <inheritdoc/>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
         TokenRequest request,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+        CancellationToken cancellationToken)
     {
         Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
 
@@ -111,7 +112,7 @@ public class TokenExchangeGrantHandler(
     /// <summary>
     /// RFC 8693 §2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
     /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 §5.2), not a server
-    /// fault — the previous throw-on-access surfaced it as HTTP 500.
+    /// fault - the previous throw-on-access surfaced it as HTTP 500.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateRequiredParameters(ValidationContext ctx)
     {
@@ -334,12 +335,12 @@ public class TokenExchangeGrantHandler(
 
     /// <summary>
     /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 §2.1). The requested audience is
-    /// written into the issued token's <c>aud</c> claim, so it must be constrained — otherwise a
+    /// written into the issued token's <c>aud</c> claim, so it must be constrained - otherwise a
     /// client could mint a token for any target service it names. The allowlist is default-deny: an
     /// <c>audience</c> is accepted only when the client declares a non-empty
     /// <see cref="ClientInfo.TokenExchangeAllowedAudiences"/> that contains every requested value.
     /// RFC 8707 <c>resource</c> values reach the <c>aud</c> claim through the exact same path
-    /// (see <c>AuthorizationContextExtensions.ApplyTo</c>), so a declared allowlist gates them too —
+    /// (see <c>AuthorizationContextExtensions.ApplyTo</c>), so a declared allowlist gates them too -
     /// otherwise renaming <c>audience</c> to <c>resource</c> would bypass the constraint entirely.
     /// A client without a declared allowlist keeps the asymmetric defaults: <c>audience</c> is
     /// default-deny because no other gate exists for logical service names, while <c>resource</c>
@@ -450,7 +451,7 @@ public class TokenExchangeGrantHandler(
         var clientInfo = ctx.ClientInfo;
 
         // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
-        // and delegation alike). Scope handling keeps the exchange least-privilege — the issued token
+        // and delegation alike). Scope handling keeps the exchange least-privilege - the issued token
         // never carries more authority than either the presented subject_token or the client's own
         // registration:
         //
@@ -460,7 +461,7 @@ public class TokenExchangeGrantHandler(
         //   the presented token. A subject token without a scope claim (e.g. an id_token) imposes no
         //   scope upper bound, so the RFC 8693 id_token -> access_token scenario keeps working.
         // - Fallback to the subject_token's scope (2b): the fallback path does not pass through
-        //   ScopeValidator, so it is filtered to the client's AllowedScopes here — otherwise a broker
+        //   ScopeValidator, so it is filtered to the client's AllowedScopes here - otherwise a broker
         //   client would obtain scopes it was never registered for (RFC 6749 §3.3).
         string[] scope;
         if (request.Scope is { Length: > 0 } requestedScope)

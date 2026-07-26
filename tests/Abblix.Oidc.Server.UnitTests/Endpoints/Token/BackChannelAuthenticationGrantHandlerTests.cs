@@ -119,12 +119,12 @@ public class BackChannelAuthenticationGrantHandlerTests
 
     /// <summary>
     /// RFC 6749 §5.2: a token request without the required auth_req_id parameter is the caller's
-    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
     public async Task AuthorizeAsync_MissingAuthenticationRequestId_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId));
+        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -154,7 +154,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = deliveryMode };
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
@@ -202,7 +202,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -228,7 +228,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -261,7 +261,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -297,7 +297,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -332,7 +332,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -368,7 +368,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -398,7 +398,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -420,7 +420,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert: the missing required auth_req_id is rejected by the parameter validator.
         Assert.True(result.TryGetFailure(out _));
@@ -453,7 +453,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
@@ -484,7 +484,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert - TryRemoveAsync should never be called
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
@@ -518,7 +518,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -557,7 +557,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -591,7 +591,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -627,7 +627,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -662,7 +662,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -739,7 +739,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authenticatedRequest);
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -813,7 +813,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             .ReturnsAsync(false);
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -848,7 +848,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -902,7 +902,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -966,7 +966,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             .ReturnsAsync(false);
 
         // Act
-        await handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert - verify the custom timeout was used
         statusNotifier.Verify(
@@ -994,7 +994,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // pinning an ordering that made a refusable request pay for a storage round trip.
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));

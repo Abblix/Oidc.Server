@@ -40,5 +40,21 @@ public interface ITokenContextValidator
     /// A <see cref="OidcError"/> containing error details if the validation fails;
     /// otherwise, returns null indicating that the validation was successful.
     /// </returns>
-    Task<OidcError?> ValidateAsync(TokenValidationContext context);
+    [Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
+              "implementation keeps working, and will be removed in the next major version.")]
+    Task<OidcError?> ValidateAsync(TokenValidationContext context)
+        => ValidateAsync(context, CancellationToken.None);
+
+    /// <inheritdoc cref="ValidateAsync(TokenValidationContext)"/>
+    /// <param name="context">The context containing the token request and related information.</param>
+    /// <param name="cancellationToken">
+    /// Abandons validation when the caller stops waiting. It is a parameter rather than a member of the
+    /// context because the context carries per-call data, and a cancellation token is not data.
+    /// </param>
+    /// <remarks>
+    /// This is the member an implementation provides. The obsolete overload above defaults to forwarding here,
+    /// so a caller still holding the old signature keeps working, while an implementation that provided only
+    /// the old one fails to compile rather than silently never receiving the token.
+    /// </remarks>
+    Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken);
 }

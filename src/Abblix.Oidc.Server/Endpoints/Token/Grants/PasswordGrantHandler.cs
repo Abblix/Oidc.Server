@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -62,10 +62,11 @@ public class PasswordGrantHandler(
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
-    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
-        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.UserName.HasValue())
         {
             return Task.FromResult<Result<AuthorizedGrant, OidcError>>(

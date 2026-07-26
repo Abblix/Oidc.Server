@@ -20,9 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
-using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
@@ -34,13 +34,15 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <param name="storage">The storage service for device authorization requests.</param>
 /// <param name="rateLimiter">The rate limiter for preventing brute force attacks.</param>
 /// <param name="normalizer">Canonicalizes user-entered codes before lookup (RFC 8628 Section 6.1).</param>
-/// <param name="httpContextAccessor">Accessor for the current HTTP context to retrieve client IP.</param>
+/// <param name="requestInfoProvider">Supplies the client IP the rate limiter buckets by. The core reads it
+/// through this abstraction rather than the HTTP context so it stays independent of the host, and so a test
+/// can drive the limiter without standing up a web host.</param>
 /// <param name="timeProvider">Provides the current time for deriving the request's remaining lifetime.</param>
 public class UserCodeVerificationService(
     IDeviceAuthorizationStorage storage,
     IUserCodeRateLimiter rateLimiter,
     IUserCodeNormalizer normalizer,
-    IHttpContextAccessor httpContextAccessor,
+    IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IUserCodeVerificationService
 {
     /// <inheritdoc />
@@ -51,7 +53,7 @@ public class UserCodeVerificationService(
         // dash variations cannot be used to multiply the per-code brute-force budget.
         userCode = normalizer.Normalize(userCode);
 
-        var clientIp = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
 
         // Check rate limiting before attempting verification
         var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);

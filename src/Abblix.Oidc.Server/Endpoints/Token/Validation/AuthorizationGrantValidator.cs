@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -49,7 +49,8 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// including an error code and description;
     /// otherwise, null indicating that the grant is valid and the context has been updated.
     /// </returns>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
     {
         // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.AllowedGrantTypes.Contains(context.Request.GrantType))
@@ -59,7 +60,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
                 "The grant type is not allowed for this client");
         }
 
-        var result = await grantHandler.AuthorizeAsync(context.Request, context.ClientInfo);
+        var result = await grantHandler.AuthorizeAsync(context.Request, context.ClientInfo, cancellationToken);
 
         if (result.TryGetFailure(out var error))
         {

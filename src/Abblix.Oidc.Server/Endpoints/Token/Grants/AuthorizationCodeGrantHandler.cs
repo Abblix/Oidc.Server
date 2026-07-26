@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -67,10 +67,11 @@ public class AuthorizationCodeGrantHandler(
     /// Information about the client, used to verify that the request is valid for this client.</param>
     /// <returns>A task that represents the asynchronous authorization operation.
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
-        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.Code.HasValue())
         {
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.Code);
@@ -112,7 +113,7 @@ public class AuthorizationCodeGrantHandler(
 
             // Validates the code verifier against the stored code challenge using the appropriate method.
             // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 §4.6,
-            // so the comparison is ordinal — case folding would widen the accepted set and weaken the plain method.
+            // so the comparison is ordinal - case folding would widen the accepted set and weaken the plain method.
             if (!string.Equals(
                     grant.Context.CodeChallenge,
                     CalculateChallenge(grant.Context.CodeChallengeMethod, request.CodeVerifier),

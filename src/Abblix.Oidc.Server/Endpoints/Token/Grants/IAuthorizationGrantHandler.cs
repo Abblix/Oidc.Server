@@ -48,5 +48,24 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <param name="request">The token request (already authenticated against the client).</param>
 	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was
 	/// issued to the same client that is now redeeming it.</param>
-	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo);
+	[Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
+	          "implementation keeps working, and will be removed in the next major version.")]
+	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+		=> AuthorizeAsync(request, clientInfo, CancellationToken.None);
+
+	/// <inheritdoc cref="AuthorizeAsync(TokenRequest, ClientInfo)"/>
+	/// <param name="request">The token request (already authenticated against the client).</param>
+	/// <param name="clientInfo">The authenticated client.</param>
+	/// <param name="cancellationToken">
+	/// Abandons the resolution when the caller stops waiting. CIBA holds this call open for the configured
+	/// long-polling timeout, so a handler that never receives the token goes on polling storage for a client
+	/// that disconnected.
+	/// </param>
+	/// <remarks>
+	/// This is the member an implementation provides. The obsolete overload above defaults to forwarding here,
+	/// so a caller still holding the old signature keeps working, while an implementation that provided only
+	/// the old one fails to compile rather than silently never receiving the token.
+	/// </remarks>
+	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+		TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken);
 }

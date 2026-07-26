@@ -55,10 +55,11 @@ public class DeviceCodeGrantHandler(
     /// <inheritdoc />
     public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
         TokenRequest request,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+    CancellationToken cancellationToken)
     {
         // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
-        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.DeviceCode.HasValue())
         {
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.DeviceCode);
@@ -116,7 +117,7 @@ public class DeviceCodeGrantHandler(
                 if (!await TryBumpNextPollAsync(
                         request.DeviceCode, nextPollAt + pollingInterval, deviceRequest.ExpiresAt - now))
                 {
-                    return await AuthorizeAsync(request, clientInfo);
+                    return await AuthorizeAsync(request, clientInfo, cancellationToken);
                 }
 
                 return new OidcError(
@@ -129,7 +130,7 @@ public class DeviceCodeGrantHandler(
                 if (!await TryBumpNextPollAsync(
                         request.DeviceCode, now + pollingInterval, deviceRequest.ExpiresAt - now))
                 {
-                    return await AuthorizeAsync(request, clientInfo);
+                    return await AuthorizeAsync(request, clientInfo, cancellationToken);
                 }
 
                 return new OidcError(

@@ -23,10 +23,10 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -36,8 +36,8 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 
 /// <summary>
 /// Verifies that <see cref="UserCodeVerificationService"/> canonicalizes the user-entered code
-/// before lookup (RFC 8628 Section 6.1), so the readability variants a user may type — a different
-/// case or copied-in dashes — resolve to the same stored device authorization request rather than
+/// before lookup (RFC 8628 Section 6.1), so the readability variants a user may type - a different
+/// case or copied-in dashes - resolve to the same stored device authorization request rather than
 /// being rejected as invalid.
 /// </summary>
 public class UserCodeVerificationServiceTests
@@ -80,7 +80,7 @@ public class UserCodeVerificationServiceTests
             storage.Object,
             rateLimiter.Object,
             normalizer,
-            Mock.Of<IHttpContextAccessor>(),
+            Mock.Of<IRequestInfoProvider>(),
             new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)));
     }
 

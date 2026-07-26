@@ -60,7 +60,7 @@ public class PasswordGrantHandlerTests
 
     /// <summary>
     /// RFC 6749 §5.2: a token request without the required username or password parameter is the
-    /// caller's protocol error and yields invalid_request — previously it threw and surfaced as
+    /// caller's protocol error and yields invalid_request - previously it threw and surfaced as
     /// HTTP 500.
     /// </summary>
     [Theory]
@@ -71,7 +71,7 @@ public class PasswordGrantHandlerTests
     {
         var tokenRequest = new TokenRequest { UserName = userName, Password = password };
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo(ClientId));
+        var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -105,7 +105,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -134,7 +134,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(authError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -163,7 +163,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(authError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -197,7 +197,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -230,7 +230,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -262,7 +262,7 @@ public class PasswordGrantHandlerTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -309,7 +309,7 @@ public class PasswordGrantHandlerTests
             .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -349,7 +349,7 @@ public class PasswordGrantHandlerTests
             .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);

@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -44,6 +44,7 @@ public class TokenContextValidatorComposite(ITokenContextValidator[] validators)
     /// A <see cref="OidcError"/> containing error details if any validation step fails;
     /// otherwise, returns null indicating that all validation steps were successful.
     /// </returns>
-    public Task<OidcError?> ValidateAsync(TokenValidationContext context)
-        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context, cancellationToken));
 }

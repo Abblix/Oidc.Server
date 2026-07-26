@@ -23,6 +23,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -53,7 +54,7 @@ public class AddAuthorizationGrantTests
     /// Mirrors <c>ServiceDescriptor.GetImplementationType()</c> (which is internal in
     /// .NET): for factory-based descriptors registered via
     /// <c>ServiceDescriptor.Singleton&lt;TService, TImpl&gt;(factory)</c>, the runtime type
-    /// of the factory is <c>Func&lt;IServiceProvider, TImpl&gt;</c> — its second generic
+    /// of the factory is <c>Func&lt;IServiceProvider, TImpl&gt;</c> - its second generic
     /// argument is the implementation type the dual-registration helper preserves for
     /// dedup purposes.
     /// </summary>
@@ -73,7 +74,7 @@ public class AddAuthorizationGrantTests
     {
         public IEnumerable<string> GrantTypesSupported { get; } = ["urn:test:stub"];
 
-        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
             => Task.FromResult<Result<AuthorizedGrant, OidcError>>(
                 new OidcError(ErrorCodes.UnsupportedGrantType, "stub"));
     }
@@ -82,14 +83,14 @@ public class AddAuthorizationGrantTests
     {
         public IEnumerable<string> GrantTypesSupported { get; } = ["urn:test:other"];
 
-        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
             => Task.FromResult<Result<AuthorizedGrant, OidcError>>(
                 new OidcError(ErrorCodes.UnsupportedGrantType, "other"));
     }
 
     /// <summary>
     /// A single call places the grant handler under both <see cref="IAuthorizationGrantHandler"/>
-    /// and <see cref="IGrantTypeInformer"/> service types. This is the core of the invariant —
+    /// and <see cref="IGrantTypeInformer"/> service types. This is the core of the invariant -
     /// the rule the helper exists to enforce.
     /// </summary>
     [Fact]
@@ -114,7 +115,7 @@ public class AddAuthorizationGrantTests
 
     /// <summary>
     /// The dual-registration shares ONE concrete <typeparamref name="TImpl"/> singleton between
-    /// both interface aliases — resolving <see cref="IAuthorizationGrantHandler"/> and
+    /// both interface aliases - resolving <see cref="IAuthorizationGrantHandler"/> and
     /// <see cref="IGrantTypeInformer"/> returns the same instance, not two separate ones. This
     /// preserves the «handler is constructed once per host» invariant that the previous direct
     /// dual-registration would have broken.
@@ -140,7 +141,7 @@ public class AddAuthorizationGrantTests
 
     /// <summary>
     /// <c>TryAddEnumerable</c> dedupes on <c>(ServiceType, ImplementationType)</c>. Calling the
-    /// helper twice with the same impl must not accumulate duplicate entries — repeated
+    /// helper twice with the same impl must not accumulate duplicate entries - repeated
     /// invocations from extension methods that share a handler stay idempotent.
     /// </summary>
     [Fact]
@@ -249,7 +250,7 @@ public class AddAuthorizationGrantTests
     /// every built-in grant handler as <see cref="IGrantTypeInformer"/> via the helper, so the
     /// discovery endpoint and registration-time validators see the same set the token endpoint
     /// dispatches on. <c>Compose&lt;&gt;</c> removes leaves only from
-    /// <see cref="IAuthorizationGrantHandler"/> — leaves' <see cref="IGrantTypeInformer"/>
+    /// <see cref="IAuthorizationGrantHandler"/> - leaves' <see cref="IGrantTypeInformer"/>
     /// registrations survive composition.
     /// </summary>
     [Fact]
@@ -291,7 +292,7 @@ public class AddAuthorizationGrantTests
 
     /// <summary>
     /// When the host opts into ROPC via <c>EnablePasswordGrant()</c> BEFORE <c>AddOidcServices</c>,
-    /// <see cref="PasswordGrantHandler"/> appears in the <see cref="IGrantTypeInformer"/> descriptor list — proving
+    /// <see cref="PasswordGrantHandler"/> appears in the <see cref="IGrantTypeInformer"/> descriptor list - proving
     /// the opt-in surfaces in the same registry discovery and the registration validator read. The opt-in must
     /// precede <c>AddOidcCore</c> so the handler is included in the composite the token endpoint dispatches on;
     /// registering it after is rejected by the ordering guard (see below).
@@ -316,7 +317,7 @@ public class AddAuthorizationGrantTests
     /// A grant handler registered AFTER the grant handlers were composed by <c>AddOidcCore</c> would land beside the
     /// composite rather than inside it, so the token endpoint would silently not dispatch its grant type. The
     /// ordering guard turns that latent misconfiguration into a loud startup error naming the offending handler and
-    /// pointing at the fix — call the opt-in before <c>AddOidcCore</c>.
+    /// pointing at the fix - call the opt-in before <c>AddOidcCore</c>.
     /// </summary>
     [Fact]
     public void AddAuthorizationGrant_AfterOidcCore_ThrowsWithOrderingGuidance()
@@ -332,7 +333,7 @@ public class AddAuthorizationGrantTests
     }
 
     /// <summary>
-    /// The mirror of the guard: a grant handler registered BEFORE <c>AddOidcCore</c> — the correct order — is
+    /// The mirror of the guard: a grant handler registered BEFORE <c>AddOidcCore</c> - the correct order - is
     /// accepted, and the subsequent composition does not throw. This is the path every opt-in feature method takes.
     /// </summary>
     [Fact]
@@ -349,7 +350,7 @@ public class AddAuthorizationGrantTests
 
     /// <summary>
     /// The guard fires through a real opt-in feature method, not only the low-level helper: calling
-    /// <c>EnablePasswordGrant()</c> after <c>AddOidcServices</c> — the exact misuse a host might commit — is rejected
+    /// <c>EnablePasswordGrant()</c> after <c>AddOidcServices</c> - the exact misuse a host might commit - is rejected
     /// with the grant handler named and the fix pointed at. This is the consumer-facing shape of the ordering
     /// contract, and the regression that would return if the sentinel check were removed.
     /// </summary>
