@@ -20,16 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
-
-/// <summary>
-/// The generation stub extracted from a hand-written partial record: where the model lives,
-/// which core type it is generated from, and the type-level binding options. A pure value so
-/// the incremental pipeline can cache on it.
-/// </summary>
-internal sealed record StubInfo(
-	string Namespace,
-	string Name,
-	string CoreTypeName,
-	bool SupportsGet,
-	LocationInfo Location);
+// The shared sources sit in their own namespace, which is a sibling of each generator's rather than a parent,
+// so nothing resolves them implicitly. Importing it globally here means a generator file uses the shared types
+// the way it used to when they lived alongside it, and a new file needs no import to keep working.
+global using Abblix.Oidc.Server.SourceGenerators;

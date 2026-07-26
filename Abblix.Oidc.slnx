@@ -22,9 +22,9 @@
     <Project Path="src/Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
     <Project Path="src/Abblix.Oidc.Server.AspNetCore/Abblix.Oidc.Server.AspNetCore.csproj" />
     <Project Path="src/Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
-    <Project Path="src/Abblix.Oidc.Server.Mvc.SourceGeneration/Abblix.Oidc.Server.Mvc.SourceGeneration.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.Mvc.SourceGenerators/Abblix.Oidc.Server.Mvc.SourceGenerators.csproj" />
     <Project Path="src/Abblix.Oidc.Server.MinimalApi/Abblix.Oidc.Server.MinimalApi.csproj" />
-    <Project Path="src/Abblix.Oidc.Server.MinimalApi.SourceGeneration/Abblix.Oidc.Server.MinimalApi.SourceGeneration.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.MinimalApi.SourceGenerators/Abblix.Oidc.Server.MinimalApi.SourceGenerators.csproj" />
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
   </Folder>
