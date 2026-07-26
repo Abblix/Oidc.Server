@@ -243,6 +243,12 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
     /// Stands in for the integrator-supplied device interaction and refuses with the error the test needs, so
     /// the refusal arms of the formatter are reached the only way production reaches them.
     /// </summary>
+    /// <remarks>
+    /// A class rather than a mock, matching every other seam these suites fill. An end-to-end test asserts
+    /// composition, so what it registers has to be something the container constructs and the pipeline calls
+    /// like any other registration; a mock there is a proxy configured by the test, which is the thing the
+    /// suite exists to rule out. Neither E2E project references a mocking framework for that reason.
+    /// </remarks>
     private sealed class RefusingUserDeviceHandler(OidcError refusal) : IUserDeviceAuthenticationHandler
     {
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
