@@ -102,8 +102,12 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         var body = await ReadJsonAsync(response);
         Assert.True(response.IsSuccessStatusCode, $"registering a CIBA client failed: {(int)response.StatusCode} {body}");
 
-        return (body[ClientParameters.ClientId]!.GetValue<string>(),
-                body[ClientParameters.ClientSecret]!.GetValue<string>());
+        var clientId = body[ClientParameters.ClientId];
+        var secret = body[ClientParameters.ClientSecret];
+        Assert.NotNull(clientId);
+        Assert.NotNull(secret);
+
+        return (clientId.GetValue<string>(), secret.GetValue<string>());
     }
 
     private static Dictionary<string, string> RequestFor((string ClientId, string Secret) ciba) => new()
@@ -115,7 +119,13 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
     };
 
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response)
-        => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+    {
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var node = JsonNode.Parse(raw);
+        Assert.NotNull(node);
+
+        return node.AsObject();
+    }
 
     [Fact]
     public async Task A_device_handler_refusing_the_client_answers_401_with_a_bearer_challenge()
@@ -138,7 +148,9 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.Contains(TestConstants.Issuer, challenge, StringComparison.Ordinal);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.AccessDenied, body[ResponseParameters.Error]!.GetValue<string>());
+        var error = body[ResponseParameters.Error];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
 
     /// <summary>
@@ -197,7 +209,9 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.AccessDenied, body[ResponseParameters.Error]!.GetValue<string>());
+        var error = body[ResponseParameters.Error];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
 
     /// <summary>
