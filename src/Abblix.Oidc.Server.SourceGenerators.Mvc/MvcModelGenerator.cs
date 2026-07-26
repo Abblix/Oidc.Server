@@ -66,6 +66,10 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
 
+	// Taken from the type rather than written out, so it cannot rot into a dangling emitted reference.
+	private static readonly string ExcludeFromCoverageAttribute =
+		$"global::{typeof(System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute).FullName}";
+
 	private static readonly SymbolDisplayFormat FullyQualifiedWithNullability =
 		SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
 			SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
@@ -240,6 +244,12 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine();
 			_writer.AppendLine($"namespace {stub.Namespace};");
 			_writer.AppendLine();
+			// Nobody writes this file, so counting its lines tells nobody anything: it drags the adapter's
+			// coverage denominator down with code that can only be changed by changing the generator, and
+			// hides the hand-written shortfall behind it. The attribute travels with the source rather than
+			// living in a coverage settings file, which is both tool-independent and the only route that
+			// works here - dotnet test refuses to run at all when handed --coverage-settings.
+			_writer.AppendLine($"[{ExcludeFromCoverageAttribute}]");
 			_writer.AppendLine($"public partial record {stub.Name}");
 			_writer.AppendLine("{");
 
