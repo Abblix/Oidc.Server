@@ -145,7 +145,7 @@ public static class ServiceCollectionExtensions
         // AuthorizationHandler is no longer aliased as IGrantTypeInformer: each registered
         // IAuthorizationResponseBuilder now contributes its own grant types directly to the
         // IGrantTypeInformer set, so the IGrantTypeInformer chain stays Singleton-friendly
-        // (every contributor is Singleton — no captive-dep risk for Singleton consumers).
+        // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
         return services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
     }
@@ -240,9 +240,13 @@ public static class ServiceCollectionExtensions
             .AddAuthorizationCodeGrant()
             .AddRefreshTokenGrant()
             .AddClientCredentialsGrant()
-            .AddTokenExchangeGrant()
-            // BackChannelAuthenticationGrantHandler and DeviceCodeGrantHandler are registered
-            // in AddBackChannelAuthentication() and AddDeviceAuthorization() respectively
+            // TokenExchangeGrantHandler is registered in AddTokenExchangeGrant(), like
+            // BackChannelAuthenticationGrantHandler in AddBackChannelAuthentication() and
+            // DeviceCodeGrantHandler in AddDeviceAuthorization(). Token exchange is opt-in because
+            // registering it makes the OP advertise urn:ietf:params:oauth:grant-type:token-exchange
+            // in grant_types_supported, and a host that never intends to delegate authority should
+            // not publish that it does. It also brings four subject-token resolvers, one of which
+            // (RefreshTokenSubjectTokenResolver) reads the refresh-token store.
             // AddAuthorizationGrants() is called in AddOidcCore() after all handlers are registered
             .AddTokenContextValidators();
 
@@ -368,11 +372,18 @@ public static class ServiceCollectionExtensions
     /// <see cref="Features.TokenExchange.RefreshTokenSubjectTokenResolver"/> for refresh tokens).
     /// </summary>
     /// <remarks>
+    /// Opt-in: unlike the authorization-code, refresh-token and client-credentials grants, this one is
+    /// not registered by <c>AddTokenEndpoint</c>. Call it explicitly, and call it BEFORE
+    /// <c>AddOidcCore</c> / <c>AddOidcServices</c> / <c>AddOidcMinimalApi</c>, because
+    /// <c>AddAuthorizationGrants()</c> composes the registered handlers inside them - a handler added
+    /// afterwards lands beside the composite and the token endpoint resolves the wrong single
+    /// <see cref="Token.Grants.IAuthorizationGrantHandler"/>. A host that does not call this
+    /// neither serves the grant nor advertises it in <c>grant_types_supported</c>.
+    ///
     /// Subject-token resolvers are dispatched by keyed DI under the
     /// <c>urn:ietf:params:oauth:token-type:*</c> URI. Hosts may register additional resolvers
-    /// after this call (e.g. SAML 2.0 assertions in federation scenarios) -- the handler picks
-    /// them up automatically. The <c>actor_token</c>/delegation path and discovery / DCR
-    /// metadata land in subsequent slices (see #143).
+    /// after this call (e.g. SAML 2.0 assertions in federation scenarios) - the handler picks
+    /// them up automatically.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
@@ -469,7 +480,7 @@ public static class ServiceCollectionExtensions
     {
         // The IAuthorizationResponseBuilder / IGrantTypeInformer aliases inherit this lifetime
         // (BuildAliasDescriptor preserves the source lifetime), so a builder with scoped
-        // dependencies registers Scoped and its aliases follow — no captive dependency.
+        // dependencies registers Scoped and its aliases follow - no captive dependency.
         services.TryAdd(new ServiceDescriptor(typeof(TImpl), typeof(TImpl), lifetime));
         services.TryAddEnumerableAlias<IAuthorizationResponseBuilder, TImpl>();
         services.TryAddEnumerableAlias<IGrantTypeInformer, TImpl>();
@@ -719,7 +730,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the Device Authorization Grant (RFC 8628) endpoint services — handler, request and context
+    /// Registers the Device Authorization Grant (RFC 8628) endpoint services - handler, request and context
     /// validators, and the <c>DeviceAuthorizationOptionsValidator</c>. Invoked by the public
     /// <c>AddDeviceAuthorization()</c> opt-in method, not by the unconditional endpoint wiring: device
     /// authorization is a single opt-in feature, so its validator only runs when a server opts in.

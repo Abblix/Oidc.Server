@@ -26,9 +26,10 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     public async Task Discovery_exposes_token_exchange_grant_type()
     {
         // RFC 8693 §5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
-        // Automatic exposure via AddTokenExchangeGrant() -> AddAuthorizationGrant<TokenExchangeGrantHandler>,
-        // CompositeAuthorizationGrantHandler aggregates GrantTypesSupported across all registered
-        // handlers and the discovery pipeline reads from it.
+        // Exposure follows the host opting in: AddTokenExchangeGrant() -> AddAuthorizationGrant
+        // <TokenExchangeGrantHandler>, CompositeAuthorizationGrantHandler aggregates GrantTypesSupported
+        // across all registered handlers and the discovery pipeline reads from it. A host that never calls
+        // AddTokenExchangeGrant() therefore does not advertise the grant, which is the point of the opt-in.
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -73,7 +74,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     {
         // The embedded test license declares valid_issuers = [TestConstants.Issuer] only.
         // Loading it at TestHost startup registers a permissive license, but
-        // LicenseChecker.CheckIssuer throws on any issuer that is not on that whitelist —
+        // LicenseChecker.CheckIssuer throws on any issuer that is not on that whitelist -
         // physically preventing the license from being lifted into a production host with
         // a different issuer URL. Touch a client first so the WebApplicationFactory bootstraps
         // the host (which is what triggers LicenseLoader.LoadAsync on the embedded JWT).
