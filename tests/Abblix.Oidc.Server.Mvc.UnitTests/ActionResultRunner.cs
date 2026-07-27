@@ -53,6 +53,31 @@ internal static class ActionResultRunner
 
         await using var provider = services.BuildServiceProvider();
 
+        var (context, body) = CreateContext(provider);
+        await result.ExecuteResultAsync(context);
+
+        return Capture(context, body);
+    }
+
+    /// <summary>
+    /// Runs a result through the synchronous <see cref="ActionResult.ExecuteResult"/> entry point instead of the
+    /// asynchronous one. Only results that write without awaiting can take this path.
+    /// </summary>
+    internal static Response Run(ActionResult result)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        using var provider = services.BuildServiceProvider();
+
+        var (context, body) = CreateContext(provider);
+        result.ExecuteResult(context);
+
+        return Capture(context, body);
+    }
+
+    private static (ActionContext Context, MemoryStream Body) CreateContext(IServiceProvider provider)
+    {
         var body = new MemoryStream();
         var httpContext = new DefaultHttpContext
         {
@@ -60,11 +85,12 @@ internal static class ActionResultRunner
             Response = { Body = body },
         };
 
-        await result.ExecuteResultAsync(new ActionContext(httpContext, new RouteData(), new ActionDescriptor()));
-
-        return new Response(
-            httpContext.Response.StatusCode,
-            httpContext.Response.Headers,
-            Encoding.UTF8.GetString(body.ToArray()));
+        return (new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), body);
     }
+
+    private static Response Capture(ActionContext context, MemoryStream body)
+        => new(
+            context.HttpContext.Response.StatusCode,
+            context.HttpContext.Response.Headers,
+            Encoding.UTF8.GetString(body.ToArray()));
 }

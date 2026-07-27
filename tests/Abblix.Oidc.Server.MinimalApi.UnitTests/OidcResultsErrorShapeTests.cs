@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Http;
@@ -45,7 +46,7 @@ namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 public class OidcResultsErrorShapeTests
 {
     private const string Realm = "https://auth.example.com";
-    private static readonly string[] DPoPAlgs = ["RS256", "ES256"];
+    private static readonly string[] DPoPAlgs = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
 
     private static string Challenge(HttpResultRunner.Response response)
         => response.Headers[HeaderNames.WWWAuthenticate].ToString();
@@ -138,7 +139,7 @@ public class OidcResultsErrorShapeTests
 
         Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
         Assert.Contains(TokenTypes.DPoP, Challenge(response));
-        Assert.Contains("ES256", Challenge(response));
+        Assert.Contains(SigningAlgorithms.ES256, Challenge(response));
         Assert.DoesNotContain(TokenTypes.Bearer, Challenge(response));
         Assert.Empty(response.Body);
     }
