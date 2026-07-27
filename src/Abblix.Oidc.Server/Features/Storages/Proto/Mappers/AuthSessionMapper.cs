@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Utils.Collections;
 using Abblix.Utils.Json;
 using Google.Protobuf.WellKnownTypes;
 
@@ -72,7 +73,7 @@ internal static class AuthSessionMapper
             source.IdentityProvider)
         {
             AuthContextClassRef = ProtoMapper.GetString(source.AuthContextClassRef, source.HasAuthContextClassRef),
-            AffectedClientIds = source.AffectedClientIds.ToList(),
+            AffectedClientIds = new ConcurrentSet<string>(source.AffectedClientIds),
             AuthenticationMethodReferences = source.AuthenticationMethodReferences.Count > 0
                 ? source.AuthenticationMethodReferences.ToList()
                 : null,

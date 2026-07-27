@@ -27,6 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
+using Abblix.Utils.Collections;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -203,7 +204,7 @@ public class AuthenticationSchemeAdapter(
 
 		if (authenticationResult.Properties is { } properties &&
 		    properties.TryGetStringList(nameof(AuthSession.AffectedClientIds), out var affectedClientIds))
-			authSession = authSession with { AffectedClientIds = affectedClientIds };
+			authSession = authSession with { AffectedClientIds = new ConcurrentSet<string>(affectedClientIds) };
 
 		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
