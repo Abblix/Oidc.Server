@@ -1,0 +1,70 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Text;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Abblix.Oidc.Server.Mvc.UnitTests;
+
+/// <summary>
+/// Runs an <see cref="ActionResult"/> the way MVC does and reports what reached the wire.
+/// </summary>
+/// <remarks>
+/// Inspecting the returned object is not enough here: a header this adapter attaches lives in a decorator that
+/// only applies it while executing, so a test that reads the object sees the status and misses the header
+/// entirely. Executing also puts the decorator itself under test, which is where the header logic actually is.
+/// </remarks>
+internal static class ActionResultRunner
+{
+    /// <summary>What the client would have received: the status line, the headers and the body.</summary>
+    internal sealed record Response(int StatusCode, IHeaderDictionary Headers, string Body);
+
+    internal static async Task<Response> RunAsync(ActionResult result)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        // The object results write their body through MVC's output formatters, which only exist once the MVC
+        // core services are registered - without them the execution fails on a missing result executor.
+        services.AddMvcCore();
+
+        await using var provider = services.BuildServiceProvider();
+
+        var body = new MemoryStream();
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = provider,
+            Response = { Body = body },
+        };
+
+        await result.ExecuteResultAsync(new ActionContext(httpContext, new RouteData(), new ActionDescriptor()));
+
+        return new Response(
+            httpContext.Response.StatusCode,
+            httpContext.Response.Headers,
+            Encoding.UTF8.GetString(body.ToArray()));
+    }
+}
