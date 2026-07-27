@@ -84,6 +84,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private static readonly string CompilerServicesNamespace =
         typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
 
+    // Taken from the type rather than written out, so it cannot rot into a dangling emitted reference.
+    private static readonly string ExcludeFromCoverageAttribute =
+        $"global::{typeof(System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute).FullName}";
+
     private static readonly SymbolDisplayFormat FullyQualifiedWithNullability =
         SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
@@ -372,6 +376,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             // When any property carries a translated validation attribute, the model opts into validation by the
             // group-scoped endpoint filter through this marker.
             var marker = _properties.Any(property => property.Validations.Count > 0) ? $" : {known.ValidatableModel}" : string.Empty;
+            // Nobody writes this file, so counting its lines tells nobody anything: it drags the adapter's
+            // coverage denominator down with code that can only be changed by changing the generator, and
+            // hides the hand-written shortfall behind it. The attribute travels with the source rather than
+            // living in a coverage settings file, which is both tool-independent and the only route that
+            // works here - dotnet test refuses to run at all when handed --coverage-settings.
+            _writer.AppendLine($"[{ExcludeFromCoverageAttribute}]");
             _writer.AppendLine($"public partial record {stub.Name}{marker}");
             _writer.AppendLine("{");
 
