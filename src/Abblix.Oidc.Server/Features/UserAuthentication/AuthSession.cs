@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json.Nodes;
+using Abblix.Utils.Collections;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -66,7 +67,19 @@ public record AuthSession(string Subject, string SessionId, DateTimeOffset Authe
     /// A collection of client identifiers that the user has interacted with during the session.
     /// This can be used to manage and track user consent and interaction with multiple clients within the same session.
     /// </summary>
-    public ICollection<string> AffectedClientIds { get; init; } = new List<string>();
+    /// <remarks>
+    /// The default is a concurrent set, because a host that caches the session serves one instance to several
+    /// requests at once, and this is the one member they all write to: the authorization endpoint adds a client
+    /// here, the end-session endpoint enumerates it to decide whom to notify. A plain list loses one of two
+    /// simultaneous additions and throws if an enumeration is open while one lands - a client that never learns
+    /// the user signed out, or a failed logout.
+    ///
+    /// This bounds the guarantee to a shared instance, which is worth stating because the usual host is not one:
+    /// the cookie-backed adapter rebuilds a session from claims per request, so concurrent requests there hold
+    /// separate instances and can still lose an addition when both write the cookie back. Closing that needs a
+    /// store that can add atomically, not a collection type.
+    /// </remarks>
+    public ICollection<string> AffectedClientIds { get; init; } = new ConcurrentSet<string>();
 
     /// <summary>
     /// A list of authentication methods used during the user's authentication process,
