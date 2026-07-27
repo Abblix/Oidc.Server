@@ -1,0 +1,163 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Net;
+using System.Net.Http.Headers;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.Model;
+using Xunit;
+
+namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
+
+/// <summary>
+/// What the endpoints do with input that cannot be bound at all: a parameter sent twice, and an authorization
+/// header that is not a header value.
+/// </summary>
+/// <remarks>
+/// The property under test is that the server answers rather than fails: an endpoint that throws where the
+/// pipeline turns it into a 500 hands an unauthenticated caller a way to make it fail on demand, and tells a
+/// legitimate client nothing it can act on.
+///
+/// Sending a parameter twice is not a corner case invented here: OpenID Connect Core 1.0 section 3.1.2.1 says
+/// request parameters "MUST NOT be included more than once", so a conforming server has to have an answer for
+/// it.
+///
+/// What these do NOT do is exercise the model binders' own refusal paths, which was the intent they were
+/// written with. Coverage says otherwise and coverage is right: a repeated parameter reaches the binder as one
+/// comma-joined value rather than as an absent one, so the refusal happens further down. Those paths are
+/// driven directly in the MVC unit suite's ModelBinderRefusalTests. These remain because what they assert -
+/// that neither input reaches the caller as a server error - is worth asserting on its own, and no unit test
+/// of a binder can say it.
+/// </remarks>
+public class MalformedParameterBindingTests(TestFactory factory) : TestBase(factory)
+{
+    private static async Task<HttpResponseMessage> GetAsync(HttpClient client, string url)
+        => await client.GetAsync(url, TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// A locale list sent twice. Whatever the server decides, it must decide - not fail.
+    /// </summary>
+    [Fact]
+    public async Task A_parameter_repeated_in_the_query_does_not_reach_the_endpoint_as_a_server_error()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (_, challenge) = GeneratePkcePair();
+
+        var url =
+            $"{discovery.AuthorizationEndpoint}" +
+            $"?{AuthorizationRequest.Parameters.ClientId}={TestConstants.ConfidentialClientId}" +
+            $"&{AuthorizationRequest.Parameters.ResponseType}={ResponseTypes.Code}" +
+            $"&{AuthorizationRequest.Parameters.RedirectUri}={Uri.EscapeDataString(TestConstants.RedirectUri)}" +
+            $"&{AuthorizationRequest.Parameters.Scope}={Scopes.OpenId}" +
+            $"&{AuthorizationRequest.Parameters.State}={Guid.NewGuid():N}" +
+            $"&{AuthorizationRequest.Parameters.CodeChallenge}={challenge}" +
+            $"&{AuthorizationRequest.Parameters.CodeChallengeMethod}={CodeChallengeMethods.S256}" +
+            $"&{AuthorizationRequest.Parameters.UiLocales}=en-US" +
+            $"&{AuthorizationRequest.Parameters.UiLocales}=fr-FR";
+
+        var response = await GetAsync(client, url);
+
+        Assert.True(
+            (int)response.StatusCode < 500,
+            $"a repeated parameter produced {(int)response.StatusCode}, so an unauthenticated caller can make " +
+            "the authorization endpoint fail: " +
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The claims parameter carries JSON, so it goes through a different binder than the locale list - one that
+    /// deserializes. It gets the same treatment when repeated.
+    /// </summary>
+    [Fact]
+    public async Task A_json_valued_parameter_repeated_in_the_query_does_not_reach_the_endpoint_as_a_server_error()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (_, challenge) = GeneratePkcePair();
+
+        var claims = Uri.EscapeDataString("""{"id_token":{"email":null}}""");
+        var url =
+            $"{discovery.AuthorizationEndpoint}" +
+            $"?{AuthorizationRequest.Parameters.ClientId}={TestConstants.ConfidentialClientId}" +
+            $"&{AuthorizationRequest.Parameters.ResponseType}={ResponseTypes.Code}" +
+            $"&{AuthorizationRequest.Parameters.RedirectUri}={Uri.EscapeDataString(TestConstants.RedirectUri)}" +
+            $"&{AuthorizationRequest.Parameters.Scope}={Scopes.OpenId}" +
+            $"&{AuthorizationRequest.Parameters.State}={Guid.NewGuid():N}" +
+            $"&{AuthorizationRequest.Parameters.CodeChallenge}={challenge}" +
+            $"&{AuthorizationRequest.Parameters.CodeChallengeMethod}={CodeChallengeMethods.S256}" +
+            $"&{AuthorizationRequest.Parameters.Claims}={claims}" +
+            $"&{AuthorizationRequest.Parameters.Claims}={claims}";
+
+        var response = await GetAsync(client, url);
+
+        Assert.True(
+            (int)response.StatusCode < 500,
+            $"a repeated JSON parameter produced {(int)response.StatusCode}: " +
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// An Authorization header naming a scheme this server does not speak. Measured rather than assumed: the
+    /// header grammar accepts this value, reading "this" as the scheme and the rest as its parameter, so the
+    /// refusal is the endpoint's and not the binder's - which is the point, since what the caller must get back
+    /// is a challenge telling it how to authenticate, not a failure of the request pipeline.
+    /// </summary>
+    [Fact]
+    public async Task An_authorization_header_naming_an_unknown_scheme_is_refused_with_a_challenge()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.UserInfoEndpoint);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
+        request.Headers.TryAddWithoutValidation("Authorization", "this is not a header value");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.NotEmpty(response.Headers.WwwAuthenticate);
+    }
+
+    /// <summary>
+    /// A bearer token that is syntactically a header value but not a token this server issued. Sits beside the
+    /// case above to keep them apart: one fails to bind, the other binds and fails to validate, and both owe
+    /// the caller the same shape of answer.
+    /// </summary>
+    [Fact]
+    public async Task A_bearer_token_that_is_not_ours_is_refused_with_a_challenge()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.UserInfoEndpoint);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, "not-a-token-we-issued");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.NotEmpty(response.Headers.WwwAuthenticate);
+    }
+}
