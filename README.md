@@ -17,7 +17,7 @@
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
 
-⭐ Star us on GitHub — your support motivates us a lot! 🙏😊
+⭐ Star us on GitHub: your support motivates us a lot! 🙏😊
 
 [![Share](https://img.shields.io/badge/share-000000?logo=x&logoColor=white)](https://x.com/intent/tweet?text=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server%20%23OpenIDConnect%20%23Security%20%23Authentication)
 [![Share](https://img.shields.io/badge/share-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/Abblix/Oidc.Server)
@@ -25,7 +25,7 @@
 [![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server)
 [![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
 
-**Add a certified OpenID Connect provider to your own ASP.NET Core app — one you embed and own end to end, not a separate server to run and operate.**
+**Add a certified OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.**
 
 📑 For the full picture, see the [technical overview](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf).
 
@@ -37,6 +37,7 @@
 - [How to Install](#-how-to-install)
 - [How to Build](#-how-to-build)
 - [Documentation](#-documentation)
+- [Abblix Account](#-abblix-account)
 - [Feedback and Contributions](#-feedback-and-contributions)
 - [License](#-license)
 - [Contacts](#%EF%B8%8F-contacts)
@@ -45,13 +46,13 @@
 
 **Abblix OIDC Server** turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- **Certified to the letter** — every OpenID profile, 634 conformance tests passed, zero skipped and zero warnings.
-- **A library you own, not a server you run** — the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
-- **Current with the modern security stack** — DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
-- **Engineering you can audit** — 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
-- **Modern .NET, minimal friction** — targets .NET 8, 9, and 10, with drop-in adapters for both MVC and Minimal API.
+- **Certified to the letter:** every OpenID profile, 634 conformance tests passed, zero skipped and zero warnings.
+- **A library you own, not a server you run:** the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
+- **Current with the modern security stack:** DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
+- **Engineering you can audit:** 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
+- **Modern .NET, minimal friction:** targets .NET 8, 9, and 10, with drop-in adapters for both MVC and Minimal API.
 
-Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints — one for MVC controllers and routing, one for Minimal API endpoint routing — so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
+Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
 
 ## ⚡ Quickstart
 
@@ -77,7 +78,7 @@ builder.Services.AddOidcServices(options =>
 });
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store — the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
 
 ## ✨ What's New
 
@@ -113,7 +114,7 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 
 Most deployments need only the first two; the rest apply if you use the named feature.
 
-- **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed — success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
+- **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed, and success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
 - **Implicit Flow is opt-in.** Implicit and hybrid response types are rejected at client registration unless you call `EnableImplicitFlow()` on the OIDC builder. Authorization Code Flow is the default; no action otherwise.
 - **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 §3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
 - **Back-channel logout endpoint validated at registration.** A `backchannel_logout_uri` with a non-`https` scheme, internal hostname, or private/loopback address is rejected with `invalid_client_metadata` under the secure default. Register public `https` endpoints, or relax `SecureHttpFetchOptions` (`AllowedSchemes`, `BlockPrivateNetworks`) for trusted internal deployments.
@@ -164,7 +165,7 @@ dotnet add package Abblix.OIDC.Server.MVC
 dotnet add package Abblix.OIDC.Server.MinimalApi
 ```
 
-Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency — pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
 ## 📝 How to Build
 
@@ -203,9 +204,9 @@ To better understand the Abblix OIDC Server product, we recommend visiting our [
 
 ## 💎 Abblix Account
 
-Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications — everything your users need, integrated into your website in minutes.
+Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications: everything your users need, integrated into your website in minutes.
 
-👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service — all delivered by Abblix Account — fit into a client website.
+👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service, all delivered by Abblix Account, fit into a client website.
 
 ## 🤝 Feedback and Contributions
 
@@ -214,9 +215,9 @@ We've made every effort to implement all the main aspects of the OpenID protocol
 > [!IMPORTANT]
 > Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. Your insights help us make the Abblix OIDC Server library more robust and user-friendly.
 
-Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/orgs/Abblix/discussions). Each contribution helps us grow and improve.
+Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/Abblix/Oidc.Server/discussions). Each contribution helps us grow and improve.
 
-For how we handle contributions — and why the library is developed in-house — see our [Contributing Guidelines](CONTRIBUTING.md).
+For how we handle contributions, and why the library is developed in-house, see our [Contributing Guidelines](CONTRIBUTING.md).
 
 We appreciate your support and look forward to making our product even better with your help!
 
@@ -230,7 +231,8 @@ For non-commercial use, this product is available for free.
 
 For more details about our products, services, or any general information regarding the Abblix OIDC Server, feel free to reach out to us. We are here to provide support and answer any questions you may have. Below are the best ways to contact our team:
 
-- **Email**: Send us your inquiries or support requests at [support@abblix.com](mailto:support@abblix.com).
+- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
+- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com), see the [Security Policy](SECURITY.md)
 - **Website**: Visit the official Abblix OIDC Server page for more information: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 Subscribe to our LinkedIn and Twitter:

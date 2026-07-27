@@ -54,6 +54,8 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
    
    (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls.
 
+2.2.1. **Security Research Exception.** Subsections 2.2(a) and 2.2(b) do not apply to good-faith security research conducted in accordance with the Security Policy published in the Software's official repository (SECURITY.md), which is incorporated into this Agreement by reference under Section 11.4(c). For that purpose You may modify, instrument, decompile and analyse the Software on installations You control, and the Copyright Holder will not treat such work as a breach of this Agreement. This exception does not permit distribution of the Software or of any derivative work, and Section 2.2(c) and 2.2(d) continue to apply in full.
+
 2.3. You may not use the Software in commercial projects, except as provided in Section 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
 
    (a) Free educational projects;

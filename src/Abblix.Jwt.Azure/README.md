@@ -148,5 +148,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **Email**: [support@abblix.com](mailto:support@abblix.com)
+- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
+- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
 - **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
