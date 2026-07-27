@@ -20,11 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 using Google.Protobuf.WellKnownTypes;
+using Xunit;
 
-namespace Abblix.Utils.UnitTests.Json;
+namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
 /// <summary>
 /// Tests for JsonNodeExtensions protobuf conversion methods.
@@ -504,9 +507,11 @@ public class JsonNodeExtensionsTests
     /// The dictionary pair of the bridge: <c>ToStruct(IDictionary)</c> and <c>ToDictionary(Struct)</c>.
     /// </summary>
     /// <remarks>
-    /// Retained public API with no call site: the one production consumer of this bridge,
-    /// <c>AuthSessionMapper</c>, carries its additional claims as a <c>JsonObject</c> and uses the JsonObject
-    /// overloads in both directions. These are exercised so the first caller does not have to find out.
+    /// Retained without a call site: the one production consumer of this bridge, <c>AuthSessionMapper</c>,
+    /// carries its additional claims as a <c>JsonObject</c> and uses the JsonObject overloads in both
+    /// directions. Since the type became internal these are reachable only from inside this library, so the
+    /// question of whether to keep them is now ours alone - they are exercised so that whoever answers it, or
+    /// becomes their first caller, does not have to find out how they behave.
     /// The round trip is asserted rather than either direction alone, because the number handling is where a
     /// pair like this loses information: protobuf carries every number as a double, so a whole one has to be
     /// recognised on the way back or an integer claim returns as a fraction.
