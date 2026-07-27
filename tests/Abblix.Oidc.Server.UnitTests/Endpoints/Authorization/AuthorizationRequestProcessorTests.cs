@@ -155,7 +155,8 @@ public class AuthorizationRequestProcessorTests
             IdentityProvider: "local")
         {
             AuthContextClassRef = acr,
-            AffectedClientIds = new List<string>(),
+            // AffectedClientIds is left at its default on purpose: hard-coding a List here would test the
+            // fixture's collection rather than the one a session actually carries.
         };
     }
 

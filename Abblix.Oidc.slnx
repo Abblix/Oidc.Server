@@ -39,6 +39,7 @@
     <Project Path="tests/Abblix.Oidc.Server.E2E.Tests/Abblix.Oidc.Server.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.TestHost/Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Server.MinimalApi.UnitTests/Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Vault.UnitTests/Abblix.Jwt.Vault.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Azure.UnitTests/Abblix.Jwt.Azure.UnitTests.csproj" />
   </Folder>

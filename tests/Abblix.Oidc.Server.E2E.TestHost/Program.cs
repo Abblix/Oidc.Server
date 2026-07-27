@@ -47,7 +47,13 @@ builder.Services.AddDynamicClientRegistration();
 builder.Services.AddOidcServices(options =>
 {
     options.Issuer = TestConstants.Issuer;
-    options.LoginUri = new Uri("/", UriKind.Relative);
+    // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
+    // A host that configures only LoginUri leaves the other arms of the authorization response formatter
+    // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
+    options.LoginUri = new Uri("/login", UriKind.Relative);
+    options.ConsentUri = new Uri("/consent", UriKind.Relative);
+    options.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
+    options.RegistrationUri = new Uri("/register", UriKind.Relative);
     options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);

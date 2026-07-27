@@ -15,9 +15,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Moq" />
 		<PackageReference Include="xunit.v3.mtp-v2" />
-    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+		<PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
 		<PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
 		<PackageReference Update="SonarAnalyzer.CSharp">
 		  <PrivateAssets>all</PrivateAssets>
@@ -30,17 +29,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
-	  <!-- The shared ASP.NET-neutral assembly reaches the MVC adapter with PrivateAssets=all, so it is not
-	       passed on to whatever references the adapter. Referenced directly here to assert against its
-	       constants rather than against literals copied out of them. -->
-	  <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <None Update="appsettings.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
+	  <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
 	</ItemGroup>
 
 </Project>
