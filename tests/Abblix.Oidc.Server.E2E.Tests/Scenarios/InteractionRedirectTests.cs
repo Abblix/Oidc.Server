@@ -85,11 +85,6 @@ public class InteractionRedirectTests(TestFactory factory) : TestBase(factory)
         };
 
     /// <summary>
-    /// Drives /authorize and returns where the endpoint sent the browser, asserting it redirected at all.
-    /// </summary>
-    /// <summary>The path the browser was sent to, whether the endpoint answered with a relative or an
-    /// absolute location.</summary>
-    /// <summary>
     /// The interaction page is handed one parameter: a reference to the stored authorization request. Without
     /// it the page cannot tell what was asked for and has nowhere to send the user afterwards.
     /// </summary>
@@ -102,15 +97,22 @@ public class InteractionRedirectTests(TestFactory factory) : TestBase(factory)
             $"the interaction redirect carried no {AuthorizationRequest.Parameters.RequestUri}: {location}");
     }
 
+    /// <summary>The query the endpoint appended, whether the location it answered with is relative or absolute.
+    /// </summary>
     private static System.Collections.Specialized.NameValueCollection QueryOf(Uri location)
         => System.Web.HttpUtility.ParseQueryString(
             location.IsAbsoluteUri ? location.Query : location.OriginalString.Split('?').ElementAtOrDefault(1) ?? "");
 
+    /// <summary>The path the browser was sent to, whether the endpoint answered with a relative or an
+    /// absolute location.</summary>
     private static string PathOf(Uri location)
         => location.IsAbsoluteUri
             ? location.AbsolutePath
             : location.OriginalString.Split('?')[0];
 
+    /// <summary>
+    /// Drives /authorize and returns where the endpoint sent the browser, asserting it redirected at all.
+    /// </summary>
     private static async Task<Uri> InteractionRedirectAsync(
         HttpClient client, DiscoveryDocument discovery, string prompt, string state)
     {

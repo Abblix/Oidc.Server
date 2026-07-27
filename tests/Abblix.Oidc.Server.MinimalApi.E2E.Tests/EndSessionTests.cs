@@ -38,14 +38,14 @@ using Xunit;
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
 /// <summary>
-/// The Minimal API counterpart of the MVC suite's RP-initiated logout scenarios: the three shapes the
-/// end-session endpoint can answer with (OpenID Connect RP-Initiated Logout 1.0, and Front-Channel Logout 1.0
-/// section 2 for the framed page).
+/// The Minimal API counterpart of the MVC suite's RP-initiated logout scenarios: every shape the end-session
+/// endpoint can answer with - a framed page, a redirect, a refusal, and 204 when there is nowhere to return to
+/// (OpenID Connect RP-Initiated Logout 1.0, and Front-Channel Logout 1.0 section 2 for the framed page).
 /// </summary>
 /// <remarks>
 /// The endpoint was reached here only by a binding test, which proves the parameters arrive and says nothing
-/// about what comes back. All three answers are separate arms of one formatter, and the adapters implement it
-/// separately, so this pins the Minimal API side against the same cases as the MVC one.
+/// about what comes back. Each answer is a separate arm of one formatter, and the adapters implement that
+/// formatter separately, so this pins the Minimal API side against the same cases as the MVC one.
 /// </remarks>
 public sealed class EndSessionTests(TestFactory factory) : IClassFixture<TestFactory>
 {
@@ -164,6 +164,29 @@ public sealed class EndSessionTests(TestFactory factory) : IClassFixture<TestFac
 
         // The refusal must not name the rejected target as somewhere to go: no redirect, whatever the body says.
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A logout with nowhere to return to and nobody to notify answers 204: no body, no redirect. RP-Initiated
+    /// Logout 1.0 makes <c>post_logout_redirect_uri</c> optional, so this is what an ordinary client that does
+    /// not ask to be sent anywhere receives.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_with_nowhere_to_return_to_answers_no_content()
+    {
+        var client = CreateClient();
+        var discovery = await client.FetchDiscoveryAsync();
+        var (clientId, _) = await RegisterAsync(client, discovery, frontChannelLogout: false);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.Confirmed] = bool.TrueString,
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     private static async Task<(string ClientId, string ClientSecret)> RegisterAsync(

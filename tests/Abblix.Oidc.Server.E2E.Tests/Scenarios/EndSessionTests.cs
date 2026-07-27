@@ -230,6 +230,30 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A logout with nowhere to return to and nobody to notify answers 204: no body, no redirect. RP-Initiated
+    /// Logout 1.0 makes <c>post_logout_redirect_uri</c> optional, so this is what an ordinary client that does
+    /// not ask to be sent anywhere receives - the arm neither suite reached, and the one where a regression
+    /// would surface to the user as a failed logout rather than as a wrong page.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_with_nowhere_to_return_to_answers_no_content()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.Confirmed] = bool.TrueString,
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// Registers a client that additionally asks to be signed out through the front channel.
     /// </summary>
     private static async Task<string> RegisterFrontChannelLogoutClientAsync(
