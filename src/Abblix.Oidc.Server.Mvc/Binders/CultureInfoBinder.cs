@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Mvc.Binders;
 
@@ -63,12 +64,9 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
     /// <returns>True if parsing is successful, otherwise false.</returns>
     protected override bool TryParse(Type type, StringValues values, out object? result)
     {
-        string? stringValue = values;
-        if (stringValue == null)
-        {
-            result = null;
-            return false;
-        }
+        // The base binder returns before this is reached when the value provider held nothing, so a set with no
+        // values cannot arrive here - and a set with values converts to a string. See ModelBinderBase.TryParse.
+        var stringValue = ((string?)values).NotNull(nameof(values));
 
         if (type == typeof(CultureInfo))
         {
