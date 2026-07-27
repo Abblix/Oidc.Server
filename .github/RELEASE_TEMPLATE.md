@@ -60,12 +60,14 @@ Usage:
 🔒 Security
 -----------
 
+<!-- Describe the new behaviour or the requirement, never the hole it closes: a release body that names a
+     vulnerability advertises it in every version published before this one. Never mention an issue that is
+     still open. A fix a host need not act on ships silently - see SECURITY.md. -->
 <!-- Include security-related changes -->
 <!-- Examples:
 - Enhanced SSRF protection with multi-layered security approach
   - Added DNS resolution validation before HTTP requests
   - Implemented IP-based blocking for private network ranges
-  - Note: TOCTOU vulnerability exists between DNS validation and HTTP request
 - Hardened GitHub Actions workflow against supply chain attacks
   - Pinned all GitHub Actions to commit SHA instead of mutable version tags
 - Fixed Denial of Service vulnerability in cryptography libraries
@@ -91,7 +93,7 @@ Detailed description
 
 **Fixed routing-template resolution**
 
-- The original token parser used a regex that stopped capturing fallback values at the first closing bracket, and its resolution loop could exit before all placeholders were replaced—resulting in literal `[route:…]` fragments, malformed templates, and startup-time 404s. We broadened the regex to capture any character in the fallback and improved the loop to run until no further substitutions occur.
+- The original token parser used a regex that stopped capturing fallback values at the first closing bracket, and its resolution loop could exit before all placeholders were replaced, resulting in literal `[route:…]` fragments, malformed templates, and startup-time 404s. We broadened the regex to capture any character in the fallback and improved the loop to run until no further substitutions occur.
 -->
 
 ---
