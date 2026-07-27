@@ -79,12 +79,19 @@ public sealed record ClientJwtEncryption(
 
 	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered
-	/// <c>authorization_encrypted_response_alg</c> (JARM §2.2 / §3 opt-in), defaulting the content-encryption to
-	/// <c>A128CBC-HS256</c> when <c>authorization_encrypted_response_enc</c> is omitted (JARM §3).
+	/// <c>authorization_encrypted_response_alg</c> (JARM §2.2 / §3 opt-in), falling back to
+	/// <see cref="OidcOptions.DefaultAuthorizationResponseEncryptionAlgorithm"/> when
+	/// <c>authorization_encrypted_response_enc</c> is omitted.
 	/// </summary>
-	public static ClientJwtEncryption ForJarm(ClientInfo clientInfo) => new(
+	/// <remarks>
+	/// The fallback comes from its own setting rather than
+	/// <see cref="OidcOptions.DefaultContentEncryptionAlgorithm"/>, because JARM section 3 names a different
+	/// value for this response than the one the other client-addressed JWTs default to, and a client that
+	/// registered only the key-management algorithm is entitled to the one the specification named.
+	/// </remarks>
+	public static ClientJwtEncryption ForJarm(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.AuthorizationEncryptedResponseAlgorithm,
 		clientInfo.AuthorizationEncryptedResponseEncryption,
-		EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+		options.DefaultAuthorizationResponseEncryptionAlgorithm,
 		RequireRegisteredAlgorithm: true);
 }

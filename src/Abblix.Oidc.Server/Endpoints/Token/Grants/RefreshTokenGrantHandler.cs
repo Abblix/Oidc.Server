@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -65,7 +65,8 @@ public class RefreshTokenGrantHandler(
 	/// A task representing the outcome of the authorization process, either returning a successful grant with a new
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
 	{
 		// RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.

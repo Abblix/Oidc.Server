@@ -22,7 +22,7 @@
 
 using System.Collections;
 
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators;
 
 /// <summary>
 /// An immutable array with value equality, required by the incremental generator pipeline:

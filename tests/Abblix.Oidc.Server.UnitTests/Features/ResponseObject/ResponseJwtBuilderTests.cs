@@ -190,6 +190,44 @@ public class ResponseJwtBuilderTests
     }
 
     /// <summary>
+    /// The JARM fallback is a setting, so a deployment whose clients all understand a stronger algorithm can
+    /// raise it.
+    /// </summary>
+    /// <remarks>
+    /// The case above pins the value the specification names, which a client registering only
+    /// <c>authorization_encrypted_response_alg</c> is entitled to. This one pins that the value is reachable
+    /// at all: without it the setting could be read from nowhere and every test would still pass, because the
+    /// default it happens to carry is the same constant the code used to hold.
+    /// </remarks>
+    [Fact]
+    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_HonoursTheConfiguredFallback()
+    {
+        var capture = CaptureIssue();
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
+
+        _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        var options = Options.Create(new OidcOptions
+        {
+            DefaultAuthorizationResponseEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+        });
+
+        var builder = new ResponseJwtBuilder(
+            _clientInfoProvider.Object,
+            new ClientJwtFormatter(
+                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, Options.Create(new OidcOptions())),
+            _issuerProvider.Object,
+            _timeProvider.Object,
+            options);
+
+        await builder.BuildAsync(ClientId, [("code", "auth-code")]);
+
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, capture.ContentAlgorithm);
+    }
+
+    /// <summary>
     /// Characterizes the unified key-management algorithm selection shared by all client-addressed JWTs: when the
     /// client's encryption key declares its own <c>alg</c>, that algorithm is used in preference to the registered
     /// <c>authorization_encrypted_response_alg</c>. This is the long-standing UserInfo/ID-token rule, now applied to

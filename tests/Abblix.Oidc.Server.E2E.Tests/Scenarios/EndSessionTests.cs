@@ -22,10 +22,15 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Mime;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Net.Http.Headers;
 using Xunit;
 using EndSessionParameters = Abblix.Oidc.Server.Model.EndSessionRequest.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -61,6 +66,11 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Stand-in for an attacker-controlled target in the open-redirect test; not a deployment URL.")]
     private const string UnregisteredPostLogoutUri = "https://attacker.example.com/harvest";
+
+    /// <summary>The client's own logout endpoint, which the OP's page loads in a frame.</summary>
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test frontchannel_logout_uri for the dynamically registered client; not a deployment URL.")]
+    private static readonly Uri FrontChannelLogoutUri = new("https://client.example.com/front-channel-logout");
 
     [Fact]
     public async Task A_post_logout_redirect_uri_the_client_never_registered_is_refused()
@@ -151,6 +161,115 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(CreateClient());
 
         Assert.NotNull(discovery.EndSessionEndpoint);
+    }
+
+    /// <summary>
+    /// A client that registered a front-channel logout URI is signed out through a browser page rather than a
+    /// redirect: the OP answers HTML that loads that URI in a frame, so the client's own site clears its
+    /// cookies (OpenID Connect Front-Channel Logout 1.0 section 2).
+    /// </summary>
+    /// <remarks>
+    /// This arm had no test through either adapter, and the thing it emits is a page that deliberately frames
+    /// third-party URLs - so its Content-Security-Policy is the only thing standing between "load the logout
+    /// endpoints of the clients in this session" and "load whatever the page happens to contain". A missing or
+    /// weakened policy here would not fail any other assertion, because the logout still works.
+    ///
+    /// The client only receives a front-channel notice if the session knows it, which happens when it
+    /// authorizes - so the flow runs first, and the logout follows on the same client.
+    /// </remarks>
+    [Fact]
+    public async Task A_client_with_a_front_channel_logout_uri_is_signed_out_through_a_framed_page()
+    {
+        // On its own host: authorizing adds this client to the session the test host keeps for the whole
+        // process, and that addition never goes away - a shared host would hand every later end-session test a
+        // client to notify through the front channel, turning their redirects into this page.
+        await using var host = Factory.WithWebHostBuilder(_ => { });
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
+
+        // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
+        var (_, challenge) = GeneratePkcePair();
+        await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+            [EndSessionParameters.Confirmed] = bool.TrueString,
+        });
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
+        Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
+
+        var policy = response.Headers.GetValues(HeaderNames.ContentSecurityPolicy).Single();
+
+        // The page frames a third party, so the policy has to name that origin and nothing wider, and it has to
+        // deny everything it does not name - "default-src 'none'" is what makes the rest of it a whitelist.
+        // A policy names origins rather than paths, so the origin is what is asserted here.
+        Assert.Contains("default-src 'none'", policy);
+        Assert.Contains(FrontChannelLogoutUri.GetLeftPart(UriPartial.Authority), policy);
+        Assert.DoesNotContain("frame-src *", policy);
+    }
+
+    /// <summary>
+    /// A logout with nowhere to return to and nobody to notify answers 204: no body, no redirect. RP-Initiated
+    /// Logout 1.0 makes <c>post_logout_redirect_uri</c> optional, so this is what an ordinary client that does
+    /// not ask to be sent anywhere receives - the arm neither suite reached, and the one where a regression
+    /// would surface to the user as a failed logout rather than as a wrong page.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_with_nowhere_to_return_to_answers_no_content()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.Confirmed] = bool.TrueString,
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Registers a client that additionally asks to be signed out through the front channel.
+    /// </summary>
+    private static async Task<string> RegisterFrontChannelLogoutClientAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
+        var registered = await RegisterClientAsync(client, discovery, new JsonObject
+        {
+            [RegistrationMembers.ClientName] = "front-channel-logout-rp",
+            [RegistrationMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
+            [RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode),
+            [RegistrationMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+            [RegistrationMembers.PostLogoutRedirectUris] = new JsonArray(RegisteredPostLogoutUri),
+            [RegistrationMembers.FrontChannelLogoutUri] = FrontChannelLogoutUri.OriginalString,
+        });
+
+        return registered[RegistrationResponseMembers.ClientId]!.GetValue<string>();
     }
 
     /// <summary>

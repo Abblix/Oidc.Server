@@ -81,6 +81,42 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
+    /// <summary>
+    /// A client whose grants redirect still has to register a redirect URI, and is told so in the
+    /// protocol's own terms.
+    /// </summary>
+    /// <remarks>
+    /// The requirement lives in the validator that expresses it correctly - it applies when the requested
+    /// grants include one that redirects - rather than as a declarative constraint on the model, which ran
+    /// first and refused a device-flow or CIBA client that has no user agent to redirect. This case is the
+    /// other half of that change: the rule is still enforced where it applies, and the refusal carries
+    /// invalid_redirect_uri rather than a transport-level complaint naming a C# property.
+    /// </remarks>
+    [Fact]
+    public async Task A_redirecting_client_still_has_to_register_a_redirect_uri()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // The metadata every other case here registers with, minus the one member under test - so what
+        // differs between an accepted registration and this one is exactly the redirect URI.
+        var metadata = NewClientMetadata("redirecting-without-a-uri");
+        metadata.Remove(RequestMembers.RedirectUris);
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        var error = body["error"];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
+    }
+
     [Fact]
     public async Task A_client_can_read_its_own_registration()
     {

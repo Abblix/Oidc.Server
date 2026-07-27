@@ -29,7 +29,6 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -47,14 +46,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
-/// <param name="httpContextAccessor">Accessor for HTTP context to retrieve cancellation token.</param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
-    IBackChannelLongPollingService? statusNotifier = null,
-    IHttpContextAccessor? httpContextAccessor = null) : IAuthorizationGrantHandler
+    IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
@@ -94,10 +91,11 @@ public class BackChannelAuthenticationGrantHandler(
     /// Either an authorized grant if authentication succeeded, or an error indicating why the request failed
     /// (authorization_pending, access_denied, expired_token, slow_down, or invalid_grant).
     /// </returns>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
-        // not a server fault — the previous throw-on-access surfaced it as HTTP 500.
+        // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.AuthenticationRequestId.HasValue())
         {
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.AuthenticationRequestId);
@@ -143,7 +141,8 @@ public class BackChannelAuthenticationGrantHandler(
             // If the user has not yet been authenticated and the request is still pending,
             // either wait for status change (long-polling) or return immediately (short-polling)
             { Status: BackChannelAuthenticationStatus.Pending } pendingRequest
-                => await HandlePendingRequestAsync(request.AuthenticationRequestId, pendingRequest, clientInfo),
+                => await HandlePendingRequestAsync(
+                    request.AuthenticationRequestId, pendingRequest, clientInfo, cancellationToken),
 
             // If the user denied the authentication request, return an error indicating access is denied
             { Status: BackChannelAuthenticationStatus.Denied }
@@ -170,11 +169,13 @@ public class BackChannelAuthenticationGrantHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="authenticationRequest">The pending authentication request to update.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
+    /// <param name="cancellationToken">Abandons the wait when the caller stops waiting.</param>
     /// <returns>Either an authorized grant if authentication completed during long-polling, or authorization_pending error.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> HandlePendingRequestAsync(
         string authenticationRequestId,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticationRequest,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+        CancellationToken cancellationToken)
     {
         // Calculate remaining time before expiration
         var expiresIn = authenticationRequest.ExpiresAt - timeProvider.GetUtcNow();
@@ -196,7 +197,7 @@ public class BackChannelAuthenticationGrantHandler(
 
         if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null)
         {
-            var result = await TryLongPollingAsync(authenticationRequestId, clientInfo);
+            var result = await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken);
             if (result != null)
             {
                 return result;
@@ -214,18 +215,20 @@ public class BackChannelAuthenticationGrantHandler(
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
+    /// <param name="cancellationToken">Abandons the wait when the caller stops waiting.</param>
     /// <returns>
     /// The result of processing the updated request if status changed, or null if timeout occurred.
     /// Null indicates the caller should return authorization_pending error.
     /// </returns>
     private async Task<Result<AuthorizedGrant, OidcError>?> TryLongPollingAsync(
         string authenticationRequestId,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+        CancellationToken cancellationToken)
     {
         var statusChanged = await statusNotifier!.WaitForStatusChangeAsync(
             authenticationRequestId,
             options.Value.BackChannelAuthentication.LongPollingTimeout,
-            httpContextAccessor?.HttpContext?.RequestAborted ?? CancellationToken.None);
+            cancellationToken);
 
         if (!statusChanged)
         {

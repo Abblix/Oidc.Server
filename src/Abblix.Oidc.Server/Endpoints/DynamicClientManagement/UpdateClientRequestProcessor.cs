@@ -68,7 +68,10 @@ public class UpdateClientRequestProcessor(
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
             AllowedGrantTypes = model.GrantTypes,
-            RedirectUris = model.RedirectUris,
+            // Empty rather than null when the client registers none, matching registration: RFC 7592 §2
+            // replaces the whole metadata set, so a client dropping its redirect URIs must end up with an
+            // empty set rather than an absent one.
+            RedirectUris = model.RedirectUris ?? [],
             Jwks = model.Jwks,
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,

@@ -147,7 +147,11 @@ public class RegisterClientRequestProcessor(
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
             AllowedGrantTypes = model.GrantTypes,
-            RedirectUris = model.RedirectUris,
+            // A client that registers none has none: the flows that redirect are the ones that require
+            // them, and a device-flow or CIBA client runs neither. Empty rather than null so every reader
+            // downstream - the authorization endpoint's redirect check among them - sees a set to compare
+            // against instead of having to ask whether there is one.
+            RedirectUris = model.RedirectUris ?? [],
             Jwks = model.Jwks,
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,

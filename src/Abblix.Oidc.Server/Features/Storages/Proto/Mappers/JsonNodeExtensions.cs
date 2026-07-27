@@ -24,14 +24,19 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Google.Protobuf.WellKnownTypes;
 
-namespace Abblix.Utils.Json;
+namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
 /// <summary>
-/// Bidirectional conversion between System.Text.Json types (JsonObject, JsonNode) and Protocol Buffers well-known types (Struct, Value).
-/// Performs direct object-to-object mapping without intermediate JSON string serialization, providing efficient
-/// conversion for storing JSON data in protobuf messages.
+/// Bidirectional conversion between System.Text.Json types (JsonObject, JsonNode) and Protocol Buffers well-known
+/// types (Struct, Value). Performs direct object-to-object mapping without intermediate JSON string serialization,
+/// providing efficient conversion for storing JSON data in protobuf messages.
 /// </summary>
-public static class JsonNodeExtensions
+/// <remarks>
+/// Internal, and living beside the mappers that are its only callers, because its signatures name Protocol
+/// Buffers types. Exposing those on a public surface would make the storage serialisation format part of this
+/// package's contract, so replacing it would break consumers that never touched it.
+/// </remarks>
+internal static class JsonNodeExtensions
 {
     /// <summary>
     /// Converts JsonObject to protobuf Struct.

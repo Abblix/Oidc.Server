@@ -81,7 +81,9 @@ public class TokenController : ControllerBase
         [FromForm] ClientRequest clientRequest)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
-        var response = await handler.HandleAsync(coreTokenRequest, clientRequest);
+        // The request's own token: CIBA holds this call open for the long-polling window, and without it a
+        // client that disconnects leaves the server polling storage for an answer nobody is waiting for.
+        var response = await handler.HandleAsync(coreTokenRequest, clientRequest, HttpContext.RequestAborted);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 

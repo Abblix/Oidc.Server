@@ -221,8 +221,10 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     {
         var registered = await RegisterClientAsync(client, discovery, new JsonObject
         {
+            // No redirect_uris: CIBA moves the user interaction off the browser entirely, so there is no
+            // redirect to register. That this registration is accepted is itself part of what the suite
+            // proves.
             [RegistrationMembers.ClientName] = $"ciba-{Guid.NewGuid():N}",
-            [RegistrationMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
             [RegistrationMembers.ResponseTypes] = new JsonArray(),
             [RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba),
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,

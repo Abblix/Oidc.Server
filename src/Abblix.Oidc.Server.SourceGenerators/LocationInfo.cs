@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators;
 
 /// <summary>
 /// A source location captured as equatable primitives, restorable to a <see cref="Location"/>

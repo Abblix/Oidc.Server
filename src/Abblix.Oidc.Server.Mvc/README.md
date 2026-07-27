@@ -73,5 +73,6 @@ To learn more about the Abblix OIDC Server product, visit our [Documentation](ht
 
 ## Contacts
 
-- **Email**: [support@abblix.com](mailto:support@abblix.com)
+- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
+- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
 - **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

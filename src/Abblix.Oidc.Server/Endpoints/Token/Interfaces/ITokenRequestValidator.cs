@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -42,5 +43,22 @@ public interface ITokenRequestValidator
 	/// or an <see cref="OidcError"/> using one of the codes from RFC 6749 §5.2 (e.g. <c>invalid_grant</c>,
 	/// <c>invalid_client</c>, <c>unsupported_grant_type</c>).
 	/// </summary>
-	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest);
+	[Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
+	          "implementation keeps working, and will be removed in the next major version.")]
+	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+		Justification = "Removal is scheduled and tracked: the overload is kept only so a caller written against the pre-2.4 signature keeps working, and it goes in the next major version (#302).")]
+	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(TokenRequest tokenRequest, ClientRequest clientRequest)
+		=> ValidateAsync(tokenRequest, clientRequest, CancellationToken.None);
+
+	/// <inheritdoc cref="ValidateAsync(TokenRequest, ClientRequest)"/>
+	/// <param name="tokenRequest">The token request to validate.</param>
+	/// <param name="clientRequest">Supplementary information about the client making the request.</param>
+	/// <param name="cancellationToken">Abandons validation when the caller stops waiting.</param>
+	/// <remarks>
+	/// This is the member an implementation provides. The obsolete overload above defaults to forwarding here,
+	/// so a caller still holding the old signature keeps working, while an implementation that provided only
+	/// the old one fails to compile rather than silently never receiving the token.
+	/// </remarks>
+	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(
+		TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken);
 }

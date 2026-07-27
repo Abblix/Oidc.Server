@@ -67,7 +67,8 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
     /// <returns>A task that resolves to the result of the authorization process.
     /// If successful, it contains the granted authorization;
     /// otherwise, it contains an error explaining why the authorization failed.</returns>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // Check if there is a handler for the requested grant type.
         // If no handler exists, return an error indicating that the grant type is unsupported.
@@ -79,6 +80,6 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
         }
 
         // Delegate the authorization request to the handler that supports the specified grant type.
-        return await grantHandler.AuthorizeAsync(request, clientInfo);
+        return await grantHandler.AuthorizeAsync(request, clientInfo, cancellationToken);
     }
 }

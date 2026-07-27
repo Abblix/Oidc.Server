@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -105,7 +106,7 @@ public class TokenHandlerTests
         var tokenIssued = CreateTokenIssued();
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
 
         _processor
@@ -113,12 +114,12 @@ public class TokenHandlerTests
             .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
 
         // Act
-        var result = await _handler.HandleAsync(tokenRequest, clientRequest);
+        var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var issued));
         Assert.Same(tokenIssued, issued);
-        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()), Times.Once);
         _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
     }
 
@@ -137,16 +138,16 @@ public class TokenHandlerTests
             "Authorization code is invalid or expired");
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
 
         // Act
-        var result = await _handler.HandleAsync(tokenRequest, clientRequest);
+        var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -166,7 +167,7 @@ public class TokenHandlerTests
             "Failed to issue token");
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
 
         _processor
@@ -174,12 +175,12 @@ public class TokenHandlerTests
             .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
 
         // Act
-        var result = await _handler.HandleAsync(tokenRequest, clientRequest);
+        var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()), Times.Once);
         _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
     }
 
@@ -198,7 +199,7 @@ public class TokenHandlerTests
         var tokenIssued = CreateTokenIssued();
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
 
         _processor
@@ -206,7 +207,7 @@ public class TokenHandlerTests
             .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
 
         // Act
-        await _handler.HandleAsync(tokenRequest, clientRequest);
+        await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
@@ -228,7 +229,7 @@ public class TokenHandlerTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
@@ -244,7 +245,7 @@ public class TokenHandlerTests
             });
 
         // Act
-        await _handler.HandleAsync(tokenRequest, clientRequest);
+        await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -267,11 +268,11 @@ public class TokenHandlerTests
             "Client authentication failed");
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
 
         // Act
-        var result = await _handler.HandleAsync(tokenRequest, clientRequest);
+        var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -293,17 +294,18 @@ public class TokenHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
 
         // Act
-        await _handler.HandleAsync(tokenRequest, clientRequest);
+        await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         _validator.Verify(
             v => v.ValidateAsync(
                 It.Is<TokenRequest>(r => r == tokenRequest),
-                It.Is<ClientRequest>(r => r == clientRequest)),
+                It.Is<ClientRequest>(r => r == clientRequest),
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -321,11 +323,11 @@ public class TokenHandlerTests
         var error = new OidcError(ErrorCodes.InvalidGrant, "Invalid authorization code");
 
         _validator
-            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
 
         // Act
-        await _handler.HandleAsync(tokenRequest, clientRequest);
+        await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         _processor.VerifyNoOtherCalls();

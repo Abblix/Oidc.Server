@@ -68,7 +68,12 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Protobuf Include="Features\Storages\Proto\*.proto" GrpcServices="None" />
+      <!-- Access="Internal" keeps the generated message types out of the public API. They are the on-disk
+           shape of what the storages persist, not a contract any host programs against, and every mapper that
+           touches them is already internal. Left public they would be the only place Google.Protobuf reaches
+           this package's public surface, which makes replacing the serialisation format a breaking change for
+           consumers who never used it. -->
+      <Protobuf Include="Features\Storages\Proto\*.proto" GrpcServices="None" Access="Internal" />
     </ItemGroup>
 
     <ItemGroup>

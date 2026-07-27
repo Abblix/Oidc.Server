@@ -82,12 +82,12 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// RFC 6749 §5.2: a token request without the required device_code parameter is the caller's
-    /// protocol error and yields invalid_request — previously it threw and surfaced as HTTP 500.
+    /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
     public async Task AuthorizeAsync_MissingDeviceCode_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId));
+        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -132,7 +132,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -170,7 +170,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -194,7 +194,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -222,7 +222,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -254,7 +254,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -288,7 +288,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -321,7 +321,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -344,7 +344,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert: the missing required device_code is rejected by the parameter validator.
         Assert.True(result.TryGetFailure(out _));
@@ -370,7 +370,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
@@ -406,7 +406,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -442,7 +442,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -473,7 +473,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -482,7 +482,7 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// RFC 8628 §3.2: once the device_code reaches its fixed lifetime the token endpoint returns
-    /// expired_token and the record is cleaned up — polling must not keep an expired code alive.
+    /// expired_token and the record is cleaned up - polling must not keep an expired code alive.
     /// </summary>
     [Fact]
     public async Task AuthorizeAsync_CodeExpired_ReturnsExpiredTokenAndRemoves()
@@ -502,7 +502,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -552,9 +552,9 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
-        // Assert: the approval survives — tokens are issued, and no Pending snapshot was written back.
+        // Assert: the approval survives - tokens are issued, and no Pending snapshot was written back.
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(UserId, grant.AuthSession.Subject);
         _storage.Verify(
@@ -564,7 +564,7 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// RFC 8628 §3.2: each poll refreshes the cache TTL with the code's remaining lifetime, never the full
-    /// CodeLifetime — so a client that keeps polling cannot extend the device_code past its fixed expiry.
+    /// CodeLifetime - so a client that keeps polling cannot extend the device_code past its fixed expiry.
     /// </summary>
     [Fact]
     public async Task PendingPoll_CapsCacheTtlAtRemainingLifetime_NotFullCodeLifetime()
@@ -587,7 +587,7 @@ public class DeviceCodeGrantHandlerTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo);
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert: the refreshed TTL is the 3-minute remainder, not the 15-minute CodeLifetime.
         Assert.True(result.TryGetFailure(out var error));

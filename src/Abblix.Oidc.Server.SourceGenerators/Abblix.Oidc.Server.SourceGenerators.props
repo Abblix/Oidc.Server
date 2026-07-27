@@ -1,0 +1,23 @@
+<Project>
+
+    <!--
+      Generator plumbing common to every adapter generator: framework-neutral value types, the shared rule for
+      resolving a declarative marker's executable twin, and netstandard2.0 polyfills.
+
+      This is a directory of sources rather than a project on purpose. Roslyn loads a generator as a single
+      assembly and resolves nothing beside it, so a shared class library would have to be packed into each
+      analyzer's own folder to load at all - a packaging obligation with no upside here. Compiling the sources
+      into each generator keeps every analyzer self-contained, which is the shape Roslyn already expects.
+
+      It is also why the sources do not live in either generator: a peer-to-peer include makes one adapter a
+      dependency of the other, and the direction of that dependency would be arbitrary. Neither points at the
+      other; both point here.
+
+      The include is a glob, so a file added here reaches both generators without a project edit - the failure
+      mode a hand-maintained list has is a new shared file that silently reaches only one of them.
+    -->
+    <ItemGroup>
+        <Compile Include="$(MSBuildThisFileDirectory)*.cs" LinkBase="Shared" />
+    </ItemGroup>
+
+</Project>

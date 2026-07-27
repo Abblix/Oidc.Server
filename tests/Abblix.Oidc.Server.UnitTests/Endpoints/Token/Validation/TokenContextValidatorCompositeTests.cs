@@ -22,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -57,7 +58,7 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -75,9 +76,9 @@ public class TokenContextValidatorCompositeTests
         var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
 
         var composite = new TokenContextValidatorComposite([
             validator1.Object,
@@ -87,13 +88,13 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -108,7 +109,7 @@ public class TokenContextValidatorCompositeTests
         var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
         var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error1);
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error1);
 
         var composite = new TokenContextValidatorComposite([
             validator1.Object,
@@ -117,11 +118,11 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(error1, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
         validator2.VerifyNoOtherCalls();
     }
 
@@ -138,8 +139,8 @@ public class TokenContextValidatorCompositeTests
         var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error2);
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error2);
 
         var composite = new TokenContextValidatorComposite([
             validator1.Object,
@@ -149,12 +150,12 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(error2, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
         validator3.VerifyNoOtherCalls();
     }
 
@@ -171,9 +172,9 @@ public class TokenContextValidatorCompositeTests
         var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync(error3);
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error3);
 
         var composite = new TokenContextValidatorComposite([
             validator1.Object,
@@ -183,13 +184,13 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(error3, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -206,16 +207,16 @@ public class TokenContextValidatorCompositeTests
         var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
         validator1
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
-            .Callback(new Action<TokenValidationContext>(_ => callOrder.Add(1)))
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(1)))
             .ReturnsAsync((OidcError?)null);
         validator2
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
-            .Callback(new Action<TokenValidationContext>(_ => callOrder.Add(2)))
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(2)))
             .ReturnsAsync((OidcError?)null);
         validator3
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
-            .Callback(new Action<TokenValidationContext>(_ => callOrder.Add(3)))
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new TokenContextValidatorComposite([
@@ -226,7 +227,7 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(new[] { 1, 2, 3 }, callOrder);
@@ -245,12 +246,12 @@ public class TokenContextValidatorCompositeTests
         var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
 
         validator1
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
-            .Callback(new Action<TokenValidationContext>(ctx => capturedContexts.Add(ctx)))
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((ctx, _) => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
         validator2
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()))
-            .Callback(new Action<TokenValidationContext>(ctx => capturedContexts.Add(ctx)))
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((ctx, _) => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new TokenContextValidatorComposite([
@@ -260,7 +261,7 @@ public class TokenContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, capturedContexts.Count);
@@ -277,16 +278,16 @@ public class TokenContextValidatorCompositeTests
     {
         // Arrange
         var validator = new Mock<ITokenContextValidator>(MockBehavior.Strict);
-        validator.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
 
         var composite = new TokenContextValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
-        validator.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>()), Times.Once);
+        validator.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

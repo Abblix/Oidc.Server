@@ -20,11 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 using Google.Protobuf.WellKnownTypes;
+using Xunit;
 
-namespace Abblix.Utils.UnitTests.Json;
+namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
 /// <summary>
 /// Tests for JsonNodeExtensions protobuf conversion methods.
@@ -499,4 +502,51 @@ public class JsonNodeExtensionsTests
     }
 
     #endregion
+
+    /// <summary>
+    /// The dictionary pair of the bridge: <c>ToStruct(IDictionary)</c> and <c>ToDictionary(Struct)</c>.
+    /// </summary>
+    /// <remarks>
+    /// Retained without a call site: the one production consumer of this bridge, <c>AuthSessionMapper</c>,
+    /// carries its additional claims as a <c>JsonObject</c> and uses the JsonObject overloads in both
+    /// directions. Since the type became internal these are reachable only from inside this library, so the
+    /// question of whether to keep them is now ours alone - they are exercised so that whoever answers it, or
+    /// becomes their first caller, does not have to find out how they behave.
+    /// The round trip is asserted rather than either direction alone, because the number handling is where a
+    /// pair like this loses information: protobuf carries every number as a double, so a whole one has to be
+    /// recognised on the way back or an integer claim returns as a fraction.
+    /// </remarks>
+    [Fact]
+    public void DictionaryRoundTrip_PreservesValuesAndTheirTypes()
+    {
+        var source = new Dictionary<string, object>
+        {
+            ["sub"] = "user-1",
+            ["email_verified"] = true,
+            ["auth_time"] = 1700000000L,
+            ["issued_ticks"] = 9_000_000_000L,
+            ["score"] = 1.5,
+        };
+
+        var result = source.ToStruct().ToDictionary();
+
+        Assert.Equal("user-1", result["sub"]);
+        Assert.True((bool)result["email_verified"]);
+        Assert.Equal(1.5, result["score"]);
+
+        // Protobuf carries every number as a double, so the way back picks the narrowest whole type that
+        // holds the value: a Unix timestamp comes back an int even though it went in a long, and only a
+        // value too large for int stays one. Asserting the types is the point - a claim that changes shape
+        // across a storage round trip is the defect this pair can have.
+        Assert.Equal(1700000000, result["auth_time"]);
+        Assert.Equal(9_000_000_000L, result["issued_ticks"]);
+    }
+
+    [Fact]
+    public void ToStruct_OfNothing_ProducesAnEmptyStruct()
+        => Assert.Empty(((IDictionary<string, object>?)null).ToStruct().Fields);
+
+    [Fact]
+    public void ToDictionary_OfNothing_ProducesAnEmptyDictionary()
+        => Assert.Empty(((Struct?)null).ToDictionary());
 }

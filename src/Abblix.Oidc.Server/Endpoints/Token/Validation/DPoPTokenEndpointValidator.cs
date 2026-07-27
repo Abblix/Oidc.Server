@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// token.
 /// </summary>
 /// <remarks>
-/// Sits AFTER <see cref="ClientValidator"/> in the composite — that ordering is
+/// Sits AFTER <see cref="ClientValidator"/> in the composite - that ordering is
 /// load-bearing because this step reads <see cref="TokenValidationContext.ClientInfo"/>
 /// to decide whether DPoP is mandatory (<see cref="ClientInfo.RequireDPoP"/>)
 /// or opportunistic. When the client opts in but the proof is missing, the request is
@@ -56,7 +56,7 @@ public partial class DPoPTokenEndpointValidator(
     IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), ITokenContextValidator
 {
     /// <inheritdoc/>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
     {
         if (ValidateCertificateBinding(context) is { } certificateError)
             return certificateError;
@@ -70,7 +70,7 @@ public partial class DPoPTokenEndpointValidator(
 
     /// <summary>
     /// RFC 8705 §4: a grant issued with a certificate-bound token must be redeemed (e.g. on refresh) by
-    /// re-presenting the same certificate. Clients that authenticate via mutual TLS are skipped — their
+    /// re-presenting the same certificate. Clients that authenticate via mutual TLS are skipped - their
     /// authentication already proved certificate possession on this connection. For every other
     /// authentication method (including public 'none') the binding is otherwise never checked, so a stolen
     /// certificate-bound refresh token would be redeemable with no certificate at all while the issued

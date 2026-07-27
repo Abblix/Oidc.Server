@@ -7,7 +7,7 @@ Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERN
 ## Installation
 
 ```bash
-dotnet add package Abblix.Jwt.Vault
+dotnet add package Abblix.JWT.Vault
 ```
 
 ## Provisioning
@@ -148,7 +148,7 @@ ECDH-ES key agreement is not supported: Vault Transit exposes no key-agreement p
 | Package | Description |
 |---------|-------------|
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.Jwt.Azure](https://www.nuget.org/packages/Abblix.Jwt.Azure)** | Azure Key Vault custodian for the same external-key seam |
+| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault custodian for the same external-key seam |
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started
@@ -161,5 +161,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **Email**: [support@abblix.com](mailto:support@abblix.com)
+- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
+- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
 - **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

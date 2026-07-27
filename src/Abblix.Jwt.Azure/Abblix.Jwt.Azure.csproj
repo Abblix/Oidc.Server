@@ -7,7 +7,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Abblix.Jwt.Azure</PackageId>
+    <PackageId>Abblix.JWT.Azure</PackageId>
     <Title>Abblix OIDC Server Azure Key Vault Custodian</Title>
     <Description>Azure Key Vault external-key integration for Abblix OIDC Server. Signs and unwraps with keys held in Azure Key Vault (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, wired with an AddAzureCustodian call and the tier choice that follows it.</Description>
     <Authors>Abblix LLP</Authors>

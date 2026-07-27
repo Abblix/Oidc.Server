@@ -41,5 +41,5 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Relevant logs or token (redact all secrets)
+      label: Relevant logs, or a decoded JWT header and payload (drop the signature, remove every secret)
       render: text

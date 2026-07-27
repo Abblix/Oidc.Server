@@ -1,4 +1,4 @@
-namespace Abblix.Oidc.Server.Mvc.SourceGeneration;
+namespace Abblix.Oidc.Server.SourceGenerators;
 
 /// <summary>
 /// The rendered output for one model: the hint name, the full source text (or null when generation
