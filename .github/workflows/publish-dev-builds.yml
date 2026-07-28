@@ -47,7 +47,12 @@ jobs:
   pack-and-publish:
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Raised from 5, which the job had outgrown: two consecutive runs died at 5m06s and 5m16s,
+    # once mid-pack and once mid-push, leaving the dev feed without that commit's packages. A
+    # job timeout surfaces as "cancelled" with the same wording as a manual stop, so the only
+    # thing that identifies it is the duration landing on the configured ceiling. This value is
+    # deliberately generous until a run completes and gives a real figure to size it from.
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: write
