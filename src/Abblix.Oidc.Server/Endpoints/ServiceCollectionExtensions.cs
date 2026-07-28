@@ -326,11 +326,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<JwtBearer.IJwtReplayCache, JwtBearer.DistributedJwtReplayCache>();
 #pragma warning restore CS0618
 
-        // Register keyed caching decorator for JWT Bearer JWKS fetching
-        // DecorateKeyed will find the non-keyed ISecureHttpFetcher and create a keyed decorated version
-        services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
-            JwtBearerIssuerProvider.SecureHttpFetcherKey);
-
         return services.AddAuthorizationGrant<JwtBearerGrantHandler>();
     }
 

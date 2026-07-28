@@ -48,6 +48,35 @@ public class SecureHttpFetchOptions
     public long MaxResponseSizeBytes { get; set; } = 5 << 20;
 
     /// <summary>
+    /// How long a client's fetched key set is held before it is fetched again. Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// These keys verify request objects and client assertions, so this bounds how long a key the client has
+    /// already removed from its published set is still accepted here.
+    /// </remarks>
+    public TimeSpan ClientKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long a protected resource's fetched key set is held before it is fetched again. Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// This one sits on the hottest path of the four: the key is read while issuing an access token for that
+    /// resource, so every issuance would otherwise be an HTTP request. Lowering it buys faster propagation of
+    /// a rotated resource key at the cost of a fetch per interval.
+    /// </remarks>
+    public TimeSpan ResourceKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long a software-statement issuer's fetched key set is held before it is fetched again.
+    /// Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// Read only while a dynamic client registration presents a software statement, so the coldest of the
+    /// four.
+    /// </remarks>
+    public TimeSpan SoftwareStatementKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
     /// List of allowed URI schemes.
     /// Default: null (all schemes allowed).
     /// </summary>
