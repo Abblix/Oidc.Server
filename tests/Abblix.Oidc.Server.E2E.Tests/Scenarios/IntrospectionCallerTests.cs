@@ -108,25 +108,4 @@ public class IntrospectionCallerTests(TestFactory factory) : TestBase(factory)
         return tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
     }
 
-    private static async Task<JsonObject> IntrospectAsync(
-        HttpClient client, DiscoveryDocument discovery, string token, string callerClientId)
-    {
-        Assert.NotNull(discovery.IntrospectionEndpoint);
-        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
-        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = callerClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [IntrospectionRequest.Parameters.Token] = token,
-            [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
-        });
-
-        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
-        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, $"introspect failed: {(int)response.StatusCode} {raw}");
-
-        var body = JsonNode.Parse(raw)?.AsObject();
-        Assert.NotNull(body);
-        return body;
-    }
 }
