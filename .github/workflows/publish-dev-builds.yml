@@ -44,14 +44,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  shards:
+    # The same shards the pull request ran, defined once in a called workflow. They run here too
+    # because a squash merge produces a new commit on top of whatever develop had moved to, so what
+    # lands on the branch is a state no pull request tested.
+    uses: ./.github/workflows/test-shards.yml
+
   pack-and-publish:
+    needs: shards
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    # Raised from 5, which the job had outgrown: two consecutive runs died at 5m06s and 5m16s,
-    # once mid-pack and once mid-push, leaving the dev feed without that commit's packages. A
-    # job timeout surfaces as "cancelled" with the same wording as a manual stop, so the only
-    # thing that identifies it is the duration landing on the configured ceiling. This value is
-    # deliberately generous until a run completes and gives a real figure to size it from.
+    # The suite moved to the shards above, so this job is now restore, build, pack and push -
+    # measured at roughly 130s of the 269s the combined job used to take. Ten minutes is generous
+    # on purpose until a few runs give a figure to size it from; the previous ceiling of 5 was set
+    # from a measurement with no headroom and the job silently outgrew it, dying at 5m06s and
+    # 5m16s. Worth knowing when it happens again: a job timeout is reported as "cancelled" with
+    # the same wording as a manual stop, so the only thing that identifies it is the duration
+    # landing exactly on the configured ceiling.
     timeout-minutes: 10
     permissions:
       contents: read
@@ -84,10 +93,6 @@ jobs:
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release
-
-        timeout-minutes: 3
-      - name: Test
-        run: dotnet test --no-build -c Release --verbosity normal
 
         timeout-minutes: 3
       - name: Pack
