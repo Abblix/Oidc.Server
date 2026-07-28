@@ -78,11 +78,19 @@ public partial class IntrospectionRequestValidator(
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
-		// The audience is deliberately not required to name this server. RFC 7662 Section 4 asks a different
-		// question - "determine whether or not the token can be used at the resource server making the
-		// introspection call" - and the caller check below is the answer to it. Demanding that the token's own
-		// audience name this server instead would report every token minted for a resource indicator as
-		// inactive, telling the caller a token it holds was never issued.
+		// The audience is deliberately not required to name this server. Introspection reports on a token, it
+		// does not consume one, so RFC 9068 Section 4, which binds the resource server that reads a token, does
+		// not apply here. Requiring it would report every token minted for a resource indicator as inactive,
+		// telling the caller a token it holds was never issued.
+		//
+		// RFC 7662 Section 4 lists what the authorization server must check instead - expiry, not-before,
+		// revocation, signature - and adds a conditional fifth: "If the token can be used only at certain
+		// resource servers, the authorization server MUST determine whether or not the token can be used at
+		// the resource server making the introspection call." Answering that needs the caller's identity as a
+		// resource server, which the endpoint has no way to learn: it authenticates a client, and Section 4
+		// notes that a piece of software acting as both "MAY reuse the same credentials", so a client
+		// identifier does not say which resource is asking. The same section closes the list with "it is up to
+		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
 			introspectionRequest.Token,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
@@ -92,7 +100,12 @@ public partial class IntrospectionRequestValidator(
 			{
 				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
-					// The token was issued to another client
+					// The token was issued to another client. This restriction is ours, not the RFC's: RFC 7662
+					// requires only that the caller be authenticated (Section 4, MUST) and specifically
+					// authorized to call the endpoint (Section 4, SHOULD), and says nothing about who the token
+					// belongs to. It serves Section 5, which requires measures against disclosing the response's
+					// privacy-sensitive contents "to unintended parties", by the bluntest of the means that
+					// section offers - refusing rather than narrowing the response.
 					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 				}
 
