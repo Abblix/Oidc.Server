@@ -59,11 +59,19 @@ public class IntrospectionRequestProcessorTests
         return token;
     }
 
+    /// <summary>
+    /// The caller defaults to the client the token was issued to, because that is the pairing these cases are
+    /// about: what the token's own client receives. A caller that differs is the protected-resource path of
+    /// RFC 7662, and it is answered with a narrowed response - pass <paramref name="callerClientId"/> to reach
+    /// it deliberately rather than through a fixture that happened to name two different clients.
+    /// </summary>
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(
         IntrospectionRequest request,
-        JsonWebToken? token = null)
+        JsonWebToken? token = null,
+        string? callerClientId = null)
     {
-        return new ValidIntrospectionRequest(request, new ClientInfo("test_client"), token!);
+        var clientId = callerClientId ?? token?.Payload.ClientId ?? "test_client";
+        return new ValidIntrospectionRequest(request, new ClientInfo(clientId), token!);
     }
 
     /// <summary>
@@ -187,6 +195,35 @@ public class IntrospectionRequestProcessorTests
     }
 
     /// <summary>
+    /// A caller the token was not issued to is answered without the end-user identifier, and without any claim
+    /// beyond the members RFC 7662 Section 2.2 defines. Section 5: "measures MUST be taken to prevent
+    /// disclosure of this information to unintended parties", and "omitting privacy-sensitive information from
+    /// an introspection response is the simplest way of minimizing privacy issues".
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ForAnotherClientsToken_ShouldWithholdTheSubjectAndUnlistedClaims()
+    {
+        // Arrange
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json["department"] = "finance";
+        var validRequest = CreateValidIntrospectionRequest(request, token, callerClientId: "resource_server");
+
+        // Act
+        var result = await _processor.ProcessAsync(validRequest);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.NotNull(success.Claims);
+        Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.Sub));
+        Assert.False(success.Claims.ContainsKey("department"));
+
+        // The caller still gets what it came for: who the token is for and what it may do.
+        Assert.Equal("client_456", success.Claims[IanaClaimTypes.ClientId]?.GetValue<string>());
+        Assert.Equal("openid profile", success.Claims[IanaClaimTypes.Scope]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// Verifies introspection preserves all claims from token payload.
     /// Tests that all token claims are included in response.
     /// </summary>
@@ -225,14 +262,18 @@ public class IntrospectionRequestProcessorTests
     public async Task ProcessAsync_WithDifferentTokens_ShouldReturnDifferentClaims()
     {
         // Arrange
+        // Both tokens carry client_id as every minted access token does, and each is introspected by its own
+        // client, so the responses are the full ones.
         var request1 = CreateIntrospectionRequest();
         var token1 = new JsonWebToken();
         token1.Payload.Json["sub"] = "user_1";
+        token1.Payload.Json[IanaClaimTypes.ClientId] = "client_456";
         var validRequest1 = CreateValidIntrospectionRequest(request1, token1);
 
         var request2 = CreateIntrospectionRequest();
         var token2 = new JsonWebToken();
         token2.Payload.Json["sub"] = "user_2";
+        token2.Payload.Json[IanaClaimTypes.ClientId] = "client_456";
         var validRequest2 = CreateValidIntrospectionRequest(request2, token2);
 
         // Act
@@ -299,6 +340,9 @@ public class IntrospectionRequestProcessorTests
         var request = CreateIntrospectionRequest();
         var token = new JsonWebToken();
         token.Payload.Json["sub"] = "user_123";
+        // Every access token this server mints carries client_id, and the caller here is that same client -
+        // this case is about the full response its own client receives.
+        token.Payload.Json[IanaClaimTypes.ClientId] = "client_456";
         token.Payload.Json["address"] = new JsonObject
         {
             ["street"] = "123 Main St",

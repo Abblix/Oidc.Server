@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Utils;
@@ -66,7 +68,60 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 		// to prevent a protected resource from learning more about the larger network than is necessary for its operation.
 
 		// A pairwise client's 'sub' is its own opaque per-sector pseudonym - meaningful only to the issuing server
-		// (which can reverse it) - so echoing the payload as-is leaks nothing extra to the introspecting resource.
-		return new IntrospectionSuccess(true, request.Token.Payload.Json, request.ClientInfo);
+		// (which can reverse it) - so echoing the payload as-is leaks nothing extra to the client the token was
+		// issued to. That reasoning does not carry to any other caller: the pseudonym belongs to somebody else's
+		// sector, and handing it over gives the caller a stable handle on a user it was never told about.
+		var payload = request.Token.Payload.Json;
+		if (request.Token.Payload.ClientId != request.ClientInfo.ClientId)
+		{
+			payload = WithoutPrivateClaims(payload);
+		}
+
+		return new IntrospectionSuccess(true, payload, request.ClientInfo);
+	}
+
+	/// <summary>
+	/// The members RFC 7662 Section 2.2 defines that carry nothing about the end-user, which is what a caller
+	/// other than the token's own client receives.
+	/// </summary>
+	/// <remarks>
+	/// This is an allow list rather than a list of claims to strip, because the payload is open-ended: scopes,
+	/// authorization details and host-defined claims all live there, and a deny list only withholds what
+	/// whoever wrote it happened to think of. Section 2.2 names the members a protected resource can expect,
+	/// so anything outside it is something the caller was never promised.
+	/// </remarks>
+	private static readonly string[] ClaimsSafeForAnyCaller =
+	[
+		IanaClaimTypes.Iss,
+		IanaClaimTypes.Aud,
+		IanaClaimTypes.Exp,
+		IanaClaimTypes.Nbf,
+		IanaClaimTypes.Iat,
+		IanaClaimTypes.Jti,
+		IanaClaimTypes.Scope,
+		IanaClaimTypes.ClientId,
+	];
+
+	/// <summary>
+	/// Keeps only the members safe for a caller the token was not issued to.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7662 Section 5: "measures MUST be taken to prevent disclosure of this information to unintended
+	/// parties", naming user identifiers as the case in point, and "omitting privacy-sensitive information from
+	/// an introspection response is the simplest way of minimizing privacy issues". Section 2.2 grants the
+	/// latitude to answer such a caller differently.
+	/// </remarks>
+	private static JsonObject WithoutPrivateClaims(JsonObject payload)
+	{
+		var narrowed = new JsonObject();
+		foreach (var name in ClaimsSafeForAnyCaller)
+		{
+			if (payload.TryGetPropertyValue(name, out var value) && value is not null)
+			{
+				narrowed[name] = value.DeepClone();
+			}
+		}
+
+		return narrowed;
 	}
 }

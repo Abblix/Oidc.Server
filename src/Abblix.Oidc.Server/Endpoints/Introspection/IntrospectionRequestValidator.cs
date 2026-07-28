@@ -98,14 +98,15 @@ public partial class IntrospectionRequestValidator(
 		return result.Match(
 			token =>
 			{
-				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
+				if (token is { Payload.ClientId: {} clientId } &&
+				    clientId != clientInfo.ClientId &&
+				    !clientInfo.AllowCrossClientIntrospection)
 				{
-					// The token was issued to another client. This restriction is ours, not the RFC's: RFC 7662
-					// requires only that the caller be authenticated (Section 4, MUST) and specifically
-					// authorized to call the endpoint (Section 4, SHOULD), and says nothing about who the token
-					// belongs to. It serves Section 5, which requires measures against disclosing the response's
-					// privacy-sensitive contents "to unintended parties", by the bluntest of the means that
-					// section offers - refusing rather than narrowing the response.
+					// The token was issued to another client and this caller is not authorized to act as a
+					// protected resource. RFC 7662 Section 4 asks for exactly that authorization - "SHOULD
+					// require protected resources to be specifically authorized to call the introspection
+					// endpoint" - and says nothing about who the token belongs to, so ownership is what stands
+					// in for the permission on a client that was never granted it.
 					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 				}
 

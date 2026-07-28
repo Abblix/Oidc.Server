@@ -63,7 +63,12 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
         Mint(TestConstants.EmptyAllowlistClientId, secret, redirect, [], idTokenRar: false),
-        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false),
+        // Doubles as the protected resource in the introspection scenarios: RFC 7662 §4 has such a caller
+        // "specifically authorized to call the introspection endpoint", which is what this permission is.
+        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            AllowCrossClientIntrospection = true,
+        },
         // RFC 9449 mandatory-binding client: token endpoint rejects any request without a valid proof.
         Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
         // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.

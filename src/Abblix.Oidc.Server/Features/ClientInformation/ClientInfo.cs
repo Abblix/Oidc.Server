@@ -256,6 +256,26 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
 
     /// <summary>
+    /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
+    /// RFC 7662 §4: the authorization server "SHOULD require protected resources to be specifically authorized
+    /// to call the introspection endpoint". This is that authorization.
+    /// </summary>
+    /// <remarks>
+    /// Without it a caller may only ask about tokens issued to itself, which is the one caller RFC 7662 is not
+    /// written for: §2.1 has the protected resource make the call, and a protected resource is by construction
+    /// not the client the token was issued to. Such a caller would otherwise be told a live token does not
+    /// exist, the answer §2.2 reserves for a token that was never issued or that the caller may not ask about.
+    /// <para>
+    /// The response is narrowed for a token issued to somebody else: the end-user identifier and any claims
+    /// beyond the members RFC 7662 §2.2 defines are withheld, per §5 - "omitting privacy-sensitive information
+    /// from an introspection response is the simplest way of minimizing privacy issues".
+    /// </para>
+    /// This is granted by the host, never through dynamic client registration. A client may take a restriction
+    /// upon itself, but a permission handed out on request is not a permission.
+    /// </remarks>
+    public bool AllowCrossClientIntrospection { get; set; } = false;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
