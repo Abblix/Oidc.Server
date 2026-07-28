@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -73,6 +74,49 @@ public static partial class SecureHttpFetcherExtensions
 			});
 
 		await foreach (var key in jwksKeys)
+		{
+			yield return key;
+		}
+	}
+
+	/// <summary>
+	/// Resolves the keys a party publishes, in the two forms a party may publish them: inline in its
+	/// registration, and at a JWKS URI. Both may be present, and the inline keys come first.
+	/// </summary>
+	/// <param name="serviceProvider">Used to resolve <see cref="ISecureHttpFetcher"/>, which is scoped while
+	/// the providers calling this are not, so a scope is created per call rather than held.</param>
+	/// <param name="jwks">The key set held in the party's own registration, if any.</param>
+	/// <param name="jwksUri">The URI the party publishes its key set at, if any.</param>
+	/// <param name="logger">Logger for recording fetch operations and errors.</param>
+	/// <param name="entityId">The identifier of the party, for logging.</param>
+	/// <param name="entityType">What kind of party it is, for logging. Use a value from
+	/// <see cref="KeySetOwners"/>.</param>
+	/// <returns>The inline keys followed by the fetched ones. Empty when the party declares neither.</returns>
+	/// <remarks>
+	/// The fetch itself is SSRF-protected and cached by the decorators around <see cref="ISecureHttpFetcher"/>,
+	/// so a caller gets both without arranging either.
+	/// </remarks>
+	public static async IAsyncEnumerable<JsonWebKey> ResolveKeysAsync(
+		this IServiceProvider serviceProvider,
+		JsonWebKeySet? jwks,
+		Uri? jwksUri,
+		ILogger logger,
+		string entityId,
+		string entityType)
+	{
+		if (jwks != null)
+		{
+			foreach (var key in jwks.Keys)
+				yield return key;
+		}
+
+		if (jwksUri == null)
+			yield break;
+
+		using var scope = serviceProvider.CreateScope();
+		var secureFetcher = scope.ServiceProvider.GetRequiredService<ISecureHttpFetcher>();
+
+		await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, entityId, entityType))
 		{
 			yield return key;
 		}

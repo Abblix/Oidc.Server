@@ -69,7 +69,15 @@ public static class ServiceCollectionExtensions
 	{
 		return services
 			.AddOptions<OidcOptions>()
-			.Configure(configureOptions).Services
+			.Configure(configureOptions)
+			// Makes validation a stated contract rather than a side effect. Without it the registered
+			// IValidateOptions validators run on whoever first reads the options value, and today something in
+			// this composition already reads it while the host starts, so removing this line changes no
+			// observable behaviour (measured: the end-to-end startup-refusal test stays green without it).
+			// That is a property of the current wiring rather than a guarantee. The day the last startup-time
+			// reader becomes lazy, a contradictory configuration would boot, report healthy and fail on live
+			// traffic instead.
+			.ValidateOnStart().Services
 			.AddCommonServices()
             .AddSecureHttpFetch() // Must be before AddEndpoints() so DecorateKeyed can find it
             .AddEndpoints()
@@ -121,7 +129,7 @@ public static class ServiceCollectionExtensions
 	}
 
 	/// <summary>
-	/// Configures the service collection with the always-on OAuth 2.0 and OpenID Connect endpoints — the set
+	/// Configures the service collection with the always-on OAuth 2.0 and OpenID Connect endpoints - the set
 	/// mounted unconditionally regardless of <see cref="OidcOptions.EnabledEndpoints"/>: discovery, authorization,
 	/// PAR, token, UserInfo and end session.
 	/// </summary>
@@ -135,8 +143,8 @@ public static class ServiceCollectionExtensions
 	/// - User Info Endpoint for accessing authenticated user information.
 	/// - End Session Endpoint for managing user logout processes.
 	///
-	/// The niche or security-sensitive endpoints — Revocation, Introspection, CIBA, Check Session and Dynamic
-	/// Client Registration — are not wired here. Each is opt-in through its dedicated <c>AddX()</c> feature method
+	/// The niche or security-sensitive endpoints - Revocation, Introspection, CIBA, Check Session and Dynamic
+	/// Client Registration - are not wired here. Each is opt-in through its dedicated <c>AddX()</c> feature method
 	/// (<c>AddRevocation</c>, <c>AddIntrospection</c>, <c>AddBackChannelAuthentication</c>, <c>AddCheckSession</c>,
 	/// <c>AddDynamicClientRegistration</c>), which registers the endpoint services and re-enables its flag in
 	/// <see cref="OidcOptions.EnabledEndpoints"/> (defaulting to <see cref="OidcEndpoints.Base"/>).

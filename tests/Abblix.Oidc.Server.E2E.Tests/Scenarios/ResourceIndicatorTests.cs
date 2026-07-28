@@ -3,9 +3,15 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
@@ -81,6 +87,76 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var error = JsonNode.Parse(raw)?.AsObject();
         Assert.Equal(ErrorCodes.InvalidTarget, error?[ResponseParameters.Error]?.GetValue<string>());
     }
+
+    /// <summary>
+    /// A resource that publishes an encryption key gets its access token encrypted to that key, so the party
+    /// named in <c>aud</c> can read the token minted for it. The proof is the recipient: the JWE header names
+    /// the resource's own <c>kid</c>, not the server's, and a token encrypted to the server's key would be
+    /// unreadable by the resource, which holds only the published public half.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_with_resource_publishing_a_key_encrypts_the_token_to_it()
+    {
+        var resourceKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        resourceKey = resourceKey with { KeyId = "orders-api-enc" };
+
+        await using var host = CreateHostWithResourceKey(resourceKey);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
+        });
+
+        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+
+        var segments = accessToken.Split('.');
+        Assert.True(segments.Length == 5, $"Expected a JWE (5 segments), got {segments.Length}");
+
+        var header = JsonNode.Parse(Base64UrlDecode(segments[0]))?.AsObject();
+        Assert.NotNull(header);
+        Assert.Equal(resourceKey.KeyId, header![JwtClaimTypes.KeyId]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Builds an isolated host where the registered resource publishes the given encryption key, and the
+    /// server holds an encryption key of its own. Both being present is what makes the assertion meaningful:
+    /// the token could have been encrypted to either, and the header says which one was chosen.
+    /// </summary>
+    private WebApplicationFactory<Program> CreateHostWithResourceKey(JsonWebKey resourceKey)
+        => Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options =>
+                        {
+                            options.EncryptionKeys =
+                            [
+                                JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with
+                                {
+                                    KeyId = "server-enc",
+                                },
+                            ];
+                            options.Resources =
+                            [
+                                new ResourceDefinition(new Uri(TestConstants.ApiResource))
+                                {
+                                    Jwks = new JsonWebKeySet([resourceKey]),
+                                },
+                            ];
+                        }))));
+
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+        => host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
 
     // RFC 7519 §4.1.3: aud is serialized as a single string when there is one value, or an array
     // when there are several. Normalize both shapes to a flat list for assertion.

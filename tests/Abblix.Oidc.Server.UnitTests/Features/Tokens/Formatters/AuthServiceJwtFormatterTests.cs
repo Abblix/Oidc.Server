@@ -37,9 +37,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 /// <summary>
 /// Unit tests for <see cref="AuthServiceJwtFormatter"/> verifying JWT formatting, signing and encryption
 /// for tokens the authorization server issues for itself, per RFC 7519 (JWT), RFC 7515 (JWS) and RFC 7516
-/// (JWE). The tests exercise the explicit <see cref="ServiceJwtEncryption"/> policy overload — signed only,
+/// (JWE). The tests exercise the explicit <see cref="ServiceJwtEncryption"/> policy overload - signed only,
 /// encrypt with a key-derived or explicit key-management algorithm, signing- and encryption-key pinning by
-/// <c>kid</c>, and the missing-key error — plus the retained implicit legacy path.
+/// <c>kid</c>, and the missing-key error - plus the retained implicit legacy path.
 /// </summary>
 public class AuthServiceJwtFormatterTests
 {
@@ -78,6 +78,13 @@ public class AuthServiceJwtFormatterTests
 
     private static ServiceJwtEncryption Encrypt(string? keyManagementAlgorithm = null, string? keyId = null) => new(
         Encrypt: true, keyManagementAlgorithm, keyId, ContentEnc);
+
+    /// <summary>
+    /// The policy of a host that never stated whether this token type should be encrypted: encrypt when a key
+    /// is available, sign only when none is.
+    /// </summary>
+    private static ServiceJwtEncryption Unstated => new(
+        Encrypt: null, KeyManagementAlgorithm: null, KeyId: null, ContentEnc);
 
     private void SetupSigningKeys(params JsonWebKey[] keys) =>
         _keysProvider.Setup(p => p.GetSigningKeys(true)).Returns(keys.ToAsyncEnumerable());
@@ -138,8 +145,8 @@ public class AuthServiceJwtFormatterTests
     // Signed only
 
     /// <summary>
-    /// Verifies that a signed-only policy issues a JWS with no encryption key, and — mirroring the client
-    /// formatter's JARM signed-only branch — does not even resolve the server's encryption keys. The strict
+    /// Verifies that a signed-only policy issues a JWS with no encryption key, and - mirroring the client
+    /// formatter's JARM signed-only branch - does not even resolve the server's encryption keys. The strict
     /// mock has no <c>GetEncryptionKeys</c> setup, so any attempt to resolve them would fail the test.
     /// </summary>
     [Fact]
@@ -377,12 +384,56 @@ public class AuthServiceJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that a policy asking for encryption while no encryption key is configured falls back to a
-    /// signed-only JWS rather than failing, matching the behavior of prior versions a host keeps by leaving
-    /// encryption on without configuring a key.
+    /// Verifies that a policy naming its own key encrypts to that key and does not consult the server's key
+    /// set at all. This is how an access token minted for a resource is encrypted to the party that reads it:
+    /// the strict mock has no <c>GetEncryptionKeys</c> setup, so any attempt to fall back to the server's own
+    /// keys would fail the test.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_Encrypt_WithNoEncryptionKey_SignsOnly()
+    public async Task FormatAsync_PolicyCarriesKey_EncryptsToItWithoutResolvingServerKeys()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+
+        var audienceKey = new RsaJsonWebKey { KeyId = "audience-enc" };
+        var policy = Encrypt() with { Key = audienceKey };
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, audienceKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        var result = await _formatter.FormatAsync(token, policy);
+
+        Assert.Equal(EncodedJwt, result);
+        Assert.Same(audienceKey, capturedEncryptionKey);
+    }
+
+    /// <summary>
+    /// Verifies that a policy requiring encryption refuses to issue the token when no encryption key is
+    /// available, rather than downgrading to a signed JWS. A host that asked for confidentiality and silently
+    /// did not get it has no way to learn that, and the token would travel readable while the configuration
+    /// says otherwise.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_EncryptRequired_WithNoEncryptionKey_Throws()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _formatter.FormatAsync(token, Encrypt()));
+    }
+
+    /// <summary>
+    /// Verifies that a host which never stated an encryption decision keeps the behavior of prior versions:
+    /// with no encryption key available the token is issued as a signed JWS, without failing. This is what
+    /// separates "asked to encrypt" from "did not object", and it is why the decision is nullable.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_EncryptUnstated_WithNoEncryptionKey_SignsOnly()
     {
         var token = TokenWith();
         SetupSigningKeys(_signingKeyRS256);
@@ -394,10 +445,33 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        var result = await _formatter.FormatAsync(token, Encrypt());
+        var result = await _formatter.FormatAsync(token, Unstated);
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
+    }
+
+    /// <summary>
+    /// Verifies that an unstated decision still encrypts when a key is available, which is the other half of
+    /// the prior-version behavior and the reason a host that configured a key sees no change.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_EncryptUnstated_WithEncryptionKey_Encrypts()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(_encryptionKey);
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, _encryptionKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        var result = await _formatter.FormatAsync(token, Unstated);
+
+        Assert.Equal(EncodedJwt, result);
+        Assert.Same(_encryptionKey, capturedEncryptionKey);
     }
 
     /// <summary>

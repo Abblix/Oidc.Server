@@ -30,6 +30,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
@@ -54,13 +55,18 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
+/// <param name="resourceManager">Resolves a requested resource URI to its registered definition, where a
+/// resource may publish the key its access tokens are encrypted to.</param>
+/// <param name="resourceKeysProvider">Supplies that key, inline or fetched from the resource's JWKS URI.</param>
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter serviceJwtFormatter,
 	ISubjectTypeConverter subjectTypeConverter,
-	IOptions<OidcOptions> options) : IAccessTokenService
+	IOptions<OidcOptions> options,
+	IResourceManager resourceManager,
+	IResourceKeysProvider resourceKeysProvider) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
@@ -114,10 +120,57 @@ internal class AccessTokenService(
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
 		accessToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
 
-		var encoded = await serviceJwtFormatter.FormatAsync(
-			accessToken, ServiceJwtEncryption.ForAccessToken(options.Value));
+		var encryption = await ApplyAudienceKeyAsync(
+			ServiceJwtEncryption.ForAccessToken(options.Value), authContext);
+
+		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
+	}
+
+	/// <summary>
+	/// Points the encryption policy at the key published by the resource this token was minted for, so the
+	/// party named in <c>aud</c> can read it. A resource that publishes no key leaves the policy untouched,
+	/// which is how it says a signed JWS is what it expects.
+	/// </summary>
+	/// <remarks>
+	/// Several audiences each publishing a key have no correct answer: compact JWE serialization carries one
+	/// recipient, so encrypting to one of them would silently leave the token unreadable to the rest. Refuse
+	/// instead of choosing. Unknown resources never reach here, having been rejected as <c>invalid_target</c>
+	/// during request validation (RFC 8707 Section 2).
+	/// </remarks>
+	private async Task<ServiceJwtEncryption> ApplyAudienceKeyAsync(
+		ServiceJwtEncryption encryption,
+		AuthorizationContext authContext)
+	{
+		if (authContext.Resources is not { Length: > 0 } resources)
+			return encryption;
+
+		JsonWebKey? audienceKey = null;
+		Uri? keyOwner = null;
+
+		foreach (var resource in resources)
+		{
+			if (!resourceManager.TryGet(resource, out var definition))
+				continue;
+
+			var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();
+			if (key is null)
+				continue;
+
+			if (audienceKey is not null)
+			{
+				throw new InvalidOperationException(
+					$"The access token names several resources that each publish an encryption key " +
+					$"('{keyOwner}' and '{resource}'), and an encrypted JWT has a single recipient. " +
+					$"Request one such resource per token, or remove the key from all but one of them.");
+			}
+
+			audienceKey = key;
+			keyOwner = resource;
+		}
+
+		return audienceKey is null ? encryption : encryption with { Key = audienceKey };
 	}
 
 	/// <summary>

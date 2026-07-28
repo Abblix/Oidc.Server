@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -30,13 +31,19 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// key-management algorithm that no registered signer or encryptor can produce, instead of letting the
 /// contradiction surface at token-issuance time as a per-request failure. The accepted sets are read from
 /// the live JWT registrations, the same union OpenID Connect discovery advertises, so a host that adds or
-/// replaces an algorithm is validated against exactly what it registered — no static allow-list to keep in sync.
+/// replaces an algorithm is validated against exactly what it registered - no static allow-list to keep in sync.
 /// </summary>
-/// <param name="jwtCreator">Source of the registered signing and JWE key-management algorithms. The creator is
-/// deliberately the only dependency: it is lightweight, so validating options does not drag the runtime token
-/// pipeline (and its storage) into startup.</param>
+/// <param name="jwtCreator">Source of the registered signing and JWE key-management algorithms. Kept
+/// lightweight on purpose, so validating options does not drag the runtime token pipeline (and its storage)
+/// into startup.</param>
+/// <param name="custodian">Present when the host holds its keys in an external custodian (a Vault or Key Vault
+/// backend), absent when they come from <see cref="OidcOptions.EncryptionKeys"/>. It is a registration marker
+/// only, and is never called here: it answers where the keys come from without reading them, and without
+/// reading the options that are still being created. Injecting the key provider instead would re-enter
+/// <see cref="IOptions{TOptions}.Value"/> from inside its own creation.</param>
 public sealed class ServiceTokensAlgorithmsValidator(
-    IJsonWebTokenCreator jwtCreator) : IValidateOptions<OidcOptions>
+    IJsonWebTokenCreator jwtCreator,
+    IKeyCustodian? custodian = null) : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
@@ -66,12 +73,28 @@ public sealed class ServiceTokensAlgorithmsValidator(
                     $"registered signing algorithms ({string.Join(", ", signingAlgorithms)}).");
             }
 
+            if (token.Encrypt == false)
+                return;
+
             var encryptionAlgorithm = token.Encryption.Algorithm;
-            if (token.Encrypt && encryptionAlgorithm is not null && !keyManagementAlgorithms.Contains(encryptionAlgorithm))
+            if (encryptionAlgorithm is not null && !keyManagementAlgorithms.Contains(encryptionAlgorithm))
             {
                 results.Add(
                     $"ServiceTokens.{tokenType}.Encryption.Algorithm '{encryptionAlgorithm}' is not among the " +
                     $"registered JWE key-management algorithms ({string.Join(", ", keyManagementAlgorithms)}).");
+            }
+
+            // Asked to encrypt with nothing to encrypt with. Only an explicit true is refused: the null default
+            // states nothing, and a host that never touched the setting must keep starting and issuing a signed
+            // JWS exactly as before. The key set is only knowable here when it comes from the options; with a
+            // custodian registered the keys live outside them, so the emptiness above says nothing.
+            if (token.Encrypt == true && custodian is null && options.EncryptionKeys.Count == 0)
+            {
+                results.Add(
+                    $"ServiceTokens.{tokenType}.Encrypt is true, but no encryption key is available: " +
+                    $"{nameof(OidcOptions.EncryptionKeys)} is empty and no external key custodian is registered. " +
+                    $"Configure an encryption key, or set ServiceTokens.{tokenType}.Encrypt to false to issue " +
+                    $"this token as a signed JWS.");
             }
         }
     }
