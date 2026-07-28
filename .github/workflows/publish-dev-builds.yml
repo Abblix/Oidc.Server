@@ -47,12 +47,15 @@ jobs:
   pack-and-publish:
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    # Measured at 269s: build 100s, test 123s, restore 14s, pack 10s, push 6s. The previous ceiling
-    # of 5 minutes was set from a measurement with no headroom, so the job silently outgrew it and
-    # died at 5m06s and 5m16s, leaving the feed without those commits' packages. Worth knowing when
-    # it happens again: a job timeout is reported as "cancelled" with the same wording as a manual
-    # stop, so the only thing that identifies it is the duration landing exactly on the ceiling.
-    timeout-minutes: 10
+    # Sized from the worst observation plus 20%, rounded up. Completed runs took 269s and 284s
+    # (build ~105s, test ~130s, the rest under 30s together), and two more were cut off at 306s and
+    # 316s, which are lower bounds on what they would have taken - so 316s is the figure to size
+    # from, not the fastest run. The earlier ceiling of 5 minutes was set from a measurement with no
+    # headroom, and the job silently outgrew it, leaving the feed without those commits' packages.
+    # Worth knowing when it happens again: a job timeout is reported as "cancelled" with the same
+    # wording as a manual stop, so the only thing identifying it is the duration landing exactly on
+    # the ceiling.
+    timeout-minutes: 7
     permissions:
       contents: read
       packages: write
