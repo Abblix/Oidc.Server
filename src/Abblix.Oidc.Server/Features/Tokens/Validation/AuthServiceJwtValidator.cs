@@ -85,14 +85,26 @@ public class AuthServiceJwtValidator(
 	}
 
 	/// <summary>
-	/// Validates the audience of the JWT by checking if it matches any known client information.
+	/// Validates the audience of the JWT by checking whether it names this service or any known client.
 	/// </summary>
 	/// <param name="audiences">A collection of audience values to validate.</param>
 	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
+	/// <remarks>
+	/// The issuer is a valid audience because a token nobody else was named for is consumed here: refresh,
+	/// registration and initial access tokens round-trip to this service, and an access token for which no
+	/// resource was requested carries the issuer in its audience for exactly that reason (RFC 9068 Section 4
+	/// requires the consumer to be named). Client identifiers remain valid so that tokens issued by earlier
+	/// versions, which named the requesting client, still validate while they live out their lifetime.
+	/// </remarks>
 	private async Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
 	{
+		var issuer = issuerProvider.GetIssuer();
+
 		foreach (var audience in audiences)
 		{
+			if (audience == issuer)
+				return true;
+
 			var clientInfo = await clientInfoProvider.TryFindClientAsync(audience).WithLicenseCheck();
 			if (clientInfo != null)
 				return true;

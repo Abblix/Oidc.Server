@@ -48,7 +48,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     }
 
     [Fact]
-    public async Task ClientCredentials_without_resource_falls_back_to_client_id_audience()
+    public async Task ClientCredentials_without_resource_falls_back_to_issuer_audience()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -63,8 +63,12 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
         var audiences = ExtractAudiences(payload);
 
-        // No resource indicator: the OIDC convention falls back to the client id as the audience.
-        Assert.Contains(TestConstants.ClientCredentialsClientId, audiences);
+        // No resource indicator: the audience names this server, which is who consumes the token when no
+        // resource was asked for. RFC 9068 Section 4 has a resource server reject a token whose audience does
+        // not name it, so the client id - the party that asked rather than the one that reads - would be a
+        // value every conforming consumer must refuse.
+        Assert.Contains(discovery.Issuer.OriginalString, audiences);
+        Assert.DoesNotContain(TestConstants.ClientCredentialsClientId, audiences);
     }
 
     [Fact]

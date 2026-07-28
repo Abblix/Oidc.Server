@@ -165,12 +165,13 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that CreateRefreshTokenAsync sets audience (aud) to the client ID.
-    /// Per RFC 7519 Section 4.1.3, audience identifies the recipients for this JWT.
-    /// Refresh tokens are intended only for the specific client that was issued the token.
+    /// Verifies that CreateRefreshTokenAsync sets audience (aud) to the issuer.
+    /// Per RFC 7519 Section 4.1.3, audience identifies the recipients for this JWT, and the only recipient of
+    /// a refresh token is the token endpoint that issued it - the client presents the token, it never reads
+    /// it. Naming the issuer is what lets the audience be checked on the way back in.
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_ShouldSetAudienceToClientId()
+    public async Task CreateRefreshToken_ShouldSetAudienceToIssuer()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -189,7 +190,7 @@ public class RefreshTokenServiceTests
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Single(capturedToken!.Payload.Audiences);
-        Assert.Equal(ClientId, capturedToken.Payload.Audiences.Single());
+        Assert.Equal(Issuer, capturedToken.Payload.Audiences.Single());
     }
 
     /// <summary>

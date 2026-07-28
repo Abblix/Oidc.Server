@@ -232,11 +232,13 @@ public class AccessTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that when no Resources are specified in AuthorizationContext,
-    /// the audience defaults to the ClientId (self-audience pattern).
+    /// Verifies that when no Resources are specified in AuthorizationContext, the audience is the issuer.
+    /// RFC 9068 Section 4 has a resource server reject a token whose audience does not name it, so the value
+    /// standing in for an unstated resource has to name a real consumer: with nothing requested, that is this
+    /// server, reached through UserInfo and introspection.
     /// </summary>
     [Fact]
-    public async Task CreateAccessToken_WithoutResources_ShouldUseClientIdAsAudience()
+    public async Task CreateAccessToken_WithoutResources_ShouldUseIssuerAsAudience()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -254,7 +256,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal([ClientId], capturedToken!.Payload.Audiences);
+        Assert.Equal([Issuer], capturedToken!.Payload.Audiences);
     }
 
     /// <summary>

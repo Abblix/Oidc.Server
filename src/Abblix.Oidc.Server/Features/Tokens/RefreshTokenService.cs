@@ -123,11 +123,13 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-				Audiences = [clientInfo.ClientId],
 				GrantId = grantId,
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
+
+		// This also sets the audience - the resources the grant was issued for, or the issuer when it named
+		// none - so setting it above would only be overwritten.
 		authContext.ApplyTo(newToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
