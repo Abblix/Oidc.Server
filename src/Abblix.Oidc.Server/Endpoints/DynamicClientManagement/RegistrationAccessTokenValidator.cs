@@ -49,6 +49,10 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         if (header.Scheme != TokenTypes.Bearer)
             return $"The scheme name '{header.Scheme}' is not supported";
 
+        // The audience is checked below, against the client being managed, rather than by the shared
+        // validator, which accepts only the issuer. A registration access token names the client it manages
+        // (RFC 7592 Section 2), which is a stricter binding than any general rule could express: it is what
+        // stops a token issued for one registration from managing another.
         var result = await jwtValidator.ValidateAsync(
             header.Parameter,
             ValidationOptions.Default & ~ValidationOptions.ValidateAudience);

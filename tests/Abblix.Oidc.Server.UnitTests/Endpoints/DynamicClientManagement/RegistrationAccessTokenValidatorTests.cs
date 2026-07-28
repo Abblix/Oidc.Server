@@ -52,7 +52,7 @@ public class RegistrationAccessTokenValidatorTests
         return new RegistrationAccessTokenValidator(jwtValidator.Object);
     }
 
-    private static JsonWebToken CreateToken(string jti) => new()
+    private static JsonWebToken CreateToken(string jti, string? subject = null, string? audience = null) => new()
     {
         Header = new JsonWebTokenHeader(new JsonObject
         {
@@ -61,8 +61,8 @@ public class RegistrationAccessTokenValidatorTests
         Payload = new JsonWebTokenPayload(new JsonObject
         {
             [JwtClaimTypes.JwtId] = jti,
-            [JwtClaimTypes.Subject] = ClientId,
-            [JwtClaimTypes.Audience] = ClientId,
+            [JwtClaimTypes.Subject] = subject ?? ClientId,
+            [JwtClaimTypes.Audience] = audience ?? ClientId,
         }),
     };
 
@@ -85,6 +85,37 @@ public class RegistrationAccessTokenValidatorTests
         var validator = CreateValidator(CreateToken("jti-old"));
 
         var error = await validator.ValidateAsync(Bearer, ClientId, "jti-current");
+
+        Assert.NotNull(error);
+    }
+
+    /// <summary>
+    /// The token is bound to the client it was issued for: presenting it against a different registration is
+    /// refused. The shared JWT validator cannot decide this - it accepts only the issuer as an audience - so
+    /// the binding is enforced here, and this case is what proves it is enforced at all.
+    /// </summary>
+    [Fact]
+    public async Task ATokenIssuedForAnotherClient_IsRejected()
+    {
+        var validator = CreateValidator(CreateToken("jti-current"));
+
+        var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
+
+        Assert.NotNull(error);
+    }
+
+    /// <summary>
+    /// The audience carries the binding on its own. With a subject that matches the client being managed, the
+    /// audience is the only claim left to refuse on - so this is the case that fails if that half of the check
+    /// is ever dropped, where a token differing in both would still be caught by the subject.
+    /// </summary>
+    [Fact]
+    public async Task AnAudienceNamingAnotherClient_IsRejectedOnItsOwn()
+    {
+        var token = CreateToken("jti-current", subject: "client-2", audience: ClientId);
+        var validator = CreateValidator(token);
+
+        var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
 
         Assert.NotNull(error);
     }
