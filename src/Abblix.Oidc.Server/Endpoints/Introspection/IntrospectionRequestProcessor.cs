@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -24,6 +24,10 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
@@ -36,7 +40,12 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// It follows the OAuth 2.0 Token Introspection specification (RFC 7662).
 /// The processor examines the token's status and provides an appropriate response as per the specification.
 /// </remarks>
-public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
+/// <param name="clientInfoProvider">Resolves the client a token was issued to, so its subject can be opened
+/// before being re-sealed for a different caller.</param>
+/// <param name="subjectTypeConverter">Opens and re-seals the end-user identifier per client sector.</param>
+public class IntrospectionRequestProcessor(
+	IClientInfoProvider clientInfoProvider,
+	ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
@@ -46,9 +55,10 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionSuccess"/>
 	/// or an <see cref="OidcError"/>. The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, OidcError>>(Process(request));
+	public async Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request)
+		=> await ProcessInternalAsync(request);
 
-	private static IntrospectionSuccess Process(ValidIntrospectionRequest request)
+	private async Task<IntrospectionSuccess> ProcessInternalAsync(ValidIntrospectionRequest request)
 	{
 		if (request.Token == null)
 		{
@@ -75,9 +85,52 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 		if (request.Token.Payload.ClientId != request.ClientInfo.ClientId)
 		{
 			payload = WithoutPrivateClaims(payload);
+
+			var pseudonym = await PseudonymForCallerAsync(request);
+			if (pseudonym != null)
+			{
+				payload[IanaClaimTypes.Sub] = pseudonym;
+			}
 		}
 
 		return new IntrospectionSuccess(true, payload, request.ClientInfo);
+	}
+
+	/// <summary>
+	/// Produces the identifier by which the calling protected resource knows this end-user, or <c>null</c> when
+	/// there is none to give and the subject stays withheld.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7662 Section 5 offers this as the alternative to withholding: "transmit user identifiers as opaque
+	/// service-specific strings, potentially returning different identifiers to each protected resource". A
+	/// pairwise caller already has such a namespace, so the subject is opened back to the real user and
+	/// re-sealed to the caller's sector - it gets a stable handle that says nothing about the real subject and
+	/// cannot be matched against what another resource sees.
+	/// <para>
+	/// A caller that is not pairwise gets nothing. Its own subject type says it sees users under their real
+	/// identifiers, which is a statement about the tokens issued to it, not a licence to learn the identity of
+	/// a user who authorized somebody else.
+	/// </para>
+	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not
+	/// open, leaves the response as it would have been without this.
+	/// </remarks>
+	private async Task<string?> PseudonymForCallerAsync(ValidIntrospectionRequest request)
+	{
+		if (request.ClientInfo.SubjectType != SubjectTypes.Pairwise)
+			return null;
+
+		var token = request.Token.NotNull(nameof(request.Token));
+		if (token.Payload.Subject is not { } subject || token.Payload.ClientId is not { } ownerId)
+			return null;
+
+		// The subject in the token is what its own client sees, so it has to be opened against that client
+		// before it can be re-sealed for anybody else.
+		var owner = await clientInfoProvider.TryFindClientAsync(ownerId).WithLicenseCheck();
+		if (owner == null)
+			return null;
+
+		var realSubject = subjectTypeConverter.Recover(subject, owner);
+		return realSubject == null ? null : subjectTypeConverter.Convert(realSubject, request.ClientInfo);
 	}
 
 	/// <summary>

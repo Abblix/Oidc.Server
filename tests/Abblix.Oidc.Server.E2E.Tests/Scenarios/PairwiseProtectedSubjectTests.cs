@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,6 +31,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
@@ -218,6 +219,59 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     /// seal is keyed by the pairwise salt, so no service encryption key is needed. The shared default host stays
     /// untouched.
     /// </summary>
+    /// <summary>
+    /// RFC 7662 Section 5 offers two ways to keep an introspection response from disclosing a user to an
+    /// unintended party. Withholding the identifier is the one it calls simplest; the other is to "transmit
+    /// user identifiers as opaque service-specific strings, potentially returning different identifiers to
+    /// each protected resource". A pairwise caller gets the second: a usable handle on the user that is its
+    /// own, tells it nothing about the real subject, and cannot be matched against what another resource sees.
+    /// </summary>
+    [Fact]
+    public async Task PairwiseIntrospector_ReceivesItsOwnPseudonym_NotTheRealSubject()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // A token belonging to somebody else. Its owner is a public client, so it carries the real subject -
+        // which is exactly what must not come back out of introspection.
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        Assert.Equal(RealSubject, DecodeJwtPayload(accessToken)[IanaClaimTypes.Sub]!.GetValue<string>());
+
+        var body = await IntrospectAsync(client, discovery, accessToken, PairwiseClientId);
+
+        Assert.True(
+            body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>(),
+            $"the protected resource was told a live token does not exist: {body.ToJsonString()}");
+
+        var reported = body[IanaClaimTypes.Sub]?.GetValue<string>();
+        Assert.NotEqual(RealSubject, reported);
+        Assert.Equal(ExpectedPseudonym(), reported);
+    }
+
+    private static async Task<JsonObject> IntrospectAsync(
+        HttpClient client, DiscoveryDocument discovery, string token, string callerClientId)
+    {
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
+        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = callerClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [IntrospectionRequest.Parameters.Token] = token,
+            [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
+        });
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, $"introspect failed: {(int)response.StatusCode} {raw}");
+
+        var body = JsonNode.Parse(raw)?.AsObject();
+        Assert.NotNull(body);
+        return body;
+    }
+
     private WebApplicationFactory<Program> CreateHost()
     {
         var secret = new ClientSecret
@@ -233,6 +287,10 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
             OfflineAccessAllowed = true,
             SubjectType = SubjectTypes.Pairwise,
+
+            // Also acts as a protected resource in the introspection scenario below, so it receives tokens
+            // issued to other clients - and, being pairwise, sees their users under its own pseudonyms.
+            AllowCrossClientIntrospection = true,
         };
 
         return Factory.WithWebHostBuilder(builder =>

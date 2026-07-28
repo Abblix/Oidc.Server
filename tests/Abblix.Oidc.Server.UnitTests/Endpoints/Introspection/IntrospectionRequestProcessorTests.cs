@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -26,7 +26,9 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Introspection;
@@ -37,11 +39,20 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Introspection;
 /// </summary>
 public class IntrospectionRequestProcessorTests
 {
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider;
+    private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter;
     private readonly IntrospectionRequestProcessor _processor;
 
     public IntrospectionRequestProcessorTests()
     {
-        _processor = new IntrospectionRequestProcessor();
+        // Neither is reached for a caller that is the token's own client, nor for one that is not pairwise,
+        // which is every case here except the pseudonym one below.
+        _clientInfoProvider = new Mock<IClientInfoProvider>();
+        _subjectTypeConverter = new Mock<ISubjectTypeConverter>();
+
+        _processor = new IntrospectionRequestProcessor(
+            _clientInfoProvider.Object,
+            _subjectTypeConverter.Object);
     }
 
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
