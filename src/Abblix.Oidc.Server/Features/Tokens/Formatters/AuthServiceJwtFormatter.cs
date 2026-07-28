@@ -95,21 +95,36 @@ public class AuthServiceJwtFormatter(
 
 		// Opt-out: this token type is configured signed only, so the server's encryption keys are not even
 		// resolved, mirroring the client formatter's JARM signed-only branch.
-		if (!encryption.Encrypt)
+		if (encryption.Encrypt == false)
 			return await jwtCreator.IssueAsync(token, signingCredentials);
 
 		// Select the encryption key symmetrically with signing: by the policy's key-management algorithm (and
 		// any pinned key id), exactly as the signing key is selected by the token's 'alg'. An algorithm-agnostic
 		// key (no declared 'alg') matches any algorithm per RFC 7517 Section 4.4; when the policy pins no
-		// algorithm, selection falls back to the first available encryption key. No key available at all means
-		// encryption is not configured, so fall back to a signed-only JWS (the behavior of prior versions a host
-		// keeps by leaving Encrypt on); a pinned key id or a required algorithm that matches nothing fails
-		// loudly inside the selector.
+		// algorithm, selection falls back to the first available encryption key. A pinned key id or a required
+		// algorithm that matches nothing fails loudly inside the selector.
 		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
 			.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
 
 		if (encryptingCredentials is null)
+		{
+			// Encryption was required and there is nothing to encrypt with. Refuse rather than fall back to a
+			// signed JWS: a host that asked for confidentiality and silently did not get it has no way to learn
+			// that, and the token would travel readable while its configuration says otherwise. Startup
+			// validation catches this when the keys come from the options; it cannot when they come from an
+			// external custodian, which is the case that reaches here.
+			if (encryption.Encrypt == true)
+			{
+				throw new InvalidOperationException(
+					$"Encryption is required for this token type, but no encryption key is available. " +
+					$"Configure a server encryption key, or set the token type's " +
+					$"{nameof(ServiceTokenOptions.Encrypt)} to false to issue it as a signed JWS.");
+			}
+
+			// Nothing was stated, so an absent key means encryption is simply not configured: issue a signed
+			// JWS, which is what the server produced before this policy existed.
 			return await jwtCreator.IssueAsync(token, signingCredentials);
+		}
 
 		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 §4.4), else the default.
 		var keyEncryptionAlgorithm = encryption.KeyManagementAlgorithm

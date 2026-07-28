@@ -38,8 +38,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <summary>
 /// End-to-end proof of the service-token encryption model: when a server encryption key is configured, the
 /// tokens the server issues for itself are encrypted to it by default (as in prior versions), and encryption
-/// can be turned off per token type. The default is opaque-first — an encrypted access token is consumed by
-/// the server's own UserInfo endpoint — and a host keeps the access token readable by external resource
+/// can be turned off per token type. The default is opaque-first - an encrypted access token is consumed by
+/// the server's own UserInfo endpoint - and a host keeps the access token readable by external resource
 /// servers by disabling its encryption. These settings are enabled on an isolated host so the shared default
 /// suite is untouched.
 /// </summary>
@@ -48,7 +48,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     /// <summary>
     /// With an encryption key configured and default settings, the access token issued through the real flow
     /// is an encrypted JWE (five segments), reproducing the prior-version behavior, and the server's own
-    /// UserInfo endpoint reads it back — the access token is opaque to third parties but consumed first-party.
+    /// UserInfo endpoint reads it back - the access token is opaque to third parties but consumed first-party.
     /// </summary>
     [Fact]
     public async Task EncryptionKeyConfigured_AccessTokenEncryptedByDefault_AndConsumedByOwnUserInfo()
@@ -75,7 +75,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     /// <summary>
     /// Encryption is turned off per token type: disabling the access token's encryption leaves it a signed JWS
     /// (three segments) even though a key is configured, while the refresh token stays encrypted (five
-    /// segments). The encrypted refresh token still round-trips — the server decrypts and validates its own
+    /// segments). The encrypted refresh token still round-trips - the server decrypts and validates its own
     /// JWE on the refresh grant.
     /// </summary>
     [Fact]
@@ -131,4 +131,34 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         });
 
     private static int SegmentCount(string jwt) => jwt.Split('.').Length;
+
+    /// <summary>
+    /// A host that requires encryption while no key can serve it does not come up. This is the end-to-end half
+    /// of the refusal: the unit test proves the validator returns a failure, and only a real host proves the
+    /// failure is raised rather than collected and ignored.
+    /// </summary>
+    /// <remarks>
+    /// It does not prove that the refusal comes from <c>ValidateOnStart</c>. Measured by mutation: removing
+    /// that call leaves this test green, because something in the composition already reads
+    /// <c>IOptions&lt;OidcOptions&gt;.Value</c> while the host starts. The call is kept as a stated contract
+    /// rather than a behaviour this test can observe.
+    /// </remarks>
+    [Fact]
+    public void StartupIsRefusedWhenEncryptionIsRequiredWithoutAnyKey()
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options =>
+                        {
+                            options.EncryptionKeys = [];
+                            options.ServiceTokens.AccessToken.Encrypt = true;
+                        }))));
+
+        var exception = Assert.Throws<OptionsValidationException>(() => CreateClientFor(host));
+
+        Assert.Contains(exception.Failures, f => f.Contains("AccessToken.Encrypt is true"));
+    }
 }

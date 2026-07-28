@@ -36,13 +36,23 @@ public record ServiceTokenOptions
     public JwtSigningSettings Signing { get; set; } = new();
 
     /// <summary>
-    /// Whether to encrypt this token type to the server's own encryption key. <c>true</c> (the default)
-    /// encrypts it whenever a server encryption key is configured and otherwise signs it only, matching the
-    /// behavior of prior versions. Set to <c>false</c> to keep the token signed only even when an encryption
-    /// key exists — for example to keep the access token readable by external resource servers that validate
-    /// it against the published key set.
+    /// Whether to encrypt this token type to the server's own encryption key.
     /// </summary>
-    public bool Encrypt { get; set; } = true;
+    /// <remarks>
+    /// Three states, and the difference between two of them decides how a missing key is answered:
+    /// <list type="bullet">
+    /// <item><c>false</c> keeps the token a signed JWS even when an encryption key exists, for example to keep
+    /// the access token readable by external resource servers that validate it against the published key set.
+    /// The server's encryption keys are not resolved at all.</item>
+    /// <item><c>true</c> requires encryption. If no encryption key can be resolved the server refuses to issue
+    /// the token rather than falling back to a signed JWS, because a host that asked for confidentiality and
+    /// silently did not get it has no way to find out.</item>
+    /// <item><c>null</c>, the default, states nothing: the token is encrypted when a server encryption key is
+    /// available and signed only when none is, which is the behaviour of prior versions. A host that never
+    /// touched this setting therefore sees no change and no new failure.</item>
+    /// </list>
+    /// </remarks>
+    public bool? Encrypt { get; set; }
 
     /// <summary>
     /// How this token type is encrypted when <see cref="Encrypt"/> is on and a server encryption key is

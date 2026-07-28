@@ -33,8 +33,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <see cref="OidcOptions.ServiceTokens"/>.
 /// </summary>
 /// <param name="Encrypt">Whether to encrypt the token. <c>false</c> yields a signed-only JWS and the
-/// server's encryption keys are not even resolved. <c>true</c> encrypts when a server encryption key is
-/// available and otherwise falls back to a signed-only JWS (the behavior of prior versions).</param>
+/// server's encryption keys are not even resolved. <c>true</c> requires encryption and fails when no key can
+/// be resolved. <c>null</c> states nothing: encrypt if a key is available, sign only if not.</param>
 /// <param name="KeyManagementAlgorithm">The JWE key-management <c>alg</c>, or <c>null</c> to derive it from
 /// the selected encryption key's declared <c>alg</c> (RFC 7517 Section 4.4), falling back to
 /// <c>RSA-OAEP-256</c>.</param>
@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="ContentEncryptionAlgorithm">The JWE content-encryption <c>enc</c>, taken from
 /// <see cref="OidcOptions.DefaultContentEncryptionAlgorithm"/>.</param>
 public sealed record ServiceJwtEncryption(
-    bool Encrypt,
+    bool? Encrypt,
     string? KeyManagementAlgorithm,
     string? KeyId,
     string ContentEncryptionAlgorithm)
