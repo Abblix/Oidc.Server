@@ -111,7 +111,13 @@ builder.Services.AddOidcServices(options =>
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
     options.Resources =
     [
-        new ResourceDefinition(new Uri(TestConstants.ApiResource)),
+        // The confidential client doubles as the resource server for this API: it is the caller allowed to
+        // introspect tokens audienced here, even though they are issued to somebody else. That is the caller
+        // RFC 7662 §2.1 is written for.
+        new ResourceDefinition(new Uri(TestConstants.ApiResource))
+        {
+            IntrospectionClientIds = [TestConstants.ConfidentialClientId],
+        },
     ];
 
     // RFC 8628 device flow settings. The host opts into device authorization (AddDeviceAuthorization() below),

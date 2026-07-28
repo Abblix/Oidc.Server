@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -45,6 +46,7 @@ public class IntrospectionRequestValidatorTests
     private readonly Mock<ILogger<IntrospectionRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
+    private readonly Mock<IResourceManager> _resourceManager;
     private readonly IntrospectionRequestValidator _validator;
 
     public IntrospectionRequestValidatorTests()
@@ -52,10 +54,15 @@ public class IntrospectionRequestValidatorTests
         _logger = new Mock<ILogger<IntrospectionRequestValidator>>();
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+
+        // No resource is configured by default, so the caller check falls back to token ownership - the
+        // behaviour every test here predates the resource-server path was written against.
+        _resourceManager = new Mock<IResourceManager>();
         _validator = new IntrospectionRequestValidator(
             _logger.Object,
             _clientAuthenticator.Object,
-            _jwtValidator.Object);
+            _jwtValidator.Object,
+            _resourceManager.Object);
     }
 
     private static IntrospectionRequest CreateIntrospectionRequest(string token = "token_value")
