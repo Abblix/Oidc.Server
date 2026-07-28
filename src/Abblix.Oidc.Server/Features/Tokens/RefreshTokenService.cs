@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -181,10 +181,10 @@ public class RefreshTokenService(
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
-		// Recover the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
+		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		var subject = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo);
 		if (subject is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the

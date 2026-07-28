@@ -64,5 +64,5 @@ public interface ISubjectTypeConverter
     /// token at the protocol level.</returns>
     /// <exception cref="System.InvalidOperationException">Thrown only when pairwise identifiers are not configured
     /// but a pairwise client is asked to recover, which is a server misconfiguration rather than a bad token.</exception>
-    string? Recover(string subject, ClientInfo clientInfo);
+    string? ConvertBack(string subject, ClientInfo clientInfo);
 }

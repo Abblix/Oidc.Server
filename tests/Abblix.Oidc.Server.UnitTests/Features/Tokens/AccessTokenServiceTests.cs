@@ -76,7 +76,7 @@ public class AccessTokenServiceTests
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
-        // the exact production path: Convert and Recover both pass the subject through unchanged.
+        // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new AccessTokenService(
             issuerProvider.Object,
             timeProvider,

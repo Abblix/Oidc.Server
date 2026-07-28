@@ -83,7 +83,7 @@ public class RefreshTokenServiceTests
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
 
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
-        // the exact production path: Convert and Recover both pass the subject through unchanged.
+        // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new RefreshTokenService(
             issuerProvider.Object,
             timeProvider,

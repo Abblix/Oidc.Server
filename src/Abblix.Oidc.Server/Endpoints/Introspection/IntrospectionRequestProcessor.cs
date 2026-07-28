@@ -129,7 +129,7 @@ public class IntrospectionRequestProcessor(
 		if (owner == null)
 			return null;
 
-		var realSubject = subjectTypeConverter.Recover(subject, owner);
+		var realSubject = subjectTypeConverter.ConvertBack(subject, owner);
 		return realSubject == null ? null : subjectTypeConverter.Convert(realSubject, request.ClientInfo);
 	}
 

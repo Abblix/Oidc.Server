@@ -155,11 +155,11 @@ internal class AccessTokenService(
 		var authSession = accessToken.Payload.ToAuthSession();
 		var authorizationContext = accessToken.Payload.ToAuthorizationContext();
 
-		// Recover the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
+		// ConvertBack the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
 		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
 		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
 		// at the protocol level instead of faulting.
-		var result = subjectTypeConverter.Recover(authSession.Subject, clientInfo)
+		var result = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo)
 			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
 			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
 
