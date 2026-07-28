@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -32,6 +33,8 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
+using System.Collections.Generic;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Options;
@@ -80,8 +83,18 @@ public class AccessTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()),
+            NoResources,
+            NoResourceKeys);
     }
+
+    /// <summary>
+    /// A registry with nothing registered: these tests request no resource, so the audience-key lookup never
+    /// reaches it. Strict mocks would be equivalent here and noisier.
+    /// </summary>
+    private static IResourceManager NoResources => Mock.Of<IResourceManager>();
+
+    private static IResourceKeysProvider NoResourceKeys => Mock.Of<IResourceKeysProvider>();
 
     /// <summary>
     /// Verifies that CreateAccessTokenAsync generates a JWT with correct header fields:
@@ -489,7 +502,9 @@ public class AccessTokenServiceTests
             Mock.Of<ITokenIdGenerator>(),
             Mock.Of<IAuthServiceJwtFormatter>(),
             converter,
-            Options.Create(new OidcOptions()));
+            Options.Create(new OidcOptions()),
+            NoResources,
+            NoResourceKeys);
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -563,5 +578,117 @@ public class AccessTokenServiceTests
         if (accessTokenExpiresIn.HasValue)
             clientInfo.AccessTokenExpiresIn = accessTokenExpiresIn.Value;
         return clientInfo;
+    }
+
+    // Encrypting to the audience rather than to this server
+
+    private static readonly Uri OrdersApi = new("https://orders.example.com");
+    private static readonly Uri BillingApi = new("https://billing.example.com");
+
+    /// <summary>
+    /// Builds a service whose resource registry answers for the given resources, each with the encryption keys
+    /// listed for it. A resource mapped to an empty array is registered but publishes no key.
+    /// </summary>
+    private AccessTokenService CreateServiceWithResources(
+        Dictionary<Uri, JsonWebKey[]> resources)
+    {
+        var manager = new Mock<IResourceManager>(MockBehavior.Strict);
+        var keys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
+
+        foreach (var (uri, resourceKeys) in resources)
+        {
+            var definition = new ResourceDefinition(uri);
+            var captured = definition;
+            manager.Setup(m => m.TryGet(uri, out captured)).Returns(true);
+            keys.Setup(k => k.GetEncryptionKeys(definition)).Returns(resourceKeys.ToAsyncEnumerable());
+        }
+
+        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
+        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+
+        return new AccessTokenService(
+            issuerProvider.Object,
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            _jwtFormatter.Object,
+            new SubjectTypeConverter(),
+            Options.Create(new OidcOptions()),
+            manager.Object,
+            keys.Object);
+    }
+
+    private static AuthorizationContext ContextFor(params Uri[] resources) =>
+        new(ClientId, [Scopes.OpenId], null) { Resources = resources };
+
+    /// <summary>
+    /// A resource that publishes an encryption key gets the access token encrypted to it, so the party named
+    /// in <c>aud</c> can read the token minted for it. Without this the token is encrypted to this server's
+    /// own key, which the audience cannot decrypt: it holds only the published public half.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_ResourcePublishesKey_EncryptsToThatKey()
+    {
+        var resourceKey = new RsaJsonWebKey { KeyId = "orders-enc" };
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [resourceKey] });
+
+        ServiceJwtEncryption? capturedPolicy = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((_, policy) => capturedPolicy = policy)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(
+            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo());
+
+        Assert.NotNull(capturedPolicy);
+        Assert.Same(resourceKey, capturedPolicy!.Key);
+    }
+
+    /// <summary>
+    /// A resource that publishes no key leaves the policy alone, so the token follows the server's own
+    /// settings exactly as it did before resources could carry keys. Publishing nothing is how a resource says
+    /// a signed JWS is what it expects.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_ResourcePublishesNoKey_LeavesPolicyUntouched()
+    {
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] });
+
+        ServiceJwtEncryption? capturedPolicy = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((_, policy) => capturedPolicy = policy)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(
+            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo());
+
+        Assert.NotNull(capturedPolicy);
+        Assert.Null(capturedPolicy!.Key);
+    }
+
+    /// <summary>
+    /// Two audiences that each publish a key have no correct answer, because compact JWE serialization carries
+    /// a single recipient. Encrypting to one would leave the token unreadable to the other while looking
+    /// successful, so the request is refused instead.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_SeveralResourcesPublishKeys_Throws()
+    {
+        var service = CreateServiceWithResources(new()
+        {
+            [OrdersApi] = [new RsaJsonWebKey { KeyId = "orders-enc" }],
+            [BillingApi] = [new RsaJsonWebKey { KeyId = "billing-enc" }],
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await service.CreateAccessTokenAsync(
+                CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo()));
+
+        Assert.Contains(OrdersApi.OriginalString, exception.Message);
+        Assert.Contains(BillingApi.OriginalString, exception.Message);
     }
 }

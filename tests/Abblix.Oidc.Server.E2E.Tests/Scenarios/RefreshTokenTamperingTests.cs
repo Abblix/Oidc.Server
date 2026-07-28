@@ -38,8 +38,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// validation gate (<c>RefreshTokenGrantHandler</c> → <c>AuthServiceJwtValidator</c> → the real
 /// signer) before it ever touches the token store: a tampered refresh token is rejected with
 /// <c>invalid_grant</c> however it was mutated. Covers the RFC 8725 attack matrix on the refresh-token
-/// path — alg-stripping (§3.1), payload tampering (§2.1), signature corruption, and segment-count
-/// confusion (RFC 7515 §7.1) — which the handler's unit tests cannot exercise because they mock the
+/// path - alg-stripping (§3.1), payload tampering (§2.1), signature corruption, and segment-count
+/// confusion (RFC 7515 §7.1) - which the handler's unit tests cannot exercise because they mock the
 /// validator. Each test obtains its own genuine refresh token and only ever submits a mutated copy, so
 /// the real token is never spent and no rotation/family state is disturbed.
 /// </summary>
@@ -143,15 +143,4 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
 
     private static string Base64UrlEncode(string value) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    private static byte[] Base64UrlDecode(string input)
-    {
-        var padded = input.Replace('-', '+').Replace('_', '/');
-        switch (padded.Length % 4)
-        {
-            case 2: padded += "=="; break;
-            case 3: padded += "="; break;
-        }
-        return Convert.FromBase64String(padded);
-    }
 }

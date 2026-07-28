@@ -384,6 +384,33 @@ public class AuthServiceJwtFormatterTests
     }
 
     /// <summary>
+    /// Verifies that a policy naming its own key encrypts to that key and does not consult the server's key
+    /// set at all. This is how an access token minted for a resource is encrypted to the party that reads it:
+    /// the strict mock has no <c>GetEncryptionKeys</c> setup, so any attempt to fall back to the server's own
+    /// keys would fail the test.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_PolicyCarriesKey_EncryptsToItWithoutResolvingServerKeys()
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+
+        var audienceKey = new RsaJsonWebKey { KeyId = "audience-enc" };
+        var policy = Encrypt() with { Key = audienceKey };
+
+        JsonWebKey? capturedEncryptionKey = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, audienceKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
+            .ReturnsAsync(EncodedJwt);
+
+        var result = await _formatter.FormatAsync(token, policy);
+
+        Assert.Equal(EncodedJwt, result);
+        Assert.Same(audienceKey, capturedEncryptionKey);
+    }
+
+    /// <summary>
     /// Verifies that a policy requiring encryption refuses to issue the token when no encryption key is
     /// available, rather than downgrading to a signed JWS. A host that asked for confidentiality and silently
     /// did not get it has no way to learn that, and the token would travel readable while the configuration

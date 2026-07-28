@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -48,6 +49,18 @@ public sealed record ServiceJwtEncryption(
     string? KeyId,
     string ContentEncryptionAlgorithm)
 {
+    /// <summary>
+    /// The key to encrypt to, when it is not one of this server's own. Set for an access token whose named
+    /// audience publishes a key: the token is then readable by the party it was minted for, instead of only by
+    /// this server.
+    /// </summary>
+    /// <remarks>
+    /// Carried as data rather than resolved by the formatter, so the formatter stays unaware of resources and
+    /// the decision is made where the request context is. When null the server's own encryption keys are
+    /// selected as before.
+    /// </remarks>
+    public JsonWebKey? Key { get; init; }
+
     /// <summary>Policy for the access token, projected from <c>ServiceTokens.AccessToken</c>.</summary>
     public static ServiceJwtEncryption ForAccessToken(OidcOptions options)
         => FromSettings(options.ServiceTokens.AccessToken, options);

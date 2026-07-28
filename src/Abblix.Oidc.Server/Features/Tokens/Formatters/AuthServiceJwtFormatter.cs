@@ -98,13 +98,16 @@ public class AuthServiceJwtFormatter(
 		if (encryption.Encrypt == false)
 			return await jwtCreator.IssueAsync(token, signingCredentials);
 
-		// Select the encryption key symmetrically with signing: by the policy's key-management algorithm (and
-		// any pinned key id), exactly as the signing key is selected by the token's 'alg'. An algorithm-agnostic
-		// key (no declared 'alg') matches any algorithm per RFC 7517 Section 4.4; when the policy pins no
-		// algorithm, selection falls back to the first available encryption key. A pinned key id or a required
-		// algorithm that matches nothing fails loudly inside the selector.
-		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
-			.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
+		// A policy may name the key itself, which is how a token minted for another party is encrypted to that
+		// party rather than to this server. Otherwise select among the server's own keys symmetrically with
+		// signing: by the policy's key-management algorithm (and any pinned key id), exactly as the signing key
+		// is selected by the token's 'alg'. An algorithm-agnostic key (no declared 'alg') matches any algorithm
+		// per RFC 7517 Section 4.4; when the policy pins no algorithm, selection falls back to the first
+		// available encryption key. A pinned key id or a required algorithm that matches nothing fails loudly
+		// inside the selector.
+		var encryptingCredentials = encryption.Key
+			?? await serviceKeysProvider.GetEncryptionKeys()
+				.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
 
 		if (encryptingCredentials is null)
 		{
