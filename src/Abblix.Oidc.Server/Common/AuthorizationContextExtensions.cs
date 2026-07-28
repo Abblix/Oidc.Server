@@ -41,6 +41,35 @@ public static class AuthorizationContextExtensions
     };
 
     /// <summary>
+    /// Names the given resource as the audience when the context names none, so a token says which party is
+    /// meant to consume it rather than which one asked for it.
+    /// </summary>
+    /// <param name="context">The authorization context to complete.</param>
+    /// <param name="defaultResource">The resource to fall back on, or <c>null</c> to leave the context alone.</param>
+    /// <returns>The context, with the default resource applied where it was needed.</returns>
+    /// <remarks>
+    /// RFC 9068 Section 3: "If the request does not include a `resource` parameter, the authorization server
+    /// MUST use a default resource indicator in the `aud` claim." With no default supplied the context is
+    /// returned untouched and the audience falls back to the client identifier, which is what prior versions
+    /// did - the behaviour changes only where a host states the default, because that value is read by every
+    /// resource server in the deployment.
+    /// A context that already names a resource or an audience is returned unchanged: it says who the token is
+    /// for, and this only fills a gap.
+    /// </remarks>
+    public static AuthorizationContext WithDefaultResource(
+        this AuthorizationContext context,
+        Uri? defaultResource)
+    {
+        if (defaultResource is null)
+            return context;
+
+        if (context.Resources is { Length: > 0 } || context.Audiences is { Length: > 0 })
+            return context;
+
+        return context with { Resources = [defaultResource] };
+    }
+
+    /// <summary>
     /// Applies the information from an <see cref="AuthorizationContext"/> to a <see cref="JsonWebTokenPayload"/>,
     /// converting the context into JWT claims.
     /// </summary>

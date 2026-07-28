@@ -150,6 +150,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
 
+        // Refuse a default resource indicator that no resource server could accept, rather than minting every
+        // access token with an audience nothing recognises.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>());
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
         return services

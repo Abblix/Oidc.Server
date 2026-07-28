@@ -113,64 +113,23 @@ internal class AccessTokenService(
 		};
 
 		authSession.ApplyTo(accessToken.Payload);
-		authContext.ApplyTo(accessToken.Payload);
+
+		// The audience is settled once, before anything reads it, so the payload below and the encryption
+		// policy further down agree on who this token is for instead of each deriving its own answer.
+		var audienceContext = authContext.WithDefaultResource(options.Value.DefaultResourceIndicator);
+		audienceContext.ApplyTo(accessToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
 		accessToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
 
-		var encryption = await ApplyAudienceKeyAsync(
-			ServiceJwtEncryption.ForAccessToken(options.Value), authContext);
+		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
+			.WithAudienceKeyAsync(audienceContext, resourceManager, resourceKeysProvider);
 
 		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
-	}
-
-	/// <summary>
-	/// Points the encryption policy at the key published by the resource this token was minted for, so the
-	/// party named in <c>aud</c> can read it. A resource that publishes no key leaves the policy untouched,
-	/// which is how it says a signed JWS is what it expects.
-	/// </summary>
-	/// <remarks>
-	/// Several audiences each publishing a key have no correct answer: compact JWE serialization carries one
-	/// recipient, so encrypting to one of them would silently leave the token unreadable to the rest. Refuse
-	/// instead of choosing. Unknown resources never reach here, having been rejected as <c>invalid_target</c>
-	/// during request validation (RFC 8707 Section 2).
-	/// </remarks>
-	private async Task<ServiceJwtEncryption> ApplyAudienceKeyAsync(
-		ServiceJwtEncryption encryption,
-		AuthorizationContext authContext)
-	{
-		if (authContext.Resources is not { Length: > 0 } resources)
-			return encryption;
-
-		JsonWebKey? audienceKey = null;
-		Uri? keyOwner = null;
-
-		foreach (var resource in resources)
-		{
-			if (!resourceManager.TryGet(resource, out var definition))
-				continue;
-
-			var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();
-			if (key is null)
-				continue;
-
-			if (audienceKey is not null)
-			{
-				throw new InvalidOperationException(
-					$"The access token names several resources that each publish an encryption key " +
-					$"('{keyOwner}' and '{resource}'), and an encrypted JWT has a single recipient. " +
-					$"Request one such resource per token, or remove the key from all but one of them.");
-			}
-
-			audienceKey = key;
-			keyOwner = resource;
-		}
-
-		return audienceKey is null ? encryption : encryption with { Key = audienceKey };
 	}
 
 	/// <summary>

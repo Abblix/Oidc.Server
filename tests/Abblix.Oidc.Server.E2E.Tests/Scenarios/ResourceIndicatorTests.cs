@@ -89,6 +89,68 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// With a default resource indicator configured, a request naming no resource still gets an access token
+    /// whose <c>aud</c> names the API rather than the client. RFC 9068 section 3 requires that default, and
+    /// section 4 tells a resource server to reject a token whose <c>aud</c> does not name it - so a client
+    /// identifier there is a value no conforming resource server should accept.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_without_resource_uses_the_configured_default_indicator()
+    {
+        await using var host = CreateHostWithDefaultResource();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var audiences = ExtractAudiences(payload);
+
+        Assert.Contains(TestConstants.ApiResource, audiences);
+        Assert.DoesNotContain(TestConstants.ClientCredentialsClientId, audiences);
+    }
+
+    /// <summary>
+    /// The default fills a gap rather than overriding a stated intent: a request naming a resource keeps it.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_with_resource_keeps_it_over_the_default()
+    {
+        await using var host = CreateHostWithDefaultResource();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
+        });
+
+        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
+    }
+
+    /// <summary>
+    /// Builds an isolated host stating a default resource indicator, leaving the shared suite on the
+    /// client-identifier fallback that every existing deployment still gets.
+    /// </summary>
+    private WebApplicationFactory<Program> CreateHostWithDefaultResource()
+        => Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.DefaultResourceIndicator = new Uri(TestConstants.ApiResource)))));
+
+    /// <summary>
     /// A resource that publishes an encryption key gets its access token encrypted to that key, so the party
     /// named in <c>aud</c> can read the token minted for it. The proof is the recipient: the JWE header names
     /// the resource's own <c>kid</c>, not the server's, and a token encrypted to the server's key would be
