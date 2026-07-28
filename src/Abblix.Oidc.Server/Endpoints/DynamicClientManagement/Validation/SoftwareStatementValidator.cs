@@ -24,6 +24,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -41,7 +42,8 @@ public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
     IJsonWebTokenValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
-    ISecureHttpFetcher secureFetcher) : IClientRegistrationContextValidator
+    [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher)
+    : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
@@ -66,7 +68,7 @@ public partial class SoftwareStatementValidator(
 
         var validationParameters = new ValidationParameters
         {
-            // Skip audience — software statements describe the software, not target a specific server
+            // Skip audience - software statements describe the software, not target a specific server
             Options = ValidationOptions.Default &
                       ~ValidationOptions.RequireAudience &
                       ~ValidationOptions.ValidateAudience,
@@ -140,7 +142,8 @@ public partial class SoftwareStatementValidator(
         if (trustedIssuer == null)
             yield break;
 
-        var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, "software statement issuer");
+        var keys = secureFetcher.FetchKeysAsync(
+            trustedIssuer.JwksUri, logger, issuer, KeySetOwners.SoftwareStatementIssuer);
         await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
         {
             yield return key;

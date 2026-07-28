@@ -37,18 +37,13 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
 /// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 5.2.</param>
-/// <param name="secureFetcher">HTTP fetcher with SSRF protection and JWKS caching.</param>
+/// <param name="secureFetcher">HTTP fetcher with SSRF protection and caching.</param>
 public partial class JwtBearerIssuerProvider(
 	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
 	ReplayPrevention.IJwtReplayCache replayCache,
-	[FromKeyedServices(JwtBearerIssuerProvider.SecureHttpFetcherKey)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
+	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
 {
-	/// <summary>
-	/// The keyed service key used to resolve the caching <see cref="ISecureHttpFetcher"/> for JWKS fetching.
-	/// </summary>
-	public const string SecureHttpFetcherKey = "JwtBearerJwks";
-
 	/// <inheritdoc />
 	public JwtBearerOptions Options => oidcOptions.CurrentValue.JwtBearer;
 
@@ -126,7 +121,7 @@ public partial class JwtBearerIssuerProvider(
 			yield break;
 		}
 
-		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, "issuer");
+		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer);
 		await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
 		{
 			yield return key;

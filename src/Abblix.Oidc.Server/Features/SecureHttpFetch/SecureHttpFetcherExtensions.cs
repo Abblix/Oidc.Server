@@ -89,8 +89,9 @@ public static partial class SecureHttpFetcherExtensions
 	/// <param name="jwksUri">The URI the party publishes its key set at, if any.</param>
 	/// <param name="logger">Logger for recording fetch operations and errors.</param>
 	/// <param name="entityId">The identifier of the party, for logging.</param>
-	/// <param name="entityType">What kind of party it is, for logging. Use a value from
-	/// <see cref="KeySetOwners"/>.</param>
+	/// <param name="entityType">What kind of party it is. Must be a value from <see cref="KeySetOwners"/>:
+	/// besides labelling the log, it is the service key under which this consumer's cached fetcher is
+	/// registered, so the same value selects the cache lifetime that consumer was given.</param>
 	/// <returns>The inline keys followed by the fetched ones. Empty when the party declares neither.</returns>
 	/// <remarks>
 	/// The fetch itself is SSRF-protected and cached by the decorators around <see cref="ISecureHttpFetcher"/>,
@@ -114,7 +115,7 @@ public static partial class SecureHttpFetcherExtensions
 			yield break;
 
 		using var scope = serviceProvider.CreateScope();
-		var secureFetcher = scope.ServiceProvider.GetRequiredService<ISecureHttpFetcher>();
+		var secureFetcher = scope.ServiceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(entityType);
 
 		await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, entityId, entityType))
 		{

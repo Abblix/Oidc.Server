@@ -35,11 +35,14 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// </summary>
 /// <param name="inner">The inner fetcher to decorate.</param>
 /// <param name="cache">The memory cache to store responses.</param>
-/// <param name="oidcOptions">OIDC options containing the cache duration configuration.</param>
+/// <param name="cacheDuration">How long a successfully fetched document is held. Supplied per consumer at
+/// registration rather than read from a shared setting, so each one states the staleness it can live with:
+/// a key set backing token issuance and one backing an occasional signature check do not want the same
+/// lifetime, and the transport contract stays free of the caller's policy.</param>
 public class CachingSecureHttpFetcherDecorator(
 	ISecureHttpFetcher inner,
 	IMemoryCache cache,
-	IOptionsMonitor<OidcOptions> oidcOptions) : ISecureHttpFetcher
+	TimeSpan cacheDuration) : ISecureHttpFetcher
 {
 	/// <inheritdoc />
 	public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
@@ -51,9 +54,14 @@ public class CachingSecureHttpFetcherDecorator(
 
 		var result = await inner.FetchAsync<T>(uri);
 
-		if (result.TryGetSuccess(out var value))
+		// A non-positive lifetime means caching off, and it has to be handled here: MemoryCache does not read
+		// TimeSpan.Zero as "do not store", so a host zeroing the setting to force fresh fetches would get a
+		// stored entry instead of the behaviour it asked for.
+		if (result.TryGetSuccess(out var value) && cacheDuration > TimeSpan.Zero)
 		{
-			cache.Set(cacheKey, value, oidcOptions.CurrentValue.JwtBearer.JwksCacheDuration);
+			// Keyed on the URI alone, because one address is one document. What differs between consumers is
+			// how long it may be held, and that is fixed per instance rather than per call.
+			cache.Set(cacheKey, value, cacheDuration);
 		}
 
 		return result;

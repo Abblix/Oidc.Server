@@ -65,10 +65,39 @@ public class AddSecureHttpFetchIntegrationTests
 
         // Assert - Keyed service should be decorated with caching
         var keyedFetcher = serviceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(
-            JwtBearerIssuerProvider.SecureHttpFetcherKey);
+            KeySetOwners.Issuer);
 
         Assert.NotNull(keyedFetcher);
         Assert.IsType<CachingSecureHttpFetcherDecorator>(keyedFetcher);
+    }
+
+    /// <summary>
+    /// Every consumer that fetches a key set gets a cached fetcher of its own, not just the JWT bearer grant.
+    /// Asserted per consumer because the defect this pins was precisely that they differed: caching hung off a
+    /// single service key, and the other three fetched over the network on every use.
+    /// </summary>
+    [Theory]
+    [InlineData(KeySetOwners.Client)]
+    [InlineData(KeySetOwners.Resource)]
+    [InlineData(KeySetOwners.SoftwareStatementIssuer)]
+    [InlineData(KeySetOwners.Issuer)]
+    public void EveryKeySetConsumer_ResolvesACachingFetcher(string consumer)
+    {
+        var services = new ServiceCollection();
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton(System.TimeProvider.System);
+        services.AddOptions();
+        services.AddLogging();
+
+        services.AddSecureHttpFetch();
+        services.AddJwtBearerGrant();
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        var fetcher = serviceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(consumer);
+
+        Assert.IsType<CachingSecureHttpFetcherDecorator>(fetcher);
     }
 
     [Fact]
