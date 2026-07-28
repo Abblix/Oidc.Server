@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -70,14 +71,21 @@ public partial class IntrospectionRequestValidator(
 
 		// RFC 7662 §2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
-		// which is not a credential — reject it even though "none" is valid at the token endpoint.
+		// which is not a credential - reject it even though "none" is valid at the token endpoint.
 		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
-		var result = await jwtValidator.ValidateAsync(introspectionRequest.Token);
+		// The audience is deliberately not required to name this server. RFC 7662 Section 4 asks a different
+		// question - "determine whether or not the token can be used at the resource server making the
+		// introspection call" - and the caller check below is the answer to it. Demanding that the token's own
+		// audience name this server instead would report every token minted for a resource indicator as
+		// inactive, telling the caller a token it holds was never issued.
+		var result = await jwtValidator.ValidateAsync(
+			introspectionRequest.Token,
+			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		return result.Match(
 			token =>
