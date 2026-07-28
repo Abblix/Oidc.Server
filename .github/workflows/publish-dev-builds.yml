@@ -44,23 +44,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  shards:
-    # The same shards the pull request ran, defined once in a called workflow. They run here too
-    # because a squash merge produces a new commit on top of whatever develop had moved to, so what
-    # lands on the branch is a state no pull request tested.
-    uses: ./.github/workflows/test-shards.yml
-
   pack-and-publish:
-    needs: shards
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    # The suite moved to the shards above, so this job is now restore, build, pack and push -
-    # measured at roughly 130s of the 269s the combined job used to take. Ten minutes is generous
-    # on purpose until a few runs give a figure to size it from; the previous ceiling of 5 was set
-    # from a measurement with no headroom and the job silently outgrew it, dying at 5m06s and
-    # 5m16s. Worth knowing when it happens again: a job timeout is reported as "cancelled" with
-    # the same wording as a manual stop, so the only thing that identifies it is the duration
-    # landing exactly on the configured ceiling.
+    # Measured at 269s: build 100s, test 123s, restore 14s, pack 10s, push 6s. The previous ceiling
+    # of 5 minutes was set from a measurement with no headroom, so the job silently outgrew it and
+    # died at 5m06s and 5m16s, leaving the feed without those commits' packages. Worth knowing when
+    # it happens again: a job timeout is reported as "cancelled" with the same wording as a manual
+    # stop, so the only thing that identifies it is the duration landing exactly on the ceiling.
     timeout-minutes: 10
     permissions:
       contents: read
@@ -95,6 +86,18 @@ jobs:
         run: dotnet build --no-restore -c Release
 
         timeout-minutes: 3
+      - name: Test
+        # The whole suite in one pass over the tree this job just built. Sharding it the way
+        # pr-tests does would be slower here, not faster: a shard restores and builds its own
+        # dependency closure, where this reuses the build above. Measured at 202s for the slowest
+        # shard against 123s for this step.
+        #
+        # The suite runs on this path because a squash merge produces a new commit on top of
+        # wherever develop had moved to, so what lands on the branch is a state no pull request
+        # tested, and no other workflow tests develop itself.
+        run: dotnet test --no-build -c Release --verbosity normal
+
+        timeout-minutes: 5
       - name: Pack
         # `pack --no-build` on the multi-targeted family csprojs trips NETSDK1085 on the .NET 10.0.301 SDK
         # ("NoBuild set but Build target invoked") — the outer no-build does not propagate to the inner
