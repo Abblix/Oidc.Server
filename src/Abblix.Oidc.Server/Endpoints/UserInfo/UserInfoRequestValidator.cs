@@ -87,8 +87,12 @@ public class UserInfoRequestValidator(
 
 		var token = result.GetSuccess();
 
+		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
+		// 'application/at+jwt' and reject tokens carrying any other value." The two spellings name one media
+		// type, per RFC 7515 Section 4.1.9, so the comparison folds the prefix and the case rather than
+		// testing for equality against one of them.
 		var tokenType = token.Header.Type;
-		if (tokenType != JwtTypes.AccessToken)
+		if (!JwtTypeName.Matches(tokenType, JwtTypes.AccessToken))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,

@@ -421,4 +421,71 @@ public class UserInfoRequestValidatorTests
         Assert.NotNull(capturedOptions);
         Assert.False((capturedOptions.Value & ValidationOptions.ValidateAudience) == ValidationOptions.ValidateAudience);
     }
+
+    /// <summary>
+    /// Both spellings of the access-token media type are accepted, per RFC 9068 Section 4: "The resource
+    /// server MUST verify that the 'typ' header value is 'at+jwt' or 'application/at+jwt' and reject tokens
+    /// carrying any other value." RFC 7515 Section 4.1.9 is why there are two of them: a recipient treats a
+    /// value with no '/' as though 'application/' were prepended, so the short and long forms name one type
+    /// rather than two.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtTypes.AccessToken)]
+    [InlineData("application/" + JwtTypes.AccessToken)]
+    [InlineData("Application/AT+JWT")]
+    public async Task ValidateAsync_AcceptsEitherSpellingOfTheAccessTokenType(string tokenType)
+    {
+        var userInfoRequest = CreateUserInfoRequest();
+        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
+        var clientRequest = CreateClientRequest(authHeader: authHeader);
+
+        var accessToken = CreateValidAccessToken();
+        accessToken.Header.Type = tokenType;
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(accessToken);
+
+        _accessTokenService
+            .Setup(service => service.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(
+                CreateAuthSession(), CreateAuthContext()));
+
+        _clientInfoProvider
+            .Setup(provider => provider.TryFindClientAsync(TestConstants.DefaultClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetSuccess(out _), $"'{tokenType}' names the access-token media type");
+    }
+
+    /// <summary>
+    /// Widening the accepted spelling must not widen the accepted set of token classes: a token of another
+    /// class is still refused, which is the RFC 8725 Section 3.11 token-class-confusion guard the check exists
+    /// for.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtTypes.RefreshToken)]
+    [InlineData("application/jwt")]
+    [InlineData("at+jwt-but-not-really")]
+    public async Task ValidateAsync_ForeignTokenType_IsRejected(string tokenType)
+    {
+        var userInfoRequest = CreateUserInfoRequest();
+        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
+        var clientRequest = CreateClientRequest(authHeader: authHeader);
+
+        var accessToken = CreateValidAccessToken();
+        accessToken.Header.Type = tokenType;
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(accessToken);
+
+        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error), $"'{tokenType}' is not an access token");
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+    }
 }

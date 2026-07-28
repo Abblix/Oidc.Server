@@ -223,7 +223,7 @@ internal class JsonWebTokenValidator(
 
     /// <summary>
     /// Validates the JWS signature according to validation parameters. Returns the token
-    /// unchanged on success — the chain stage adds nothing to the token, only gates the
+    /// unchanged on success - the chain stage adds nothing to the token, only gates the
     /// rest of the pipeline behind a successful integrity proof.
     /// </summary>
     private async Task<Result<JsonWebToken, JwtValidationError>> ValidateSignatureAsync(
@@ -239,7 +239,7 @@ internal class JsonWebTokenValidator(
         // Reject anything outside the registered RFC 7518 §3 alg taxonomy with the matching
         // taxonomy-level error. Without this gate, an unknown alg (e.g. byte-variant 'None')
         // streams into the signature-verification path and surfaces as InvalidSignature,
-        // which is the wrong category — the cryptographic check never had a chance to run
+        // which is the wrong category - the cryptographic check never had a chance to run
         // because the algorithm itself is unrecognised.
         if (!SigningAlgorithms.Known.Contains(algorithm))
         {
@@ -269,7 +269,7 @@ internal class JsonWebTokenValidator(
             SigningAlgorithms.None when jwtParts[2].HasValue()
                 => new JwtValidationError(JwtError.MalformedToken, "Unsigned token must have empty signature"),
 
-            // Reached only by alg "none" when signatures are not required — accept the unsigned token.
+            // Reached only by alg "none" when signatures are not required - accept the unsigned token.
             SigningAlgorithms.None => token,
 
             // Two trust-model branches selected by the caller via UseEmbeddedVerificationKey:
@@ -285,11 +285,11 @@ internal class JsonWebTokenValidator(
 
     /// <summary>
     /// Verifies the JWS signature against the key embedded in the JOSE header's <c>jwk</c>
-    /// parameter. This is the trust model RFC 9449 §4.2 prescribes for DPoP proofs — the
+    /// parameter. This is the trust model RFC 9449 §4.2 prescribes for DPoP proofs - the
     /// proof carries its own public key and the validator's job is solely to confirm that
     /// the signature matches that key. The issuer-resolved-keys delegate is intentionally
     /// not consulted: in the embedded-key model there is no out-of-band key registry, so
-    /// resolving by <c>iss</c> would either no-op or — worse — reintroduce the auto-trust
+    /// resolving by <c>iss</c> would either no-op or - worse - reintroduce the auto-trust
     /// surface this branch exists to keep closed.
     /// </summary>
     /// <param name="token">The parsed token; its <see cref="JsonWebTokenHeader.VerificationKey"/>
@@ -361,7 +361,7 @@ internal class JsonWebTokenValidator(
         // Symmetric with the JWE path: the validator's other trust mode looks up signing
         // keys by issuer (via parameters.ResolveIssuerSigningKeys, typically the host's
         // JWKS lookup). A caller routed here without wiring that delegate is a category
-        // mismatch — surface a typed JwtValidationError so the request fails with a 401,
+        // mismatch - surface a typed JwtValidationError so the request fails with a 401,
         // not an unhandled NotNull throw that propagates as 500.
         var resolveIssuerSigningKeys = parameters.ResolveIssuerSigningKeys;
         if (resolveIssuerSigningKeys is null)
@@ -447,7 +447,7 @@ internal class JsonWebTokenValidator(
         string[] jwtParts,
         ValidationParameters parameters)
     {
-        // The token may be a perfectly well-formed JWE — the failure mode here is that
+        // The token may be a perfectly well-formed JWE - the failure mode here is that
         // this validation path was not wired with a decryption-key resolver. Most callsites
         // validate JWS only (DPoP proofs per RFC 9449 §4.2, client_assertion per RFC 7521,
         // etc.) and intentionally pass ResolveTokenDecryptionKeys = null. Throwing
@@ -506,12 +506,10 @@ internal class JsonWebTokenValidator(
         {
             return new JwtValidationError(
                 JwtError.InvalidTokenType,
-                $"JWT 'typ' header is missing — expected one of: {string.Join(", ", expected)}");
+                $"JWT 'typ' header is missing - expected one of: {string.Join(", ", expected)}");
         }
 
-        var normalized = StripApplicationPrefix(typ);
-        var matched = expected.Any(expectedTyp => string.Equals(
-            StripApplicationPrefix(expectedTyp), normalized, StringComparison.OrdinalIgnoreCase));
+        var matched = expected.Any(expectedTyp => JwtTypeName.Matches(typ, expectedTyp));
 
         if (!matched)
         {
@@ -523,23 +521,6 @@ internal class JsonWebTokenValidator(
         return token;
     }
 
-    /// <summary>
-    /// Implements RFC 7515 §4.1.9's prefix convention: "A recipient using the media type value
-    /// MUST treat it as if 'application/' were prepended to any 'typ' value not containing a
-    /// '/'." Stripping the literal prefix instead of prepending it reaches the same equivalence
-    /// from either form, and is applied to both sides of the comparison so a caller may write
-    /// whichever they prefer.
-    /// </summary>
-    /// <remarks>
-    /// The prefix match ignores case because it is the media type portion, which RFC 2045 §5.1
-    /// declares case-insensitive; matching it ordinally would leave <c>Application/at+jwt</c>
-    /// unstripped and therefore unmatchable.
-    /// </remarks>
-    private static string StripApplicationPrefix(string typ)
-    {
-        const string prefix = "application/";
-        return typ.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? typ[prefix.Length..] : typ;
-    }
 
     /// <summary>
     /// Validates the issuer claim according to validation parameters.
