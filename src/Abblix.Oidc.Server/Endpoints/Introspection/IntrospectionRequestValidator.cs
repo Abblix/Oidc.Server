@@ -26,8 +26,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -47,13 +45,10 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
 /// <param name="jwtValidator">The JWT validator to validate the token.</param>
-/// <param name="resourceManager">Resolves the resources a token's audience names, so a resource server calling
-/// on its own behalf can be told apart from an unrelated client.</param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator,
-	IResourceManager resourceManager) : IIntrospectionRequestValidator
+	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
 {
 	/// <summary>
 	/// Validates the introspection request properties and authenticates a client that initiated the request.
@@ -95,12 +90,9 @@ public partial class IntrospectionRequestValidator(
 		return result.Match(
 			token =>
 			{
-				if (token is { Payload.ClientId: {} clientId } &&
-				    clientId != clientInfo.ClientId &&
-				    !ActsForATokenAudience(token, clientInfo))
+				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
 				{
-					// The token was issued to another client, and the caller does not speak for any resource
-					// the token names
+					// The token was issued to another client
 					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 				}
 
@@ -112,30 +104,5 @@ public partial class IntrospectionRequestValidator(
 				LogInvalidJwt(error);
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
-	}
-
-	/// <summary>
-	/// Decides whether the caller is entitled to ask about a token issued to somebody else, by checking
-	/// whether it authenticates for a resource the token's audience names.
-	/// </summary>
-	/// <remarks>
-	/// This is the answer to RFC 7662 Section 4, "determine whether or not the token can be used at the
-	/// resource server making the introspection call". The association is host-configured on
-	/// <see cref="ResourceDefinition.IntrospectionClientIds"/>, so a caller cannot name itself here.
-	/// </remarks>
-	private bool ActsForATokenAudience(JsonWebToken token, ClientInfo clientInfo)
-	{
-		foreach (var audience in token.Payload.Audiences)
-		{
-			if (Uri.TryCreate(audience, UriKind.Absolute, out var resource) &&
-			    resourceManager.TryGet(resource, out var definition) &&
-			    definition.IntrospectionClientIds is { } callers &&
-			    callers.Contains(clientInfo.ClientId))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 }

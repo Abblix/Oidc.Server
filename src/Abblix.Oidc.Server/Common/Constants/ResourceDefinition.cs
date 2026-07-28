@@ -57,28 +57,4 @@ public record ResourceDefinition(Uri Resource, params ScopeDefinition[] Scopes)
     /// for a client that registers both.
     /// </remarks>
     public Uri? JwksUri { get; init; }
-
-    /// <summary>
-    /// The identifiers of the registered clients this resource server authenticates as when it calls the
-    /// introspection endpoint. A caller named here may introspect any token whose audience names this
-    /// resource, even though the token was issued to somebody else.
-    /// </summary>
-    /// <remarks>
-    /// <see href="https://datatracker.ietf.org/doc/html/rfc7662#section-2.1">RFC 7662 Section 2.1</see> has
-    /// the protected resource call introspection, and
-    /// <see href="https://datatracker.ietf.org/doc/html/rfc7662#section-4">Section 4</see> states what the
-    /// authorization server owes it: "determine whether or not the token can be used at the resource server
-    /// making the introspection call." A resource server is by definition not the client the token was issued
-    /// to, so without this list the only answer it could get is the active:false that
-    /// <see href="https://datatracker.ietf.org/doc/html/rfc7662#section-2.2">Section 2.2</see> reserves for a
-    /// token that does not exist or that the caller may not ask about.
-    /// <para>
-    /// This lives on the resource rather than on the client because resources are configured by the host
-    /// alone. A client may not declare through dynamic registration which resource it speaks for, which would
-    /// otherwise let it register a claim over somebody else's API and read every token issued for it.
-    /// </para>
-    /// Leaving it unset keeps the previous behaviour: only the client the token was issued to can introspect
-    /// it.
-    /// </remarks>
-    public string[]? IntrospectionClientIds { get; init; }
 }
