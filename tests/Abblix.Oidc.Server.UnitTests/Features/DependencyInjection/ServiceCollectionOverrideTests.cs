@@ -289,7 +289,7 @@ public class ServiceCollectionOverrideTests
         services.AddCheckSession();
         services.AddDynamicClientRegistration();
 
-        services.AddOidcMinimalApi(_ => { });
+        services.AddOidcServices(_ => { });
         services.AddRichAuthorizationRequests();
 
         using var provider = services.BuildServiceProvider(

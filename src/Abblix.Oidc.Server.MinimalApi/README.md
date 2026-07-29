@@ -5,7 +5,7 @@
 ## What's New in Version 2.4
 
 🚀 **Features**
-- **Minimal API integration**: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcMinimalApi` and `MapOidcEndpoints`, with full feature parity with the MVC integration - JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
+- **Minimal API integration**: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcServices` and `MapOidcEndpoints`, with full feature parity with the MVC integration - JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
 
 ## Key Features
 
@@ -31,7 +31,7 @@ This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.Dependenc
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOidcMinimalApi(options =>
+builder.Services.AddOidcServices(options =>
 {
     // configure issuer, clients, signing keys, enabled endpoints, ...
 });
@@ -62,7 +62,7 @@ Endpoints that allow cross-origin requests (checksession, token, revoke, userinf
 
 **Remove the `Abblix.OIDC.Server.MVC` package reference.** Referencing it is enough for its controllers to be mapped: `AddControllers()` finds controller assemblies in the dependency graph on its own, whether or not `AddOidcServices()` was ever called. With both packages in place the two transports claim the same paths and every OIDC request fails with `AmbiguousMatchException`. `MapOidcEndpoints()` refuses to start an application in that state and says which package to drop.
 
-The rest of the swap: call `AddOidcMinimalApi` in place of `AddOidcServices`, `app.MapOidcEndpoints()` in place of `app.MapControllers()`, and rename any response formatter the host replaced or decorated - the interfaces are named `...ResultFormatter` here and return `IResult` instead of `ActionResult`.
+The rest of the swap is small on purpose: `AddOidcServices` is named and shaped exactly as in the MVC integration, and so are the response formatter interfaces, down to the namespace suffix. What changes is `app.MapControllers()`, which becomes `app.MapOidcEndpoints()`, and the return type of any formatter the host replaced or decorated: `IResult` here, `ActionResult` there.
 
 ## Endpoint URLs
 

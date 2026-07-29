@@ -46,7 +46,7 @@ builder.Services.AddDynamicClientRegistration();
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
-builder.Services.AddOidcMinimalApi(options =>
+builder.Services.AddOidcServices(options =>
 {
     options.Issuer = TestConstants.Issuer;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.

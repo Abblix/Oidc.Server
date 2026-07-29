@@ -17,6 +17,13 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The transport adapters and this assembly's own tests reach its internals; nothing outside does. -->
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc" />
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi" />
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.AspNetCore.UnitTests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
         <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />

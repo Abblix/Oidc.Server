@@ -24,6 +24,8 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
+using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>

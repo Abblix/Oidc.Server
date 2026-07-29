@@ -1,0 +1,45 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using Microsoft.AspNetCore.Http;
+using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
+
+namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+
+/// <summary>
+/// Formats the framework-neutral OpenID Connect configuration metadata into an <see cref="IResult"/>, enriching it
+/// with the absolute endpoint URLs resolved for the current request.
+/// </summary>
+/// <remarks>
+/// This is the Minimal API counterpart of the MVC integration's <c>IConfigurationResponseFormatter</c>: same mapping
+/// logic, but it returns an <see cref="IResult"/> instead of an <c>ActionResult</c>, and it resolves endpoint URLs
+/// from the configured route templates plus the request's base URL rather than from controller/action descriptors.
+/// </remarks>
+public interface IConfigurationResponseFormatter
+{
+    /// <summary>
+    /// Formats the configuration response, adding endpoint URLs and (when enabled) the RFC 8414 signed metadata.
+    /// </summary>
+    /// <param name="response">The framework-neutral configuration metadata produced by the core handler.</param>
+    /// <returns>An <see cref="IResult"/> that writes the discovery document as JSON.</returns>
+    Task<IResult> FormatResponseAsync(EndpointResponse response);
+}
