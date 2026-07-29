@@ -87,7 +87,7 @@ public static class JwtTypes
 	/// a foreign token.
 	/// </para>
 	/// </remarks>
-	public const string IdToken = VendorPrefix + "id_token+jwt";
+	public const string IdToken = VendorPrefix + "id-token+jwt";
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -115,7 +115,7 @@ public static class JwtTypes
 	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
 	/// per RFC 7591 Section 3.
 	/// </summary>
-	public const string InitialAccessToken = VendorPrefix + "initial_access+jwt";
+	public const string InitialAccessToken = VendorPrefix + "initial-access+jwt";
 
 	/// <summary>
 	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
@@ -130,4 +130,52 @@ public static class JwtTypes
 	/// signed introspection response cannot be replayed as a different JWT class (RFC 8725 §3.11).
 	/// </summary>
 	public const string TokenIntrospection = "token-introspection+jwt";
+
+	/// <summary>A JWT used to authenticate a client, per RFC 7523bis (approved, awaiting its number).</summary>
+	public const string ClientAuthentication = "client-authentication+jwt";
+
+	/// <summary>An OAuth 2.0 request object, per RFC 9101.</summary>
+	public const string RequestObject = "oauth-authz-req+jwt";
+
+	/// <summary>A Security Event Token, per RFC 8417.</summary>
+	public const string SecurityEvent = "secevent+jwt";
+
+	/// <summary>An Entity Attestation Token, per RFC 9782.</summary>
+	public const string EntityAttestation = "eat+jwt";
+
+	/// <summary>An SD-JWT key binding token, per RFC 9901.</summary>
+	public const string KeyBinding = "kb+jwt";
+
+	/// <summary>A token status list, per the OAuth status list specification (approved, awaiting its number).</summary>
+	public const string StatusList = "statuslist+jwt";
+
+	/// <summary>A signed JSON Web Key Set, registered by the OpenID Foundation.</summary>
+	public const string JwkSet = "jwk-set+jwt";
+
+	/// <summary>An OpenID Federation entity statement, registered by the OpenID Foundation.</summary>
+	public const string EntityStatement = "entity-statement+jwt";
+
+	/// <summary>An OpenID Federation explicit registration response, registered by the OpenID Foundation.</summary>
+	public const string ExplicitRegistrationResponse = "explicit-registration-response+jwt";
+
+	/// <summary>An OpenID Federation resolve response, registered by the OpenID Foundation.</summary>
+	public const string ResolveResponse = "resolve-response+jwt";
+
+	/// <summary>An OpenID Federation trust mark, registered by the OpenID Foundation.</summary>
+	public const string TrustMark = "trust-mark+jwt";
+
+	/// <summary>An OpenID Federation trust mark delegation, registered by the OpenID Foundation.</summary>
+	public const string TrustMarkDelegation = "trust-mark-delegation+jwt";
+
+	/// <summary>An OpenID Federation trust mark status response, registered by the OpenID Foundation.</summary>
+	public const string TrustMarkStatusResponse = "trust-mark-status-response+jwt";
+
+	/// <summary>Claims provided to an identity assurance verifier, registered by the OpenID Foundation.</summary>
+	public const string ProvidedClaims = "provided-claims+jwt";
+
+	/// <summary>A W3C Verifiable Credential secured as a JWT.</summary>
+	public const string VerifiableCredential = "vc+jwt";
+
+	/// <summary>A W3C Verifiable Presentation secured as a JWT.</summary>
+	public const string VerifiablePresentation = "vp+jwt";
 }
