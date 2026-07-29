@@ -72,30 +72,13 @@ public static class JwtTypes
 	/// </remarks>
 	public const string AccessToken = "at+jwt";
 
-	/// <summary>
-	/// OpenID Connect ID Token.
-	/// Indicates this token is an OpenID Connect ID Token.
-	/// Used in the 'typ' header of ID tokens for explicit typing.
-	/// </summary>
-	/// <remarks>
-	/// Ours entirely: OpenID Connect Core 1.0 never mentions the <c>typ</c> header parameter, let alone a value
-	/// for the ID token, so there is no standard name here to match or to squat on. The value is emitted for
-	/// this server's own benefit, following the RFC 8725 Section 3.11 guidance on explicit typing - the
-	/// <c>id_token_hint</c> validators pin it so an access or refresh token cannot be replayed as a hint, which
-	/// the signature and audience checks alone would not catch.
-	/// <para>
-	/// A relying party will not check it, precisely because the specification does not ask for one. That cuts
-	/// both ways and is worth remembering when consuming somebody else's ID token: theirs will carry a
-	/// different value or none at all, so this constant is a rule about what we issue, never a test to apply to
-	/// a foreign token.
-	/// </para>
-	/// </remarks>
-	// S6418 reads a short literal assigned to a name ending in "Token" as a possible hard-coded secret. This
-	// one is a media type that every ID token carries in the clear, and it is short because the registry's own
-	// names for this suffix are (at+jwt, kb+jwt, vc+jwt). The rule does not fire on the longer spelling, which
-	// is the only thing that changed.
-	[SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
-    public const string IdToken = VendorPrefix + "id+jwt";
+	// There is deliberately no value here for the ID token. OpenID Connect Core 1.0 never mentions the typ
+	// header parameter at all, so nothing standard exists to use, and a vendor value would be one no relying
+	// party reads: neither Duende IdentityServer nor OpenIddict types an ID token either, both leaving the
+	// generic JWT that the JWT library writes. What a vendor value does instead is break at a version
+	// boundary - an ID token issued before a rename is refused after it, which is how RP-initiated logout
+	// stopped working across two servers of different builds. The classes this system does define are listed
+	// in TokenClasses below, and an ID token is recognised by not being one of them.
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -111,19 +94,22 @@ public static class JwtTypes
 	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens
 	/// without reauthentication.
 	/// </summary>
-	public const string RefreshToken = VendorPrefix + "refresh+jwt";
+    [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
+	public const string RefreshToken = VendorPrefix + "rt+jwt";
 
 	/// <summary>
 	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely
 	/// registering clients.
 	/// </summary>
-	public const string RegistrationAccessToken = VendorPrefix + "registration+jwt";
+    [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
+	public const string RegistrationAccessToken = VendorPrefix + "dcr+jwt";
 
 	/// <summary>
 	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
 	/// per RFC 7591 Section 3.
 	/// </summary>
-	public const string InitialAccessToken = VendorPrefix + "initial-access+jwt";
+    [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
+	public const string InitialAccessToken = VendorPrefix + "iat+jwt";
 
 	/// <summary>
 	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
@@ -194,7 +180,6 @@ public static class JwtTypes
 	private static readonly string[] TokenClasses =
 	[
 		AccessToken,
-		IdToken,
 		LogoutToken,
 		RefreshToken,
 		RegistrationAccessToken,

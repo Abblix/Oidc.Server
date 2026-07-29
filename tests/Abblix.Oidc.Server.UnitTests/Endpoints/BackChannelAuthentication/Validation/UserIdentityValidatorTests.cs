@@ -249,7 +249,6 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Type = JwtTypes.IdToken },
             Payload = { Audiences = ["test-client"] },
         };
 
@@ -280,7 +279,6 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Type = JwtTypes.IdToken },
             Payload = { Audiences = ["test-client"] },
         };
 
@@ -301,10 +299,14 @@ public class UserIdentityValidatorTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <see cref="JwtTypes.IdToken"/> (e.g. a stolen access token replayed as a
-    /// hint) must be rejected even when its audience matches the requesting client.
+    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
+    /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
+    /// when its audience matches the requesting client.
     /// </summary>
+    /// <remarks>
+    /// The rejection reason is asserted, not just the error code: every refusal here answers
+    /// <c>invalid_request</c>, so a test checking only the code passes whichever check happened to fire.
+    /// </remarks>
     [Fact]
     public async Task ValidateAsync_IdTokenHintWrongType_ShouldReturnInvalidRequest()
     {
@@ -327,6 +329,7 @@ public class UserIdentityValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal("The id token hint is not an ID Token", result.ErrorDescription);
     }
 
     /// <summary>
@@ -339,7 +342,6 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Type = JwtTypes.IdToken },
             Payload = { Audiences = ["different-client"] },
         };
 
