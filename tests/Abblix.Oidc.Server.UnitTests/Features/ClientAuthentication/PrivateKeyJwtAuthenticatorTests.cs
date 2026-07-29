@@ -88,6 +88,85 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// A token this server issued is not proof of who the client is. RFC 8725 Section 3.11 calls this token
+    /// confusion, and here it would be the sharpest kind: an access token the client legitimately holds,
+    /// presented as its credential. Everything else about the assertion below is valid - issuer, subject, jti
+    /// and expiry all check out - so the token type is the only thing standing between the two meanings.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtTypes.AccessToken)]
+    [InlineData(JwtTypes.IdToken)]
+    [InlineData(JwtTypes.RefreshToken)]
+    public async Task ATokenClassPresentedAsAssertion_ShouldReturnNull(string tokenType)
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "valid-jti-assertion",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        token.Header.Type = tokenType;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The values a conformant sender may use cannot be enumerated - RFC 7523bis asks for
+    /// <c>client-authentication+jwt</c> "or another more specific explicit type value defined by a
+    /// specification profiling this specification", and plenty of clients predate the guidance entirely. So an
+    /// absent, generic or unfamiliar type has to pass, or the check would refuse honest callers rather than
+    /// confused tokens.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(JwtTypes.Jwt)]
+    [InlineData(JwtTypes.ClientAuthentication)]
+    [InlineData("something-a-profile-defined+jwt")]
+    public async Task AnAssertionTypeThatNamesNoTokenClass_ShouldAuthenticate(string? tokenType)
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, $"valid-jti-{tokenType ?? "none"}",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        token.Header.Type = tokenType;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ClientId, result.ClientId);
+    }
+
+    /// <summary>
     /// Verifies that authentication fails when client_assertion_type is missing.
     /// Both client_assertion_type and client_assertion are required.
     /// </summary>

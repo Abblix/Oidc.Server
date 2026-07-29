@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt;
+
 namespace Abblix.Oidc.Server.Common.Constants;
 
 /// <summary>
@@ -87,7 +90,12 @@ public static class JwtTypes
 	/// a foreign token.
 	/// </para>
 	/// </remarks>
-	public const string IdToken = VendorPrefix + "id-token+jwt";
+	// S6418 reads a short literal assigned to a name ending in "Token" as a possible hard-coded secret. This
+	// one is a media type that every ID token carries in the clear, and it is short because the registry's own
+	// names for this suffix are (at+jwt, kb+jwt, vc+jwt). The rule does not fire on the longer spelling, which
+	// is the only thing that changed.
+	[SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
+    public const string IdToken = VendorPrefix + "id+jwt";
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -178,4 +186,44 @@ public static class JwtTypes
 
 	/// <summary>A W3C Verifiable Presentation secured as a JWT.</summary>
 	public const string VerifiablePresentation = "vp+jwt";
+
+	/// <summary>
+	/// Every <c>typ</c> naming a token class in its own right, as opposed to a JWT that carries something else
+	/// - request parameters, a client authentication assertion, an assertion from a trusted issuer.
+	/// </summary>
+	private static readonly string[] TokenClasses =
+	[
+		AccessToken,
+		IdToken,
+		LogoutToken,
+		RefreshToken,
+		RegistrationAccessToken,
+		InitialAccessToken,
+		DPoPProof,
+		TokenIntrospection,
+	];
+
+	/// <summary>
+	/// Reports whether a <c>typ</c> names a token class, so that a JWT presenting itself as one where a
+	/// carrier is expected can be refused.
+	/// </summary>
+	/// <param name="tokenType">The <c>typ</c> header parameter of the incoming JWT, which may be absent.</param>
+	/// <returns><c>true</c> when the value names one of the recognised token classes.</returns>
+	/// <remarks>
+	/// This enumerates what to refuse rather than what to accept, which is the opposite of the usual
+	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 7523bis allows a client
+	/// authentication JWT to be typed "client-authentication+jwt or another more specific explicit type value
+	/// defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
+	/// object that "some existing deployments may alternatively be using the type application/jwt". An allow
+	/// list would refuse conformant senders on both counts.
+	/// <para>
+	/// What can be enumerated exactly is the set of classes this system defines, and that is what this refuses.
+	/// The check fires only where one of those turns up somewhere it has no business being, which is the
+	/// confusion RFC 8725 Section 3.11 describes; an absent, generic or unfamiliar value passes untouched, so a
+	/// sender that never heard of explicit typing is unaffected.
+	/// </para>
+	/// </remarks>
+	public static bool IsTokenClass(string? tokenType)
+		=> tokenType is not null &&
+		   Array.Exists(TokenClasses, tokenClass => JwtTypeName.Matches(tokenType, tokenClass));
 }

@@ -182,6 +182,20 @@ public partial class RequestObjectFetcher(
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>
             {
+                // A request object carries authorization request parameters; it is not a token. RFC 9101 §4
+                // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
+                // deployments may alternatively be using the type application/jwt", so the exact value cannot
+                // be demanded of a conformant client. What can be refused is a JWT declaring itself one of
+                // this server's own token classes, which is a token being replayed where request parameters
+                // belong - the confusion RFC 8725 §3.11 describes.
+                var tokenType = validJwt.Token.Header.Type;
+                if (JwtTypes.IsTokenClass(tokenType))
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequestObject,
+                        $"A token of type '{tokenType}' cannot be used as a request object");
+                }
+
                 // RFC 9101 §10.5: a client registered with require_signed_request_object committed
                 // to SIGNED request objects — an unsigned (alg=none) object satisfies the
                 // structural check but not the commitment.
