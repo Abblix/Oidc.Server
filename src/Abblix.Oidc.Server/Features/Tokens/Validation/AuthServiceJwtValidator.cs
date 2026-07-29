@@ -34,14 +34,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// with the expected issuer, audience, and cryptographic signatures.
 /// </summary>
 /// <param name="validator">The service used to perform the core JWT validation.</param>
-/// <param name="clientInfoProvider">The provider used to retrieve information about clients during
-/// audience validation.</param>
-/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT.</param>
+/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT, which is also the
+/// only audience these tokens may name.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
-	IClientInfoProvider clientInfoProvider,
 	IIssuerProvider issuerProvider,
 	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
 {
@@ -85,19 +83,27 @@ public class AuthServiceJwtValidator(
 	}
 
 	/// <summary>
-	/// Validates the audience of the JWT by checking if it matches any known client information.
+	/// Validates the audience of the JWT by checking whether it names this service or any known client.
 	/// </summary>
 	/// <param name="audiences">A collection of audience values to validate.</param>
 	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
-	private async Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
+	/// <remarks>
+	/// The issuer is the only acceptable audience. Every token this service issues for its own consumption
+	/// names it: refresh, registration and initial access tokens round-trip here, and an access token whose
+	/// request named no resource carries the issuer for the same reason, since RFC 9068 Section 4 has a
+	/// resource server reject a token whose audience does not name it.
+	/// <para>
+	/// A client identifier is deliberately not accepted. An audience names the party meant to consume the
+	/// token, and a client is the party that asked for it. The one token class that legitimately carries a
+	/// client identifier there is the ID token (OpenID Connect Core 1.0 Section 2), which is why the
+	/// <c>id_token_hint</c> path checks its audience itself rather than through this method.
+	/// </para>
+	/// A token minted for a named resource names that resource, so it is not valid here either - which is what
+	/// keeps a token issued for somebody else's API from opening this service's own endpoints.
+	/// </remarks>
+	private Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
 	{
-		foreach (var audience in audiences)
-		{
-			var clientInfo = await clientInfoProvider.TryFindClientAsync(audience).WithLicenseCheck();
-			if (clientInfo != null)
-				return true;
-		}
-
-		return false;
+		var issuer = issuerProvider.GetIssuer();
+		return Task.FromResult(audiences.Contains(issuer, StringComparer.Ordinal));
 	}
 }

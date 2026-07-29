@@ -386,10 +386,15 @@ public class UserInfoRequestValidatorTests
 
     /// <summary>
     /// Verifies JWT validation uses correct validation options.
-    /// Per OIDC Core, audience validation is skipped for UserInfo endpoint.
+    /// The audience is checked here because this endpoint is a protected resource
+    /// (OpenID Connect Core 1.0 Section 1.2), which puts it under RFC 9068 Section 4: "The resource server
+    /// MUST validate that the aud claim contains a resource indicator value corresponding to an identifier
+    /// the resource server expects for itself." Section 5 names the cost of skipping it - a token minted for
+    /// another resource would open this one, which is the cross-JWT confusion distinct audiences exist to
+    /// prevent.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldValidateJwtWithoutAudienceCheck()
+    public async Task ValidateAsync_ShouldValidateJwtWithAudienceCheck()
     {
         // Arrange
         var userInfoRequest = CreateUserInfoRequest("token_123");
@@ -419,7 +424,9 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.False((capturedOptions.Value & ValidationOptions.ValidateAudience) == ValidationOptions.ValidateAudience);
+        Assert.Equal(
+            ValidationOptions.RequireValidAudience,
+            capturedOptions.Value & ValidationOptions.RequireValidAudience);
     }
 
     /// <summary>

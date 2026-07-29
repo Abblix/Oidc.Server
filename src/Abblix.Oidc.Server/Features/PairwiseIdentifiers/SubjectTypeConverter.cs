@@ -87,13 +87,13 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// pseudonym; for a public client, returns the subject unchanged. Returns <c>null</c> when a pairwise pseudonym
     /// cannot be opened, so the caller can surface a protocol-level rejection instead of faulting.
     /// </summary>
-    public string? Recover(string subject, ClientInfo clientInfo) => clientInfo.SubjectType switch
+    public string? ConvertBack(string subject, ClientInfo clientInfo) => clientInfo.SubjectType switch
     {
-        SubjectTypes.Pairwise => RecoverPairwise(subject, clientInfo),
+        SubjectTypes.Pairwise => ConvertBackPairwise(subject, clientInfo),
         _ => subject,
     };
 
-    private string? RecoverPairwise(string pseudonym, ClientInfo clientInfo)
+    private string? ConvertBackPairwise(string pseudonym, ClientInfo clientInfo)
     {
         // The pseudonym is client-supplied (it rides in the token's 'sub'), so a value that is not valid base64url or
         // does not open is a rejected input, not a server fault: return null and let the caller surface the protocol

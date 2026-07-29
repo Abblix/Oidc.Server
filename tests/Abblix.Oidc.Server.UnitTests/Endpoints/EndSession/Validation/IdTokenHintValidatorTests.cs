@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -39,12 +40,21 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession.Validation;
 public class IdTokenHintValidatorTests
 {
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly IdTokenHintValidator _validator;
 
     public IdTokenHintValidatorTests()
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
-        _validator = new IdTokenHintValidator(_jwtValidator.Object);
+
+        // The audience client resolves by default: these cases are about the hint's own rules, and the
+        // registration check has its own case below.
+        _clientInfoProvider = new Mock<IClientInfoProvider>();
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .ReturnsAsync((string id) => new ClientInfo(id));
+
+        _validator = new IdTokenHintValidator(_jwtValidator.Object, _clientInfoProvider.Object);
     }
 
     private static EndSessionValidationContext CreateContext(
@@ -172,7 +182,7 @@ public class IdTokenHintValidatorTests
 
     /// <summary>
     /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
+    /// A token whose 'typ' is not <see cref="JwtTypes.IdToken"/> (e.g. a stolen access token replayed as a
     /// hint) must be rejected even when its audience matches the requesting client.
     /// </summary>
     [Fact]

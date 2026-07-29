@@ -85,15 +85,26 @@ public static class AuthorizationContextExtensions
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
 
-        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names)
-        // both feed into the JWT aud claim. Resources take precedence in ordering for legacy
-        // compat; when neither is set we fall back to the client_id (OIDC convention).
+        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names) both feed
+        // into the JWT aud claim. Resources take precedence in ordering for legacy compat.
+        //
+        // With neither set, the audience is the issuer. RFC 9068 §3 requires a default resource
+        // indicator here, and §4 tells a resource server to reject a token whose aud does not name it -
+        // so the client id, which names the party that asked for the token rather than the one that
+        // reads it, is a value a conforming resource server must refuse. Where nothing was requested
+        // the consumer is this server, and the issuer identifies it exactly, without a host having to
+        // invent a URI for a resource that does not exist.
+        //
+        // The issuer is read off the payload rather than taken as a parameter: every caller sets it
+        // before calling this, and threading it through would change a shipped public signature.
         var audienceParts = new List<string>();
         if (context.Resources is { Length: > 0 })
             audienceParts.AddRange(Array.ConvertAll(context.Resources, res => res.OriginalString));
         if (context.Audiences is { Length: > 0 })
             audienceParts.AddRange(context.Audiences);
-        payload.Audiences = audienceParts.Count > 0 ? audienceParts.ToArray() : [context.ClientId];
+        payload.Audiences = audienceParts.Count > 0
+            ? audienceParts.ToArray()
+            : [payload.Issuer.NotNull(nameof(payload.Issuer))];
 
         payload[JwtClaimTypes.RequestedClaims] = JsonSerializer.SerializeToNode(
             context.RequestedClaims,
@@ -144,8 +155,13 @@ public static class AuthorizationContextExtensions
     {
         var audiences = payload.Audiences.ToArray();
 
+        // A lone audience naming this server, or the client that asked for the token, is what the write side
+        // puts there when the request named no resource - so reading it back must not produce a resource
+        // nobody requested, or a refresh would silently narrow the new token to it. The client identifier is
+        // still recognised here because tokens issued before the fallback became the issuer name the client,
+        // and they stay valid until they expire.
         Uri[]? resources = null;
-        if (audiences.Length != 1 || audiences[0] != payload.ClientId)
+        if (audiences.Length != 1 || (audiences[0] != payload.Issuer && audiences[0] != payload.ClientId))
         {
             resources = audiences
                 .Select(aud => Uri.TryCreate(aud, UriKind.Absolute, out var uri) ? uri : null)

@@ -268,8 +268,41 @@ public class UserIdentityValidatorTests
     }
 
     /// <summary>
+    /// The shared audience check is off for this call, and the check below - that the hint names the
+    /// requesting client - takes its place. An ID token names a client in <c>aud</c> (OpenID Connect Core 1.0
+    /// Section 2, "It MUST contain the OAuth 2.0 client_id of the Relying Party"), while the shared validator
+    /// accepts only the issuer, so leaving it on would refuse every hint. The mocked validator returns a token
+    /// whatever options it is handed, which is why the options themselves have to be asserted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_IdTokenHint_ShouldNotUseTheSharedAudienceCheck()
+    {
+        // Arrange
+        var token = new JsonWebToken
+        {
+            Header = { Type = JwtTypes.IdToken },
+            Payload = { Audiences = ["test-client"] },
+        };
+
+        ValidationOptions? capturedOptions = null;
+        _idTokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<string, ValidationOptions>((_, options) => capturedOptions = options))
+            .ReturnsAsync(token);
+
+        var context = CreateContext(idTokenHint: "id-token");
+
+        // Act
+        await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(capturedOptions);
+        Assert.False(capturedOptions.Value.HasFlag(ValidationOptions.ValidateAudience));
+    }
+
+    /// <summary>
     /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
+    /// A token whose 'typ' is not <see cref="JwtTypes.IdToken"/> (e.g. a stolen access token replayed as a
     /// hint) must be rejected even when its audience matches the requesting client.
     /// </summary>
     [Fact]

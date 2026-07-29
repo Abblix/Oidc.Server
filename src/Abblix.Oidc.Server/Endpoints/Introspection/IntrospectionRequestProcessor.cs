@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,8 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
@@ -34,7 +40,12 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// It follows the OAuth 2.0 Token Introspection specification (RFC 7662).
 /// The processor examines the token's status and provides an appropriate response as per the specification.
 /// </remarks>
-public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
+/// <param name="clientInfoProvider">Resolves the client a token was issued to, so its subject can be opened
+/// before being re-sealed for a different caller.</param>
+/// <param name="subjectTypeConverter">Opens and re-seals the end-user identifier per client sector.</param>
+public class IntrospectionRequestProcessor(
+	IClientInfoProvider clientInfoProvider,
+	ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
@@ -44,9 +55,10 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionSuccess"/>
 	/// or an <see cref="OidcError"/>. The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request) => Task.FromResult<Result<IntrospectionSuccess, OidcError>>(Process(request));
+	public async Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request)
+		=> await ProcessInternalAsync(request);
 
-	private static IntrospectionSuccess Process(ValidIntrospectionRequest request)
+	private async Task<IntrospectionSuccess> ProcessInternalAsync(ValidIntrospectionRequest request)
 	{
 		if (request.Token == null)
 		{
@@ -66,7 +78,103 @@ public class IntrospectionRequestProcessor : IIntrospectionRequestProcessor
 		// to prevent a protected resource from learning more about the larger network than is necessary for its operation.
 
 		// A pairwise client's 'sub' is its own opaque per-sector pseudonym - meaningful only to the issuing server
-		// (which can reverse it) - so echoing the payload as-is leaks nothing extra to the introspecting resource.
-		return new IntrospectionSuccess(true, request.Token.Payload.Json, request.ClientInfo);
+		// (which can reverse it) - so echoing the payload as-is leaks nothing extra to the client the token was
+		// issued to. That reasoning does not carry to any other caller: the pseudonym belongs to somebody else's
+		// sector, and handing it over gives the caller a stable handle on a user it was never told about.
+		var payload = request.Token.Payload.Json;
+		if (request.Token.Payload.ClientId != request.ClientInfo.ClientId)
+		{
+			payload = WithoutPrivateClaims(payload);
+
+			var pseudonym = await PseudonymForCallerAsync(request);
+			if (pseudonym != null)
+			{
+				payload[IanaClaimTypes.Sub] = pseudonym;
+			}
+		}
+
+		return new IntrospectionSuccess(true, payload, request.ClientInfo);
+	}
+
+	/// <summary>
+	/// Produces the identifier by which the calling protected resource knows this end-user, or <c>null</c> when
+	/// there is none to give and the subject stays withheld.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7662 Section 5 offers this as the alternative to withholding: "transmit user identifiers as opaque
+	/// service-specific strings, potentially returning different identifiers to each protected resource". A
+	/// pairwise caller already has such a namespace, so the subject is opened back to the real user and
+	/// re-sealed to the caller's sector - it gets a stable handle that says nothing about the real subject and
+	/// cannot be matched against what another resource sees.
+	/// <para>
+	/// A caller that is not pairwise gets nothing. Its own subject type says it sees users under their real
+	/// identifiers, which is a statement about the tokens issued to it, not a licence to learn the identity of
+	/// a user who authorized somebody else.
+	/// </para>
+	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not
+	/// open, leaves the response as it would have been without this.
+	/// </remarks>
+	private async Task<string?> PseudonymForCallerAsync(ValidIntrospectionRequest request)
+	{
+		if (request.ClientInfo.SubjectType != SubjectTypes.Pairwise)
+			return null;
+
+		var token = request.Token.NotNull(nameof(request.Token));
+		if (token.Payload.Subject is not { } subject || token.Payload.ClientId is not { } ownerId)
+			return null;
+
+		// The subject in the token is what its own client sees, so it has to be opened against that client
+		// before it can be re-sealed for anybody else.
+		var owner = await clientInfoProvider.TryFindClientAsync(ownerId).WithLicenseCheck();
+		if (owner == null)
+			return null;
+
+		var realSubject = subjectTypeConverter.ConvertBack(subject, owner);
+		return realSubject == null ? null : subjectTypeConverter.Convert(realSubject, request.ClientInfo);
+	}
+
+	/// <summary>
+	/// The members RFC 7662 Section 2.2 defines that carry nothing about the end-user, which is what a caller
+	/// other than the token's own client receives.
+	/// </summary>
+	/// <remarks>
+	/// This is an allow list rather than a list of claims to strip, because the payload is open-ended: scopes,
+	/// authorization details and host-defined claims all live there, and a deny list only withholds what
+	/// whoever wrote it happened to think of. Section 2.2 names the members a protected resource can expect,
+	/// so anything outside it is something the caller was never promised.
+	/// </remarks>
+	private static readonly string[] ClaimsSafeForAnyCaller =
+	[
+		IanaClaimTypes.Iss,
+		IanaClaimTypes.Aud,
+		IanaClaimTypes.Exp,
+		IanaClaimTypes.Nbf,
+		IanaClaimTypes.Iat,
+		IanaClaimTypes.Jti,
+		IanaClaimTypes.Scope,
+		IanaClaimTypes.ClientId,
+	];
+
+	/// <summary>
+	/// Keeps only the members safe for a caller the token was not issued to.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7662 Section 5: "measures MUST be taken to prevent disclosure of this information to unintended
+	/// parties", naming user identifiers as the case in point, and "omitting privacy-sensitive information from
+	/// an introspection response is the simplest way of minimizing privacy issues". Section 2.2 grants the
+	/// latitude to answer such a caller differently.
+	/// </remarks>
+	private static JsonObject WithoutPrivateClaims(JsonObject payload)
+	{
+		var narrowed = new JsonObject();
+		foreach (var name in ClaimsSafeForAnyCaller)
+		{
+			if (payload.TryGetPropertyValue(name, out var value) && value is not null)
+			{
+				narrowed[name] = value.DeepClone();
+			}
+		}
+
+		return narrowed;
 	}
 }

@@ -136,9 +136,13 @@ public class UserIdentityValidator(
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
+        // The audience is checked below, against the requesting client, rather than by the shared validator,
+        // which accepts only the issuer. An ID token is the one class that names a client there: OpenID
+        // Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id of the Relying
+        // Party". Leaving the shared check on would refuse every hint.
         var result = await idTokenValidator.ValidateAsync(
             idTokenHint,
-            ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
+            ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience);
 
         if (result.TryGetFailure(out var error))
         {

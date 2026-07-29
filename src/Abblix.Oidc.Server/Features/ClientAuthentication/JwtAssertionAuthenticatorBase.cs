@@ -119,6 +119,19 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
+        // An assertion authenticates the client; it is not a token this server issued. RFC 7523bis asks that
+        // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
+        // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
+        // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
+        // itself one of this server's own token classes, which is the replay RFC 8725 §3.11 describes: without
+        // it, a token the client legitimately holds could be presented as proof of its identity.
+        var tokenType = token.Header.Type;
+        if (JwtTypes.IsTokenClass(tokenType))
+        {
+            LogTokenClassPresentedAsAssertion(clientInfo.ClientId, tokenType);
+            return null;
+        }
+
         // OIDC Core §9: the client-authentication assertion's jti is REQUIRED — "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,

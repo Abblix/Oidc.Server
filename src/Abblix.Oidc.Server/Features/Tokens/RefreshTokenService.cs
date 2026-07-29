@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -106,6 +106,20 @@ public class RefreshTokenService(
 		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
 		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
+		// The same four claims as on an access token, answering the same four questions - but the audience
+		// lands differently, and that difference is the point:
+		//
+		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
+		//   aud       - who reads it         (RFC 7519 Section 4.1.3). Here it is always this server. A
+		//                                     refresh token grants access to nothing: the client presents it
+		//                                     to the token endpoint and never opens it, so "who reads it"
+		//                                     and "where it grants access" - which coincide on an access
+		//                                     token - come apart. Naming the client instead would say who
+		//                                     asked rather than who reads, and leave the audience uncheckable
+		//                                     on the way back in.
+		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set by ApplyTo below.
+		//   sub       - who it is about      (RFC 9068 Section 2.2), sealed per sector for a pairwise client
+		//                                     further down.
 		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
 
 		var newToken = new JsonWebToken
@@ -123,11 +137,13 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-				Audiences = [clientInfo.ClientId],
 				GrantId = grantId,
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
+
+		// This also sets the audience - the resources the grant was issued for, or the issuer when it named
+		// none - so setting it above would only be overwritten.
 		authContext.ApplyTo(newToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
@@ -179,10 +195,10 @@ public class RefreshTokenService(
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
-		// Recover the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
+		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		var subject = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo);
 		if (subject is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the

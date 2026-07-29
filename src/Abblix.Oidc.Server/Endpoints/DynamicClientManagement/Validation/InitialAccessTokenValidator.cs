@@ -64,13 +64,11 @@ public class InitialAccessTokenValidator(
                 $"The scheme name '{header.Scheme}' is not supported");
         }
 
-        // Skip audience validation: initial access tokens authorize registration at the issuer itself,
-        // so no audience claim is set or expected. Clearing RequireValidAudience drops BOTH the
-        // presence requirement and the value check; clearing only ValidateAudience would leave
-        // RequireAudience set, and an initial access token carries no 'aud', so it would be rejected.
-        var result = await jwtValidator.ValidateAsync(
-            header.Parameter,
-            ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
+        // The audience is required and checked. An initial access token authorizes registration at this
+        // server, so this server is its audience, and the shared validator accepts exactly that. The check
+        // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
+        // the one exception to the rule every other token here follows.
+        var result = await jwtValidator.ValidateAsync(header.Parameter);
 
         if (result.TryGetFailure(out var error))
             return new OidcError(ErrorCodes.InvalidToken, error.ErrorDescription);

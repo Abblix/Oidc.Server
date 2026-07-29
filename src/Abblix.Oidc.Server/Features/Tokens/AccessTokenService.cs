@@ -91,6 +91,25 @@ internal class AccessTokenService(
 		AuthorizationContext authContext,
 		ClientInfo clientInfo)
 	{
+		// Four claims answer four different questions, and keeping them apart is what stops any one of them
+		// from being asked to carry two meanings at once:
+		//
+		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
+		//   aud       - who reads it         (RFC 7519 Section 4.1.3: "identifies the recipients that the JWT
+		//                                     is intended for"). For an access token the reader is the
+		//                                     resource server, so this doubles as where the token grants
+		//                                     access - the requested resource, the configured default, or
+		//                                     this server when nothing was asked for.
+		//   client_id - who asked for it     (RFC 8693 Section 4.3: "the client identifier of the OAuth 2.0
+		//                                     client that requested the token") - set by ApplyTo below.
+		//   sub       - who it is about      (RFC 9068 Section 2.2: the resource owner's identifier, or an
+		//                                     identifier for the client itself under client_credentials,
+		//                                     where there is no resource owner)
+		//
+		// So client_id and sub coincide only under client_credentials; under the authorization code grant the
+		// client asked and the token is about the user. The separation is also why the audience is checkable
+		// at all: RFC 7519 Section 4.1.3 says a principal that cannot identify itself in aud MUST reject the
+		// token, which is what keeps a token minted for somebody else's API from opening UserInfo.
 		var issuedAt = clock.GetUtcNow();
 		var signing = options.Value.ServiceTokens.AccessToken.Signing;
 
@@ -155,11 +174,11 @@ internal class AccessTokenService(
 		var authSession = accessToken.Payload.ToAuthSession();
 		var authorizationContext = accessToken.Payload.ToAuthorizationContext();
 
-		// Recover the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
+		// ConvertBack the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
 		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
 		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
 		// at the protocol level instead of faulting.
-		var result = subjectTypeConverter.Recover(authSession.Subject, clientInfo)
+		var result = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo)
 			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
 			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
 
