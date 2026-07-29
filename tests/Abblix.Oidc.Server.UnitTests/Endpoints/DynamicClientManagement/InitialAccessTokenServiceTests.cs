@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -76,6 +77,28 @@ public class InitialAccessTokenServiceTests
         Assert.NotNull(capturedToken);
         Assert.Equal(JwtTypes.InitialAccessToken, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// RFC 7591 Section 3 has this token authorize a registration call at this server, so this server is what
+    /// consumes it - and the audience is where a token says so. Without it this would be the only token issued
+    /// here whose intended recipient is unstated, and the only one whose audience could not be checked.
+    /// </summary>
+    [Fact]
+    public async Task IssueTokenAsync_ShouldSetAudienceToIssuer()
+    {
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((t, _) => capturedToken = t)
+            .ReturnsAsync("formatted-jwt");
+
+        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal(
+            [TestConstants.DefaultIssuer.OriginalString],
+            capturedToken.Payload.Audiences.ToArray());
     }
 
     [Fact]
