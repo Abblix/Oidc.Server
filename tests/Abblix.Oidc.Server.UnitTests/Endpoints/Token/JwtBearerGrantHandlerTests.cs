@@ -1052,7 +1052,7 @@ public class JwtBearerGrantHandlerTests
 	/// </summary>
 	[Theory]
 	[InlineData("at+jwt")]
-	[InlineData("id_token+jwt")]
+	[InlineData(JwtTypes.IdToken)]
 	[InlineData(null)]
 	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
 	{

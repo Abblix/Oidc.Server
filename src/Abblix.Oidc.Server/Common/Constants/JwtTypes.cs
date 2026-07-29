@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -26,24 +26,30 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// This class defines JWT (JSON Web Token) types used in various contexts.
 /// </summary>
 /// <remarks>
-/// Half of these are registered media types and half are ours, and the difference is not visible in the
-/// values, so it is recorded here. Registered with IANA: <see cref="AccessToken"/> (RFC 9068),
-/// <see cref="LogoutToken"/> (OpenID Foundation), <see cref="DPoPProof"/> (RFC 9449) and
-/// <see cref="TokenIntrospection"/> (RFC 9701). Not registered by anyone: <see cref="IdToken"/>,
-/// <see cref="RefreshToken"/>, <see cref="RegistrationAccessToken"/> and <see cref="InitialAccessToken"/>.
+/// Some of these values are fixed by a specification and some are ours, and the prefix is what tells them
+/// apart. Fixed elsewhere, carrying no prefix: <see cref="AccessToken"/> (RFC 9068), <see cref="LogoutToken"/>
+/// (OpenID Foundation), <see cref="DPoPProof"/> (RFC 9449) and <see cref="TokenIntrospection"/> (RFC 9701) -
+/// each registered with IANA and each rejected by its counterparties under any other value, so none of them
+/// may be changed. Everything else is invented here and says so, through the vendor prefix.
 /// <para>
-/// The unregistered four follow the shape RFC 8725 Section 3.11 recommends - "a media type name of the format
-/// application/example+jwt" - which asks for the format and not for a registration. They do occupy the
-/// standards tree without one, so a future registration of the same name would collide. Three of them are read
-/// only by this server, where a collision would be a naming embarrassment rather than an interoperability
-/// break; the ID token is the one that leaves the perimeter, and OpenID Connect Core defines no typ for it, so
-/// no relying party checks the value.
+/// RFC 6838 Section 3.2 is where that prefix comes from: the vendor tree "is used for media types associated
+/// with publicly available products", and its registrations "will be distinguished by the leading facet vnd.".
+/// Names without it belong to the standards tree, where a future registration of the same word would collide
+/// with ours - and, worse for a reader, a name sitting there looks exactly as authoritative as one that was
+/// actually standardised.
 /// </para>
-/// Renaming any of them changes what already-issued tokens must look like, so treat the values as fixed unless
-/// a party outside this server needs to parse one.
+/// Changing a prefixed value is possible but not free: it changes what an already-issued token looks like, so
+/// tokens minted before the change stop being recognised.
 /// </remarks>
 public static class JwtTypes
 {
+	/// <summary>
+	/// Marks a token type this server invented rather than one a specification fixed. RFC 6838 Section 3.2
+	/// reserves the "vnd." facet for exactly this, keeping our names out of the standards tree where they
+	/// would both risk collision and read as though somebody had standardised them.
+	/// </summary>
+	private const string VendorPrefix = "vnd.abblix.";
+
 	/// <summary>
 	/// Standard JSON Web Token type.
 	/// Per RFC 7519 Section 5.1, this is the recommended value for the 'typ' header parameter.
@@ -54,6 +60,13 @@ public static class JwtTypes
 	/// The "AccessToken" JWT type is used to represent access tokens, typically used for authenticating
 	/// and authorizing users in APIs.
 	/// </summary>
+	/// <remarks>
+	/// FIXED BY SPECIFICATION - MUST NOT be changed. Registered with IANA as <c>application/at+jwt</c> by
+	/// RFC 9068, which requires it verbatim: "JWT access tokens MUST include this media type in the typ header
+	/// parameter to explicitly declare that the JWT represents an access token complying with this profile"
+	/// (Section 2.1). Every resource server that validates our access tokens rejects any other value, so a
+	/// change here is not a rename but a withdrawal from the profile.
+	/// </remarks>
 	public const string AccessToken = "at+jwt";
 
 	/// <summary>
@@ -61,30 +74,35 @@ public static class JwtTypes
 	/// Indicates this token is an OpenID Connect ID Token.
 	/// Used in the 'typ' header of ID tokens for explicit typing.
 	/// </summary>
-	public const string IdToken = "id_token+jwt";
+	public const string IdToken = VendorPrefix + "id_token+jwt";
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
 	/// </summary>
+	/// <remarks>
+	/// FIXED BY SPECIFICATION - MUST NOT be changed. Registered with IANA as <c>application/logout+jwt</c> by
+	/// the OpenID Foundation and required by OpenID Connect Back-Channel Logout, which the relying parties we
+	/// notify implement. A different value would leave every one of them unable to recognise the token.
+	/// </remarks>
 	public const string LogoutToken = "logout+jwt";
 
 	/// <summary>
 	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens
 	/// without reauthentication.
 	/// </summary>
-	public const string RefreshToken = "refresh+jwt";
+	public const string RefreshToken = VendorPrefix + "refresh+jwt";
 
 	/// <summary>
 	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely
 	/// registering clients.
 	/// </summary>
-	public const string RegistrationAccessToken = "registration+jwt";
+	public const string RegistrationAccessToken = VendorPrefix + "registration+jwt";
 
 	/// <summary>
 	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
 	/// per RFC 7591 Section 3.
 	/// </summary>
-	public const string InitialAccessToken = "initial_access+jwt";
+	public const string InitialAccessToken = VendorPrefix + "initial_access+jwt";
 
 	/// <summary>
 	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this

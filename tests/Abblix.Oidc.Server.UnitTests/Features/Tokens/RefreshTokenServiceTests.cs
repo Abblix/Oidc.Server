@@ -58,7 +58,7 @@ public class RefreshTokenServiceTests
     private const string TokenId = "token_abc123";
     private const string GrantId = "grant_xyz789";
     private const string OldTokenId = "old_token_xyz";
-    private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InJlZnJlc2grand0In0.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
+    private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InZuZC5hYmJsaXgucmVmcmVzaCtqd3QifQ.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
 
     private readonly Mock<IAuthServiceJwtFormatter> _jwtFormatter;
     private readonly Mock<ITokenRegistry> _tokenRegistry;
