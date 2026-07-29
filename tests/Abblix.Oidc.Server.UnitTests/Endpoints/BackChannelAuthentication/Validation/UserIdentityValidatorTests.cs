@@ -302,7 +302,7 @@ public class UserIdentityValidatorTests
 
     /// <summary>
     /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
+    /// A token whose 'typ' is not <see cref="JwtTypes.IdToken"/> (e.g. a stolen access token replayed as a
     /// hint) must be rejected even when its audience matches the requesting client.
     /// </summary>
     [Fact]
