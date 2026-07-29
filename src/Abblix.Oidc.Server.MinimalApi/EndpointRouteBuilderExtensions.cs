@@ -72,6 +72,10 @@ public static class EndpointRouteBuilderExtensions
     /// cross-cutting conventions (rate limiting, host filtering, metadata) to all of them at once.</returns>
     public static RouteGroupBuilder MapOidcEndpoints(this IEndpointRouteBuilder endpoints, string prefix = "")
     {
+        // Refuse at startup rather than let both adapters map the same paths and fail on every request with a
+        // routing error that names neither package. See TransportAdapterConflict.
+        TransportAdapterConflict.ThrowIfAdaptersPresent();
+
         var options = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcOptions>>().Value;
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var oidcGroup = endpoints.MapGroup(prefix);

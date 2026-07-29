@@ -88,4 +88,10 @@ public static class TestConstants
 
     /// <summary>RFC 9396 §2.2 type used for negative tests (no registered validator).</summary>
     public const string AccountInformationType = "account_information";
+
+    /// <summary>Path of the test-only probe that reports what <c>IOidcEndpointResolver</c> answers for an
+    /// endpoint named in the last segment. The resolver builds an absolute URL from the ambient request, so it
+    /// can only be exercised from inside one. Both test hosts mount it here, which is what lets the suites
+    /// compare what the two adapters answer.</summary>
+    public const string EndpointResolverProbePath = "/test/oidc-endpoint";
 }

@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 
 /// <summary>
-/// Constants specific to the Minimal API test host — those the shared (MVC-linked) <c>TestConstants</c> does not
+/// Constants specific to the Minimal API test host - those the shared (MVC-linked) <c>TestConstants</c> does not
 /// carry. Kept in this assembly so both <c>Program</c> and the test project bind to a single source.
 /// </summary>
 public static class MinimalApiTestConstants

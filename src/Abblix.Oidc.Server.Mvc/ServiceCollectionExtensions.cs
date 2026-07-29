@@ -97,6 +97,10 @@ public static class ServiceCollectionExtensions
 		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
 		services.TryAddSingleton<IUriResolver, UriResolver>();
 		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
+
+		// Absolute URLs for the OIDC endpoints, under the contract the Minimal API adapter answers too, so
+		// host code that needs one survives a change of adapter unchanged.
+		services.TryAddScoped<IOidcEndpointResolver, Features.EndpointResolving.OidcEndpointResolver>();
 		services.TryAddSingleton<IUrlHelperFactory, UrlHelperFactory>();
 		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
 		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();

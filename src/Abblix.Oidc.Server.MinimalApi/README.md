@@ -5,11 +5,11 @@
 ## What's New in Version 2.4
 
 🚀 **Features**
-- **Minimal API integration**: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcMinimalApi` and `MapOidcEndpoints`, with full feature parity with the MVC integration — JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
+- **Minimal API integration**: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcMinimalApi` and `MapOidcEndpoints`, with full feature parity with the MVC integration - JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
 
 ## Key Features
 
-- **MVC-free Integration**: maps OIDC endpoints as Minimal API route handlers — no controllers, no `Microsoft.AspNetCore.Mvc` dependency
+- **MVC-free Integration**: maps OIDC endpoints as Minimal API route handlers - no controllers, no `Microsoft.AspNetCore.Mvc` dependency
 - **OIDC Endpoints**: authorization, token, userinfo, introspection, revocation, device authorization, pushed authorization requests, and more
 - **Single Route Group**: `MapOidcEndpoints()` returns the `RouteGroupBuilder`, so cross-cutting conventions (rate limiting, auth, filters) apply to all OIDC endpoints at once
 - **Endpoint Enablement**: each endpoint is mapped only when its flag is set in `OidcOptions.EnabledEndpoints`; a disabled endpoint is never registered and returns 404
@@ -57,6 +57,22 @@ app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-
 ```
 
 Endpoints that allow cross-origin requests (checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them registers a CORS policy named `OidcConstants.CorsPolicyName` and calls `app.UseCors()`.
+
+## Migrating from the MVC integration
+
+**Remove the `Abblix.OIDC.Server.MVC` package reference.** Referencing it is enough for its controllers to be mapped: `AddControllers()` finds controller assemblies in the dependency graph on its own, whether or not `AddOidcServices()` was ever called. With both packages in place the two transports claim the same paths and every OIDC request fails with `AmbiguousMatchException`. `MapOidcEndpoints()` refuses to start an application in that state and says which package to drop.
+
+The rest of the swap: call `AddOidcMinimalApi` in place of `AddOidcServices`, `app.MapOidcEndpoints()` in place of `app.MapControllers()`, and rename any response formatter the host replaced or decorated - the interfaces are named `...ResultFormatter` here and return `IResult` instead of `ActionResult`.
+
+## Endpoint URLs
+
+A host that needs an OIDC endpoint's URL - to point an external identity provider's callback back at the authorization endpoint, say - asks `IOidcEndpointResolver`:
+
+```csharp
+var authorizationUrl = resolver.Resolve(OidcEndpoints.Authorize);
+```
+
+Both integrations register it, so this code is written once and survives a change of adapter. The answer comes from the endpoints as mapped, so a route override or a `MapOidcEndpoints(prefix)` prefix is already in it, and an endpoint the host does not serve resolves to `null`.
 
 ## Implemented Standards
 
