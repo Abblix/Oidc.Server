@@ -40,7 +40,6 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Filters;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
