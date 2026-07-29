@@ -25,6 +25,23 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// <summary>
 /// This class defines JWT (JSON Web Token) types used in various contexts.
 /// </summary>
+/// <remarks>
+/// Half of these are registered media types and half are ours, and the difference is not visible in the
+/// values, so it is recorded here. Registered with IANA: <see cref="AccessToken"/> (RFC 9068),
+/// <see cref="LogoutToken"/> (OpenID Foundation), <see cref="DPoPProof"/> (RFC 9449) and
+/// <see cref="TokenIntrospection"/> (RFC 9701). Not registered by anyone: <see cref="IdToken"/>,
+/// <see cref="RefreshToken"/>, <see cref="RegistrationAccessToken"/> and <see cref="InitialAccessToken"/>.
+/// <para>
+/// The unregistered four follow the shape RFC 8725 Section 3.11 recommends - "a media type name of the format
+/// application/example+jwt" - which asks for the format and not for a registration. They do occupy the
+/// standards tree without one, so a future registration of the same name would collide. Three of them are read
+/// only by this server, where a collision would be a naming embarrassment rather than an interoperability
+/// break; the ID token is the one that leaves the perimeter, and OpenID Connect Core defines no typ for it, so
+/// no relying party checks the value.
+/// </para>
+/// Renaming any of them changes what already-issued tokens must look like, so treat the values as fixed unless
+/// a party outside this server needs to parse one.
+/// </remarks>
 public static class JwtTypes
 {
 	/// <summary>
@@ -34,7 +51,8 @@ public static class JwtTypes
 	public const string Jwt = "JWT";
 
 	/// <summary>
-	/// The "AccessToken" JWT type is used to represent access tokens, typically used for authenticating and authorizing users in APIs.
+	/// The "AccessToken" JWT type is used to represent access tokens, typically used for authenticating
+	/// and authorizing users in APIs.
 	/// </summary>
 	public const string AccessToken = "at+jwt";
 
@@ -51,12 +69,14 @@ public static class JwtTypes
 	public const string LogoutToken = "logout+jwt";
 
 	/// <summary>
-	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens without reauthentication.
+	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens
+	/// without reauthentication.
 	/// </summary>
 	public const string RefreshToken = "refresh+jwt";
 
 	/// <summary>
-	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely registering clients.
+	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely
+	/// registering clients.
 	/// </summary>
 	public const string RegistrationAccessToken = "registration+jwt";
 
