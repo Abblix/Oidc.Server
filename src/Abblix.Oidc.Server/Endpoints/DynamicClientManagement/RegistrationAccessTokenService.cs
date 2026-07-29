@@ -50,6 +50,7 @@ public class RegistrationAccessTokenService(
     public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
         var signing = options.Value.ServiceTokens.RegistrationAccessToken.Signing;
+        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
 
         var token = new JsonWebToken
         {
@@ -69,8 +70,13 @@ public class RegistrationAccessTokenService(
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt + expiresIn,
 
-                Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-                Audiences = [clientId],
+                Issuer = issuer,
+
+                // The audience names this server, because this server is what reads the token: RFC 7592
+                // Section 3 has the client present it back to the client configuration endpoint as a bearer
+                // token, and it never opens it. Which registration the token is about is a different question,
+                // and the subject below is what answers it.
+                Audiences = [issuer],
                 Subject = clientId,
             },
         };

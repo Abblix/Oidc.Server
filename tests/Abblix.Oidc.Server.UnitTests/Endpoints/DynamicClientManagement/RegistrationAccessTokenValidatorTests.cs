@@ -27,6 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -41,6 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 public class RegistrationAccessTokenValidatorTests
 {
     private const string ClientId = "client-1";
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private static RegistrationAccessTokenValidator CreateValidator(JsonWebToken token)
     {
@@ -62,7 +64,7 @@ public class RegistrationAccessTokenValidatorTests
         {
             [JwtClaimTypes.JwtId] = jti,
             [JwtClaimTypes.Subject] = subject ?? ClientId,
-            [JwtClaimTypes.Audience] = audience ?? ClientId,
+            [JwtClaimTypes.Audience] = audience ?? Issuer,
         }),
     };
 
@@ -90,30 +92,15 @@ public class RegistrationAccessTokenValidatorTests
     }
 
     /// <summary>
-    /// The token is bound to the client it was issued for: presenting it against a different registration is
-    /// refused. The shared JWT validator cannot decide this - it accepts only the issuer as an audience - so
-    /// the binding is enforced here, and this case is what proves it is enforced at all.
+    /// The token is bound to the registration it names, and presenting it against another is refused. The
+    /// binding rests on the subject: the audience names this server and reads the same on every registration
+    /// access token, so it cannot say which registration this one is about. Nothing tested this before, so the
+    /// binding could have been dropped without a red run.
     /// </summary>
     [Fact]
     public async Task ATokenIssuedForAnotherClient_IsRejected()
     {
         var validator = CreateValidator(CreateToken("jti-current"));
-
-        var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
-
-        Assert.NotNull(error);
-    }
-
-    /// <summary>
-    /// The audience carries the binding on its own. With a subject that matches the client being managed, the
-    /// audience is the only claim left to refuse on - so this is the case that fails if that half of the check
-    /// is ever dropped, where a token differing in both would still be caught by the subject.
-    /// </summary>
-    [Fact]
-    public async Task AnAudienceNamingAnotherClient_IsRejectedOnItsOwn()
-    {
-        var token = CreateToken("jti-current", subject: "client-2", audience: ClientId);
-        var validator = CreateValidator(token);
 
         var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
 
