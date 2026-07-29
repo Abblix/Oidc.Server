@@ -74,6 +74,19 @@ public static class JwtTypes
 	/// Indicates this token is an OpenID Connect ID Token.
 	/// Used in the 'typ' header of ID tokens for explicit typing.
 	/// </summary>
+	/// <remarks>
+	/// Ours entirely: OpenID Connect Core 1.0 never mentions the <c>typ</c> header parameter, let alone a value
+	/// for the ID token, so there is no standard name here to match or to squat on. The value is emitted for
+	/// this server's own benefit, following the RFC 8725 Section 3.11 guidance on explicit typing - the
+	/// <c>id_token_hint</c> validators pin it so an access or refresh token cannot be replayed as a hint, which
+	/// the signature and audience checks alone would not catch.
+	/// <para>
+	/// A relying party will not check it, precisely because the specification does not ask for one. That cuts
+	/// both ways and is worth remembering when consuming somebody else's ID token: theirs will carry a
+	/// different value or none at all, so this constant is a rule about what we issue, never a test to apply to
+	/// a foreign token.
+	/// </para>
+	/// </remarks>
 	public const string IdToken = VendorPrefix + "id_token+jwt";
 
 	/// <summary>

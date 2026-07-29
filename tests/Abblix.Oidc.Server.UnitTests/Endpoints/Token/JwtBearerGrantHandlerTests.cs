@@ -1051,7 +1051,7 @@ public class JwtBearerGrantHandlerTests
 	/// This prevents token confusion attacks in multi-token environments.
 	/// </summary>
 	[Theory]
-	[InlineData("at+jwt")]
+	[InlineData(JwtTypes.AccessToken)]
 	[InlineData(JwtTypes.IdToken)]
 	[InlineData(null)]
 	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
