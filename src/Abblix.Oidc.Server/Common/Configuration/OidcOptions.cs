@@ -333,11 +333,19 @@ public record OidcOptions
 	public bool IgnoreParametersOutsideRequestObject { get; set; } = false;
 
 	/// <summary>
-	/// Determines whether the client registration endpoint requires an initial access token
-	/// in the Authorization header per RFC 7591 Section 3.
-	/// When <c>true</c>, POST requests to the registration endpoint must include a valid
+	/// Determines whether the client registration endpoint requires an initial access token in the
+	/// Authorization header. When <c>true</c>, POST requests to the registration endpoint must include a valid
 	/// Bearer token. When <c>false</c>, open registration is allowed.
 	/// </summary>
+	/// <remarks>
+	/// The default deviates from a SHOULD deliberately. RFC 7591 Section 3: "To support open registration and
+	/// facilitate wider interoperability, the client registration endpoint SHOULD allow registration requests
+	/// with no authorization (which is to say, with no initial access token in the request)." Appendix A.1.2
+	/// describes the other choice, protected registration, as an equally supported deployment, and that is what
+	/// this default picks: an endpoint that mints client credentials to anyone who asks is not a safe starting
+	/// point, and a host that wants open registration opts into it in one line. The trade the specification
+	/// names in return is interoperability, since client software cannot register itself unattended.
+	/// </remarks>
 	public bool RequireInitialAccessToken { get; set; } = true;
 
 	/// <summary>
