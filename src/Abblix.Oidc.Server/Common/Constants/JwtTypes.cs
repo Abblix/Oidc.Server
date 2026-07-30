@@ -77,8 +77,8 @@ public static class JwtTypes
 	// party reads: neither Duende IdentityServer nor OpenIddict types an ID token either, both leaving the
 	// generic JWT that the JWT library writes. What a vendor value does instead is break at a version
 	// boundary - an ID token issued before a rename is refused after it, which is how RP-initiated logout
-	// stopped working across two servers of different builds. The classes this system does define are listed
-	// in TokenClasses below, and an ID token is recognised by not being one of them.
+	// stopped working across two servers of different builds. Every kind this class names is listed
+	// in Known below, and an ID token is recognised by not being one of them.
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -194,10 +194,19 @@ public static class JwtTypes
 	public const string VerifiablePresentation = "vp+jwt";
 
 	/// <summary>
-	/// Every <c>typ</c> naming a token class in its own right, as opposed to a JWT that carries something else
-	/// - request parameters, a client authentication assertion, an assertion from a trusted issuer.
+	/// Every <c>typ</c> named in this class except <see cref="Jwt"/>, which says only that a thing is a JWT
+	/// and so cannot tell one kind from another.
 	/// </summary>
-	private static readonly string[] TokenClasses =
+	/// <remarks>
+	/// A value belongs here once this class names it, whoever issues it. What decides whether a given one is
+	/// refused is not membership but the position it turns up in, and that is stated at each call site
+	/// rather than here - see <see cref="IsOtherThan"/>.
+	/// <para>
+	/// Add a value when this class gains one. Leaving it out is the failure that matters: an omission is a
+	/// refusal that silently does not happen, and nothing anywhere reports it.
+	/// </para>
+	/// </remarks>
+	private static readonly string[] Known =
 	[
 		AccessToken,
 		LogoutToken,
@@ -206,29 +215,53 @@ public static class JwtTypes
 		InitialAccessToken,
 		DPoPProof,
 		TokenIntrospection,
+		ClientAuthentication,
+		RequestObject,
+		SecurityEvent,
+		EntityAttestation,
+		KeyBinding,
+		StatusList,
+		JwkSet,
+		EntityStatement,
+		ExplicitRegistrationResponse,
+		ResolveResponse,
+		TrustMark,
+		TrustMarkDelegation,
+		TrustMarkStatusResponse,
+		ProvidedClaims,
+		VerifiableCredential,
+		VerifiablePresentation,
 	];
 
 	/// <summary>
-	/// Reports whether a <c>typ</c> names a token class, so that a JWT presenting itself as one where a
-	/// carrier is expected can be refused.
+	/// Reports whether a <c>typ</c> names a known kind of JWT that is not one of those <paramref
+	/// name="permitted"/> where it turned up, so that a JWT meant for one purpose and presented for another
+	/// can be refused.
 	/// </summary>
 	/// <param name="tokenType">The <c>typ</c> header parameter of the incoming JWT, which may be absent.</param>
-	/// <returns><c>true</c> when the value names one of the recognised token classes.</returns>
+	/// <param name="permitted">
+	/// The kinds that legitimately appear in this position. Pass none where the expected JWT carries no
+	/// <c>typ</c> at all, as an ID token does.
+	/// </param>
+	/// <returns><c>true</c> when the value names a known kind and none of the permitted ones.</returns>
 	/// <remarks>
 	/// This enumerates what to refuse rather than what to accept, which is the opposite of the usual
 	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 7523bis allows a client
 	/// authentication JWT to be typed "client-authentication+jwt or another more specific explicit type value
 	/// defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
 	/// object that "some existing deployments may alternatively be using the type application/jwt". An allow
-	/// list would refuse conformant senders on both counts.
+	/// list would refuse conformant senders on both counts, so an absent, generic or unfamiliar value passes
+	/// untouched and a sender that never heard of explicit typing is unaffected.
 	/// <para>
-	/// What can be enumerated exactly is the set of classes this system defines, and that is what this refuses.
-	/// The check fires only where one of those turns up somewhere it has no business being, which is the
-	/// confusion RFC 8725 Section 3.11 describes; an absent, generic or unfamiliar value passes untouched, so a
-	/// sender that never heard of explicit typing is unaffected.
+	/// What is refused therefore depends on where the question is asked, which is why the permitted kinds are
+	/// named by the caller. The alternative - one list of everything this server issues - was too narrow at
+	/// half the call sites: a client assertion and a request object are verified with the CLIENT's key, so the
+	/// client chooses the <c>typ</c> and can present a JWT it signed for some entirely different purpose.
+	/// Refusing by kind is the mutually exclusive validation RFC 8725 Section 3.12 asks for.
 	/// </para>
 	/// </remarks>
-	public static bool IsTokenClass(string? tokenType)
+	public static bool IsOtherThan(string? tokenType, params string[] permitted)
 		=> tokenType is not null &&
-		   Array.Exists(TokenClasses, tokenClass => JwtTypeName.Matches(tokenType, tokenClass));
+		   Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) &&
+		   !Array.Exists(permitted, allowed => JwtTypeName.Matches(tokenType, allowed));
 }

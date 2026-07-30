@@ -213,7 +213,7 @@ public class AuthServiceJwtValidatorTests
     /// <summary>
     /// A registered client identifier is no longer an acceptable audience, even though the client exists.
     /// An audience names the party meant to consume the token, and a client is the party that asked for it.
-    /// The one token class that legitimately carries a client identifier in <c>aud</c> is the ID token
+    /// The one token type that legitimately carries a client identifier in <c>aud</c> is the ID token
     /// (OpenID Connect Core 1.0 Section 2), and the endpoint that accepts one checks that itself.
     /// </summary>
     [Fact]

@@ -131,7 +131,7 @@ public class JsonWebTokenValidationTests
     /// <summary>
     /// Verifies that when the issuer has signing keys but the token's <c>kid</c> header does
     /// not match any of them, validation fails with an error description that distinguishes
-    /// this case from "issuer has no keys at all" (RFC 7515 §4.1.4 / §6 — observability).
+    /// this case from "issuer has no keys at all" (RFC 7515 §4.1.4 / §6 - observability).
     /// Both still surface as <see cref="JwtError.InvalidToken"/>; the distinction lives in
     /// the description text and (separately) in the structured log event.
     /// </summary>
@@ -329,7 +329,7 @@ public class JsonWebTokenValidationTests
     /// Verifies that a 5-segment JWE-shaped input on a validation path that does not wire a
     /// decryption-key resolver returns <see cref="JwtError.InvalidToken"/> instead of
     /// throwing <see cref="InvalidOperationException"/>. Caught 2026-05-14 at /connect/userinfo
-    /// against an OIDF FAPI 2.0 sub-test that injected two DPoP HTTP headers — ASP.NET Core
+    /// against an OIDF FAPI 2.0 sub-test that injected two DPoP HTTP headers - ASP.NET Core
     /// concatenated them with a comma producing a 5-segment string, which routed the
     /// validator to the JWE branch and crashed it. The token itself may be a perfectly
     /// well-formed JWE; the failure here is a callsite category mismatch (this path
@@ -388,7 +388,7 @@ public class JsonWebTokenValidationTests
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         // ValidationOptions.Default selects the issuer-resolved-keys trust branch, but the
-        // host did not provide a ResolveIssuerSigningKeys resolver — the validator must
+        // host did not provide a ResolveIssuerSigningKeys resolver - the validator must
         // return a typed error, not throw an InvalidOperationException.
         var parameters = new ValidationParameters { Options = ValidationOptions.Default };
 
@@ -490,7 +490,7 @@ public class JsonWebTokenValidationTests
     /// Verifies that unsigned JWTs (algorithm: none) fail validation when signatures are required.
     /// Critical security check - prevents acceptance of unsigned tokens that could be trivially forged.
     /// Per RFC 7515 Section 3.1, "none" algorithm indicates unsecured JWTs.
-    /// Returns JwtError.InvalidAlgorithm — alg "none" is rejected by the algorithm gate before
+    /// Returns JwtError.InvalidAlgorithm - alg "none" is rejected by the algorithm gate before
     /// signature verification when RequireSignedTokens is set.
     /// </summary>
     [Fact]
@@ -512,7 +512,7 @@ public class JsonWebTokenValidationTests
     /// RFC 8725 §3.1/§3.3: a signed token (alg != none) must ALWAYS have its signature verified,
     /// even when the caller requests neither <see cref="ValidationOptions.RequireSignedTokens"/> nor
     /// <see cref="ValidationOptions.ValidateIssuerSigningKey"/>. A token signed with one key must not
-    /// be accepted when only a different key resolves — otherwise a signed-but-unverified token is
+    /// be accepted when only a different key resolves - otherwise a signed-but-unverified token is
     /// silently trusted.
     /// </summary>
     [Fact]
@@ -970,7 +970,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// The same token, with <see cref="ValidationOptions.RequireExpirationTime"/> set, is rejected.
-    /// That flag is the caller saying its token class makes <c>exp</c> REQUIRED - an ID Token
+    /// That flag is the caller saying its token type makes <c>exp</c> REQUIRED - an ID Token
     /// (OpenID Connect Core 1.0 section 2), a JWT access token (RFC 9068 section 2.2), a client
     /// assertion (RFC 7523 section 3).
     /// </summary>
@@ -1172,7 +1172,7 @@ public class JsonWebTokenValidationTests
     /// Concretely: a token with header alg=HS256 against an RsaJsonWebKey has no
     /// ISignatureAlgorithm&lt;RsaJsonWebKey&gt; registered for "HS256", so GetRequiredKeyedService
     /// would throw. Per the IJsonWebTokenValidator contract, validation must return a
-    /// Result.Failure with JwtError.InvalidToken — never an unhandled exception.
+    /// Result.Failure with JwtError.InvalidToken - never an unhandled exception.
     /// </summary>
     [Fact]
     public async Task TokenWithAlgorithmUnsupportedForResolvedKeyType_FailsValidation()
@@ -1309,7 +1309,7 @@ public class JsonWebTokenValidationTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // RFC 8725 §3.11 — pin the JWT 'typ' header (RFC 7515 §4.1.9) via
+    // RFC 8725 §3.11 - pin the JWT 'typ' header (RFC 7515 §4.1.9) via
     // ValidationParameters.ExpectedTokenTypes so token-class confusion (replaying a
     // logout_token as an id_token, etc.) is rejected inside the validator instead of
     // relying on every caller to post-check token.Header.Type.
@@ -1317,7 +1317,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// Sanity baseline: when <see cref="ValidationParameters.ExpectedTokenTypes"/> is null,
-    /// the validator skips <c>typ</c> enforcement entirely — preserves historical behaviour
+    /// the validator skips <c>typ</c> enforcement entirely - preserves historical behaviour
     /// for callers that have not opted in to the RFC 8725 §3.11 hook.
     /// </summary>
     [Fact]
@@ -1358,7 +1358,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// When the JWT's <c>typ</c> does not match any configured expected value, the validator
-    /// rejects with <see cref="JwtError.InvalidTokenType"/> — the very token-class-confusion
+    /// rejects with <see cref="JwtError.InvalidTokenType"/> - the very token-class-confusion
     /// rejection RFC 8725 §3.11 prescribes.
     /// </summary>
     [Fact]
@@ -1520,7 +1520,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// When the configured set has multiple values, any one of them is acceptable. Lets a
-    /// caller accept several token classes through the same validator invocation — for
+    /// caller accept several token types through the same validator invocation - for
     /// example, a transitional period where both <c>at+jwt</c> and a legacy custom
     /// <c>access+jwt</c> are honoured.
     /// </summary>
@@ -1543,7 +1543,7 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
-    /// Empty set is treated identically to null — no enforcement. Defensive default for
+    /// Empty set is treated identically to null - no enforcement. Defensive default for
     /// callers that build the set programmatically and may hit edge cases producing zero
     /// expected types.
     /// </summary>
@@ -1566,12 +1566,12 @@ public class JsonWebTokenValidationTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Hardening coverage — token-shape confusion (segment count) and alg-stripping /
+    // Hardening coverage - token-shape confusion (segment count) and alg-stripping /
     // payload tampering. RFC 7515 §7.1 fixes JWS compact serialization at exactly three
     // dot-separated parts and RFC 7516 §9 fixes JWE at five; any other count must be
     // rejected as malformed, never mis-routed into a validation path (the JWS-as-JWE
     // type-confusion class). RFC 8725 §2.1/§3.1 warn that an attacker will strip 'alg'
-    // to none or rewrite the payload of a captured token — the validator must reject both.
+    // to none or rewrite the payload of a captured token - the validator must reject both.
     // ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1620,7 +1620,7 @@ public class JsonWebTokenValidationTests
     /// <summary>
     /// The 5-segment type-confusion variant: a genuine 3-part JWS padded with two extra segments
     /// becomes a 5-part string, which the part-count dispatch routes to the JWE decryption path. The
-    /// signed JWS content must NOT be trusted — the JWE decrypt fails (a JWS 'alg' is not a JWE
+    /// signed JWS content must NOT be trusted - the JWE decrypt fails (a JWS 'alg' is not a JWE
     /// key-management alg and no matching key exists), so the token is rejected rather than accepted
     /// as its inner JWS.
     /// </summary>
@@ -1640,8 +1640,8 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.1 (alg-stripping): a header that declares no 'alg' — whether it carries other
-    /// parameters (<c>{"typ":"JWT"}</c>) or is the empty object (<c>{}</c>) — must be rejected as
+    /// RFC 8725 §3.1 (alg-stripping): a header that declares no 'alg' - whether it carries other
+    /// parameters (<c>{"typ":"JWT"}</c>) or is the empty object (<c>{}</c>) - must be rejected as
     /// <see cref="JwtError.InvalidAlgorithm"/>, never treated as an implicit unsigned token. RFC 7515
     /// §4.1.1 makes 'alg' REQUIRED.
     /// </summary>
@@ -1666,7 +1666,7 @@ public class JsonWebTokenValidationTests
     /// <summary>
     /// RFC 8725 §3.1 (alg-stripping on a captured token): take a genuinely RS256-signed token, rewrite
     /// its header 'alg' to 'none' and drop the signature. Under the default options (RequireSignedTokens)
-    /// the downgraded token must be rejected as <see cref="JwtError.InvalidAlgorithm"/> — the captured
+    /// the downgraded token must be rejected as <see cref="JwtError.InvalidAlgorithm"/> - the captured
     /// payload is not trusted just because the attacker relabelled it unsigned.
     /// </summary>
     [Fact]
@@ -1693,7 +1693,7 @@ public class JsonWebTokenValidationTests
     /// privilege-escalation attempt on 'sub'), re-encode the payload but keep the ORIGINAL signature.
     /// The signature no longer covers the mutated payload, so validation must fail as
     /// <see cref="JwtError.InvalidSignature"/>. Header and 'alg' are untouched, isolating the payload
-    /// integrity check — and the rewrite is done at the JSON level so the payload stays parseable and
+    /// integrity check - and the rewrite is done at the JSON level so the payload stays parseable and
     /// the token reaches the signature stage rather than short-circuiting as malformed.
     /// </summary>
     [Fact]
@@ -1727,7 +1727,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// The canonical RS256->HS256 algorithm-confusion attack (OWASP WSTG-SESS-10 / CVE-2016-5431 class):
-    /// the attacker takes the server's RSA <em>public</em> key — which is published — and uses its bytes as
+    /// the attacker takes the server's RSA <em>public</em> key - which is published - and uses its bytes as
     /// the secret for an HMAC (HS256) signature, betting the validator picks the MAC-vs-RSA verifier from the
     /// attacker-controlled <c>alg</c> header and feeds it the same key material. The token must be rejected:
     /// the signer is resolved by (key type, alg) together, so an RSA key can never be driven with HS256, and
@@ -1787,13 +1787,13 @@ public class JsonWebTokenValidationTests
         var accepted = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>()
             .ValidateAsync(forged, embeddedParameters);
         Assert.True(accepted.TryGetSuccess(out _),
-            "The embedded-key opt-in must trust the header jwk — otherwise the default rejection proves nothing.");
+            "The embedded-key opt-in must trust the header jwk - otherwise the default rejection proves nothing.");
     }
 
     /// <summary>
     /// URL-based key-source header injection (OWASP WSTG-SESS-10): a token that points <c>jku</c> (JWK Set URL)
     /// or <c>x5u</c> (X.509 URL) at an attacker-controlled endpoint must not cause the validator to fetch and
-    /// trust a key from there — that would be both a signature bypass and an SSRF. This library never fetches
+    /// trust a key from there - that would be both a signature bypass and an SSRF. This library never fetches
     /// those URLs; it verifies against the host's issuer keys, so an attacker-signed token carrying a hostile
     /// key-source header is rejected.
     /// </summary>
@@ -1831,8 +1831,8 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// JWE additional-authenticated-data integrity (RFC 7516 §5.1): the protected header is the AEAD's AAD, so
-    /// altering it — here by adding an innocuous parameter while leaving <c>alg</c>/<c>enc</c> intact and the
-    /// header still valid JSON — must fail authentication even though the encrypted key and ciphertext are
+    /// altering it - here by adding an innocuous parameter while leaving <c>alg</c>/<c>enc</c> intact and the
+    /// header still valid JSON - must fail authentication even though the encrypted key and ciphertext are
     /// untouched. Guards against an attacker rewriting header parameters on an otherwise-valid JWE.
     /// </summary>
     [Fact]
@@ -1850,7 +1850,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// Nested-JWT forgery: a JWE that decrypts to a JWS signed with the wrong key must still be rejected. This
-    /// proves the inner signature is verified <em>after</em> decryption — confidentiality (the token decrypts
+    /// proves the inner signature is verified <em>after</em> decryption - confidentiality (the token decrypts
     /// cleanly with the host's key) never substitutes for authenticity. A validator that trusted decrypted
     /// content without re-checking the inner JWS would accept an attacker-signed payload.
     /// </summary>
@@ -1865,7 +1865,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// Forges a JWS with an <c>alg=HS256</c> header, signing <c>header.payload</c> with an HMAC keyed by the
-    /// supplied secret — the mechanism of the RS256->HS256 confusion attack.
+    /// supplied secret - the mechanism of the RS256->HS256 confusion attack.
     /// </summary>
     private static string ForgeHs256WithSecret(byte[] hmacSecret)
     {

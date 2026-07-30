@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -82,8 +82,8 @@ public partial class RequestObjectFetcher(
             {
                 var (payload, client) = validated;
 
-                // Strict RFC 9101 §6.3 processing — only the request object's parameters are used and anything
-                // passed outside it is ignored — applies when the host turns it on globally or the client's
+                // Strict RFC 9101 §6.3 processing - only the request object's parameters are used and anything
+                // passed outside it is ignored - applies when the host turns it on globally or the client's
                 // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core §6.1 merge
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
@@ -122,7 +122,7 @@ public partial class RequestObjectFetcher(
         var ignored = new List<string>();
         foreach (var (name, value) in outer)
         {
-            // Carried by the object as well — used, not dropped.
+            // Carried by the object as well - used, not dropped.
             if (payload.ContainsKey(name))
                 continue;
 
@@ -130,7 +130,7 @@ public partial class RequestObjectFetcher(
             if (value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject)
                 continue;
 
-            // Left at its type default — the client did not actually supply it.
+            // Left at its type default - the client did not actually supply it.
             if (JsonNode.DeepEquals(value, defaults?[name]))
                 continue;
 
@@ -163,7 +163,7 @@ public partial class RequestObjectFetcher(
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
         // Always validate lifetime (exp/nbf claims) if present
-        // RFC 9101 §4 / OIDC Core §6.1: the aud of a request object SHOULD be the OP — when the
+        // RFC 9101 §4 / OIDC Core §6.1: the aud of a request object SHOULD be the OP - when the
         // object carries an audience, reject values addressed to another server (a request object
         // minted for a different OP must not be replayable here); an absent aud stays accepted.
         // Only require signed tokens when RequireSignedRequestObject is true
@@ -185,11 +185,12 @@ public partial class RequestObjectFetcher(
                 // A request object carries authorization request parameters; it is not a token. RFC 9101 §4
                 // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
                 // deployments may alternatively be using the type application/jwt", so the exact value cannot
-                // be demanded of a conformant client. What can be refused is a JWT declaring itself one of
-                // this server's own token classes, which is a token being replayed where request parameters
-                // belong - the confusion RFC 8725 §3.11 describes.
+                // be demanded of a conformant client. What can be refused is a JWT declaring itself some
+                // other kind this class names, which is one being replayed where request parameters belong -
+                // the confusion RFC 8725 §3.11 describes. The client signs this one, so the kinds within its
+                // reach are not only the ones this server issued.
                 var tokenType = validJwt.Token.Header.Type;
-                if (JwtTypes.IsTokenClass(tokenType))
+                if (JwtTypes.IsOtherThan(tokenType, JwtTypes.RequestObject))
                 {
                     return new OidcError(
                         ErrorCodes.InvalidRequestObject,
@@ -197,7 +198,7 @@ public partial class RequestObjectFetcher(
                 }
 
                 // RFC 9101 §10.5: a client registered with require_signed_request_object committed
-                // to SIGNED request objects — an unsigned (alg=none) object satisfies the
+                // to SIGNED request objects - an unsigned (alg=none) object satisfies the
                 // structural check but not the commitment.
                 if (validJwt.Client.RequireSignedRequestObject &&
                     string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))

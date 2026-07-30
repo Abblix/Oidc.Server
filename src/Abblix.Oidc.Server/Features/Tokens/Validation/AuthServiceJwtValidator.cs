@@ -94,7 +94,7 @@ public class AuthServiceJwtValidator(
 	/// resource server reject a token whose audience does not name it.
 	/// <para>
 	/// A client identifier is deliberately not accepted. An audience names the party meant to consume the
-	/// token, and a client is the party that asked for it. The one token class that legitimately carries a
+	/// token, and a client is the party that asked for it. The one token type that legitimately carries a
 	/// client identifier there is the ID token (OpenID Connect Core 1.0 Section 2), which is why the
 	/// <c>id_token_hint</c> path checks its audience itself rather than through this method.
 	/// </para>

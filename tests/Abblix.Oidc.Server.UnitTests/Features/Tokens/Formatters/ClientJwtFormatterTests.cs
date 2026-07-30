@@ -317,7 +317,7 @@ public class ClientJwtFormatterTests
     [Fact]
     public async Task FormatAsync_SelectsEncryptionAlgorithmByTokenType()
     {
-        // Arrange — distinct registered key-management AND content-encryption per token class.
+        // Arrange - distinct registered key-management AND content-encryption per token type.
         var clientInfo = new ClientInfo(ClientId)
         {
             IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
@@ -345,7 +345,7 @@ public class ClientJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        // Act & Assert — id_token uses the id_token encryption metadata (both alg and enc).
+        // Act & Assert - id_token uses the id_token encryption metadata (both alg and enc).
         var idToken = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },

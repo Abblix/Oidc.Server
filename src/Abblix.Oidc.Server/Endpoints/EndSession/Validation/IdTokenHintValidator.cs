@@ -67,9 +67,9 @@ public class IdTokenHintValidator(
             // Stated as a refusal rather than a requirement, because the accepting side cannot be enumerated:
             // an ID token carries no type of its own, and RFC 8725 §3.11 warns that explicit typing "may not
             // achieve disambiguation from existing kinds of JWTs, as the validation rules for existing kinds
-            // of JWTs often do not use the typ Header Parameter value". What can be enumerated exactly is what
-            // this system issues under a class of its own, and that is what is refused.
-            if (JwtTypes.IsTokenClass(idToken.Header.Type))
+            // of JWTs often do not use the typ Header Parameter value". What can be enumerated exactly is every
+            // other kind this class names, and here none of them belongs, so all of them are refused.
+            if (JwtTypes.IsOtherThan(idToken.Header.Type))
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
 

@@ -42,7 +42,7 @@ public static class JwtTypeName
     private const string ApplicationPrefix = "application/";
 
     /// <summary>
-    /// Determines whether two <c>typ</c> values name the same token class, in any spelling of either.
+    /// Determines whether two <c>typ</c> values name the same token type, in any spelling of either.
     /// </summary>
     /// <param name="actual">The value read from the token's header, or <c>null</c> when it carries none.</param>
     /// <param name="expected">The value the caller expects, written in whichever spelling it prefers.</param>

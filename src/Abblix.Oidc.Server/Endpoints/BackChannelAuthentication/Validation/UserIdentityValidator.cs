@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -100,8 +100,8 @@ public class UserIdentityValidator(
             else
             {
                 // The client opted into JWT parsing (ParseLoginHintTokenAsJwt), so any
-                // validation failure — including a malformed / forged token surfacing as
-                // InvalidToken — is rejected rather than silently treated as "no usable hint".
+                // validation failure - including a malformed / forged token surfacing as
+                // InvalidToken - is rejected rather than silently treated as "no usable hint".
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "LoginHintToken validation failed.");
@@ -156,8 +156,8 @@ public class UserIdentityValidator(
         // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so another
         // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
         // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
-        // ID token carries no type of its own; see JwtTypes.IsTokenClass.
-        if (JwtTypes.IsTokenClass(token.Header.Type))
+        // ID token carries no type of its own; see JwtTypes.IsOtherThan.
+        if (JwtTypes.IsOtherThan(token.Header.Type))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");

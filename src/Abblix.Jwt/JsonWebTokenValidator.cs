@@ -604,7 +604,7 @@ internal class JsonWebTokenValidator(
     /// split them. The distinction is not academic: a token carrying neither <c>nbf</c> nor
     /// <c>exp</c> has no instant at which it is expired, so a pure lifetime comparison finds
     /// nothing wrong with it and lets it through forever. Whether that is correct depends
-    /// entirely on the token class, which only the caller knows -
+    /// entirely on the token type, which only the caller knows -
     /// <see cref="ValidationOptions.RequireExpirationTime"/> is how it says so.
     /// </remarks>
     private Result<JsonWebToken, JwtValidationError> ValidateLifetime(

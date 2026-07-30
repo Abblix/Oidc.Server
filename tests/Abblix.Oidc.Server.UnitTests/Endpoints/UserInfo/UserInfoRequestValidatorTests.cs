@@ -469,7 +469,7 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// Widening the accepted spelling must not widen the accepted set of token classes: a token of another
+    /// Widening the accepted spelling must not widen the accepted set of token types: a token of another
     /// class is still refused, which is the RFC 8725 Section 3.11 token-class-confusion guard the check exists
     /// for.
     /// </summary>

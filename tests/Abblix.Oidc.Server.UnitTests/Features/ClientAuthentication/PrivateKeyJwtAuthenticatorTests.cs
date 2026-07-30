@@ -88,16 +88,20 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// A token this server issued is not proof of who the client is. RFC 8725 Section 3.11 calls this token
-    /// confusion, and here it would be the sharpest kind: an access token the client legitimately holds,
-    /// presented as its credential. Everything else about the assertion below is valid - issuer, subject, jti
-    /// and expiry all check out - so the token type is the only thing standing between the two meanings.
+    /// A JWT made for some other purpose is not proof of who the client is. RFC 8725 Section 3.11 calls this
+    /// token confusion, and the sharpest case is an access token the client legitimately holds, presented as
+    /// its credential. The last two cases are the reason the refusal is not limited to what this server
+    /// issues: the client signs its own assertion, so a credential or a security event it signed elsewhere is
+    /// equally within reach. Everything else about the assertion below is valid - issuer, subject, jti and
+    /// expiry all check out - so the type is the only thing standing between the two meanings.
     /// </summary>
     [Theory]
     [InlineData(JwtTypes.AccessToken)]
     [InlineData(JwtTypes.LogoutToken)]
     [InlineData(JwtTypes.RefreshToken)]
-    public async Task ATokenClassPresentedAsAssertion_ShouldReturnNull(string tokenType)
+    [InlineData(JwtTypes.VerifiableCredential)]
+    [InlineData(JwtTypes.SecurityEvent)]
+    public async Task AnotherKindPresentedAsAssertion_ShouldReturnNull(string tokenType)
     {
         // Arrange
         var (authenticator, mocks) = CreateAuthenticator();
@@ -137,7 +141,7 @@ public class PrivateKeyJwtAuthenticatorTests
     [InlineData(JwtTypes.Jwt)]
     [InlineData(JwtTypes.ClientAuthentication)]
     [InlineData("something-a-profile-defined+jwt")]
-    public async Task AnAssertionTypeThatNamesNoTokenClass_ShouldAuthenticate(string? tokenType)
+    public async Task APermittedOrUnfamiliarType_ShouldAuthenticate(string? tokenType)
     {
         // Arrange
         var (authenticator, mocks) = CreateAuthenticator();
@@ -421,7 +425,7 @@ public class PrivateKeyJwtAuthenticatorTests
 
     /// <summary>
     /// Verifies that a replayed assertion is rejected: the replay cache reports the jti as
-    /// already present, and the single TryAddAsync call makes the reserve-and-check atomic —
+    /// already present, and the single TryAddAsync call makes the reserve-and-check atomic -
     /// two concurrent presenters of the same assertion cannot both pass.
     /// </summary>
     [Fact]
