@@ -264,6 +264,6 @@ public static class JwtTypes
 	/// </remarks>
 	public static bool IsPermitted(string? tokenType, params string[] permittedTypes)
 		=> tokenType is null ||
-		   !Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) ||
-		   Array.Exists(permittedTypes, permitted => JwtTypeName.Matches(tokenType, permitted));
+		   Array.Exists(permittedTypes, permitted => JwtTypeName.Matches(tokenType, permitted)) ||
+		   !Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known));
 }

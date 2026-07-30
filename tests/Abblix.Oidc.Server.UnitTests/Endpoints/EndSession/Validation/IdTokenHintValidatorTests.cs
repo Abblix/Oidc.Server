@@ -188,16 +188,25 @@ public class IdTokenHintValidatorTests
     /// <remarks>
     /// The rejection reason is asserted, not just the error code. Every refusal in this validator answers
     /// <c>invalid_request</c>, so a test that checks only the code passes whichever check fired - and this one
-    /// did: removing the class check entirely left it green, because the request then failed further down for
+    /// did: removing the type check entirely left it green, because the request then failed further down for
     /// an unrelated reason.
+    /// <para>
+    /// The last two cases are the ones that pin the design. Both are permitted elsewhere - one is what a
+    /// client assertion is, the other what a request object is - and both must still be refused here, which
+    /// works only because the catalogue names every type and each position states its own exceptions. Drop
+    /// either from the catalogue to spare its own position, and it starts passing as an ID token too.
+    /// </para>
     /// </remarks>
-    [Fact]
-    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError()
+    [Theory]
+    [InlineData(JwtTypes.AccessToken)]
+    [InlineData(JwtTypes.ClientAuthentication)]
+    [InlineData(JwtTypes.RequestObject)]
+    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError(string tokenType)
     {
         // Arrange
         var context = CreateContext("access_token_as_hint");
         var accessToken = CreateValidIdToken(TestConstants.DefaultClientId);
-        accessToken.Header.Type = JwtTypes.AccessToken;
+        accessToken.Header.Type = tokenType;
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
