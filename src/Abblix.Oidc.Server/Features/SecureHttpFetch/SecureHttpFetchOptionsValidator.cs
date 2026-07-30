@@ -45,12 +45,11 @@ public class SecureHttpFetchOptionsValidator : IValidateOptions<SecureHttpFetchO
         var failures = new List<string>();
         foreach (var destination in destinations)
         {
-            var member = $"{nameof(SecureHttpFetchOptions)}.{nameof(SecureHttpFetchOptions.AllowedDestinations)}";
+            const string member = $"{nameof(SecureHttpFetchOptions)}.{nameof(SecureHttpFetchOptions.AllowedDestinations)}";
 
             if (!destination.IsAbsoluteUri)
             {
-                failures.Add(
-                    $"The entry '{destination}' in {member} must be an absolute URI naming a scheme and a host.");
+                failures.Add($"The entry '{destination}' in {member} must be an absolute URI naming a scheme and a host.");
 
                 // Every question below reads a component only an absolute URI has.
                 continue;
