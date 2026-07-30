@@ -94,6 +94,14 @@ public static class JwtTypes
 	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens
 	/// without reauthentication.
 	/// </summary>
+	/// <remarks>
+	/// Not replaceable by <see cref="AccessToken"/>, and the reason is a protection rather than a preference.
+	/// A refresh token carries the resources of its grant in the audience claim, exactly as the access token of
+	/// that grant does, so with a shared type nothing would separate the two and a resource server presented
+	/// with a refresh token would have no ground to refuse it. There is also nowhere standard to move to: the
+	/// IANA media types registry holds no entry for a refresh token, which follows from RFC 6749 Section 1.5
+	/// making it a value "intended for use only with authorization servers".
+	/// </remarks>
     [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
 	public const string RefreshToken = VendorPrefix + "rt+jwt";
 
@@ -101,6 +109,13 @@ public static class JwtTypes
 	/// The "RegistrationAccessToken" JWT type is used in OAuth 2.0 Dynamic Client Registration for securely
 	/// registering clients.
 	/// </summary>
+	/// <remarks>
+	/// Not replaceable by <see cref="AccessToken"/>. Its validator does ask for more - the subject must name the
+	/// client being managed, and the identifier must match the one that client records - but the second of those
+	/// is enforced only where a record exists, which leaves a statically configured client defended by the
+	/// subject alone. An access token issued for the client itself carries that same subject, so the type is
+	/// what keeps the two apart. See also <see cref="InitialAccessToken"/>, which has nothing else at all.
+	/// </remarks>
     [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
 	public const string RegistrationAccessToken = VendorPrefix + "dcr+jwt";
 
@@ -108,6 +123,11 @@ public static class JwtTypes
 	/// The "InitialAccessToken" JWT type is used to authorize calls to the client registration endpoint
 	/// per RFC 7591 Section 3.
 	/// </summary>
+	/// <remarks>
+	/// Not replaceable by <see cref="AccessToken"/>, and here the type is load-bearing on its own. Beyond it,
+	/// the validator asks only for a non-empty subject that has not been revoked, so sharing a type with the
+	/// access token would let any access token this server issued register clients.
+	/// </remarks>
     [SuppressMessage("Blocker Vulnerability", "S6418:Secrets should not be hard-coded")]
 	public const string InitialAccessToken = VendorPrefix + "iat+jwt";
 
