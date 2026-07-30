@@ -1,29 +1,34 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-8.0%2C%209.0%2C%2010.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
-[![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/ru-ru/dotnet/csharp/tour-of-csharp/overview)
-[![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
-[![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
-[![security rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
-[![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Abblix.OIDC.Server)](https://www.nuget.org/packages/Abblix.OIDC.Server)
-[![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
-[![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
-[![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
-[![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
-[![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
-[![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
+<!-- Badges use raw HTML with align="left": GitHub's logged-out pages load a marketing stylesheet
+     whose global reset makes every img display:block, which stacks markdown badges one per line.
+     The float that align produces survives that reset, so both views render identically. -->
+<a href="https://docs.abblix.com/docs/technical-requirements"><img src="https://img.shields.io/badge/.NET-8.0%2C%209.0%2C%2010.0-512BD4" alt=".NET" align="left" hspace="2"></a>
+<a href="https://learn.microsoft.com/ru-ru/dotnet/csharp/tour-of-csharp/overview"><img src="https://img.shields.io/badge/language-C%23-239120" alt="language" align="left" hspace="2"></a>
+<a href="https://docs.abblix.com/docs/technical-requirements"><img src="https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4" alt="OS" align="left" hspace="2"></a>
+<a href="https://docs.abblix.com/docs/technical-requirements"><img src="https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00" alt="CPU" align="left" hspace="2"></a>
+<a href="https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server"><img src="https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&amp;metric=security_rating" alt="security rating" align="left" hspace="2"></a>
+<a href="https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server"><img src="https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&amp;metric=reliability_rating" alt="reliability rating" align="left" hspace="2"></a>
+<a href="https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server"><img src="https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&amp;metric=sqale_rating" alt="maintainability rating" align="left" hspace="2"></a>
+<a href="https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen"><img src="https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop" alt="CodeQL analysis" align="left" hspace="2"></a>
+<a href="https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests"><img src="https://img.shields.io/badge/tests-2000+%20passing-brightgreen" alt="tests" align="left" hspace="2"></a>
+<a href="https://www.nuget.org/packages/Abblix.OIDC.Server"><img src="https://img.shields.io/nuget/dt/Abblix.OIDC.Server" alt="NuGet Downloads" align="left" hspace="2"></a>
+<a href="#"><img src="https://img.shields.io/github/v/release/Abblix/Oidc.Server" alt="GitHub release" align="left" hspace="2"></a>
+<a href="#"><img src="https://img.shields.io/github/release-date/Abblix/Oidc.Server" alt="GitHub release date" align="left" hspace="2"></a>
+<a href="#"><img src="https://img.shields.io/github/last-commit/Abblix/Oidc.Server" alt="GitHub last commit" align="left" hspace="2"></a>
+<a href="https://docs.abblix.com/docs/getting-started-guide"><img src="https://img.shields.io/badge/getting_started-guide-1D76DB" alt="getting started" align="left" hspace="2"></a>
+<a href="LICENSE.md"><img src="https://img.shields.io/badge/license-Source_Available-blue" alt="License" align="left" hspace="2"></a>
+<a href="#-license"><img src="https://img.shields.io/badge/free_for_non_commercial_use-brightgreen" alt="Free" align="left" hspace="2"></a>
+<br clear="all">
 
 ⭐ Star us on GitHub: your support motivates us a lot! 🙏😊
 
-[![Share](https://img.shields.io/badge/share-000000?logo=x&logoColor=white)](https://x.com/intent/tweet?text=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server%20%23OpenIDConnect%20%23Security%20%23Authentication)
-[![Share](https://img.shields.io/badge/share-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/Abblix/Oidc.Server)
-[![Share](https://img.shields.io/badge/share-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/Abblix/Oidc.Server)
-[![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server)
-[![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
+<a href="https://x.com/intent/tweet?text=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server%20%23OpenIDConnect%20%23Security%20%23Authentication"><img src="https://img.shields.io/badge/share-000000?logo=x&amp;logoColor=white" alt="Share" align="left" hspace="2"></a>
+<a href="https://www.facebook.com/sharer/sharer.php?u=https://github.com/Abblix/Oidc.Server"><img src="https://img.shields.io/badge/share-1877F2?logo=facebook&amp;logoColor=white" alt="Share" align="left" hspace="2"></a>
+<a href="https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/Abblix/Oidc.Server"><img src="https://img.shields.io/badge/share-0A66C2?logo=linkedin&amp;logoColor=white" alt="Share" align="left" hspace="2"></a>
+<a href="https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server"><img src="https://img.shields.io/badge/share-FF4500?logo=reddit&amp;logoColor=white" alt="Share" align="left" hspace="2"></a>
+<a href="https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&amp;text=Check%20out%20this%20project%20on%20GitHub"><img src="https://img.shields.io/badge/share-0088CC?logo=telegram&amp;logoColor=white" alt="Share" align="left" hspace="2"></a>
+<br clear="all">
 
 **Add a certified OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.**
 
