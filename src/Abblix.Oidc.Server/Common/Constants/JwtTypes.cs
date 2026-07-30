@@ -200,7 +200,7 @@ public static class JwtTypes
 	/// <remarks>
 	/// A value belongs here once this class names it, whoever issues it. What decides whether a given one is
 	/// refused is not membership but the position it turns up in, and that is stated at each call site
-	/// rather than here - see <see cref="IsExpected"/>.
+	/// rather than here - see <see cref="IsPermitted"/>.
 	/// <para>
 	/// Add a value when this class gains one. Leaving it out is the failure that matters: an omission is a
 	/// refusal that silently does not happen, and nothing anywhere reports it.
@@ -234,16 +234,16 @@ public static class JwtTypes
 	];
 
 	/// <summary>
-	/// Reports whether a <c>typ</c> is one the position it turned up in accepts, so that a JWT meant for a
-	/// different purpose can be refused where it does not belong.
+	/// Reports whether a <c>typ</c> is one this position permits, so that a JWT meant for a different purpose
+	/// can be refused where it has no business being.
 	/// </summary>
 	/// <param name="tokenType">The <c>typ</c> header parameter of the incoming JWT, which may be absent.</param>
-	/// <param name="expectedTypes">
-	/// The types that belong in this position. Pass none where the expected JWT carries no <c>typ</c> at all,
-	/// as an ID token does - then every type this class names is out of place.
+	/// <param name="permittedTypes">
+	/// The types this position permits. Pass none where the JWT that belongs there carries no <c>typ</c> at
+	/// all, as an ID token does - then every type this class names is out of place.
 	/// </param>
 	/// <returns>
-	/// <c>true</c> for an absent, generic or unfamiliar value and for any of <paramref name="expectedTypes"/>;
+	/// <c>true</c> for an absent, generic or unfamiliar value and for any of <paramref name="permittedTypes"/>;
 	/// <c>false</c> only for a type this class names that is not among them.
 	/// </returns>
 	/// <remarks>
@@ -262,8 +262,8 @@ public static class JwtTypes
 	/// Refusing by kind is the mutually exclusive validation RFC 8725 Section 3.12 asks for.
 	/// </para>
 	/// </remarks>
-	public static bool IsExpected(string? tokenType, params string[] expectedTypes)
+	public static bool IsPermitted(string? tokenType, params string[] permittedTypes)
 		=> tokenType is null ||
 		   !Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) ||
-		   Array.Exists(expectedTypes, expected => JwtTypeName.Matches(tokenType, expected));
+		   Array.Exists(permittedTypes, permitted => JwtTypeName.Matches(tokenType, permitted));
 }

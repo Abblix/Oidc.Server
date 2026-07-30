@@ -126,7 +126,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // itself some other type this class names, which is the replay RFC 8725 §3.11 describes. The client
         // signs this one itself, so the types within its reach are not only the ones this server issued.
         var tokenType = token.Header.Type;
-        if (!JwtTypes.IsExpected(tokenType, JwtTypes.ClientAuthentication))
+        if (!JwtTypes.IsPermitted(tokenType, JwtTypes.ClientAuthentication))
         {
             LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
             return null;
