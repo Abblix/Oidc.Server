@@ -100,4 +100,26 @@ public class SecureHttpFetchOptions
     /// Set to false only in development environments where fetching from internal networks is required.
     /// </remarks>
     public bool BlockPrivateNetworks { get; set; } = true;
+
+    /// <summary>
+    /// Destinations this server may reach whatever the rules above say. Default: null, meaning none.
+    /// </summary>
+    /// <remarks>
+    /// This is how a deployment reaches one known service inside its own network without standing the
+    /// protection down. The rules above are a blanket refusal that cannot be narrowed, only switched off, so
+    /// an authorization server that must call a sibling in its own cluster would otherwise set
+    /// <see cref="BlockPrivateNetworks"/> to <c>false</c> and widen <see cref="AllowedSchemes"/> - and both
+    /// relaxations apply equally to every address a *client* supplies: a key set, a sector identifier, a
+    /// back-channel logout endpoint. Naming the one destination leaves the refusal total everywhere else.
+    /// <para>
+    /// An entry is matched on scheme, host and port, and additionally on path when it carries one. So
+    /// <c>http://localhost:5002</c> permits every path on that origin, while
+    /// <c>http://localhost:5002/manage/api/signout-backchannel-oidc</c> permits that one and leaves the rest
+    /// of the host refused. Prefer the second: this permission is read at client registration as well as on
+    /// the way out, and registration is where a client chooses the address.
+    /// </para>
+    /// An entry carrying a query, a fragment or user information is refused at startup rather than ignored,
+    /// because an entry permitting more than it appears to say is the failure this option exists to avoid.
+    /// </remarks>
+    public Uri[]? AllowedDestinations { get; set; }
 }

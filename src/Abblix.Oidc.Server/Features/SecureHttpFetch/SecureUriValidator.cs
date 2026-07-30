@@ -61,9 +61,43 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
         ".lan"
     ];
 
+    /// <summary>
+    /// Reports whether a URI is one of the destinations named in
+    /// <see cref="SecureHttpFetchOptions.AllowedDestinations"/>.
+    /// </summary>
+    /// <param name="uri">The URI about to be reached.</param>
+    /// <param name="allowedDestinations">The configured permissions, which may be absent.</param>
+    /// <returns><c>true</c> when the URI matches one of them.</returns>
+    /// <remarks>
+    /// Static because two separate refusals have to honour the same permission: the synchronous policy
+    /// below, and the DNS re-resolution in <see cref="SsrfValidatingHttpMessageHandler"/>. A permission
+    /// honoured by only one of them passes validation and then dies at the request - which reads as a
+    /// working allow-list in every test of this class, and fails only against a live service.
+    /// <para>
+    /// An entry with no path of its own (<c>/</c>) matches the whole origin; an entry carrying a path
+    /// matches that path exactly. Comparison of scheme and host ignores case as RFC 3986 Section 6.2.2.1
+    /// requires, while the path is compared as written, because the same section leaves it case-sensitive.
+    /// </para>
+    /// </remarks>
+    public static bool IsAllowedDestination(Uri uri, Uri[]? allowedDestinations)
+        => allowedDestinations is { Length: > 0 } destinations &&
+           Array.Exists(destinations, allowed =>
+               allowed.IsAbsoluteUri &&
+               string.Equals(uri.Scheme, allowed.Scheme, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(uri.Host, allowed.Host, StringComparison.OrdinalIgnoreCase) &&
+               uri.Port == allowed.Port &&
+               (allowed.AbsolutePath == "/" ||
+                string.Equals(uri.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal)));
+
     /// <inheritdoc />
     public string? Validate(Uri uri)
     {
+        // A named destination is the one way past everything below, and it is checked first so that it also
+        // lifts the scheme restriction: reaching a service inside the network means plain HTTP, and a
+        // permission unable to say so would permit nothing.
+        if (IsAllowedDestination(uri, options.Value.AllowedDestinations))
+            return null;
+
         if (options.Value.AllowedSchemes is { Length: > 0 } allowedSchemes &&
             !allowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
         {
@@ -120,7 +154,7 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
     public static bool IsPrivateOrReservedAddress(IPAddress address)
     {
         // Collapse an IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 / ::ffff:169.254.169.254) to its IPv4 form
-        // FIRST — RFC 4291 §2.5.5 — so every rule below, including the loopback check, inspects the embedded IPv4
+        // FIRST - RFC 4291 §2.5.5 - so every rule below, including the loopback check, inspects the embedded IPv4
         // address. Without this an attacker reaches loopback, cloud metadata or private ranges through the IPv6 arm,
         // which never inspects the embedded IPv4 address.
         if (address.IsIPv4MappedToIPv6)

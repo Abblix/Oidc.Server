@@ -89,7 +89,15 @@ public class SsrfValidatingHttpMessageHandler(
 
         // DNS rebinding (TOCTOU) defence: for a resolvable hostname (not an IP literal, already checked
         // above), re-resolve immediately before the request and reject if any address is private.
-        if (options.Value.BlockPrivateNetworks && !IPAddress.TryParse(uri.Host, out _))
+        //
+        // A destination the host named is exempt here as well as above, and it has to be: such a service is
+        // reached at a private address by definition, so honouring the permission only in the validator
+        // would let the URI pass and then refuse it here, one line before the request. There is no rebinding
+        // to defend against either - the permission names the host, and an attacker who could change what it
+        // resolves to already owns the name.
+        if (options.Value.BlockPrivateNetworks &&
+            !SecureUriValidator.IsAllowedDestination(uri, options.Value.AllowedDestinations) &&
+            !IPAddress.TryParse(uri.Host, out _))
         {
             IPHostEntry hostEntry;
             try

@@ -777,6 +777,11 @@ public static class ServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        // The framework resolves every registered validator, so this joins the set rather than replacing
+        // whatever a host registered for the same options.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<SecureHttpFetchOptions>, SecureHttpFetchOptionsValidator>());
+
         services.TryAddSingleton<ISecureUriValidator, SecureUriValidator>();
         services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
 

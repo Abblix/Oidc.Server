@@ -440,4 +440,56 @@ public class SsrfValidatingHttpMessageHandlerTests
     }
 
     #endregion
+
+    /// <summary>
+    /// A named destination has to be honoured by the DNS re-resolution here, not only by the synchronous
+    /// policy the validator applies.
+    /// </summary>
+    /// <remarks>
+    /// The name resolves to a loopback address, so a permission that reached only the validator would pass
+    /// validation and then be refused one line before the request goes out. Every test of
+    /// <see cref="SecureUriValidator"/> stays green in that state, which is what makes this the test worth
+    /// having: the two refusals are separate, and a permission has to clear both.
+    /// </remarks>
+    [Fact]
+    public async Task SendAsync_ToNamedDestination_IsNotRefusedByTheDnsRecheck()
+    {
+        var client = CreateClient(new SecureHttpFetchOptions
+        {
+            BlockPrivateNetworks = true,
+            AllowedDestinations = [new Uri("http://localhost:5002")],
+        });
+
+        try
+        {
+            await client.GetAsync("http://localhost:5002/health", TestContext.Current.CancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.Message.Contains("SSRF protection"))
+        {
+            Assert.Fail($"A named destination must reach the request: {ex.Message}");
+        }
+        catch
+        {
+            // Nothing listens on that port during a unit-test run, so a transport failure is the expected
+            // outcome here and is not what this asserts.
+        }
+    }
+
+    /// <summary>
+    /// Naming one destination must not stand the protection down for its neighbours.
+    /// </summary>
+    [Fact]
+    public async Task SendAsync_BesideANamedDestination_IsStillRefused()
+    {
+        var client = CreateClient(new SecureHttpFetchOptions
+        {
+            BlockPrivateNetworks = true,
+            AllowedDestinations = [new Uri("http://localhost:5002")],
+        });
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.GetAsync("http://169.254.169.254/latest/meta-data", TestContext.Current.CancellationToken));
+
+        Assert.Contains("SSRF protection", exception.Message);
+    }
 }
