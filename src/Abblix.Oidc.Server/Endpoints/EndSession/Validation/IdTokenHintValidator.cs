@@ -49,7 +49,7 @@ public class IdTokenHintValidator(
         if (request.IdTokenHint.HasValue())
         {
             // The audience is checked below rather than by the shared validator, which accepts only the
-            // issuer. An ID token is the one class that names a client there: OpenID Connect Core 1.0
+            // issuer. An ID token is the one type that names a client there: OpenID Connect Core 1.0
             // Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id of the Relying Party".
             var result = await jwtValidator.ValidateAsync(
                 request.IdTokenHint,
@@ -68,8 +68,8 @@ public class IdTokenHintValidator(
             // an ID token carries no type of its own, and RFC 8725 §3.11 warns that explicit typing "may not
             // achieve disambiguation from existing kinds of JWTs, as the validation rules for existing kinds
             // of JWTs often do not use the typ Header Parameter value". What can be enumerated exactly is every
-            // other kind this class names, and here none of them belongs, so all of them are refused.
-            if (JwtTypes.IsOtherThan(idToken.Header.Type))
+            // other type this class names, and here none of them belongs, so all of them are refused.
+            if (!JwtTypes.Expect(idToken.Header.Type))
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
 

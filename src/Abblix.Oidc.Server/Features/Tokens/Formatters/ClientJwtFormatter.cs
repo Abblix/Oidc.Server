@@ -55,7 +55,7 @@ public class ClientJwtFormatter(
               "This overload infers the policy from token.Header.Type and is kept for backward compatibility.")]
     public Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
     {
-        // The legacy contract picks the client's registered encryption metadata by JWT class: a logout token
+        // The legacy contract picks the client's registered encryption metadata by JWT type: a logout token
         // uses id_token_encrypted_response_*, everything else (UserInfo) uses userinfo_encrypted_response_*.
         //
         // An ID token no longer lands in the first arm, because it no longer carries a type of its own - which
@@ -72,7 +72,7 @@ public class ClientJwtFormatter(
 
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
-    /// the token's header algorithm and — per the supplied <paramref name="encryption"/> policy — optionally
+    /// the token's header algorithm and - per the supplied <paramref name="encryption"/> policy - optionally
     /// encrypting it to the client's registered public key.
     /// </summary>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
@@ -86,7 +86,7 @@ public class ClientJwtFormatter(
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         // JARM §2.2 / §3 opt-in: when the policy requires a registered key-management algorithm and the client has
-        // not registered one, the response is signed only — the client's encryption keys are not even resolved.
+        // not registered one, the response is signed only - the client's encryption keys are not even resolved.
         if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
             return await jwtCreator.IssueAsync(token, signingCredentials);
 

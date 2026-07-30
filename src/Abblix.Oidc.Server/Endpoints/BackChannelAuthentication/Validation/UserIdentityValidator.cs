@@ -137,7 +137,7 @@ public class UserIdentityValidator(
         string idTokenHint)
     {
         // The audience is checked below, against the requesting client, rather than by the shared validator,
-        // which accepts only the issuer. An ID token is the one class that names a client there: OpenID
+        // which accepts only the issuer. An ID token is the one type that names a client there: OpenID
         // Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id of the Relying
         // Party". Leaving the shared check on would refuse every hint.
         var result = await idTokenValidator.ValidateAsync(
@@ -156,8 +156,8 @@ public class UserIdentityValidator(
         // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so another
         // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
         // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
-        // ID token carries no type of its own; see JwtTypes.IsOtherThan.
-        if (JwtTypes.IsOtherThan(token.Header.Type))
+        // ID token carries no type of its own; see JwtTypes.Expect.
+        if (!JwtTypes.Expect(token.Header.Type))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");

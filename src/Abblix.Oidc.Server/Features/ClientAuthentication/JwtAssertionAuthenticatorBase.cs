@@ -123,10 +123,10 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
         // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
         // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
-        // itself some other kind this class names, which is the replay RFC 8725 §3.11 describes. The client
-        // signs this one itself, so the kinds within its reach are not only the ones this server issued.
+        // itself some other type this class names, which is the replay RFC 8725 §3.11 describes. The client
+        // signs this one itself, so the types within its reach are not only the ones this server issued.
         var tokenType = token.Header.Type;
-        if (JwtTypes.IsOtherThan(tokenType, JwtTypes.ClientAuthentication))
+        if (!JwtTypes.Expect(tokenType, JwtTypes.ClientAuthentication))
         {
             LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
             return null;

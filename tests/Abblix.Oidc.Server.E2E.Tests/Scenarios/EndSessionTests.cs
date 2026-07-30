@@ -254,7 +254,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// An ID token is the one class this server issues that names a client in its audience - OpenID Connect
+    /// An ID token is the one type this server issues that names a client in its audience - OpenID Connect
     /// Core 1.0 Section 2: the aud claim "MUST contain the OAuth 2.0 client_id of the Relying Party as an
     /// audience value". The shared token validator accepts only the issuer, so this endpoint checks the ID
     /// token's own rule itself; without a case driving the real flow, moving that check would look harmless

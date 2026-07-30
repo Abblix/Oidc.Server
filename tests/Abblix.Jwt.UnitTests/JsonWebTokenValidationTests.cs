@@ -1310,7 +1310,7 @@ public class JsonWebTokenValidationTests
 
     // ─────────────────────────────────────────────────────────────────────────────
     // RFC 8725 §3.11 - pin the JWT 'typ' header (RFC 7515 §4.1.9) via
-    // ValidationParameters.ExpectedTokenTypes so token-class confusion (replaying a
+    // ValidationParameters.ExpectedTokenTypes so token-type confusion (replaying a
     // logout_token as an id_token, etc.) is rejected inside the validator instead of
     // relying on every caller to post-check token.Header.Type.
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1358,7 +1358,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// When the JWT's <c>typ</c> does not match any configured expected value, the validator
-    /// rejects with <see cref="JwtError.InvalidTokenType"/> - the very token-class-confusion
+    /// rejects with <see cref="JwtError.InvalidTokenType"/> - the very token-type confusion
     /// rejection RFC 8725 §3.11 prescribes.
     /// </summary>
     [Fact]

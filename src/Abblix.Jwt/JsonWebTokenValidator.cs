@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -470,7 +470,7 @@ internal class JsonWebTokenValidator(
 
     /// <summary>
     /// Pins the JWT's <c>typ</c> header (RFC 7515 §4.1.9) to the set the caller expects, per
-    /// the RFC 8725 §3.11 token-class-confusion guidance. When
+    /// the RFC 8725 §3.11 token-type confusion guidance. When
     /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
     /// skipped (backward-compatible default for callers that have not opted in).
     /// </summary>

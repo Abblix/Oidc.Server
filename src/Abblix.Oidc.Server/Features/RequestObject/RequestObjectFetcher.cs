@@ -186,11 +186,11 @@ public partial class RequestObjectFetcher(
                 // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
                 // deployments may alternatively be using the type application/jwt", so the exact value cannot
                 // be demanded of a conformant client. What can be refused is a JWT declaring itself some
-                // other kind this class names, which is one being replayed where request parameters belong -
+                // other type this class names, which is one being replayed where request parameters belong -
                 // the confusion RFC 8725 §3.11 describes. The client signs this one, so the kinds within its
                 // reach are not only the ones this server issued.
                 var tokenType = validJwt.Token.Header.Type;
-                if (JwtTypes.IsOtherThan(tokenType, JwtTypes.RequestObject))
+                if (!JwtTypes.Expect(tokenType, JwtTypes.RequestObject))
                 {
                     return new OidcError(
                         ErrorCodes.InvalidRequestObject,

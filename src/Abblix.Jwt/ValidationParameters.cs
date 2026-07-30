@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -60,7 +60,7 @@ public record ValidationParameters
 	/// <summary>
 	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.
 	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 §3.11 to
-	/// prevent token-class confusion: a JWS signed for one class (id_token, logout_token,
+	/// prevent token-type confusion: a JWS signed for one type (id_token, logout_token,
 	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
 	/// as another by relying parties that trust the same issuer for several classes.
 	/// </summary>
@@ -82,7 +82,7 @@ public record ValidationParameters
 	/// <summary>
 	/// JWS signing algorithms (per RFC 7518) that the validator MUST accept; any other
 	/// <c>alg</c> in the JOSE header causes rejection. When <c>null</c> or empty the
-	/// check is skipped — the validator only enforces the basic
+	/// check is skipped - the validator only enforces the basic
 	/// <see cref="ValidationOptions.RequireSignedTokens"/> rule (which forbids
 	/// <c>none</c>) and lets any registered signer match.
 	/// </summary>

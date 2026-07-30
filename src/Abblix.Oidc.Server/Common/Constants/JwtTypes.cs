@@ -133,15 +133,15 @@ public static class JwtTypes
 
 	/// <summary>
 	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
-	/// value so a relying party that trusts the same client across multiple JWT classes
-	/// (id_token, request_object, DPoP proof) cannot have one class replayed as another
-	/// per the RFC 8725 §3.11 token-class-confusion guidance.
+	/// value so a relying party that trusts the same client across multiple JWT types
+	/// (id_token, request_object, DPoP proof) cannot have one type replayed as another
+	/// per the RFC 8725 §3.11 token-type confusion guidance.
 	/// </summary>
 	public const string DPoPProof = "dpop+jwt";
 
 	/// <summary>
 	/// The "token introspection response" JWT type per RFC 9701 §5. The <c>typ</c> header equals this value so a
-	/// signed introspection response cannot be replayed as a different JWT class (RFC 8725 §3.11).
+	/// signed introspection response cannot be replayed as a different JWT type (RFC 8725 §3.11).
 	/// </summary>
 	public const string TokenIntrospection = "token-introspection+jwt";
 
@@ -200,7 +200,7 @@ public static class JwtTypes
 	/// <remarks>
 	/// A value belongs here once this class names it, whoever issues it. What decides whether a given one is
 	/// refused is not membership but the position it turns up in, and that is stated at each call site
-	/// rather than here - see <see cref="IsOtherThan"/>.
+	/// rather than here - see <see cref="Expect"/>.
 	/// <para>
 	/// Add a value when this class gains one. Leaving it out is the failure that matters: an omission is a
 	/// refusal that silently does not happen, and nothing anywhere reports it.
@@ -234,16 +234,18 @@ public static class JwtTypes
 	];
 
 	/// <summary>
-	/// Reports whether a <c>typ</c> names a known kind of JWT that is not one of those <paramref
-	/// name="permitted"/> where it turned up, so that a JWT meant for one purpose and presented for another
-	/// can be refused.
+	/// Reports whether a <c>typ</c> is one the position it turned up in accepts, so that a JWT meant for a
+	/// different purpose can be refused where it does not belong.
 	/// </summary>
 	/// <param name="tokenType">The <c>typ</c> header parameter of the incoming JWT, which may be absent.</param>
-	/// <param name="permitted">
-	/// The kinds that legitimately appear in this position. Pass none where the expected JWT carries no
-	/// <c>typ</c> at all, as an ID token does.
+	/// <param name="expectedTypes">
+	/// The types that belong in this position. Pass none where the expected JWT carries no <c>typ</c> at all,
+	/// as an ID token does - then every type this class names is out of place.
 	/// </param>
-	/// <returns><c>true</c> when the value names a known kind and none of the permitted ones.</returns>
+	/// <returns>
+	/// <c>true</c> for an absent, generic or unfamiliar value and for any of <paramref name="expectedTypes"/>;
+	/// <c>false</c> only for a type this class names that is not among them.
+	/// </returns>
 	/// <remarks>
 	/// This enumerates what to refuse rather than what to accept, which is the opposite of the usual
 	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 7523bis allows a client
@@ -253,15 +255,15 @@ public static class JwtTypes
 	/// list would refuse conformant senders on both counts, so an absent, generic or unfamiliar value passes
 	/// untouched and a sender that never heard of explicit typing is unaffected.
 	/// <para>
-	/// What is refused therefore depends on where the question is asked, which is why the permitted kinds are
+	/// What is refused therefore depends on where the question is asked, which is why what belongs is
 	/// named by the caller. The alternative - one list of everything this server issues - was too narrow at
 	/// half the call sites: a client assertion and a request object are verified with the CLIENT's key, so the
 	/// client chooses the <c>typ</c> and can present a JWT it signed for some entirely different purpose.
 	/// Refusing by kind is the mutually exclusive validation RFC 8725 Section 3.12 asks for.
 	/// </para>
 	/// </remarks>
-	public static bool IsOtherThan(string? tokenType, params string[] permitted)
-		=> tokenType is not null &&
-		   Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) &&
-		   !Array.Exists(permitted, allowed => JwtTypeName.Matches(tokenType, allowed));
+	public static bool Expect(string? tokenType, params string[] expectedTypes)
+		=> tokenType is null ||
+		   !Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) ||
+		   Array.Exists(expectedTypes, expected => JwtTypeName.Matches(tokenType, expected));
 }

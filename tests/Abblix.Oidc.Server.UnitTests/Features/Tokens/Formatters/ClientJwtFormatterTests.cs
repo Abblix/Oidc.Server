@@ -309,7 +309,7 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that the formatter selects the client's encryption metadata by JWT class: an
+    /// Verifies that the formatter selects the client's encryption metadata by JWT type: an
     /// id_token uses id_token_encrypted_response_alg, while a UserInfo response (which carries no
     /// id_token/logout type) uses userinfo_encrypted_response_alg. The encryption key here has no
     /// algorithm of its own, so the registered value is what reaches the JWT creator.
