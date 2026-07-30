@@ -200,7 +200,7 @@ public static class JwtTypes
 	/// <remarks>
 	/// A value belongs here once this class names it, whoever issues it. What decides whether a given one is
 	/// refused is not membership but the position it turns up in, and that is stated at each call site
-	/// rather than here - see <see cref="Expect"/>.
+	/// rather than here - see <see cref="IsExpected"/>.
 	/// <para>
 	/// Add a value when this class gains one. Leaving it out is the failure that matters: an omission is a
 	/// refusal that silently does not happen, and nothing anywhere reports it.
@@ -262,7 +262,7 @@ public static class JwtTypes
 	/// Refusing by kind is the mutually exclusive validation RFC 8725 Section 3.12 asks for.
 	/// </para>
 	/// </remarks>
-	public static bool Expect(string? tokenType, params string[] expectedTypes)
+	public static bool IsExpected(string? tokenType, params string[] expectedTypes)
 		=> tokenType is null ||
 		   !Array.Exists(Known, known => JwtTypeName.Matches(tokenType, known)) ||
 		   Array.Exists(expectedTypes, expected => JwtTypeName.Matches(tokenType, expected));

@@ -69,7 +69,7 @@ public class IdTokenHintValidator(
             // achieve disambiguation from existing kinds of JWTs, as the validation rules for existing kinds
             // of JWTs often do not use the typ Header Parameter value". What can be enumerated exactly is every
             // other type this class names, and here none of them belongs, so all of them are refused.
-            if (!JwtTypes.Expect(idToken.Header.Type))
+            if (!JwtTypes.IsExpected(idToken.Header.Type))
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
 

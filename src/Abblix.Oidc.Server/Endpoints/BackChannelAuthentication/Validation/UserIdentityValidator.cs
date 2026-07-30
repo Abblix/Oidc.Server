@@ -157,7 +157,7 @@ public class UserIdentityValidator(
         // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
         // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
         // ID token carries no type of its own; see JwtTypes.Expect.
-        if (!JwtTypes.Expect(token.Header.Type))
+        if (!JwtTypes.IsExpected(token.Header.Type))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
