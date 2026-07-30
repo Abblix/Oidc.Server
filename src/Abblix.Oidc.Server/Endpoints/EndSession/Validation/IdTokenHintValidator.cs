@@ -60,10 +60,16 @@ public class IdTokenHintValidator(
 
             var idToken = result.GetSuccess();
 
-            // RFC 8725 §3.12: pin the token class. The id_token_hint MUST be an ID Token; without this
-            // check another own-issued token whose audience matches (an access or refresh token) would
-            // be accepted here, since the audience/signature checks alone do not distinguish the class.
-            if (idToken.Header.Type != JwtTypes.IdToken)
+            // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so
+            // another own-issued token whose audience happens to match - an access or refresh token - cannot
+            // be replayed here, which the signature and audience checks alone would not catch.
+            //
+            // Stated as a refusal rather than a requirement, because the accepting side cannot be enumerated:
+            // an ID token carries no type of its own, and RFC 8725 §3.11 warns that explicit typing "may not
+            // achieve disambiguation from existing kinds of JWTs, as the validation rules for existing kinds
+            // of JWTs often do not use the typ Header Parameter value". What can be enumerated exactly is what
+            // this system issues under a class of its own, and that is what is refused.
+            if (JwtTypes.IsTokenClass(idToken.Header.Type))
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
 

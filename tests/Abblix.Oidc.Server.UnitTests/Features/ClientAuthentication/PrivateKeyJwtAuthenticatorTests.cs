@@ -95,7 +95,7 @@ public class PrivateKeyJwtAuthenticatorTests
     /// </summary>
     [Theory]
     [InlineData(JwtTypes.AccessToken)]
-    [InlineData(JwtTypes.IdToken)]
+    [InlineData(JwtTypes.LogoutToken)]
     [InlineData(JwtTypes.RefreshToken)]
     public async Task ATokenClassPresentedAsAssertion_ShouldReturnNull(string tokenType)
     {

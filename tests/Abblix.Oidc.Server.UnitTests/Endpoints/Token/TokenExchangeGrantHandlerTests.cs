@@ -702,13 +702,13 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task S3_IdTokenTyp_rejected_when_subject_token_type_is_access_token()
     {
-        // A JWT minted as id_token (typ=id+jwt) presented under subject_token_type=access_token
-        // is a cross-type confusion: id_tokens carry identity assertions, not authorisation,
-        // and may have different audience expectations. Reject even though signature validates.
+        // A JWT minted as a refresh token presented under subject_token_type=access_token is a cross-type
+        // confusion: the two carry different authority and are redeemed at different places. Reject even
+        // though the signature validates.
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.IdToken,  // typ mismatch
+            JwtTokenType = JwtTypes.RefreshToken,  // typ mismatch
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);

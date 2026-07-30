@@ -71,8 +71,8 @@ public class IdTokenHintValidatorTests
 
     private static JsonWebToken CreateValidIdToken(params string[] audiences)
     {
+        // No type is set: an ID token carries none of its own, so this is what a real one looks like.
         var token = new JsonWebToken();
-        token.Header.Type = JwtTypes.IdToken;
         token.Payload.Audiences = audiences;
         return token;
     }
@@ -181,10 +181,16 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <see cref="JwtTypes.IdToken"/> (e.g. a stolen access token replayed as a
-    /// hint) must be rejected even when its audience matches the requesting client.
+    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
+    /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
+    /// when its audience matches the requesting client.
     /// </summary>
+    /// <remarks>
+    /// The rejection reason is asserted, not just the error code. Every refusal in this validator answers
+    /// <c>invalid_request</c>, so a test that checks only the code passes whichever check fired - and this one
+    /// did: removing the class check entirely left it green, because the request then failed further down for
+    /// an unrelated reason.
+    /// </remarks>
     [Fact]
     public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError()
     {
@@ -205,6 +211,7 @@ public class IdTokenHintValidatorTests
         // Assert
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
     }
 
     /// <summary>

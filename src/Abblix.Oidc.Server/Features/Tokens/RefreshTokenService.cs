@@ -106,20 +106,27 @@ public class RefreshTokenService(
 		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
 		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
-		// The same four claims as on an access token, answering the same four questions - but the audience
-		// lands differently, and that difference is the point:
+		// The same four claims as on an access token, answering the same four questions - except that one of
+		// them answers a different question here than its name suggests:
 		//
 		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
-		//   aud       - who reads it         (RFC 7519 Section 4.1.3). Here it is always this server. A
-		//                                     refresh token grants access to nothing: the client presents it
-		//                                     to the token endpoint and never opens it, so "who reads it"
-		//                                     and "where it grants access" - which coincide on an access
-		//                                     token - come apart. Naming the client instead would say who
-		//                                     asked rather than who reads, and leave the audience uncheckable
-		//                                     on the way back in.
+		//   aud       - not who reads it     (RFC 7519 Section 4.1.3). Set by ApplyTo below, from the same
+		//                                     authorization context the access token uses, so it holds the
+		//                                     resources the grant was issued for - or the issuer where it
+		//                                     named none. AuthorizeByRefreshTokenAsync reads them straight
+		//                                     back out of it to rebuild the grant, which makes the claim a
+		//                                     store of grant state rather than a statement about the reader,
+		//                                     and gives a refresh token the same audience as every access
+		//                                     token of the same grant.
 		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set by ApplyTo below.
 		//   sub       - who it is about      (RFC 9068 Section 2.2), sealed per sector for a pairwise client
 		//                                     further down.
+		//
+		// The type below therefore carries a protection rather than a label. With the audiences identical, it
+		// is the only thing separating a refresh token from an access token, and a resource server presented
+		// with one has nothing else to reject it by - the mutually exclusive validation rules RFC 8725
+		// Section 3.12 asks for. Encryption does not stand in for it: it applies only where the host
+		// configured a server encryption key, and without one every service token ships as a readable JWS.
 		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
 
 		var newToken = new JsonWebToken
@@ -142,8 +149,8 @@ public class RefreshTokenService(
 		};
 		authSession.ApplyTo(newToken.Payload);
 
-		// This also sets the audience - the resources the grant was issued for, or the issuer when it named
-		// none - so setting it above would only be overwritten.
+		// This is what sets the audience described above, so setting it in the initializer would only be
+		// overwritten here.
 		authContext.ApplyTo(newToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector

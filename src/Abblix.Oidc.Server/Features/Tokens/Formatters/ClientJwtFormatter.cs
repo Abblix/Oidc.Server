@@ -55,11 +55,15 @@ public class ClientJwtFormatter(
               "This overload infers the policy from token.Header.Type and is kept for backward compatibility.")]
     public Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
     {
-        // The legacy contract picks the client's registered encryption metadata by JWT class: id_token and
-        // logout_token use id_token_encrypted_response_*, everything else (UserInfo) uses userinfo_encrypted_response_*.
+        // The legacy contract picks the client's registered encryption metadata by JWT class: a logout token
+        // uses id_token_encrypted_response_*, everything else (UserInfo) uses userinfo_encrypted_response_*.
+        //
+        // An ID token no longer lands in the first arm, because it no longer carries a type of its own - which
+        // is precisely why this overload is obsolete. Inferring an encryption policy from a header that the
+        // specifications do not define was never sound; callers pass the policy explicitly instead.
         var encryption = token.Header.Type switch
         {
-            JwtTypes.IdToken or JwtTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
+            JwtTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
             _ => ClientJwtEncryption.ForUserInfo(clientInfo, options.Value),
         };
 

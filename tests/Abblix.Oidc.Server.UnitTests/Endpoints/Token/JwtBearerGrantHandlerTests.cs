@@ -1052,7 +1052,7 @@ public class JwtBearerGrantHandlerTests
 	/// </summary>
 	[Theory]
 	[InlineData(JwtTypes.AccessToken)]
-	[InlineData(JwtTypes.IdToken)]
+	[InlineData(JwtTypes.RefreshToken)]
 	[InlineData(null)]
 	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
 	{
