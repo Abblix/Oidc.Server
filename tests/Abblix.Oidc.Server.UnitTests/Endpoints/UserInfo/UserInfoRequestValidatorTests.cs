@@ -98,7 +98,7 @@ public class UserInfoRequestValidatorTests
     private static JsonWebToken CreateValidAccessToken(string clientId = TestConstants.DefaultClientId)
     {
         var token = new JsonWebToken();
-        token.Header.Type = JwtTypes.AccessToken;
+        token.Header.Type = JsonWebTokenTypes.AccessToken;
         token.Payload.ClientId = clientId;
         token.Payload.Subject = "user_123";
         token.Payload.JwtId = "jwt_id_123";
@@ -437,8 +437,8 @@ public class UserInfoRequestValidatorTests
     /// rather than two.
     /// </summary>
     [Theory]
-    [InlineData(JwtTypes.AccessToken)]
-    [InlineData("application/" + JwtTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData("application/" + JsonWebTokenTypes.AccessToken)]
     [InlineData("Application/AT+JWT")]
     public async Task ValidateAsync_AcceptsEitherSpellingOfTheAccessTokenType(string tokenType)
     {

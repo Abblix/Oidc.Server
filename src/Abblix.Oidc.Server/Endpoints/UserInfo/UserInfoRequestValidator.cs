@@ -100,7 +100,7 @@ public class UserInfoRequestValidator(
 		// type, per RFC 7515 Section 4.1.9, so the comparison folds the prefix and the case rather than
 		// testing for equality against one of them.
 		var tokenType = token.Header.Type;
-		if (!JwtTypeName.Matches(tokenType, JwtTypes.AccessToken))
+		if (!JwtTypeName.Matches(tokenType, JsonWebTokenTypes.AccessToken))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,

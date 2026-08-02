@@ -156,7 +156,7 @@ public class UserIdentityValidator(
         // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so another
         // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
         // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
-        // ID token carries no type of its own; see JwtTypes.Expect.
+        // ID token carries no type of its own; see JwtTypes.IsPermitted.
         if (!JwtTypes.IsPermitted(token.Header.Type))
         {
             return new OidcError(

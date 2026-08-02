@@ -86,7 +86,7 @@ public partial class LogoutTokenService(
         {
             Header =
             {
-                Type = JwtTypes.LogoutToken,
+                Type = JsonWebTokenTypes.LogoutToken,
                 // Back-Channel Logout §2.4: the logout token is signed in the same manner as the
                 // ID Token, so the client's ID Token signing algorithm is the default; a host may
                 // diverge per client via the explicit LogoutTokenSignedResponseAlgorithm override.

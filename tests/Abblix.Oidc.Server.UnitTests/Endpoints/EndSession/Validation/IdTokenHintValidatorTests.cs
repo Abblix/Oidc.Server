@@ -198,9 +198,9 @@ public class IdTokenHintValidatorTests
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(JwtTypes.AccessToken)]
-    [InlineData(JwtTypes.ClientAuthentication)]
-    [InlineData(JwtTypes.RequestObject)]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
+    [InlineData(JsonWebTokenTypes.RequestObject)]
     public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError(string tokenType)
     {
         // Arrange

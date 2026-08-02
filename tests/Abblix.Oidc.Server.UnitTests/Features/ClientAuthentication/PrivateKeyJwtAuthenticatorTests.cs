@@ -96,11 +96,11 @@ public class PrivateKeyJwtAuthenticatorTests
     /// expiry all check out - so the type is the only thing standing between the two meanings.
     /// </summary>
     [Theory]
-    [InlineData(JwtTypes.AccessToken)]
-    [InlineData(JwtTypes.LogoutToken)]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.LogoutToken)]
     [InlineData(JwtTypes.RefreshToken)]
-    [InlineData(JwtTypes.VerifiableCredential)]
-    [InlineData(JwtTypes.SecurityEvent)]
+    [InlineData(JsonWebTokenTypes.VerifiableCredential)]
+    [InlineData(JsonWebTokenTypes.SecurityEvent)]
     public async Task AnotherKindPresentedAsAssertion_ShouldReturnNull(string tokenType)
     {
         // Arrange
@@ -138,8 +138,8 @@ public class PrivateKeyJwtAuthenticatorTests
     /// </summary>
     [Theory]
     [InlineData(null)]
-    [InlineData(JwtTypes.Jwt)]
-    [InlineData(JwtTypes.ClientAuthentication)]
+    [InlineData(JsonWebTokenTypes.Jwt)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
     [InlineData("something-a-profile-defined+jwt")]
     public async Task APermittedOrUnfamiliarType_ShouldAuthenticate(string? tokenType)
     {

@@ -34,7 +34,8 @@ public static class SecurityEventTokenMediaTypes
     /// "application/secevent+jwt": the full media type, as an HTTP header carries it. The token's
     /// "typ" header uses the short spelling instead - that value lives on
     /// <see cref="SecurityEventToken.TokenType"/>, and RFC 7515 Section 4.1.9 is what makes the
-    /// two the same name.
+    /// two the same name; composing the long form from the short one keeps that a fact rather
+    /// than a coincidence of two literals.
     /// </summary>
-    public const string SecurityEventToken = "application/secevent+jwt";
+    public const string SecurityEventToken = "application/" + Abblix.SecurityEvents.SecurityEventToken.TokenType;
 }

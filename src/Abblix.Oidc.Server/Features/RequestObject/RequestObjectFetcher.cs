@@ -190,7 +190,7 @@ public partial class RequestObjectFetcher(
                 // the confusion RFC 8725 §3.11 describes. The client signs this one, so the kinds within its
                 // reach are not only the ones this server issued.
                 var tokenType = validJwt.Token.Header.Type;
-                if (!JwtTypes.IsPermitted(tokenType, JwtTypes.RequestObject))
+                if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.RequestObject))
                 {
                     return new OidcError(
                         ErrorCodes.InvalidRequestObject,

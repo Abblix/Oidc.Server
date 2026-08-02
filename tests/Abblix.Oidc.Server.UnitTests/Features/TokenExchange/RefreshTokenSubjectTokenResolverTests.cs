@@ -132,7 +132,7 @@ public class RefreshTokenSubjectTokenResolverTests
     public async Task WrongTypHeader_Rejected()
     {
         var jwt = NewRefreshJwt();
-        jwt.Header.Type = JwtTypes.AccessToken;  // mismatch -- this is supposed to be rt+jwt
+        jwt.Header.Type = JsonWebTokenTypes.AccessToken;  // mismatch -- this is supposed to be rt+jwt
         _jwtValidator
             .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
             .ReturnsAsync(jwt);

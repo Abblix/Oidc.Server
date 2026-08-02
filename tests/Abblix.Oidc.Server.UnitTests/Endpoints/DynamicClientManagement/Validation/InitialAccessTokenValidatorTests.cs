@@ -149,7 +149,7 @@ public class InitialAccessTokenValidatorTests
     public async Task ValidateAsync_WithWrongTokenType_ShouldReturnInvalidToken()
     {
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
-        var token = CreateValidToken(tokenType: JwtTypes.AccessToken);
+        var token = CreateValidToken(tokenType: JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))

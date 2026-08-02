@@ -25,6 +25,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -444,7 +445,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = "client-A",
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
@@ -463,7 +464,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = "client-A",
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var brokerClient = new ClientInfo(ClientId)
@@ -487,7 +488,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -510,7 +511,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], ad)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientWithDifferentAllowlist = new ClientInfo(ClientId)
@@ -533,7 +534,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -559,7 +560,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // no audience allowlist
@@ -580,7 +581,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -610,7 +611,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -633,7 +634,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -657,7 +658,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -683,7 +684,7 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -730,13 +731,13 @@ public class TokenExchangeGrantHandlerTests
         var subject = new SubjectTokenContext("alice", null, ["openid"], null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         const string actorWire = "actor.jwt";
         var actor = new SubjectTokenContext("svc-worker", null, null, null)
         {
             OriginalClientId = ClientId,
-            JwtTokenType = JwtTypes.AccessToken,
+            JwtTokenType = JsonWebTokenTypes.AccessToken,
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);
         resolverMock

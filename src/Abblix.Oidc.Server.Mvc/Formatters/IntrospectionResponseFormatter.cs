@@ -96,7 +96,7 @@ public class IntrospectionResponseFormatter(
         {
             Header =
             {
-                Type = JwtTypes.TokenIntrospection,
+                Type = JsonWebTokenTypes.TokenIntrospection,
                 Algorithm = clientInfo.IntrospectionSignedResponseAlgorithm,
             },
             Payload =

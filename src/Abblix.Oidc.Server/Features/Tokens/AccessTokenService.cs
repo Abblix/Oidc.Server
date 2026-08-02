@@ -117,7 +117,7 @@ internal class AccessTokenService(
 		{
 			Header =
 			{
-				Type = JwtTypes.AccessToken,
+				Type = JsonWebTokenTypes.AccessToken,
 				Algorithm = signing.Algorithm,
 				KeyId = signing.KeyId,
 			},

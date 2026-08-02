@@ -410,7 +410,7 @@ public class TokenExchangeGrantHandler(
         // Resolvers for non-JWT formats leave JwtTokenType null; this check is a no-op for them.
         var expectedTyp = requestedTypeUri switch
         {
-            TokenExchangeTokenTypes.AccessToken => JwtTypes.AccessToken,
+            TokenExchangeTokenTypes.AccessToken => JsonWebTokenTypes.AccessToken,
             TokenExchangeTokenTypes.RefreshToken => JwtTypes.RefreshToken,
             _ => null,
         };

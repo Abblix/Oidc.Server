@@ -44,8 +44,10 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// The "typ" header value declaring a JWT to be a SET. RFC 8417 Section 2.3 registers the
     /// "application/secevent+jwt" media type and, per RFC 7515 Section 4.1.9, recommends omitting
     /// the "application/" prefix in the header, so the value used SHOULD be "secevent+jwt".
+    /// An alias into the core's shared registry, kept here because the value is a property of
+    /// THIS token type and reads that way at call sites.
     /// </summary>
-    public const string TokenType = "secevent+jwt";
+    public const string TokenType = JsonWebTokenTypes.SecurityEvent;
 
     /// <summary>
     /// The underlying JWT, for everything the SET profile does not name: header parameters,
