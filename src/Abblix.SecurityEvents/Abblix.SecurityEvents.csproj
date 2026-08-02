@@ -37,6 +37,7 @@
          ActivatorUtilities, the options pattern, the LoggerMessage source generator - rather than
          leaning on what happens to flow transitively through Abblix.Jwt today. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />

@@ -45,7 +45,10 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
     {
         context.Require(SecurityEventTokenValidationState.Parsed);
 
-        var result = await verifier.VerifyAsync(context.CompactToken, cancellationToken);
+        var result = await verifier.VerifyAsync(
+            context.CompactToken,
+            context.UnverifiedHeader!.KeyId,
+            cancellationToken);
 
         if (!result.TryGetSuccess(out var token))
         {

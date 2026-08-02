@@ -44,11 +44,16 @@ public interface ISecurityEventTokenVerifier
     /// Verifies the token's signature.
     /// </summary>
     /// <param name="compactToken">The token as received, in compact serialization.</param>
+    /// <param name="keyId">
+    /// The "kid" the token's header names, when the caller has already parsed it - the signature
+    /// step has - so a caching key resolver can recognise a rollover without re-parsing the
+    /// token.</param>
     /// <param name="cancellationToken">Cancels key retrieval mid-flight.</param>
     /// <returns>
     /// The parsed token on success - claims now carrying the issuer's authority - or the error a
     /// receiver branches on.</returns>
     Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
         string compactToken,
+        string? keyId = null,
         CancellationToken cancellationToken = default);
 }

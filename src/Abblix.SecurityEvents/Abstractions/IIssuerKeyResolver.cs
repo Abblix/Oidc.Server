@@ -40,7 +40,15 @@ public interface IIssuerKeyResolver
     /// Resolves the signature verification keys of an issuer.
     /// </summary>
     /// <param name="issuer">The issuer as its tokens spell it in "iss".</param>
+    /// <param name="keyId">
+    /// The "kid" the token's header names, when it names one. This is the key-rollover signal: a
+    /// caching implementation that holds keys for the issuer but none under this identifier knows
+    /// its copy predates a rotation and refreshes before answering, instead of failing a token
+    /// signed with a key newer than the cache.</param>
     /// <param name="cancellationToken">Cancels retrieval mid-flight.</param>
     /// <returns>The issuer's current verification keys; empty when the issuer is not trusted.</returns>
-    IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(string issuer, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
+        string issuer,
+        string? keyId = null,
+        CancellationToken cancellationToken = default);
 }

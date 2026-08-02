@@ -109,6 +109,32 @@ public static partial class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers JWKS-based key resolution as the <see cref="IIssuerKeyResolver"/>: issuers'
+    /// keys fetched from their published JWK Set documents and cached, with a forced refetch
+    /// when a token names a key the cache has never seen.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">
+    /// Where key sets live and how long they answer from cache; a Shared Signals receiver sets
+    /// the URI selector from the transmitter's advertised "jwks_uri".</param>
+    public static IServiceCollection AddJwksKeyResolution(
+        this IServiceCollection services,
+        Action<JwksKeyResolutionOptions>? configure = null)
+    {
+        services.AddHttpClient();
+
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IIssuerKeyResolver, JwksIssuerKeyResolver>();
+
+        return services;
+    }
+
+    /// <summary>
     /// Registers the process-local replay cache as the <see cref="IJtiReplayCache"/>.
     /// </summary>
     /// <param name="services">The service collection.</param>

@@ -62,6 +62,7 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            string? keyId = null,
             CancellationToken cancellationToken = default)
         {
             var segments = compactToken.Split('.');
@@ -86,6 +87,7 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            string? keyId = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Failure(error));
     }

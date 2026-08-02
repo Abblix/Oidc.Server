@@ -47,6 +47,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
         string compactToken,
+        string? keyId = null,
         CancellationToken cancellationToken = default)
     {
         // The core streams keys per issuer; buffering them first is what lets an empty set be
@@ -69,7 +70,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
         async IAsyncEnumerable<JsonWebKey> ResolveBuffered(string issuer)
         {
             var keys = new List<JsonWebKey>();
-            await foreach (var key in keyResolver.ResolveSigningKeysAsync(issuer, cancellationToken))
+            await foreach (var key in keyResolver.ResolveSigningKeysAsync(issuer, keyId, cancellationToken))
             {
                 keys.Add(key);
             }

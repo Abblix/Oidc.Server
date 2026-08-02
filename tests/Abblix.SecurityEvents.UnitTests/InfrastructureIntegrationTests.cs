@@ -56,6 +56,7 @@ public class InfrastructureIntegrationTests
     {
         public async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
             string issuer,
+            string? keyId = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
@@ -226,6 +227,7 @@ public class InfrastructureIntegrationTests
     {
         public Task<Abblix.Utils.Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            string? keyId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException("Registration identity is the assertion; this never runs.");
     }
