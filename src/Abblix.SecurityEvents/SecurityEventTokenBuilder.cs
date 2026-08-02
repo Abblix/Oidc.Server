@@ -238,7 +238,8 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// <param name="name">The claim name.</param>
     /// <param name="value">The claim value.</param>
     /// <exception cref="ArgumentException">
-    /// The name is "exp", or a claim a dedicated builder method manages. "exp" is rejected
+    /// The name is "exp", a claim a dedicated builder method manages, or a name already written
+    /// through this method - every claim has exactly one writer. "exp" is rejected
     /// outright: RFC 8417 Section 2.2 already advises against it for a token that records
     /// history, and Sections 4.1 and 4.2 make its ABSENCE the wall between a SET and the ID and
     /// access tokens an attacker would like to pass one off as - this builder takes that defence
@@ -260,6 +261,15 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             throw new ArgumentException(
                 $"The '{name}' claim is managed by {method}; writing it here too would leave two doors to "
                 + "one claim.",
+                nameof(name));
+        }
+
+        if (_extraClaims.Any(claim => claim.Key == name))
+        {
+            throw new ArgumentException(
+                $"The '{name}' claim was already written; accepting a second value would let the last "
+                + $"write win silently at {nameof(Build)} - the same two-doors problem the managed "
+                + "claims refuse.",
                 nameof(name));
         }
 

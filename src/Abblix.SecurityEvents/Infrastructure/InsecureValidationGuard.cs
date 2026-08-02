@@ -34,10 +34,12 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// construction naming what is missing. At validation time it is a pure pass-through.
 /// </summary>
 /// <remarks>
-/// Guarding the result rather than any editing API is what makes the guard impossible to bypass:
-/// the old pipeline builder watched its own doors, and the composition cursor walked past them.
-/// The check runs once, when the singleton is first resolved, which is the earliest moment the
-/// final composition exists to inspect.
+/// Guarding the result rather than any editing API is what puts every editing door inside its
+/// reach: the old pipeline builder watched its own doors, and the composition cursor walked past
+/// them. What remains outside is wholesale replacement of the singular registration, which
+/// replaces this guard along with the profile - a visible takeover, not an edit. The check runs
+/// once, when the singleton is first resolved, which is the earliest moment the final
+/// composition exists to inspect.
 /// </remarks>
 internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValidator
 {
@@ -94,7 +96,7 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         => _inner.ValidateAsync(context, cancellationToken);
 
     [LoggerMessage(
-        EventId = LogEvents.Composition.InsecurePipelineAllowance,
+        EventId = LogEvents.Composition.InsecureProfileAllowance,
         Level = LogLevel.Warning,
         Message = "The validation profile lacks security-critical default steps ({MissingSteps}) "
             + "under an explicit allowance: {Allowance}")]

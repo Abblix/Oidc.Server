@@ -211,6 +211,40 @@ public class SecurityEventTokenBuilderTests
     }
 
     [Fact]
+    public void WithClaim_WritingTheSameNameTwice_IsRejected()
+    {
+        // Custom claims obey the same one-writer rule the managed claims enforce: without this,
+        // the second write would win silently at Build and the first would vanish without trace.
+        var builder = new SecurityEventTokenBuilder().WithClaim("acr", "urn:example:low");
+
+        var error = Assert.Throws<ArgumentException>(() => builder.WithClaim("acr", "urn:example:high"));
+
+        Assert.Contains("already written", error.Message);
+    }
+
+    [Fact]
+    public void EventsCollection_RefusesAPayloadAttachedToAnotherTree()
+    {
+        // Handing over a node still parented in a parsed document would otherwise surface as the
+        // serializer's own "already has a parent", naming neither the event nor the way out.
+        var parsed = (JsonObject)JsonNode.Parse("""{"payload":{"change":"revoked"}}""")!;
+        var attached = (JsonObject)parsed["payload"]!;
+
+        var error = Assert.Throws<ArgumentException>(
+            () => new EventsCollection().Add("urn:example:event", attached));
+
+        Assert.Contains(nameof(JsonNode.DeepClone), error.Message);
+    }
+
+    [Fact]
+    public void Events_RepeatedReads_ShareOneView()
+    {
+        var token = MinimalValidBuilder().Build();
+
+        Assert.Same(token.Events, token.Events);
+    }
+
+    [Fact]
     public async Task SignAsync_HandsTheBuiltTokenToTheSigner()
     {
         var signer = new CapturingSigner();

@@ -207,4 +207,46 @@ public class JwksIssuerKeyResolverTests
 
         Assert.Equal(signingKey.KeyId, Assert.Single(keys).KeyId);
     }
+
+    [Fact]
+    public async Task CleartextHttpIssuer_IsRefusedBeforeAnyRequestLeaves()
+    {
+        // The fetched document decides which signatures verify, so over cleartext HTTP a
+        // path-sitting attacker substitutes a key and forges tokens at will. The refusal must
+        // come before the request: a fetch that leaks and then fails has already spoken.
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([]));
+        var resolver = Resolver(handler, new FakeTimeProvider(Now));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var key in resolver.ResolveSigningKeysAsync(
+                               "http://issuer.example.com",
+                               cancellationToken: TestContext.Current.CancellationToken))
+            {
+                Assert.Fail($"No key should resolve over cleartext HTTP, yet '{key.KeyId}' did.");
+            }
+        });
+
+        Assert.Contains("cleartext", error.Message);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LoopbackHttpIssuer_StaysAvailableForLocalDevelopment()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+        var resolver = Resolver(handler, new FakeTimeProvider(Now));
+
+        var keys = new List<JsonWebKey>();
+        await foreach (var resolved in resolver.ResolveSigningKeysAsync(
+                           "http://localhost:5000",
+                           cancellationToken: TestContext.Current.CancellationToken))
+        {
+            keys.Add(resolved);
+        }
+
+        Assert.Equal(new Uri("http://localhost:5000/.well-known/jwks.json"), Assert.Single(handler.Requests));
+        Assert.Equal(key.KeyId, Assert.Single(keys).KeyId);
+    }
 }

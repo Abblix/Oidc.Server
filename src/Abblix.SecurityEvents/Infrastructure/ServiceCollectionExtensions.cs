@@ -79,8 +79,11 @@ public static class ServiceCollectionExtensions
     /// cursor with its position-aware operations - and a profile that drops or replaces a
     /// security-critical default acknowledges that through
     /// <see cref="SecurityEventsOptions.AllowInsecureValidation"/>: the guard decorating the
-    /// composed result demands the acknowledgement at construction, so no editing door
-    /// bypasses it.
+    /// composed result demands the acknowledgement at construction, so no door that edits the
+    /// composition bypasses it. The one door outside its reach is standard container semantics:
+    /// a singular <see cref="ISecurityEventTokenValidator"/> registration made after this call
+    /// replaces the guarded profile wholesale (last registration wins), guard included - that is
+    /// the host visibly taking ownership of validation, not an edit of this profile.
     /// </para>
     /// <para>
     /// Two of the defaults ask for more configuration before they resolve, and each fails loudly
@@ -106,7 +109,22 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
 
-        services.TryAddSingleton<EventTypeRegistry>(
+        // The registry has exactly one door: SecurityEventsOptions.Events. A second registry
+        // instance in the container would win the singular resolve and silently orphan every
+        // registration made through the options - configuration that reads as applied and is
+        // not. There is no legitimate second implementation to defer to (registrations are the
+        // only thing a host customizes, and the options door carries them), so a pre-registration
+        // is a wiring mistake to name, not a choice to honor.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(EventTypeRegistry)))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(EventTypeRegistry)} is already registered. Register event types through "
+                + $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.Events)} in "
+                + $"{nameof(AddSecurityEvents)} instead: a second registry instance would silently "
+                + "orphan the registrations made there.");
+        }
+
+        services.AddSingleton<EventTypeRegistry>(
             provider => provider.GetRequiredService<IOptions<SecurityEventsOptions>>().Value.Events);
 
         services.TryAddSingleton<ISecurityEventTokenVerifier, DefaultSecurityEventTokenVerifier>();

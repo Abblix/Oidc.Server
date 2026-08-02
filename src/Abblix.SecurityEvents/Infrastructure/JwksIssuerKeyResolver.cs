@@ -110,6 +110,18 @@ public sealed class JwksIssuerKeyResolver(
     {
         var jwksUri = options.Value.JwksUriSelector?.Invoke(issuer) ?? DeriveWellKnownUri(issuer);
 
+        // The document behind this URI decides which signatures verify, so its transport is part
+        // of the trust: over cleartext HTTP, whoever sits on the path substitutes a key and every
+        // token they sign afterwards validates. Loopback stays permitted - a developer's local
+        // issuer offers no path for anyone to sit on.
+        if (jwksUri.Scheme != Uri.UriSchemeHttps && !jwksUri.IsLoopback)
+        {
+            throw new InvalidOperationException(
+                $"Refusing to fetch signature verification keys over '{jwksUri.Scheme}' from '{jwksUri}': "
+                + "a JWK Set fetched over cleartext can be substituted in transit. Serve it over HTTPS, "
+                + "or use a loopback address for local development.");
+        }
+
         using var client = httpClientFactory.CreateClient(HttpClientName);
         var keySet = await client.GetFromJsonAsync<JsonWebKeySet>(jwksUri, cancellationToken)
             ?? throw new InvalidOperationException($"The JWK Set document at '{jwksUri}' deserialized to null.");

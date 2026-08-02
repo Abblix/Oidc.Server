@@ -37,9 +37,9 @@ public static class LogEvents
         private const int Base = 1000;
 
         /// <summary>
-        /// A security-critical validation step was removed or replaced under an explicit
-        /// allowance; the message carries the operation and the reason given.
+        /// The composed validation profile lacks a security-critical default step under an
+        /// explicit allowance; the message carries the missing steps and the reason given.
         /// </summary>
-        public const int InsecurePipelineAllowance = Base + 1;
+        public const int InsecureProfileAllowance = Base + 1;
     }
 }

@@ -34,8 +34,12 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// The issuer read here is unverified - it decides only whether to PROCEED, and proceeding means
 /// verifying a signature against that issuer's keys, so a lie about "iss" buys an attacker
 /// nothing: the signature against the claimed issuer's keys is exactly what fails next.
+/// Security-critical, because this step is also what keeps that unverified claim from steering
+/// the key fetch: with the allowlist gone, a crafted "iss" aims the resolver's outbound request
+/// at a network target of the sender's choosing, and the failed signature afterwards is no
+/// consolation - the request itself was the prize.
 /// </remarks>
-public sealed class IssuerAllowlistStep : ISecurityEventTokenValidator
+public sealed class IssuerAllowlistStep : ISecurityCriticalValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

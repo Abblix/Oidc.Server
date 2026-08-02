@@ -35,6 +35,61 @@ The signer is the seam to your cryptography: `ISecurityEventTokenSigner` owns ke
 choice, and unless a token's integrity is ensured by other means, RFC 8417 requires it to be
 signed. `Build()` alone returns the typed, unsigned model for inspection.
 
+## Validating a Security Event Token
+
+Validation is a composed profile behind one interface. The default profile runs the receiver
+checks in their required order - parse, the `secevent+jwt` type header, the absence of `exp`,
+the presence of events, the issuer allowlist, the signature, the audience, the issued-at
+freshness window, and payload deserialization into the registered models.
+
+```csharp
+var result = await validator.ValidateAsync(
+    compact,
+    new SecurityEventTokenValidationOptions
+    {
+        ExpectedAudience = "https://receiver.example.com/events",
+        ExpectedIssuers = ["https://tenant.example.com"],
+    });
+
+if (result.TryGetSuccess(out var validated))
+{
+    // validated.Token is the typed SET; validated.EventPayloads holds the deserialized
+    // payload per event identifier.
+}
+```
+
+A consumer profile edits the default steps in place through the composition cursor
+(`services.Decompose<ISecurityEventTokenValidator>()`) - inserting, replacing or removing steps
+without this package changing. A profile that removes or replaces a security-critical default
+must say why through `SecurityEventsOptions.AllowInsecureValidation(reason)`: the acknowledgement
+is logged at startup, and without it the weakened profile refuses to construct.
+
+## Wiring into a host
+
+```csharp
+services.AddSecurityEvents(options =>
+{
+    options.Events.Register<MembershipChangedPayload>(
+        "https://tenant.example.com/events/membership-changed");
+    options.SigningKeySource = _ => ValueTask.FromResult(signingKey); // transmitters only
+});
+services.AddJwksKeyResolution();   // receivers: issuers' keys from their published JWK Sets
+services.AddInMemoryReplayCache(); // receivers: process-local "jti" replay protection
+```
+
+A pure receiver registers a key resolver and never configures signing; a pure transmitter does
+the reverse. Event registrations go through `options.Events`: registered event types deserialize
+into their payload models, unregistered ones pass through as `UnknownEventPayload` rather than
+failing. Every registration lets a host pre-registration win.
+
+## Delivery types
+
+The data shapes of both standard delivery methods, without their transports: the media type and
+error codes of push delivery ([RFC 8935](https://www.rfc-editor.org/rfc/rfc8935.html)), and the
+request and response models of poll delivery
+([RFC 8936](https://www.rfc-editor.org/rfc/rfc8936.html)). The HTTP side belongs to the consumer,
+or to a Shared Signals package above this one.
+
 ## Subject Identifiers
 
 A Subject Identifier is a JSON object that says who or what an event is about, and says it in a

@@ -98,8 +98,10 @@ public sealed class EventsCollection(JsonObject json) : IReadOnlyCollection<KeyV
     /// "SHALL be represented as the empty JSON object" (RFC 8417 Section 2) - the empty object is
     /// written here so no caller has to remember that rule.</param>
     /// <exception cref="ArgumentException">
-    /// A statement with the same event identifier is already present: "Multiple event identifiers
-    /// with the same value MUST NOT be used" (RFC 8417 Section 2.2).</exception>
+    /// A statement with the same event identifier is already present - "Multiple event identifiers
+    /// with the same value MUST NOT be used" (RFC 8417 Section 2.2) - or the payload is still
+    /// attached to another JSON tree; pass a copy of a parsed node rather than the node itself.
+    /// </exception>
     public void Add(string eventType, JsonObject? payload = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(eventType);
@@ -110,6 +112,17 @@ public sealed class EventsCollection(JsonObject json) : IReadOnlyCollection<KeyV
                 $"An event statement '{eventType}' is already present: multiple event identifiers with "
                 + "the same value must not be used (RFC 8417 Section 2.2).",
                 nameof(eventType));
+        }
+
+        // Without this check the serializer throws its own "node already has a parent", which
+        // names neither the event nor the way out.
+        if (payload?.Parent is not null)
+        {
+            throw new ArgumentException(
+                $"The payload for '{eventType}' is attached to another JSON tree - typically a "
+                + "previously parsed token. Pass a copy (payload.DeepClone()) instead of moving a node "
+                + "out of its owner.",
+                nameof(payload));
         }
 
         Json.Add(eventType, payload ?? new JsonObject());

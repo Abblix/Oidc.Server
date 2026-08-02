@@ -98,11 +98,32 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// </summary>
     public DateTimeOffset? TimeOfEvent => Token.Payload.Json.GetUnixTimeSeconds(IanaClaimTypes.Toe);
 
+    private EventsCollection? _eventsView;
+
     /// <summary>
     /// The "events" claim: the event statements this SET expresses, keyed by event identifier URI.
     /// Null when the claim is absent or is not a JSON object - a shape for the validation pipeline
     /// to reject, not for this view to repair.
     /// </summary>
-    public EventsCollection? Events =>
-        Token.Payload.Json[IanaClaimTypes.Events] is JsonObject events ? new EventsCollection(events) : null;
+    /// <remarks>
+    /// The view is a read-through wrapper cached per underlying node, so repeated reads cost
+    /// nothing and a claim replaced wholesale still yields a fresh view over the new node.
+    /// </remarks>
+    public EventsCollection? Events
+    {
+        get
+        {
+            if (Token.Payload.Json[IanaClaimTypes.Events] is not JsonObject events)
+            {
+                return null;
+            }
+
+            if (_eventsView is null || !ReferenceEquals(_eventsView.Json, events))
+            {
+                _eventsView = new EventsCollection(events);
+            }
+
+            return _eventsView;
+        }
+    }
 }

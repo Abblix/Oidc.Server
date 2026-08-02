@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
@@ -35,7 +36,7 @@ namespace Abblix.SecurityEvents.UnitTests;
 /// <summary>
 /// Pins the composition contract now that the pipeline is an ordinary composed family: the
 /// default order, profile editing through the live cursor, and above all the guard that judges
-/// the composed RESULT - a pipeline lacking a security-critical default demands a reasoned
+/// the composed RESULT - a profile lacking a security-critical default demands a reasoned
 /// acknowledgement however it came to lack it, which no editing door can bypass.
 /// </summary>
 public class ValidationCompositionTests
@@ -84,6 +85,23 @@ public class ValidationCompositionTests
     }
 
     [Fact]
+    public void PreRegisteredEventTypeRegistry_IsRefusedNamingTheOptionsDoor()
+    {
+        // Two registry instances would split the registrations: the container would serve one
+        // while the options filled the other, and every event registered through the options
+        // would silently deserialize as unknown. The refusal happens at Add time, where the
+        // wiring mistake is one line away from its fix.
+        var services = new ServiceCollection();
+        services.AddSingleton(new EventTypeRegistry());
+
+        var error = Assert.Throws<InvalidOperationException>(() => services.AddSecurityEvents());
+
+        Assert.Contains(
+            $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.Events)}",
+            error.Message);
+    }
+
+    [Fact]
     public void AddAfter_PlacesTheStepRightAfterItsAnchor()
     {
         var services = Host();
@@ -108,6 +126,7 @@ public class ValidationCompositionTests
     [Theory]
     [InlineData(typeof(TypHeaderStep))]
     [InlineData(typeof(ExpAbsenceStep))]
+    [InlineData(typeof(IssuerAllowlistStep))]
     [InlineData(typeof(SignatureStep))]
     public void RemovingACriticalStep_WithoutAnAllowance_FailsValidatorConstruction(Type criticalStep)
     {
