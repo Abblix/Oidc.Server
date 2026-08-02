@@ -117,15 +117,10 @@ public partial class LogoutTokenService(
         logoutToken.Payload.NotBefore = issuedAt;
         logoutToken.Payload.ExpiresAt = issuedAt + logoutOptions.LogoutTokenExpiresIn;
 
-        // Back-Channel Logout §2.4: the logout token is signed in the same manner as the
-        // ID Token, so the client's ID Token signing algorithm is the default; a host may
-        // diverge per client via the explicit LogoutTokenSignedResponseAlgorithm override.
-        // The previous hardcoded RS256 produced tokens an ES256/PS256-registered client
-        // would reject on signature-algorithm verification. The same §2.4 also demands
-        // "A Logout Token MUST be signed" and that none "MUST NOT be used": a client whose
-        // response types return no ID Token from the authorization endpoint may legally
-        // register id_token_signed_response_alg=none, so that value cannot be inherited
-        // here - fall back to RS256, which every OIDC client is required to support.
+        // Back-Channel Logout 1.0 Section 2.4 signs the logout token with the same keys as the
+        // ID Token, so the algorithm follows the client's ID Token registration unless the host
+        // set the explicit per-client override; ResolveSigningAlgorithm owns the one value that
+        // cannot be inherited.
         logoutToken.Header.Algorithm = ResolveSigningAlgorithm(clientInfo);
 
         LogTokenPrepared(logoutToken);
@@ -138,8 +133,26 @@ public partial class LogoutTokenService(
         return new EncodedJsonWebToken(logoutToken, jwt);
     }
 
+    /// <summary>
+    /// Picks the logout token's signature algorithm: the host's explicit per-client override
+    /// wins, otherwise the client's registered ID Token algorithm - Back-Channel Logout 1.0
+    /// Section 2.4 signs a logout token with the same keys as ID Tokens, so the ID Token
+    /// registration is the natural source of the algorithm too.
+    /// </summary>
+    /// <remarks>
+    /// The "none" branch is the one value inheritance must not carry across. A client whose
+    /// response types return no ID Token from the authorization endpoint may legally register
+    /// <c>id_token_signed_response_alg=none</c> (Dynamic Client Registration 1.0 Section 2) -
+    /// there is simply nothing to sign. A logout token has no such escape: it "MUST be signed"
+    /// (Back-Channel Logout 1.0 Section 2.4), and validation is told both what to refuse and
+    /// what to expect - "an alg with the value none MUST NOT be used for Logout Tokens", while
+    /// the value "SHOULD be the default of RS256" (Section 2.6). So an inherited "none" becomes
+    /// RS256, the exact value Section 2.6 names, instead of being honored into a logout order
+    /// no receiver could verify.
+    /// </remarks>
     private static string ResolveSigningAlgorithm(ClientInfo clientInfo)
-        => (clientInfo.LogoutTokenSignedResponseAlgorithm ?? clientInfo.IdentityTokenSignedResponseAlgorithm) switch
+        => (clientInfo.LogoutTokenSignedResponseAlgorithm ??
+            clientInfo.IdentityTokenSignedResponseAlgorithm) switch
         {
             SigningAlgorithms.None => SigningAlgorithms.RS256,
             var algorithm => algorithm,
