@@ -66,6 +66,12 @@ public sealed class SecurityEventTokenValidationPipelineBuilder
     public IReadOnlyList<string> InsecureAllowances => _insecureAllowances;
 
     /// <summary>
+    /// The composed step types, in pipeline order - what dependency injection reads to know which
+    /// types <see cref="Build"/> will ask its factory for.
+    /// </summary>
+    public IReadOnlyList<Type> StepTypes => _steps;
+
+    /// <summary>
     /// Starts from the default receiver profile.
     /// </summary>
     public SecurityEventTokenValidationPipelineBuilder UseDefaultPipeline()
