@@ -28,22 +28,14 @@ namespace Abblix.SecurityEvents.Subjects;
 /// Identifies a subject by an account at a service provider, expressed as an "acct" URI
 /// (RFC 9493 Section 3.2.1, RFC 7565).
 /// </summary>
+/// <param name="uri">
+/// The "acct" URI of the subject's account. REQUIRED, and must be neither null nor empty.
+/// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class AccountSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class AccountSubject(string uri)
+    : SubjectIdentifier(SubjectFormats.Account)
 {
-    /// <summary>
-    /// Creates an Account Subject Identifier.
-    /// </summary>
-    /// <param name="uri">
-    /// The "acct" URI of the subject's account. REQUIRED, and must be neither null nor empty.
-    /// </param>
-    [JsonConstructor]
-    public AccountSubject(string uri)
-        : base(SubjectFormats.Account)
-    {
-        Uri = RequirePresent(uri, SubjectMemberNames.Uri);
-    }
-
     /// <summary>
     /// The "acct" URI identifying the account (RFC 7565).
     /// </summary>
@@ -57,5 +49,5 @@ public sealed class AccountSubject : SubjectIdentifier
     /// by the RFC either, so two spellings of one account remain two distinct identifiers here.
     /// </remarks>
     [JsonPropertyName(SubjectMemberNames.Uri)]
-    public string Uri { get; }
+    public string Uri { get; } = RequirePresent(uri, SubjectMemberNames.Uri);
 }

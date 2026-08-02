@@ -37,21 +37,9 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// the largest possible parser surface before any authenticity check. The ordering contract makes
 /// a pipeline composed that way fail its first run.
 /// </remarks>
-public sealed class PayloadDeserializationStep : ISecurityEventTokenValidationStep
+/// <param name="registry">The event-type registrations of this receiver.</param>
+public sealed class PayloadDeserializationStep(EventTypeRegistry registry) : ISecurityEventTokenValidationStep
 {
-    private readonly EventTypeRegistry _registry;
-
-    /// <summary>
-    /// Creates the step.
-    /// </summary>
-    /// <param name="registry">The event-type registrations of this receiver.</param>
-    public PayloadDeserializationStep(EventTypeRegistry registry)
-    {
-        ArgumentNullException.ThrowIfNull(registry);
-
-        _registry = registry;
-    }
-
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
         SecurityEventTokenValidationContext context,
@@ -85,7 +73,7 @@ public sealed class PayloadDeserializationStep : ISecurityEventTokenValidationSt
 
             try
             {
-                payloads.Add(eventType, _registry.Deserialize(eventType, payloadObject));
+                payloads.Add(eventType, registry.Deserialize(eventType, payloadObject));
             }
             catch (JsonException exception)
             {

@@ -28,26 +28,18 @@ namespace Abblix.SecurityEvents.Subjects;
 /// Identifies a subject by a string that asserts nothing beyond being its identifier, such as a
 /// UUID or a surrogate key for a database record (RFC 9493 Section 3.2.4).
 /// </summary>
+/// <param name="id">
+/// The opaque identifier of the subject. REQUIRED, and must be neither null nor empty.
+/// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class OpaqueSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class OpaqueSubject(string id)
+    : SubjectIdentifier(SubjectFormats.Opaque)
 {
-    /// <summary>
-    /// Creates an Opaque Subject Identifier.
-    /// </summary>
-    /// <param name="id">
-    /// The opaque identifier of the subject. REQUIRED, and must be neither null nor empty.
-    /// </param>
-    [JsonConstructor]
-    public OpaqueSubject(string id)
-        : base(SubjectFormats.Opaque)
-    {
-        Id = RequirePresent(id, SubjectMemberNames.Id);
-    }
-
     /// <summary>
     /// The opaque identifier. It carries no semantics, so it is compared as an exact string and
     /// never interpreted, normalised or parsed.
     /// </summary>
     [JsonPropertyName(SubjectMemberNames.Id)]
-    public string Id { get; }
+    public string Id { get; } = RequirePresent(id, SubjectMemberNames.Id);
 }

@@ -46,8 +46,15 @@ namespace Abblix.SecurityEvents.Subjects;
 /// itself, or anything else the transmitter and receiver both understand.
 /// </para>
 /// </remarks>
+/// <param name="format">
+/// The Identifier Format's name. A subtype passes its format as a constant, which is what makes
+/// the format a property of the TYPE: it is set exactly once, here, so no subtype can carry an
+/// attribute-decorated override of its own. An overridable property was tried first and is a
+/// trap - the serializer does not inherit attributes across an override, so the base declaration
+/// and the override serialize as two different members, "format" and "Format", in one document.
+/// </param>
 [JsonConverter(typeof(SubjectIdentifierJsonConverter))]
-public abstract class SubjectIdentifier
+public abstract class SubjectIdentifier(string format)
 {
     /// <summary>
     /// Places the "format" member ahead of the format-specific members. RFC 9493 does not order
@@ -57,35 +64,22 @@ public abstract class SubjectIdentifier
     private const int FormatOrder = -1;
 
     /// <summary>
-    /// Binds this identifier to its Identifier Format.
-    /// </summary>
-    /// <param name="format">
-    /// The Identifier Format's name. A subtype passes its format as a constant, which is what
-    /// makes the format a property of the TYPE: it is set exactly once, here, so no subtype can
-    /// carry an attribute-decorated override of its own. An overridable property was tried first
-    /// and is a trap - the serializer does not inherit attributes across an override, so the base
-    /// declaration and the override serialize as two different members, "format" and "Format",
-    /// in one document.</param>
-    protected SubjectIdentifier(string format)
-    {
-        // The format member has its own normative sentence, distinct from the per-format member
-        // rules RequirePresent speaks for: "A Subject Identifier ... MUST contain a 'format'
-        // member whose value is the name of that Identifier Format" (RFC 9493 Section 3).
-        Format = !string.IsNullOrEmpty(format)
-            ? format
-            : throw new ArgumentException(
-                $"A Subject Identifier must carry a '{SubjectMemberNames.Format}' member naming its "
-                + "Identifier Format (RFC 9493 Section 3).",
-                nameof(format));
-    }
-
-    /// <summary>
     /// The name of the Identifier Format this Subject Identifier conforms to (RFC 9493 Section 3).
     /// Values for the formats this library ships are listed in <see cref="SubjectFormats"/>.
     /// </summary>
+    /// <remarks>
+    /// The format member has its own normative sentence, distinct from the per-format member
+    /// rules <see cref="RequirePresent"/> speaks for: "A Subject Identifier ... MUST contain a
+    /// 'format' member whose value is the name of that Identifier Format" (RFC 9493 Section 3).
+    /// </remarks>
     [JsonPropertyName(SubjectMemberNames.Format)]
     [JsonPropertyOrder(FormatOrder)]
-    public string Format { get; }
+    public string Format { get; } = !string.IsNullOrEmpty(format)
+        ? format
+        : throw new ArgumentException(
+            $"A Subject Identifier must carry a '{SubjectMemberNames.Format}' member naming its "
+            + "Identifier Format (RFC 9493 Section 3).",
+            nameof(format));
 
     /// <summary>
     /// Returns <paramref name="value"/> when the "REQUIRED and MUST NOT be null or empty"

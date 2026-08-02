@@ -27,22 +27,14 @@ namespace Abblix.SecurityEvents.Subjects;
 /// <summary>
 /// Identifies a subject by a telephone number (RFC 9493 Section 3.2.5).
 /// </summary>
+/// <param name="phoneNumber">
+/// The subject's full telephone number including its international dialling prefix, formatted
+/// according to E.164. REQUIRED, and must be neither null nor empty.</param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class PhoneNumberSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class PhoneNumberSubject(string phoneNumber)
+    : SubjectIdentifier(SubjectFormats.PhoneNumber)
 {
-    /// <summary>
-    /// Creates a Phone Number Subject Identifier.
-    /// </summary>
-    /// <param name="phoneNumber">
-    /// The subject's full telephone number including its international dialling prefix, formatted
-    /// according to E.164. REQUIRED, and must be neither null nor empty.</param>
-    [JsonConstructor]
-    public PhoneNumberSubject(string phoneNumber)
-        : base(SubjectFormats.PhoneNumber)
-    {
-        PhoneNumber = RequirePresent(phoneNumber, SubjectMemberNames.PhoneNumber);
-    }
-
     /// <summary>
     /// The telephone number, as received.
     /// </summary>
@@ -54,5 +46,5 @@ public sealed class PhoneNumberSubject : SubjectIdentifier
     /// <see cref="PhoneNumberCanonicalization"/> when values from different senders must meet.
     /// </remarks>
     [JsonPropertyName(SubjectMemberNames.PhoneNumber)]
-    public string PhoneNumber { get; }
+    public string PhoneNumber { get; } = RequirePresent(phoneNumber, SubjectMemberNames.PhoneNumber);
 }

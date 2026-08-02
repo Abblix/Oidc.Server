@@ -32,26 +32,18 @@ namespace Abblix.SecurityEvents.Subjects;
 /// the most specific one available: an email address belongs in <see cref="EmailSubject"/> rather
 /// than in a "mailto:" URI here, because the format itself conveys meaning to the receiver.
 /// </remarks>
+/// <param name="uri">
+/// A URI for the subject. REQUIRED, and must be neither null nor empty.
+/// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class UriSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class UriSubject(string uri)
+    : SubjectIdentifier(SubjectFormats.Uri)
 {
-    /// <summary>
-    /// Creates a URI Subject Identifier.
-    /// </summary>
-    /// <param name="uri">
-    /// A URI for the subject. REQUIRED, and must be neither null nor empty.
-    /// </param>
-    [JsonConstructor]
-    public UriSubject(string uri)
-        : base(SubjectFormats.Uri)
-    {
-        Uri = RequirePresent(uri, SubjectMemberNames.Uri);
-    }
-
     /// <summary>
     /// The URI identifying the subject. RFC 9493 Section 3.2.7 makes no promise about its content,
     /// scheme or reachability, so it is neither dereferenced nor required to name a live resource.
     /// </summary>
     [JsonPropertyName(SubjectMemberNames.Uri)]
-    public string Uri { get; }
+    public string Uri { get; } = RequirePresent(uri, SubjectMemberNames.Uri);
 }

@@ -27,23 +27,15 @@ namespace Abblix.SecurityEvents.Subjects;
 /// <summary>
 /// Identifies a subject by a Decentralized Identifier URL (RFC 9493 Section 3.2.6).
 /// </summary>
+/// <param name="url">
+/// A DID URL for the subject. RFC 9493 Section 3.2.6 permits a bare DID as well as a DID URL
+/// carrying path, query or fragment components. REQUIRED, and must be neither null nor empty.
+/// </param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class DidSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class DidSubject(string url)
+    : SubjectIdentifier(SubjectFormats.Did)
 {
-    /// <summary>
-    /// Creates a Decentralized Identifier Subject Identifier.
-    /// </summary>
-    /// <param name="url">
-    /// A DID URL for the subject. RFC 9493 Section 3.2.6 permits a bare DID as well as a DID URL
-    /// carrying path, query or fragment components. REQUIRED, and must be neither null nor empty.
-    /// </param>
-    [JsonConstructor]
-    public DidSubject(string url)
-        : base(SubjectFormats.Did)
-    {
-        Url = RequirePresent(url, SubjectMemberNames.Url);
-    }
-
     /// <summary>
     /// The DID URL identifying the subject.
     /// </summary>
@@ -53,5 +45,5 @@ public sealed class DidSubject : SubjectIdentifier
     /// reject valid DIDs from methods this library has never heard of.
     /// </remarks>
     [JsonPropertyName(SubjectMemberNames.Url)]
-    public string Url { get; }
+    public string Url { get; } = RequirePresent(url, SubjectMemberNames.Url);
 }

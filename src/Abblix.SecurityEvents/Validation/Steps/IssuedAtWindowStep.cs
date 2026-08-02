@@ -36,21 +36,9 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// caution RFC 8417 Section 5.3 raises about treating timestamps as exact across distributed
 /// systems.
 /// </remarks>
-public sealed class IssuedAtWindowStep : ISecurityEventTokenValidationStep
+/// <param name="clock">The receiver's clock; a test hands in a fake to pin the window.</param>
+public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventTokenValidationStep
 {
-    private readonly TimeProvider _clock;
-
-    /// <summary>
-    /// Creates the step.
-    /// </summary>
-    /// <param name="clock">The receiver's clock; a test hands in a fake to pin the window.</param>
-    public IssuedAtWindowStep(TimeProvider clock)
-    {
-        ArgumentNullException.ThrowIfNull(clock);
-
-        _clock = clock;
-    }
-
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
         SecurityEventTokenValidationContext context,
@@ -58,7 +46,7 @@ public sealed class IssuedAtWindowStep : ISecurityEventTokenValidationStep
     {
         context.Require(SecurityEventTokenValidationState.SignatureVerified);
 
-        var now = _clock.GetUtcNow();
+        var now = clock.GetUtcNow();
         var tolerance = context.Options.IssuedAtTolerance;
 
         var description = context.Token!.IssuedAt switch

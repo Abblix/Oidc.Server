@@ -34,21 +34,11 @@ namespace Abblix.SecurityEvents.Events;
 /// consumer can log it, route it, or ignore it deliberately - each of which requires having
 /// received it.
 /// </remarks>
-public sealed class UnknownEventPayload : IEventPayload
+/// <param name="json">The payload exactly as the event statement carried it.</param>
+public sealed class UnknownEventPayload(JsonObject json) : IEventPayload
 {
-    /// <summary>
-    /// Creates the passthrough payload.
-    /// </summary>
-    /// <param name="json">The payload exactly as the event statement carried it.</param>
-    public UnknownEventPayload(JsonObject json)
-    {
-        ArgumentNullException.ThrowIfNull(json);
-
-        Json = json;
-    }
-
     /// <summary>
     /// The payload exactly as the event statement carried it.
     /// </summary>
-    public JsonObject Json { get; }
+    public JsonObject Json { get; } = json;
 }

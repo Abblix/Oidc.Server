@@ -37,32 +37,24 @@ namespace Abblix.SecurityEvents.Validation;
 /// trusted token cannot accidentally read the untrusted one: they are different properties, and
 /// the trusted one is null until trust exists.
 /// </remarks>
-public sealed class SecurityEventTokenValidationContext
+/// <param name="compactToken">The token as received, in compact serialization.</param>
+/// <param name="options">What this run expects of the token.</param>
+public sealed class SecurityEventTokenValidationContext(
+    string compactToken,
+    SecurityEventTokenValidationOptions options)
 {
-    /// <summary>
-    /// Creates the context for one validation run.
-    /// </summary>
-    /// <param name="compactToken">The token as received, in compact serialization.</param>
-    /// <param name="options">What this run expects of the token.</param>
-    public SecurityEventTokenValidationContext(string compactToken, SecurityEventTokenValidationOptions options)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(compactToken);
-        ArgumentNullException.ThrowIfNull(options);
-
-        CompactToken = compactToken;
-        Options = options;
-    }
-
     /// <summary>
     /// The token as received. Steps performing cryptography read this, never a re-serialization
     /// of parsed parts: the signature covers these exact bytes.
     /// </summary>
-    public string CompactToken { get; }
+    public string CompactToken { get; } = !string.IsNullOrEmpty(compactToken)
+        ? compactToken
+        : throw new ArgumentException("A validation run needs a token to run on.", nameof(compactToken));
 
     /// <summary>
     /// What this run expects of the token.
     /// </summary>
-    public SecurityEventTokenValidationOptions Options { get; }
+    public SecurityEventTokenValidationOptions Options { get; } = options;
 
     /// <summary>
     /// The facts established so far.

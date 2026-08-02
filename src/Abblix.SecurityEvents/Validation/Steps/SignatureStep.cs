@@ -35,21 +35,9 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// bytes received - RFC 8417 Section 5.1: unless integrity is ensured by other means, a SET
 /// "MUST be signed using JWS by an issuer that is trusted to do so for the use case".
 /// </remarks>
-public sealed class SignatureStep : ISecurityCriticalValidationStep
+/// <param name="verifier">The bridge to the host's cryptography.</param>
+public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecurityCriticalValidationStep
 {
-    private readonly ISecurityEventTokenVerifier _verifier;
-
-    /// <summary>
-    /// Creates the step.
-    /// </summary>
-    /// <param name="verifier">The bridge to the host's cryptography.</param>
-    public SignatureStep(ISecurityEventTokenVerifier verifier)
-    {
-        ArgumentNullException.ThrowIfNull(verifier);
-
-        _verifier = verifier;
-    }
-
     /// <inheritdoc />
     public async ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
         SecurityEventTokenValidationContext context,
@@ -57,7 +45,7 @@ public sealed class SignatureStep : ISecurityCriticalValidationStep
     {
         context.Require(SecurityEventTokenValidationState.Parsed);
 
-        var result = await _verifier.VerifyAsync(context.CompactToken, cancellationToken);
+        var result = await verifier.VerifyAsync(context.CompactToken, cancellationToken);
 
         if (!result.TryGetSuccess(out var token))
         {

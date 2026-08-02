@@ -37,7 +37,8 @@ namespace Abblix.SecurityEvents;
 /// validated. <see cref="SecurityEventTokenBuilder"/> produces conformant instances by
 /// construction.
 /// </remarks>
-public sealed class SecurityEventToken
+/// <param name="token">The token to view. Its claims are read in place, never copied.</param>
+public sealed class SecurityEventToken(JsonWebToken token)
 {
     /// <summary>
     /// The "typ" header value declaring a JWT to be a SET. RFC 8417 Section 2.3 registers the
@@ -47,21 +48,10 @@ public sealed class SecurityEventToken
     public const string TokenType = "secevent+jwt";
 
     /// <summary>
-    /// Creates a typed SET view over a JWT.
-    /// </summary>
-    /// <param name="token">The token to view. Its claims are read in place, never copied.</param>
-    public SecurityEventToken(JsonWebToken token)
-    {
-        ArgumentNullException.ThrowIfNull(token);
-
-        Token = token;
-    }
-
-    /// <summary>
     /// The underlying JWT, for everything the SET profile does not name: header parameters,
     /// profile-specific envelope claims, serialization.
     /// </summary>
-    public JsonWebToken Token { get; }
+    public JsonWebToken Token { get; } = token;
 
     /// <summary>
     /// The "iss" claim: the service provider publishing the SET. REQUIRED (RFC 8417 Section 2.2),

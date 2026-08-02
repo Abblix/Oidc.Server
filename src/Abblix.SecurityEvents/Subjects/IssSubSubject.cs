@@ -34,35 +34,26 @@ namespace Abblix.SecurityEvents.Subjects;
 /// (RFC 9493 Section 4.2): that is how a party names a subject by an identity its counterparty
 /// already understands rather than by its own local one.
 /// </remarks>
+/// <param name="issuer">
+/// The identity issuer, following the format of the JWT "iss" claim (RFC 7519).
+/// REQUIRED, and must be neither null nor empty.</param>
+/// <param name="subject">
+/// The subject at that issuer, following the format of the JWT "sub" claim (RFC 7519).
+/// REQUIRED, and must be neither null nor empty.</param>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed class IssSubSubject : SubjectIdentifier
+[method: JsonConstructor]
+public sealed class IssSubSubject(string issuer, string subject)
+    : SubjectIdentifier(SubjectFormats.IssSub)
 {
-    /// <summary>
-    /// Creates an Issuer and Subject Identifier.
-    /// </summary>
-    /// <param name="issuer">
-    /// The identity issuer, following the format of the JWT "iss" claim (RFC 7519).
-    /// REQUIRED, and must be neither null nor empty.</param>
-    /// <param name="subject">
-    /// The subject at that issuer, following the format of the JWT "sub" claim (RFC 7519).
-    /// REQUIRED, and must be neither null nor empty.</param>
-    [JsonConstructor]
-    public IssSubSubject(string issuer, string subject)
-        : base(SubjectFormats.IssSub)
-    {
-        Issuer = RequirePresent(issuer, SubjectMemberNames.Issuer);
-        Subject = RequirePresent(subject, SubjectMemberNames.Subject);
-    }
-
     /// <summary>
     /// The issuer of the identity, in the format of the JWT "iss" claim (RFC 7519 Section 4.1.1).
     /// </summary>
     [JsonPropertyName(SubjectMemberNames.Issuer)]
-    public string Issuer { get; }
+    public string Issuer { get; } = RequirePresent(issuer, SubjectMemberNames.Issuer);
 
     /// <summary>
     /// The subject at that issuer, in the format of the JWT "sub" claim (RFC 7519 Section 4.1.2).
     /// </summary>
     [JsonPropertyName(SubjectMemberNames.Subject)]
-    public string Subject { get; }
+    public string Subject { get; } = RequirePresent(subject, SubjectMemberNames.Subject);
 }

@@ -37,7 +37,10 @@ namespace Abblix.SecurityEvents;
 /// transmitter may keep one builder per event shape and vary a claim between builds without the
 /// tokens sharing state.
 /// </remarks>
-public sealed class SecurityEventTokenBuilder
+/// <param name="clock">
+/// Supplies "iat" when <see cref="WithIssuedAt"/> is not called. Defaults to the system clock; a
+/// test hands in a fake to build tokens at a chosen instant.</param>
+public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
 {
     /// <summary>
     /// The envelope claims a dedicated builder method manages, kept so <see cref="WithClaim"/> can
@@ -57,7 +60,7 @@ public sealed class SecurityEventTokenBuilder
             [IanaClaimTypes.Toe] = nameof(WithTimeOfEvent),
         };
 
-    private readonly TimeProvider _clock;
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly List<string> _audiences = [];
     private readonly EventsCollection _events = new();
     private readonly List<KeyValuePair<string, JsonNode?>> _extraClaims = [];
@@ -68,17 +71,6 @@ public sealed class SecurityEventTokenBuilder
     private string? _transactionId;
     private DateTimeOffset? _issuedAt;
     private DateTimeOffset? _timeOfEvent;
-
-    /// <summary>
-    /// Creates a builder.
-    /// </summary>
-    /// <param name="clock">
-    /// Supplies "iat" when <see cref="WithIssuedAt"/> is not called. Defaults to the system clock;
-    /// a test hands in a fake to build tokens at a chosen instant.</param>
-    public SecurityEventTokenBuilder(TimeProvider? clock = null)
-    {
-        _clock = clock ?? TimeProvider.System;
-    }
 
     /// <summary>
     /// Sets the "iss" claim: the service provider publishing the SET. REQUIRED

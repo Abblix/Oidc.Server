@@ -35,7 +35,12 @@ namespace Abblix.SecurityEvents.Events;
 /// dictionary package - the CAEP one, for instance - is nothing but a set of registrations over
 /// this mechanism.
 /// </remarks>
-public sealed class EventTypeRegistry
+/// <param name="serializerOptions">
+/// Options for payload deserialization; null takes the serializer's defaults. Property-name
+/// matching stays exact either way - wire names on payload types belong in
+/// JsonPropertyName attributes, where the profiling specification's spelling is
+/// visible next to the member it names.</param>
+public sealed class EventTypeRegistry(JsonSerializerOptions? serializerOptions = null)
 {
     private readonly Dictionary<string, Type> _payloadTypes = new(StringComparer.Ordinal);
 
@@ -43,20 +48,7 @@ public sealed class EventTypeRegistry
     /// The serializer options payloads are read with. Owned by the registry so every payload in a
     /// process is read by the same rules, whichever step or consumer asks.
     /// </summary>
-    private readonly JsonSerializerOptions _serializerOptions;
-
-    /// <summary>
-    /// Creates a registry.
-    /// </summary>
-    /// <param name="serializerOptions">
-    /// Options for payload deserialization; null takes the serializer's defaults. Property-name
-    /// matching stays exact either way - wire names on payload types belong in
-    /// JsonPropertyName attributes, where the profiling specification's spelling is
-    /// visible next to the member it names.</param>
-    public EventTypeRegistry(JsonSerializerOptions? serializerOptions = null)
-    {
-        _serializerOptions = serializerOptions ?? JsonSerializerOptions.Default;
-    }
+    private readonly JsonSerializerOptions _serializerOptions = serializerOptions ?? JsonSerializerOptions.Default;
 
     /// <summary>
     /// Registers a payload type for an event identifier.

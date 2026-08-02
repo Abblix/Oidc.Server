@@ -29,30 +29,19 @@ namespace Abblix.SecurityEvents.Validation;
 /// whose whole behaviour is its step list, which is what lets a consumer profile change one check
 /// without forking a monolith.
 /// </summary>
-public sealed class SecurityEventTokenValidator
+/// <param name="steps">
+/// The pipeline, typically composed by <see cref="SecurityEventTokenValidationPipelineBuilder"/>.
+/// </param>
+public sealed class SecurityEventTokenValidator(IEnumerable<ISecurityEventTokenValidationStep> steps)
 {
-    private readonly IReadOnlyList<ISecurityEventTokenValidationStep> _steps;
-
-    /// <summary>
-    /// Creates a validator over the given steps, in the given order.
-    /// </summary>
-    /// <param name="steps">
-    /// The pipeline, typically composed by <see cref="SecurityEventTokenValidationPipelineBuilder"/>.
-    /// </param>
-    public SecurityEventTokenValidator(IEnumerable<ISecurityEventTokenValidationStep> steps)
+    private readonly IReadOnlyList<ISecurityEventTokenValidationStep> _steps = steps.ToArray() switch
     {
-        ArgumentNullException.ThrowIfNull(steps);
-
-        _steps = steps.ToArray();
-
-        if (_steps.Count == 0)
-        {
-            throw new ArgumentException(
-                "A validator with no steps would accept every token; an empty pipeline is a composition "
-                + "bug, not a permissive profile.",
-                nameof(steps));
-        }
-    }
+        { Length: 0 } => throw new ArgumentException(
+            "A validator with no steps would accept every token; an empty pipeline is a composition "
+            + "bug, not a permissive profile.",
+            nameof(steps)),
+        var materialized => materialized,
+    };
 
     /// <summary>
     /// Validates a token.

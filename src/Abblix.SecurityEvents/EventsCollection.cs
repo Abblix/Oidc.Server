@@ -37,7 +37,9 @@ namespace Abblix.SecurityEvents;
 /// about meaning, so no code can check it - it is the caller's to honour when adding a second
 /// statement.
 /// </remarks>
-public sealed class EventsCollection : IReadOnlyCollection<KeyValuePair<string, JsonObject>>
+/// <param name="json">
+/// The JSON object holding the event statements, read and written in place, never copied.</param>
+public sealed class EventsCollection(JsonObject json) : IReadOnlyCollection<KeyValuePair<string, JsonObject>>
 {
     /// <summary>
     /// Creates an empty collection, to be filled through <see cref="Add"/>.
@@ -48,21 +50,9 @@ public sealed class EventsCollection : IReadOnlyCollection<KeyValuePair<string, 
     }
 
     /// <summary>
-    /// Creates a view over an existing "events" claim value. The object is read and written in
-    /// place, never copied.
-    /// </summary>
-    /// <param name="json">The JSON object holding the event statements.</param>
-    public EventsCollection(JsonObject json)
-    {
-        ArgumentNullException.ThrowIfNull(json);
-
-        Json = json;
-    }
-
-    /// <summary>
     /// The underlying JSON object, in the exact shape the "events" claim carries on the wire.
     /// </summary>
-    public JsonObject Json { get; }
+    public JsonObject Json { get; } = json;
 
     /// <summary>
     /// The number of event statements. RFC 8417 Section 2 requires at least one in a valid SET;
