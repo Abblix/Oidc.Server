@@ -20,15 +20,14 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.SecurityEvents;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -82,45 +81,48 @@ public partial class LogoutTokenService(
 
         var issuedAt = clock.GetUtcNow();
 
-        var logoutToken = new JsonWebToken
+        // The logout token is a Security Event Token, so the SET envelope comes from the shared
+        // builder and its rules hold by construction: the required claims cannot be omitted and
+        // the logout order is one event statement carrying the empty object. The 'nonce' claim,
+        // which Back-Channel Logout PROHIBITS
+        // (https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken), stays out
+        // because nothing here writes it - the builder itself refuses only 'exp' and the claims
+        // its own methods manage, so the prohibition is this method's to keep, not the builder's.
+        var builder = new SecurityEventTokenBuilder()
+            .WithIssuer(logoutContext.Issuer)
+            .WithAudience(clientInfo.ClientId)
+            .WithJwtId(tokenIdGenerator.GenerateTokenId())
+            .WithIssuedAt(issuedAt)
+            .WithEvent(LogoutTokenEvents.BackChannelLogout);
+
+        // Either identifier may be absent - the guard above requires one of the two - and an
+        // absent one stays off the wire entirely rather than travelling as an empty value.
+        if (!string.IsNullOrEmpty(subjectId))
         {
-            Header =
-            {
-                Type = JwtTypes.LogoutToken,
-                // Back-Channel Logout §2.4: the logout token is signed in the same manner as the
-                // ID Token, so the client's ID Token signing algorithm is the default; a host may
-                // diverge per client via the explicit LogoutTokenSignedResponseAlgorithm override.
-                // The previous hardcoded RS256 produced tokens an ES256/PS256-registered client
-                // would reject on signature-algorithm verification. The same §2.4 also demands
-                // "A Logout Token MUST be signed" and that none "MUST NOT be used": a client whose
-                // response types return no ID Token from the authorization endpoint may legally
-                // register id_token_signed_response_alg=none, so that value cannot be inherited
-                // here - fall back to RS256, which every OIDC client is required to support.
-                Algorithm = ResolveSigningAlgorithm(clientInfo),
-            },
-            Payload =
-            {
-                // Attention: according to the https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken
-                // the nonce is PROHIBITED in Logout tokens.
+            builder.WithSubject(subjectId);
+        }
 
-                JwtId = tokenIdGenerator.GenerateTokenId(),
+        if (!string.IsNullOrEmpty(logoutContext.SessionId))
+        {
+            builder.WithClaim(IanaClaimTypes.Sid, logoutContext.SessionId);
+        }
 
-                IssuedAt = issuedAt,
-                NotBefore = issuedAt,
-                ExpiresAt = issuedAt + logoutOptions.LogoutTokenExpiresIn,
+        var logoutToken = builder.Build().Token;
 
-                Issuer = logoutContext.Issuer,
-                Audiences = [clientInfo.ClientId],
+        // Where Back-Channel Logout deliberately departs from the SET default profile, each
+        // departure is one visible line on the open token model, which the builder refuses to
+        // write by design: §2.4 registers the token's own type, and REQUIRES an expiration -
+        // for a logout order, expiry is what bounds how long a lost token still logs somebody
+        // out - where a generic SET must carry none.
+        logoutToken.Header.Type = JsonWebTokenTypes.LogoutToken;
+        logoutToken.Payload.NotBefore = issuedAt;
+        logoutToken.Payload.ExpiresAt = issuedAt + logoutOptions.LogoutTokenExpiresIn;
 
-                Subject = subjectId,
-                SessionId = logoutContext.SessionId,
-
-                [JwtClaimTypes.Events] = new JsonObject
-                {
-                    { "http://schemas.openid.net/event/backchannel-logout", new JsonObject() },
-                }
-            },
-        };
+        // Back-Channel Logout 1.0 Section 2.4 signs the logout token with the same keys as the
+        // ID Token, so the algorithm follows the client's ID Token registration unless the host
+        // set the explicit per-client override; ResolveSigningAlgorithm owns the one value that
+        // cannot be inherited.
+        logoutToken.Header.Algorithm = ResolveSigningAlgorithm(clientInfo);
 
         LogTokenPrepared(logoutToken);
 
@@ -132,8 +134,26 @@ public partial class LogoutTokenService(
         return new EncodedJsonWebToken(logoutToken, jwt);
     }
 
+    /// <summary>
+    /// Picks the logout token's signature algorithm: the host's explicit per-client override
+    /// wins, otherwise the client's registered ID Token algorithm - Back-Channel Logout 1.0
+    /// Section 2.4 signs a logout token with the same keys as ID Tokens, so the ID Token
+    /// registration is the natural source of the algorithm too.
+    /// </summary>
+    /// <remarks>
+    /// The "none" branch is the one value inheritance must not carry across. A client whose
+    /// response types return no ID Token from the authorization endpoint may legally register
+    /// <c>id_token_signed_response_alg=none</c> (Dynamic Client Registration 1.0 Section 2) -
+    /// there is simply nothing to sign. A logout token has no such escape: it "MUST be signed"
+    /// (Back-Channel Logout 1.0 Section 2.4), and validation is told both what to refuse and
+    /// what to expect - "an alg with the value none MUST NOT be used for Logout Tokens", while
+    /// the value "SHOULD be the default of RS256" (Section 2.6). So an inherited "none" becomes
+    /// RS256, the exact value Section 2.6 names, instead of being honored into a logout order
+    /// no receiver could verify.
+    /// </remarks>
     private static string ResolveSigningAlgorithm(ClientInfo clientInfo)
-        => (clientInfo.LogoutTokenSignedResponseAlgorithm ?? clientInfo.IdentityTokenSignedResponseAlgorithm) switch
+        => (clientInfo.LogoutTokenSignedResponseAlgorithm ??
+            clientInfo.IdentityTokenSignedResponseAlgorithm) switch
         {
             SigningAlgorithms.None => SigningAlgorithms.RS256,
             var algorithm => algorithm,

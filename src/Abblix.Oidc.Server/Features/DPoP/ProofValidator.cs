@@ -58,7 +58,7 @@ internal sealed class ProofValidator(
 {
     private static readonly IReadOnlySet<string> ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal)
     {
-        JwtTypes.DPoPProof,
+        JsonWebTokenTypes.DPoPProof,
     };
 
     /// <inheritdoc/>

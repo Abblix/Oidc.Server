@@ -6,8 +6,9 @@
   </PropertyGroup>
 
   <!-- Treat all compiler and analyzer warnings as errors so the build stays clean and regressions
-       surface at build time instead of in review. Test projects keep MTP0001 / xUnit1051 as plain
-       warnings via the IsTestProject NoWarn block below. -->
+       surface at build time instead of in review. This binds test projects too: the MTP0001 /
+       xUnit1051 NoWarn carve-out they once needed is gone, because the suites now satisfy both
+       rules outright. -->
   <PropertyGroup>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>

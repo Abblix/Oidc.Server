@@ -120,7 +120,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JwtTypes.AccessToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.AccessToken, capturedToken!.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 

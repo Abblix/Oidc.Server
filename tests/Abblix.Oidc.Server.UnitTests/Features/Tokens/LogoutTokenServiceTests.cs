@@ -107,7 +107,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JwtTypes.LogoutToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken!.Header.Type);
         // The default ClientInfo registers RS256 for ID Token signing, and §2.4 signs the logout
         // token in the same manner as the ID Token.
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
@@ -407,7 +407,7 @@ public class LogoutTokenServiceTests
 
         var events = capturedToken.Payload.Json[JwtClaimTypes.Events] as JsonObject;
         Assert.NotNull(events);
-        Assert.True(events!.ContainsKey("http://schemas.openid.net/event/backchannel-logout"));
+        Assert.True(events!.ContainsKey(LogoutTokenEvents.BackChannelLogout));
     }
 
     /// <summary>

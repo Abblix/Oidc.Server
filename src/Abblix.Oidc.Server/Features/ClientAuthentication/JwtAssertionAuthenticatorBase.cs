@@ -71,7 +71,6 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         }
 
         var validationResult = await ValidateJwtAsync(request.ClientAssertion);
-
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
@@ -126,7 +125,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // itself some other type this class names, which is the replay RFC 8725 §3.11 describes. The client
         // signs this one itself, so the types within its reach are not only the ones this server issued.
         var tokenType = token.Header.Type;
-        if (!JwtTypes.IsPermitted(tokenType, JwtTypes.ClientAuthentication))
+        if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
         {
             LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
             return null;
@@ -137,7 +136,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // assertion without it: single-use replay protection is impossible without a unique id,
         // and accepting it would leave the assertion replayable within its expiry window (the
         // replay cache below keys off jti).
-        if (token.Payload.JwtId is not { } jwtId)
+        if (token is not { Payload.JwtId: { } jwtId })
         {
             LogMissingJti(clientInfo.ClientId);
             return null;
@@ -147,7 +146,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.
-        if (token.Payload.ExpiresAt is not { } expiresAt)
+        if (token is not { Payload.ExpiresAt: { } expiresAt })
         {
             LogMissingExpiration(clientInfo.ClientId);
             return null;

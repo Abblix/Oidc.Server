@@ -126,7 +126,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -162,7 +162,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -232,7 +232,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -277,7 +277,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -348,7 +348,7 @@ public class ClientJwtFormatterTests
         // Act & Assert - id_token uses the id_token encryption metadata (both alg and enc).
         var idToken = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Audiences = [ClientId] },
         };
         await _formatter.FormatAsync(idToken, clientInfo);

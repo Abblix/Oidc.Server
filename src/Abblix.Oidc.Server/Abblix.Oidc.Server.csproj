@@ -79,6 +79,7 @@
     <ItemGroup>
       <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
       <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+      <ProjectReference Include="..\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
     </ItemGroup>
 
     <ItemGroup>

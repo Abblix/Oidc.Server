@@ -100,7 +100,7 @@ public sealed class DPoPProofGenerator : IDisposable
     {
         var header = new JsonObject
         {
-            ["typ"] = JwtTypes.DPoPProof,
+            ["typ"] = JsonWebTokenTypes.DPoPProof,
             ["alg"] = SigningAlgorithms.ES256,
             [JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(PublicJwk),
         };

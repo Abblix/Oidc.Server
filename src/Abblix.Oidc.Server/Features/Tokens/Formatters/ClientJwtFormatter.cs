@@ -63,7 +63,7 @@ public class ClientJwtFormatter(
         // specifications do not define was never sound; callers pass the policy explicitly instead.
         var encryption = token.Header.Type switch
         {
-            JwtTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
+            JsonWebTokenTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
             _ => ClientJwtEncryption.ForUserInfo(clientInfo, options.Value),
         };
 

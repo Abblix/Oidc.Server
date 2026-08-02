@@ -313,7 +313,7 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Type = JwtTypes.AccessToken },
+            Header = { Type = JsonWebTokenTypes.AccessToken },
             Payload = { Audiences = ["test-client"] },
         };
 
