@@ -53,21 +53,32 @@ public static class JwtTypes
 	private const string VendorPrefix = "vnd.abblix.";
 
 	/// <summary>
+	/// Why the S1133 reminder is quiet on the aliases below: they are the migration bridge for the
+	/// surface v2.3 shipped, and their removal is not a "someday" to be reminded of but a scheduled
+	/// part of the next major release.
+	/// </summary>
+	private const string ObsoleteAliasJustification =
+		"Deliberate migration bridge for the v2.3-shipped surface; removal is scheduled for the next major release.";
+
+	/// <summary>
 	/// Standard JSON Web Token type.
 	/// Per RFC 7519 Section 5.1, this is the recommended value for the 'typ' header parameter.
 	/// </summary>
+	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.Jwt)}.")]
 	public const string Jwt = JsonWebTokenTypes.Jwt;
 
 	/// <summary>
 	/// The "AccessToken" JWT type per RFC 9068, fixed by the specification.
 	/// </summary>
+	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.AccessToken)}.")]
 	public const string AccessToken = JsonWebTokenTypes.AccessToken;
 
 	/// <summary>
 	/// The "LogoutToken" JWT type per OpenID Connect Back-Channel Logout, fixed by the specification.
 	/// </summary>
+	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.LogoutToken)}.")]
 	public const string LogoutToken = JsonWebTokenTypes.LogoutToken;
 
@@ -116,12 +127,14 @@ public static class JwtTypes
 	/// <summary>
 	/// The "DPoP proof" JWT type per RFC 9449 §4.2, fixed by the specification.
 	/// </summary>
+	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.DPoPProof)}.")]
 	public const string DPoPProof = JsonWebTokenTypes.DPoPProof;
 
 	/// <summary>
 	/// The "token introspection response" JWT type per RFC 9701 §5, fixed by the specification.
 	/// </summary>
+	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.TokenIntrospection)}.")]
 	public const string TokenIntrospection = JsonWebTokenTypes.TokenIntrospection;
 
