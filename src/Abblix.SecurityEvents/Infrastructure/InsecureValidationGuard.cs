@@ -55,7 +55,7 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         // the host collapsed to a single member never composed, and then the inner validator IS
         // the whole profile.
         var memberTypes = provider
-            .GetKeyedServices<ISecurityEventTokenValidator>(typeof(SecurityEventTokenValidatorComposite))
+            .GetKeyedServices<ISecurityEventTokenValidator>(typeof(CompositeSecurityEventTokenValidator))
             .Select(member => member.GetType())
             .DefaultIfEmpty(inner.GetType())
             .ToHashSet();

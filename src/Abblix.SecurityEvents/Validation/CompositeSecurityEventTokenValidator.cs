@@ -33,26 +33,15 @@ namespace Abblix.SecurityEvents.Validation;
 /// place through the live composition cursor, inserting, replacing or removing steps without this
 /// package changing. The constructor takes the member array that machinery hands to a composite.
 /// </remarks>
-public sealed class SecurityEventTokenValidatorComposite : ISecurityEventTokenValidator
+public sealed class CompositeSecurityEventTokenValidator(ISecurityEventTokenValidator[] steps)
+    : ISecurityEventTokenValidator
 {
-    private readonly ISecurityEventTokenValidator[] _steps;
-
-    /// <summary>
-    /// Creates the composite over its members, in execution order.
-    /// </summary>
-    /// <param name="steps">The steps of the profile.</param>
-    public SecurityEventTokenValidatorComposite(ISecurityEventTokenValidator[] steps)
-    {
-        if (steps is not { Length: > 0 })
-        {
-            throw new ArgumentException(
-                "A pipeline with no steps would accept every token; an empty composition is a "
-                + "configuration bug, not a permissive profile.",
-                nameof(steps));
-        }
-
-        _steps = steps;
-    }
+    private readonly ISecurityEventTokenValidator[] _steps = steps is { Length: > 0 }
+        ? steps
+        : throw new ArgumentException(
+            "A composite with no members would accept every token; an empty composition is a "
+            + "configuration bug, not a permissive profile.",
+            nameof(steps));
 
     /// <inheritdoc />
     public async ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

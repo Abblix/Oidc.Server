@@ -129,7 +129,7 @@ public class SecurityEventTokenValidatorTests
 
         // The default profile assembled by hand, in its required order: these tests judge the
         // steps' behaviour, and the composition machinery has its own suite.
-        return new SecurityEventTokenValidatorComposite(
+        return new CompositeSecurityEventTokenValidator(
         [
             new ParseStep(),
             new TypHeaderStep(),
@@ -408,7 +408,7 @@ public class SecurityEventTokenValidatorTests
     {
         // AudienceStep reads trusted claims, so a pipeline running it before the signature step
         // is unsafe by construction - and says so on run one, not month three.
-        var validator = new SecurityEventTokenValidatorComposite([new ParseStep(), new AudienceStep()]);
+        var validator = new CompositeSecurityEventTokenValidator([new ParseStep(), new AudienceStep()]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -420,7 +420,7 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public async Task PipelineWithoutATokenProducingStep_FailsLoudly_NotWithANull()
     {
-        var validator = new SecurityEventTokenValidatorComposite([new ParseStep()]);
+        var validator = new CompositeSecurityEventTokenValidator([new ParseStep()]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -432,6 +432,6 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public void EmptyPipeline_IsRejectedAtConstruction()
     {
-        Assert.Throws<ArgumentException>(() => new SecurityEventTokenValidatorComposite([]));
+        Assert.Throws<ArgumentException>(() => new CompositeSecurityEventTokenValidator([]));
     }
 }

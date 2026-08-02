@@ -129,7 +129,7 @@ public static class ServiceCollectionExtensions
         // behind the singular contract, and the guard decorates the result so a weakened profile
         // cannot construct without a reasoned acknowledgement - whichever door edited it.
         services.TryAddEnumerable(DefaultPipelineSteps);
-        services.Compose<ISecurityEventTokenValidator, SecurityEventTokenValidatorComposite>();
+        services.Compose<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>();
         services.Decorate<ISecurityEventTokenValidator, InsecureValidationGuard>();
 
         return services;
