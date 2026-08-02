@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -111,6 +112,8 @@ public class SecurityEventTokenRfcFixtureTests
     }
 
     [Fact]
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The RFC 8417 Figure 2 fixture is quoted verbatim; its event identifier is a name compared as a string, not an address.")]
     public void LogoutExample_Figure2_IsRebuiltVerbatim()
     {
         // RFC 8417 Section 2.1.2: the Back-Channel Logout token - an event with no payload

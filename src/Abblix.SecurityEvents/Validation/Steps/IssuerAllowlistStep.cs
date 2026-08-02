@@ -42,7 +42,7 @@ public sealed class IssuerAllowlistStep : ISecurityEventTokenValidationStep
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.Parsed);
+        context.Require(SecurityEventTokenValidationStates.Parsed);
 
         var issuer = context.UnverifiedPayload!.Issuer;
 
@@ -61,7 +61,7 @@ public sealed class IssuerAllowlistStep : ISecurityEventTokenValidationStep
         }
         else
         {
-            context.Establish(SecurityEventTokenValidationState.IssuerAccepted);
+            context.Establish(SecurityEventTokenValidationStates.IssuerAccepted);
             error = null;
         }
 

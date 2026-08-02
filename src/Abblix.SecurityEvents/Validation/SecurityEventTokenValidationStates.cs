@@ -29,7 +29,7 @@ namespace Abblix.SecurityEvents.Validation;
 /// mis-ordered pipeline into a loud first-run failure instead of a silently skipped check.
 /// </summary>
 [Flags]
-public enum SecurityEventTokenValidationState
+public enum SecurityEventTokenValidationStates
 {
     /// <summary>
     /// Nothing established yet: the token is an opaque string.

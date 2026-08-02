@@ -36,7 +36,7 @@ public sealed class AudienceStep : ISecurityEventTokenValidationStep
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.SignatureVerified);
+        context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
         // A missing expectation is a configuration bug, not a token defect: reporting it as a
         // token error would let a receiver run for months rejecting everything - or, with the
@@ -52,7 +52,7 @@ public sealed class AudienceStep : ISecurityEventTokenValidationStep
         SecurityEventTokenValidationError? error;
         if (context.Token!.Audiences.Contains(expected, StringComparer.Ordinal))
         {
-            context.Establish(SecurityEventTokenValidationState.AudienceVerified);
+            context.Establish(SecurityEventTokenValidationStates.AudienceVerified);
             error = null;
         }
         else

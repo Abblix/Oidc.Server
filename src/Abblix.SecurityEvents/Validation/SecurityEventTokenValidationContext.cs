@@ -59,7 +59,7 @@ public sealed class SecurityEventTokenValidationContext(
     /// <summary>
     /// The facts established so far.
     /// </summary>
-    public SecurityEventTokenValidationState State { get; private set; }
+    public SecurityEventTokenValidationStates State { get; private set; }
 
     /// <summary>
     /// The token's header as parsed, before any signature check. Shape, not authorship.
@@ -87,7 +87,7 @@ public sealed class SecurityEventTokenValidationContext(
     /// Records a fact this step has established.
     /// </summary>
     /// <param name="state">The flag to set.</param>
-    public void Establish(SecurityEventTokenValidationState state) => State |= state;
+    public void Establish(SecurityEventTokenValidationStates state) => State |= state;
 
     /// <summary>
     /// Declares the facts this step's safety depends on, failing loudly when the pipeline was
@@ -101,10 +101,10 @@ public sealed class SecurityEventTokenValidationContext(
     /// </remarks>
     /// <param name="required">The facts that must already be established.</param>
     /// <exception cref="InvalidOperationException">A required fact is not established.</exception>
-    public void Require(SecurityEventTokenValidationState required)
+    public void Require(SecurityEventTokenValidationStates required)
     {
         var missing = required & ~State;
-        if (missing != SecurityEventTokenValidationState.None)
+        if (missing != SecurityEventTokenValidationStates.None)
         {
             throw new InvalidOperationException(
                 $"The validation pipeline is mis-ordered: this step requires {missing}, which no earlier "

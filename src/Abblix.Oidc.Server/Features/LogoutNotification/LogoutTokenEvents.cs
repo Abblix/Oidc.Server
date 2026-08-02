@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
@@ -35,5 +37,7 @@ public static class LogoutTokenEvents
     /// token a logout order. Its value is always the empty JSON object, as the specification
     /// requires.
     /// </summary>
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The value is an event identifier compared verbatim (OpenID Back-Channel Logout 1.0 Section 2.4), not an address anything connects to; the https spelling would be a different identifier no receiver recognises.")]
     public const string BackChannelLogout = "http://schemas.openid.net/event/backchannel-logout";
 }

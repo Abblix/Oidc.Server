@@ -46,7 +46,7 @@ public sealed class PayloadDeserializationStep(EventTypeRegistry registry) : ISe
         CancellationToken cancellationToken)
     {
         context.Require(
-            SecurityEventTokenValidationState.SignatureVerified | SecurityEventTokenValidationState.EventsPresent);
+            SecurityEventTokenValidationStates.SignatureVerified | SecurityEventTokenValidationStates.EventsPresent);
 
         var events = context.Token!.Events;
         if (events is null)
@@ -88,7 +88,7 @@ public sealed class PayloadDeserializationStep(EventTypeRegistry registry) : ISe
         if (error is null)
         {
             context.EventPayloads = payloads;
-            context.Establish(SecurityEventTokenValidationState.PayloadsDeserialized);
+            context.Establish(SecurityEventTokenValidationStates.PayloadsDeserialized);
         }
 
         return ValueTask.FromResult(error);

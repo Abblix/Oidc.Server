@@ -75,7 +75,7 @@ public sealed class ParseStep : ISecurityEventTokenValidationStep
         {
             context.UnverifiedHeader = new JsonWebTokenHeader(ParseSegment(segments[0], "header"));
             context.UnverifiedPayload = new JsonWebTokenPayload(ParseSegment(segments[1], "claims"));
-            context.Establish(SecurityEventTokenValidationState.Parsed);
+            context.Establish(SecurityEventTokenValidationStates.Parsed);
         }
         catch (Exception exception) when (exception is FormatException or JsonException)
         {

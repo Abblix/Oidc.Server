@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -44,6 +45,8 @@ public class BackChannelLogoutProfileTests
 {
     private const string Issuer = "https://op.example.com";
     private const string ClientId = "client_123";
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The value is an event identifier compared verbatim (OpenID Back-Channel Logout 1.0 Section 2.4), not an address anything connects to; the https spelling would be a different identifier no receiver recognises.")]
     private const string LogoutEventType = "http://schemas.openid.net/event/backchannel-logout";
 
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1754040000);
@@ -60,12 +63,12 @@ public class BackChannelLogoutProfileTests
             SecurityEventTokenValidationContext context,
             CancellationToken cancellationToken)
         {
-            context.Require(SecurityEventTokenValidationState.Parsed);
+            context.Require(SecurityEventTokenValidationStates.Parsed);
 
             SecurityEventTokenValidationError? error;
             if (JwtTypeName.Matches(context.UnverifiedHeader!.Type, JsonWebTokenTypes.LogoutToken))
             {
-                context.Establish(SecurityEventTokenValidationState.TypVerified);
+                context.Establish(SecurityEventTokenValidationStates.TypVerified);
                 error = null;
             }
             else
@@ -92,7 +95,7 @@ public class BackChannelLogoutProfileTests
             SecurityEventTokenValidationContext context,
             CancellationToken cancellationToken)
         {
-            context.Require(SecurityEventTokenValidationState.Parsed);
+            context.Require(SecurityEventTokenValidationStates.Parsed);
 
             var error = context.UnverifiedPayload!.Json.ContainsKey(JwtClaimTypes.ExpiresAt)
                 ? null
@@ -113,7 +116,7 @@ public class BackChannelLogoutProfileTests
             SecurityEventTokenValidationContext context,
             CancellationToken cancellationToken)
         {
-            context.Require(SecurityEventTokenValidationState.SignatureVerified);
+            context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
             var payload = context.Token!.Token.Payload;
             var error = payload.Subject is not null || payload.SessionId is not null
@@ -137,8 +140,8 @@ public class BackChannelLogoutProfileTests
             CancellationToken cancellationToken)
         {
             context.Require(
-                SecurityEventTokenValidationState.SignatureVerified
-                | SecurityEventTokenValidationState.EventsPresent);
+                SecurityEventTokenValidationStates.SignatureVerified
+                | SecurityEventTokenValidationStates.EventsPresent);
 
             var error = context.Token!.Events!.Contains(LogoutEventType)
                 ? null
@@ -160,7 +163,7 @@ public class BackChannelLogoutProfileTests
             SecurityEventTokenValidationContext context,
             CancellationToken cancellationToken)
         {
-            context.Require(SecurityEventTokenValidationState.Parsed);
+            context.Require(SecurityEventTokenValidationStates.Parsed);
 
             var error = context.UnverifiedPayload!.Json.ContainsKey(JwtClaimTypes.Nonce)
                 ? new SecurityEventTokenValidationError(

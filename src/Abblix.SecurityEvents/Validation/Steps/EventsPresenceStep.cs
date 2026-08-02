@@ -39,7 +39,7 @@ public sealed class EventsPresenceStep : ISecurityEventTokenValidationStep
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.Parsed);
+        context.Require(SecurityEventTokenValidationStates.Parsed);
 
         var description = context.UnverifiedPayload!.Json[JwtClaimTypes.Events] switch
         {
@@ -54,7 +54,7 @@ public sealed class EventsPresenceStep : ISecurityEventTokenValidationStep
         SecurityEventTokenValidationError? error;
         if (description is null)
         {
-            context.Establish(SecurityEventTokenValidationState.EventsPresent);
+            context.Establish(SecurityEventTokenValidationStates.EventsPresent);
             error = null;
         }
         else

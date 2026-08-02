@@ -45,14 +45,14 @@ public sealed class TypHeaderStep : ISecurityCriticalValidationStep
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.Parsed);
+        context.Require(SecurityEventTokenValidationStates.Parsed);
 
         var type = context.UnverifiedHeader!.Type;
 
         SecurityEventTokenValidationError? error;
         if (JwtTypeName.Matches(type, SecurityEventToken.TokenType))
         {
-            context.Establish(SecurityEventTokenValidationState.TypVerified);
+            context.Establish(SecurityEventTokenValidationStates.TypVerified);
             error = null;
         }
         else

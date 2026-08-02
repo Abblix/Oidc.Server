@@ -44,7 +44,7 @@ public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventToken
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.SignatureVerified);
+        context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
         var now = clock.GetUtcNow();
         var tolerance = context.Options.IssuedAtTolerance;
@@ -63,7 +63,7 @@ public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventToken
         SecurityEventTokenValidationError? error;
         if (description is null)
         {
-            context.Establish(SecurityEventTokenValidationState.IssuedAtVerified);
+            context.Establish(SecurityEventTokenValidationStates.IssuedAtVerified);
             error = null;
         }
         else

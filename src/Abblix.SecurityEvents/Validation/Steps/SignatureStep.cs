@@ -43,7 +43,7 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.Parsed);
+        context.Require(SecurityEventTokenValidationStates.Parsed);
 
         var result = await verifier.VerifyAsync(
             context.CompactToken,
@@ -56,7 +56,7 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         }
 
         context.Token = new SecurityEventToken(token);
-        context.Establish(SecurityEventTokenValidationState.SignatureVerified);
+        context.Establish(SecurityEventTokenValidationStates.SignatureVerified);
         return null;
     }
 }

@@ -43,7 +43,7 @@ public sealed class ExpAbsenceStep : ISecurityCriticalValidationStep
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationState.Parsed);
+        context.Require(SecurityEventTokenValidationStates.Parsed);
 
         SecurityEventTokenValidationError? error;
         if (context.UnverifiedPayload!.Json.ContainsKey(JwtClaimTypes.ExpiresAt))
@@ -55,7 +55,7 @@ public sealed class ExpAbsenceStep : ISecurityCriticalValidationStep
         }
         else
         {
-            context.Establish(SecurityEventTokenValidationState.ExpAbsenceVerified);
+            context.Establish(SecurityEventTokenValidationStates.ExpAbsenceVerified);
             error = null;
         }
 
