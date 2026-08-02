@@ -63,10 +63,17 @@ public partial class BackChannelLogoutTokenSender(
 
         LogRequestSent(parameters, logoutOptions.Uri, response.StatusCode);
 
-        response.EnsureSuccessStatusCode();
-        if (!response.IsSuccessStatusCode)
+        try
         {
+            response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException)
+        {
+            // The error record must precede the rethrow: the exception is swallowed per client
+            // upstream (a logout must not fail because one client is down), so this log line is
+            // the operator's only account of which URI refused and with what status.
             LogSendFailed(logoutOptions.Uri, response.StatusCode);
+            throw;
         }
     }
 }
