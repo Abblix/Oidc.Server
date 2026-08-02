@@ -25,10 +25,14 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -202,27 +206,34 @@ public class BackChannelLogoutProfileTests
 
     private static SecurityEventTokenValidator LogoutProfileValidator()
     {
-        var steps = new SecurityEventTokenValidationPipelineBuilder()
-            .UseDefaultPipeline()
-            .AllowInsecure("Back-Channel Logout types its token 'logout+jwt'; the replacement pins that "
-                + "value and is itself security-critical")
-            .Replace<TypHeaderStep, LogoutTokenTypeStep>()
-            .AllowInsecure("Back-Channel Logout REQUIRES 'exp', inverting the SET default; the replacement "
-                + "polices the same claim with the opposite sign")
-            .Replace<ExpAbsenceStep, ExpRequiredStep>()
-            .InsertAfter<ParseStep, ForbidNonceStep>()
-            .InsertAfter<SignatureStep, RequireSidOrSubStep>()
-            .InsertAfter<RequireSidOrSubStep, RequireLogoutEventTypeStep>()
-            .Build(type => type switch
-            {
-                _ when type == typeof(SignatureStep) => new SignatureStep(new AcceptingVerifier()),
-                _ when type == typeof(IssuedAtWindowStep) => new IssuedAtWindowStep(new FakeTimeProvider(Now)),
-                _ when type == typeof(PayloadDeserializationStep) =>
-                    new PayloadDeserializationStep(new Events.EventTypeRegistry()),
-                _ => (ISecurityEventTokenValidationStep)Activator.CreateInstance(type)!,
-            });
+        // The profile is composed the way a real consumer composes it: the package's defaults,
+        // edited in place through the live composition cursor, with the two critical departures
+        // acknowledged where the boot log will surface them.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddSingleton<ISecurityEventTokenVerifier>(new AcceptingVerifier());
+        services.AddSecurityEvents(options => options
+            .AllowInsecureValidation(
+                "Back-Channel Logout types its token 'logout+jwt'; the replacement pins that value and is "
+                + "itself security-critical")
+            .AllowInsecureValidation(
+                "Back-Channel Logout REQUIRES 'exp', inverting the SET default; the replacement polices the "
+                + "same claim with the opposite sign"));
 
-        return new SecurityEventTokenValidator(steps);
+        services.Decompose<ISecurityEventTokenValidationStep>()
+            .Replace<TypHeaderStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, LogoutTokenTypeStep>())
+            .Replace<ExpAbsenceStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ExpRequiredStep>())
+            .AddAfter<ParseStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ForbidNonceStep>())
+            .AddAfter<SignatureStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, RequireSidOrSubStep>())
+            .AddAfter<RequireSidOrSubStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, RequireLogoutEventTypeStep>());
+
+        return services.BuildServiceProvider().GetRequiredService<SecurityEventTokenValidator>();
     }
 
     private static string LogoutCompact(Action<JsonWebToken>? mutate = null)

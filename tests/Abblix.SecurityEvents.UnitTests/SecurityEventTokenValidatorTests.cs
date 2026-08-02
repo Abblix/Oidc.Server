@@ -127,20 +127,20 @@ public class SecurityEventTokenValidatorTests
             registry.Register<MembershipChangedPayload>(MembershipChanged);
         }
 
-        var steps = new SecurityEventTokenValidationPipelineBuilder()
-            .UseDefaultPipeline()
-            .Build(CreateStep);
-
-        return new SecurityEventTokenValidator(steps);
-
-        ISecurityEventTokenValidationStep CreateStep(Type type)
-            => type switch
-            {
-                _ when type == typeof(SignatureStep) => new SignatureStep(verifier ?? new AcceptingVerifier()),
-                _ when type == typeof(IssuedAtWindowStep) => new IssuedAtWindowStep(new FakeTimeProvider(Now)),
-                _ when type == typeof(PayloadDeserializationStep) => new PayloadDeserializationStep(registry),
-                _ => (ISecurityEventTokenValidationStep)Activator.CreateInstance(type)!,
-            };
+        // The default profile assembled by hand, in its required order: these tests judge the
+        // steps' behaviour, and the composition machinery has its own suite.
+        return new SecurityEventTokenValidator(new SecurityEventTokenValidationPipeline(
+        [
+            new ParseStep(),
+            new TypHeaderStep(),
+            new ExpAbsenceStep(),
+            new EventsPresenceStep(),
+            new IssuerAllowlistStep(),
+            new SignatureStep(verifier ?? new AcceptingVerifier()),
+            new AudienceStep(),
+            new IssuedAtWindowStep(new FakeTimeProvider(Now)),
+            new PayloadDeserializationStep(registry),
+        ]));
     }
 
     private static SecurityEventTokenValidationOptions DefaultOptions() => new()
@@ -271,6 +271,43 @@ public class SecurityEventTokenValidatorTests
     }
 
     [Fact]
+    public async Task MissingIssuer_IsUnknownIssuer()
+    {
+        // The "iss" claim is REQUIRED (RFC 8417 Section 2.2); a token without it names no feed to
+        // trust and dies on the allowlist step with the reason spelled out.
+        var header = Base64Url.EncodeToString("""{"typ":"secevent+jwt","alg":"none"}"""u8);
+        var payload = Base64Url.EncodeToString(
+            """{"jti":"1","iat":1754040000,"events":{"urn:example:event":{}}}"""u8);
+
+        var error = await ValidateExpectingError($"{header}.{payload}.sig");
+        Assert.Equal(SecurityEventTokenErrorCode.UnknownIssuer, error.Code);
+    }
+
+    [Fact]
+    public async Task NonObjectEventPayload_IsMalformed()
+    {
+        // The events object itself is present and non-empty, so the presence step passes; the
+        // payload deserialization step is what refuses a statement whose value is not an object
+        // (RFC 8417 Section 2.2).
+        var header = Base64Url.EncodeToString("""{"typ":"secevent+jwt","alg":"none"}"""u8);
+        var payload = Base64Url.EncodeToString(
+            """{"iss":"https://tenant.example.com","jti":"1","iat":1754040000,"aud":"https://receiver.example.com/events","events":{"urn:example:event":"not-an-object"}}"""u8);
+
+        var error = await ValidateExpectingError($"{header}.{payload}.sig");
+        Assert.Equal(SecurityEventTokenErrorCode.MalformedToken, error.Code);
+    }
+
+    [Fact]
+    public void ValidationError_PrintsItsDescription()
+    {
+        // The half of the error a human reads is what logging interpolation gets.
+        var error = new SecurityEventTokenValidationError(
+            SecurityEventTokenErrorCode.Custom, "the sentence a log reader needs");
+
+        Assert.Equal("the sentence a log reader needs", error.ToString());
+    }
+
+    [Fact]
     public async Task UnlistedIssuer_IsUnknownIssuer()
     {
         var compact = ConformantCompact();
@@ -371,7 +408,8 @@ public class SecurityEventTokenValidatorTests
     {
         // AudienceStep reads trusted claims, so a pipeline running it before the signature step
         // is unsafe by construction - and says so on run one, not month three.
-        var validator = new SecurityEventTokenValidator([new ParseStep(), new AudienceStep()]);
+        var validator = new SecurityEventTokenValidator(
+            new SecurityEventTokenValidationPipeline([new ParseStep(), new AudienceStep()]));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -383,7 +421,8 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public async Task PipelineWithoutATokenProducingStep_FailsLoudly_NotWithANull()
     {
-        var validator = new SecurityEventTokenValidator([new ParseStep()]);
+        var validator = new SecurityEventTokenValidator(
+            new SecurityEventTokenValidationPipeline([new ParseStep()]));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -395,6 +434,6 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public void EmptyPipeline_IsRejectedAtConstruction()
     {
-        Assert.Throws<ArgumentException>(() => new SecurityEventTokenValidator([]));
+        Assert.Throws<ArgumentException>(() => new SecurityEventTokenValidationPipeline([]));
     }
 }

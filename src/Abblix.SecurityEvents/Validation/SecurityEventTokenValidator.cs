@@ -25,24 +25,15 @@ using Abblix.Utils;
 namespace Abblix.SecurityEvents.Validation;
 
 /// <summary>
-/// Runs a token through the pipeline's steps in order, stopping at the first error: the composite
-/// whose whole behaviour is its step list, which is what lets a consumer profile change one check
-/// without forking a monolith.
+/// Drives one validation run: creates the context, hands it to the pipeline, and shapes the
+/// outcome into the result a consumer acts on.
 /// </summary>
-/// <param name="steps">
-/// The pipeline, typically composed by <see cref="SecurityEventTokenValidationPipelineBuilder"/>.
-/// </param>
-public sealed class SecurityEventTokenValidator(IEnumerable<ISecurityEventTokenValidationStep> steps)
+/// <param name="pipeline">
+/// The validation profile as one step - after composition, the singular
+/// <see cref="ISecurityEventTokenValidationStep"/> resolve IS the composed pipeline, which is what
+/// lets a consumer profile change the steps without this type knowing.</param>
+public sealed class SecurityEventTokenValidator(ISecurityEventTokenValidationStep pipeline)
 {
-    private readonly IReadOnlyList<ISecurityEventTokenValidationStep> _steps = steps.ToArray() switch
-    {
-        { Length: 0 } => throw new ArgumentException(
-            "A validator with no steps would accept every token; an empty pipeline is a composition "
-            + "bug, not a permissive profile.",
-            nameof(steps)),
-        var materialized => materialized,
-    };
-
     /// <summary>
     /// Validates a token.
     /// </summary>
@@ -62,13 +53,10 @@ public sealed class SecurityEventTokenValidator(IEnumerable<ISecurityEventTokenV
     {
         var context = new SecurityEventTokenValidationContext(compactToken, options);
 
-        foreach (var step in _steps)
+        var error = await pipeline.ValidateAsync(context, cancellationToken);
+        if (error is not null)
         {
-            var error = await step.ValidateAsync(context, cancellationToken);
-            if (error is not null)
-            {
-                return error;
-            }
+            return error;
         }
 
         if (context.Token is null)

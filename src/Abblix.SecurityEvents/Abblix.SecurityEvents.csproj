@@ -48,6 +48,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
     <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
   </ItemGroup>
 

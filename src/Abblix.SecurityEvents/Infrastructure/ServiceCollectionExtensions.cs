@@ -20,10 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Validation;
+using Abblix.SecurityEvents.Validation.Steps;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -38,19 +40,59 @@ namespace Abblix.SecurityEvents.Infrastructure;
 public static partial class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the security-event core: the validator over the configured profile, the event
-    /// registry, and the default verifier and signer over the Abblix JWT core.
+    /// The default receiver profile, in its required order: parse, then the cheap unverified
+    /// rejections, then the signature, then the checks that read trusted claims.
+    /// </summary>
+    private static readonly ServiceDescriptor[] DefaultPipelineSteps =
+    [
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ParseStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, TypHeaderStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ExpAbsenceStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, EventsPresenceStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, IssuerAllowlistStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, SignatureStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, AudienceStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, IssuedAtWindowStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, PayloadDeserializationStep>(),
+    ];
+
+    /// <summary>
+    /// The default steps whose absence weakens the profile: derived from the registrations by the
+    /// marker interface, never kept as a second hand-maintained list - a new critical default
+    /// joins this set by being registered, not by being remembered.
+    /// </summary>
+    private static readonly Type[] CriticalDefaultSteps = DefaultPipelineSteps
+        .Select(descriptor => descriptor.ImplementationType!)
+        .Where(type => typeof(ISecurityCriticalValidationStep).IsAssignableFrom(type))
+        .ToArray();
+
+    /// <summary>
+    /// Registers the security-event core: the default validation pipeline as a composed step
+    /// family, the validator over it, the event registry, and the default verifier and signer
+    /// over the Abblix JWT core.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The pipeline is an ordinary composed family: the nine default steps register as
+    /// <see cref="ISecurityEventTokenValidationStep"/> implementations in execution order and
+    /// collapse behind the singular contract. A consumer profile edits them in place afterwards -
+    /// <c>services.Decompose&lt;ISecurityEventTokenValidationStep&gt;()</c> returns the live
+    /// cursor with its position-aware operations - and a profile that drops or replaces a
+    /// security-critical default acknowledges that through
+    /// <see cref="SecurityEventsOptions.AllowInsecureValidation"/>: the check runs against the
+    /// composed RESULT at validator construction, so no editing door bypasses it.
+    /// </para>
+    /// <para>
     /// Two of the defaults ask for more configuration before they resolve, and each fails loudly
     /// naming what is missing: the verifier needs an <see cref="IIssuerKeyResolver"/> - key trust
     /// is deployment knowledge - and the signer needs
     /// <see cref="SecurityEventsOptions.SigningKeySource"/>, which only a transmitter has. A pure
     /// receiver registers a resolver and never touches signing; a pure transmitter does the
     /// reverse.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    /// <param name="configure">Configures the profile, the event dictionary, and signing.</param>
+    /// <param name="configure">Configures the event dictionary, signing, and allowances.</param>
     public static IServiceCollection AddSecurityEvents(
         this IServiceCollection services,
         Action<SecurityEventsOptions>? configure = null)
@@ -83,26 +125,17 @@ public static partial class ServiceCollectionExtensions
                     + $"register your own {nameof(ISecurityEventTokenSigner)}.");
         });
 
+        // TryAddEnumerable keeps the registrations idempotent, and Compose collapses the family
+        // behind the singular contract, where the validator finds it as one step.
+        services.TryAddEnumerable(DefaultPipelineSteps);
+        services.Compose<ISecurityEventTokenValidationStep, SecurityEventTokenValidationPipeline>();
+
         services.TryAddSingleton<SecurityEventTokenValidator>(provider =>
         {
-            var pipeline = provider.GetRequiredService<IOptions<SecurityEventsOptions>>().Value.Validation;
-            if (pipeline.StepTypes.Count == 0)
-            {
-                pipeline.UseDefaultPipeline();
-            }
+            DemandAllowanceForWeakenedPipeline(provider);
 
-            // A weakened pipeline must be visible in the boot log, not only at the composition
-            // site - this is where the AllowInsecure reasons surface operationally.
-            if (provider.GetService<ILoggerFactory>() is { } loggerFactory)
-            {
-                var logger = loggerFactory.CreateLogger<SecurityEventTokenValidator>();
-                foreach (var allowance in pipeline.InsecureAllowances)
-                {
-                    LogInsecurePipelineAllowance(logger, allowance);
-                }
-            }
-
-            return new SecurityEventTokenValidator(pipeline.Build(type => ResolveStep(provider, type)));
+            return new SecurityEventTokenValidator(
+                provider.GetRequiredService<ISecurityEventTokenValidationStep>());
         });
 
         return services;
@@ -156,17 +189,58 @@ public static partial class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Creates a pipeline step: a host-registered instance when there is one, so a host can
-    /// configure a step as a service, and a container-constructed instance otherwise, so the
-    /// default steps and a consumer's custom steps need no registration of their own.
+    /// The guard over the composed RESULT: whichever door edited the pipeline, a profile lacking
+    /// a default security-critical step either carries a reasoned acknowledgement - logged, so
+    /// the weakening is visible in the boot log - or fails construction naming what is missing.
     /// </summary>
-    private static ISecurityEventTokenValidationStep ResolveStep(IServiceProvider provider, Type stepType)
-        => provider.GetService(stepType) as ISecurityEventTokenValidationStep
-            ?? (ISecurityEventTokenValidationStep)ActivatorUtilities.CreateInstance(provider, stepType);
+    private static void DemandAllowanceForWeakenedPipeline(IServiceProvider provider)
+    {
+        // After composition the members live as keyed services under the composite type; before
+        // composition (a family the host collapsed to fewer than two members) the singular
+        // registration is the whole profile.
+        var memberTypes = provider
+            .GetKeyedServices<ISecurityEventTokenValidationStep>(typeof(SecurityEventTokenValidationPipeline))
+            .Select(step => step.GetType())
+            .ToHashSet();
+
+        if (memberTypes.Count == 0)
+        {
+            memberTypes.Add(provider.GetRequiredService<ISecurityEventTokenValidationStep>().GetType());
+        }
+
+        var missing = CriticalDefaultSteps.Where(critical => !memberTypes.Contains(critical)).ToArray();
+
+        if (missing.Length == 0)
+        {
+            return;
+        }
+
+        var options = provider.GetRequiredService<IOptions<SecurityEventsOptions>>().Value;
+        var missingNames = string.Join(", ", missing.Select(type => type.Name));
+
+        if (options.InsecureValidationAllowances.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"The validation pipeline lacks security-critical default steps ({missingNames}) and no "
+                + $"allowance is on record; call {nameof(SecurityEventsOptions)}."
+                + $"{nameof(SecurityEventsOptions.AllowInsecureValidation)}(reason) so the weakening is a "
+                + "visible decision instead of an accident.");
+        }
+
+        if (provider.GetService<ILoggerFactory>() is { } loggerFactory)
+        {
+            var logger = loggerFactory.CreateLogger<SecurityEventTokenValidator>();
+            foreach (var allowance in options.InsecureValidationAllowances)
+            {
+                LogInsecurePipelineAllowance(logger, missingNames, allowance);
+            }
+        }
+    }
 
     [LoggerMessage(
         EventId = LogEvents.Composition.InsecurePipelineAllowance,
         Level = LogLevel.Warning,
-        Message = "The validation pipeline was weakened under an explicit allowance: {Allowance}")]
-    private static partial void LogInsecurePipelineAllowance(ILogger logger, string allowance);
+        Message = "The validation pipeline lacks security-critical default steps ({MissingSteps}) "
+            + "under an explicit allowance: {Allowance}")]
+    private static partial void LogInsecurePipelineAllowance(ILogger logger, string missingSteps, string allowance);
 }

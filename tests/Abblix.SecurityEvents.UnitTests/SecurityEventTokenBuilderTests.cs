@@ -200,6 +200,17 @@ public class SecurityEventTokenBuilderTests
     }
 
     [Fact]
+    public void EventsCollection_RefusesToEnumerate_ANonObjectPayload()
+    {
+        // The view refuses to invent a payload for a statement RFC 8417 Section 2.2 forbids:
+        // enumeration is where a wire-read malformation would otherwise slip into typed code.
+        var events = new EventsCollection(
+            new JsonObject { ["urn:example:event"] = "not-an-object" });
+
+        Assert.Throws<InvalidOperationException>(() => events.ToArray());
+    }
+
+    [Fact]
     public async Task SignAsync_HandsTheBuiltTokenToTheSigner()
     {
         var signer = new CapturingSigner();

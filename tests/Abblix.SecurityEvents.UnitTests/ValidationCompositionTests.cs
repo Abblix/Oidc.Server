@@ -1,0 +1,171 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using Abblix.DependencyInjection;
+using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Infrastructure;
+using Abblix.SecurityEvents.Validation;
+using Abblix.SecurityEvents.Validation.Steps;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Xunit;
+
+namespace Abblix.SecurityEvents.UnitTests;
+
+/// <summary>
+/// Pins the composition contract now that the pipeline is an ordinary composed family: the
+/// default order, profile editing through the live cursor, and above all the guard that judges
+/// the composed RESULT - a pipeline lacking a security-critical default demands a reasoned
+/// acknowledgement however it came to lack it, which no editing door can bypass.
+/// </summary>
+public class ValidationCompositionTests
+{
+    /// <summary>
+    /// Stands in for a consumer's profile step; composition tests read types, never run steps.
+    /// </summary>
+    private sealed class CustomStep : ISecurityEventTokenValidationStep
+    {
+        public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
+            SecurityEventTokenValidationContext context,
+            CancellationToken cancellationToken)
+            => throw new NotSupportedException("Composition tests never run steps.");
+    }
+
+    private static ServiceCollection Host(Action<SecurityEventsOptions>? configure = null)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
+        services.AddSecurityEvents(configure);
+        return services;
+    }
+
+    private static Type[] PipelineTypes(IServiceCollection services)
+        => services.Decompose<ISecurityEventTokenValidationStep>()
+            .Select(descriptor => descriptor.ResolveImplementationType()!)
+            .ToArray();
+
+    [Fact]
+    public void DefaultPipeline_HoldsTheNineStepsInOrder()
+    {
+        Assert.Equal(
+            [
+                typeof(ParseStep),
+                typeof(TypHeaderStep),
+                typeof(ExpAbsenceStep),
+                typeof(EventsPresenceStep),
+                typeof(IssuerAllowlistStep),
+                typeof(SignatureStep),
+                typeof(AudienceStep),
+                typeof(IssuedAtWindowStep),
+                typeof(PayloadDeserializationStep),
+            ],
+            PipelineTypes(Host()));
+    }
+
+    [Fact]
+    public void AddAfter_PlacesTheStepRightAfterItsAnchor()
+    {
+        var services = Host();
+        services.Decompose<ISecurityEventTokenValidationStep>()
+            .AddAfter<SignatureStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, CustomStep>());
+
+        var types = PipelineTypes(services);
+        Assert.Equal(Array.IndexOf(types, typeof(SignatureStep)) + 1, Array.IndexOf(types, typeof(CustomStep)));
+    }
+
+    [Fact]
+    public void RemovingANonCriticalStep_NeedsNoAllowance()
+    {
+        var services = Host();
+        services.Decompose<ISecurityEventTokenValidationStep>().Remove<AudienceStep>();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetRequiredService<SecurityEventTokenValidator>());
+    }
+
+    [Theory]
+    [InlineData(typeof(TypHeaderStep))]
+    [InlineData(typeof(ExpAbsenceStep))]
+    [InlineData(typeof(SignatureStep))]
+    public void RemovingACriticalStep_WithoutAnAllowance_FailsValidatorConstruction(Type criticalStep)
+    {
+        var services = Host();
+        var cursor = services.Decompose<ISecurityEventTokenValidationStep>();
+        var member = cursor.Single(descriptor => descriptor.ResolveImplementationType() == criticalStep);
+        cursor.Remove(member);
+
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => provider.GetRequiredService<SecurityEventTokenValidator>());
+
+        Assert.Contains(criticalStep.Name, exception.Message);
+        Assert.Contains(nameof(SecurityEventsOptions.AllowInsecureValidation), exception.Message);
+    }
+
+    [Fact]
+    public void RemovingACriticalStep_WithAnAllowance_Constructs()
+    {
+        var services = Host(options => options.AllowInsecureValidation(
+            "integration test profile: tokens are minted unsigned by the test host"));
+        services.Decompose<ISecurityEventTokenValidationStep>().Remove<SignatureStep>();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetRequiredService<SecurityEventTokenValidator>());
+    }
+
+    [Fact]
+    public void TheGuard_JudgesTheResult_NotTheDoor()
+    {
+        // Replace goes through the cursor's own operation - an editing door this package does
+        // not provide - and the guard still fires, because it inspects what was composed rather
+        // than intercepting any API.
+        var services = Host();
+        services.Decompose<ISecurityEventTokenValidationStep>()
+            .Replace<TypHeaderStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, CustomStep>());
+
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => provider.GetRequiredService<SecurityEventTokenValidator>());
+
+        Assert.Contains(nameof(TypHeaderStep), exception.Message);
+    }
+
+    [Fact]
+    public void HostRegisteredStep_BeforeAddSecurityEvents_JoinsTheFamily()
+    {
+        // The standard family door: a member registered ahead of composition composes in ahead of
+        // the defaults, exactly as every composed family in the product line behaves.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
+        services.AddSingleton<ISecurityEventTokenValidationStep, CustomStep>();
+        services.AddSecurityEvents();
+
+        Assert.Equal(typeof(CustomStep), PipelineTypes(services)[0]);
+    }
+}
