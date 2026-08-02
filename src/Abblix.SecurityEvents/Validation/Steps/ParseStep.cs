@@ -40,7 +40,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// version: none of the first consumers encrypts, and JWS-only keeps the parse step free of key
 /// material. A five-segment token reports that plainly rather than as a generic parse failure.
 /// </remarks>
-public sealed class ParseStep : ISecurityEventTokenValidationStep
+public sealed class ParseStep : ISecurityEventTokenValidator
 {
     private const int JwsSegmentCount = 3;
     private const int JweSegmentCount = 5;

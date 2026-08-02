@@ -38,7 +38,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// tokens are typed differently - Back-Channel Logout's "logout+jwt", say - replaces this step
 /// with its own rather than removing typing altogether.
 /// </remarks>
-public sealed class TypHeaderStep : ISecurityCriticalValidationStep
+public sealed class TypHeaderStep : ISecurityCriticalValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

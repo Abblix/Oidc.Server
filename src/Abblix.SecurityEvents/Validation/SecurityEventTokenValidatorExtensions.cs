@@ -25,35 +25,36 @@ using Abblix.Utils;
 namespace Abblix.SecurityEvents.Validation;
 
 /// <summary>
-/// Drives one validation run: creates the context, hands it to the pipeline, and shapes the
-/// outcome into the result a consumer acts on.
+/// The consumer-facing entry into validation: one call that runs a compact token through a
+/// validator and shapes the outcome into the result a consumer acts on. Defined over the
+/// interface rather than a class of its own, because after composition the resolved
+/// <see cref="ISecurityEventTokenValidator"/> IS the whole profile - there is no separate driver
+/// to name, hold or inject.
 /// </summary>
-/// <param name="pipeline">
-/// The validation profile as one step - after composition, the singular
-/// <see cref="ISecurityEventTokenValidationStep"/> resolve IS the composed pipeline, which is what
-/// lets a consumer profile change the steps without this type knowing.</param>
-public sealed class SecurityEventTokenValidator(ISecurityEventTokenValidationStep pipeline)
+public static class SecurityEventTokenValidatorExtensions
 {
     /// <summary>
     /// Validates a token.
     /// </summary>
+    /// <param name="validator">The validation profile - typically the composed pipeline.</param>
     /// <param name="compactToken">The token as received, in compact serialization.</param>
     /// <param name="options">What this run expects of the token.</param>
-    /// <param name="cancellationToken">Cancels I/O the steps perform, such as key retrieval.</param>
+    /// <param name="cancellationToken">Cancels I/O the validators perform, such as key retrieval.</param>
     /// <returns>
-    /// The validated token with its typed payloads, or the first error a step reported.</returns>
+    /// The validated token with its typed payloads, or the first error a validator reported.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Every step passed but none produced a validated token. A pipeline that removes the
-    /// signature step must still set the context's token from a step of its own - the exception
-    /// is what keeps that omission from surfacing as a null to the consumer.</exception>
-    public async Task<Result<ValidatedSecurityEventToken, SecurityEventTokenValidationError>> ValidateAsync(
+    /// Every check passed but none produced a validated token. A profile that removes the
+    /// signature step must still set the context's token from a validator of its own - the
+    /// exception is what keeps that omission from surfacing as a null to the consumer.</exception>
+    public static async Task<Result<ValidatedSecurityEventToken, SecurityEventTokenValidationError>> ValidateAsync(
+        this ISecurityEventTokenValidator validator,
         string compactToken,
         SecurityEventTokenValidationOptions options,
         CancellationToken cancellationToken = default)
     {
         var context = new SecurityEventTokenValidationContext(compactToken, options);
 
-        var error = await pipeline.ValidateAsync(context, cancellationToken);
+        var error = await validator.ValidateAsync(context, cancellationToken);
         if (error is not null)
         {
             return error;
@@ -62,8 +63,8 @@ public sealed class SecurityEventTokenValidator(ISecurityEventTokenValidationSte
         if (context.Token is null)
         {
             throw new InvalidOperationException(
-                "Every step passed but none set the validated token; a pipeline composed without "
-                + "the signature step must produce the token from a step of its own.");
+                "Every check passed but none set the validated token; a profile composed without "
+                + "the signature step must produce the token from a validator of its own.");
         }
 
         return new ValidatedSecurityEventToken(context.Token, context.EventPayloads);

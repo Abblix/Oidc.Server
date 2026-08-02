@@ -36,7 +36,7 @@ namespace Abblix.SecurityEvents.Validation;
 /// registering a "jti" is a mutation, and a pipeline that mutated on a token later steps might
 /// still reject would need an undo.
 /// </remarks>
-public interface ISecurityEventTokenValidationStep
+public interface ISecurityEventTokenValidator
 {
     /// <summary>
     /// Checks the token in flight.
@@ -54,4 +54,4 @@ public interface ISecurityEventTokenValidationStep
 /// token possible. The pipeline builder refuses to touch such a step without an explicit,
 /// reasoned acknowledgement - "temporarily for a test" must not ride into production silently.
 /// </summary>
-public interface ISecurityCriticalValidationStep : ISecurityEventTokenValidationStep;
+public interface ISecurityCriticalValidator : ISecurityEventTokenValidator;

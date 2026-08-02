@@ -28,20 +28,20 @@ namespace Abblix.SecurityEvents.Validation;
 /// </summary>
 /// <remarks>
 /// The family is composed through the dependency-injection machinery the rest of the product line
-/// uses - members registered as ordinary <see cref="ISecurityEventTokenValidationStep"/>
+/// uses - members registered as ordinary <see cref="ISecurityEventTokenValidator"/>
 /// implementations collapse behind the singular contract, and a consumer profile edits them in
 /// place through the live composition cursor, inserting, replacing or removing steps without this
 /// package changing. The constructor takes the member array that machinery hands to a composite.
 /// </remarks>
-public sealed class SecurityEventTokenValidationPipeline : ISecurityEventTokenValidationStep
+public sealed class SecurityEventTokenValidatorComposite : ISecurityEventTokenValidator
 {
-    private readonly ISecurityEventTokenValidationStep[] _steps;
+    private readonly ISecurityEventTokenValidator[] _steps;
 
     /// <summary>
     /// Creates the composite over its members, in execution order.
     /// </summary>
     /// <param name="steps">The steps of the profile.</param>
-    public SecurityEventTokenValidationPipeline(ISecurityEventTokenValidationStep[] steps)
+    public SecurityEventTokenValidatorComposite(ISecurityEventTokenValidator[] steps)
     {
         if (steps is not { Length: > 0 })
         {

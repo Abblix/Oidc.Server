@@ -29,7 +29,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// the default profile checks, and a receiver in a closed deployment removes the step as a named
 /// decision rather than by leaving an option empty.
 /// </summary>
-public sealed class AudienceStep : ISecurityEventTokenValidationStep
+public sealed class AudienceStep : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

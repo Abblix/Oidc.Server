@@ -43,7 +43,7 @@ public class ValidationCompositionTests
     /// <summary>
     /// Stands in for a consumer's profile step; composition tests read types, never run steps.
     /// </summary>
-    private sealed class CustomStep : ISecurityEventTokenValidationStep
+    private sealed class CustomStep : ISecurityEventTokenValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -61,7 +61,7 @@ public class ValidationCompositionTests
     }
 
     private static Type[] PipelineTypes(IServiceCollection services)
-        => services.Decompose<ISecurityEventTokenValidationStep>()
+        => services.Decompose<ISecurityEventTokenValidator>()
             .Select(descriptor => descriptor.ResolveImplementationType()!)
             .ToArray();
 
@@ -87,9 +87,9 @@ public class ValidationCompositionTests
     public void AddAfter_PlacesTheStepRightAfterItsAnchor()
     {
         var services = Host();
-        services.Decompose<ISecurityEventTokenValidationStep>()
+        services.Decompose<ISecurityEventTokenValidator>()
             .AddAfter<SignatureStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, CustomStep>());
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CustomStep>());
 
         var types = PipelineTypes(services);
         Assert.Equal(Array.IndexOf(types, typeof(SignatureStep)) + 1, Array.IndexOf(types, typeof(CustomStep)));
@@ -99,10 +99,10 @@ public class ValidationCompositionTests
     public void RemovingANonCriticalStep_NeedsNoAllowance()
     {
         var services = Host();
-        services.Decompose<ISecurityEventTokenValidationStep>().Remove<AudienceStep>();
+        services.Decompose<ISecurityEventTokenValidator>().Remove<AudienceStep>();
 
         using var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetRequiredService<SecurityEventTokenValidator>());
+        Assert.NotNull(provider.GetRequiredService<ISecurityEventTokenValidator>());
     }
 
     [Theory]
@@ -112,14 +112,14 @@ public class ValidationCompositionTests
     public void RemovingACriticalStep_WithoutAnAllowance_FailsValidatorConstruction(Type criticalStep)
     {
         var services = Host();
-        var cursor = services.Decompose<ISecurityEventTokenValidationStep>();
+        var cursor = services.Decompose<ISecurityEventTokenValidator>();
         var member = cursor.Single(descriptor => descriptor.ResolveImplementationType() == criticalStep);
         cursor.Remove(member);
 
         using var provider = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<SecurityEventTokenValidator>());
+            () => provider.GetRequiredService<ISecurityEventTokenValidator>());
 
         Assert.Contains(criticalStep.Name, exception.Message);
         Assert.Contains(nameof(SecurityEventsOptions.AllowInsecureValidation), exception.Message);
@@ -130,10 +130,10 @@ public class ValidationCompositionTests
     {
         var services = Host(options => options.AllowInsecureValidation(
             "integration test profile: tokens are minted unsigned by the test host"));
-        services.Decompose<ISecurityEventTokenValidationStep>().Remove<SignatureStep>();
+        services.Decompose<ISecurityEventTokenValidator>().Remove<SignatureStep>();
 
         using var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetRequiredService<SecurityEventTokenValidator>());
+        Assert.NotNull(provider.GetRequiredService<ISecurityEventTokenValidator>());
     }
 
     [Fact]
@@ -143,14 +143,14 @@ public class ValidationCompositionTests
         // not provide - and the guard still fires, because it inspects what was composed rather
         // than intercepting any API.
         var services = Host();
-        services.Decompose<ISecurityEventTokenValidationStep>()
+        services.Decompose<ISecurityEventTokenValidator>()
             .Replace<TypHeaderStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, CustomStep>());
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CustomStep>());
 
         using var provider = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<SecurityEventTokenValidator>());
+            () => provider.GetRequiredService<ISecurityEventTokenValidator>());
 
         Assert.Contains(nameof(TypHeaderStep), exception.Message);
     }
@@ -163,7 +163,7 @@ public class ValidationCompositionTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
-        services.AddSingleton<ISecurityEventTokenValidationStep, CustomStep>();
+        services.AddSingleton<ISecurityEventTokenValidator, CustomStep>();
         services.AddSecurityEvents();
 
         Assert.Equal(typeof(CustomStep), PipelineTypes(services)[0]);

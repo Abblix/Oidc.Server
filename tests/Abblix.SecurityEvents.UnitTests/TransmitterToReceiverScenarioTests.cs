@@ -130,7 +130,7 @@ public class TransmitterToReceiverScenarioTests
         string compact,
         List<MembershipChangedPayload> processed)
     {
-        var result = await receiver.GetRequiredService<SecurityEventTokenValidator>().ValidateAsync(
+        var result = await receiver.GetRequiredService<ISecurityEventTokenValidator>().ValidateAsync(
             compact,
             new SecurityEventTokenValidationOptions
             {

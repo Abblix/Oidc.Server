@@ -36,7 +36,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// "MUST be signed using JWS by an issuer that is trusted to do so for the use case".
 /// </remarks>
 /// <param name="verifier">The bridge to the host's cryptography.</param>
-public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecurityCriticalValidationStep
+public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecurityCriticalValidator
 {
     /// <inheritdoc />
     public async ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

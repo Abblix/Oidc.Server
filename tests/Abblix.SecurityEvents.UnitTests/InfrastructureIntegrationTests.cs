@@ -106,7 +106,7 @@ public class InfrastructureIntegrationTests
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<SecurityEventTokenValidator>()
+        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated), "Validation unexpectedly failed.");
@@ -128,7 +128,7 @@ public class InfrastructureIntegrationTests
         var segments = compact.Split('.');
         var tampered = $"{segments[0]}.{segments[1][..^2]}AA.{segments[2]}";
 
-        var result = await host.GetRequiredService<SecurityEventTokenValidator>()
+        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
             .ValidateAsync(tampered, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -147,7 +147,7 @@ public class InfrastructureIntegrationTests
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<SecurityEventTokenValidator>()
+        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -170,7 +170,7 @@ public class InfrastructureIntegrationTests
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<SecurityEventTokenValidator>()
+        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));

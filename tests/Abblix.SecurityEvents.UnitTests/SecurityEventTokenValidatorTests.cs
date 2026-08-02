@@ -117,7 +117,7 @@ public class SecurityEventTokenValidatorTests
         return EncodeCompact(builder.Build());
     }
 
-    private static SecurityEventTokenValidator DefaultValidator(
+    private static ISecurityEventTokenValidator DefaultValidator(
         ISecurityEventTokenVerifier? verifier = null,
         EventTypeRegistry? registry = null)
     {
@@ -129,7 +129,7 @@ public class SecurityEventTokenValidatorTests
 
         // The default profile assembled by hand, in its required order: these tests judge the
         // steps' behaviour, and the composition machinery has its own suite.
-        return new SecurityEventTokenValidator(new SecurityEventTokenValidationPipeline(
+        return new SecurityEventTokenValidatorComposite(
         [
             new ParseStep(),
             new TypHeaderStep(),
@@ -140,7 +140,7 @@ public class SecurityEventTokenValidatorTests
             new AudienceStep(),
             new IssuedAtWindowStep(new FakeTimeProvider(Now)),
             new PayloadDeserializationStep(registry),
-        ]));
+        ]);
     }
 
     private static SecurityEventTokenValidationOptions DefaultOptions() => new()
@@ -408,8 +408,7 @@ public class SecurityEventTokenValidatorTests
     {
         // AudienceStep reads trusted claims, so a pipeline running it before the signature step
         // is unsafe by construction - and says so on run one, not month three.
-        var validator = new SecurityEventTokenValidator(
-            new SecurityEventTokenValidationPipeline([new ParseStep(), new AudienceStep()]));
+        var validator = new SecurityEventTokenValidatorComposite([new ParseStep(), new AudienceStep()]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -421,8 +420,7 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public async Task PipelineWithoutATokenProducingStep_FailsLoudly_NotWithANull()
     {
-        var validator = new SecurityEventTokenValidator(
-            new SecurityEventTokenValidationPipeline([new ParseStep()]));
+        var validator = new SecurityEventTokenValidatorComposite([new ParseStep()]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(
@@ -434,6 +432,6 @@ public class SecurityEventTokenValidatorTests
     [Fact]
     public void EmptyPipeline_IsRejectedAtConstruction()
     {
-        Assert.Throws<ArgumentException>(() => new SecurityEventTokenValidationPipeline([]));
+        Assert.Throws<ArgumentException>(() => new SecurityEventTokenValidatorComposite([]));
     }
 }

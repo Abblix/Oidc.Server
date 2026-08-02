@@ -61,7 +61,7 @@ public class BackChannelLogoutProfileTests
     /// type, and in both directions: a generic SET is exactly as refused here as a logout token
     /// is by the default profile.
     /// </summary>
-    private sealed class LogoutTokenTypeStep : ISecurityCriticalValidationStep
+    private sealed class LogoutTokenTypeStep : ISecurityCriticalValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -93,7 +93,7 @@ public class BackChannelLogoutProfileTests
     /// Critical itself: it replaces a critical step and still polices the same claim, with the
     /// opposite sign.
     /// </summary>
-    private sealed class ExpRequiredStep : ISecurityCriticalValidationStep
+    private sealed class ExpRequiredStep : ISecurityCriticalValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -114,7 +114,7 @@ public class BackChannelLogoutProfileTests
     /// <summary>
     /// "A Logout Token MUST contain either a sub or a sid Claim, and MAY contain both."
     /// </summary>
-    private sealed class RequireSidOrSubStep : ISecurityEventTokenValidationStep
+    private sealed class RequireSidOrSubStep : ISecurityEventTokenValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -137,7 +137,7 @@ public class BackChannelLogoutProfileTests
     /// The logout event statement must be present: it is what makes the token a logout order and
     /// not some other event that happens to share the envelope.
     /// </summary>
-    private sealed class RequireLogoutEventTypeStep : ISecurityEventTokenValidationStep
+    private sealed class RequireLogoutEventTypeStep : ISecurityEventTokenValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -161,7 +161,7 @@ public class BackChannelLogoutProfileTests
     /// "Logout Tokens MUST NOT contain a nonce Claim" - the wall that keeps a logout token from
     /// being replayed where an ID token is expected.
     /// </summary>
-    private sealed class ForbidNonceStep : ISecurityEventTokenValidationStep
+    private sealed class ForbidNonceStep : ISecurityEventTokenValidator
     {
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
@@ -204,7 +204,7 @@ public class BackChannelLogoutProfileTests
             => (JsonObject)JsonNode.Parse(Encoding.UTF8.GetString(Base64Url.DecodeFromChars(segment)))!;
     }
 
-    private static SecurityEventTokenValidator LogoutProfileValidator()
+    private static ISecurityEventTokenValidator LogoutProfileValidator()
     {
         // The profile is composed the way a real consumer composes it: the package's defaults,
         // edited in place through the live composition cursor, with the two critical departures
@@ -221,19 +221,19 @@ public class BackChannelLogoutProfileTests
                 "Back-Channel Logout REQUIRES 'exp', inverting the SET default; the replacement polices the "
                 + "same claim with the opposite sign"));
 
-        services.Decompose<ISecurityEventTokenValidationStep>()
+        services.Decompose<ISecurityEventTokenValidator>()
             .Replace<TypHeaderStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, LogoutTokenTypeStep>())
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
             .Replace<ExpAbsenceStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ExpRequiredStep>())
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ExpRequiredStep>())
             .AddAfter<ParseStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, ForbidNonceStep>())
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
             .AddAfter<SignatureStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, RequireSidOrSubStep>())
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireSidOrSubStep>())
             .AddAfter<RequireSidOrSubStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidationStep, RequireLogoutEventTypeStep>());
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireLogoutEventTypeStep>());
 
-        return services.BuildServiceProvider().GetRequiredService<SecurityEventTokenValidator>();
+        return services.BuildServiceProvider().GetRequiredService<ISecurityEventTokenValidator>();
     }
 
     private static string LogoutCompact(Action<JsonWebToken>? mutate = null)

@@ -38,7 +38,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// a pipeline composed that way fail its first run.
 /// </remarks>
 /// <param name="registry">The event-type registrations of this receiver.</param>
-public sealed class PayloadDeserializationStep(EventTypeRegistry registry) : ISecurityEventTokenValidationStep
+public sealed class PayloadDeserializationStep(EventTypeRegistry registry) : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

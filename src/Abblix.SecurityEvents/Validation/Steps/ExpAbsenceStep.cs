@@ -36,7 +36,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// deliberately: the builder on the transmitting side refuses to write the claim, and a receiver
 /// this strict keeps the confusion wall standing even for issuers using other toolkits.
 /// </remarks>
-public sealed class ExpAbsenceStep : ISecurityCriticalValidationStep
+public sealed class ExpAbsenceStep : ISecurityCriticalValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

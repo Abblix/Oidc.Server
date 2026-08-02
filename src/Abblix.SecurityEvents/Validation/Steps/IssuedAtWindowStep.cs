@@ -37,7 +37,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// systems.
 /// </remarks>
 /// <param name="clock">The receiver's clock; a test hands in a fake to pin the window.</param>
-public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventTokenValidationStep
+public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

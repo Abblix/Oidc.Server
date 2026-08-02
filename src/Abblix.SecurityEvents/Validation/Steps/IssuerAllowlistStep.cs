@@ -35,7 +35,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// verifying a signature against that issuer's keys, so a lie about "iss" buys an attacker
 /// nothing: the signature against the claimed issuer's keys is exactly what fails next.
 /// </remarks>
-public sealed class IssuerAllowlistStep : ISecurityEventTokenValidationStep
+public sealed class IssuerAllowlistStep : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(

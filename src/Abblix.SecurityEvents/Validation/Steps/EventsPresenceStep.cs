@@ -32,7 +32,7 @@ namespace Abblix.SecurityEvents.Validation.Steps;
 /// Section 4.3 recommends, "reject JWTs containing an 'events' claim unless the JWT is intended
 /// to be a SET" read from the receiving side.
 /// </summary>
-public sealed class EventsPresenceStep : ISecurityEventTokenValidationStep
+public sealed class EventsPresenceStep : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
     public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
