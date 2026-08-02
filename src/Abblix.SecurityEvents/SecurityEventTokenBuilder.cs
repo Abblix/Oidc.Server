@@ -20,9 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 
 namespace Abblix.SecurityEvents;
 
@@ -193,6 +195,47 @@ public sealed class SecurityEventTokenBuilder
     public SecurityEventTokenBuilder WithEvent(string eventType, JsonObject? payload = null)
     {
         _events.Add(eventType, payload);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an event statement whose payload is a typed model, serialized here so the caller
+    /// works in terms of the profiling specification's type rather than raw JSON.
+    /// </summary>
+    /// <typeparam name="TPayload">The type modelling the event's payload.</typeparam>
+    /// <param name="eventType">The event identifier URI.</param>
+    /// <param name="payload">The payload value.</param>
+    /// <param name="serializerOptions">
+    /// Options for payload serialization; null takes the serializer's defaults. A receiver reads
+    /// the payload back with the options its <see cref="EventTypeRegistry"/> holds, so a
+    /// transmitter and receiver sharing a dictionary package agree by construction.</param>
+    /// <exception cref="ArgumentException">
+    /// A statement with the same event identifier was already added, or the payload serialized
+    /// into something other than a JSON object, which RFC 8417 Section 2.2 requires the value to
+    /// be.</exception>
+    public SecurityEventTokenBuilder WithEvent<TPayload>(
+        string eventType,
+        TPayload payload,
+        JsonSerializerOptions? serializerOptions = null)
+        where TPayload : IEventPayload
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        // A passthrough payload re-transmits what arrived, not a serialization of the wrapper:
+        // the wrapper is this package's shape, while its Json is the event's.
+        var node = payload is UnknownEventPayload unknown
+            ? unknown.Json.DeepClone()
+            : JsonSerializer.SerializeToNode(payload, payload.GetType(), serializerOptions);
+
+        if (node is not JsonObject payloadObject)
+        {
+            throw new ArgumentException(
+                $"The payload of event '{eventType}' serialized into {node?.GetValueKind().ToString() ?? "null"}, "
+                + "but an event payload must be a JSON object (RFC 8417 Section 2.2).",
+                nameof(payload));
+        }
+
+        _events.Add(eventType, payloadObject);
         return this;
     }
 
