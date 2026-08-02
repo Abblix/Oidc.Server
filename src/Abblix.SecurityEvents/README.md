@@ -1,6 +1,41 @@
 # Abblix.SecurityEvents
 
-Subject Identifiers for .NET, as defined by [RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html).
+Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
+Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
+
+## Building a Security Event Token
+
+A SET is a JWT whose claims describe a security event. The builder enforces what the
+specification requires - issuer, token identifier, issue time and at least one event statement -
+and refuses what the profile forbids: the `typ` header is fixed to `secevent+jwt`, and `exp`
+cannot be written, because its absence is what stops a SET doubling as an ID or access token.
+
+```csharp
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Abblix.SecurityEvents;
+using Abblix.SecurityEvents.Subjects;
+
+var compact = await new SecurityEventTokenBuilder()
+    .WithIssuer("https://tenant.example.com")
+    .WithAudience("https://receiver.example.com/events")
+    .WithJwtId(Guid.NewGuid().ToString("N"))
+    .WithEvent(
+        "https://tenant.example.com/events/membership-changed",
+        new JsonObject
+        {
+            ["subject"] = JsonSerializer.SerializeToNode<SubjectIdentifier>(
+                new IssSubSubject("https://account.example.com", "a3f1c9e2")),
+            ["change"] = "revoked",
+        })
+    .SignAsync(signer);
+```
+
+The signer is the seam to your cryptography: `ISecurityEventTokenSigner` owns key and algorithm
+choice, and unless a token's integrity is ensured by other means, RFC 8417 requires it to be
+signed. `Build()` alone returns the typed, unsigned model for inspection.
+
+## Subject Identifiers
 
 A Subject Identifier is a JSON object that says who or what an event is about, and says it in a
 way that names the identification mechanism rather than leaving it to be guessed. An email
