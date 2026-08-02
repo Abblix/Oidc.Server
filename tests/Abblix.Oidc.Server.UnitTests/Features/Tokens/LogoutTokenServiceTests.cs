@@ -407,7 +407,7 @@ public class LogoutTokenServiceTests
 
         var events = capturedToken.Payload.Json[JwtClaimTypes.Events] as JsonObject;
         Assert.NotNull(events);
-        Assert.True(events!.ContainsKey("http://schemas.openid.net/event/backchannel-logout"));
+        Assert.True(events!.ContainsKey(LogoutTokenEvents.BackChannelLogout));
     }
 
     /// <summary>

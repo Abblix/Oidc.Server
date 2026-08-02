@@ -55,7 +55,7 @@ public class LogoutTokenAsSecurityEventTests
     private const string SessionId = "session_789";
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string JwtId = "jwt-id-1";
-    private const string BackChannelLogoutEventType = "http://schemas.openid.net/event/backchannel-logout";
+    private const string BackChannelLogoutEventType = LogoutTokenEvents.BackChannelLogout;
 
     private static readonly DateTimeOffset IssuedAt = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan LogoutTokenExpiresIn = TimeSpan.FromMinutes(5);
