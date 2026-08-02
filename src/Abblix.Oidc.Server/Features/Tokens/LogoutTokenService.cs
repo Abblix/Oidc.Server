@@ -82,11 +82,12 @@ public partial class LogoutTokenService(
         var issuedAt = clock.GetUtcNow();
 
         // The logout token is a Security Event Token, so the SET envelope comes from the shared
-        // builder and its rules hold by construction: the required claims cannot be omitted, the
-        // logout order is one event statement carrying the empty object, and 'nonce' - which
-        // Back-Channel Logout PROHIBITS
-        // (https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken) - has no door
-        // to come in through.
+        // builder and its rules hold by construction: the required claims cannot be omitted and
+        // the logout order is one event statement carrying the empty object. The 'nonce' claim,
+        // which Back-Channel Logout PROHIBITS
+        // (https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken), stays out
+        // because nothing here writes it - the builder itself refuses only 'exp' and the claims
+        // its own methods manage, so the prohibition is this method's to keep, not the builder's.
         var builder = new SecurityEventTokenBuilder()
             .WithIssuer(logoutContext.Issuer)
             .WithAudience(clientInfo.ClientId)
