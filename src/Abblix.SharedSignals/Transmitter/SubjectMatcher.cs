@@ -100,9 +100,11 @@ public static class SubjectMatcher
     /// "Exactly identical" (SSF 1.0 Section 8.1.3.1), taken at the wire level: two subjects are
     /// identical when they serialize to equal JSON. The serialized form is what both parties
     /// actually exchanged, and each subtype writes its members in one fixed order, so the
-    /// comparison is deterministic without a per-format equality to maintain.
+    /// comparison is deterministic without a per-format equality to maintain. Public beside
+    /// <see cref="Matches"/> because subject BOOKKEEPING wants the strict relation: a removal
+    /// undoes exactly what was added, where the wildcard matching would over-reach.
     /// </summary>
-    private static bool Identical(SubjectIdentifier first, SubjectIdentifier second)
+    public static bool Identical(SubjectIdentifier first, SubjectIdentifier second)
         => JsonNode.DeepEquals(
             JsonSerializer.SerializeToNode<SubjectIdentifier>(first),
             JsonSerializer.SerializeToNode<SubjectIdentifier>(second));

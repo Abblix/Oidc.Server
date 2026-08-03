@@ -79,6 +79,13 @@ public sealed record StreamState
     public IReadOnlyList<SubjectIdentifier> RemovedSubjects { get; init; } = [];
 
     /// <summary>
+    /// When the receiver last triggered a verification event, the fact the
+    /// "min_verification_interval" throttle is measured against (SSF 1.0 Sections 8.1.1,
+    /// 8.1.4.2); null before the first trigger.
+    /// </summary>
+    public DateTimeOffset? LastVerificationRequestAt { get; init; }
+
+    /// <summary>
     /// The stream's identifier, read off the configuration - one value, one owner.
     /// </summary>
     public string StreamId => Configuration.StreamId;
