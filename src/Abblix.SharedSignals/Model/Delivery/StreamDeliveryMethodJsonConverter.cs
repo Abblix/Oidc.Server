@@ -52,17 +52,34 @@ public sealed class StreamDeliveryMethodJsonConverter : JsonConverter<StreamDeli
             throw new JsonException("A delivery object must be a JSON object (SSF 1.0 Section 6.1).");
         }
 
-        var method = document[StreamDeliveryMethod.ParameterNames.Method]?.GetValue<string>();
-
-        return method switch
+        var method = document[StreamDeliveryMethod.ParameterNames.Method] switch
         {
-            PushDeliveryMethod.MethodUri => document.Deserialize<PushDeliveryMethod>(options),
-            PollDeliveryMethod.MethodUri => document.Deserialize<PollDeliveryMethod>(options),
             null => throw new JsonException(
                 $"A delivery object carries no '{StreamDeliveryMethod.ParameterNames.Method}' member "
                 + "(SSF 1.0 Section 6.1)."),
-            _ => throw new JsonException($"The delivery method '{method}' is not supported."),
+            JsonValue value when value.TryGetValue<string>(out var name) => name,
+            _ => throw new JsonException(
+                $"The '{StreamDeliveryMethod.ParameterNames.Method}' member of a delivery object must "
+                + "be a string (SSF 1.0 Section 6.1)."),
         };
+
+        try
+        {
+            return method switch
+            {
+                PushDeliveryMethod.MethodUri => document.Deserialize<PushDeliveryMethod>(options),
+                PollDeliveryMethod.MethodUri => document.Deserialize<PollDeliveryMethod>(options),
+                _ => throw new JsonException($"The delivery method '{method}' is not supported."),
+            };
+        }
+        catch (ArgumentException exception)
+        {
+            // The subtype constructors enforce the member rules; here their verdict is only
+            // re-labelled for the wire, where "this document is invalid" is a JsonException by
+            // the serializer's own convention - so a transmitter mapping parse failures to a
+            // 400 answers 400, never 500, whatever the malformation.
+            throw new JsonException(exception.Message, exception);
+        }
     }
 
     /// <inheritdoc />

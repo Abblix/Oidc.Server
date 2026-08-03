@@ -29,9 +29,13 @@ namespace Abblix.SharedSignals.Model.Delivery;
 /// URL the transmitter supplied. The URL may be shared across receivers but must be unique per
 /// stream for a given receiver.
 /// </summary>
-/// <param name="endpointUrl">Where events are retrieved from; supplied by the transmitter.</param>
+/// <param name="endpointUrl">
+/// Where events are retrieved from - supplied by the transmitter, which is exactly why it may be
+/// null: a RECEIVER proposing poll delivery in a create or update request has no URL to offer,
+/// so its proposal is the bare method (SSF 1.0 Sections 6.1.2, 8.1.1.1), while a
+/// transmitter-issued stream configuration always carries the URL.</param>
 [method: JsonConstructor]
-public sealed class PollDeliveryMethod(Uri endpointUrl) : StreamDeliveryMethod(MethodUri)
+public sealed class PollDeliveryMethod(Uri? endpointUrl = null) : StreamDeliveryMethod(MethodUri)
 {
     /// <summary>
     /// The delivery method URI registered for poll delivery: "urn:ietf:rfc:8936"
@@ -40,9 +44,11 @@ public sealed class PollDeliveryMethod(Uri endpointUrl) : StreamDeliveryMethod(M
     public const string MethodUri = "urn:ietf:rfc:8936";
 
     /// <summary>
-    /// The URL where events can be retrieved from; supplied by the transmitter
-    /// (SSF 1.0 Section 6.1.2).
+    /// The URL where events can be retrieved from. Transmitter-supplied: present in every
+    /// transmitter-issued configuration (SSF 1.0 Section 8.1.1.1), absent from a receiver's own
+    /// proposal of poll delivery - the direction the null represents.
     /// </summary>
     [JsonPropertyName(ParameterNames.EndpointUrl)]
-    public Uri EndpointUrl { get; } = endpointUrl ?? throw new ArgumentNullException(nameof(endpointUrl));
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Uri? EndpointUrl { get; } = endpointUrl;
 }

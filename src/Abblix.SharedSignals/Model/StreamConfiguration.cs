@@ -29,9 +29,10 @@ namespace Abblix.SharedSignals.Model;
 /// <summary>
 /// An Event Stream's configuration: the document both sides contribute to and the transmitter
 /// returns whole (SSF 1.0 Section 8.1.1). Each member's doc says who supplies it, because that
-/// decides who may change it - a receiver's update request carries only the receiver-supplied
-/// members, and a transmitter ignores any transmitter-supplied member a receiver sends back
-/// (SSF 1.0 Sections 8.1.1.4, 8.1.1.5).
+/// decides who may change it - a receiver's update carries the receiver-supplied members, and a
+/// transmitter-supplied member it echoes back must match the expected value exactly, a mismatch
+/// earning a 400; only a MISSING transmitter-supplied member is ignored
+/// (SSF 1.0 Sections 8.1.1.3, 8.1.1.4).
 /// </summary>
 /// <remarks>
 /// The members SSF 1.0 Section 8.1.1 marks REQUIRED are declared <c>required</c>: this type is

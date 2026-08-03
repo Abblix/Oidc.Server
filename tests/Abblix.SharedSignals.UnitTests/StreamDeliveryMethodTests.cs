@@ -105,4 +105,35 @@ public class StreamDeliveryMethodTests
     {
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<StreamDeliveryMethod>("\"push\""));
     }
+
+    [Fact]
+    public void PollProposal_WithoutEndpointUrl_RoundTrips()
+    {
+        // The poll endpoint URL is transmitter-supplied (SSF 1.0 Section 6.1.2), so a receiver
+        // proposing poll sends the bare method - the shape must be constructible and readable.
+        var written = JsonSerializer.Serialize<StreamDeliveryMethod>(new PollDeliveryMethod());
+        Assert.Equal($$"""{"method":"{{PollDeliveryMethod.MethodUri}}"}""", written);
+
+        var reread = Assert.IsType<PollDeliveryMethod>(
+            JsonSerializer.Deserialize<StreamDeliveryMethod>(written));
+        Assert.Null(reread.EndpointUrl);
+    }
+
+    [Fact]
+    public void NonStringMethod_IsRefusedAsMalformedJson()
+    {
+        // Every malformation of a delivery object must surface as JsonException, so a
+        // transmitter mapping parse failures to a 400 never answers 500 for this one shape.
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<StreamDeliveryMethod>(
+            """{"method": 42}"""));
+    }
+
+    [Fact]
+    public void PushWithoutEndpointUrl_IsRefusedAsMalformedJson()
+    {
+        // The push endpoint URL is receiver-supplied and required; its constructor verdict is
+        // re-labelled to the serializer's own exception type at the converter boundary.
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<StreamDeliveryMethod>(
+            $$"""{"method": "{{PushDeliveryMethod.MethodUri}}"}"""));
+    }
 }
