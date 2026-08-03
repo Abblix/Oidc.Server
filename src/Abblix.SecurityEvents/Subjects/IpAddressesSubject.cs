@@ -21,9 +21,8 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
-using Abblix.SecurityEvents.Subjects;
 
-namespace Abblix.SharedSignals.Subjects;
+namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
 /// Identifies a subject by the IP addresses the transmitter observed for it
@@ -45,7 +44,7 @@ public sealed class IpAddressesSubject : SubjectIdentifier
     /// <paramref name="ipAddresses"/> holds a null or empty entry.</exception>
     [JsonConstructor]
     public IpAddressesSubject(IReadOnlyList<string> ipAddresses)
-        : base(SsfSubjectFormats.IpAddresses)
+        : base(SubjectFormats.IpAddresses)
     {
         ArgumentNullException.ThrowIfNull(ipAddresses);
 
@@ -54,7 +53,7 @@ public sealed class IpAddressesSubject : SubjectIdentifier
             if (string.IsNullOrEmpty(ipAddresses[i]))
             {
                 throw new ArgumentException(
-                    $"The '{SsfSubjectMemberNames.IpAddresses}' member holds a null or empty entry at "
+                    $"The '{SubjectMemberNames.IpAddresses}' member holds a null or empty entry at "
                     + $"index {i}; every entry must be the string representation of an IP address "
                     + "(SSF 1.0 Section 3.5.3).",
                     nameof(ipAddresses));
@@ -79,6 +78,6 @@ public sealed class IpAddressesSubject : SubjectIdentifier
     /// The IP addresses of the subject as observed by the transmitter
     /// (SSF 1.0 Section 3.5.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.IpAddresses)]
+    [JsonPropertyName(SubjectMemberNames.IpAddresses)]
     public IReadOnlyList<string> IpAddresses { get; }
 }

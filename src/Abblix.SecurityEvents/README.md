@@ -115,6 +115,16 @@ Every Identifier Format in the IANA registry, as a type of its own:
 | `uri` | `UriSubject` | `uri` |
 | `aliases` | `AliasesSubject` | `identifiers` |
 
+And the formats OpenID Shared Signals Framework 1.0 defines on top of that registry - the same
+vocabulary, with each constant's documentation naming which specification defines it:
+
+| Format | Type | Members |
+|---|---|---|
+| `complex` | `ComplexSubject` | `user`, `device`, `session`, `application`, `tenant`, `org_unit`, `group`, extensions |
+| `jwt_id` | `JwtIdSubject` | `iss`, `jti` |
+| `saml_assertion_id` | `SamlAssertionIdSubject` | `issuer`, `assertion_id` |
+| `ip-addresses` | `IpAddressesSubject` | `ip-addresses` |
+
 ## Reading and writing
 
 Serialization is polymorphic on the `format` member, and it needs no configuration: the converter
@@ -172,8 +182,8 @@ var options = new JsonSerializerOptions
 };
 ```
 
-A name that RFC 9493 already defines cannot be rebound, so a custom format can never change how a
-standard document is read.
+A name from the built-in vocabulary - RFC 9493 or Shared Signals - cannot be rebound, so a custom
+format can never change how a standard document is read.
 
 ## License
 

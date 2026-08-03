@@ -23,7 +23,6 @@
 using System.Text.Json;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
-using Abblix.SharedSignals.Subjects;
 
 namespace Abblix.SharedSignals.Receiver;
 

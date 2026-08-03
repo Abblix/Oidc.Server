@@ -22,9 +22,8 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Abblix.SecurityEvents.Subjects;
 
-namespace Abblix.SharedSignals.Subjects;
+namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
 /// A Complex Subject: several Simple Subject Members - a user, the device they are on, the
@@ -47,7 +46,7 @@ namespace Abblix.SharedSignals.Subjects;
 /// refused.
 /// </para>
 /// </remarks>
-public sealed class ComplexSubject() : SubjectIdentifier(SsfSubjectFormats.Complex)
+public sealed class ComplexSubject() : SubjectIdentifier(SubjectFormats.Complex)
 {
     private readonly SubjectIdentifier? _user;
     private readonly SubjectIdentifier? _device;
@@ -60,78 +59,78 @@ public sealed class ComplexSubject() : SubjectIdentifier(SsfSubjectFormats.Compl
     /// <summary>
     /// OPTIONAL. Identifies a user (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.User)]
+    [JsonPropertyName(SubjectMemberNames.User)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? User
     {
         get => _user;
-        init => _user = RequireSimple(value, SsfSubjectMemberNames.User);
+        init => _user = RequireSimple(value, SubjectMemberNames.User);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies a device (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Device)]
+    [JsonPropertyName(SubjectMemberNames.Device)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? Device
     {
         get => _device;
-        init => _device = RequireSimple(value, SsfSubjectMemberNames.Device);
+        init => _device = RequireSimple(value, SubjectMemberNames.Device);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies a session (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Session)]
+    [JsonPropertyName(SubjectMemberNames.Session)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? Session
     {
         get => _session;
-        init => _session = RequireSimple(value, SsfSubjectMemberNames.Session);
+        init => _session = RequireSimple(value, SubjectMemberNames.Session);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies an application (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Application)]
+    [JsonPropertyName(SubjectMemberNames.Application)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? Application
     {
         get => _application;
-        init => _application = RequireSimple(value, SsfSubjectMemberNames.Application);
+        init => _application = RequireSimple(value, SubjectMemberNames.Application);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies a tenant (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Tenant)]
+    [JsonPropertyName(SubjectMemberNames.Tenant)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? Tenant
     {
         get => _tenant;
-        init => _tenant = RequireSimple(value, SsfSubjectMemberNames.Tenant);
+        init => _tenant = RequireSimple(value, SubjectMemberNames.Tenant);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies an organizational unit (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.OrgUnit)]
+    [JsonPropertyName(SubjectMemberNames.OrgUnit)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? OrgUnit
     {
         get => _orgUnit;
-        init => _orgUnit = RequireSimple(value, SsfSubjectMemberNames.OrgUnit);
+        init => _orgUnit = RequireSimple(value, SubjectMemberNames.OrgUnit);
     }
 
     /// <summary>
     /// OPTIONAL. Identifies a group (SSF 1.0 Section 3.3).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Group)]
+    [JsonPropertyName(SubjectMemberNames.Group)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SubjectIdentifier? Group
     {
         get => _group;
-        init => _group = RequireSimple(value, SsfSubjectMemberNames.Group);
+        init => _group = RequireSimple(value, SubjectMemberNames.Group);
     }
 
     /// <summary>
@@ -155,6 +154,6 @@ public sealed class ComplexSubject() : SubjectIdentifier(SsfSubjectFormats.Compl
             ? value
             : throw new ArgumentException(
                 $"The '{memberName}' member of a Complex Subject must be a Simple Subject Member; "
-                + $"a nested '{SsfSubjectFormats.Complex}' subject is not one (SSF 1.0 Section 3.3).",
+                + $"a nested '{SubjectFormats.Complex}' subject is not one (SSF 1.0 Section 3.3).",
                 memberName);
 }

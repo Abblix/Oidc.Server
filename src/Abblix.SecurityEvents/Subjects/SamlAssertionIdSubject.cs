@@ -21,9 +21,8 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
-using Abblix.SecurityEvents.Subjects;
 
-namespace Abblix.SharedSignals.Subjects;
+namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
 /// Identifies a subject that is a SAML 2.0 assertion, by the assertion's Issuer and ID values
@@ -39,17 +38,17 @@ namespace Abblix.SharedSignals.Subjects;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [method: JsonConstructor]
 public sealed class SamlAssertionIdSubject(string issuer, string assertionId)
-    : SubjectIdentifier(SsfSubjectFormats.SamlAssertionId)
+    : SubjectIdentifier(SubjectFormats.SamlAssertionId)
 {
     /// <summary>
     /// The Issuer value of the SAML assertion being identified (SSF 1.0 Section 3.5.2).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.Issuer)]
-    public string Issuer { get; } = RequirePresent(issuer, SsfSubjectMemberNames.Issuer);
+    [JsonPropertyName(SubjectMemberNames.SamlIssuer)]
+    public string Issuer { get; } = RequirePresent(issuer, SubjectMemberNames.SamlIssuer);
 
     /// <summary>
     /// The ID value of the SAML assertion being identified (SSF 1.0 Section 3.5.2).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.AssertionId)]
-    public string AssertionId { get; } = RequirePresent(assertionId, SsfSubjectMemberNames.AssertionId);
+    [JsonPropertyName(SubjectMemberNames.AssertionId)]
+    public string AssertionId { get; } = RequirePresent(assertionId, SubjectMemberNames.AssertionId);
 }

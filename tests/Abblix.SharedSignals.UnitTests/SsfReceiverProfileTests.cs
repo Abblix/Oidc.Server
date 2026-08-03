@@ -27,7 +27,6 @@ using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Receiver;
-using Abblix.SharedSignals.Subjects;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;

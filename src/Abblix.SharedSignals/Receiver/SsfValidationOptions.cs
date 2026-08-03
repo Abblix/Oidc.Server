@@ -22,7 +22,6 @@
 
 using System.Text.Json;
 using Abblix.SecurityEvents.Validation;
-using Abblix.SharedSignals.Subjects;
 
 namespace Abblix.SharedSignals.Receiver;
 
@@ -52,9 +51,10 @@ public sealed record SsfValidationOptions : SecurityEventTokenValidationOptions
     public IReadOnlyCollection<string> CriticalSubjectMembers { get; init; } = [];
 
     /// <summary>
-    /// The options the "sub_id" claim is read with. The default understands the RFC 9493
-    /// registry plus the SSF formats; a deployment speaking proprietary formats supplies its
-    /// own extended options.
+    /// The options the "sub_id" claim is read with. Null - the common case - reads the built-in
+    /// vocabulary, which already spans the RFC 9493 registry and the SSF extensions; a
+    /// deployment speaking proprietary formats supplies options carrying its own extended
+    /// subject converter.
     /// </summary>
-    public JsonSerializerOptions SubjectSerializerOptions { get; init; } = SsfSubjectJson.Options;
+    public JsonSerializerOptions? SubjectSerializerOptions { get; init; }
 }

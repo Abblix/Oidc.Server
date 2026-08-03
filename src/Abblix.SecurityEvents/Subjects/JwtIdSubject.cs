@@ -21,9 +21,8 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
-using Abblix.SecurityEvents.Subjects;
 
-namespace Abblix.SharedSignals.Subjects;
+namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
 /// Identifies a subject that is itself a JWT, by the issuer that minted it and its token
@@ -39,7 +38,7 @@ namespace Abblix.SharedSignals.Subjects;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [method: JsonConstructor]
 public sealed class JwtIdSubject(string issuer, string jwtId)
-    : SubjectIdentifier(SsfSubjectFormats.JwtId)
+    : SubjectIdentifier(SubjectFormats.JwtId)
 {
     /// <summary>
     /// The "iss" claim of the JWT being identified (SSF 1.0 Section 3.5.1).
@@ -50,6 +49,6 @@ public sealed class JwtIdSubject(string issuer, string jwtId)
     /// <summary>
     /// The "jti" claim of the JWT being identified (SSF 1.0 Section 3.5.1).
     /// </summary>
-    [JsonPropertyName(SsfSubjectMemberNames.JwtId)]
-    public string JwtId { get; } = RequirePresent(jwtId, SsfSubjectMemberNames.JwtId);
+    [JsonPropertyName(SubjectMemberNames.JwtId)]
+    public string JwtId { get; } = RequirePresent(jwtId, SubjectMemberNames.JwtId);
 }
