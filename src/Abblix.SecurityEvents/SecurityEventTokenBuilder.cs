@@ -25,6 +25,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
+using Abblix.SecurityEvents.Subjects;
 
 namespace Abblix.SecurityEvents;
 
@@ -58,6 +59,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             [JwtClaimTypes.Events] = nameof(WithEvent),
             [IanaClaimTypes.Txn] = nameof(WithTransactionId),
             [IanaClaimTypes.Toe] = nameof(WithTimeOfEvent),
+            [IanaClaimTypes.SubId] = nameof(WithSubjectId),
         };
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -68,6 +70,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     private string? _issuer;
     private string? _jwtId;
     private string? _subject;
+    private SubjectIdentifier? _subjectId;
     private string? _transactionId;
     private DateTimeOffset? _issuedAt;
     private DateTimeOffset? _timeOfEvent;
@@ -144,6 +147,24 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
         ArgumentException.ThrowIfNullOrEmpty(subject);
 
         _subject = subject;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the "sub_id" claim: the Subject Identifier of the principal the SET is about
+    /// (RFC 9493 Section 4.2).
+    /// </summary>
+    /// <remarks>
+    /// Serialization happens at <see cref="Build"/> under the identifier's runtime type, so a
+    /// profile-specific subtype travels correctly without this builder knowing its format - the
+    /// custom-formats registration matters only to the reader.
+    /// </remarks>
+    /// <param name="subjectId">The Subject Identifier, in any Identifier Format.</param>
+    public SecurityEventTokenBuilder WithSubjectId(SubjectIdentifier subjectId)
+    {
+        ArgumentNullException.ThrowIfNull(subjectId);
+
+        _subjectId = subjectId;
         return this;
     }
 
@@ -327,6 +348,15 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
         if (_audiences.Count > 0)
         {
             token.Payload.Audiences = _audiences;
+        }
+
+        if (_subjectId is not null)
+        {
+            // Serialized fresh per Build under the runtime type, so each token owns its node and
+            // the polymorphic dispatch never needs the reader-side format registration.
+            payload.SetProperty(
+                IanaClaimTypes.SubId,
+                JsonSerializer.SerializeToNode<SubjectIdentifier>(_subjectId));
         }
 
         if (_transactionId is not null)

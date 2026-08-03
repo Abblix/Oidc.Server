@@ -20,8 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.SecurityEvents.Subjects;
 
 namespace Abblix.SecurityEvents;
 
@@ -90,6 +92,27 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// the same transaction. OPTIONAL (RFC 8417 Section 2.2).
     /// </summary>
     public string? TransactionId => Token.Payload.Json.GetProperty<string>(IanaClaimTypes.Txn);
+
+    /// <summary>
+    /// Reads the "sub_id" claim: the Subject Identifier of the principal the SET is about
+    /// (RFC 9493 Section 4.2). Null when the claim is absent.
+    /// </summary>
+    /// <remarks>
+    /// A method rather than a property, because interpreting the claim is real work whose outcome
+    /// depends on the options: a profile teaching the converter extra Identifier Formats passes
+    /// them here, and a document naming a format the options do not know fails as malformed
+    /// rather than being repaired - the same posture the rest of this view takes.
+    /// </remarks>
+    /// <param name="serializerOptions">
+    /// Options whose converters extend the RFC 9493 registered formats, typically a
+    /// <see cref="SubjectIdentifierJsonConverter"/> built with a profile's custom-formats map;
+    /// null reads the registered formats alone.</param>
+    /// <exception cref="JsonException">
+    /// The claim is present but is not a Subject Identifier the options understand.</exception>
+    public SubjectIdentifier? GetSubjectId(JsonSerializerOptions? serializerOptions = null)
+        => Token.Payload.Json[IanaClaimTypes.SubId] is { } subjectId
+            ? subjectId.Deserialize<SubjectIdentifier>(serializerOptions)
+            : null;
 
     /// <summary>
     /// The "toe" claim: when the event itself occurred, as opposed to when the SET about it was

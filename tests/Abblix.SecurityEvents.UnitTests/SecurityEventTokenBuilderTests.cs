@@ -23,6 +23,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -120,6 +121,7 @@ public class SecurityEventTokenBuilderTests
     [InlineData(JwtClaimTypes.Events)]
     [InlineData(IanaClaimTypes.Txn)]
     [InlineData(IanaClaimTypes.Toe)]
+    [InlineData(IanaClaimTypes.SubId)]
     public void WithClaim_ManagedClaim_IsRejected_NamingTheRightDoor(string claim)
     {
         var exception = Assert.Throws<ArgumentException>(
@@ -162,6 +164,20 @@ public class SecurityEventTokenBuilderTests
         Assert.False(payload.ContainsKey(IanaClaimTypes.Sub));
         Assert.False(payload.ContainsKey(IanaClaimTypes.Txn));
         Assert.False(payload.ContainsKey(IanaClaimTypes.Toe));
+        Assert.False(payload.ContainsKey(IanaClaimTypes.SubId));
+    }
+
+    [Fact]
+    public void SubjectId_RoundTrips_ThroughTheModel()
+    {
+        // The "sub_id" claim carries a Subject Identifier object (RFC 9493 Section 4.2); the
+        // reader dispatches on its "format" and hands back the typed subtype.
+        var token = MinimalValidBuilder()
+            .WithSubjectId(new OpaqueSubject("f67e39a0a4d34d56b3aa1bc4cff0069f"))
+            .Build();
+
+        var subjectId = Assert.IsType<OpaqueSubject>(token.GetSubjectId());
+        Assert.Equal("f67e39a0a4d34d56b3aa1bc4cff0069f", subjectId.Id);
     }
 
     [Fact]
