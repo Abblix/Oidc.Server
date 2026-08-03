@@ -99,7 +99,7 @@ public sealed class EventDispatcher(
                 continue;
             }
 
-            await MintAndEnqueueAsync(stream, descriptor, cancellationToken);
+            await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
             reached++;
         }
 
@@ -116,16 +116,20 @@ public sealed class EventDispatcher(
     /// <param name="stream">The stream the event targets.</param>
     /// <param name="descriptor">The event; for verification and stream-updated its subject is
     /// the stream's own opaque identifier (SSF 1.0 Sections 8.1.4.1, 8.1.5).</param>
+    /// <param name="asStatusAnnouncement">
+    /// True for the stream-updated event escorting a transmitter-initiated status change, so
+    /// delivery carries it even over the stream it stops (SSF 1.0 Section 8.1.5).</param>
     /// <param name="cancellationToken">Cancels signing and the enqueue.</param>
     public Task DispatchToStreamAsync(
         StreamState stream,
         SecurityEventDescriptor descriptor,
+        bool asStatusAnnouncement = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        return MintAndEnqueueAsync(stream, descriptor, cancellationToken);
+        return MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
     }
 
     /// <summary>
@@ -149,6 +153,7 @@ public sealed class EventDispatcher(
     private async Task MintAndEnqueueAsync(
         StreamState stream,
         SecurityEventDescriptor descriptor,
+        bool asStatusAnnouncement,
         CancellationToken cancellationToken)
     {
         // Each stream gets its own SET: its own identifier, its own audience. Sharing one token
@@ -181,6 +186,9 @@ public sealed class EventDispatcher(
         }
 
         var compactToken = await builder.SignAsync(signer, cancellationToken);
-        await outbox.EnqueueAsync(stream.StreamId, new OutboxItem(jwtId, compactToken), cancellationToken);
+        await outbox.EnqueueAsync(
+            stream.StreamId,
+            new OutboxItem(jwtId, compactToken, asStatusAnnouncement),
+            cancellationToken);
     }
 }

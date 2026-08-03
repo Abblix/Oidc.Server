@@ -436,10 +436,72 @@ public sealed class StreamManagementService(
                 Subject = new OpaqueSubject(stream.StreamId),
                 Payload = new VerificationEventPayload { State = request.State },
             },
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         await store.UpdateAsync(stream with { LastVerificationRequestAt = now }, cancellationToken);
         return ManagementResult<object>.NoContent();
+    }
+
+    /// <summary>
+    /// Changes a stream's status on the transmitter's OWN initiative - the door SSF 1.0
+    /// Section 8.1.5 governs, as opposed to the receiver-driven
+    /// <see cref="UpdateStreamStatusAsync"/>. The stream-updated event escorts the change: for
+    /// a pause or disable it is enqueued as a status announcement, the one kind of item
+    /// delivery carries over a stopped stream, and for a disable the held queue is dropped
+    /// FIRST so the announcement is not dropped with it.
+    /// </summary>
+    /// <param name="receiverId">The receiver whose stream is being changed.</param>
+    /// <param name="streamId">The stream being changed.</param>
+    /// <param name="status">The new status, one of <see cref="StreamStatuses"/>.</param>
+    /// <param name="reason">Why the transmitter changed it, for the event and the status
+    /// document.</param>
+    /// <param name="cancellationToken">Cancels store I/O and the enqueue.</param>
+    /// <returns>True when the stream was found and changed; false when no such stream exists,
+    /// or its status already was the requested one - a no-op announces nothing.</returns>
+    /// <exception cref="ArgumentException">
+    /// The status value is not one of <see cref="StreamStatuses"/>: the caller here is the
+    /// transmitter's own code, so a bad value is a programming error, not wire input.
+    /// </exception>
+    public async Task<bool> ChangeStreamStatusAsync(
+        string receiverId,
+        string streamId,
+        string status,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (StreamStatuses.Enabled or StreamStatuses.Paused or StreamStatuses.Disabled))
+        {
+            throw new ArgumentException(
+                $"'{status}' is not a stream status (SSF 1.0 Section 8.1.2.1).", nameof(status));
+        }
+
+        if (await store.FindAsync(receiverId, streamId, cancellationToken) is not { } stream
+            || stream.Status == status)
+        {
+            return false;
+        }
+
+        if (status == StreamStatuses.Disabled)
+        {
+            // "will not hold any events" (Section 8.1.2.1) - and dropped before the
+            // announcement is enqueued, so the announcement survives the drop.
+            await outbox.ClearAsync(stream.StreamId, cancellationToken);
+        }
+
+        await dispatcher.DispatchToStreamAsync(
+            stream,
+            new SecurityEventDescriptor
+            {
+                EventType = SsfEventTypes.StreamUpdated,
+                Subject = new OpaqueSubject(stream.StreamId),
+                Payload = new StreamUpdatedEventPayload { Status = status, Reason = reason },
+            },
+            asStatusAnnouncement: true,
+            cancellationToken);
+
+        return await store.UpdateAsync(
+            stream with { Status = status, StatusReason = reason },
+            cancellationToken);
     }
 
     /// <summary>

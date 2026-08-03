@@ -30,4 +30,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// (RFC 8936 Section 2.2).</param>
 /// <param name="CompactToken">The signed token in compact serialization, exactly as it will
 /// travel.</param>
-public sealed record OutboxItem(string JwtId, string CompactToken);
+/// <param name="IsStatusAnnouncement">
+/// True for the stream-updated event that escorts a transmitter-initiated status change: the
+/// one item delivery must carry even over a stream that is paused or disabled, because
+/// SSF 1.0 Section 8.1.5 wants it sent "before stopping the stream" - and the stop has, by the
+/// time delivery runs, already happened.</param>
+public sealed record OutboxItem(string JwtId, string CompactToken, bool IsStatusAnnouncement = false);

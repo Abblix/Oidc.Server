@@ -202,7 +202,7 @@ public class EventDispatcherTests
                 Subject = new OpaqueSubject("s-1"),
                 Payload = new Events.StreamUpdatedEventPayload { Status = StreamStatuses.Disabled },
             },
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
         var minted = Assert.Single(signer.Signed);
