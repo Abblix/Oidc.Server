@@ -33,9 +33,60 @@ namespace Abblix.SharedSignals.Model;
 public sealed record TransmitterConfiguration
 {
     /// <summary>
-    /// The well-known path suffix the metadata is published under (SSF 1.0 Section 7.2.1).
+    /// The well-known segment the metadata is published under (SSF 1.0 Section 7.2). A segment
+    /// to INSERT, never a suffix to append - see <see cref="WellKnownAddress"/>.
     /// </summary>
-    public const string WellKnownPathSuffix = "/.well-known/ssf-configuration";
+    private const string WellKnownSegment = "/.well-known/ssf-configuration";
+
+    /// <summary>
+    /// The address the metadata for <paramref name="issuer"/> is published at: the well-known
+    /// segment inserted "into the Issuer between the host component and the path component, if
+    /// any", with any terminating "/" of the issuer's path removed first (SSF 1.0 Sections 7.2,
+    /// 7.2.1). The insertion - not a suffix - is what lets one host serve several issuers:
+    /// "https://tr.example.com/issuer1" resolves to
+    /// "https://tr.example.com/.well-known/ssf-configuration/issuer1".
+    /// </summary>
+    /// <param name="issuer">The transmitter's issuer identifier, as documented by the
+    /// transmitter.</param>
+    /// <exception cref="ArgumentException">
+    /// The issuer is relative, carries a query or fragment (SSF 1.0 Section 7.1 defines the
+    /// identifier without them), or uses a scheme other than https on a non-loopback host - the
+    /// document behind this address names every endpoint and the signing keys, so its transport
+    /// is part of the trust, and Section 7.2 expects the https scheme. Loopback stays permitted
+    /// for local development.</exception>
+    public static Uri WellKnownAddress(Uri issuer)
+    {
+        ArgumentNullException.ThrowIfNull(issuer);
+
+        if (!issuer.IsAbsoluteUri)
+        {
+            throw new ArgumentException(
+                "An issuer identifier is an absolute URL (SSF 1.0 Section 7.1).", nameof(issuer));
+        }
+
+        if (issuer.Query.Length > 0 || issuer.Fragment.Length > 0)
+        {
+            throw new ArgumentException(
+                $"The issuer '{issuer}' carries a query or fragment component, which an issuer "
+                + "identifier has no room for (SSF 1.0 Section 7.1).",
+                nameof(issuer));
+        }
+
+        if (issuer.Scheme != Uri.UriSchemeHttps && !issuer.IsLoopback)
+        {
+            throw new ArgumentException(
+                $"Refusing to derive a configuration address from '{issuer}': the document there "
+                + "names every endpoint and the signing keys, so fetching it over cleartext hands "
+                + "the whole trust anchor to whoever sits on the path (SSF 1.0 Section 7.2). Use "
+                + "https, or a loopback address for local development.",
+                nameof(issuer));
+        }
+
+        return new UriBuilder(issuer)
+        {
+            Path = WellKnownSegment + issuer.AbsolutePath.TrimEnd('/'),
+        }.Uri;
+    }
 
     /// <summary>
     /// The wire names of the metadata members (SSF 1.0 Section 7.1).

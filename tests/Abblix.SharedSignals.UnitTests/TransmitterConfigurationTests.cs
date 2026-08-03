@@ -94,4 +94,57 @@ public class TransmitterConfigurationTests
         Assert.Throws<JsonException>(
             () => JsonSerializer.Deserialize<TransmitterConfiguration>("""{"spec_version": "1_0"}"""));
     }
+
+    [Fact]
+    public void WellKnownAddress_WithoutAPathComponent_AppendsTheSegment()
+    {
+        // SSF 1.0 Section 7.2.1, Figure 16: "https://tr.example.com" has no path, so the
+        // insertion degenerates to a plain append.
+        Assert.Equal(
+            new Uri("https://tr.example.com/.well-known/ssf-configuration"),
+            TransmitterConfiguration.WellKnownAddress(new Uri("https://tr.example.com")));
+    }
+
+    [Fact]
+    public void WellKnownAddress_WithAPathComponent_InsertsBetweenHostAndPath()
+    {
+        // SSF 1.0 Section 7.2.1, Figure 17: the segment goes BETWEEN host and path - a naive
+        // suffix would produce ".../issuer1/.well-known/..." and miss multi-tenant issuers.
+        Assert.Equal(
+            new Uri("https://tr.example.com/.well-known/ssf-configuration/issuer1"),
+            TransmitterConfiguration.WellKnownAddress(new Uri("https://tr.example.com/issuer1")));
+    }
+
+    [Fact]
+    public void WellKnownAddress_RemovesTheTerminatingSlash_BeforeInserting()
+    {
+        // "any terminating '/' MUST be removed before inserting" (SSF 1.0 Section 7.2.1).
+        Assert.Equal(
+            new Uri("https://tr.example.com/.well-known/ssf-configuration/issuer1"),
+            TransmitterConfiguration.WellKnownAddress(new Uri("https://tr.example.com/issuer1/")));
+    }
+
+    [Fact]
+    public void WellKnownAddress_CleartextIssuer_IsRefused_ExceptOnLoopback()
+    {
+        // The document behind the address names every endpoint and the signing keys; over
+        // cleartext the whole trust anchor is whoever sits on the path. A developer's loopback
+        // offers no path to sit on.
+        Assert.Throws<ArgumentException>(
+            () => TransmitterConfiguration.WellKnownAddress(new Uri("http://tr.example.com")));
+
+        Assert.Equal(
+            new Uri("http://localhost:5000/.well-known/ssf-configuration"),
+            TransmitterConfiguration.WellKnownAddress(new Uri("http://localhost:5000")));
+    }
+
+    [Fact]
+    public void WellKnownAddress_IssuerWithQueryOrFragment_IsRefused()
+    {
+        // An issuer identifier has no room for either (SSF 1.0 Section 7.1).
+        Assert.Throws<ArgumentException>(
+            () => TransmitterConfiguration.WellKnownAddress(new Uri("https://tr.example.com/a?x=1")));
+        Assert.Throws<ArgumentException>(
+            () => TransmitterConfiguration.WellKnownAddress(new Uri("https://tr.example.com/a#frag")));
+    }
 }
