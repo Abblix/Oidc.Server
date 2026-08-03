@@ -97,7 +97,8 @@ public class TransmitterToReceiverScenarioTests
             options.SigningKeySource = _ => ValueTask.FromResult(key);
             options.Events.Register<MembershipChangedPayload>(MembershipChanged);
         });
-        services.AddInMemoryReplayCache();
+        services.AddDistributedMemoryCache();
+        services.AddDistributedReplayCache();
 
         return services.BuildServiceProvider();
     }

@@ -36,6 +36,7 @@
     <!-- Declared directly because this package uses them directly - IServiceCollection and
          ActivatorUtilities, the options pattern, the LoggerMessage source generator - rather than
          leaning on what happens to flow transitively through Abblix.Jwt today. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
@@ -50,6 +51,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
     <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
   </ItemGroup>
 
   <ItemGroup>

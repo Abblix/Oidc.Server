@@ -73,8 +73,9 @@ services.AddSecurityEvents(options =>
         "https://tenant.example.com/events/membership-changed");
     options.SigningKeySource = _ => ValueTask.FromResult(signingKey); // transmitters only
 });
-services.AddJwksKeyResolution();   // receivers: issuers' keys from their published JWK Sets
-services.AddInMemoryReplayCache(); // receivers: process-local "jti" replay protection
+services.AddJwksKeyResolution();      // receivers: issuers' keys from their published JWK Sets
+services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache
+services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store
 ```
 
 A pure receiver registers a key resolver and never configures signing; a pure transmitter does
