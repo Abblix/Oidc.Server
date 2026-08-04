@@ -47,5 +47,6 @@
     <Project Path="tests/Abblix.Jwt.Azure.UnitTests/Abblix.Jwt.Azure.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.UnitTests/Abblix.SecurityEvents.UnitTests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.UnitTests/Abblix.SharedSignals.UnitTests.csproj" />
+    <Project Path="tests/Abblix.SharedSignals.E2E.Tests/Abblix.SharedSignals.E2E.Tests.csproj" />
   </Folder>
 </Solution>
