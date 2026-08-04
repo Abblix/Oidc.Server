@@ -97,15 +97,24 @@ public sealed class PushDeliveryHandler(
 
         verdict.TryGetSuccess(out var validated);
 
-        // The envelope claims are REQUIRED and the profile has verified them by now, so a miss
-        // here is a mis-composed pipeline, not a token defect - and with no replay cache the
-        // question does not arise.
-        if (replayCache is not null
-            && validated!.Token is { Issuer: { } issuer, JwtId: { } jwtId, IssuedAt: { } issuedAt }
-            && !await replayCache.TryRegisterAsync(issuer, jwtId, issuedAt, cancellationToken))
+        if (replayCache is not null)
         {
-            // A redelivery of something already processed: acknowledged, never re-consumed.
-            return PushDeliveryResult.Accepted;
+            // The default profile requires each of these envelope claims with its own step, so a
+            // miss here means a weakened profile let an incomplete envelope through - and a token
+            // replay accounting cannot track must not slip past it. The miss fails closed.
+            if (validated!.Token is not { Issuer: { } issuer, JwtId: { } jwtId, IssuedAt: { } issuedAt })
+            {
+                return PushDeliveryResult.BadRequest(new DeliveryError(
+                    DeliveryErrorCodes.InvalidRequest,
+                    "The SET lacks an envelope claim replay accounting keys on: 'iss', 'jti' and "
+                    + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
+            }
+
+            if (!await replayCache.TryRegisterAsync(issuer, jwtId, issuedAt, cancellationToken))
+            {
+                // A redelivery of something already processed: acknowledged, never re-consumed.
+                return PushDeliveryResult.Accepted;
+            }
         }
 
         var refusal = await sink.ConsumeAsync(validated!, cancellationToken);

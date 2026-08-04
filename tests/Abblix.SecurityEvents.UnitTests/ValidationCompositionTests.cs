@@ -67,7 +67,7 @@ public class ValidationCompositionTests
             .ToArray();
 
     [Fact]
-    public void DefaultPipeline_HoldsTheNineStepsInOrder()
+    public void DefaultPipeline_HoldsTheTenStepsInOrder()
     {
         Assert.Equal(
             [
@@ -75,6 +75,7 @@ public class ValidationCompositionTests
                 typeof(TypHeaderStep),
                 typeof(ExpAbsenceStep),
                 typeof(EventsPresenceStep),
+                typeof(JwtIdPresenceStep),
                 typeof(IssuerAllowlistStep),
                 typeof(SignatureStep),
                 typeof(AudienceStep),

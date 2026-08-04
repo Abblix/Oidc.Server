@@ -187,6 +187,31 @@ public class PushDeliveryHandlerTests
     }
 
     [Fact]
+    public async Task UntrackableEnvelope_WithReplayCache_FailsClosed()
+    {
+        // The default profile requires "iss", "jti" and "iat" (RFC 8417 Section 2.2), so this
+        // token can only come from a weakened profile - and a token replay accounting cannot
+        // track must not slip past it. The safe direction is rejection, not consumption.
+        var jtiless = new SecurityEventToken(new Abblix.Jwt.JsonWebToken
+        {
+            Payload = { Issuer = "https://tr.example.com" },
+        });
+        var sink = new RecordingSink();
+        var handler = new PushDeliveryHandler(
+            new StubValidator(error: null, token: jtiless),
+            new SsfValidationOptions(),
+            sink,
+            new FakeReplayCache());
+
+        var result = await handler.HandleAsync(
+            SetMediaType, "a.b.c", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(DeliveryErrorCodes.InvalidRequest, result.Error!.Error);
+        Assert.Empty(sink.Consumed);
+    }
+
+    [Fact]
     public async Task Redelivery_IsAcknowledged_WithoutReprocessing()
     {
         // RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier responses: the
