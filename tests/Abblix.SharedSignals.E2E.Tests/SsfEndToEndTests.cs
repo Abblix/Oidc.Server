@@ -1,0 +1,304 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Runtime.CompilerServices;
+using Abblix.Jwt;
+using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Delivery;
+using Abblix.SecurityEvents.Infrastructure;
+using Abblix.SecurityEvents.Subjects;
+using Abblix.SecurityEvents.Validation;
+using Abblix.SharedSignals.Events;
+using Abblix.SharedSignals.Infrastructure;
+using Abblix.SharedSignals.MinimalApi;
+using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Model.Delivery;
+using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Transmitter;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Abblix.SharedSignals.E2E.Tests;
+
+/// <summary>
+/// The whole framework as two real hosts talking HTTP: a transmitter serving discovery, the
+/// management API and poll delivery through the Minimal API adapter, and a receiver whose push
+/// intake runs the composed validation pipeline over a genuine RS256 signature. Every hop is
+/// the shipped code path - the receiver's clients, the transmitter's endpoints, the delivery
+/// senders - so a green run means the packages carry both roles end to end.
+/// </summary>
+public sealed class SsfEndToEndTests : IAsyncLifetime
+{
+    private const string TransmitterIssuer = "https://tr.example.com";
+    private const string ReceiverId = "receiver-e2e";
+    private const string PushEndpoint = "https://receiver.example.com/events";
+    private const string MembershipChanged = "https://tenant.example.com/events/membership-changed";
+
+    private readonly JsonWebKey _key =
+        JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+
+    private readonly RecordingSink _sink = new();
+
+    private WebApplication _transmitter = null!;
+    private WebApplication _receiver = null!;
+
+    public async ValueTask InitializeAsync()
+    {
+        _transmitter = await StartTransmitterAsync();
+        _receiver = await StartReceiverAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _receiver.DisposeAsync();
+        await _transmitter.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task DiscoveryToPushDelivery_CarriesAVerifiedEvent_AndARedeliveryIsAcknowledgedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        var stream = management.Created;
+
+        // The receiver names its subject and asks the stream to prove itself.
+        Assert.True(await management.Client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = stream.StreamId, Subject = Jdoe() },
+            cancellationToken));
+        Assert.True(await management.Client.RequestVerificationAsync(
+            new VerificationRequest { StreamId = stream.StreamId, State = "e2e-state" },
+            cancellationToken));
+
+        // The transmitter drains its outbox into the receiver's real push endpoint.
+        Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
+
+        var verification = Assert.Single(_sink.Consumed);
+        Assert.Equal(
+            stream.StreamId,
+            Assert.IsType<OpaqueSubject>(verification.Token.GetSubjectId()).Id);
+        Assert.Equal(
+            "e2e-state",
+            Assert.IsType<VerificationEventPayload>(
+                verification.EventPayloads![SsfEventTypes.Verification]).State);
+
+        // A business event reaches the stream through the matching fan-out.
+        var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
+        Assert.Equal(1, await dispatcher.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken));
+
+        // Captured before draining, so the exact same SET can be redelivered afterwards.
+        var outbox = _transmitter.Services.GetRequiredService<IEventOutbox>();
+        var minted = Assert.Single(
+            await outbox.PendingAsync(stream.StreamId, null, cancellationToken));
+
+        Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
+        Assert.Equal(2, _sink.Consumed.Count);
+
+        // RFC 8935 Section 2 lets the transmitter redeliver regardless of earlier responses:
+        // the repeat earns the same 202 and the queue empties, but the receiver's replay cache
+        // keeps the sink at one processing per event.
+        await outbox.EnqueueAsync(stream.StreamId, minted, cancellationToken);
+        Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
+        Assert.Equal(2, _sink.Consumed.Count);
+    }
+
+    [Fact]
+    public async Task PollLifecycle_SwitchesDelivery_HoldsAcrossAPause_AndEndsWithDeletion()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        var streamId = management.Created.StreamId;
+        var client = management.Client;
+
+        Assert.True(await client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
+
+        // The receiver proposes poll with the bare method - the endpoint URL is the
+        // transmitter's to supply, and the update answers with it.
+        var updated = await client.UpdateAsync(
+            new UpdateStreamRequest { StreamId = streamId, Delivery = new PollDeliveryMethod() },
+            cancellationToken);
+        var poll = Assert.IsType<PollDeliveryMethod>(updated!.Delivery);
+        Assert.NotNull(poll.EndpointUrl);
+
+        var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
+        var pollClient = new PollClient(_transmitter.GetTestClient());
+
+        Assert.Equal(1, await dispatcher.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken));
+
+        var page = await pollClient.PollAsync(poll, new PollRequest(), cancellationToken);
+        var jwtId = Assert.Single(page.Sets).Key;
+
+        // Acknowledging releases retention; the next poll is empty.
+        var afterAcknowledge = await pollClient.PollAsync(
+            poll, new PollRequest { Acknowledged = [jwtId] }, cancellationToken);
+        Assert.Empty(afterAcknowledge.Sets);
+
+        // Paused holds: the event waits invisible until the receiver enables the stream again.
+        await client.UpdateStatusAsync(
+            new StreamStatus { StreamId = streamId, Status = StreamStatuses.Paused },
+            cancellationToken);
+        Assert.Equal(1, await dispatcher.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken));
+        Assert.Empty((await pollClient.PollAsync(poll, new PollRequest(), cancellationToken)).Sets);
+
+        await client.UpdateStatusAsync(
+            new StreamStatus { StreamId = streamId, Status = StreamStatuses.Enabled },
+            cancellationToken);
+        Assert.Single((await pollClient.PollAsync(poll, new PollRequest(), cancellationToken)).Sets);
+
+        // Deletion ends the stream; reading it back answers nothing.
+        await client.DeleteAsync(streamId, cancellationToken);
+        Assert.Null(await client.GetAsync(streamId, cancellationToken));
+    }
+
+    private sealed record ManagementSurface(StreamManagementClient Client, StreamConfiguration Created);
+
+    /// <summary>
+    /// The receiver's opening moves, through its own shipped clients: discover the transmitter
+    /// at the well-known address, confirm its identity, and create a push stream - proving on
+    /// the way that a second create answers 409.
+    /// </summary>
+    private async Task<ManagementSurface> DiscoverAndCreatePushStreamAsync(
+        CancellationToken cancellationToken)
+    {
+        var transmitterClient = _transmitter.GetTestClient();
+
+        var metadata = await new TransmitterConfigurationClient(transmitterClient)
+            .GetAsync(new Uri(TransmitterIssuer), cancellationToken);
+        Assert.Equal(TransmitterIssuer, metadata.Issuer);
+
+        var client = new StreamManagementClient(transmitterClient, metadata);
+        var created = await client.CreateAsync(
+            new CreateStreamRequest
+            {
+                EventsRequested = [MembershipChanged],
+                Delivery = new PushDeliveryMethod(new Uri(PushEndpoint)),
+            },
+            cancellationToken);
+
+        Assert.NotNull(created);
+        Assert.Equal([MembershipChanged], created.EventsDelivered);
+        Assert.Null(await client.CreateAsync(new CreateStreamRequest(), cancellationToken));
+
+        return new ManagementSurface(client, created);
+    }
+
+    private async Task<PushDeliveryPassOutcome> DrainPushAsync(
+        string streamId,
+        CancellationToken cancellationToken)
+    {
+        var store = _transmitter.Services.GetRequiredService<IStreamStore>();
+        var stream = await store.FindAsync(ReceiverId, streamId, cancellationToken);
+
+        var sender = new PushDeliverySender(
+            _receiver.GetTestClient(),
+            _transmitter.Services.GetRequiredService<IEventOutbox>());
+
+        return await sender.SendPendingAsync(stream!, cancellationToken);
+    }
+
+    private async Task<WebApplication> StartTransmitterAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSecurityEvents(options =>
+            options.SigningKeySource = _ => ValueTask.FromResult(_key));
+        builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
+        {
+            Issuer = TransmitterIssuer,
+            EventsSupported = [MembershipChanged],
+            PollEndpointFactory = streamId => new Uri($"{TransmitterIssuer}/ssf/poll/{streamId}"),
+        });
+
+        // The test host's stand-in for authentication: every request is the one receiver. A
+        // real deployment authenticates and attaches authorization to the returned group.
+        builder.Services.AddSingleton(new SsfEndpointOptions
+        {
+            ReceiverIdSelector = _ => ReceiverId,
+        });
+
+        var app = builder.Build();
+        app.MapSsfTransmitterEndpoints("/ssf");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        return app;
+    }
+
+    private async Task<WebApplication> StartReceiverAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_key));
+        builder.Services.AddSecurityEvents(options =>
+            options.Events.Register<VerificationEventPayload>(SsfEventTypes.Verification));
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddDistributedReplayCache();
+        builder.Services.AddSsfReceiver(new SsfValidationOptions
+        {
+            ExpectedAudience = ReceiverId,
+            ExpectedIssuers = [TransmitterIssuer],
+            StreamIssuer = TransmitterIssuer,
+        });
+        builder.Services.AddSingleton<ISecurityEventSink>(_sink);
+
+        var app = builder.Build();
+        app.MapSsfPushEndpoint("/events");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        return app;
+    }
+
+    private static EmailSubject Jdoe() => new("jdoe@example.com");
+
+    private sealed class RecordingSink : ISecurityEventSink
+    {
+        public List<ValidatedSecurityEventToken> Consumed { get; } = [];
+
+        public ValueTask<DeliveryError?> ConsumeAsync(
+            ValidatedSecurityEventToken token,
+            CancellationToken cancellationToken = default)
+        {
+            Consumed.Add(token);
+            return ValueTask.FromResult<DeliveryError?>(null);
+        }
+    }
+
+    private sealed class FixedKeyResolver(params JsonWebKey[] keys) : IIssuerKeyResolver
+    {
+        public async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
+            string issuer,
+            string? keyId = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            foreach (var key in keys)
+            {
+                yield return key;
+            }
+        }
+    }
+}

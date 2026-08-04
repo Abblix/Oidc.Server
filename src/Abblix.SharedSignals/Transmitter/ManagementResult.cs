@@ -1,0 +1,72 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Net;
+
+namespace Abblix.SharedSignals.Transmitter;
+
+/// <summary>
+/// What one management operation earned: the status code the specification assigns the outcome
+/// (SSF 1.0 Section 8.1's error tables), the body a successful read or update carries, and -
+/// for the operator's logs, never the wire, since the management API defines no error body -
+/// why a refusal refused.
+/// </summary>
+/// <typeparam name="TBody">The body of a successful outcome.</typeparam>
+/// <param name="StatusCode">The status code the transport answers with.</param>
+/// <param name="Body">The response body; null for outcomes whose response is empty.</param>
+/// <param name="Description">Why a refusal refused; null on success.</param>
+public sealed record ManagementResult<TBody>(
+    HttpStatusCode StatusCode,
+    TBody? Body = default,
+    string? Description = null)
+{
+    /// <summary>A successful read or update: "200 OK" with the body.</summary>
+    public static ManagementResult<TBody> Ok(TBody body) => new(HttpStatusCode.OK, body);
+
+    /// <summary>A successful operation answered "200 OK" with an empty body - the add-subject
+    /// shape (SSF 1.0 Section 8.1.3.2).</summary>
+    public static ManagementResult<TBody> Ok() => new(HttpStatusCode.OK);
+
+    /// <summary>A successful creation: "201 Created" with the created document.</summary>
+    public static ManagementResult<TBody> Created(TBody body) => new(HttpStatusCode.Created, body);
+
+    /// <summary>A successful operation whose response is empty: "204 No Content".</summary>
+    public static ManagementResult<TBody> NoContent() => new(HttpStatusCode.NoContent);
+
+    /// <summary>No stream with the given identifier for this receiver: "404 Not Found".</summary>
+    public static ManagementResult<TBody> NotFound(string description)
+        => new(HttpStatusCode.NotFound, default, description);
+
+    /// <summary>The stream already exists and the transmitter allows one per receiver:
+    /// "409 Conflict" (SSF 1.0 Section 8.1.1.1).</summary>
+    public static ManagementResult<TBody> Conflict(string description)
+        => new(HttpStatusCode.Conflict, default, description);
+
+    /// <summary>The request is invalid: "400 Bad Request".</summary>
+    public static ManagementResult<TBody> BadRequest(string description)
+        => new(HttpStatusCode.BadRequest, default, description);
+
+    /// <summary>The receiver asks too often: "429 Too Many Requests"
+    /// (SSF 1.0 Section 8.1.4.2).</summary>
+    public static ManagementResult<TBody> TooManyRequests(string description)
+        => new(HttpStatusCode.TooManyRequests, default, description);
+}

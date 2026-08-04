@@ -73,8 +73,9 @@ services.AddSecurityEvents(options =>
         "https://tenant.example.com/events/membership-changed");
     options.SigningKeySource = _ => ValueTask.FromResult(signingKey); // transmitters only
 });
-services.AddJwksKeyResolution();   // receivers: issuers' keys from their published JWK Sets
-services.AddInMemoryReplayCache(); // receivers: process-local "jti" replay protection
+services.AddJwksKeyResolution();      // receivers: issuers' keys from their published JWK Sets
+services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache
+services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store
 ```
 
 A pure receiver registers a key resolver and never configures signing; a pure transmitter does
@@ -113,6 +114,16 @@ Every Identifier Format in the IANA registry, as a type of its own:
 | `did` | `DidSubject` | `url` |
 | `uri` | `UriSubject` | `uri` |
 | `aliases` | `AliasesSubject` | `identifiers` |
+
+And the formats OpenID Shared Signals Framework 1.0 defines on top of that registry - the same
+vocabulary, with each constant's documentation naming which specification defines it:
+
+| Format | Type | Members |
+|---|---|---|
+| `complex` | `ComplexSubject` | `user`, `device`, `session`, `application`, `tenant`, `org_unit`, `group`, extensions |
+| `jwt_id` | `JwtIdSubject` | `iss`, `jti` |
+| `saml_assertion_id` | `SamlAssertionIdSubject` | `issuer`, `assertion_id` |
+| `ip-addresses` | `IpAddressesSubject` | `ip-addresses` |
 
 ## Reading and writing
 
@@ -171,8 +182,8 @@ var options = new JsonSerializerOptions
 };
 ```
 
-A name that RFC 9493 already defines cannot be rebound, so a custom format can never change how a
-standard document is read.
+A name from the built-in vocabulary - RFC 9493 or Shared Signals - cannot be rebound, so a custom
+format can never change how a standard document is read.
 
 ## License
 

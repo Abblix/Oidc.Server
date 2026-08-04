@@ -30,6 +30,76 @@ namespace Abblix.Utils;
 public static class DistributedCacheExtensions
 {
 	/// <summary>
+	/// Marker value stored by <see cref="TryAddAsync"/>: presence of the key is the fact, the
+	/// stored bytes carry no information of their own.
+	/// </summary>
+	private static readonly byte[] PresenceMarker = [1];
+
+	/// <summary>
+	/// Floor applied to the time-to-live requested from <see cref="TryAddAsync"/>.
+	/// <see cref="DistributedCacheEntryOptions.AbsoluteExpirationRelativeToNow"/> rejects a zero or
+	/// negative value outright, and a caller-side clock skew can legitimately produce one; the floor
+	/// keeps a skewed caller marking instead of throwing, at the cost of remembering a few seconds
+	/// longer than asked.
+	/// </summary>
+	private static readonly TimeSpan MinimumTimeToLive = TimeSpan.FromSeconds(10);
+
+	/// <summary>
+	/// Marks a key as present unless it already is, telling a first call from a repeat: the
+	/// add-if-absent primitive replay caches and other "seen before?" checks are built on.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <strong>Not atomic:</strong> <see cref="IDistributedCache"/> exposes only Get + Set, no
+	/// compare-and-set primitive, so two concurrent callers of the same key can both observe a miss
+	/// before either writes and both hear "new". The race window is bounded by the cache round-trip,
+	/// which makes the duplicate-detection guarantee probabilistic rather than strict. Callers whose
+	/// domain needs strict exactly-once must use a backend-aware implementation instead (Redis
+	/// <c>SET ... NX EX</c>, SQL <c>INSERT ... ON CONFLICT DO NOTHING</c>).
+	/// </para>
+	/// <para>
+	/// The entry stores an opaque marker; only the key's presence carries meaning. The requested
+	/// time-to-live is floored to a small positive minimum so a value the cache would reject or
+	/// discard immediately still records the sighting.
+	/// </para>
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key whose first sighting is being recorded.</param>
+	/// <param name="timeToLive">How long the sighting is remembered.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>
+	/// A task containing true when the key was absent and is now marked; false when it was
+	/// already present.
+	/// </returns>
+	public static async Task<bool> TryAddAsync(
+		this IDistributedCache cache,
+		string key,
+		TimeSpan timeToLive,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+
+		if (await cache.GetAsync(key, cancellationToken) != null)
+		{
+			return false;
+		}
+
+		if (timeToLive < MinimumTimeToLive)
+		{
+			timeToLive = MinimumTimeToLive;
+		}
+
+		await cache.SetAsync(
+			key,
+			PresenceMarker,
+			new () { AbsoluteExpirationRelativeToNow = timeToLive },
+			cancellationToken);
+
+		return true;
+	}
+
+	/// <summary>
 	/// Atomically retrieves and removes a value from the distributed cache.
 	/// Uses a lock-based protocol to ensure atomic get-and-remove semantics even when the underlying
 	/// cache implementation doesn't support native atomic operations (e.g., Redis GETDEL).
@@ -150,7 +220,7 @@ public static class DistributedCacheExtensions
 
 		// The value must still exist at the moment we hold the lock. Without this check a caller whose lock
 		// window does not overlap a prior successful removal would still see its own token survive and wrongly
-		// report success — breaking exactly-once removal (two token requests both redeeming the same
+		// report success - breaking exactly-once removal (two token requests both redeeming the same
 		// device_code / authorization code, RFC 8628 §3.5 / RFC 6749 §4.1.2). The documented contract is
 		// "false if ... the key didn't exist".
 		if (await cache.GetAsync(key, cancellationToken) == null)

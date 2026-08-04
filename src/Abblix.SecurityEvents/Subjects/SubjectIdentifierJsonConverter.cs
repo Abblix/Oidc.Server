@@ -39,7 +39,7 @@ namespace Abblix.SecurityEvents.Subjects;
 /// to the serializer under its runtime type without re-entering this converter.
 /// </para>
 /// <para>
-/// A format outside the IANA registry is supported by deriving from
+/// A format outside the built-in vocabulary is supported by deriving from
 /// <see cref="SubjectIdentifier"/> and naming the subtype in the custom-formats map of
 /// <see cref="SubjectIdentifierJsonConverter(IReadOnlyDictionary{string, Type})"/>, then placing
 /// the resulting converter in the serializer options. Registration happens once, when the
@@ -48,7 +48,12 @@ namespace Abblix.SecurityEvents.Subjects;
 /// </remarks>
 public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdentifier>
 {
-    private static readonly IReadOnlyDictionary<string, Type> StandardFormats =
+    /// <summary>
+    /// The built-in vocabulary: the IANA-registered RFC 9493 formats first, then the SSF 1.0
+    /// extensions - one dispatch, with each name's provenance recorded on its
+    /// <see cref="SubjectFormats"/> constant.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, Type> BuiltInFormats =
         new Dictionary<string, Type>(StringComparer.Ordinal)
         {
             [SubjectFormats.Account] = typeof(AccountSubject),
@@ -59,12 +64,17 @@ public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdenti
             [SubjectFormats.Did] = typeof(DidSubject),
             [SubjectFormats.Uri] = typeof(UriSubject),
             [SubjectFormats.Aliases] = typeof(AliasesSubject),
+            [SubjectFormats.Complex] = typeof(ComplexSubject),
+            [SubjectFormats.JwtId] = typeof(JwtIdSubject),
+            [SubjectFormats.SamlAssertionId] = typeof(SamlAssertionIdSubject),
+            [SubjectFormats.IpAddresses] = typeof(IpAddressesSubject),
         };
 
     private readonly IReadOnlyDictionary<string, Type> _formats;
 
     /// <summary>
-    /// Creates a converter that understands the formats registered by RFC 9493 Section 8.1.2.
+    /// Creates a converter that understands the built-in vocabulary: the formats of the IANA
+    /// registry (RFC 9493 Section 8.1.2) and the SSF 1.0 extensions (Sections 3.3, 3.5).
     /// </summary>
     public SubjectIdentifierJsonConverter()
         : this(null)
@@ -72,16 +82,15 @@ public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdenti
     }
 
     /// <summary>
-    /// Creates a converter that understands the formats registered by RFC 9493 Section 8.1.2 plus
-    /// the ones given.
+    /// Creates a converter that understands the built-in vocabulary plus the formats given.
     /// </summary>
     /// <param name="customFormats">
     /// Format names mapped to the concrete <see cref="SubjectIdentifier"/> subtype that models
-    /// them. A name already defined by RFC 9493 cannot be redefined here: the specification's
-    /// formats are the shared vocabulary, and quietly rebinding one would make two parties
-    /// disagree about a document both consider valid.</param>
+    /// them. A name from the built-in vocabulary cannot be redefined here: those formats are the
+    /// shared vocabulary of their specifications, and quietly rebinding one would make two
+    /// parties disagree about a document both consider valid.</param>
     /// <exception cref="ArgumentException">
-    /// A name is null or empty, collides with a format defined by RFC 9493, or is mapped to a type
+    /// A name is null or empty, collides with the built-in vocabulary, or is mapped to a type
     /// that is not a concrete subclass of <see cref="SubjectIdentifier"/>.</exception>
     public SubjectIdentifierJsonConverter(IReadOnlyDictionary<string, Type>? customFormats)
     {
@@ -90,33 +99,37 @@ public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdenti
         // Section 8.1.1, which binds only registrations); custom names are Collision-Resistant Names
         // (RFC 9493 Section 3), where case may be significant, so folding could merge two distinct
         // formats.
-        var formats = new Dictionary<string, Type>(StandardFormats, StringComparer.Ordinal);
+        var formats = new Dictionary<string, Type>(BuiltInFormats, StringComparer.Ordinal);
 
-        foreach (var (format, type) in customFormats ?? Enumerable.Empty<KeyValuePair<string, Type>>())
+        if (customFormats != null)
         {
-            if (string.IsNullOrEmpty(format))
+            foreach (var (format, type) in customFormats)
             {
-                throw new ArgumentException(
-                    "A custom Identifier Format name must be neither null nor empty.",
-                    nameof(customFormats));
-            }
+                if (string.IsNullOrEmpty(format))
+                {
+                    throw new ArgumentException(
+                        "A custom Identifier Format name must be neither null nor empty.",
+                        nameof(customFormats));
+                }
 
-            if (StandardFormats.ContainsKey(format))
-            {
-                throw new ArgumentException(
-                    $"The Identifier Format '{format}' is defined by RFC 9493 and cannot be redefined.",
-                    nameof(customFormats));
-            }
+                if (BuiltInFormats.ContainsKey(format))
+                {
+                    throw new ArgumentException(
+                        $"The Identifier Format '{format}' is part of the built-in vocabulary "
+                        + "(RFC 9493 or SSF 1.0) and cannot be redefined.",
+                        nameof(customFormats));
+                }
 
-            if (!typeof(SubjectIdentifier).IsAssignableFrom(type) || type.IsAbstract)
-            {
-                throw new ArgumentException(
-                    $"The Identifier Format '{format}' is mapped to '{type}', which is not a concrete "
-                    + $"subclass of {nameof(SubjectIdentifier)}.",
-                    nameof(customFormats));
-            }
+                if (!typeof(SubjectIdentifier).IsAssignableFrom(type) || type.IsAbstract)
+                {
+                    throw new ArgumentException(
+                        $"The Identifier Format '{format}' is mapped to '{type}', which is not a concrete "
+                        + $"subclass of {nameof(SubjectIdentifier)}.",
+                        nameof(customFormats));
+                }
 
-            formats.Add(format, type);
+                formats.Add(format, type);
+            }
         }
 
         _formats = formats;

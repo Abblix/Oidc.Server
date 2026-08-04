@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -48,7 +49,7 @@ public partial class DistributedJwtReplayCache(
 {
 	/// <summary>
 	/// Cache key prefix for JTI entries to avoid collisions with other cache data.
-	/// Stable literal — preserved across the namespace move so existing Redis entries
+	/// Stable literal - preserved across the namespace move so existing Redis entries
 	/// from prior deployments stay valid through the rolling upgrade window.
 	/// </summary>
 	private const string CacheKeyPrefix =
@@ -59,17 +60,6 @@ public partial class DistributedJwtReplayCache(
 	/// </summary>
 	private static readonly TimeSpan DefaultExpiration = TimeSpan.FromHours(1);
 
-	/// <summary>
-	/// Marker value stored in cache to indicate a JTI has been used.
-	/// </summary>
-	private static readonly byte[] UsedMarker = [1];
-
-	/// <summary>
-	/// Minimum TTL to ensure cache entries are not immediately expired due to clock issues.
-	/// Prevents edge cases where calculated expiration is negative or very small.
-	/// </summary>
-	private static readonly TimeSpan MinimumTtl = TimeSpan.FromSeconds(10);
-
 	/// <inheritdoc />
 	/// <remarks>
 	/// <see cref="IDistributedCache"/> exposes only Get + Set, no atomic compare-and-set
@@ -78,37 +68,27 @@ public partial class DistributedJwtReplayCache(
 	/// rather than strict; the race window is bounded by the cache round-trip. RFC 9449
 	/// §11.1 accepts probabilistic replay defence for DPoP proofs. Hosts that need
 	/// strict atomicity should plug in a backend-aware implementation (Redis
-	/// <c>SET … NX EX</c> via <c>StackExchange.Redis</c>, SQL <c>INSERT … ON CONFLICT
+	/// <c>SET ... NX EX</c> via <c>StackExchange.Redis</c>, SQL <c>INSERT ... ON CONFLICT
 	/// DO NOTHING</c>, etc.).
 	/// </remarks>
 	public async Task<bool> TryAddAsync(string jti, DateTimeOffset? expiresAt)
 	{
 		var cacheKey = CacheKeyPrefix + jti;
 
-		var existing = await cache.GetAsync(cacheKey);
-		if (existing != null)
-		{
-			LogReplayDetected(jti);
-			return false;
-		}
-
 		var now = timeProvider.GetUtcNow();
 		var clockSkew = options.CurrentValue.JwtBearer.ClockSkew;
 
-		// TTL = JWT expiration + clock-skew buffer, or a sane default.
+		// TTL = JWT expiration + clock-skew buffer, or a sane default. The shared primitive
+		// floors a zero/negative result so an expiry-already-past still records the sighting.
 		var expiration = expiresAt.HasValue
 			? expiresAt.Value - now + clockSkew
 			: DefaultExpiration;
 
-		// Floor to MinimumTtl so a clock skew or expiry-already-past does not yield a
-		// zero/negative TTL that the cache would discard immediately.
-		if (expiration < MinimumTtl)
-			expiration = MinimumTtl;
-
-		await cache.SetAsync(
-			cacheKey,
-			UsedMarker,
-			new () { AbsoluteExpirationRelativeToNow = expiration });
+		if (!await cache.TryAddAsync(cacheKey, expiration))
+		{
+			LogReplayDetected(jti);
+			return false;
+		}
 
 		LogMarkedAsUsed(jti, expiration);
 		return true;

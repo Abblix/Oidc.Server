@@ -513,6 +513,17 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Txn = "txn";
 
+    /// <summary>
+    /// Represents the Subject Identifier of the principal a token is about (RFC 9493, Section 4.2).
+    /// </summary>
+    /// <remarks>
+    /// The value is a Subject Identifier object naming its Identifier Format, letting a Security
+    /// Event Token identify its subject by a mechanism richer than the plain "sub" string - and by
+    /// an identity the recipient understands, since the identifier's members may differ from the
+    /// token's own "iss" and "sub" claims. Kept beside the RFC 8417 SET claims it profiles.
+    /// </remarks>
+    public const string SubId = "sub_id";
+
     #endregion
 
     #region RFC8443, Section 3 - Resource Priority

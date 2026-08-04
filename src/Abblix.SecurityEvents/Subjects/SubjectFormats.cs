@@ -24,9 +24,12 @@ namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
 /// Values for the Subject Identifier "format" member (RFC 9493 Section 3), naming the set of rules
-/// by which a subject is encoded. These are the initial contents of the IANA "Security Event
-/// Identifier Formats" registry (RFC 9493 Section 8.1.2) and act as the discriminator when
-/// deserializing a <see cref="SubjectIdentifier"/> into the correct concrete subtype.
+/// by which a subject is encoded; the discriminator when deserializing a
+/// <see cref="SubjectIdentifier"/> into the correct concrete subtype. Two families live here, each
+/// constant naming its own: the formats of the IANA "Security Event Subject Identifier Formats"
+/// registry (RFC 9493 Section 8.1.2), and the extensions OpenID Shared Signals Framework 1.0
+/// defines on top of that registry (SSF 1.0 Sections 3.3, 3.5) - which its Section 11 asks IANA to
+/// register, a registration the registry does not yet show.
 /// </summary>
 public static class SubjectFormats
 {
@@ -75,4 +78,29 @@ public static class SubjectFormats
     /// (RFC 9493 Section 3.2.8). Maps to <see cref="AliasesSubject"/>.
     /// </summary>
     public const string Aliases = "aliases";
+
+    /// <summary>
+    /// SSF 1.0 extension, not an IANA registration. A set of Simple Subject Members that together
+    /// refer to exactly one Subject Principal (SSF 1.0 Section 3.3).
+    /// Maps to <see cref="ComplexSubject"/>.
+    /// </summary>
+    public const string Complex = "complex";
+
+    /// <summary>
+    /// SSF 1.0 extension, not an IANA registration. A JWT identified by its "iss" and "jti"
+    /// claims (SSF 1.0 Section 3.5.1). Maps to <see cref="JwtIdSubject"/>.
+    /// </summary>
+    public const string JwtId = "jwt_id";
+
+    /// <summary>
+    /// SSF 1.0 extension, not an IANA registration. A SAML 2.0 assertion identified by its Issuer
+    /// and ID values (SSF 1.0 Section 3.5.2). Maps to <see cref="SamlAssertionIdSubject"/>.
+    /// </summary>
+    public const string SamlAssertionId = "saml_assertion_id";
+
+    /// <summary>
+    /// SSF 1.0 extension, not an IANA registration. An array of IP addresses observed by the
+    /// transmitter (SSF 1.0 Section 3.5.3). Maps to <see cref="IpAddressesSubject"/>.
+    /// </summary>
+    public const string IpAddresses = "ip-addresses";
 }

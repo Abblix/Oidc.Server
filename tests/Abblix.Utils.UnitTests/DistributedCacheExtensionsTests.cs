@@ -302,4 +302,67 @@ public class DistributedCacheExtensionsTests
 		Assert.True(first);
 		Assert.False(second);
 	}
+
+	[Fact]
+	public async Task TryAddAsync_NewKey_MarksAndReturnsTrue()
+	{
+		var cache = CreateCache();
+		const string key = "first-sighting";
+
+		var result = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+
+		Assert.True(result);
+		Assert.NotNull(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_SecondSequentialCall_ReturnsFalse()
+	{
+		var cache = CreateCache();
+		const string key = "repeat-sighting";
+
+		var first = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+		var second = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+
+		Assert.True(first);
+		Assert.False(second);
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NonPositiveTimeToLive_StillMarks()
+	{
+		// The floor is what makes this pass: without it the requested value would reach
+		// DistributedCacheEntryOptions.AbsoluteExpirationRelativeToNow, whose setter rejects
+		// anything non-positive, and the sighting would throw instead of being recorded.
+		var cache = CreateCache();
+
+		Assert.True(await cache.TryAddAsync(
+			"zero-ttl", TimeSpan.Zero, TestContext.Current.CancellationToken));
+		Assert.True(await cache.TryAddAsync(
+			"negative-ttl", TimeSpan.FromSeconds(-30), TestContext.Current.CancellationToken));
+
+		Assert.NotNull(await cache.GetAsync("zero-ttl", TestContext.Current.CancellationToken));
+		Assert.NotNull(await cache.GetAsync("negative-ttl", TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NullCache_ThrowsArgumentNullException()
+	{
+		IDistributedCache? cache = null;
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache!.TryAddAsync("key", TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NullKey_ThrowsArgumentNullException()
+	{
+		var cache = CreateCache();
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache.TryAddAsync(null!, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
+	}
 }

@@ -180,22 +180,28 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the process-local replay cache as the <see cref="IJtiReplayCache"/>.
+    /// Registers the replay cache over the host's <c>IDistributedCache</c> as the
+    /// <see cref="IJtiReplayCache"/>.
     /// </summary>
+    /// <remarks>
+    /// The store itself is the host's choice and is deliberately not registered here:
+    /// <c>AddDistributedMemoryCache()</c> gives a single-instance receiver process-local
+    /// behavior, Redis or another backend gives a scaled-out one a shared memory - the same
+    /// registration either way.
+    /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="retention">
     /// How long identifiers are remembered past their tokens' issue time; must cover the
     /// validation profile's issued-at tolerance with a margin. The default doubles the default
     /// tolerance of <see cref="SecurityEventTokenValidationOptions.IssuedAtTolerance"/>.</param>
-    public static IServiceCollection AddInMemoryReplayCache(
+    public static IServiceCollection AddDistributedReplayCache(
         this IServiceCollection services,
         TimeSpan? retention = null)
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IJtiReplayCache>(
-            provider => new InMemoryJtiReplayCache(
-                provider.GetRequiredService<TimeProvider>(),
-                retention ?? TimeSpan.FromMinutes(10)));
+            provider => provider.CreateService<DistributedJtiReplayCache>(
+                Dependency.Override(retention ?? TimeSpan.FromMinutes(10))));
 
         return services;
     }

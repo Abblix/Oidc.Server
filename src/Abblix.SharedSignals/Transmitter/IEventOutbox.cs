@@ -1,0 +1,77 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+namespace Abblix.SharedSignals.Transmitter;
+
+/// <summary>
+/// Where minted SETs wait for delivery, one queue per stream. The queue IS the holding the
+/// status rules speak of: a paused stream's events stay here because nothing drains them
+/// (SSF 1.0 Section 8.1.2.1), a poll delivery reads and re-reads here until acknowledged
+/// (RFC 8936 Section 2.4), and a push delivery removes an item only once the receiver's 202
+/// earned it. Order is enqueue order, which is what keeps same-principal events in generation
+/// order across a pause.
+/// </summary>
+public interface IEventOutbox
+{
+    /// <summary>
+    /// Appends a SET to a stream's queue.
+    /// </summary>
+    /// <param name="streamId">The stream the SET was minted for.</param>
+    /// <param name="item">The minted SET.</param>
+    /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
+    ValueTask EnqueueAsync(string streamId, OutboxItem item, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads the unacknowledged head of a stream's queue, oldest first, without removing
+    /// anything - redelivery of the unacknowledged is the delivery protocols' own semantics.
+    /// </summary>
+    /// <param name="streamId">The stream whose queue is read.</param>
+    /// <param name="maxCount">
+    /// The most items to return; null returns everything pending, mirroring an absent
+    /// "maxEvents" (RFC 8936 Section 2.2).</param>
+    /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
+    ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+        string streamId,
+        int? maxCount = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes acknowledged SETs from a stream's queue, releasing the transmitter from
+    /// retaining them (RFC 8936 Section 2.2). Identifiers with nothing to match are ignored -
+    /// an acknowledgement can only arrive for something that was once here.
+    /// </summary>
+    /// <param name="streamId">The stream whose queue is acknowledged.</param>
+    /// <param name="jwtIds">The "jti" values being acknowledged.</param>
+    /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
+    ValueTask AcknowledgeAsync(
+        string streamId,
+        IReadOnlyCollection<string> jwtIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Drops a stream's whole queue - the companion of deleting or disabling the stream, whose
+    /// events are not held for later (SSF 1.0 Sections 8.1.1.5, 8.1.2.1).
+    /// </summary>
+    /// <param name="streamId">The stream whose queue is dropped.</param>
+    /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
+    ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default);
+}

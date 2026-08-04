@@ -69,6 +69,14 @@ public static class DeliveryErrorCodes
     public const string AccessDenied = "access_denied";
 
     /// <summary>
+    /// SSF 1.0 extension to the registry (its Section 11 requests the assignment): "Indicates
+    /// that a Verification event contained a 'state' claim that does not match the value
+    /// expected by the Receiver" (SSF 1.0 Sections 8.1.4.1, 11). A verdict only the consumer
+    /// holding the expected state can reach, which is why no validation error maps to it.
+    /// </summary>
+    public const string InvalidState = "invalid_state";
+
+    /// <summary>
     /// Translates a validation verdict into the registry code a delivery response carries.
     /// </summary>
     /// <remarks>
