@@ -27,6 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 
@@ -41,6 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 public class RegistrationAccessTokenValidatorTests
 {
     private const string ClientId = "client-1";
+    private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
 
     private static RegistrationAccessTokenValidator CreateValidator(JsonWebToken token)
     {
@@ -52,7 +54,7 @@ public class RegistrationAccessTokenValidatorTests
         return new RegistrationAccessTokenValidator(jwtValidator.Object);
     }
 
-    private static JsonWebToken CreateToken(string jti) => new()
+    private static JsonWebToken CreateToken(string jti, string? subject = null, string? audience = null) => new()
     {
         Header = new JsonWebTokenHeader(new JsonObject
         {
@@ -61,8 +63,8 @@ public class RegistrationAccessTokenValidatorTests
         Payload = new JsonWebTokenPayload(new JsonObject
         {
             [JwtClaimTypes.JwtId] = jti,
-            [JwtClaimTypes.Subject] = ClientId,
-            [JwtClaimTypes.Audience] = ClientId,
+            [JwtClaimTypes.Subject] = subject ?? ClientId,
+            [JwtClaimTypes.Audience] = audience ?? Issuer,
         }),
     };
 
@@ -85,6 +87,22 @@ public class RegistrationAccessTokenValidatorTests
         var validator = CreateValidator(CreateToken("jti-old"));
 
         var error = await validator.ValidateAsync(Bearer, ClientId, "jti-current");
+
+        Assert.NotNull(error);
+    }
+
+    /// <summary>
+    /// The token is bound to the registration it names, and presenting it against another is refused. The
+    /// binding rests on the subject: the audience names this server and reads the same on every registration
+    /// access token, so it cannot say which registration this one is about. Nothing tested this before, so the
+    /// binding could have been dropped without a red run.
+    /// </summary>
+    [Fact]
+    public async Task ATokenIssuedForAnotherClient_IsRejected()
+    {
+        var validator = CreateValidator(CreateToken("jti-current"));
+
+        var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
 
         Assert.NotNull(error);
     }

@@ -102,8 +102,8 @@ public class PushedAuthorizationRequestValidator(
     /// Resolves the RFC 9449 §10 commitment from the inbound PAR call: when a DPoP header
     /// accompanies the request, validates the proof against the PAR endpoint's method+URI
     /// and (if configured) the nonce policy, then either back-fills <c>dpop_jkt</c> from
-    /// the proof's thumbprint or — if the client also posted <c>dpop_jkt</c> as a form
-    /// parameter — checks both produce the same thumbprint. Returns the (possibly
+    /// the proof's thumbprint or - if the client also posted <c>dpop_jkt</c> as a form
+    /// parameter - checks both produce the same thumbprint. Returns the (possibly
     /// back-filled) request on success.
     /// </summary>
     private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> ResolveProofKeyThumbprintAsync(

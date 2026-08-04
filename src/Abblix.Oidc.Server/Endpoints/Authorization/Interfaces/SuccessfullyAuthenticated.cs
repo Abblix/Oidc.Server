@@ -78,7 +78,7 @@ public record SuccessfullyAuthenticated(
 	public string? Scope { get; set; }
 
 	/// <summary>
-	/// The scope actually granted by the user-consent decision — the same set the issued access/ID token
+	/// The scope actually granted by the user-consent decision - the same set the issued access/ID token
 	/// carries. Threaded by the authorization request processor so the response encoder advertises it on
 	/// the front-channel <c>scope</c> parameter. May be a subset of the requested
 	/// <see cref="AuthorizationRequest.Scope"/> when the host consent provider narrows the grant (RFC 6749 §3.3).

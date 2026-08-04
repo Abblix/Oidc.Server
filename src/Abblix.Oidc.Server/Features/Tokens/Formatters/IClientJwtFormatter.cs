@@ -46,7 +46,7 @@ public interface IClientJwtFormatter
 
     /// <summary>
     /// Formats a JWT for a client, signing it with the authentication service's key chosen by the token's header
-    /// algorithm and — per the supplied <paramref name="encryption"/> policy — optionally encrypting it to the
+    /// algorithm and - per the supplied <paramref name="encryption"/> policy - optionally encrypting it to the
     /// client's registered public key.
     /// </summary>
     /// <param name="token">The JWT token to format.</param>

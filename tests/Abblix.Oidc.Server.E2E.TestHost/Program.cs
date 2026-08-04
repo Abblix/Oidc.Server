@@ -6,6 +6,7 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 using Abblix.Oidc.Server.Endpoints;
@@ -63,7 +64,12 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
         Mint(TestConstants.EmptyAllowlistClientId, secret, redirect, [], idTokenRar: false),
-        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false),
+        // Doubles as the protected resource in the introspection scenarios: RFC 7662 §4 has such a caller
+        // "specifically authorized to call the introspection endpoint", which is what this permission is.
+        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            AllowCrossClientIntrospection = true,
+        },
         // RFC 9449 mandatory-binding client: token endpoint rejects any request without a valid proof.
         Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
         // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.
@@ -188,6 +194,16 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
+
+// Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs
+// the ambient request to build an absolute URL, so the only way to exercise it end to end is from inside one.
+// The Minimal API test host carries the same probe at the same path, which is what lets one test assert that
+// the two adapters answer alike.
+app.MapGet(TestConstants.EndpointResolverProbePath + "/{endpoint}",
+    (string endpoint, IOidcEndpointResolver resolver) =>
+        Enum.TryParse<OidcEndpoints>(endpoint, ignoreCase: true, out var requested)
+            ? Results.Text(resolver.Resolve(requested)?.AbsoluteUri ?? string.Empty)
+            : Results.BadRequest());
 
 await app.RunAsync();
 

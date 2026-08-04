@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <summary>
 /// Base for the authorization responses that are delivered to the client's <c>redirect_uri</c>
 /// (<see cref="SuccessfullyAuthenticated"/> and <see cref="AuthorizationError"/>), as opposed to the
-/// interaction responses (<see cref="LoginRequired"/>, <see cref="ConsentRequired"/>, …) that redirect
+/// interaction responses (<see cref="LoginRequired"/>, <see cref="ConsentRequired"/>, ...) that redirect
 /// to the authorization server's own UI. These are the responses the
 /// <see cref="IAuthorizationResponseEncoder"/> encodes: it sets the <c>iss</c> (RFC 9207) value, and for
 /// a JARM (<c>*.jwt</c>) request packs the parameters into <see cref="ResponseJwt"/> and resolves

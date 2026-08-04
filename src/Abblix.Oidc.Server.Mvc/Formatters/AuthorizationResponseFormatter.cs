@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// response encoder; this formatter maps the encoded response onto the MVC wire DTO and delivers it to the
 /// client's redirect URI via query, fragment or form_post - for both successful and error responses.
 /// </summary>
-/// <param name="options">Provides the configured interaction URIs (login, consent, …) and request-uri
+/// <param name="options">Provides the configured interaction URIs (login, consent, ...) and request-uri
 /// parameter name used when redirecting the user agent to the authorization server's own UI.</param>
 /// <param name="authorizationRequestStorage">Stores the pending authorization request when redirecting to an
 /// interaction page, returning the request_uri that links back to it.</param>

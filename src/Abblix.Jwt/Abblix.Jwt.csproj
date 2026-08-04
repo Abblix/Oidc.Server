@@ -11,10 +11,10 @@
     <Title>Abblix JWT</Title>
     <Description>A JWT and JOSE toolkit for .NET: token signing, encryption, validation, custom claims, and JSON Web Key handling. The token layer behind Abblix OIDC Server, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix JWT JSON-Web-Token Authentication Security Token API-Security OAuth OAuth2 AccessToken Identity ASP.NET-Security Web-Security JWK-Thumbprint DPoP</PackageTags>
+    <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
@@ -35,7 +35,10 @@
 
   <ItemGroup>
     <!-- Hosting.Abstractions carries only IHostedService and BackgroundService, which the key ring's refresh
-         service needs. Options carries IOptions<>, which the ring reads its rollover window from. -->
+         service needs. Options carries IOptions<>, which the ring reads its rollover window from.
+         Caching.Abstractions carries only IDistributedCache, the store the replay cache reserves identifiers
+         in; the store itself is the host's to register. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

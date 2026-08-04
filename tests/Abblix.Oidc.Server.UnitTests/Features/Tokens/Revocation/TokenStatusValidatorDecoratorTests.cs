@@ -55,7 +55,7 @@ public class TokenStatusValidatorDecoratorTests
     /// <summary>
     /// Replay of a superseded (already-rotated) refresh token: the decorator cannot tell an attacker from a
     /// lagging client, so it revokes the whole family and reports the token as already used. This is the
-    /// breach signal of RFC 9700 Section 4.14.2 — the point at which the active token in the lineage is doomed.
+    /// breach signal of RFC 9700 Section 4.14.2 - the point at which the active token in the lineage is doomed.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
@@ -78,7 +78,7 @@ public class TokenStatusValidatorDecoratorTests
     /// A structurally valid, not-yet-used refresh token whose family has already been revoked is rejected.
     /// This is the kill switch that outlives any single token: once a replay elsewhere in the lineage revoked
     /// the family, the currently active token dies on its next use, even though its own <c>jti</c> is still
-    /// Unknown. The per-token status is never consulted — the family check short-circuits first.
+    /// Unknown. The per-token status is never consulted - the family check short-circuits first.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ActiveTokenOfRevokedFamily_IsRejected()
@@ -112,7 +112,7 @@ public class TokenStatusValidatorDecoratorTests
     }
 
     /// <summary>
-    /// Tokens without a family claim (access tokens, ID tokens — anything that is not a rotating refresh token)
+    /// Tokens without a family claim (access tokens, ID tokens - anything that is not a rotating refresh token)
     /// keep the pre-existing single-token behaviour: a used token is rejected, but no family cascade fires. This
     /// proves the family logic is inert for non-refresh tokens rather than reaching for a null family key.
     /// </summary>

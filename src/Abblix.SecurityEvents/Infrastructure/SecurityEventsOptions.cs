@@ -1,0 +1,81 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using Abblix.Jwt;
+using Abblix.SecurityEvents.Events;
+using Abblix.SecurityEvents.Validation;
+
+namespace Abblix.SecurityEvents.Infrastructure;
+
+/// <summary>
+/// What a host configures once about its security-event handling: the event dictionary, signing,
+/// and - for a profile that weakens the default validation - the reasoned acknowledgement of that
+/// weakening. The pipeline itself is composed through the service collection: the default steps
+/// register as an ordinary family, and a consumer profile edits them in place through the live
+/// composition cursor after <c>AddSecurityEvents</c>.
+/// </summary>
+public sealed class SecurityEventsOptions
+{
+    private readonly List<string> _insecureValidationAllowances = [];
+
+    /// <summary>
+    /// The event dictionary: which event identifier URIs deserialize into which payload models.
+    /// An event dictionary package is a set of calls against this registry.
+    /// </summary>
+    public EventTypeRegistry Events { get; } = new();
+
+    /// <summary>
+    /// Supplies the private key each signing uses - the one thing a transmitter must configure
+    /// and a pure receiver never does. Left null, resolving the signer fails loudly naming this
+    /// property, instead of a transmitter discovering at first delivery that it signs nothing.
+    /// </summary>
+    public Func<CancellationToken, Task<JsonWebKey>>? SigningKeySource { get; set; }
+
+    /// <summary>
+    /// The reasons given for composing a validation pipeline without the default
+    /// security-critical steps, surfaced in the boot log when the validator is built.
+    /// </summary>
+    public IReadOnlyList<string> InsecureValidationAllowances => _insecureValidationAllowances;
+
+    /// <summary>
+    /// Acknowledges that this host's validation profile deliberately drops or replaces
+    /// security-critical steps of the default pipeline, with the reason that will be logged at
+    /// startup.
+    /// </summary>
+    /// <remarks>
+    /// The check this feeds guards the RESULT of composition, not any particular editing door: at
+    /// validator construction, a missing default critical step - the explicit-typing check, the
+    /// exp-absence check, the signature check - demands an acknowledgement on record, however the
+    /// pipeline came to lack it. "Temporarily, for a test" therefore cannot ride into production
+    /// silently through any API, this package's or the composition cursor's.
+    /// </remarks>
+    /// <param name="reason">
+    /// Why weakening the default validation is acceptable here - named concretely enough that
+    /// reading it in a production boot log answers the question it raises.</param>
+    public SecurityEventsOptions AllowInsecureValidation(string reason)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(reason);
+
+        _insecureValidationAllowances.Add(reason);
+        return this;
+    }
+}

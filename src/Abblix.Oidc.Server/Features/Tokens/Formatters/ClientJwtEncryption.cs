@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <summary>
 /// The encryption policy a caller hands to <see cref="ClientJwtFormatter"/> when formatting a client-addressed JWT.
 /// It makes explicit which registered client metadata governs encryption, so the formatter no longer has to infer it
-/// from the token type. Each client-JWT class (UserInfo, ID token, JARM authorization response, introspection)
+/// from the token type. Each client-JWT type (UserInfo, ID token, JARM authorization response, introspection)
 /// supplies its own policy via the static factories below.
 /// </summary>
 /// <param name="KeyManagementAlgorithm">The client's registered <c>*_encrypted_response_alg</c>, or <c>null</c> when
@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="DefaultContentEncryptionAlgorithm">The content-encryption algorithm to use when the client did not
 /// register one.</param>
 /// <param name="RequireRegisteredAlgorithm">When <c>true</c> the JWT is encrypted only if the client registered a
-/// key-management algorithm (and the client's encryption keys are not even resolved otherwise) — the JARM §2.2 / §3
+/// key-management algorithm (and the client's encryption keys are not even resolved otherwise) - the JARM §2.2 / §3
 /// opt-in rule. When <c>false</c> the JWT is encrypted whenever the client published encryption keys.</param>
 public sealed record ClientJwtEncryption(
 	string? KeyManagementAlgorithm,

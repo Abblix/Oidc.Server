@@ -35,7 +35,7 @@ public static class DPoPAlgorithms
 {
     /// <summary>
     /// JWS algorithms accepted on a DPoP proof. <c>none</c> and HMAC-based algorithms
-    /// are intentionally absent — RFC 9449 §4.2 forbids them because the embedded
+    /// are intentionally absent - RFC 9449 §4.2 forbids them because the embedded
     /// <c>jwk</c> header carries an asymmetric public key for verification.
     /// </summary>
     public static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)

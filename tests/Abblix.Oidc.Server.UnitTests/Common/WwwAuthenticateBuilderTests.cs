@@ -74,7 +74,7 @@ public class WwwAuthenticateBuilderTests
 
     /// <summary>
     /// RFC 6750 §3.1: a request that carried no authentication information at all gets a bare
-    /// challenge — realm only, no error attributes — on both the Bearer and the DPoP lines.
+    /// challenge - realm only, no error attributes - on both the Bearer and the DPoP lines.
     /// </summary>
     [Fact]
     public void BuildChallenges_MissingAuthentication_EmitsBareChallenges()
@@ -93,7 +93,7 @@ public class WwwAuthenticateBuilderTests
     public void BuildBasicChallenge_WithRealm_EmitsRealmOnly()
     {
         // RFC 7617 defines no error attributes for the Basic scheme, so the challenge carries
-        // only the realm — the error itself travels in the JSON body (RFC 6749 §5.2).
+        // only the realm - the error itself travels in the JSON body (RFC 6749 §5.2).
         var challenge = WwwAuthenticateBuilder.BuildBasicChallenge(Realm);
 
         Assert.Equal($"Basic realm=\"{Realm}\"", challenge);
@@ -133,7 +133,7 @@ public class WwwAuthenticateBuilderTests
     {
         // RFC 9449 §7.1: «the Bearer scheme didn't fail; the client used the DPoP scheme».
         // Attaching error="invalid_dpop_proof" to the Bearer line would misrepresent the
-        // failure — the Bearer line carries only the realm.
+        // failure - the Bearer line carries only the realm.
         var challenges = WwwAuthenticateBuilder.BuildChallenges(
             InvalidDPoPProof, Realm, DPoPAlgs, advertiseBearer: true);
 

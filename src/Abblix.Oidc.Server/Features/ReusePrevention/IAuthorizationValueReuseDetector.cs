@@ -23,7 +23,7 @@
 namespace Abblix.Oidc.Server.Features.ReusePrevention;
 
 /// <summary>
-/// Detects reuse of an authorization request's transaction-binding values — the PKCE
+/// Detects reuse of an authorization request's transaction-binding values - the PKCE
 /// <c>code_challenge</c> (RFC 7636) and the OpenID Connect <c>nonce</c>. Both must be
 /// transaction-specific; a client that keeps sending a constant value defeats the protection they provide.
 /// RFC 9700 (OAuth 2.0 Security BCP) Section 2.1.1 encourages the authorization server to make a
@@ -34,7 +34,7 @@ public interface IAuthorizationValueReuseDetector
 {
     /// <summary>
     /// Reports whether a value of the given kind has already been recorded for this client within the
-    /// detection window — that is, whether the client is repeating a value that must be unique per request.
+    /// detection window - that is, whether the client is repeating a value that must be unique per request.
     /// </summary>
     /// <param name="clientId">The client presenting the value.</param>
     /// <param name="valueKind">A discriminator for the value's role (for example the parameter name), so

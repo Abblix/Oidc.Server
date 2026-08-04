@@ -32,14 +32,14 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Enables the <c>none</c> response type (OAuth 2.0 Multiple Response Type Encoding Practices §4),
-    /// which authorizes a request without returning any code or token — the authorization endpoint
+    /// which authorizes a request without returning any code or token - the authorization endpoint
     /// responds with only <c>state</c> and, when advertised, <c>iss</c> (RFC 9207).
     /// </summary>
     /// <remarks>
     /// By default this library does not register the <c>none</c> response-type processor, so the
     /// authorization endpoint rejects <c>response_type=none</c> with <c>unsupported_response_type</c>
     /// and the discovery document omits <c>none</c> from <c>response_types_supported</c>. Hosts that
-    /// need it — for example, to pre-authorize a grant the client redeems later by other means — opt in
+    /// need it - for example, to pre-authorize a grant the client redeems later by other means - opt in
     /// via this method, mirroring the <c>EnableImplicitFlow</c> precedent for non-core response types. A
     /// client must additionally list <c>none</c> among its allowed response types to use it.
     /// </remarks>

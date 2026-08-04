@@ -23,7 +23,7 @@
 namespace Abblix.Oidc.Server.Common.Interfaces;
 
 /// <summary>
-/// Extracts a flat set of name/value pairs from a response object — the reverse of binding — for delivery as query,
+/// Extracts a flat set of name/value pairs from a response object - the reverse of binding - for delivery as query,
 /// fragment or form_post parameters. The transport adapters (MVC, Minimal API) share this contract because flattening
 /// a response DTO is framework-neutral; the implementation lives in the core for the same reason.
 /// </summary>

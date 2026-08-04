@@ -130,7 +130,7 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// The pairwise identifier is reversible: Recover opens it back to the exact original subject, and the sealed
+    /// The pairwise identifier is reversible: ConvertBack opens it back to the exact original subject, and the sealed
     /// value is not the bare subject - this is what lets the server carry the pseudonym in tokens yet still resolve
     /// the real user.
     /// </summary>
@@ -143,7 +143,7 @@ public class SubjectTypeConverterTests
         var pairwise = converter.Convert(Subject, client);
 
         Assert.NotEqual(Subject, pairwise);
-        Assert.Equal(Subject, converter.Recover(pairwise, client));
+        Assert.Equal(Subject, converter.ConvertBack(pairwise, client));
     }
 
     /// <summary>
@@ -177,7 +177,7 @@ public class SubjectTypeConverterTests
 
     /// <summary>
     /// A pairwise identifier sealed for one sector cannot be opened under another: the sector is bound as associated
-    /// data, so Recover under the wrong client's sector returns null instead of a wrong or forged subject, letting
+    /// data, so ConvertBack under the wrong client's sector returns null instead of a wrong or forged subject, letting
     /// the caller reject the token.
     /// </summary>
     [Fact]
@@ -189,7 +189,7 @@ public class SubjectTypeConverterTests
 
         var pairwise = converter.Convert(Subject, sealingClient);
 
-        Assert.Null(converter.Recover(pairwise, otherSectorClient));
+        Assert.Null(converter.ConvertBack(pairwise, otherSectorClient));
     }
 
     /// <summary>
@@ -206,7 +206,7 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// A public client's subject passes through on the way back too: Recover returns it unchanged, since a public
+    /// A public client's subject passes through on the way back too: ConvertBack returns it unchanged, since a public
     /// subject is never sealed.
     /// </summary>
     [Fact]
@@ -215,7 +215,7 @@ public class SubjectTypeConverterTests
         var converter = CreateConverter();
         var client = new ClientInfo("client-pub") { SubjectType = SubjectTypes.Public };
 
-        Assert.Equal(Subject, converter.Recover(Subject, client));
+        Assert.Equal(Subject, converter.ConvertBack(Subject, client));
     }
 
     /// <summary>
@@ -256,7 +256,7 @@ public class SubjectTypeConverterTests
         var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
         var pairwise = configured.Convert(Subject, client);
 
-        Assert.Throws<InvalidOperationException>(() => unconfigured.Recover(pairwise, client));
+        Assert.Throws<InvalidOperationException>(() => unconfigured.ConvertBack(pairwise, client));
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public class SubjectTypeConverterTests
         var sealedByA = instanceA.Convert(Subject, client);
 
         Assert.Equal(sealedByA, instanceB.Convert(Subject, client));
-        Assert.Equal(Subject, instanceB.Recover(sealedByA, client));
+        Assert.Equal(Subject, instanceB.ConvertBack(sealedByA, client));
     }
 
     /// <summary>
@@ -287,7 +287,7 @@ public class SubjectTypeConverterTests
         var converter = CreateConverter();
         var client = CreatePairwiseClient("client-a", sectorIdentifier: "sector.example.com");
 
-        Assert.Null(converter.Recover("not valid base64url!!", client));
+        Assert.Null(converter.ConvertBack("not valid base64url!!", client));
     }
 
     /// <summary>

@@ -11,10 +11,10 @@
     <Title>Abblix DependencyInjection</Title>
     <Description>Dependency-injection helpers for .NET: service aliasing, composition, decorators, and keyed registration that lets host registrations win. The DI layer behind Abblix OIDC Server, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.DependencyInjection</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix DependencyInjection DI .NET ServiceLifetime Scoped Singleton Transient Composite Decorator AdvancedDI ServiceResolver .NET Core Microsoft.Extensions.DependencyInjection IoC InversionOfControl</PackageTags>
+    <PackageTags>Abblix Dependency-Injection DI IoC Inversion-of-Control Service-Lifetime Scoped Singleton Transient Composite Decorator Keyed-Services Service-Alias Microsoft-Extensions-DependencyInjection dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

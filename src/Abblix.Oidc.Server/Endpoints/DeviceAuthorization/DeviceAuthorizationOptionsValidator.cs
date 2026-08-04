@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// request. The endpoint is off in the default <see cref="OidcEndpoints.Base"/> set and is turned on only by an
 /// explicit <c>AddDeviceAuthorization()</c> opt-in (or a host that sets the
 /// <see cref="OidcEndpoints.DeviceAuthorization"/> flag itself), yet <see cref="OidcOptions.DeviceAuthorization"/> has
-/// no default — so a host that enables it without configuring it has an internally inconsistent configuration this
+/// no default - so a host that enables it without configuring it has an internally inconsistent configuration this
 /// validator turns into a clear startup error. A no-op when the endpoint is disabled or the settings are present.
 /// </summary>
 public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>

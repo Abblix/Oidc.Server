@@ -8,13 +8,13 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.JWT.Azure</PackageId>
-    <Title>Abblix OIDC Server Azure Key Vault Custodian</Title>
+    <Title>Abblix JWT Azure Key Vault Custodian</Title>
     <Description>Azure Key Vault external-key integration for Abblix OIDC Server. Signs and unwraps with keys held in Azure Key Vault (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, wired with an AddAzureCustodian call and the tier choice that follows it.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt.Azure</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix JWT Azure Key-Vault HSM KMS External-Key Custodian Signing Encryption Security OAuth OIDC</PackageTags>
+    <PackageTags>Abblix JWT Azure Key-Vault HSM KMS External-Key Key-Management Custodian Signing Encryption JWKS Security OAuth OIDC dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

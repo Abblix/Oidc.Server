@@ -74,7 +74,7 @@ public class AuthorizationRequestProcessor(
 		{
 			// Initiating User Registration via OpenID Connect 1.0: prompt=create takes the user to
 			// the account-creation experience regardless of whether a session exists. An OP that
-			// advertises create in prompt_values_supported must act on it — previously the value
+			// advertises create in prompt_values_supported must act on it - previously the value
 			// fell through to the generic branches and the registration intent was silently lost.
 			case (_, Prompts.Create):
 				return new RegistrationRequired(model);
@@ -221,8 +221,8 @@ public class AuthorizationRequestProcessor(
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
 		// Dispatch each requested response-type part to its registered builder. The DI
-		// registration order — AuthorizationCodeBuilder in the core registration, then
-		// TokenResponseBuilder and IdTokenResponseBuilder added by EnableImplicitFlow —
+		// registration order - AuthorizationCodeBuilder in the core registration, then
+		// TokenResponseBuilder and IdTokenResponseBuilder added by EnableImplicitFlow -
 		// preserves the dependency IdTokenResponseBuilder has on the code and access-token
 		// fields populated by earlier builders (used to compute c_hash / at_hash). Parts
 		// whose builders are not registered (e.g. token / id_token when Implicit Flow is not

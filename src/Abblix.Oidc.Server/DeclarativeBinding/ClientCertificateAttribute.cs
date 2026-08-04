@@ -23,7 +23,7 @@
 namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value is the client X.509 certificate presented at the transport layer —
+/// Declares that the value is the client X.509 certificate presented at the transport layer -
 /// via mutual TLS (RFC 8705) or forwarded by a trusted reverse proxy. Purely semantic: it names
 /// the transport source and leaves the extraction mechanism to the transport layer.
 /// </summary>

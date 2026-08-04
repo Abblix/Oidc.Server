@@ -40,7 +40,7 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Filters;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
+using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -72,6 +72,22 @@ public static class EndpointRouteBuilderExtensions
     /// cross-cutting conventions (rate limiting, host filtering, metadata) to all of them at once.</returns>
     public static RouteGroupBuilder MapOidcEndpoints(this IEndpointRouteBuilder endpoints, string prefix = "")
     {
+        // Refuse at startup rather than let both adapters map the same paths and fail on every request with a
+        // routing error that names neither package. Referencing the MVC package is enough for the conflict:
+        // AddControllers() finds its controllers in the dependency graph with or without a call of its own,
+        // which is why the presence of the assembly is the signal here rather than a registration.
+        TransportAdapterConflict.ThrowIfLoaded(
+            TransportAdapterConflict.MvcAdapterAssemblyName,
+            "Both OIDC transport adapters are present in this application: MapOidcEndpoints() maps the " +
+            "Minimal API endpoints, and the MVC adapter (Abblix.OIDC.Server.MVC) is loaded as well. Only one " +
+            "of them may serve the OIDC endpoints. Referencing the MVC package is enough to bring its " +
+            "controllers in - AddControllers() finds them in the dependency graph whether or not " +
+            "AddOidcServices() was ever called - so both transports would claim /connect/* and " +
+            "/.well-known/*, and every OIDC request would fail with AmbiguousMatchException. " +
+            "To stay on Minimal API, remove the Abblix.OIDC.Server.MVC package reference together with any " +
+            "AddOidcServices() or AddOidcMvc() call. To stay on MVC, remove the " +
+            "Abblix.OIDC.Server.MinimalApi package reference together with this MapOidcEndpoints() call.");
+
         var options = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcOptions>>().Value;
         var routes = endpoints.ServiceProvider.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var oidcGroup = endpoints.MapGroup(prefix);
@@ -258,7 +274,7 @@ public static class EndpointRouteBuilderExtensions
     private static async Task<IResult> AuthorizeAsync(
         AuthorizationRequest authorizationRequest,
         IAuthorizationHandler handler,
-        IAuthorizationResultFormatter formatter)
+        IAuthorizationResponseFormatter formatter)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreAuthorizationRequest);
@@ -273,7 +289,7 @@ public static class EndpointRouteBuilderExtensions
         Core.ClientRegistrationRequest request,
         HttpContext context,
         IRegisterClientHandler handler,
-        IRegisterClientResultFormatter formatter)
+        IRegisterClientResponseFormatter formatter)
     {
         var clientRegistrationRequest = request with { AuthorizationHeader = ParseAuthorizationHeader(context.Request) };
         var response = await handler.HandleAsync(clientRegistrationRequest);
@@ -284,7 +300,7 @@ public static class EndpointRouteBuilderExtensions
     private static async Task<IResult> ReadClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IReadClientHandler handler,
-        IReadClientResultFormatter formatter)
+        IReadClientResponseFormatter formatter)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreClientRequest);
@@ -296,7 +312,7 @@ public static class EndpointRouteBuilderExtensions
         ClientAuthorizationRequest authorizationRequest,
         Core.ClientRegistrationRequest registrationRequest,
         IUpdateClientHandler handler,
-        IUpdateClientResultFormatter formatter)
+        IUpdateClientResponseFormatter formatter)
     {
         var updateRequest = new UpdateClientRequest(authorizationRequest, registrationRequest);
         var response = await handler.HandleAsync(updateRequest);
@@ -307,7 +323,7 @@ public static class EndpointRouteBuilderExtensions
     private static async Task<IResult> RemoveClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IRemoveClientHandler handler,
-        IRemoveClientResultFormatter formatter)
+        IRemoveClientResponseFormatter formatter)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(coreClientRequest);
@@ -330,7 +346,7 @@ public static class EndpointRouteBuilderExtensions
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest,
         IPushedAuthorizationHandler handler,
-        IPushedAuthorizationResultFormatter formatter)
+        IPushedAuthorizationResponseFormatter formatter)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -346,7 +362,7 @@ public static class EndpointRouteBuilderExtensions
         BackChannelAuthenticationRequest authenticationRequest,
         ClientRequest clientRequest,
         IBackChannelAuthenticationHandler handler,
-        IBackChannelAuthenticationResultFormatter formatter)
+        IBackChannelAuthenticationResponseFormatter formatter)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -362,7 +378,7 @@ public static class EndpointRouteBuilderExtensions
         DeviceAuthorizationRequest deviceAuthorizationRequest,
         ClientRequest clientRequest,
         IDeviceAuthorizationHandler handler,
-        IDeviceAuthorizationResultFormatter formatter)
+        IDeviceAuthorizationResponseFormatter formatter)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -378,7 +394,7 @@ public static class EndpointRouteBuilderExtensions
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest,
         IUserInfoHandler handler,
-        IUserInfoResultFormatter formatter)
+        IUserInfoResponseFormatter formatter)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -393,7 +409,7 @@ public static class EndpointRouteBuilderExtensions
     private static async Task<IResult> EndSessionAsync(
         EndSessionRequest endSessionRequest,
         IEndSessionHandler handler,
-        IEndSessionResultFormatter formatter)
+        IEndSessionResponseFormatter formatter)
     {
         Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
         var response = await handler.HandleAsync(coreEndSessionRequest);
@@ -408,7 +424,7 @@ public static class EndpointRouteBuilderExtensions
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
         ITokenHandler handler,
-        ITokenResultFormatter formatter,
+        ITokenResponseFormatter formatter,
         CancellationToken cancellationToken)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
@@ -424,7 +440,7 @@ public static class EndpointRouteBuilderExtensions
         RevocationRequest revocationRequest,
         ClientRequest clientRequest,
         IRevocationHandler handler,
-        IRevocationResultFormatter formatter)
+        IRevocationResponseFormatter formatter)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -437,7 +453,7 @@ public static class EndpointRouteBuilderExtensions
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest,
         IIntrospectionHandler handler,
-        IIntrospectionResultFormatter formatter)
+        IIntrospectionResponseFormatter formatter)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -449,7 +465,7 @@ public static class EndpointRouteBuilderExtensions
     /// Returns the session-management iframe document (OpenID Connect Session Management).
     /// </summary>
     private static async Task<IResult> CheckSessionAsync(
-        ICheckSessionHandler handler, ICheckSessionResultFormatter formatter)
+        ICheckSessionHandler handler, ICheckSessionResponseFormatter formatter)
     {
         var response = await handler.HandleAsync();
         return await formatter.FormatResponseAsync(response);
@@ -459,7 +475,7 @@ public static class EndpointRouteBuilderExtensions
     /// Returns the OpenID Provider configuration document (discovery metadata) for the current request.
     /// </summary>
     private static async Task<IResult> ConfigurationAsync(
-        IConfigurationHandler handler, IConfigurationResultFormatter formatter)
+        IConfigurationHandler handler, IConfigurationResponseFormatter formatter)
     {
         var response = await handler.HandleAsync();
         return await formatter.FormatResponseAsync(response);

@@ -173,7 +173,7 @@ public class JweKeyManagementInteropTests
 	// handler emits the RFC-defined 'epk'/'kid' headers only under the process-wide AppContext
 	// switch "Switch.Microsoft.IdentityModel.UseRfcDefinitionOfEpkAndKid" (its default mode omits
 	// 'epk' and derives from the recipient key against itself), and enabling that cached switch
-	// breaks the handler's own RSA/AES-KW JWE writer on a null KeyExchangePublicKey — the two modes
+	// breaks the handler's own RSA/AES-KW JWE writer on a null KeyExchangePublicKey - the two modes
 	// cannot coexist in one test process. The primitive level is exactly the cryptographic contract
 	// interop must prove: both sides derive the same KEK from the same agreement parameters and
 	// unwrap each other's wrapped CEKs.
@@ -227,7 +227,7 @@ public class JweKeyManagementInteropTests
 		int keyEncryptionKeySize,
 		int contentEncryptionKeySize)
 	{
-		// Arrange: the Microsoft primitives act as the producer — the sender key plays the ephemeral
+		// Arrange: the Microsoft primitives act as the producer - the sender key plays the ephemeral
 		// role and its public part travels as 'epk', exactly what their RFC-mode handler would emit
 		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
 		var senderKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);

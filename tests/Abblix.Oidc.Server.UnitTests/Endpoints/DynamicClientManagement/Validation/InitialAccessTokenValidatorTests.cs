@@ -149,7 +149,7 @@ public class InitialAccessTokenValidatorTests
     public async Task ValidateAsync_WithWrongTokenType_ShouldReturnInvalidToken()
     {
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
-        var token = CreateValidToken(tokenType: JwtTypes.AccessToken);
+        var token = CreateValidToken(tokenType: JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync("jwt-token", It.IsAny<ValidationOptions>()))
@@ -221,8 +221,12 @@ public class InitialAccessTokenValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// The audience is required and checked like any other token this server issues for itself. It names the
+    /// issuer, and the shared validator accepts exactly that - so there is nothing left to exempt.
+    /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldSkipAudienceValidation()
+    public async Task ValidateAsync_ShouldRequireAndValidateAudience()
     {
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         var token = CreateValidToken();
@@ -241,9 +245,10 @@ public class InitialAccessTokenValidatorTests
 
         Assert.NotNull(capturedOptions);
 
-        // The whole RequireValidAudience pair (RequireAudience | ValidateAudience) must be cleared:
-        // an initial access token carries no 'aud', so leaving RequireAudience set would reject it.
-        Assert.Equal(ValidationOptions.Default & ~ValidationOptions.RequireValidAudience, capturedOptions);
-        Assert.False(capturedOptions.Value.HasFlag(ValidationOptions.RequireAudience));
+        // Both halves of the pair stay on: the claim has to be there (RequireAudience) and has to name this
+        // server (ValidateAudience).
+        Assert.Equal(ValidationOptions.Default, capturedOptions);
+        Assert.True(capturedOptions.Value.HasFlag(ValidationOptions.RequireAudience));
+        Assert.True(capturedOptions.Value.HasFlag(ValidationOptions.ValidateAudience));
     }
 }

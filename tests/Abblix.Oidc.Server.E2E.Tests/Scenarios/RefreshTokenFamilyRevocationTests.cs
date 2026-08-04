@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// End-to-end proof of the OAuth 2.0 Security BCP refresh-token rotation model (RFC 9700 Section 4.14.2)
 /// against the real token endpoint and the real token registry: a replay of a superseded refresh token
 /// revokes the entire token family, so the currently active token of the same authorization grant dies
-/// with it. This is the reuse-detection behaviour that contains a stolen refresh token — a leaked token is
+/// with it. This is the reuse-detection behaviour that contains a stolen refresh token - a leaked token is
 /// directly replayable for a public client, which is exactly why RFC 9700 Section 2.2.2 mandates rotation
 /// there. The mechanism is client-type independent; the confidential client is used here as the most
 /// heavily-exercised transport path.
@@ -85,12 +85,12 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         Assert.NotEqual(rt2, rt3);
         Assert.NotEqual(rt1, rt3);
 
-        // Replaying rt1 — superseded two generations ago — is still the breach signal that revokes the whole
+        // Replaying rt1 - superseded two generations ago - is still the breach signal that revokes the whole
         // family, not merely the token replayed (RFC 9700 Section 4.14.2).
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt1));
 
         // Every member of the lineage is now dead: the already-superseded rt2 and, crucially, the still-active
-        // rt3 — the token an attacker who had rotated forward would be holding.
+        // rt3 - the token an attacker who had rotated forward would be holding.
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt3));
     }
@@ -107,7 +107,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
 
     /// <summary>
     /// Refreshes with <paramref name="refreshToken"/>, asserts the rotation succeeded, and returns the newly
-    /// issued refresh token — the next member of the same grant family.
+    /// issued refresh token - the next member of the same grant family.
     /// </summary>
     private static async Task<string> RotateAsync(HttpClient client, DiscoveryDocument discovery, string refreshToken)
     {

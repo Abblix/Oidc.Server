@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Valid
 /// DI and the composed validator set is inspected directly, so the test reflects the real
 /// pipeline a host runs (the individual validators are captured inside the composite by
 /// <c>Compose()</c>, not left as service descriptors). <see cref="PingModeValidator"/> is
-/// asserted alongside as a methodology anchor — it is registered, so the test distinguishes
+/// asserted alongside as a methodology anchor - it is registered, so the test distinguishes
 /// "validator missing" from "inspection technique broken".
 /// </summary>
 public class PushModeValidatorRegistrationTests

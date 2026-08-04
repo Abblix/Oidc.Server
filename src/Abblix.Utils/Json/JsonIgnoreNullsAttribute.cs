@@ -30,7 +30,7 @@ namespace Abblix.Utils.Json;
 /// <remarks>
 /// This attribute is a marker only. For it to take effect, the <see cref="System.Text.Json.JsonSerializerOptions"/>
 /// used during serialization must have <see cref="JsonIgnoreNullsModifier.Apply"/> registered as a
-/// <see cref="System.Text.Json.Serialization.Metadata.JsonTypeInfo"/> modifier — for example via
+/// <see cref="System.Text.Json.Serialization.Metadata.JsonTypeInfo"/> modifier - for example via
 /// <see cref="System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver.Modifiers"/> added to
 /// <see cref="System.Text.Json.JsonSerializerOptions.TypeInfoResolverChain"/>.
 /// Abblix's <c>AddOidcControllers</c> registers the modifier automatically.

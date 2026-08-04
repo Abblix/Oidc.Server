@@ -51,7 +51,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// Two parallel error types exist because of the layered architecture: the validator pipeline operates on
 /// the generic <see cref="Abblix.Utils.Result{TSuccess,TFailure}"/> envelope and stays free of response-level
 /// concerns. The cost is field duplication (<c>Error</c>, <c>ErrorDescription</c>, <c>ResponseMode</c>,
-/// <c>RedirectUri</c>) — accepted for the architectural seam.
+/// <c>RedirectUri</c>) - accepted for the architectural seam.
 /// </para>
 /// </remarks>
 public record AuthorizationError(

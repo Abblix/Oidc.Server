@@ -149,7 +149,7 @@ public sealed record RsaJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// For RSA keys, returns true if any RFC 7518 §6.3.2 private-key member is present —
+    /// For RSA keys, returns true if any RFC 7518 §6.3.2 private-key member is present -
     /// not just <c>d</c>. The DPoP §4.2 «MUST NOT contain private key» check needs to
     /// catch a JWK that omits <c>d</c> but still leaks CRT factors (<c>p</c>, <c>q</c>,
     /// <c>dp</c>, <c>dq</c>, <c>qi</c>), since those alone reconstruct the private key.

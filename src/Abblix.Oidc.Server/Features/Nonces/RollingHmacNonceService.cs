@@ -61,7 +61,7 @@ public partial class RollingHmacNonceService(
 
     /// <summary>
     /// Length of the HMAC secret. 32 bytes matches SHA-256's block-aligned
-    /// security level — anything longer would be hashed down by HMAC anyway.
+    /// security level - anything longer would be hashed down by HMAC anyway.
     /// </summary>
     private const int SecretLengthBytes = 32;
 
@@ -92,7 +92,7 @@ public partial class RollingHmacNonceService(
     {
         // The 24-byte allocation is dwarfed by the cache round-trip; using
         // byte[] (rather than stackalloc Span<byte>) sidesteps two issues at
-        // once — Span cannot cross the await on GetOrCreateSecretAsync, and
+        // once - Span cannot cross the await on GetOrCreateSecretAsync, and
         // ref structs are not allowed inside async method bodies pre-C# 13
         // (the .NET 8 target's language version).
         var decoded = new byte[NonceBytes];

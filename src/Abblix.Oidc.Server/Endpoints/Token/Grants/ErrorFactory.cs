@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public static class ErrorFactory
 {
     /// <summary>
-    /// Creates an error for a malformed token request — a missing, repeated, or otherwise
+    /// Creates an error for a malformed token request - a missing, repeated, or otherwise
     /// invalid parameter (RFC 6749 §5.2, <c>invalid_request</c>).
     /// </summary>
     /// <param name="description">The description of the error.</param>

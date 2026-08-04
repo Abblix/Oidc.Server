@@ -26,8 +26,8 @@ namespace Abblix.Jwt;
 /// Recipient-side handler for one JWS 'crit' header extension spec (RFC 7515 §4.1.11).
 /// Covers «understood AND processed»: the handler applies the extension's recipient-side
 /// semantics via <see cref="HandleAsync"/>. The JOSE header parameter name the handler
-/// implements is the DI key it is registered under — see
-/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/> — so name
+/// implements is the DI key it is registered under - see
+/// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/> - so name
 /// and behaviour are inseparable: a name cannot be registered without a handler behind it.
 /// </summary>
 /// <remarks>
@@ -36,7 +36,7 @@ namespace Abblix.Jwt;
 /// «handle». Every realistic crit extension reads the header, optionally performs
 /// side effects (consume a replay nonce, emit an audit event), and returns
 /// success or a typed error. Splitting into validate+handle methods would tear
-/// related code apart — nonce extraction, freshness check, and consumption are
+/// related code apart - nonce extraction, freshness check, and consumption are
 /// one logical step.
 /// </para>
 /// <para>
@@ -44,14 +44,14 @@ namespace Abblix.Jwt;
 /// <list type="bullet">
 ///   <item>
 ///     <description>
-///       <b>Validate-only</b> — read the header value, compare against local
+///       <b>Validate-only</b> - read the header value, compare against local
 ///       policy, accept or reject. Pure function over the JWT. Examples:
 ///       RFC 8225 'ppt' (PASSporT Type), enterprise-policy headers.
 ///     </description>
 ///   </item>
 ///   <item>
 ///     <description>
-///       <b>Stateful handler</b> — read the header value, mutate external state
+///       <b>Stateful handler</b> - read the header value, mutate external state
 ///       (replay-cache, audit log, counters), accept or reject. Example:
 ///       ACME-style 'nonce' (RFC 8555 §6.5.2) consumption with atomic
 ///       single-use semantics.
@@ -60,12 +60,12 @@ namespace Abblix.Jwt;
 /// </list>
 /// </para>
 /// <para>
-/// Signature-affecting crit extensions (RFC 7797 'b64' — Unencoded Payload Option)
+/// Signature-affecting crit extensions (RFC 7797 'b64' - Unencoded Payload Option)
 /// need a pre-signature hook that transforms the JWS Signing Input bytes, which
 /// MUST run before signature verification. That hook is a separate sibling
 /// contract on the signing pipeline (out of scope for this interface). A b64
 /// implementation of THIS interface is a thin shim registered under "b64" that
-/// short-circuits to success — successful signature verification already proves
+/// short-circuits to success - successful signature verification already proves
 /// the directive was honoured.
 /// </para>
 /// <para>

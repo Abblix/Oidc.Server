@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
-    IJwtReplayCache replayCache) : IClientAuthenticator
+    IReplayCache replayCache) : IClientAuthenticator
 {
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
@@ -71,7 +71,6 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         }
 
         var validationResult = await ValidateJwtAsync(request.ClientAssertion);
-
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
@@ -119,12 +118,25 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        // OIDC Core §9: the client-authentication assertion's jti is REQUIRED — "A unique
+        // An assertion authenticates the client; it is not a token this server issued. RFC 7523bis asks that
+        // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
+        // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
+        // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
+        // itself some other type this class names, which is the replay RFC 8725 §3.11 describes. The client
+        // signs this one itself, so the types within its reach are not only the ones this server issued.
+        var tokenType = token.Header.Type;
+        if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
+        {
+            LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
+            return null;
+        }
+
+        // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,
         // and accepting it would leave the assertion replayable within its expiry window (the
         // replay cache below keys off jti).
-        if (token.Payload.JwtId is not { } jwtId)
+        if (token is not { Payload.JwtId: { } jwtId })
         {
             LogMissingJti(clientInfo.ClientId);
             return null;
@@ -134,7 +146,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.
-        if (token.Payload.ExpiresAt is not { } expiresAt)
+        if (token is not { Payload.ExpiresAt: { } expiresAt })
         {
             LogMissingExpiration(clientInfo.ClientId);
             return null;
@@ -143,7 +155,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
         // One call avoids the read-then-write race a separate status check + mark step would leave
         // between two concurrent presenters of the same assertion.
-        if (!await replayCache.TryAddAsync(jwtId, expiresAt))
+        if (!await replayCache.TryReserveAsync(jwtId, expiresAt))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
             return null;

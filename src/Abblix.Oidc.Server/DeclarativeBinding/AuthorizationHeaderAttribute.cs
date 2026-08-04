@@ -23,7 +23,7 @@
 namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value is the parsed HTTP <c>Authorization</c> request header — the scheme and
+/// Declares that the value is the parsed HTTP <c>Authorization</c> request header - the scheme and
 /// credentials used by transport-level client authentication such as <c>Basic</c> (RFC 7617) or
 /// <c>Bearer</c> (RFC 6750). Purely semantic: it names the transport source and leaves the parsing
 /// mechanism to the transport layer.

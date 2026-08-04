@@ -19,8 +19,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// a client registers an EC encryption key via DCR together with <c>id_token_encrypted_response_alg</c>,
 /// completes the authorization code flow through the real endpoints and receives its ID token as a JWE
 /// it can decrypt with the EC private key. The <c>ECDH-ES+A256KW</c> case also drives the RFC 3394
-/// AES Key Wrap on the issuing side. PBES2 has no server-level scenario by construction — client
-/// metadata carries no password channel — so its coverage is the full-pipeline creator/validator suite,
+/// AES Key Wrap on the issuing side. PBES2 has no server-level scenario by construction - client
+/// metadata carries no password channel - so its coverage is the full-pipeline creator/validator suite,
 /// which exercises exactly the code path the server invokes.
 /// </summary>
 public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
@@ -106,7 +106,7 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
             Assert.Empty(parts[1]);
 
         // The client decrypts with its EC private key and validates the inner JWS against the
-        // server's published signing keys — the complete consume side of the flow.
+        // server's published signing keys - the complete consume side of the flow.
         var serverJwks = JsonSerializer.Deserialize<JsonWebKeySet>(
             await httpClient.GetStringAsync(discovery.JwksUri, TestContext.Current.CancellationToken));
         Assert.NotNull(serverJwks);

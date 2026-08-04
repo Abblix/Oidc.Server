@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <summary>
 /// Serializes a <see cref="JsonWebToken"/> minted by the authorization server itself (access tokens, refresh
 /// tokens, registration access tokens, initial access tokens) into a compact JWS form (RFC 7515) using the
-/// server's signing keys, and — per an explicit <see cref="ServiceJwtEncryption"/> policy — optionally wraps
+/// server's signing keys, and - per an explicit <see cref="ServiceJwtEncryption"/> policy - optionally wraps
 /// the result in a JWE (RFC 7516) encrypted to the server's own encryption key.
 /// </summary>
 public interface IAuthServiceJwtFormatter
@@ -45,8 +45,8 @@ public interface IAuthServiceJwtFormatter
     Task<string> FormatAsync(JsonWebToken token);
 
     /// <summary>
-    /// Formats and signs a JWT for use within the authentication service, and — per the supplied
-    /// <paramref name="encryption"/> policy — optionally encrypts it as a JWE to the server's own encryption key.
+    /// Formats and signs a JWT for use within the authentication service, and - per the supplied
+    /// <paramref name="encryption"/> policy - optionally encrypts it as a JWE to the server's own encryption key.
     /// The signing algorithm and pinned signing key id come from the token header, set by the issuing service.
     /// </summary>
     /// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>

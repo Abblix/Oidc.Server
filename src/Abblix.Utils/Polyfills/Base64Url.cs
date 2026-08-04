@@ -67,7 +67,7 @@ public static class Base64Url
     /// Mirrors the .NET 9+ BCL surface so consumer code can use a single call shape
     /// across TFMs. Returns <c>false</c> when <paramref name="destination"/> is too
     /// small to hold the decoded bytes; throws <see cref="FormatException"/> on
-    /// invalid characters or length-mod-4-of-1 inputs, matching BCL semantics —
+    /// invalid characters or length-mod-4-of-1 inputs, matching BCL semantics -
     /// the "Try" prefix here covers buffer-size failures, not malformed input.
     /// </summary>
     /// <param name="source">The base64url-encoded characters.</param>

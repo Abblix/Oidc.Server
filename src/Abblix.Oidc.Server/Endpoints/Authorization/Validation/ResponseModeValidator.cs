@@ -63,7 +63,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 
 		// Optional per-client allow-list. The effective mode is context.ResponseMode: the explicit
 		// response_mode set just above, or the flow default FlowTypeValidator placed there when the
-		// parameter was omitted — so omitting response_mode cannot slip past a configured restriction.
+		// parameter was omitted - so omitting response_mode cannot slip past a configured restriction.
 		var allowedModes = context.ClientInfo.AllowedResponseModes;
 		if (allowedModes is { Length: > 0 } && Array.IndexOf(allowedModes, context.ResponseMode) < 0)
 		{
@@ -84,7 +84,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType)
 	{
 		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
-		// is then subject to the same flow-compatibility rules as its plaintext counterpart — so query.jwt
+		// is then subject to the same flow-compatibility rules as its plaintext counterpart - so query.jwt
 		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
 		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
 		if (responseMode.IsJwtMode())
@@ -104,7 +104,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 		{
 			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
-			// The none response type returns no credentials, so every delivery mode is safe — including
+			// The none response type returns no credentials, so every delivery mode is safe - including
 			// query, which OAuth 2.0 Multiple Response Type Encoding Practices §4 makes its default.
 			FlowTypes.None => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),

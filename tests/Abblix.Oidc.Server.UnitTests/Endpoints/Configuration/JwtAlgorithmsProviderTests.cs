@@ -116,7 +116,7 @@ public class JwtAlgorithmsProviderTests
     [Fact]
     public void AuthorizationSigningAlgValuesSupported_ForwardsCreatorSignedResponseAlgorithms()
     {
-        // JARM responses are signed with the same service keys as ID tokens — the creator's signing set.
+        // JARM responses are signed with the same service keys as ID tokens - the creator's signing set.
         string[] signing = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
         _creator.Setup(c => c.SignedResponseAlgorithmsSupported).Returns(signing);
 
@@ -127,7 +127,7 @@ public class JwtAlgorithmsProviderTests
 
     /// <summary>
     /// OIDC Core §10.1: HS* signatures key on the client_secret, which this server stores only as
-    /// a hash — so HMAC algorithms must not be advertised on any client-addressed response-signing
+    /// a hash - so HMAC algorithms must not be advertised on any client-addressed response-signing
     /// list, even when the JWT layer has HMAC signers registered. Previously the full signer set
     /// (HS* included) leaked into discovery, a client could register HS256 via DCR, and the first
     /// issued id_token failed with a server error at signing-key lookup.

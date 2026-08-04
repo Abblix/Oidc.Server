@@ -209,6 +209,7 @@ internal static class LogEvents
             public const int SigningAlgorithmNotAllowed = Base + 8;
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
+            public const int OtherKindPresentedAsAssertion = Base + 11;
         }
 
         /// <summary>

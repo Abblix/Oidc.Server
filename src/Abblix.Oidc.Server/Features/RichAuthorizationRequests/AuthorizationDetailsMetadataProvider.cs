@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <see cref="KeyedService.AnyKey"/> (.NET 8+) and projects each instance's
 /// <see cref="IAuthorizationDetailValidator.Type"/>, so discovery's
 /// <c>authorization_details_types_supported</c> list always reflects exactly the per-type
-/// validators the host currently has registered — no separate config to keep in sync.
+/// validators the host currently has registered - no separate config to keep in sync.
 /// </summary>
 internal sealed class AuthorizationDetailsMetadataProvider(
     IServiceProvider serviceProvider) : IAuthorizationDetailsMetadataProvider

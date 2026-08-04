@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// <summary>
 /// Locks <see cref="SupportedGrantTypeValidator"/> against the registration-time gap it
 /// closes: client registration must surface <c>invalid_client_metadata</c> when
-/// <c>grant_types</c> include grants the server doesn't support — including the
+/// <c>grant_types</c> include grants the server doesn't support - including the
 /// <c>implicit</c> grant when <c>EnableImplicitFlow()</c> hasn't been called.
 /// </summary>
 public class SupportedGrantTypeValidatorTests
@@ -71,7 +71,7 @@ public class SupportedGrantTypeValidatorTests
     }
 
     /// <summary>
-    /// Without <c>EnableImplicitFlow()</c> no informer advertises <c>implicit</c> — a client
+    /// Without <c>EnableImplicitFlow()</c> no informer advertises <c>implicit</c> - a client
     /// registering it must be rejected at registration time.
     /// </summary>
     [Fact]
@@ -102,7 +102,7 @@ public class SupportedGrantTypeValidatorTests
 
     /// <summary>
     /// Without <c>EnablePasswordGrant()</c> the password grant is absent from the token
-    /// endpoint — registration must reject it. Symmetric to the implicit case.
+    /// endpoint - registration must reject it. Symmetric to the implicit case.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_PasswordGrantNotEnabled_RejectsPasswordGrant()
@@ -130,7 +130,7 @@ public class SupportedGrantTypeValidatorTests
     }
 
     /// <summary>
-    /// The validator unions multiple <see cref="IGrantTypeInformer"/> contributions — exactly
+    /// The validator unions multiple <see cref="IGrantTypeInformer"/> contributions - exactly
     /// the aggregate the discovery endpoint exposes. Implicit can come from one informer,
     /// authorization_code from another, and both register cleanly.
     /// </summary>
@@ -167,7 +167,7 @@ public class SupportedGrantTypeValidatorTests
     }
 
     /// <summary>
-    /// Empty <c>grant_types</c> array — nothing to gate — passes (other validators handle
+    /// Empty <c>grant_types</c> array - nothing to gate - passes (other validators handle
     /// the «must be specified» rule, this one is purely about server support).
     /// </summary>
     [Fact]

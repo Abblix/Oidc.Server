@@ -51,7 +51,7 @@ public static class JsonIgnoreNullsModifier
         {
             var propertyType = property.PropertyType;
 
-            // Non-nullable value types (e.g. bool, int) can never be null — skip them.
+            // Non-nullable value types (e.g. bool, int) can never be null - skip them.
             if (propertyType.IsValueType && Nullable.GetUnderlyingType(propertyType) == null)
                 continue;
 

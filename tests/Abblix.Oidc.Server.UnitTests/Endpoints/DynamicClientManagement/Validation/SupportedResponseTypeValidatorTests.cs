@@ -79,7 +79,7 @@ public class SupportedResponseTypeValidatorTests
 
     /// <summary>
     /// Without <c>EnableImplicitFlow()</c>, a client requesting <c>token</c> must be rejected
-    /// at registration time — the gap this validator closes.
+    /// at registration time - the gap this validator closes.
     /// </summary>
     [Theory]
     [InlineData(ResponseTypes.Token)]
@@ -114,7 +114,7 @@ public class SupportedResponseTypeValidatorTests
 
     /// <summary>
     /// With <c>EnableImplicitFlow()</c> all three response-type parts are registered, so any
-    /// canonical combination — including pure Implicit and full Hybrid — must be accepted.
+    /// canonical combination - including pure Implicit and full Hybrid - must be accepted.
     /// </summary>
     [Theory]
     [InlineData(ResponseTypes.Code)]
@@ -131,7 +131,7 @@ public class SupportedResponseTypeValidatorTests
 
     /// <summary>
     /// Client registering several combinations at once is rejected if any single combination
-    /// references an unsupported part — registrations are all-or-nothing.
+    /// references an unsupported part - registrations are all-or-nothing.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_CodeOnlyServer_RejectsMultiCombinationContainingUnsupported()
@@ -149,7 +149,7 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
-    /// Empty <c>response_types</c> array — nothing to validate against — passes the gate
+    /// Empty <c>response_types</c> array - nothing to validate against - passes the gate
     /// (other validators handle the «must be specified» rule, this one is purely about
     /// support).
     /// </summary>

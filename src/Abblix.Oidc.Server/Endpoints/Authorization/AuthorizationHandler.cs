@@ -65,8 +65,8 @@ public class AuthorizationHandler(
     public async Task<AuthorizationResponse> HandleAsync(Model.AuthorizationRequest request)
     {
         // Produce the response through the full processing chain (including the session-management
-        // decorator that sets session_state), then let the encoder apply iss/scope gating and — for a
-        // JARM request — pack the parameters into the response JWT. Encoding happens here, at the single
+        // decorator that sets session_state), then let the encoder apply iss/scope gating and - for a
+        // JARM request - pack the parameters into the response JWT. Encoding happens here, at the single
         // convergence point for success and every error variant, after session_state is finalised.
         var response = await ProduceResponseAsync(request);
         await responseEncoder.EncodeAsync(response);

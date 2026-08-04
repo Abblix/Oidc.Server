@@ -51,7 +51,7 @@ public class AesKeyWrapTests
 	private const string KeyEncryptionKey128Hex = "000102030405060708090A0B0C0D0E0F";
 
 	/// <summary>
-	/// The six complete known-answer vectors of RFC 3394 §4.1–§4.6, covering every
+	/// The six complete known-answer vectors of RFC 3394 §4.1-§4.6, covering every
 	/// KEK-size × key-data-size combination the specification defines.
 	/// </summary>
 	public static TheoryData<string, string, string> Rfc3394Vectors => new()
@@ -113,7 +113,7 @@ public class AesKeyWrapTests
 
 	/// <summary>
 	/// RFC 3394 §2.2.2: the integrity check register comparison is the sole integrity mechanism of the
-	/// construction, so flipping ANY single byte of the wrapped key must make unwrapping fail —
+	/// construction, so flipping ANY single byte of the wrapped key must make unwrapping fail -
 	/// every byte position is exercised, not a sample.
 	/// </summary>
 	[Fact]
@@ -146,7 +146,7 @@ public class AesKeyWrapTests
 
 	[Theory]
 	[InlineData(0)]  // empty
-	[InlineData(16)] // two semiblocks only — a valid wrap is at least three
+	[InlineData(16)] // two semiblocks only - a valid wrap is at least three
 	[InlineData(23)] // not a multiple of 8
 	[InlineData(25)] // not a multiple of 8
 	public void TryUnwrap_InvalidWrappedKeyLength_Fails(int length)
@@ -158,7 +158,7 @@ public class AesKeyWrapTests
 	}
 
 	[Theory]
-	[InlineData(8)]  // single semiblock — below the NIST SP 800-38F two-semiblock minimum
+	[InlineData(8)]  // single semiblock - below the NIST SP 800-38F two-semiblock minimum
 	[InlineData(15)] // not a multiple of 8
 	[InlineData(20)] // not a multiple of 8
 	public void Wrap_InvalidKeyDataLength_Throws(int length)
@@ -232,7 +232,7 @@ public class AesKeyWrapTests
 	}
 
 	/// <summary>
-	/// Per RFC 7518 Section 4.4 the KEK size must match the algorithm name exactly —
+	/// Per RFC 7518 Section 4.4 the KEK size must match the algorithm name exactly -
 	/// a wrong-family key must be rejected, not silently truncated or padded.
 	/// </summary>
 	[Fact]

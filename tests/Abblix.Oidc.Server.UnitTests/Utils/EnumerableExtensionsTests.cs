@@ -73,9 +73,9 @@ public class EnumerableExtensionsTests
 
         var materialized = Lazy().Materialize();
 
-        // Single materialization upfront…
+        // Single materialization upfront...
         Assert.Equal(1, enumerationCount);
-        // …and replay-many afterwards: subsequent enumerations do not
+        // ...and replay-many afterwards: subsequent enumerations do not
         // re-execute the source iterator.
         Assert.Equal([1, 2, 3], materialized);
         Assert.Equal([1, 2, 3], materialized);

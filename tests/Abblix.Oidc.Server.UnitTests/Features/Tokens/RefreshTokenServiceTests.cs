@@ -58,7 +58,7 @@ public class RefreshTokenServiceTests
     private const string TokenId = "token_abc123";
     private const string GrantId = "grant_xyz789";
     private const string OldTokenId = "old_token_xyz";
-    private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InJ0K2p3dCJ9.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
+    private const string EncodedToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6InZuZC5hYmJsaXgucmVmcmVzaCtqd3QifQ.eyJzdWIiOiJ1c2VyXzQ1NiJ9.signature";
 
     private readonly Mock<IAuthServiceJwtFormatter> _jwtFormatter;
     private readonly Mock<ITokenRegistry> _tokenRegistry;
@@ -83,7 +83,7 @@ public class RefreshTokenServiceTests
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
 
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
-        // the exact production path: Convert and Recover both pass the subject through unchanged.
+        // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new RefreshTokenService(
             issuerProvider.Object,
             timeProvider,
@@ -165,12 +165,13 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that CreateRefreshTokenAsync sets audience (aud) to the client ID.
-    /// Per RFC 7519 Section 4.1.3, audience identifies the recipients for this JWT.
-    /// Refresh tokens are intended only for the specific client that was issued the token.
+    /// Verifies that CreateRefreshTokenAsync sets audience (aud) to the issuer.
+    /// Per RFC 7519 Section 4.1.3, audience identifies the recipients for this JWT, and the only recipient of
+    /// a refresh token is the token endpoint that issued it - the client presents the token, it never reads
+    /// it. Naming the issuer is what lets the audience be checked on the way back in.
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_ShouldSetAudienceToClientId()
+    public async Task CreateRefreshToken_ShouldSetAudienceToIssuer()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -189,7 +190,7 @@ public class RefreshTokenServiceTests
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Single(capturedToken!.Payload.Audiences);
-        Assert.Equal(ClientId, capturedToken.Payload.Audiences.Single());
+        Assert.Equal(Issuer, capturedToken.Payload.Audiences.Single());
     }
 
     /// <summary>

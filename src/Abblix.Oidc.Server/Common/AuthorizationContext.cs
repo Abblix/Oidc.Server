@@ -200,7 +200,7 @@ public record AuthorizationContext
 
     /// <summary>
     /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
-    /// This is the source of truth — preserved byte-exact (member order, type-specific payload)
+    /// This is the source of truth - preserved byte-exact (member order, type-specific payload)
     /// through the authorize → code → token round-trip and protobuf persistence, without lossy
     /// typed deserialise / re-serialise cycles.
     /// </summary>

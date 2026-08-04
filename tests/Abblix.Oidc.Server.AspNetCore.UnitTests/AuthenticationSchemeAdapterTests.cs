@@ -38,7 +38,7 @@ public class AuthenticationSchemeAdapterTests
 
 	/// <summary>
 	/// Runs a full write→read cycle: SignInAsync builds the principal/properties the cookie handler would persist,
-	/// and AuthenticateAsync reconstructs the <see cref="AuthSession"/> from exactly those — the round-trip the
+	/// and AuthenticateAsync reconstructs the <see cref="AuthSession"/> from exactly those - the round-trip the
 	/// production flow performs across two requests.
 	/// </summary>
 	private async Task<AuthSession?> RoundTripAsync(AuthSession input)

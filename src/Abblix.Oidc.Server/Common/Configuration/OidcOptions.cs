@@ -103,13 +103,13 @@ public record OidcOptions
 	/// <summary>
 	/// Specifies which OIDC endpoints are enabled on the server. This property allows for fine-grained control over
 	/// the available functionality, enabling or disabling specific endpoints based on the server's role, security
-	/// considerations, or operational requirements. Defaults to <see cref="OidcEndpoints.Base"/> — the core
+	/// considerations, or operational requirements. Defaults to <see cref="OidcEndpoints.Base"/> - the core
 	/// interactive OIDC set plus PAR and RP-initiated logout. The six niche or security-sensitive endpoints
 	/// (CheckSession, Revocation, Introspection, dynamic client registration, CIBA and device authorization) are
 	/// off by default and each turned on by its dedicated <c>AddX()</c> opt-in, which registers the feature and
-	/// re-enables the corresponding flag. Leaving them off keeps a server that never opts in from advertising — or
-	/// validating — an endpoint it was never asked to serve. Setting this to <see cref="OidcEndpoints.All"/> only
-	/// re-advertises and routes every endpoint — the handler for each opt-in endpoint (CheckSession, Revocation,
+	/// re-enables the corresponding flag. Leaving them off keeps a server that never opts in from advertising - or
+	/// validating - an endpoint it was never asked to serve. Setting this to <see cref="OidcEndpoints.All"/> only
+	/// re-advertises and routes every endpoint - the handler for each opt-in endpoint (CheckSession, Revocation,
 	/// Introspection, dynamic client registration, CIBA, device authorization) is still registered solely by its
 	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behaviour only when combined with
 	/// all of those opt-in calls. Setting <c>All</c> without them advertises and routes endpoints whose handlers are
@@ -254,6 +254,25 @@ public record OidcOptions
 	public ResourceDefinition[]? Resources { get; set; }
 
 	/// <summary>
+	/// The resource an access token is minted for when the request names none. Left null, the token's
+	/// <c>aud</c> falls back to the client identifier, which is what prior versions did.
+	/// </summary>
+	/// <remarks>
+	/// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
+	/// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to
+	/// reject a token whose <c>aud</c> does not name it. A client identifier names the party that asked for the
+	/// token rather than the one meant to consume it, so a conforming resource server should refuse it; a
+	/// deployment with one API therefore says so here once, instead of teaching every client to send
+	/// <c>resource</c>.
+	/// This is opt-in because the value is read by every resource server in the deployment: changing it is a
+	/// change to their contract, not to this server's configuration alone. The fallback is unchanged until a
+	/// host states otherwise. Must be an absolute URI naming a registered <see cref="Resources"/> entry -
+	/// startup refuses anything else, since a token minted for a resource this server does not know is one
+	/// nobody can accept.
+	/// </remarks>
+	public Uri? DefaultResourceIndicator { get; set; }
+
+	/// <summary>
 	/// Configuration options for the backchannel authentication flow,
 	/// used in scenarios such as Client-Initiated Backchannel Authentication (CIBA).
 	/// </summary>
@@ -298,7 +317,7 @@ public record OidcOptions
 
 	/// <summary>
 	/// Governs how a request object resolves a parameter that appears both inside the object and in the
-	/// OAuth query syntax — a choice between two specifications. When <c>false</c> (the default), request-object
+	/// OAuth query syntax - a choice between two specifications. When <c>false</c> (the default), request-object
 	/// processing follows the OpenID Connect Core §6.1 merge semantics: the object's values supersede those
 	/// passed outside it, but a parameter passed only outside the object is still used. Set to <c>true</c> for
 	/// the strict RFC 9101 §6.3 rule, where the authorization request is exactly the content of the object and
@@ -307,18 +326,26 @@ public record OidcOptions
 	/// server defaults to the merge behaviour, since strict processing would drop parameters that existing
 	/// OpenID Connect clients commonly pass outside the object. A client held to the FAPI 2.0 security profile
 	/// is processed strictly regardless of this global default.
-	/// This switch affects only parameter exclusivity; the other RFC 9101 §6.3 requirement — that a
-	/// <c>client_id</c> or <c>response_type</c> present both inside and outside the object be identical — is
+	/// This switch affects only parameter exclusivity; the other RFC 9101 §6.3 requirement - that a
+	/// <c>client_id</c> or <c>response_type</c> present both inside and outside the object be identical - is
 	/// enforced in both modes and cannot be turned off.
 	/// </summary>
 	public bool IgnoreParametersOutsideRequestObject { get; set; } = false;
 
 	/// <summary>
-	/// Determines whether the client registration endpoint requires an initial access token
-	/// in the Authorization header per RFC 7591 Section 3.
-	/// When <c>true</c>, POST requests to the registration endpoint must include a valid
+	/// Determines whether the client registration endpoint requires an initial access token in the
+	/// Authorization header. When <c>true</c>, POST requests to the registration endpoint must include a valid
 	/// Bearer token. When <c>false</c>, open registration is allowed.
 	/// </summary>
+	/// <remarks>
+	/// The default deviates from a SHOULD deliberately. RFC 7591 Section 3: "To support open registration and
+	/// facilitate wider interoperability, the client registration endpoint SHOULD allow registration requests
+	/// with no authorization (which is to say, with no initial access token in the request)." Appendix A.1.2
+	/// describes the other choice, protected registration, as an equally supported deployment, and that is what
+	/// this default picks: an endpoint that mints client credentials to anyone who asks is not a safe starting
+	/// point, and a host that wants open registration opts into it in one line. The trade the specification
+	/// names in return is interoperability, since client software cannot register itself unattended.
+	/// </remarks>
 	public bool RequireInitialAccessToken { get; set; } = true;
 
 	/// <summary>
@@ -350,7 +377,7 @@ public record OidcOptions
 	/// <summary>
 	/// The server-wide default security profile, applied to every client whose own
 	/// <see cref="ClientInfo.SecurityProfile"/> is left unset (<c>null</c>). A single-profile
-	/// deployment sets this once — for example to <see cref="ClientSecurityProfile.Fapi2"/> — and
+	/// deployment sets this once - for example to <see cref="ClientSecurityProfile.Fapi2"/> - and
 	/// every client without an explicit profile inherits the FAPI 2.0 control bundle; an individual
 	/// client opts out by setting its own profile to <see cref="ClientSecurityProfile.None"/>. The
 	/// default <see cref="ClientSecurityProfile.None"/> leaves unprofiled clients governed by their
@@ -364,7 +391,7 @@ public record OidcOptions
 	/// (RFC 9700 Section 2.1.1 encourages the authorization server to make a reasonable effort to detect and
 	/// prevent it). When set, the server records each value at the moment it issues an authorization code and
 	/// rejects a later authorization request from the same client that repeats a value within this interval.
-	/// Recording at code issuance — not on every authorization request — means re-processing one request
+	/// Recording at code issuance - not on every authorization request - means re-processing one request
 	/// across a login or consent redirect is not flagged. Left <c>null</c> (the default) the check is off:
 	/// a conforming client generates a fresh value per request and is never affected, but a client that
 	/// incorrectly reuses a value across separate authorizations would then be rejected, so it is opt-in.

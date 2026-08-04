@@ -24,10 +24,12 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
+using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Builds the RFC 7592 <c>registration_client_uri</c> — the absolute URL of a client's configuration endpoint — from
+/// Builds the RFC 7592 <c>registration_client_uri</c> - the absolute URL of a client's configuration endpoint - from
 /// the current request's base URL and the configured client-management route, replacing the MVC integration's
 /// <c>IUriResolver</c>.
 /// </summary>

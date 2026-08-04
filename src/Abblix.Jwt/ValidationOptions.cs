@@ -94,7 +94,7 @@ public enum ValidationOptions
 	/// <remarks>
 	/// Without this, <see cref="ValidateLifetime"/> alone accepts a token carrying neither
 	/// <c>nbf</c> nor <c>exp</c> - there is no instant at which such a token is expired, so
-	/// checking its lifetime finds nothing wrong. That is right for the token classes whose
+	/// checking its lifetime finds nothing wrong. That is right for the token types whose
 	/// specifications leave expiry out, and wrong for the ones that make it REQUIRED, which is
 	/// why the two are separate flags rather than one stricter check.
 	/// Set it wherever the governing specification demands <c>exp</c>: an ID Token (OpenID

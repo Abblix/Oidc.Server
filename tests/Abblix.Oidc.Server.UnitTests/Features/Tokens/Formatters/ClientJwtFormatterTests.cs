@@ -126,7 +126,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -162,7 +162,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
 
@@ -232,7 +232,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -277,7 +277,7 @@ public class ClientJwtFormatterTests
         // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.LogoutToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -309,7 +309,7 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that the formatter selects the client's encryption metadata by JWT class: an
+    /// Verifies that the formatter selects the client's encryption metadata by JWT type: an
     /// id_token uses id_token_encrypted_response_alg, while a UserInfo response (which carries no
     /// id_token/logout type) uses userinfo_encrypted_response_alg. The encryption key here has no
     /// algorithm of its own, so the registered value is what reaches the JWT creator.
@@ -317,7 +317,7 @@ public class ClientJwtFormatterTests
     [Fact]
     public async Task FormatAsync_SelectsEncryptionAlgorithmByTokenType()
     {
-        // Arrange — distinct registered key-management AND content-encryption per token class.
+        // Arrange - distinct registered key-management AND content-encryption per token type.
         var clientInfo = new ClientInfo(ClientId)
         {
             IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
@@ -345,10 +345,10 @@ public class ClientJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        // Act & Assert — id_token uses the id_token encryption metadata (both alg and enc).
+        // Act & Assert - id_token uses the id_token encryption metadata (both alg and enc).
         var idToken = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JwtTypes.IdToken },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Audiences = [ClientId] },
         };
         await _formatter.FormatAsync(idToken, clientInfo);

@@ -137,11 +137,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   <item><strong>Authentication:</strong> All notifications use Bearer token from <c>client_notification_token</c></item>
 /// </list>
 ///
-/// <para><strong>Security contract — user_code verification (CIBA Core 1.0 §7.1):</strong></para>
+/// <para><strong>Security contract - user_code verification (CIBA Core 1.0 §7.1):</strong></para>
 /// <para>
 /// The library validates only the <em>presence</em> of <c>user_code</c> when the provider and client
 /// require it (see <see cref="Endpoints.BackChannelAuthentication.Validation.UserCodeValidator"/>); it
-/// deliberately does not — and cannot — verify the code's <em>value</em>, because the secret is known
+/// deliberately does not - and cannot - verify the code's <em>value</em>, because the secret is known
 /// only to the end-user and the user's authentication device, which this handler owns. Your
 /// implementation therefore <strong>MUST</strong> verify <c>request.Model.UserCode</c> against the
 /// user's actual code as part of the device interaction, and <strong>MUST NOT</strong> return a

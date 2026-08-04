@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -100,8 +100,8 @@ public class UserIdentityValidator(
             else
             {
                 // The client opted into JWT parsing (ParseLoginHintTokenAsJwt), so any
-                // validation failure — including a malformed / forged token surfacing as
-                // InvalidToken — is rejected rather than silently treated as "no usable hint".
+                // validation failure - including a malformed / forged token surfacing as
+                // InvalidToken - is rejected rather than silently treated as "no usable hint".
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     "LoginHintToken validation failed.");
@@ -136,9 +136,13 @@ public class UserIdentityValidator(
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
+        // The audience is checked below, against the requesting client, rather than by the shared validator,
+        // which accepts only the issuer. An ID token is the one type that names a client there: OpenID
+        // Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id of the Relying
+        // Party". Leaving the shared check on would refuse every hint.
         var result = await idTokenValidator.ValidateAsync(
             idTokenHint,
-            ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
+            ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience);
 
         if (result.TryGetFailure(out var error))
         {
@@ -149,10 +153,11 @@ public class UserIdentityValidator(
 
         var token = result.GetSuccess();
 
-        // RFC 8725 §3.12: pin the token class. The id_token_hint MUST be an ID Token; without this
-        // check another own-issued token whose audience matches (an access or refresh token) would
-        // be accepted here, since the audience/signature checks alone do not distinguish the class.
-        if (token.Header.Type != JwtTypes.IdToken)
+        // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so another
+        // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
+        // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
+        // ID token carries no type of its own; see JwtTypes.IsPermitted.
+        if (!JwtTypes.IsPermitted(token.Header.Type))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");

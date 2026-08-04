@@ -28,7 +28,7 @@ namespace Abblix.Jwt;
 /// One entry in the OAuth 2.0 Rich Authorization Requests <c>authorization_details</c> array
 /// (RFC 9396 §2), wrapped over a <see cref="JsonNode"/> which is the source of truth for the
 /// entry's content. The wrapper exposes the RFC 9396 §2.2 common-data members as strongly-typed
-/// accessors that read from and write to the underlying <see cref="Json"/> directly — the same
+/// accessors that read from and write to the underlying <see cref="Json"/> directly - the same
 /// shape <see cref="JsonWebTokenPayload"/> uses over its <see cref="JsonObject"/>.
 /// </summary>
 /// <param name="Json">The underlying JSON node carrying the entry's wire shape. Member order,

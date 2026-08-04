@@ -76,10 +76,10 @@ public class UpdateClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            // RFC 9449 §5.2: dpop_bound_access_tokens - when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
             // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
-            // flags — RFC 7592 update is a full replacement, so omission resets them to false.
+            // flags - RFC 7592 update is a full replacement, so omission resets them to false.
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,

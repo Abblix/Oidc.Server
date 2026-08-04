@@ -43,6 +43,7 @@ public class InitialAccessTokenService(
     public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
+        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
 
         var token = new JsonWebToken
         {
@@ -58,7 +59,12 @@ public class InitialAccessTokenService(
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt + expiresIn,
 
-                Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+                Issuer = issuer,
+
+                // RFC 7591 Section 3 has this token authorize a registration call at this server, so this
+                // server is what consumes it - and naming itself is what makes the audience checkable on the
+                // way back in. Every other token issued here for its own consumption does the same.
+                Audiences = [issuer],
                 Subject = subject,
             },
         };

@@ -186,6 +186,33 @@ public abstract class TestBase(TestFactory factory)
     }
 
     /// <summary>
+    /// Posts a token to the introspection endpoint as the named client and returns the parsed response.
+    /// The caller authenticates with the shared confidential secret, which every confidential test client
+    /// carries, so scenarios vary only the identity that is asking.
+    /// </summary>
+    protected static async Task<JsonObject> IntrospectAsync(
+        HttpClient client, DiscoveryDocument discovery, string token, string callerClientId)
+    {
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
+        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = callerClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [IntrospectionRequest.Parameters.Token] = token,
+            [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
+        });
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, $"introspect failed: {(int)response.StatusCode} {raw}");
+
+        var body = JsonNode.Parse(raw)?.AsObject();
+        Assert.NotNull(body);
+        return body;
+    }
+
+    /// <summary>
     /// Drives PAR -> /authorize -> /token for the supplied client and
     /// authorization_details payload. Returns the parsed token response
     /// JsonObject. Throws on any non-success HTTP status - use the
@@ -293,7 +320,7 @@ public abstract class TestBase(TestFactory factory)
     private static string Base64UrlEncode(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    private static byte[] Base64UrlDecode(string input)
+    protected static byte[] Base64UrlDecode(string input)
     {
         var padded = input.Replace('-', '+').Replace('_', '/');
         switch (padded.Length % 4)

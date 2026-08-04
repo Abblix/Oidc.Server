@@ -31,7 +31,7 @@ namespace Abblix.Jwt.UnitTests;
 /// Unit tests for the JWS 'crit' header parameter validation per RFC 7515 §4.1.11. Tokens are
 /// signed with a real RSA key so the signature step passes; the focus is on the post-signature
 /// 'crit' validation pass that decides whether the JOSE header itself is acceptable. Library
-/// ships with zero <see cref="ICriticalHeaderHandler"/> implementations by default — the
+/// ships with zero <see cref="ICriticalHeaderHandler"/> implementations by default - the
 /// «no handler registered» tests exercise the rejection branch, the handler-backed tests
 /// register a test-double handler for <c>"b64"</c> to walk the happy and side-effect paths.
 /// </summary>
@@ -118,7 +118,7 @@ public class CriticalHeaderTests
 
     /// <summary>
     /// Every name in 'crit' MUST also appear as a header parameter in the JOSE header.
-    /// A name in 'crit' but absent from the header is a "dangling" reference — the validator
+    /// A name in 'crit' but absent from the header is a "dangling" reference - the validator
     /// rejects on this earlier guard before reaching the "unknown extension" fallthrough.
     /// </summary>
     [Fact]
@@ -213,7 +213,7 @@ public class CriticalHeaderTests
 
     /// <summary>
     /// When a registered handler rejects the JWS, the validator surfaces the handler's
-    /// <see cref="JwtValidationError"/> verbatim — confirming that the handler is actually
+    /// <see cref="JwtValidationError"/> verbatim - confirming that the handler is actually
     /// invoked (not bypassed by an earlier guard) and that its decision is the validator's
     /// decision.
     /// </summary>
@@ -268,7 +268,7 @@ public class CriticalHeaderTests
 
     /// <summary>
     /// Test-double handler for <c>"b64"</c> (RFC 7797 name reused here for convenience; this
-    /// handler does not implement RFC 7797's signature-input transformation — the JWS we sign
+    /// handler does not implement RFC 7797's signature-input transformation - the JWS we sign
     /// carries a bare boolean header field). Always short-circuits to success, matching the
     /// «signature-affecting extension whose work lives in the signing pipeline» mode. The name
     /// it answers to is the DI key it is registered under, not a property.
@@ -280,7 +280,7 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// Test-double handler that rejects every JWS — used to verify that handler rejection
+    /// Test-double handler that rejects every JWS - used to verify that handler rejection
     /// actually propagates through the validator (and that no earlier guard short-circuits
     /// past the handler invocation).
     /// </summary>

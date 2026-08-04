@@ -36,16 +36,16 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 /// it produces a fresh proof per call, each carrying its own <c>jti</c> and current-time
 /// <c>iat</c> so the replay cache lets it through. The same instance is reused across
 /// PAR + /token + /userinfo in a single flow so every step proves possession of the
-/// same key — that's the whole RFC 9449 invariant.
+/// same key - that's the whole RFC 9449 invariant.
 /// </summary>
 /// <remarks>
 /// Mirrors the unit-test <c>DPoPProofBuilder</c> in shape (the validator's view of a
 /// proof is identical regardless of who built it), but lives in the E2E test assembly
 /// so scenario files can mint proofs directly without crossing assembly boundaries.
 /// The unit-side builder offers fine-grained mutation knobs (CorruptSignature,
-/// IncludePrivateInJwk, …) for negative validation tests; this generator stays on the
+/// IncludePrivateInJwk, ...) for negative validation tests; this generator stays on the
 /// success path because E2E scenarios drive negatives via "wrong key" / "no header" /
-/// "wrong URI" — different keypairs and method/URI inputs, not crafted bad proofs.
+/// "wrong URI" - different keypairs and method/URI inputs, not crafted bad proofs.
 /// </remarks>
 public sealed class DPoPProofGenerator : IDisposable
 {
@@ -64,12 +64,12 @@ public sealed class DPoPProofGenerator : IDisposable
         }.Apply(publicParams);
     }
 
-    /// <summary>Public half of the proof-of-possession key — what the AS sees in the
+    /// <summary>Public half of the proof-of-possession key - what the AS sees in the
     /// proof's <c>jwk</c> header and what the issued access token's <c>cnf.jkt</c>
     /// binds to.</summary>
     public EllipticCurveJsonWebKey PublicJwk { get; }
 
-    /// <summary>RFC 7638 JWK thumbprint of <see cref="PublicJwk"/>, base64url-encoded —
+    /// <summary>RFC 7638 JWK thumbprint of <see cref="PublicJwk"/>, base64url-encoded -
     /// the value the AS commits to as <c>dpop_jkt</c> on PAR and emits as <c>cnf.jkt</c>
     /// on the access token. Tests assert against this verbatim.</summary>
     public string Thumbprint => PublicJwk.ComputeJwkThumbprintBase64Url();
@@ -100,7 +100,7 @@ public sealed class DPoPProofGenerator : IDisposable
     {
         var header = new JsonObject
         {
-            ["typ"] = JwtTypes.DPoPProof,
+            ["typ"] = JsonWebTokenTypes.DPoPProof,
             ["alg"] = SigningAlgorithms.ES256,
             [JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(PublicJwk),
         };

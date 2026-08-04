@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// Boots the Minimal API TestHost OIDC provider in-memory. The host wires the framework-neutral
 /// core through <c>AddOidcMinimalApi</c> + <c>MapOidcEndpoints</c>, so these tests exercise the
 /// generated request models' <c>BindAsync</c> and the <c>IResult</c> formatters over a real ASP.NET
-/// Core request pipeline — the same way a consumer of the Abblix.Oidc.Server.MinimalApi package would.
+/// Core request pipeline - the same way a consumer of the Abblix.Oidc.Server.MinimalApi package would.
 /// </summary>
 public sealed class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {

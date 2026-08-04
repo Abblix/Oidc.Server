@@ -31,7 +31,7 @@ namespace Abblix.Jwt;
 /// over its underlying <see cref="JsonNode"/>.
 /// </summary>
 /// <remarks>
-/// The raw <see cref="JsonArray"/> remains the source of truth — member order and type-specific
+/// The raw <see cref="JsonArray"/> remains the source of truth - member order and type-specific
 /// payload survive the authorize → code → token round-trip byte-exact because no typed
 /// deserialise / re-serialise cycle ever runs over the wrapped nodes.
 /// </remarks>
@@ -60,7 +60,7 @@ public static class JsonArrayExtensions
     /// <summary>
     /// Wraps each non-null element of a raw <see cref="JsonArray"/> as an
     /// <see cref="AuthorizationDetail"/>. The wrappers share references with the source array's
-    /// nodes — read-through is byte-exact, and any property-setter calls mutate the underlying
+    /// nodes - read-through is byte-exact, and any property-setter calls mutate the underlying
     /// array in place.
     /// </summary>
     /// <param name="jsonArray">The raw array, or <c>null</c>.</param>

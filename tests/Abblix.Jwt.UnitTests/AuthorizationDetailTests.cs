@@ -29,7 +29,7 @@ namespace Abblix.Jwt.UnitTests;
 /// Unit tests for <see cref="AuthorizationDetail"/> as a thin wrapper over a
 /// <see cref="JsonNode"/> claim element and the <see cref="JsonWebTokenPayload.AuthorizationDetails"/>
 /// accessor. Verifies that the wrapper's typed property accessors read from and write to the
-/// underlying JSON in place — so member order and type-specific extension members survive the
+/// underlying JSON in place - so member order and type-specific extension members survive the
 /// authorize → code → token round-trip byte-exact.
 /// </summary>
 public class AuthorizationDetailTests

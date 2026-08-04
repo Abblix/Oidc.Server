@@ -28,6 +28,6 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 /// <c>[Required]</c>) into executable <see cref="System.ComponentModel.DataAnnotations.ValidationAttribute"/>s on the
 /// bound model and adds this marker, so the group-scoped validation endpoint filter knows to run
 /// <see cref="System.ComponentModel.DataAnnotations.Validator"/> over it and shape any failure as
-/// <c>invalid_request</c>. A pure marker — the validation logic lives in the individual attributes, not here.
+/// <c>invalid_request</c>. A pure marker - the validation logic lives in the individual attributes, not here.
 /// </summary>
 internal interface IValidatableModel;

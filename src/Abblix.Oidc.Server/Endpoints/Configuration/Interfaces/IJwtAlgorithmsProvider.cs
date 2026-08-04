@@ -58,7 +58,7 @@ public interface IJwtAlgorithmsProvider
 	/// Lists the JWS signing algorithms the authorization server accepts on inbound DPoP
 	/// proofs (RFC 9449 §5.1 <c>dpop_signing_alg_values_supported</c>): the intersection
 	/// of <see cref="SigningAlgorithmsSupported"/> with the static DPoP-compatible
-	/// whitelist. The validator-side set is the source — the AS verifies proofs the
+	/// whitelist. The validator-side set is the source - the AS verifies proofs the
 	/// client signs, it does not issue them.
 	/// </summary>
 	IEnumerable<string> DpopSigningAlgorithmsSupported { get; }

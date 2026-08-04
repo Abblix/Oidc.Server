@@ -253,7 +253,7 @@ public class MappersTests
     [Fact]
     public void AuthorizationContextMapper_RoundTrips_AuthorizationDetails_ByteExact()
     {
-        // The wire shape we want preserved through protobuf storage — member order, a
+        // The wire shape we want preserved through protobuf storage - member order, a
         // type-specific extension payload (PSD2-style instructedAmount object), and
         // mixed-type values. After ToProto -> FromProto the JsonArray must serialise
         // back to the SAME wire JSON byte-for-byte (no key reordering, no whitespace
@@ -271,7 +271,7 @@ public class MappersTests
         var proto = context.ToProto();
         var result = AuthorizationContextMapper.FromProto(proto);
 
-        // Assert — byte-exact preservation through the proto string field.
+        // Assert - byte-exact preservation through the proto string field.
         Assert.NotNull(result.AuthorizationDetails);
         Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
@@ -334,7 +334,7 @@ public class MappersTests
 
         var proto = context.ToProto();
 
-        // Empty array is treated identically to null in protobuf storage — no point
+        // Empty array is treated identically to null in protobuf storage - no point
         // persisting an empty marker that yields the same observable behaviour.
         Assert.False(proto.HasAuthorizationDetailsJson);
     }

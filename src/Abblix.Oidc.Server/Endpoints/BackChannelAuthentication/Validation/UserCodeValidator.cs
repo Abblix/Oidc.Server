@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <remarks>
 /// This validator checks <em>presence</em> only. Verifying the code's <em>value</em> against the
-/// user's actual code is the host's responsibility and happens during the device interaction — see
+/// user's actual code is the host's responsibility and happens during the device interaction - see
 /// the security contract on
 /// <see cref="Features.BackChannelAuthentication.Interfaces.IUserDeviceAuthenticationHandler"/>.
 /// </remarks>

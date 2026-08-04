@@ -81,7 +81,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
             [UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
-        // First UserInfo call: no nonce on the proof — RS issues a fresh nonce challenge
+        // First UserInfo call: no nonce on the proof - RS issues a fresh nonce challenge
         // (RFC 9449 §9 + §7.1 SHOULD WWW-Authenticate: DPoP).
         var proofWithoutNonce = proofKey.BuildProof(
             HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
@@ -123,7 +123,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// Bootstraps PAR + /authorize, then makes the first /token call with a proof that
-    /// carries no nonce — the AS issues a 400 + <c>use_dpop_nonce</c> + a fresh
+    /// carries no nonce - the AS issues a 400 + <c>use_dpop_nonce</c> + a fresh
     /// <c>DPoP-Nonce</c> response header (RFC 9449 §8). Returns the PKCE verifier, the
     /// auth code (still spendable per §8 retry semantics), the fresh nonce, the parsed
     /// error body, and the raw response so callers can pin extra assertions.
@@ -154,8 +154,8 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// Walks the full token-endpoint nonce dance — first request gets a challenge, second
-    /// embeds the issued nonce and succeeds — and returns the parsed success-body. Used
+    /// Walks the full token-endpoint nonce dance - first request gets a challenge, second
+    /// embeds the issued nonce and succeeds - and returns the parsed success-body. Used
     /// directly by the retry-success test and as bootstrap for the §9 UserInfo nonce tests.
     /// </summary>
     private static async Task<JsonObject> ObtainDPoPBoundTokenViaNonceFlowAsync(

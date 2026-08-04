@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Builds the <c>code</c> response-type component of an authorization endpoint success
-/// response — the Authorization Code Flow contributor. Generates an authorization code via
+/// response - the Authorization Code Flow contributor. Generates an authorization code via
 /// <see cref="IAuthorizationCodeService"/> and stores it on the running
 /// <see cref="SuccessfullyAuthenticated"/> result. Registered by default through
 /// <c>AddAuthorizationEndpoint()</c>; covers the OAuth 2.1 (draft) recommended flow. Declares
@@ -63,7 +63,7 @@ public class AuthorizationCodeBuilder(
             request.ClientInfo.AuthorizationCodeExpiresIn);
 
         // Record this transaction's replay-protection values so a later reuse of a constant code_challenge
-        // or nonce by the same client is detected (RFC 9700 §2.1.1). Doing it here — once per issued code —
+        // or nonce by the same client is detected (RFC 9700 §2.1.1). Doing it here - once per issued code -
         // means the same request re-processed across a login or consent redirect is not flagged.
         var context = authorizedGrant.Context;
         if (context.CodeChallenge is { } codeChallenge)

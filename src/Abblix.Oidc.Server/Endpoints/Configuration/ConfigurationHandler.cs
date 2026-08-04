@@ -54,8 +54,8 @@ public sealed class ConfigurationHandler(
 	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
 {
 	// CIBA metadata is advertised only when the CIBA feature is opted in (AddBackChannelAuthentication), the sole
-	// registrar of IAuthenticationCompletionHandler. Resolved from a collection so discovery — an always-on
-	// endpoint — still constructs under ValidateOnBuild when CIBA is off; null means CIBA is disabled, so the
+	// registrar of IAuthenticationCompletionHandler. Resolved from a collection so discovery - an always-on
+	// endpoint - still constructs under ValidateOnBuild when CIBA is off; null means CIBA is disabled, so the
 	// backchannel discovery fields are omitted rather than advertised.
 	private readonly IAuthenticationCompletionHandler? cibaCompletionHandler = cibaCompletionHandlers.FirstOrDefault();
 
@@ -94,14 +94,14 @@ public sealed class ConfigurationHandler(
 			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
 			: null,
 
-		// JARM (JWT Secured Authorization Response Mode) is always available — a client opts in per request
-		// by selecting a *.jwt response mode — so the supported algorithms are advertised unconditionally.
+		// JARM (JWT Secured Authorization Response Mode) is always available - a client opts in per request
+		// by selecting a *.jwt response mode - so the supported algorithms are advertised unconditionally.
 		AuthorizationSigningAlgValuesSupported = jwtAlgorithms.AuthorizationSigningAlgValuesSupported,
 		AuthorizationEncryptionAlgValuesSupported = jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported,
 		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
 
-		// RFC 9701 JWT introspection responses are always available — a client opts in per request via Accept and
-		// its registered introspection_signed_response_alg — so the supported algorithms are advertised unconditionally.
+		// RFC 9701 JWT introspection responses are always available - a client opts in per request via Accept and
+		// its registered introspection_signed_response_alg - so the supported algorithms are advertised unconditionally.
 		IntrospectionSigningAlgValuesSupported = jwtAlgorithms.IntrospectionSigningAlgValuesSupported,
 		IntrospectionEncryptionAlgValuesSupported = jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported,
 		IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
@@ -112,7 +112,7 @@ public sealed class ConfigurationHandler(
 		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
 
 		// RFC 8705 §3.3: advertise certificate-bound access tokens only when a mutual-TLS client
-		// authentication method is available — the server then both issues bound tokens and
+		// authentication method is available - the server then both issues bound tokens and
 		// enforces the binding at its protected resources (MtlsUserInfoValidator).
 		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
 			method => method is ClientAuthenticationMethods.TlsClientAuth

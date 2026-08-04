@@ -18,7 +18,7 @@
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore Minimal-API dotnet Federation Claims WebApi DPoP PAR JARM Token-Exchange FAPI Proof-of-Possession</PackageTags>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Identity-Provider IdP Authorization-Server Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore Minimal-API dotnet Federation Claims WebApi PKCE DPoP PAR JARM CIBA Device-Flow Token-Exchange FAPI Proof-of-Possession</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

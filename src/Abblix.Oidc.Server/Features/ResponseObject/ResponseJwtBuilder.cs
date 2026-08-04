@@ -33,8 +33,8 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <summary>
 /// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
 /// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
-/// response JWT and hands it to <see cref="IClientJwtFormatter"/> for signing and — when the client registered an
-/// encryption algorithm — encryption to the client's public key (a Nested JWT per JARM §2.2).
+/// response JWT and hands it to <see cref="IClientJwtFormatter"/> for signing and - when the client registered an
+/// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM §2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
@@ -58,7 +58,7 @@ public class ResponseJwtBuilder(
 
         // No 'typ' header is set on purpose. The JARM specification defines none for the authorization
         // response, and RFC 7519 Section 5.1 makes 'typ' OPTIONAL. The explicit-typing benefit of
-        // RFC 8725 Section 3.11 comes from a DISTINCT media type that disambiguates one token class from
+        // RFC 8725 Section 3.11 comes from a DISTINCT media type that disambiguates one token type from
         // another (as RFC 9101 Section 10.8 registers 'oauth-authz-req+jwt' for request objects); a
         // generic 'JWT' distinguishes nothing. And there is no confusion vector to close here: the
         // response is consumed by the client, never re-validated by this server against other token

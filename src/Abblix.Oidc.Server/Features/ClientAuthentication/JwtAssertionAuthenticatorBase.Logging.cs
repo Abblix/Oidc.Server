@@ -70,6 +70,12 @@ partial class JwtAssertionAuthenticatorBase
     private partial void LogMissingJti(string ClientId);
 
     [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.OtherKindPresentedAsAssertion,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} declares typ {TokenType}, which names another kind of JWT rather than an authentication assertion")]
+    private partial void LogOtherKindPresentedAsAssertion(string ClientId, string? TokenType);
+
+    [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.SigningAlgorithmNotAllowed,
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} uses algorithm {Algorithm}, but the client registered token_endpoint_auth_signing_alg {RequiredAlgorithm}")]

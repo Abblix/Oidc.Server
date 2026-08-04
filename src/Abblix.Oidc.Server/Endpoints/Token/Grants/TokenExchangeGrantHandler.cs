@@ -404,14 +404,13 @@ public class TokenExchangeGrantHandler(
 
         // typ header expected per URI (JWT-based subject types only):
         //   access_token  -> at+jwt
-        //   id_token      -> id+jwt
-        //   refresh_token -> rt+jwt
+        //   refresh_token -> the refresh class this server issues
+        //   id_token      -> nothing to expect: an ID token carries no type of its own
         //   jwt           -> any typ acceptable (generic JWT URI)
         // Resolvers for non-JWT formats leave JwtTokenType null; this check is a no-op for them.
         var expectedTyp = requestedTypeUri switch
         {
-            TokenExchangeTokenTypes.AccessToken => JwtTypes.AccessToken,
-            TokenExchangeTokenTypes.IdToken => JwtTypes.IdToken,
+            TokenExchangeTokenTypes.AccessToken => JsonWebTokenTypes.AccessToken,
             TokenExchangeTokenTypes.RefreshToken => JwtTypes.RefreshToken,
             _ => null,
         };

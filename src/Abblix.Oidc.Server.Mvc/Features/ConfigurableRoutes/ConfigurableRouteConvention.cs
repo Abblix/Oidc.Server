@@ -47,10 +47,15 @@ public class ConfigurableRouteConvention : IApplicationModelConvention
     public ConfigurableRouteConvention(string prefix = "route", IConfigurationSection? configSection = null)
     {
         _configSection = configSection;
+        // The input is developer-authored route templates read once at startup, so the timeout is
+        // a hang backstop, not a defence against untrusted input - and it measures wall-clock
+        // time. A tight value turns ordinary CI-runner starvation during the first, JIT-compiling
+        // match into a RegexMatchTimeoutException that kills host startup; 100 ms was hit that
+        // way on a loaded runner, so the bound is generous on purpose.
         _routeRegex = new Regex(
             $@"\[{prefix}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>.+))?\]",
             RegexOptions.Compiled,
-            TimeSpan.FromMilliseconds(100));
+            TimeSpan.FromSeconds(10));
     }
     private readonly IConfigurationSection? _configSection;
     private readonly Regex _routeRegex;

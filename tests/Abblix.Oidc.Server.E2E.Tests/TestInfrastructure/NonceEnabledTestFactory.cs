@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 /// Variant of <see cref="Tests.TestFactory"/> that flips on the RFC 9449 §8 nonce
 /// requirement at both the token endpoint and the UserInfo endpoint. Hosted under a
 /// separate xunit collection so the singleton <see cref="WebApplicationFactory{TEntryPoint}"/>
-/// inside this factory never shares state with the default flow tests — toggling
+/// inside this factory never shares state with the default flow tests - toggling
 /// <c>OidcOptions.DPoP.Nonce.RequireAtTokenEndpoint</c> globally would otherwise
 /// cascade unrelated tests into the nonce challenge loop.
 /// </summary>

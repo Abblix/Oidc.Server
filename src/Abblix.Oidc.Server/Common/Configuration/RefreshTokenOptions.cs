@@ -44,7 +44,7 @@ public record struct RefreshTokenOptions()
 	/// When <c>false</c> (the secure default), each refresh rotates the token: the previous value is marked
 	/// superseded as soon as a new one is issued, and later reuse of a superseded token revokes the whole
 	/// token family (RFC 9700 Section 4.14.2). Set to <c>true</c> to opt a client into multi-use refresh
-	/// tokens that may be redeemed repeatedly until they expire — appropriate only for confidential clients
+	/// tokens that may be redeemed repeatedly until they expire - appropriate only for confidential clients
 	/// whose client authentication already binds the token to its identity (RFC 6749).
 	/// </summary>
 	public bool AllowReuse { get; init; } = false;

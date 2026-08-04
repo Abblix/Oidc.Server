@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 /// <remarks>
 /// Deliberately hand-written rather than generated: it is not a transport mirror of the core
 /// client request but a narrow projection of it specific to the management endpoints, where the
-/// client identifier travels in the URL path — a routing concept the core deliberately
+/// client identifier travels in the URL path - a routing concept the core deliberately
 /// does not know about.
 /// </remarks>
 public record ClientAuthorizationRequest

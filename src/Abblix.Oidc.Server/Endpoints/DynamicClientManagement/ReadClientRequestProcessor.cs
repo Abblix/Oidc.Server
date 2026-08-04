@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <c>client_secret</c> is intentionally omitted because secrets are persisted only as
 /// hashes; a registration access token bearing the client's current jti is re-issued so the
 /// client can keep using the management endpoint after the read, without invalidating the token
-/// it presented (read stays idempotent — only update rotates the jti).
+/// it presented (read stays idempotent - only update rotates the jti).
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
@@ -50,7 +50,7 @@ public class ReadClientRequestProcessor(
         var issuedAt = clock.GetUtcNow();
         // Reuse the stored jti so the token the client just presented stays valid; only update
         // rotates it (read is idempotent). A legacy client with no recorded jti gets a transient
-        // one — it is not persisted here, so the binding stays unenforced for that client.
+        // one - it is not persisted here, so the binding stays unenforced for that client.
         var registrationAccessTokenId =
             await registrationAccessTokenStore.GetTokenIdAsync(client.ClientId) ?? tokenIdGenerator.GenerateTokenId();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(

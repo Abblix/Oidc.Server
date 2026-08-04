@@ -153,7 +153,7 @@ public class RefreshTokenGrantHandlerTests
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-        var accessToken = CreateTokenWithType(JwtTypes.AccessToken);
+        var accessToken = CreateTokenWithType(JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))

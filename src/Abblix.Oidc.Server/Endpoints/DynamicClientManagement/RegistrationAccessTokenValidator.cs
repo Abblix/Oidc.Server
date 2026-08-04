@@ -32,9 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <summary>
 /// Default implementation of <see cref="IRegistrationAccessTokenValidator"/>. Requires a
 /// <c>Bearer</c> scheme, validates the JWT signature and lifetime via
-/// <see cref="IAuthServiceJwtValidator"/>, then enforces that the token's <c>typ</c> is
-/// <c>registration_access_token</c> and that its <c>sub</c> and <c>aud</c> both equal the
-/// requested <c>client_id</c>.
+/// <see cref="IAuthServiceJwtValidator"/> (which requires the audience to name this server, the party that
+/// reads the token), then enforces that the token's <c>typ</c> is <c>registration_access_token</c> and that
+/// its <c>sub</c> equals the requested <c>client_id</c> - the claim carrying the association RFC 7592
+/// Section 1.2 describes.
 /// </summary>
 /// <param name="jwtValidator">JWT validator used for signature and lifetime checks.</param>
 public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
@@ -49,9 +50,9 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         if (header.Scheme != TokenTypes.Bearer)
             return $"The scheme name '{header.Scheme}' is not supported";
 
-        var result = await jwtValidator.ValidateAsync(
-            header.Parameter,
-            ValidationOptions.Default & ~ValidationOptions.ValidateAudience);
+        // The audience is required and checked: it names this server, which is what reads the token. Which
+        // registration the token is about is a separate question, and the subject answers it - see below.
+        var result = await jwtValidator.ValidateAsync(header.Parameter);
 
         if (result.TryGetFailure(out var error))
             return error.ErrorDescription;
@@ -59,17 +60,18 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         var token = result.GetSuccess();
 
         var tokenType = token.Header.Type;
-        var audiences = token.Payload.Audiences;
         var subject = token.Payload.Subject;
 
         if (tokenType != JwtTypes.RegistrationAccessToken)
             return $"Invalid token type: {tokenType}";
 
-        if (subject != clientId || !audiences.Contains(clientId))
+        // RFC 7592 Section 1.2: the token "is associated with a particular registered client". The subject
+        // carries that association, so a token cannot manage a registration other than the one it names.
+        if (subject != clientId)
             return "The access token unauthorized";
 
         // RFC 7592 §5: bind the token to the client so a rotated token invalidates its
-        // predecessors. Enforced only when the client records the current jti — a null expectation
+        // predecessors. Enforced only when the client records the current jti - a null expectation
         // keeps statically configured clients and pre-existing records working unchanged.
         if (expectedTokenId != null && token.Payload.JwtId != expectedTokenId)
             return "The access token unauthorized";

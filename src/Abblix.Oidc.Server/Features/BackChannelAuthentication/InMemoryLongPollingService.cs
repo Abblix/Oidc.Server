@@ -114,8 +114,8 @@ public partial class InMemoryLongPollingService(
             // or cancelled waiter it releases the still-pending task.
             tcs.TrySetCanceled(cancellationToken);
 
-            // Remove this waiter so a request abandoned by the user — one that expires by storage
-            // TTL without ever being notified — does not accumulate task-completion sources and
+            // Remove this waiter so a request abandoned by the user - one that expires by storage
+            // TTL without ever being notified - does not accumulate task-completion sources and
             // leak memory in this singleton.
             waiters.TryRemove(tcs, out _);
 
@@ -123,7 +123,7 @@ public partial class InMemoryLongPollingService(
             // concurrent waiter has just replaced under the same auth_req_id is never removed by
             // mistake. A newly arrived waiter that registers in the tiny window between IsEmpty and
             // TryRemove simply falls back to full-timeout latency for that one poll and then cleans
-            // itself up — no leak, no missed final result, self-healing.
+            // itself up - no leak, no missed final result, self-healing.
             if (waiters.IsEmpty)
             {
                 _waiters.TryRemove(

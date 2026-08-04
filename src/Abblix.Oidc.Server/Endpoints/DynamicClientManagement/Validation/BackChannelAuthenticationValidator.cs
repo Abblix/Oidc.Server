@@ -83,7 +83,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         }
 
         // CIBA Core 1.0 §4: the notification endpoint MUST be an HTTPS URL (communication with it
-        // MUST use TLS). Only ping/push reach here with an endpoint set — poll-with-endpoint and the
+        // MUST use TLS). Only ping/push reach here with an endpoint set - poll-with-endpoint and the
         // missing-endpoint cases are already rejected above.
         var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
         if (notificationEndpoint != null && notificationEndpoint.Scheme != Uri.UriSchemeHttps)

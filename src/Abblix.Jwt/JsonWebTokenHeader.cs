@@ -105,7 +105,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'crit' is present but is not a JSON array of strings.</exception>
     [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state — RFC 7515 §4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
+        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state - RFC 7515 §4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
     public IReadOnlyList<string>? Critical
     {
         get
@@ -141,7 +141,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <summary>
     /// The 'jku' (JWK Set URL) header parameter (RFC 7515 §4.1.2): a URI referring to a JSON Web
     /// Key Set whose keys the issuer claims are candidates for verifying the JWS. The library
-    /// only exposes the URI; it does not fetch the URL — the host is responsible for trust and
+    /// only exposes the URI; it does not fetch the URL - the host is responsible for trust and
     /// transport per RFC 7515 §8 (TLS with server identity validation per RFC 6125).
     /// </summary>
     public Uri? JwkSetUrl
@@ -157,12 +157,12 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <summary>
     /// The 'jwk' (JSON Web Key) header parameter (RFC 7515 §4.1.3): the public key used to
     /// verify the JWS, embedded directly in the JOSE header as a JWK. Returns null when
-    /// 'jwk' is absent. Trust is the consumer's responsibility — for example, DPoP (RFC 9449)
+    /// 'jwk' is absent. Trust is the consumer's responsibility - for example, DPoP (RFC 9449)
     /// binds this key to the request via a separate confirmation claim.
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'jwk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
     [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "Deserialize<JsonWebKey> can throw JsonException when 'jwk' is malformed. Returning null on a malformed JWK would let a downstream consumer (DPoP, federation) silently treat the absence of trust material as success — the parse error must surface.")]
+        Justification = "Deserialize<JsonWebKey> can throw JsonException when 'jwk' is malformed. Returning null on a malformed JWK would let a downstream consumer (DPoP, federation) silently treat the absence of trust material as success - the parse error must surface.")]
     public JsonWebKey? VerificationKey
     {
         get => Json.TryGetPropertyValue(JwtClaimTypes.JsonWebKeyHeader, out var node) && node is JsonObject obj
@@ -180,7 +180,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <summary>
     /// The 'x5u' (X.509 URL) header parameter (RFC 7515 §4.1.5): a URI referring to an X.509
     /// public-key certificate or certificate chain corresponding to the key used for the JWS
-    /// signature. Same caveat as <see cref="JwkSetUrl"/> — the library does not fetch.
+    /// signature. Same caveat as <see cref="JwkSetUrl"/> - the library does not fetch.
     /// </summary>
     public Uri? CertificatesUrl
     {
@@ -236,7 +236,7 @@ public class JsonWebTokenHeader(JsonObject json)
     /// <summary>
     /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 §4.1.7): base64url-encoded
     /// SHA-1 digest of the DER-encoded leaf certificate. Per RFC 7515 §10.11, SHA-1 is
-    /// discouraged because of cryptographic weaknesses — prefer <see cref="CertificateSha256Thumbprint"/>
+    /// discouraged because of cryptographic weaknesses - prefer <see cref="CertificateSha256Thumbprint"/>
     /// for new deployments. The library exposes 'x5t' for inspection of legacy producers.
     /// </summary>
     public string? CertificateSha1Thumbprint
@@ -302,7 +302,7 @@ public class JsonWebTokenHeader(JsonObject json)
 
     /// <summary>
     /// Serializer options for the 'epk' header parameter: absent JWK members must be omitted, not
-    /// written as JSON nulls — the wire form carries only the members the ephemeral key actually has
+    /// written as JSON nulls - the wire form carries only the members the ephemeral key actually has
     /// (kty, crv, x, y), matching what conformant JOSE peers emit and expect.
     /// </summary>
     private static readonly JsonSerializerOptions EphemeralKeySerializerOptions = new()
@@ -342,7 +342,7 @@ public class JsonWebTokenHeader(JsonObject json)
 
     /// <summary>
     /// The 'p2c' header parameter (RFC 7518 §4.8.1.2): the PBKDF2 iteration count for PBES2.
-    /// Returns null when absent or when the value is not representable as a positive 32-bit integer —
+    /// Returns null when absent or when the value is not representable as a positive 32-bit integer -
     /// a count beyond int.MaxValue could never pass the decryptor's denial-of-service cap anyway.
     /// </summary>
     public int? Pbes2IterationCount

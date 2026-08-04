@@ -30,7 +30,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -57,7 +57,7 @@ public class ClientSecretJwtAuthenticatorTests
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly FakeTimeProvider _clock;
-    private readonly Mock<IJwtReplayCache> _replayCache;
+    private readonly Mock<IReplayCache> _replayCache;
     private readonly ClientSecretJwtAuthenticator _authenticator;
 
     public ClientSecretJwtAuthenticatorTests()
@@ -67,7 +67,7 @@ public class ClientSecretJwtAuthenticatorTests
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _replayCache = new Mock<IJwtReplayCache>(MockBehavior.Strict);
+        _replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
 
         _requestInfoProvider
             .Setup(p => p.RequestUri)
@@ -209,7 +209,7 @@ public class ClientSecretJwtAuthenticatorTests
             .ReturnsAsync(clientInfo);
 
         _replayCache
-            .Setup(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         var request = new ClientRequest
@@ -225,7 +225,7 @@ public class ClientSecretJwtAuthenticatorTests
         Assert.NotNull(result);
         Assert.Equal(ClientId, result.ClientId);
 
-        _replayCache.Verify(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()), Times.Once);
+        _replayCache.Verify(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()), Times.Once);
     }
 
     /// <summary>
@@ -276,7 +276,7 @@ public class ClientSecretJwtAuthenticatorTests
         // Assert
         Assert.Null(result);
         _replayCache.Verify(
-            r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()),
+            r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -316,7 +316,7 @@ public class ClientSecretJwtAuthenticatorTests
             .ReturnsAsync(clientInfo);
 
         _replayCache
-            .Setup(r => r.TryAddAsync(jwtId, It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         var request = new ClientRequest
@@ -520,7 +520,7 @@ public class ClientSecretJwtAuthenticatorTests
         Assert.Null(result);
 
         // A rejected assertion is never recorded in the replay cache.
-        _replayCache.Verify(r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()), Times.Never);
+        _replayCache.Verify(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()), Times.Never);
     }
 
     /// <summary>

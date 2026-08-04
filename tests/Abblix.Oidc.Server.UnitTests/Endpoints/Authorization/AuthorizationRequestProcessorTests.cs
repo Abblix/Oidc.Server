@@ -88,7 +88,7 @@ public class AuthorizationRequestProcessorTests
         _timeProvider = new FakeTimeProvider();
 
         // A real ConsentConstraintEnforcer (not a mock) so the anti-escalation backstop is
-        // exercised end-to-end through the processor — granted scopes/resources that exceed the
+        // exercised end-to-end through the processor - granted scopes/resources that exceed the
         // request must throw before the grant is built.
         _processor = new AuthorizationRequestProcessor(
             _authSessionService.Object,
@@ -209,7 +209,7 @@ public class AuthorizationRequestProcessorTests
 
     /// <summary>
     /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration
-    /// signal even when no session exists — previously the value fell through to the generic
+    /// signal even when no session exists - previously the value fell through to the generic
     /// no-session branch and the host saw an ordinary login request.
     /// </summary>
     [Fact]
@@ -231,7 +231,7 @@ public class AuthorizationRequestProcessorTests
 
     /// <summary>
     /// Initiating User Registration via OpenID Connect 1.0: the registration experience is shown
-    /// regardless of whether the user is currently logged in — an existing session must not make
+    /// regardless of whether the user is currently logged in - an existing session must not make
     /// the request proceed as a normal authentication.
     /// </summary>
     [Fact]
@@ -258,7 +258,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithoutMaxAge_AppliesClientDefaultMaxAge()
     {
-        // Arrange — request has no max_age; the client registered default_max_age = 5 minutes.
+        // Arrange - request has no max_age; the client registered default_max_age = 5 minutes.
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         _timeProvider.SetUtcNow(now);
         var request = CreateRequest(prompt: Prompts.None, defaultMaxAge: TimeSpan.FromMinutes(5));
@@ -271,7 +271,7 @@ public class AuthorizationRequestProcessorTests
         // Act
         var result = await _processor.ProcessAsync(request);
 
-        // Assert — the stale session is filtered by the default_max_age fallback, leaving none.
+        // Assert - the stale session is filtered by the default_max_age fallback, leaving none.
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.LoginRequired, error.Error);
     }
@@ -283,7 +283,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithoutAcrValues_AppliesClientDefaultAcrValues()
     {
-        // Arrange — request has no acr_values; the client registered default_acr_values = ["high"].
+        // Arrange - request has no acr_values; the client registered default_acr_values = ["high"].
         var request = CreateRequest(prompt: Prompts.None, defaultAcrValues: ["high"]);
         var session = CreateAuthSession("s1", acr: "low");
 
@@ -294,7 +294,7 @@ public class AuthorizationRequestProcessorTests
         // Act
         var result = await _processor.ProcessAsync(request);
 
-        // Assert — the session's ACR does not match the default, so it is filtered, leaving none.
+        // Assert - the session's ACR does not match the default, so it is filtered, leaving none.
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.LoginRequired, error.Error);
     }
@@ -548,7 +548,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_GrantedScopeExceedsRequest_ShouldThrow()
     {
-        // Arrange — request carries only openid; the consent provider returns an extra "admin"
+        // Arrange - request carries only openid; the consent provider returns an extra "admin"
         // scope that was never requested (e.g. browser tampering it failed to intersect away).
         var request = CreateRequest(responseType: [ResponseTypes.Code], scope: [Scopes.OpenId]);
         var session = CreateAuthSession();
@@ -578,7 +578,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_GrantedResourceNotRequested_ShouldThrow()
     {
-        // Arrange — the request carries no resources; the provider grants one anyway.
+        // Arrange - the request carries no resources; the provider grants one anyway.
         var request = CreateRequest(responseType: [ResponseTypes.Code]);
         var session = CreateAuthSession();
         var consents = CreateConsents(
@@ -650,7 +650,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAndEncode_ImplicitFlowWithNarrowedConsent_EmitsGrantedScopeNotRequested()
     {
-        // Arrange — request asks for openid profile email; the consent provider grants only openid profile.
+        // Arrange - request asks for openid profile email; the consent provider grants only openid profile.
         var request = CreateRequest(
             responseType: [ResponseTypes.Token],
             scope: [Scopes.OpenId, Scopes.Profile, Scopes.Email]);
@@ -687,7 +687,7 @@ public class AuthorizationRequestProcessorTests
         // Act
         await encoder.EncodeAsync(response);
 
-        // Assert — the front-channel scope reflects the granted set, not the requested set.
+        // Assert - the front-channel scope reflects the granted set, not the requested set.
         var success = Assert.IsType<SuccessfullyAuthenticated>(response);
         Assert.Equal($"{Scopes.OpenId} {Scopes.Profile}", success.Scope);
     }
@@ -1408,7 +1408,7 @@ public class AuthorizationRequestProcessorTests
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 — consent capture for authorization_details (#142).
+    // RFC 9396 - consent capture for authorization_details (#142).
     // The Pending bucket surfaces AD entries to the consent UI; the Granted
     // bucket carries the user's decision (which may narrow or deny the
     // request); token emission reads from Granted, with null → request

@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <see href="https://openid.net/specs/oauth-v2-jarm-final.html">JARM</see>. This is the framework-agnostic core
 /// of JARM: it builds, signs and optionally encrypts the response JWT. The JARM response mode is mapped to its
 /// plaintext delivery counterpart separately via <see cref="ResponseModeExtensions.ToDeliveryMode"/>.
-/// Hosts (MVC, Minimal API, …) supply the response parameters and emit the resulting <c>response</c> parameter
+/// Hosts (MVC, Minimal API, ...) supply the response parameters and emit the resulting <c>response</c> parameter
 /// through their own transport layer.
 /// </summary>
 public interface IResponseJwtBuilder

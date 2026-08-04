@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
+using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -155,7 +156,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         // instead of the default - this is the host-extensibility contract the adapter promises.
         using var overridden = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddScoped<IConfigurationResultFormatter, MarkerConfigurationFormatter>()));
+                services.AddScoped<IConfigurationResponseFormatter, MarkerConfigurationFormatter>()));
         var client = ClientOf(overridden);
 
         var discovery = JsonNode.Parse(await client.GetStringAsync(
@@ -352,7 +353,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     }
 
     /// <summary>A stand-in discovery formatter a host registers to prove its registration wins over the adapter's.</summary>
-    private sealed class MarkerConfigurationFormatter : IConfigurationResultFormatter
+    private sealed class MarkerConfigurationFormatter : IConfigurationResponseFormatter
     {
         public Task<IResult> FormatResponseAsync(EndpointResponse response)
             => Task.FromResult(Results.Json(new Dictionary<string, object> { ["host_override_marker"] = true }));

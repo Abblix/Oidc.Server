@@ -11,10 +11,10 @@
     <Title>Abblix Utils</Title>
     <Description>Utility types shared across the Abblix OpenID Connect and OAuth 2.0 libraries: URI and string helpers, secure random generation, and custom JSON converters. Usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Utils</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions .NET-Utilities Secure-Random Custom-JSON-Converters Base32-Encoding Asynchronous-Utilities</PackageTags>
+    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions Secure-Random Custom-JSON-Converters Base32-Encoding dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

@@ -27,7 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -51,14 +51,14 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// </remarks>
 internal sealed class ProofValidator(
     IJsonWebTokenValidator jwtValidator,
-    IJwtReplayCache replayCache,
+    IReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
 {
     private static readonly IReadOnlySet<string> ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal)
     {
-        JwtTypes.DPoPProof,
+        JsonWebTokenTypes.DPoPProof,
     };
 
     /// <inheritdoc/>
@@ -70,7 +70,7 @@ internal sealed class ProofValidator(
         // RFC 9449 §7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
         // string FromHeader binder joins repeated header values with a comma. The DPoP
         // proof is JWS compact serialization (RFC 7515 §3.1), whose alphabet is
-        // base64url + '.' — no comma is permitted — so a comma in the proof string
+        // base64url + '.' - no comma is permitted - so a comma in the proof string
         // is unambiguous evidence that the client sent the header twice. Reject before
         // the downstream JWS validator sees a string with 5 dot-separated parts (which
         // it would route to the JWE branch and surface a category error).
@@ -110,12 +110,13 @@ internal sealed class ProofValidator(
 
         // The latest moment a same-iat replay could still pass the iat-window check is
         // iat + tolerance; the replay-cache only needs to remember jti up to that point.
-        // TryAddAsync is single-call by contract — atomic-capable backends close the
+        // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
         // the documented probabilistic guarantee accepted under RFC 9449 §11.1.
-        var fresh = await replayCache.TryAddAsync(
+        var fresh = await replayCache.TryReserveAsync(
             jwtId,
-            issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
+            issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
+            cancellationToken);
 
         if (!fresh)
         {

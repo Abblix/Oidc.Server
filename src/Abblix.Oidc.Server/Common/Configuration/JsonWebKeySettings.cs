@@ -40,14 +40,14 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// configuration path free of <c>System.Text.Json</c> roundtrips and custom converters.
 /// Every JWK member binds out-of-the-box as a nullable string, the mapper handles
 /// base64url decoding and the <c>kty</c> dispatch in one place, and the schema lives as
-/// explicit C# code — refactor-safe and IntelliSense-friendly. The configuration binder
+/// explicit C# code - refactor-safe and IntelliSense-friendly. The configuration binder
 /// itself produces path-aware error messages on invalid input, so operators do not have
 /// to translate generic JSON exceptions back to config paths.
 /// </para>
 /// <para>
 /// Each property carries a <see cref="ConfigurationKeyNameAttribute"/> pointing at the
 /// RFC 7517 wire name from <see cref="JsonWebKeyPropertyNames"/>, so config keys can be
-/// written exactly as JWK consumers expect them (<c>kty</c>, <c>n</c>, <c>e</c>, …) and
+/// written exactly as JWK consumers expect them (<c>kty</c>, <c>n</c>, <c>e</c>, ...) and
 /// the binder maps them unambiguously to the C# properties.
 /// </para>
 /// <para>

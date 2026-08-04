@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -39,12 +40,21 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession.Validation;
 public class IdTokenHintValidatorTests
 {
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly IdTokenHintValidator _validator;
 
     public IdTokenHintValidatorTests()
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
-        _validator = new IdTokenHintValidator(_jwtValidator.Object);
+
+        // The audience client resolves by default: these cases are about the hint's own rules, and the
+        // registration check has its own case below.
+        _clientInfoProvider = new Mock<IClientInfoProvider>();
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .ReturnsAsync((string id) => new ClientInfo(id));
+
+        _validator = new IdTokenHintValidator(_jwtValidator.Object, _clientInfoProvider.Object);
     }
 
     private static EndSessionValidationContext CreateContext(
@@ -61,8 +71,8 @@ public class IdTokenHintValidatorTests
 
     private static JsonWebToken CreateValidIdToken(params string[] audiences)
     {
+        // No type is set: an ID token carries none of its own, so this is what a real one looks like.
         var token = new JsonWebToken();
-        token.Header.Type = JwtTypes.IdToken;
         token.Payload.Audiences = audiences;
         return token;
     }
@@ -171,17 +181,32 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class.
-    /// A token whose 'typ' is not <c>id_token+jwt</c> (e.g. a stolen access token replayed as a
-    /// hint) must be rejected even when its audience matches the requesting client.
+    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
+    /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
+    /// when its audience matches the requesting client.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError()
+    /// <remarks>
+    /// The rejection reason is asserted, not just the error code. Every refusal in this validator answers
+    /// <c>invalid_request</c>, so a test that checks only the code passes whichever check fired - and this one
+    /// did: removing the type check entirely left it green, because the request then failed further down for
+    /// an unrelated reason.
+    /// <para>
+    /// The last two cases are the ones that pin the design. Both are permitted elsewhere - one is what a
+    /// client assertion is, the other what a request object is - and both must still be refused here, which
+    /// works only because the catalogue names every type and each position states its own exceptions. Drop
+    /// either from the catalogue to spare its own position, and it starts passing as an ID token too.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
+    [InlineData(JsonWebTokenTypes.RequestObject)]
+    public async Task ValidateAsync_WithNonIdTokenType_ShouldReturnError(string tokenType)
     {
         // Arrange
         var context = CreateContext("access_token_as_hint");
         var accessToken = CreateValidIdToken(TestConstants.DefaultClientId);
-        accessToken.Header.Type = JwtTypes.AccessToken;
+        accessToken.Header.Type = tokenType;
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -195,6 +220,7 @@ public class IdTokenHintValidatorTests
         // Assert
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
     }
 
     /// <summary>

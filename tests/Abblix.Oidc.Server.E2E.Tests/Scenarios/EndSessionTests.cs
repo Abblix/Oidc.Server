@@ -254,6 +254,37 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// An ID token is the one type this server issues that names a client in its audience - OpenID Connect
+    /// Core 1.0 Section 2: the aud claim "MUST contain the OAuth 2.0 client_id of the Relying Party as an
+    /// audience value". The shared token validator accepts only the issuer, so this endpoint checks the ID
+    /// token's own rule itself; without a case driving the real flow, moving that check would look harmless
+    /// while leaving logout by hint broken.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_identifies_the_client_from_the_id_token_hint_alone()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[IdentityTokenName]!.GetValue<string>();
+
+        // No client_id: the endpoint has to take it from the hint's audience.
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.IdTokenHint] = idToken,
+            [EndSessionParameters.Confirmed] = bool.TrueString,
+        });
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(
+            response.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Redirect,
+            $"/end_session refused a valid id_token_hint: {(int)response.StatusCode} {body}");
+    }
+
+    private const string IdentityTokenName = "id_token";
+
+    /// <summary>
     /// Registers a client that additionally asks to be signed out through the front channel.
     /// </summary>
     private static async Task<string> RegisterFrontChannelLogoutClientAsync(

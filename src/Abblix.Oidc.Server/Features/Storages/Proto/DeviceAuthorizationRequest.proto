@@ -41,7 +41,7 @@ message DeviceAuthorizationRequest {
   optional AuthorizedGrant authorized_grant = 7;
 
   // RFC 9396 §3 authorization_details array, serialised as a JSON string. Same scheme as
-  // AuthorizationContext.proto / AuthorizationRequest.proto — byte-exact preservation of
+  // AuthorizationContext.proto / AuthorizationRequest.proto - byte-exact preservation of
   // member order and type-specific payload until the user-verification step decides what
   // to grant.
   optional string authorization_details_json = 8;

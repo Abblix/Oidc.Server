@@ -39,7 +39,7 @@ public static class CorsServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the CORS services the OIDC endpoints rely on and a default
-    /// <see cref="OidcConstants.CorsPolicyName"/> policy built from <see cref="OidcCorsOptions"/> — but only
+    /// <see cref="OidcConstants.CorsPolicyName"/> policy built from <see cref="OidcCorsOptions"/> - but only
     /// when the host has not already defined a policy of that name. Idempotent: calling it from more than one
     /// adapter registers the post-configure step once and applies the default a single time.
     /// </summary>

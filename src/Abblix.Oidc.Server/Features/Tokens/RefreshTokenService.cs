@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -106,6 +106,27 @@ public class RefreshTokenService(
 		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
 		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
+		// The same four claims as on an access token, answering the same four questions - except that one of
+		// them answers a different question here than its name suggests:
+		//
+		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
+		//   aud       - not who reads it     (RFC 7519 Section 4.1.3). Set by ApplyTo below, from the same
+		//                                     authorization context the access token uses, so it holds the
+		//                                     resources the grant was issued for - or the issuer where it
+		//                                     named none. AuthorizeByRefreshTokenAsync reads them straight
+		//                                     back out of it to rebuild the grant, which makes the claim a
+		//                                     store of grant state rather than a statement about the reader,
+		//                                     and gives a refresh token the same audience as every access
+		//                                     token of the same grant.
+		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set by ApplyTo below.
+		//   sub       - who it is about      (RFC 9068 Section 2.2), sealed per sector for a pairwise client
+		//                                     further down.
+		//
+		// The type below therefore carries a protection rather than a label. With the audiences identical, it
+		// is the only thing separating a refresh token from an access token, and a resource server presented
+		// with one has nothing else to reject it by - the mutually exclusive validation rules RFC 8725
+		// Section 3.12 asks for. Encryption does not stand in for it: it applies only where the host
+		// configured a server encryption key, and without one every service token ships as a readable JWS.
 		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
 
 		var newToken = new JsonWebToken
@@ -123,11 +144,13 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
-				Audiences = [clientInfo.ClientId],
 				GrantId = grantId,
 			},
 		};
 		authSession.ApplyTo(newToken.Payload);
+
+		// This is what sets the audience described above, so setting it in the initializer would only be
+		// overwritten here.
 		authContext.ApplyTo(newToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
@@ -179,10 +202,10 @@ public class RefreshTokenService(
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
-		// Recover the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
+		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
 		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.Recover(authSession.Subject, clientInfo);
+		var subject = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo);
 		if (subject is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the

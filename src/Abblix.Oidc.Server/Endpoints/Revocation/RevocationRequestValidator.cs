@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -79,7 +80,7 @@ public partial class RevocationRequestValidator(
 		// "none") are deliberately allowed through: RFC 7009 §5 states a revocation request
 		// "must contain a valid client_id, in the case of a public client, or valid client
 		// credentials, in the case of a confidential client", and the spec's own security
-		// analysis dismisses the guessed-client_id threat — a guessed token is worth far more
+		// analysis dismisses the guessed-client_id threat - a guessed token is worth far more
 		// used than revoked. The protection the spec actually mandates is the token-ownership
 		// check below. Do not re-add a public-client rejection here: it slipped in once and
 		// left every SPA and native client unable to revoke its own refresh token on logout.
@@ -91,7 +92,13 @@ public partial class RevocationRequestValidator(
 				"The client is not authorized");
 		}
 
-		var result = await jwtValidator.ValidateAsync(revocationRequest.Token);
+		// The audience is deliberately not required to name this server. RFC 7009 Section 2.1 has the client
+		// revoke a token it holds, and what settles the request is whether the token belongs to that client -
+		// the check below. A token minted for a resource indicator names that resource in its audience, and
+		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
+		var result = await jwtValidator.ValidateAsync(
+			revocationRequest.Token,
+			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 
 		return result.Match(
 			token =>

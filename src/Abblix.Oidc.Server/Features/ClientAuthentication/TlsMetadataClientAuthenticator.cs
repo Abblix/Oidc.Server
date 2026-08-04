@@ -108,7 +108,7 @@ public partial class TlsMetadataClientAuthenticator(
 
         // A case-insensitive string compare is deliberately NOT used as a fallback: DN string
         // equality is sensitive to attribute ordering, RDN spacing and encoding, so it both
-        // false-negatives and (on case) matches too loosely — a security-weakening path. The
+        // false-negatives and (on case) matches too loosely - a security-weakening path. The
         // required DN is validated at registration time (TlsClientAuthValidator), so a parse
         // failure here can only mean a misconfigured client; authentication fails closed.
         X500DistinguishedName requiredX500Dn;

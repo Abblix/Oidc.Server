@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifi
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -108,11 +109,9 @@ public static class ServiceCollectionExtensions
         ]);
 
         // JWT assertion authenticators (client_secret_jwt / private_key_jwt) record assertion jti
-        // values in the replay cache; defensive TryAdd so deployments that never call AddDPoP or
-        // enable JWT Bearer still resolve the dependency.
-        services.TryAddSingleton<
-            ReplayPrevention.IJwtReplayCache,
-            ReplayPrevention.DistributedJwtReplayCache>();
+        // values in the replay cache; called defensively so deployments that never call AddDPoP
+        // or enable JWT Bearer still resolve the dependency.
+        services.AddReplayPrevention();
 
         return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
@@ -149,6 +148,11 @@ public static class ServiceCollectionExtensions
         // signers/encryptors can produce, instead of failing per-request at token issuance.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
+
+        // Refuse a default resource indicator that no resource server could accept, rather than minting every
+        // access token with an audience nothing recognises.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>());
 
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
@@ -478,6 +482,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IScopeClaimsProvider, ScopeClaimsProvider>();
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();
+        services.TryAddSingleton<IResourceKeysProvider, ResourceKeysProvider>();
         return services;
     }
 
@@ -771,6 +776,11 @@ public static class ServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        // The framework resolves every registered validator, so this joins the set rather than replacing
+        // whatever a host registered for the same options.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<SecureHttpFetchOptions>, SecureHttpFetchOptionsValidator>());
+
         services.TryAddSingleton<ISecureUriValidator, SecureUriValidator>();
         services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
 
@@ -780,8 +790,51 @@ public static class ServiceCollectionExtensions
             client.Timeout = options.RequestTimeout;
         });
 
+        // One cached fetcher per consumer, each keyed by who asks and carrying its own lifetime. Caching used
+        // to hang off a single service key that only the JWT bearer grant read, so client, software-statement
+        // and resource key sets were fetched over the network on every use. Giving each consumer its own
+        // instance keeps the lifetime a property of the caller without putting it into the transport contract:
+        // how stale a document may be depends on what it is used for, and a resource key set backing every
+        // token issued is not the same case as a client key set read on the occasional request object.
+        services.AddCachedSecureHttpFetcher(
+            KeySetOwners.Client,
+            fetch => fetch.ClientKeysCacheDuration);
+
+        services.AddCachedSecureHttpFetcher(
+            KeySetOwners.Resource,
+            fetch => fetch.ResourceKeysCacheDuration);
+
+        services.AddCachedSecureHttpFetcher(
+            KeySetOwners.SoftwareStatementIssuer,
+            fetch => fetch.SoftwareStatementKeysCacheDuration);
+
+        // The JWT bearer grant keeps its own long-standing setting, which lives with the rest of that
+        // feature's options rather than here.
+        services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
+            KeySetOwners.Issuer,
+            Dependency.Override(serviceProvider => serviceProvider
+                .GetRequiredService<IOptionsMonitor<OidcOptions>>()
+                .CurrentValue.JwtBearer.JwksCacheDuration));
+
         return services;
     }
+
+    /// <summary>
+    /// Registers a caching <see cref="ISecureHttpFetcher"/> for one consumer, under its own service key and
+    /// with its own cache lifetime.
+    /// </summary>
+    /// <param name="services">The service collection to add the registration to.</param>
+    /// <param name="consumer">The consumer's key, from <see cref="KeySetOwners"/>.</param>
+    /// <param name="duration">Reads the consumer's lifetime out of the options. Resolved through a factory
+    /// rather than captured here, so a host configuring options after this call is still honoured.</param>
+    private static void AddCachedSecureHttpFetcher(
+        this IServiceCollection services,
+        string consumer,
+        Func<SecureHttpFetchOptions, TimeSpan> duration)
+        => services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
+            consumer,
+            Dependency.Override(serviceProvider => duration(
+                serviceProvider.GetRequiredService<IOptionsMonitor<SecureHttpFetchOptions>>().CurrentValue)));
 
     /// <summary>
     /// Registers the generic stateless-nonce service. The default
@@ -812,9 +865,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDPoP(this IServiceCollection services)
     {
         services.TryAddSingleton<IProofValidator, ProofValidator>();
-        services.TryAddSingleton<
-            ReplayPrevention.IJwtReplayCache,
-            ReplayPrevention.DistributedJwtReplayCache>();
+        services.AddReplayPrevention();
         return services.AddNonces();
     }
 }

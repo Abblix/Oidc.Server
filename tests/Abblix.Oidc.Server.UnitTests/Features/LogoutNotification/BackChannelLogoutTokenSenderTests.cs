@@ -52,6 +52,12 @@ public class BackChannelLogoutTokenSenderTests
     public BackChannelLogoutTokenSenderTests()
     {
         _logger = new Mock<ILogger<BackChannelLogoutTokenSender>>();
+
+        // The source-generated logger checks IsEnabled before writing, and a loose mock answers
+        // false - which skips the Log call and lets a log-presence assertion pass or fail for
+        // the wrong reason. Enabling the level makes the recording mock an actual instrument.
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+
         _httpMessageHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
         _httpClient = new HttpClient(_httpMessageHandler.Object);
     }
@@ -273,6 +279,63 @@ public class BackChannelLogoutTokenSenderTests
         // Act & Assert
         await Assert.ThrowsAsync<HttpRequestException>(
             () => sender.SendBackChannelLogoutAsync(clientInfo, logoutToken));
+    }
+
+    /// <summary>
+    /// Verifies the refusal is recorded at Error level before the exception leaves the sender.
+    /// The caller swallows the exception per client - a logout must not fail because one client
+    /// is down - so this record is the operator's only account of which URI refused and with
+    /// what status. It once sat unreachable after EnsureSuccessStatusCode, which throws first.
+    /// </summary>
+    [Fact]
+    public async Task SendBackChannelLogoutAsync_WithFailureResponse_LogsSendFailedBeforeThrowing()
+    {
+        // Arrange
+        var sender = CreateSender();
+        var clientInfo = CreateClientInfo();
+        var logoutToken = CreateLogoutToken();
+        SetupHttpResponse(HttpStatusCode.BadGateway);
+
+        // Act
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => sender.SendBackChannelLogoutAsync(clientInfo, logoutToken));
+
+        // Assert
+        _logger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.Is<EventId>(e => e.Id == LogEvents.Device.BackChannelLogoutTokenSender.SendFailed),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies a successful delivery leaves no failure record: the assertion above is only an
+    /// instrument if it can also read zero.
+    /// </summary>
+    [Fact]
+    public async Task SendBackChannelLogoutAsync_WithSuccessResponse_WritesNoFailureRecord()
+    {
+        // Arrange
+        var sender = CreateSender();
+        var clientInfo = CreateClientInfo();
+        var logoutToken = CreateLogoutToken();
+        SetupHttpResponse(HttpStatusCode.OK);
+
+        // Act
+        await sender.SendBackChannelLogoutAsync(clientInfo, logoutToken);
+
+        // Assert
+        _logger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.Is<EventId>(e => e.Id == LogEvents.Device.BackChannelLogoutTokenSender.SendFailed),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 
     /// <summary>

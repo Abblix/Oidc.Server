@@ -113,7 +113,7 @@ public class PushedRequestFetcherTests
 
     /// <summary>
     /// A FAPI 2.0 client must use PAR even though its require_pushed_authorization_requests flag is
-    /// unset and the server-wide requirement is off — the profile imposes PAR and the granular toggle
+    /// unset and the server-wide requirement is off - the profile imposes PAR and the granular toggle
     /// cannot weaken it.
     /// </summary>
     [Fact]

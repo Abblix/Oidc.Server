@@ -319,7 +319,7 @@ public class AuthorizationDetailsPolicyTests
         // Client requests "transfer 500 EUR"; user moves the slider on the consent
         // UI to 200; the per-type validator narrows the entry to amount=200, the
         // composite rebuilds the raw array with the narrowed shape, the access
-        // token carries 200 — not 500. Without this, the AS would have to either
+        // token carries 200 - not 500. Without this, the AS would have to either
         // emit 500 (over-grant, vulnerability) or reject the whole request.
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<NarrowToTwoHundredValidator>("payment_initiation"));
@@ -341,7 +341,7 @@ public class AuthorizationDetailsPolicyTests
     public async Task Scenario2_client_tier_cap_narrows_5000_to_1000_when_request_exceeds_limit()
     {
         // Client belongs to a "basic" tier with a per-transaction cap of 1000 EUR.
-        // It requests 5000. Without mutation the AS would have to reject — but the
+        // It requests 5000. Without mutation the AS would have to reject - but the
         // client doesn't know the tier limit, so it can't retry meaningfully. With
         // mutation the validator narrows to 1000; user sees a single consent screen
         // with "approved up to 1000 instead of 5000" and the token carries 1000.
@@ -521,7 +521,7 @@ public class AuthorizationDetailsPolicyTests
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // BuildConsentDescriptorAsync — default interface method on the validator
+    // BuildConsentDescriptorAsync - default interface method on the validator
     // returns null (#142 acceptance: hosts that opt out fall back to JSON
     // dump). Validators that opt in override and supply a structured shape.
     // ───────────────────────────────────────────────────────────────────────

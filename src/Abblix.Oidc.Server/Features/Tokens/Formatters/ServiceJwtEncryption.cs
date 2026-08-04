@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -33,8 +34,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <see cref="OidcOptions.ServiceTokens"/>.
 /// </summary>
 /// <param name="Encrypt">Whether to encrypt the token. <c>false</c> yields a signed-only JWS and the
-/// server's encryption keys are not even resolved. <c>true</c> encrypts when a server encryption key is
-/// available and otherwise falls back to a signed-only JWS (the behavior of prior versions).</param>
+/// server's encryption keys are not even resolved. <c>true</c> requires encryption and fails when no key can
+/// be resolved. <c>null</c> states nothing: encrypt if a key is available, sign only if not.</param>
 /// <param name="KeyManagementAlgorithm">The JWE key-management <c>alg</c>, or <c>null</c> to derive it from
 /// the selected encryption key's declared <c>alg</c> (RFC 7517 Section 4.4), falling back to
 /// <c>RSA-OAEP-256</c>.</param>
@@ -43,11 +44,23 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="ContentEncryptionAlgorithm">The JWE content-encryption <c>enc</c>, taken from
 /// <see cref="OidcOptions.DefaultContentEncryptionAlgorithm"/>.</param>
 public sealed record ServiceJwtEncryption(
-    bool Encrypt,
+    bool? Encrypt,
     string? KeyManagementAlgorithm,
     string? KeyId,
     string ContentEncryptionAlgorithm)
 {
+    /// <summary>
+    /// The key to encrypt to, when it is not one of this server's own. Set for an access token whose named
+    /// audience publishes a key: the token is then readable by the party it was minted for, instead of only by
+    /// this server.
+    /// </summary>
+    /// <remarks>
+    /// Carried as data rather than resolved by the formatter, so the formatter stays unaware of resources and
+    /// the decision is made where the request context is. When null the server's own encryption keys are
+    /// selected as before.
+    /// </remarks>
+    public JsonWebKey? Key { get; init; }
+
     /// <summary>Policy for the access token, projected from <c>ServiceTokens.AccessToken</c>.</summary>
     public static ServiceJwtEncryption ForAccessToken(OidcOptions options)
         => FromSettings(options.ServiceTokens.AccessToken, options);

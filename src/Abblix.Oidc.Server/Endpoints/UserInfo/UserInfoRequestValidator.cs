@@ -78,17 +78,29 @@ public class UserInfoRequestValidator(
 		// RFC 9068 Section 2.2 lists exp among the REQUIRED claims of a JWT access token, and
 		// Section 4 makes the consequence explicit: "The current time MUST be before the time
 		// represented by the exp claim." An access token without one would otherwise never expire.
+		//
+		// The audience is validated here because this endpoint is a protected resource
+		// (OpenID Connect Core 1.0 Section 1.2), so Section 4 binds it: "The resource server MUST validate
+		// that the aud claim contains a resource indicator value corresponding to an identifier the resource
+		// server expects for itself." The identifier this endpoint expects for itself is the issuer, which is
+		// what an access token carries when its request named no resource. Section 5 is why the check matters
+		// rather than being a formality: distinct audiences per resource exist to prevent cross-JWT confusion,
+		// and accepting a token minted for someone else's API here is that confusion.
 		var result = await jwtValidator.ValidateAsync(
 			jwtAccessToken,
-			(ValidationOptions.Default & ~ValidationOptions.RequireValidAudience) | ValidationOptions.RequireExpirationTime);
+			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
 		if (result.TryGetFailure(out var error))
 			return new OidcError(ErrorCodes.InvalidToken, error.ToString());
 
 		var token = result.GetSuccess();
 
+		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
+		// 'application/at+jwt' and reject tokens carrying any other value." The two spellings name one media
+		// type, per RFC 7515 Section 4.1.9, so the comparison folds the prefix and the case rather than
+		// testing for equality against one of them.
 		var tokenType = token.Header.Type;
-		if (tokenType != JwtTypes.AccessToken)
+		if (!JwtTypeName.Matches(tokenType, JsonWebTokenTypes.AccessToken))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,

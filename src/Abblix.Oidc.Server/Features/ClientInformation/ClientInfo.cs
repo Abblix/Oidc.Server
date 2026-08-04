@@ -170,7 +170,7 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The algorithm used to sign back-channel logout tokens issued to this client. When null
-    /// (the default), the value of <see cref="IdentityTokenSignedResponseAlgorithm"/> applies —
+    /// (the default), the value of <see cref="IdentityTokenSignedResponseAlgorithm"/> applies -
     /// Back-Channel Logout 1.0 §2.4 signs logout tokens in the same manner as ID Tokens, and this
     /// property makes that otherwise implicit coupling visible and overridable per client. There is
     /// no registered DCR metadata parameter for it, so the override is host-side configuration only.
@@ -188,12 +188,12 @@ public record ClientInfo(string ClientId)
     /// values it may use in <c>authorization_details</c> requests. DCR-exposed
     /// (<c>authorization_details_types</c>). Semantics:
     /// <list type="bullet">
-    /// <item><description><c>null</c> — no per-client constraint; the client may use any
+    /// <item><description><c>null</c> - no per-client constraint; the client may use any
     /// <c>type</c> the server understands.</description></item>
-    /// <item><description>Empty array — the client cannot use RAR; every
+    /// <item><description>Empty array - the client cannot use RAR; every
     /// <c>authorization_details</c> entry is rejected at request time regardless of
     /// <c>type</c>.</description></item>
-    /// <item><description>Non-empty array — only the listed <c>type</c> values are accepted
+    /// <item><description>Non-empty array - only the listed <c>type</c> values are accepted
     /// for this client; entries with other types are rejected with
     /// <c>invalid_authorization_details</c>.</description></item>
     /// </list>
@@ -205,7 +205,7 @@ public record ClientInfo(string ClientId)
     /// for this client in addition to the access token and introspection response. Default
     /// <c>false</c>. RFC 9396 is silent on id_token; default-off preserves role separation
     /// between identity assertion (id_token) and authorization payload (access token +
-    /// introspection). Host-controlled behavioural extension — NOT exposed via DCR (no
+    /// introspection). Host-controlled behavioural extension - NOT exposed via DCR (no
     /// OIDC wire metadata for this), mirroring the
     /// <see cref="ForceUserClaimsInIdentityToken"/> precedent.
     /// </summary>
@@ -256,6 +256,26 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
 
     /// <summary>
+    /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
+    /// RFC 7662 §4: the authorization server "SHOULD require protected resources to be specifically authorized
+    /// to call the introspection endpoint". This is that authorization.
+    /// </summary>
+    /// <remarks>
+    /// Without it a caller may only ask about tokens issued to itself, which is the one caller RFC 7662 is not
+    /// written for: §2.1 has the protected resource make the call, and a protected resource is by construction
+    /// not the client the token was issued to. Such a caller would otherwise be told a live token does not
+    /// exist, the answer §2.2 reserves for a token that was never issued or that the caller may not ask about.
+    /// <para>
+    /// The response is narrowed for a token issued to somebody else: the end-user identifier and any claims
+    /// beyond the members RFC 7662 §2.2 defines are withheld, per §5 - "omitting privacy-sensitive information
+    /// from an introspection response is the simplest way of minimizing privacy issues".
+    /// </para>
+    /// This is granted by the host, never through dynamic client registration. A client may take a restriction
+    /// upon itself, but a permission handed out on request is not a permission.
+    /// </remarks>
+    public bool AllowCrossClientIntrospection { get; set; } = false;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
@@ -272,14 +292,14 @@ public record ClientInfo(string ClientId)
     /// RFC 9449 §5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
     /// the client MUST present a valid DPoP proof on the token endpoint and the issued
     /// access token will be DPoP-bound (<c>cnf.jkt</c>). When <c>false</c>, DPoP is
-    /// opportunistic — a valid proof still binds the token, otherwise a Bearer token is
+    /// opportunistic - a valid proof still binds the token, otherwise a Bearer token is
     /// issued.
     /// </summary>
     public bool RequireDPoP { get; set; } = false;
 
     /// <summary>
     /// RFC 9126 §6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
-    /// a pushed authorization request is the only way this client may start an authorization flow —
+    /// a pushed authorization request is the only way this client may start an authorization flow -
     /// a request arriving at the authorization endpoint without a PAR-issued request URI is rejected
     /// even when the server-wide requirement is off. FAPI-grade clients set this so a granular
     /// server-side toggle cannot silently weaken them.
@@ -289,7 +309,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// RFC 9101 §10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
     /// this client must deliver its authorization request parameters as a signed request object
-    /// (via the request parameter or a pushed authorization request) — plain-parameter requests and
+    /// (via the request parameter or a pushed authorization request) - plain-parameter requests and
     /// unsigned request objects are rejected.
     /// </summary>
     public bool RequireSignedRequestObject { get; set; } = false;
@@ -297,7 +317,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// RFC 8705 §3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
     /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
-    /// request arrives over mutual TLS — independently of the client authentication method, which
+    /// request arrives over mutual TLS - independently of the client authentication method, which
     /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
     /// already get.
     /// </summary>
@@ -310,7 +330,7 @@ public record ClientInfo(string ClientId)
     /// individual toggles above from weakening it. <see cref="ClientSecurityProfile.None"/> is an
     /// explicit opt-out that leaves the client governed by those individual toggles alone, overriding
     /// any server-wide default. <c>null</c> (the default) means the client states no preference and
-    /// inherits <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> — which is
+    /// inherits <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> - which is
     /// itself <see cref="ClientSecurityProfile.None"/> unless the deployment sets a server-wide
     /// profile, so existing clients are unaffected.
     /// </summary>

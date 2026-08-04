@@ -39,7 +39,7 @@ public sealed class JwtAlgorithmsProvider(
 	/// persists client secrets as SHA-512 hashes (except the client_secret_jwt case), so it
 	/// cannot derive the HMAC key at signing time. Advertising HS* let a client register it
 	/// via DCR and then fail with a server error on the first issued token. The JWT layer
-	/// itself still supports HMAC signers — the constraint is about key availability here,
+	/// itself still supports HMAC signers - the constraint is about key availability here,
 	/// not signing capability.
 	/// </summary>
 	private static readonly string[] HmacAlgorithms =
@@ -56,7 +56,7 @@ public sealed class JwtAlgorithmsProvider(
 
 	/// <summary>
 	/// RFC 8414 §2 and OpenID Connect Discovery 1.0 §3 both state the value "none" MUST NOT appear
-	/// in token_endpoint_auth_signing_alg_values_supported — a client authenticates by signing a
+	/// in token_endpoint_auth_signing_alg_values_supported - a client authenticates by signing a
 	/// JWT assertion, so an unsecured assertion would prove nothing. HS* stay because
 	/// client_secret_jwt legitimately keys on the shared client secret.
 	/// </summary>

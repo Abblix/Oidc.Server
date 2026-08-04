@@ -391,7 +391,7 @@ public class FlowTypeValidatorTests
     /// Verifies that without <c>EnableImplicitFlow()</c> the validator rejects requests asking for
     /// the <c>token</c> response type with <c>unsupported_response_type</c>, even when the client
     /// is configured to allow it. The server-level support gate (registered processors) takes
-    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist — per OAuth 2.1 §1.4
+    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist - per OAuth 2.1 §1.4
     /// the Implicit Grant is deprecated and the library default refuses to issue access tokens
     /// directly from the authorization endpoint.
     /// </summary>
@@ -401,7 +401,7 @@ public class FlowTypeValidatorTests
     public async Task ValidateAsync_ImplicitResponseType_WhenImplicitFlowDisabled_FailsWithUnsupportedResponseType(
         string implicitResponseType)
     {
-        // Arrange — only Code processor registered (default, no EnableImplicitFlow)
+        // Arrange - only Code processor registered (default, no EnableImplicitFlow)
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         IAuthorizationResponseBuilder[] codeOnlyProcessors =
         [
@@ -435,7 +435,7 @@ public class FlowTypeValidatorTests
     public async Task ValidateAsync_HybridResponseType_WhenImplicitFlowDisabled_FailsWithUnsupportedResponseType(
         params string[] hybridResponseType)
     {
-        // Arrange — only Code processor registered.
+        // Arrange - only Code processor registered.
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         IAuthorizationResponseBuilder[] codeOnlyProcessors =
         [
@@ -582,7 +582,7 @@ public class FlowTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_TokenBearingResponseTypeRejected_ShouldDefaultErrorModeToFragment()
     {
-        // Arrange — only Code processor registered, request asks for code token
+        // Arrange - only Code processor registered, request asks for code token
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         IAuthorizationResponseBuilder[] codeOnlyProcessors =
         [
@@ -643,7 +643,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// Under the FAPI 2.0 profile the authorization-code response type is accepted — the profile
+    /// Under the FAPI 2.0 profile the authorization-code response type is accepted - the profile
     /// permits exactly this flow.
     /// </summary>
     [Fact]
@@ -662,7 +662,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Under the FAPI 2.0 profile an implicit or hybrid response type is rejected with
-    /// unauthorized_client, even though the client allows it and the server registers the builder —
+    /// unauthorized_client, even though the client allows it and the server registers the builder -
     /// the profile permits code only, and the granular AllowedResponseTypes whitelist cannot widen it.
     /// </summary>
     [Theory]
@@ -800,7 +800,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Without <c>EnableNoneFlow()</c> the none processor is absent, so <c>response_type=none</c>
-    /// is rejected at the server-level support gate with <c>unsupported_response_type</c> — even when the
+    /// is rejected at the server-level support gate with <c>unsupported_response_type</c> - even when the
     /// client is configured to allow it.
     /// </summary>
     [Fact]

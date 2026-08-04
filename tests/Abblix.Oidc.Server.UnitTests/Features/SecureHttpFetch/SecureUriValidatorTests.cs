@@ -115,10 +115,68 @@ public class SecureUriValidatorTests
     [Theory]
     [InlineData("203.0.113.10")]   // public documentation range, treated as routable
     [InlineData("8.8.8.8")]        // public
-    [InlineData("100.63.255.255")] // one below the CGNAT range — must stay routable
-    [InlineData("100.128.0.0")]    // one above the CGNAT range — must stay routable
+    [InlineData("100.63.255.255")] // one below the CGNAT range - must stay routable
+    [InlineData("100.128.0.0")]    // one above the CGNAT range - must stay routable
     public void IsPrivateOrReservedAddress_PublicAddress_ReturnsFalse(string ip)
     {
         Assert.False(SecureUriValidator.IsPrivateOrReservedAddress(IPAddress.Parse(ip)));
+    }
+
+    // A named destination lifts both refusals at once - the scheme allow-list and the private-network block -
+    // because a service inside the network is reached over plain HTTP at a private address, and a permission
+    // that could only lift one of the two would permit nothing.
+    [Theory]
+    [InlineData("http://localhost:5002/manage/api/signout-backchannel-oidc")]
+    [InlineData("http://localhost:5002/anything/else")]
+    public void Validate_NamedOrigin_PermitsEveryPathOnIt(string uri)
+    {
+        var options = new SecureHttpFetchOptions
+        {
+            AllowedDestinations = [new Uri("http://localhost:5002")],
+        };
+        Assert.Null(CreateValidator(options).Validate(new Uri(uri)));
+    }
+
+    // The permission is exactly as wide as it is written: a neighbouring port, another scheme or another host
+    // is a different destination and stays refused, so naming one service does not open the machine.
+    [Theory]
+    [InlineData("http://localhost:5003/api")]     // another port on the same host
+    [InlineData("https://localhost:5002/api")]    // another scheme
+    [InlineData("http://127.0.0.1:5002/api")]     // the same service by address rather than by the name given
+    [InlineData("http://otherhost:5002/api")]     // another host
+    public void Validate_BesideTheNamedOrigin_StaysRefused(string uri)
+    {
+        var options = new SecureHttpFetchOptions
+        {
+            AllowedDestinations = [new Uri("http://localhost:5002")],
+        };
+        Assert.NotNull(CreateValidator(options).Validate(new Uri(uri)));
+    }
+
+    // Naming a path narrows the permission to it, which is what makes the option safe to leave on: the same
+    // list is read at client registration, where the client chooses the address.
+    [Fact]
+    public void Validate_NamedPath_PermitsThatPathAndRefusesItsNeighbours()
+    {
+        var options = new SecureHttpFetchOptions
+        {
+            AllowedDestinations = [new Uri("http://localhost:5002/manage/api/signout-backchannel-oidc")],
+        };
+        var validator = CreateValidator(options);
+
+        Assert.Null(validator.Validate(new Uri("http://localhost:5002/manage/api/signout-backchannel-oidc")));
+        Assert.NotNull(validator.Validate(new Uri("http://localhost:5002/manage/api/anything-else")));
+        Assert.NotNull(validator.Validate(new Uri("http://localhost:5002/")));
+    }
+
+    // Absent or empty, the option changes nothing - a deployment that never names a destination keeps exactly
+    // the refusals it had.
+    [Fact]
+    public void Validate_WithNoNamedDestinations_LeavesTheRefusalsUntouched()
+    {
+        Assert.NotNull(CreateValidator(SecureDefaults).Validate(new Uri("http://localhost:5002/api")));
+
+        var empty = new SecureHttpFetchOptions { AllowedDestinations = [] };
+        Assert.NotNull(CreateValidator(empty).Validate(new Uri("http://localhost:5002/api")));
     }
 }

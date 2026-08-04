@@ -67,7 +67,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
     /// <summary>
     /// OIDC Registration 1.0 §2: id_token_signed_response_alg=none is allowed only for response
-    /// types that return no ID Token from the authorization endpoint — an unsigned ID Token
+    /// types that return no ID Token from the authorization endpoint - an unsigned ID Token
     /// delivered through the browser would be modifiable in transit.
     /// </summary>
     [Fact]

@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
@@ -45,7 +46,7 @@ builder.Services.AddDynamicClientRegistration();
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
-builder.Services.AddOidcMinimalApi(options =>
+builder.Services.AddOidcServices(options =>
 {
     options.Issuer = TestConstants.Issuer;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
@@ -171,6 +172,15 @@ app.UseAuthorization();
 // The prefix is empty by default; the routing test sets it through configuration to verify MapOidcEndpoints(prefix).
 var routePrefix = app.Configuration[MinimalApiTestConstants.RoutePrefixConfigKey] ?? string.Empty;
 app.MapOidcEndpoints(routePrefix);
+
+// Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs
+// the ambient request to build an absolute URL, so the only way to exercise it end to end is from inside one.
+// Mapped outside MapOidcEndpoints so it carries none of the OIDC group's conventions.
+app.MapGet(TestConstants.EndpointResolverProbePath + "/{endpoint}",
+    (string endpoint, IOidcEndpointResolver resolver) =>
+        Enum.TryParse<OidcEndpoints>(endpoint, ignoreCase: true, out var requested)
+            ? Results.Text(resolver.Resolve(requested)?.AbsoluteUri ?? string.Empty)
+            : Results.BadRequest());
 
 await app.RunAsync();
 

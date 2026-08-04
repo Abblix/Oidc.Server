@@ -59,7 +59,7 @@ internal sealed class DirectKeyAgreement : IKeyManagementAlgorithm<OctetJsonWebK
 
 	/// <inheritdoc />
 	/// <remarks>
-	/// Per RFC 7518 Section 4.5 the shared symmetric key IS the Content Encryption Key —
+	/// Per RFC 7518 Section 4.5 the shared symmetric key IS the Content Encryption Key -
 	/// no random CEK is generated, so the shared key must be exactly the size the content
 	/// encryption algorithm requires. A mismatch is a key-configuration error and is rejected
 	/// here rather than downstream, where the message would not name the actual cause.

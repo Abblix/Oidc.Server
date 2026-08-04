@@ -69,7 +69,9 @@ public class ProofValidatorTests
         services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
         services.AddSingleton<TimeProvider>(_time);
         services.AddSingleton(_requestInfo.Object);
-        services.AddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+        // Through the library's own wiring rather than a hand-picked implementation, so this
+        // suite exercises the replay cache a deployment actually gets, decorator included.
+        services.AddReplayPrevention();
         services.AddSingleton<IProofValidator, ProofValidator>();
         var sp = services.BuildServiceProvider();
         _sut = sp.GetRequiredService<IProofValidator>();
@@ -121,7 +123,7 @@ public class ProofValidatorTests
 
     /// <summary>
     /// RFC 9449 §7.1: a request must carry at most one DPoP header. ASP.NET Core's string
-    /// FromHeader binder joins repeated header values with a comma — the proof string
+    /// FromHeader binder joins repeated header values with a comma - the proof string
     /// arrives at the validator looking like "&lt;jwt1&gt;,&lt;jwt2&gt;". Because JWS
     /// compact serialization (RFC 7515 §3.1) uses only base64url + '.', a comma is
     /// unambiguous evidence of HTTP-level concatenation. The validator must reject before
@@ -291,7 +293,7 @@ public class ProofValidatorTests
     public async Task ValidateAsync_JtiTooShort_ReturnsJtiMissing()
     {
         // RFC 9449 §11.1 RECOMMENDS at least 96 bits of effective entropy in the jti
-        // claim — anything shorter is rejected to harden the replay defence.
+        // claim - anything shorter is rejected to harden the replay defence.
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "short" }.Build();
 
         var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
@@ -303,7 +305,7 @@ public class ProofValidatorTests
     [Fact]
     public async Task ValidateAsync_SameJtiPresentedTwice_SecondReturnsReplayDetected()
     {
-        // Same builder produces the same jti on every Build() — two consecutive validates
+        // Same builder produces the same jti on every Build() - two consecutive validates
         // exercise the replay-cache integration: first registers the jti, second hits.
         var builder = new DPoPProofBuilder(_time.GetUtcNow());
         var proof = builder.Build();

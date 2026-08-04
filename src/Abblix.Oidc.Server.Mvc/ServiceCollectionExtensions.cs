@@ -86,6 +86,20 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddOidcMvc(
         this IServiceCollection services)
     {
+		// Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
+		// a request arrives and routing reports an ambiguity that names neither package. Caught here it names
+		// the call to remove. Only the registration is checked on this side: the presence of the Minimal API
+		// package maps nothing on its own, so it is the call, not the reference, that creates the conflict.
+		TransportAdapterConflict.ThrowIfRegistered(
+			services,
+			TransportAdapterConflict.MinimalApiAdapterAssemblyName,
+			"Both OIDC transport adapters are registered in this application: the MVC adapter was added " +
+			"after the Minimal API adapter's own AddOidcServices()/AddOidcMinimalApi(). Only one of them may " +
+			"serve the OIDC endpoints - with both in place they claim the same paths and every OIDC request " +
+			"fails with AmbiguousMatchException. Keep one: remove either the Minimal API registration " +
+			"together with the Abblix.OIDC.Server.MinimalApi package reference, or this one together with " +
+			"the Abblix.OIDC.Server.MVC package reference.");
+
 		services
 			.AddOidcControllers()
 			.ConfigureRoutesFallback()
@@ -97,6 +111,10 @@ public static class ServiceCollectionExtensions
 		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
 		services.TryAddSingleton<IUriResolver, UriResolver>();
 		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
+
+		// Absolute URLs for the OIDC endpoints, under the contract the Minimal API adapter answers too, so
+		// host code that needs one survives a change of adapter unchanged.
+		services.TryAddScoped<IOidcEndpointResolver, Features.EndpointResolving.OidcEndpointResolver>();
 		services.TryAddSingleton<IUrlHelperFactory, UrlHelperFactory>();
 		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
 		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();

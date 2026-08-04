@@ -161,7 +161,7 @@ public partial class UserCodeRateLimiter(
     public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
     {
         // Clear the per-user-code backoff: this code has now been verified, so its own attempt
-        // history is no longer relevant. The per-IP counter is deliberately left intact — it caps
+        // history is no longer relevant. The per-IP counter is deliberately left intact - it caps
         // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.2),
         // and an occasional successful verification must not reset that cross-code budget.
         var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);

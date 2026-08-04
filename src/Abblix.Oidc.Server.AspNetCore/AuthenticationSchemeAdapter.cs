@@ -71,19 +71,19 @@ public class AuthenticationSchemeAdapter(
 		public const string JsonArray = "JSON_ARRAY";
 
 		/// <summary>
-		/// A single-precision floating-point value — the <c>xs:float</c> XSD primitive type URI, a sibling of
+		/// A single-precision floating-point value - the <c>xs:float</c> XSD primitive type URI, a sibling of
 		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
 		/// </summary>
 		public const string Float = "http://www.w3.org/2001/XMLSchema#float";
 
 		/// <summary>
-		/// A decimal value — the <c>xs:decimal</c> XSD primitive type URI, a sibling of
+		/// A decimal value - the <c>xs:decimal</c> XSD primitive type URI, a sibling of
 		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
 		/// </summary>
 		public const string Decimal = "http://www.w3.org/2001/XMLSchema#decimal";
 
 		/// <summary>
-		/// A <c>DateTimeOffset</c> — it has no XSD primitive distinct from <c>xs:dateTime</c> (which
+		/// A <c>DateTimeOffset</c> - it has no XSD primitive distinct from <c>xs:dateTime</c> (which
 		/// <c>ClaimValueTypes.DateTime</c> already uses for a <c>DateTime</c>), so it keeps a library-specific marker.
 		/// </summary>
 		public const string DateTimeOffset = "urn:abblix:datetimeoffset";
@@ -118,7 +118,7 @@ public class AuthenticationSchemeAdapter(
 	/// </summary>
 	/// <remarks>
 	/// The cookie-backed authentication scheme carries a single signed-in identity, so this stream yields at most one
-	/// session — the one represented by the current request's cookie. Multiple concurrent user accounts per browser
+	/// session - the one represented by the current request's cookie. Multiple concurrent user accounts per browser
 	/// session are not modelled by this adapter.
 	/// </remarks>
 	/// <returns>
@@ -141,7 +141,7 @@ public class AuthenticationSchemeAdapter(
 	/// <remarks>
 	/// A cookie that authenticates under the configured scheme but does not carry the OIDC session claims this adapter
 	/// writes (for example a plain application login cookie sharing the same scheme name, or a cookie whose claims are
-	/// malformed) is treated as "no OIDC session" — the method returns null rather than throwing, so an unrelated cookie
+	/// malformed) is treated as "no OIDC session" - the method returns null rather than throwing, so an unrelated cookie
 	/// never turns a request into a 500.
 	/// </remarks>
 	/// <returns>
@@ -159,7 +159,7 @@ public class AuthenticationSchemeAdapter(
 			return null;
 
 		// All JWT claim types are stored as claims (not properties) for direct access. A cookie missing any of the
-		// claims this adapter requires is not one of ours — return null instead of throwing.
+		// claims this adapter requires is not one of ours - return null instead of throwing.
 		var subject = principal.FindFirstValue(JwtClaimTypes.Subject);
 		if (string.IsNullOrEmpty(subject))
 			return null;

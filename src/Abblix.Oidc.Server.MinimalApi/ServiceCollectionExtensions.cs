@@ -26,8 +26,10 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
+using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Utils.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -52,9 +54,13 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
     /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
-    public static IServiceCollection AddOidcMinimalApi(
+    /// <remarks>
+    /// Named exactly as the MVC integration names it, so moving a host from one adapter to the other leaves
+    /// this line alone: what changes is the package reference and the endpoint mapping, not the registration.
+    /// </remarks>
+    public static IServiceCollection AddOidcServices(
         this IServiceCollection services, Action<OidcOptions> configureOptions)
-        => services.AddOidcMinimalApi((options, _) => configureOptions(options));
+        => services.AddOidcServices((options, _) => configureOptions(options));
 
     /// <summary>
     /// Adds the OpenID Connect server (core plus the Minimal API transport) and configures its options with access
@@ -63,7 +69,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
     /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
-    public static IServiceCollection AddOidcMinimalApi(
+    public static IServiceCollection AddOidcServices(
         this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
         => services
             .AddOidcCore(configureOptions)
@@ -71,18 +77,38 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds the Minimal API transport services for the OpenID Connect server. Assumes the core services
-    /// (<c>AddOidcCore</c>) are registered separately.
+    /// (<c>AddOidcCore</c>) are registered separately. The counterpart of the MVC integration's
+    /// <c>AddOidcMvc()</c>.
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
     public static IServiceCollection AddOidcMinimalApi(this IServiceCollection services)
     {
+        // Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
+        // a request arrives and routing reports an ambiguity that names neither package. Caught here it names
+        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead,
+        // because a host can carry the package without ever calling its registration - and that is enough for
+        // AddControllers() to map its controllers.
+        TransportAdapterConflict.ThrowIfRegistered(
+            services,
+            TransportAdapterConflict.MvcAdapterAssemblyName,
+            "Both OIDC transport adapters are registered in this application: the Minimal API adapter was " +
+            "added after the MVC adapter's own AddOidcServices()/AddOidcMvc(). Only one of them may serve " +
+            "the OIDC endpoints - with both in place they claim the same paths and every OIDC request fails " +
+            "with AmbiguousMatchException. Keep one: remove either the MVC registration together with the " +
+            "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
+            "Abblix.OIDC.Server.MinimalApi package reference.");
+
         services.AddHttpContextAccessor();
         services.AddOptions<OidcRouteOptions>();
 
         // The core resolves request details (base URL, scheme, client IP) through this contract; the adapter
         // supplies the ASP.NET Core HttpContext-backed implementation.
         services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
+
+        // Absolute URLs for the OIDC endpoints, under the contract the MVC adapter answers too, so host code
+        // that needs one survives a change of adapter unchanged.
+        services.TryAddScoped<IOidcEndpointResolver, OidcEndpointResolver>();
 
         // The default authentication-session bridge over the host's cookie authentication scheme,
         // mirroring the MVC transport. TryAdd lets a host supply its own session service instead.
@@ -92,30 +118,30 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 
         // Response formatters turn a core result into an IResult. TryAdd lets a host swap any of them.
-        services.TryAddScoped<IConfigurationResultFormatter, ConfigurationResultFormatter>();
+        services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
 
-        services.TryAddScoped<ICheckSessionResultFormatter, CheckSessionResultFormatter>();
-        services.Decorate<ICheckSessionResultFormatter, CheckSessionResultCachingDecorator>();
-        services.TryAddSingleton<ICheckSessionResultCache, CheckSessionResultCache>();
+        services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
+        services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
+        services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
 
-        services.TryAddScoped<ITokenResultFormatter, TokenResultFormatter>();
-        services.TryAddScoped<IRevocationResultFormatter, RevocationResultFormatter>();
-        services.TryAddScoped<IIntrospectionResultFormatter, IntrospectionResultFormatter>();
-        services.TryAddScoped<IPushedAuthorizationResultFormatter, PushedAuthorizationResultFormatter>();
-        services.TryAddScoped<IBackChannelAuthenticationResultFormatter, BackChannelAuthenticationResultFormatter>();
-        services.TryAddScoped<IDeviceAuthorizationResultFormatter, DeviceAuthorizationResultFormatter>();
-        services.TryAddScoped<IUserInfoResultFormatter, UserInfoResultFormatter>();
+        services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
+        services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
+        services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
+        services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
+        services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
+        services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
+        services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
 
-        services.TryAddScoped<IEndSessionResultFormatter, EndSessionResultFormatter>();
-        services.Decorate<IEndSessionResultFormatter, EndSessionResultDecorator>();
+        services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
+        services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
 
-        services.TryAddScoped<IAuthorizationResultFormatter, AuthorizationResultFormatter>();
+        services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
 
         services.TryAddScoped<RegistrationClientUriBuilder>();
-        services.TryAddScoped<IRegisterClientResultFormatter, RegisterClientResultFormatter>();
-        services.TryAddScoped<IReadClientResultFormatter, ReadClientResultFormatter>();
-        services.TryAddScoped<IUpdateClientResultFormatter, UpdateClientResultFormatter>();
-        services.TryAddScoped<IRemoveClientResultFormatter, RemoveClientResultFormatter>();
+        services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
+        services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
+        services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
+        services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
 
         // Results.Json serializes through Http.Json options (not MVC's), so the null-omission modifier the OIDC
         // wire format relies on is attached there. WithAddedModifier extends the resolver already in place rather

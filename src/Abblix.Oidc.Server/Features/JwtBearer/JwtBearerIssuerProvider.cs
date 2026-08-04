@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,18 +38,16 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
 /// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 5.2.</param>
-/// <param name="secureFetcher">HTTP fetcher with SSRF protection and JWKS caching.</param>
+/// <param name="secureFetcher">HTTP fetcher with SSRF protection and caching.</param>
+/// <param name="timeProvider">Dates the fallback retention window for an assertion without an
+/// expiry.</param>
 public partial class JwtBearerIssuerProvider(
 	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
-	ReplayPrevention.IJwtReplayCache replayCache,
-	[FromKeyedServices(JwtBearerIssuerProvider.SecureHttpFetcherKey)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
+	IReplayCache replayCache,
+	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher,
+	TimeProvider timeProvider) : IJwtBearerIssuerProvider
 {
-	/// <summary>
-	/// The keyed service key used to resolve the caching <see cref="ISecureHttpFetcher"/> for JWKS fetching.
-	/// </summary>
-	public const string SecureHttpFetcherKey = "JwtBearerJwks";
-
 	/// <inheritdoc />
 	public JwtBearerOptions Options => oidcOptions.CurrentValue.JwtBearer;
 
@@ -126,7 +125,7 @@ public partial class JwtBearerIssuerProvider(
 			yield break;
 		}
 
-		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, "issuer");
+		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer);
 		await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
 		{
 			yield return key;
@@ -135,5 +134,10 @@ public partial class JwtBearerIssuerProvider(
 
 	/// <inheritdoc />
 	public async Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt)
-		=> !await replayCache.TryAddAsync(jti, expiresAt);
+		// An assertion carrying no expiry names no window to remember it for, so the identifier
+		// is held for the fallback hour - the same guess this provider has always made, now
+		// stated in one place instead of hidden inside the cache.
+		=> !await replayCache.TryReserveAsync(
+			jti,
+			expiresAt ?? timeProvider.GetUtcNow() + ReplayPrevention.ConfiguredReplayCache.DefaultExpiration);
 }

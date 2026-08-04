@@ -52,7 +52,7 @@ public interface IKeyManagementAlgorithm<in TJsonWebKey>
 	/// <summary>
 	/// Produces the Content Encryption Key the content encryption step will use, before it is
 	/// protected by <see cref="EncryptKey"/>. Key-wrapping and key-transport algorithms use the
-	/// default implementation — a fresh random CEK. Algorithms where the CEK is determined by the
+	/// default implementation - a fresh random CEK. Algorithms where the CEK is determined by the
 	/// key material itself override it: direct encryption ("dir") returns the shared symmetric key,
 	/// and direct key agreement (ECDH-ES) derives the CEK from the ephemeral-static agreement,
 	/// recording the agreement parameters (e.g. "epk") in the header.

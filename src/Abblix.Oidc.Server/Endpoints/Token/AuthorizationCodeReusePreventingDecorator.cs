@@ -66,12 +66,12 @@ public class AuthorizationCodeReusePreventingDecorator(
 
         // Atomically claim the code by removing it (get-and-remove). This happens AFTER the grant
         // validators have already checked client binding and PKCE, so a failed validation never
-        // reaches here and never burns the code — but two concurrent redemptions of a valid code
+        // reaches here and never burns the code - but two concurrent redemptions of a valid code
         // now contend for a single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
         // The code is gone: a concurrent request already claimed it, or it was already consumed.
-        // Either way this redemption loses — reject without issuing a second set of tokens.
+        // Either way this redemption loses - reject without issuing a second set of tokens.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {
             return new OidcError(
@@ -79,7 +79,7 @@ public class AuthorizationCodeReusePreventingDecorator(
                 "The authorization code was already used");
         }
 
-        // The claimed grant carries tokens from a prior successful redemption — a sequential reuse.
+        // The claimed grant carries tokens from a prior successful redemption - a sequential reuse.
         // Revoke those tokens (OAuth 2.0 Security BCP §4.13) and reject.
         if (claimedGrant.IssuedTokens is { Length: > 0 } issuedTokens)
         {
@@ -93,7 +93,7 @@ public class AuthorizationCodeReusePreventingDecorator(
                 "The authorization code was already used");
         }
 
-        // We won the claim — proceed with processing the request using the decorated processor.
+        // We won the claim - proceed with processing the request using the decorated processor.
         var result = await processor.ProcessAsync(request);
 
         // Register issued tokens as part of the authorization code grant

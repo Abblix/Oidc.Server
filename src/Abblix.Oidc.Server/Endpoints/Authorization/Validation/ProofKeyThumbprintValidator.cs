@@ -28,11 +28,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// Syntactic validator for the RFC 9449 §10 <c>dpop_jkt</c> authorization-request
 /// parameter: surfaces malformed thumbprints at the authorize / PAR endpoint with
 /// <c>invalid_request</c> instead of letting them slip through to /token where they
-/// would surface only as <c>invalid_dpop_proof</c> on the live-proof comparison —
+/// would surface only as <c>invalid_dpop_proof</c> on the live-proof comparison -
 /// fail-fast at the binding-time endpoint.
 /// </summary>
 /// <remarks>
-/// Accepts exactly 43 base64url characters (no padding) — the unique encoded length
+/// Accepts exactly 43 base64url characters (no padding) - the unique encoded length
 /// of an RFC 7638 SHA-256 JWK thumbprint, the only digest algorithm DPoP uses
 /// (RFC 9449 §6.1). Rejects any other length or non-base64url character.
 /// The parameter is optional; missing values pass through (clients that do not

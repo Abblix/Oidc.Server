@@ -98,7 +98,7 @@ public class UserInfoRequestValidatorTests
     private static JsonWebToken CreateValidAccessToken(string clientId = TestConstants.DefaultClientId)
     {
         var token = new JsonWebToken();
-        token.Header.Type = JwtTypes.AccessToken;
+        token.Header.Type = JsonWebTokenTypes.AccessToken;
         token.Payload.ClientId = clientId;
         token.Payload.Subject = "user_123";
         token.Payload.JwtId = "jwt_id_123";
@@ -386,10 +386,15 @@ public class UserInfoRequestValidatorTests
 
     /// <summary>
     /// Verifies JWT validation uses correct validation options.
-    /// Per OIDC Core, audience validation is skipped for UserInfo endpoint.
+    /// The audience is checked here because this endpoint is a protected resource
+    /// (OpenID Connect Core 1.0 Section 1.2), which puts it under RFC 9068 Section 4: "The resource server
+    /// MUST validate that the aud claim contains a resource indicator value corresponding to an identifier
+    /// the resource server expects for itself." Section 5 names the cost of skipping it - a token minted for
+    /// another resource would open this one, which is the cross-JWT confusion distinct audiences exist to
+    /// prevent.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ShouldValidateJwtWithoutAudienceCheck()
+    public async Task ValidateAsync_ShouldValidateJwtWithAudienceCheck()
     {
         // Arrange
         var userInfoRequest = CreateUserInfoRequest("token_123");
@@ -419,6 +424,75 @@ public class UserInfoRequestValidatorTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.False((capturedOptions.Value & ValidationOptions.ValidateAudience) == ValidationOptions.ValidateAudience);
+        Assert.Equal(
+            ValidationOptions.RequireValidAudience,
+            capturedOptions.Value & ValidationOptions.RequireValidAudience);
+    }
+
+    /// <summary>
+    /// Both spellings of the access-token media type are accepted, per RFC 9068 Section 4: "The resource
+    /// server MUST verify that the 'typ' header value is 'at+jwt' or 'application/at+jwt' and reject tokens
+    /// carrying any other value." RFC 7515 Section 4.1.9 is why there are two of them: a recipient treats a
+    /// value with no '/' as though 'application/' were prepended, so the short and long forms name one type
+    /// rather than two.
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData("application/" + JsonWebTokenTypes.AccessToken)]
+    [InlineData("Application/AT+JWT")]
+    public async Task ValidateAsync_AcceptsEitherSpellingOfTheAccessTokenType(string tokenType)
+    {
+        var userInfoRequest = CreateUserInfoRequest();
+        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
+        var clientRequest = CreateClientRequest(authHeader: authHeader);
+
+        var accessToken = CreateValidAccessToken();
+        accessToken.Header.Type = tokenType;
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(accessToken);
+
+        _accessTokenService
+            .Setup(service => service.AuthenticateByAccessTokenAsync(accessToken, It.IsAny<ClientInfo>()))
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(
+                CreateAuthSession(), CreateAuthContext()));
+
+        _clientInfoProvider
+            .Setup(provider => provider.TryFindClientAsync(TestConstants.DefaultClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetSuccess(out _), $"'{tokenType}' names the access-token media type");
+    }
+
+    /// <summary>
+    /// Widening the accepted spelling must not widen the accepted set of token types: a token of another
+    /// type is still refused, which is the RFC 8725 Section 3.11 token-type confusion guard the check exists
+    /// for.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtTypes.RefreshToken)]
+    [InlineData("application/jwt")]
+    [InlineData("at+jwt-but-not-really")]
+    public async Task ValidateAsync_ForeignTokenType_IsRejected(string tokenType)
+    {
+        var userInfoRequest = CreateUserInfoRequest();
+        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
+        var clientRequest = CreateClientRequest(authHeader: authHeader);
+
+        var accessToken = CreateValidAccessToken();
+        accessToken.Header.Type = tokenType;
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("valid_token_123", It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(accessToken);
+
+        var result = await _validator.ValidateAsync(userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error), $"'{tokenType}' is not an access token");
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
     }
 }

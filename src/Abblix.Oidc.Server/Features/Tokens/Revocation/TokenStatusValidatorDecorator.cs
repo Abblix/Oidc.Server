@@ -77,8 +77,8 @@ public class TokenStatusValidatorDecorator(
 		{
 			// Refresh tokens carry a grant id (Payload.GrantId); other token types leave it null, so the family
 			// logic below is inert for them. A revoked grant is a kill switch that outlives any single token:
-			// once one member's replay trips it, every member of the family — including the currently active
-			// one — is rejected here on its next use (RFC 9700 §4.14.2).
+			// once one member's replay trips it, every member of the family - including the currently active
+			// one - is rejected here on its next use (RFC 9700 §4.14.2).
 			var grantId = token.Payload.GrantId;
 
 			if (grantId is not null && await tokenRegistry.GetStatusAsync(grantId) == JsonWebTokenStatus.Revoked)

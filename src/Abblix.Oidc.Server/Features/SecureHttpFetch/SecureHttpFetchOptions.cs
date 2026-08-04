@@ -48,6 +48,35 @@ public class SecureHttpFetchOptions
     public long MaxResponseSizeBytes { get; set; } = 5 << 20;
 
     /// <summary>
+    /// How long a client's fetched key set is held before it is fetched again. Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// These keys verify request objects and client assertions, so this bounds how long a key the client has
+    /// already removed from its published set is still accepted here.
+    /// </remarks>
+    public TimeSpan ClientKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long a protected resource's fetched key set is held before it is fetched again. Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// This one sits on the hottest path of the four: the key is read while issuing an access token for that
+    /// resource, so every issuance would otherwise be an HTTP request. Lowering it buys faster propagation of
+    /// a rotated resource key at the cost of a fetch per interval.
+    /// </remarks>
+    public TimeSpan ResourceKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long a software-statement issuer's fetched key set is held before it is fetched again.
+    /// Default: 1 hour.
+    /// </summary>
+    /// <remarks>
+    /// Read only while a dynamic client registration presents a software statement, so the coldest of the
+    /// four.
+    /// </remarks>
+    public TimeSpan SoftwareStatementKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
     /// List of allowed URI schemes.
     /// Default: null (all schemes allowed).
     /// </summary>
@@ -71,4 +100,26 @@ public class SecureHttpFetchOptions
     /// Set to false only in development environments where fetching from internal networks is required.
     /// </remarks>
     public bool BlockPrivateNetworks { get; set; } = true;
+
+    /// <summary>
+    /// Destinations this server may reach whatever the rules above say. Default: null, meaning none.
+    /// </summary>
+    /// <remarks>
+    /// This is how a deployment reaches one known service inside its own network without standing the
+    /// protection down. The rules above are a blanket refusal that cannot be narrowed, only switched off, so
+    /// an authorization server that must call a sibling in its own cluster would otherwise set
+    /// <see cref="BlockPrivateNetworks"/> to <c>false</c> and widen <see cref="AllowedSchemes"/> - and both
+    /// relaxations apply equally to every address a *client* supplies: a key set, a sector identifier, a
+    /// back-channel logout endpoint. Naming the one destination leaves the refusal total everywhere else.
+    /// <para>
+    /// An entry is matched on scheme, host and port, and additionally on path when it carries one. So
+    /// <c>http://localhost:5002</c> permits every path on that origin, while
+    /// <c>http://localhost:5002/manage/api/signout-backchannel-oidc</c> permits that one and leaves the rest
+    /// of the host refused. Prefer the second: this permission is read at client registration as well as on
+    /// the way out, and registration is where a client chooses the address.
+    /// </para>
+    /// An entry carrying a query, a fragment or user information is refused at startup rather than ignored,
+    /// because an entry permitting more than it appears to say is the failure this option exists to avoid.
+    /// </remarks>
+    public Uri[]? AllowedDestinations { get; set; }
 }

@@ -91,7 +91,7 @@ public class RegisterClientRequestProcessor(
             ApplicationType = clientInfo.ApplicationType,
             RedirectUris = clientInfo.RedirectUris,
             // RFC 7591 §3.2.1: grant_types/response_types/scope are read back from the stored
-            // ClientInfo, not from the request — this is what makes server-assigned defaults
+            // ClientInfo, not from the request - this is what makes server-assigned defaults
             // (authorization_code / code when omitted) visible to the client.
             GrantTypes = clientInfo.AllowedGrantTypes,
             ResponseTypes = clientInfo.AllowedResponseTypes,
@@ -156,10 +156,10 @@ public class RegisterClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 §5.2: dpop_bound_access_tokens — when omitted, defaults to false.
+            // RFC 9449 §5.2: dpop_bound_access_tokens - when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
             // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
-            // flags — when omitted, default to false.
+            // flags - when omitted, default to false.
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,

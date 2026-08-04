@@ -27,8 +27,8 @@ namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
 /// Locks the property that makes the live editing cursor work: the composite factory reads its members via
-/// <c>GetKeyedServices</c> at resolve time, so a keyed member added to the collection AFTER composition — with
-/// no recompose — is picked up when the composite is resolved. The <see cref="IComposition{TInterface}"/> cursor
+/// <c>GetKeyedServices</c> at resolve time, so a keyed member added to the collection AFTER composition - with
+/// no recompose - is picked up when the composite is resolved. The <see cref="IComposition{TInterface}"/> cursor
 /// edits exactly those keyed descriptors, so its edits are live by the same mechanism.
 /// </summary>
 public class LiveCompositionTests

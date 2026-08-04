@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Declares that the value travels on the wire as a single space-separated string while the model
-/// exposes it as an array — e.g. the OAuth 2.0 <c>scope</c> and <c>acr_values</c> parameters.
+/// exposes it as an array - e.g. the OAuth 2.0 <c>scope</c> and <c>acr_values</c> parameters.
 /// Purely semantic: it names the wire format and leaves the parsing mechanism to the transport layer.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]

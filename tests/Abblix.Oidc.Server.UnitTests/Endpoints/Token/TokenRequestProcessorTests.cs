@@ -651,7 +651,7 @@ public class TokenRequestProcessorTests
         string tokenEndpointAuthMethod,
         string? expectedRefreshContextThumbprint)
     {
-        // Arrange — set up a grant whose stored context carries the bound jkt and an
+        // Arrange - set up a grant whose stored context carries the bound jkt and an
         // offline_access scope so the refresh-token branch fires.
         const string boundThumbprint = "jkt-bound";
         var tokenRequest = new TokenRequest { GrantType = GrantTypes.AuthorizationCode };

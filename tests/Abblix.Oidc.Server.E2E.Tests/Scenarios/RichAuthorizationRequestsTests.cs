@@ -12,7 +12,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// RFC 9396 Rich Authorization Requests end-to-end against the test OIDC provider:
 /// authorization_details round-trip (byte-exact echo, member order, id_token toggle)
 /// and validation/rejection (allowlist enforcement, missing required members). Each
-/// test drives the full HTTP flow as a real RP — no internal-API shortcuts — and
+/// test drives the full HTTP flow as a real RP - no internal-API shortcuts - and
 /// asserts on the wire shape of what crosses the boundary. Discovery/DCR/introspection
 /// metadata lives in <see cref="RarMetadataTests"/> and consent narrowing in
 /// <see cref="RarConsentTests"/>; the three share <see cref="RarTestBase"/>.

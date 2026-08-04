@@ -53,7 +53,7 @@ internal static class AuthorizationRequestMapper
         proto.ClaimsLocales.AddIfNotNull(source.ClaimsLocales, c => c.Name);
         proto.Resources.AddIfNotNull(source.Resources, u => u.OriginalString);
 
-        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string -
         // byte-exact preservation for PAR storage between /par submission and the
         // front-channel /authorize redemption.
         if (source.AuthorizationDetails is { Count: > 0 } authorizationDetails)
@@ -62,7 +62,7 @@ internal static class AuthorizationRequestMapper
         return proto;
     }
 
-    // Lifted out of ToProto so its cognitive complexity stays in budget — each
+    // Lifted out of ToProto so its cognitive complexity stays in budget - each
     // if-not-null scalar copy adds 1 by Sonar's counting; with fourteen of them
     // in the parent method the rule's threshold tripped (S3776).
     private static void CopyOptionalScalars(Model.AuthorizationRequest source, AuthorizationRequest proto)

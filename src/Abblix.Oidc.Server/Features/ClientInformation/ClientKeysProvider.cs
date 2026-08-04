@@ -58,35 +58,12 @@ public class ClientKeysProvider(
     }
 
     /// <summary>
-    /// Internally fetches keys from the client's JWKS or JWKS URI with SSRF protection.
+    /// Fetches the keys the client publishes, inline in its registration and at its JWKS URI, through the
+    /// shared SSRF-protected and cached path.
     /// </summary>
     /// <param name="clientInfo">The client information specifying where to find the JWKS.</param>
     /// <returns>An asynchronous enumerable of <see cref="JsonWebKey"/>.</returns>
-    /// <remarks>
-    /// This method attempts to retrieve keys directly from the client's configured JWKS. If a JWKS URI is provided,
-    /// it fetches the JWKS from the remote URI using ISecureHttpFetcher for SSRF protection.
-    /// Logs warnings if the retrieval process fails.
-    /// </remarks>
-    private async IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo)
-    {
-        // Directly yield keys from configured JWKS
-        if (clientInfo.Jwks != null)
-        {
-            foreach (var key in clientInfo.Jwks.Keys)
-                yield return key;
-        }
-
-        // Attempt to fetch keys from JWKS URI with SSRF protection
-        var jwksUri = clientInfo.JwksUri;
-        if (jwksUri == null)
-            yield break;
-
-        using var scope = serviceProvider.CreateScope();
-        var secureFetcher = scope.ServiceProvider.GetRequiredService<ISecureHttpFetcher>();
-
-        await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, clientInfo.ClientId, "client"))
-        {
-            yield return key;
-        }
-    }
+    private IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo)
+        => serviceProvider.ResolveKeysAsync(
+            clientInfo.Jwks, clientInfo.JwksUri, logger, clientInfo.ClientId, KeySetOwners.Client);
 }

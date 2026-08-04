@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// <remarks>
 /// The binding outlives any single request and must be shared across all server replicas, so the
 /// default implementation persists it in the distributed entity storage rather than in process
-/// memory. The binding has no expiration — it lives as long as the client is registered — and is
+/// memory. The binding has no expiration - it lives as long as the client is registered - and is
 /// removed when the client is deregistered.
 /// </remarks>
 public interface IRegistrationAccessTokenStore
@@ -50,7 +50,7 @@ public interface IRegistrationAccessTokenStore
     /// <param name="clientId">The identifier of the client.</param>
     /// <returns>
     /// The stored jti, or <c>null</c> when no binding is recorded (a statically configured client,
-    /// or one registered before the binding existed) — in which case the validator does not enforce
+    /// or one registered before the binding existed) - in which case the validator does not enforce
     /// the binding.
     /// </returns>
     Task<string?> GetTokenIdAsync(string clientId);

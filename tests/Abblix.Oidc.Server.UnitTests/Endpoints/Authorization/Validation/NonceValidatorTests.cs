@@ -95,7 +95,7 @@ public class NonceValidatorTests
 
     /// <summary>
     /// Verifies that a nonce the client already used for a previously issued authorization code is rejected
-    /// when reuse detection is enabled — a nonce must be transaction-specific (RFC 9700 Section 2.1.1). The
+    /// when reuse detection is enabled - a nonce must be transaction-specific (RFC 9700 Section 2.1.1). The
     /// code response type keeps the nonce optional, so the rejection comes from reuse, not a missing nonce.
     /// </summary>
     [Fact]

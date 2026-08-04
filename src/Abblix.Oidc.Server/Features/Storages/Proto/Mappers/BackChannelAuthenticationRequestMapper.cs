@@ -44,7 +44,7 @@ internal static class BackChannelAuthenticationRequestMapper
         if (source.NextPollAt.HasValue)
             proto.NextPollAt = source.NextPollAt.Value.ToTimestamp();
 
-        // Ping/push delivery fields — absent for poll mode, kept null-distinct via the
+        // Ping/push delivery fields - absent for poll mode, kept null-distinct via the
         // proto3 optional accessors so the round-trip never coerces null into "".
         if (source.ClientNotificationEndpoint is not null)
             proto.ClientNotificationEndpoint = source.ClientNotificationEndpoint.ToString();

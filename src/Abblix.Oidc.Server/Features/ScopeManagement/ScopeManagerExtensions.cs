@@ -72,7 +72,7 @@ public static class ScopeManagerExtensions
         foreach (var scope in scopes)
         {
             // Enforce the client's registered scope set: a client must not obtain a scope it was
-            // never registered for (RFC 6749 §3.3 — the AS restricts scope by policy). Empty/null
+            // never registered for (RFC 6749 §3.3 - the AS restricts scope by policy). Empty/null
             // means no restriction, matching the per-issuer allow-list of the JWT bearer grant.
             if (allowedClientScopes is { Length: > 0 } &&
                 !allowedClientScopes.Contains(scope, StringComparer.Ordinal))

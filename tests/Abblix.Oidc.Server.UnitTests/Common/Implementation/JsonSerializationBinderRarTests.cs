@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Implementation;
 /// <summary>
 /// JAR (RFC 9101) merges a signed-JWT payload into the live AuthorizationRequest
 /// via <see cref="JsonSerializationBinder"/>. These tests lock the contract that
-/// the RFC 9396 <c>authorization_details</c> claim survives that merge — both as
+/// the RFC 9396 <c>authorization_details</c> claim survives that merge - both as
 /// a fresh value carried only in the JWT, and as an overwrite of a base-request
 /// value.
 /// </summary>
@@ -59,7 +59,7 @@ public class JsonSerializationBinderRarTests
         var merged = await binder.BindModelAsync(jwtPayload, baseRequest);
 
         Assert.NotNull(merged);
-        // JAR is the integrity-protected source — JWT-side value wins over the
+        // JAR is the integrity-protected source - JWT-side value wins over the
         // outer raw form parameter on conflict (RFC 9101 §5).
         Assert.Equal(WireJson, merged!.AuthorizationDetails!.ToJsonString());
     }

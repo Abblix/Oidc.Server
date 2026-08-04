@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// assertion with the client secret as the HMAC key. Per RFC 7518 §3.2 an HS256 key must be at
 /// least 32 bytes, and the JWT layer enforces that floor. This locks the default DCR-issued secret
 /// length to a value whose UTF-8 encoding is usable as an HS256 key, so a client that received a
-/// default secret can actually authenticate with it — the mismatch that the mocked
+/// default secret can actually authenticate with it - the mismatch that the mocked
 /// <c>ClientSecretJwtAuthenticator</c> unit tests could not surface.
 /// </summary>
 public class ClientSecretHmacKeyLengthTests

@@ -31,12 +31,12 @@ namespace Abblix.DependencyInjection;
 /// it is an <see cref="IList{T}"/> of the member descriptors backed directly by the service collection:
 /// inserting, removing or reordering through it mutates the family's keyed registrations in place.
 /// The composite reads its members via <c>GetKeyedServices</c> at resolve time,
-/// so edits made through the cursor take effect with no separate recompose step —
+/// so edits made through the cursor take effect with no separate recompose step -
 /// the members simply differ when the composite is finally resolved.
 /// </summary>
 /// <remarks>
 /// The position-aware editing methods live here rather than as extension methods so that
-/// <typeparamref name="TInterface"/> is bound by the cursor and never repeated at the call site —
+/// <typeparamref name="TInterface"/> is bound by the cursor and never repeated at the call site -
 /// only the anchor type is named (<c>composition.AddAfter&lt;ScopeValidator&gt;(step)</c>).
 /// Each returns the cursor, so edits chain, and each anchor is matched by implementation type,
 /// throwing when the anchor is not a member.
@@ -110,7 +110,7 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
 /// The live-cursor implementation of <see cref="IComposition{TInterface}"/>. Every operation reads or rewrites
 /// the family's keyed member descriptors in the underlying <see cref="IServiceCollection"/>; the cursor holds no
 /// copy of the member list, so it never drifts from what the composite will resolve. New members are re-keyed
-/// under the family key and validated to share the family lifetime — a mismatch throws instead of being silently
+/// under the family key and validated to share the family lifetime - a mismatch throws instead of being silently
 /// promoted.
 /// </summary>
 internal sealed class Composition<TInterface>(
@@ -138,7 +138,7 @@ internal sealed class Composition<TInterface>(
     /// <summary>
     /// Re-keys a caller-supplied member under the family key, at the member's own lifetime. The composite adopts
     /// the shortest member lifetime, so a member LONGER-lived than the composite is fine (it is simply shared);
-    /// a SHORTER-lived one would make the composite outlive it — a captive — and is rejected here.
+    /// a SHORTER-lived one would make the composite outlive it - a captive - and is rejected here.
     /// </summary>
     private ServiceDescriptor AsFamilyMember(ServiceDescriptor member)
     {

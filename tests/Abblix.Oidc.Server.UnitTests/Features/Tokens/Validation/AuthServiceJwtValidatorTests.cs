@@ -63,7 +63,6 @@ public class AuthServiceJwtValidatorTests
 
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
-            _clientInfoProvider.Object,
             issuerProvider.Object,
             _serviceKeysProvider.Object);
     }
@@ -187,14 +186,68 @@ public class AuthServiceJwtValidatorTests
     #region Audience Validation Tests
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts JWT with audience matching a known client.
-    /// Per RFC 7519 Section 4.1.3, audience claim identifies recipients authorized to use the token.
+    /// The tokens this service issues for itself name it in the audience, so the issuer is what a valid one
+    /// carries. RFC 9068 Section 4 is why it has to be checkable at all: a resource server must reject a token
+    /// whose audience does not name it, and this service is the resource server for its own tokens.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithValidAudience_ShouldReturnSuccess()
+    public async Task ValidateAsync_WithIssuerAudience_ShouldReturnSuccess()
     {
         // Arrange
-        var clientInfo = CreateClientInfo(ValidClientId);
+        ValidationParameters? capturedParams = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
+            .ReturnsAsync(CreateValidToken());
+
+        SetupKeyProviders();
+
+        // Act
+        await _validator.ValidateAsync(ValidJwt);
+
+        // Assert
+        Assert.NotNull(capturedParams);
+        Assert.True(await capturedParams!.ValidateAudience!([ExpectedIssuer]));
+    }
+
+    /// <summary>
+    /// A registered client identifier is no longer an acceptable audience, even though the client exists.
+    /// An audience names the party meant to consume the token, and a client is the party that asked for it.
+    /// The one token type that legitimately carries a client identifier in <c>aud</c> is the ID token
+    /// (OpenID Connect Core 1.0 Section 2), and the endpoint that accepts one checks that itself.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithRegisteredClientAudience_ShouldRejectToken()
+    {
+        // Arrange
+        ValidationParameters? capturedParams = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
+            .ReturnsAsync(CreateValidToken());
+
+        SetupKeyProviders();
+
+        // Act
+        await _validator.ValidateAsync(ValidJwt);
+
+        // Assert
+        Assert.NotNull(capturedParams);
+        Assert.False(await capturedParams!.ValidateAudience!([ValidClientId]));
+
+        // The client store is a strict mock with nothing set up for this identifier, so reaching it at all
+        // would throw. Passing is the evidence that audience validation no longer consults it.
+        _clientInfoProvider.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// Per RFC 7519 Section 4.1.3 the audience may be an array; validation passes if any value is the issuer.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithMultipleAudiencesOneIsIssuer_ShouldReturnSuccess()
+    {
+        // Arrange
+        var audiences = new[] { "https://api.example.com", ExpectedIssuer, "another_invalid" };
 
         ValidationParameters? capturedParams = null;
         _jwtValidator
@@ -204,99 +257,24 @@ public class AuthServiceJwtValidatorTests
 
         SetupKeyProviders();
 
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
-            .ReturnsAsync(clientInfo);
-
         // Act
         await _validator.ValidateAsync(ValidJwt);
 
         // Assert
         Assert.NotNull(capturedParams);
-
-        // Verify audience validation callback
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([ValidClientId]);
-        Assert.True(audienceValidationResult);
+        Assert.True(await capturedParams!.ValidateAudience!(audiences));
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects JWT with audience not matching any known client.
-    /// Prevents unauthorized clients from using tokens intended for others.
+    /// An access token minted for a named resource names that resource, not this service, so it is not one
+    /// this service will accept - which is what keeps a token for somebody else's API from opening UserInfo
+    /// (RFC 9068 Section 5, cross-JWT confusion).
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithInvalidAudience_ShouldRejectToken()
+    public async Task ValidateAsync_WithMultipleAudiencesNoneIsIssuer_ShouldRejectToken()
     {
         // Arrange
-        ValidationParameters? capturedParams = null;
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
-
-        SetupKeyProviders();
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(InvalidClientId))
-            .ReturnsAsync((ClientInfo?)null);
-
-        // Act
-        await _validator.ValidateAsync(ValidJwt);
-
-        // Assert
-        Assert.NotNull(capturedParams);
-
-        // Verify audience validation callback rejects unknown client
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([InvalidClientId]);
-        Assert.False(audienceValidationResult);
-    }
-
-    /// <summary>
-    /// Verifies that ValidateAsync accepts JWT when at least one audience matches a known client.
-    /// Per RFC 7519, audience can be an array - validation passes if any value matches.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithMultipleAudiencesOneValid_ShouldReturnSuccess()
-    {
-        // Arrange
-        var audiences = new[] { InvalidClientId, ValidClientId, "another_invalid" };
-        var clientInfo = CreateClientInfo(ValidClientId);
-
-        ValidationParameters? capturedParams = null;
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
-            .ReturnsAsync(CreateValidToken());
-
-        SetupKeyProviders();
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(InvalidClientId))
-            .ReturnsAsync((ClientInfo?)null);
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
-            .ReturnsAsync(clientInfo);
-
-        // Act
-        await _validator.ValidateAsync(ValidJwt);
-
-        // Assert
-        Assert.NotNull(capturedParams);
-
-        // Verify audience validation callback accepts when one audience is valid
-        var audienceValidationResult = await capturedParams!.ValidateAudience!(audiences);
-        Assert.True(audienceValidationResult);
-    }
-
-    /// <summary>
-    /// Verifies that ValidateAsync rejects JWT when all audiences are invalid.
-    /// All audience values must be checked - token is invalid if none match known clients.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithMultipleAudiencesAllInvalid_ShouldRejectToken()
-    {
-        // Arrange
-        var audiences = new[] { InvalidClientId, "another_invalid", "yet_another_invalid" };
+        var audiences = new[] { InvalidClientId, "https://api.example.com", "yet_another_invalid" };
 
         ValidationParameters? capturedParams = null;
         _jwtValidator
@@ -306,19 +284,12 @@ public class AuthServiceJwtValidatorTests
 
         SetupKeyProviders();
 
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
-            .ReturnsAsync((ClientInfo?)null);
-
         // Act
         await _validator.ValidateAsync(ValidJwt);
 
         // Assert
         Assert.NotNull(capturedParams);
-
-        // Verify audience validation callback rejects when all audiences are invalid
-        var audienceValidationResult = await capturedParams!.ValidateAudience!(audiences);
-        Assert.False(audienceValidationResult);
+        Assert.False(await capturedParams!.ValidateAudience!(audiences));
     }
 
     /// <summary>

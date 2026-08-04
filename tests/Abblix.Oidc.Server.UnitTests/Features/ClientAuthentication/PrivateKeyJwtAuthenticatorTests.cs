@@ -28,7 +28,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,6 +72,89 @@ public class PrivateKeyJwtAuthenticatorTests
         mocks.ClientJwtValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ClientId, result.ClientId);
+    }
+
+    /// <summary>
+    /// A JWT made for some other purpose is not proof of who the client is. RFC 8725 Section 3.11 calls this
+    /// token confusion, and the sharpest case is an access token the client legitimately holds, presented as
+    /// its credential. The last two cases are the reason the refusal is not limited to what this server
+    /// issues: the client signs its own assertion, so a credential or a security event it signed elsewhere is
+    /// equally within reach. Everything else about the assertion below is valid - issuer, subject, jti and
+    /// expiry all check out - so the type is the only thing standing between the two meanings.
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JsonWebTokenTypes.LogoutToken)]
+    [InlineData(JwtTypes.RefreshToken)]
+    [InlineData(JsonWebTokenTypes.VerifiableCredential)]
+    [InlineData(JsonWebTokenTypes.SecurityEvent)]
+    public async Task AnotherKindPresentedAsAssertion_ShouldReturnNull(string tokenType)
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "valid-jti-assertion",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        token.Header.Type = tokenType;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var request = new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion
+        };
+
+        // Act
+        var result = await authenticator.TryAuthenticateClientAsync(request);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The values a conformant sender may use cannot be enumerated - RFC 7523bis asks for
+    /// <c>client-authentication+jwt</c> "or another more specific explicit type value defined by a
+    /// specification profiling this specification", and plenty of clients predate the guidance entirely. So an
+    /// absent, generic or unfamiliar type has to pass, or the check would refuse honest callers rather than
+    /// confused tokens.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(JsonWebTokenTypes.Jwt)]
+    [InlineData(JsonWebTokenTypes.ClientAuthentication)]
+    [InlineData("something-a-profile-defined+jwt")]
+    public async Task APermittedOrUnfamiliarType_ShouldAuthenticate(string? tokenType)
+    {
+        // Arrange
+        var (authenticator, mocks) = CreateAuthenticator();
+
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, $"valid-jti-{tokenType ?? "none"}",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        token.Header.Type = tokenType;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var request = new ClientRequest
         {
@@ -333,16 +416,16 @@ public class PrivateKeyJwtAuthenticatorTests
         // Assert
         Assert.NotNull(result);
         mocks.ReplayCache.Verify(
-            r => r.TryAddAsync(
+            r => r.TryReserveAsync(
                 It.Is<string>(id => id == jti),
-                It.Is<DateTimeOffset?>(exp =>
-                    exp.HasValue && Math.Abs((exp.Value - expiresAt).TotalSeconds) < 1)),
+                It.Is<DateTimeOffset>(exp =>
+                    Math.Abs((exp - expiresAt).TotalSeconds) < 1)),
             Times.Once);
     }
 
     /// <summary>
     /// Verifies that a replayed assertion is rejected: the replay cache reports the jti as
-    /// already present, and the single TryAddAsync call makes the reserve-and-check atomic —
+    /// already present, and the single TryReserveAsync call makes the reserve-and-check atomic -
     /// two concurrent presenters of the same assertion cannot both pass.
     /// </summary>
     [Fact]
@@ -361,7 +444,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         mocks.ReplayCache
-            .Setup(r => r.TryAddAsync("replayed-jti", It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync("replayed-jti", It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(false);
 
         var request = new ClientRequest
@@ -409,7 +492,7 @@ public class PrivateKeyJwtAuthenticatorTests
         Assert.Null(result);
         // A rejected assertion is never recorded in the replay cache.
         mocks.ReplayCache.Verify(
-            r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()),
+            r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -490,12 +573,12 @@ public class PrivateKeyJwtAuthenticatorTests
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
-        var replayCache = new Mock<IJwtReplayCache>(MockBehavior.Strict);
+        var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
         var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
 
         // Setup default behavior for the replay cache: every jti is fresh
         replayCache
-            .Setup(r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         // Create service provider with scoped services
@@ -631,7 +714,7 @@ public class PrivateKeyJwtAuthenticatorTests
     private sealed class Mocks
     {
         public Mock<ILogger<PrivateKeyJwtAuthenticator>> Logger { get; init; } = null!;
-        public Mock<IJwtReplayCache> ReplayCache { get; init; } = null!;
+        public Mock<IReplayCache> ReplayCache { get; init; } = null!;
         public Mock<IClientJwtValidator> ClientJwtValidator { get; init; } = null!;
     }
 }

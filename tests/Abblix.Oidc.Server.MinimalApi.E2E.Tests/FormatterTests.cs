@@ -42,7 +42,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var state = Guid.NewGuid().ToString("N");
 
         // JARM: response_mode=query.jwt makes the AS pack the authorization response into one signed `response` JWT
-        // delivered as a query parameter, instead of bare query parameters. Exercises AuthorizationResultFormatter's
+        // delivered as a query parameter, instead of bare query parameters. Exercises AuthorizationResponseFormatter's
         // JARM branch.
         var responseJwt = await client.AuthorizeGetCallbackAsync(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),

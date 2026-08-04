@@ -23,7 +23,7 @@
 namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
-/// Declares that the value travels on the wire as a JSON document carried inside a single parameter —
+/// Declares that the value travels on the wire as a JSON document carried inside a single parameter -
 /// e.g. the OIDC <c>claims</c> parameter or RFC 9396 <c>authorization_details</c>. Purely semantic:
 /// it names the wire format and leaves the parsing mechanism to the transport layer.
 /// </summary>

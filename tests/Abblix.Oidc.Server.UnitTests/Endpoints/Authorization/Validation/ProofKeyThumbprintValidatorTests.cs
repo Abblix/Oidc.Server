@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 /// <summary>
 /// Unit tests for <see cref="ProofKeyThumbprintValidator"/>: the syntactic check on the
 /// RFC 9449 §10 <c>dpop_jkt</c> authorization-request parameter (exactly 43 base64url
-/// characters, no padding — the encoded length of an RFC 7638 SHA-256 JWK thumbprint).
+/// characters, no padding - the encoded length of an RFC 7638 SHA-256 JWK thumbprint).
 /// </summary>
 public class ProofKeyThumbprintValidatorTests
 {

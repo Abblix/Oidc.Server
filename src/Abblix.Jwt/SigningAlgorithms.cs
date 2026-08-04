@@ -114,7 +114,7 @@ public static class SigningAlgorithms
 	/// <summary>
 	/// The set of every <c>alg</c> identifier this library recognises. Per RFC 7515 §5.3 and
 	/// §10.13 the comparison is byte-exact, so case-variants like <c>None</c>/<c>NONE</c> are
-	/// not members of this set and must be rejected as unknown algorithms — not silently
+	/// not members of this set and must be rejected as unknown algorithms - not silently
 	/// stream into the signature-verification path where they would surface as the
 	/// (semantically incorrect) "invalid signature" failure.
 	/// </summary>

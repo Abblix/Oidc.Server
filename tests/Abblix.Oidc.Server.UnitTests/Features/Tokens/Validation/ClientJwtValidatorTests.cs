@@ -472,15 +472,15 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// Verifies that when the inner JWT validation succeeds but no client can be determined — neither
-    /// from the issuer nor from a client_id claim — ValidateAsync returns a failure rather than a
+    /// Verifies that when the inner JWT validation succeeds but no client can be determined - neither
+    /// from the issuer nor from a client_id claim - ValidateAsync returns a failure rather than a
     /// ValidJsonWebToken with a null Client. Downstream callers (e.g. the request-object signing-alg
     /// pin) rely on Client being non-null on success.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WhenClientCannotBeDetermined_ShouldReturnFailure()
     {
-        // Arrange — inner validation succeeds without resolving a client (ValidateIssuer is not
+        // Arrange - inner validation succeeds without resolving a client (ValidateIssuer is not
         // invoked here), and the token carries no client_id claim.
         var token = CreateValidToken();
         Assert.Null(token.Payload.ClientId);
@@ -492,7 +492,7 @@ public class ClientJwtValidatorTests
         // Act
         var result = await _validator.ValidateAsync(ValidJwt);
 
-        // Assert — a failure, never a success carrying a null Client.
+        // Assert - a failure, never a success carrying a null Client.
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
@@ -657,7 +657,7 @@ public class ClientJwtValidatorTests
         // Act
         await _validator.ValidateAsync(ValidJwt);
 
-        // Assert — the decryption-key resolver is configured and yields the server's private keys.
+        // Assert - the decryption-key resolver is configured and yields the server's private keys.
         Assert.NotNull(capturedParams);
         Assert.NotNull(capturedParams!.ResolveTokenDecryptionKeys);
         var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys!(string.Empty)

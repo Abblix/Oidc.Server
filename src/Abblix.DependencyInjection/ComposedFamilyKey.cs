@@ -25,7 +25,7 @@ namespace Abblix.DependencyInjection;
 /// <summary>
 /// The service key that members of a composed keyed family are stored under: pairs the family's original
 /// service key with the composite type. The pairing keeps same-interface families under different keys
-/// isolated (even when they share the composite class) and keeps the descriptors self-describing — both
+/// isolated (even when they share the composite class) and keeps the descriptors self-describing - both
 /// the original key and the composite type are recoverable from any member, so no side registry exists.
 /// </summary>
 /// <param name="ServiceKey">The service key the family was composed under.</param>

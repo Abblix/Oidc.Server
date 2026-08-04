@@ -47,7 +47,7 @@ public static class HttpServerUtility
 		"strict per RFC and is the BCL primitive on net9.0+; this wrapper will be removed when " +
 		"net8.0 reaches end-of-life on 2026-11-10.")]
 	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
-		Justification = "Removal scheduled in the Obsolete message — bound to the net8.0 EOL window (2026-11-10).")]
+		Justification = "Removal scheduled in the Obsolete message - bound to the net8.0 EOL window (2026-11-10).")]
 	public static byte[] UrlTokenDecode(string input)
 	{
 		var length = input.Length;
@@ -92,7 +92,7 @@ public static class HttpServerUtility
 		"with UrlTokenDecode and exists only to bridge the net8.0 target. It will be removed " +
 		"when net8.0 reaches end-of-life on 2026-11-10.")]
 	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
-		Justification = "Removal scheduled in the Obsolete message — bound to the net8.0 EOL window (2026-11-10).")]
+		Justification = "Removal scheduled in the Obsolete message - bound to the net8.0 EOL window (2026-11-10).")]
 	public static string UrlTokenEncode(byte[]? input, int? length = null)
 	{
 		if (input == null)
