@@ -68,12 +68,9 @@ public sealed class DistributedJtiReplayCache(
     private const string CacheKeyPrefix =
         $"{nameof(Abblix)}.{nameof(SecurityEvents)}:{nameof(DistributedJtiReplayCache)}:";
 
-    private readonly TimeSpan _retention = retention > TimeSpan.Zero
-        ? retention
-        : throw new ArgumentOutOfRangeException(
-            nameof(retention),
-            retention,
-            "A replay cache remembering nothing detects nothing.");
+    private readonly TimeSpan _retention = retention <= TimeSpan.Zero
+        ? throw new ArgumentOutOfRangeException(nameof(retention), retention, "A replay cache remembering nothing detects nothing.")
+        : retention;
 
     /// <inheritdoc />
     public async ValueTask<bool> TryRegisterAsync(

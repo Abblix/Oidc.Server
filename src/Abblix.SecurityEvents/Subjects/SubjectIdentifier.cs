@@ -102,9 +102,7 @@ public abstract class SubjectIdentifier(string format)
         string? value,
         string memberName,
         [CallerArgumentExpression(nameof(value))] string? parameterName = null)
-        => !string.IsNullOrEmpty(value)
-            ? value
-            : throw new ArgumentException(
-                $"The '{memberName}' member is required and must not be null or empty.",
-                parameterName);
+        => string.IsNullOrEmpty(value)
+            ? throw new ArgumentException($"The '{memberName}' member is required and must not be null or empty.", parameterName)
+            : value;
 }
