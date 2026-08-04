@@ -47,7 +47,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection) : IEvent
     private readonly IDatabase _database = connection.GetDatabase();
 
     /// <inheritdoc />
-    public async ValueTask EnqueueAsync(
+    public async Task EnqueueAsync(
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
@@ -66,7 +66,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection) : IEvent
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+    public async Task<IReadOnlyList<OutboxItem>> PendingAsync(
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
@@ -102,7 +102,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection) : IEvent
     }
 
     /// <inheritdoc />
-    public async ValueTask AcknowledgeAsync(
+    public async Task AcknowledgeAsync(
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
@@ -125,7 +125,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection) : IEvent
     }
 
     /// <inheritdoc />
-    public async ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default)
+    public async Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
         => await _database.KeyDeleteAsync([QueueKeyOf(streamId), ItemsKeyOf(streamId)]);
 
     /// <summary>

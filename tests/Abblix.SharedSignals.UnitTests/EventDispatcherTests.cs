@@ -57,11 +57,11 @@ public class EventDispatcherTests
 
     private sealed class DenyAllPolicy : IEventSharingPolicy
     {
-        public ValueTask<bool> IsSharingPermittedAsync(
+        public Task<bool> IsSharingPermittedAsync(
             StreamState stream,
             SecurityEventDescriptor descriptor,
             CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(false);
+            => Task.FromResult(false);
     }
 
     private static StreamState CreateStream(

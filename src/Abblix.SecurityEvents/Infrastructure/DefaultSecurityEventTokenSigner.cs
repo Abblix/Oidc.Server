@@ -38,7 +38,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// <param name="signingKeySource">Supplies the private key each signing uses.</param>
 public sealed class DefaultSecurityEventTokenSigner(
     IJsonWebTokenCreator creator,
-    Func<CancellationToken, ValueTask<JsonWebKey>> signingKeySource) : ISecurityEventTokenSigner
+    Func<CancellationToken, Task<JsonWebKey>> signingKeySource) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     public async Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)

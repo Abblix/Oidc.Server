@@ -48,7 +48,7 @@ public sealed class SecurityEventsOptions
     /// and a pure receiver never does. Left null, resolving the signer fails loudly naming this
     /// property, instead of a transmitter discovering at first delivery that it signs nothing.
     /// </summary>
-    public Func<CancellationToken, ValueTask<JsonWebKey>>? SigningKeySource { get; set; }
+    public Func<CancellationToken, Task<JsonWebKey>>? SigningKeySource { get; set; }
 
     /// <summary>
     /// The reasons given for composing a validation pipeline without the default

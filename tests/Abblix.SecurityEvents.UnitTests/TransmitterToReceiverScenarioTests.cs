@@ -94,7 +94,7 @@ public class TransmitterToReceiverScenarioTests
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(key));
         services.AddSecurityEvents(options =>
         {
-            options.SigningKeySource = _ => ValueTask.FromResult(key);
+            options.SigningKeySource = _ => Task.FromResult(key);
             options.Events.Register<MembershipChangedPayload>(MembershipChanged);
         });
         services.AddDistributedMemoryCache();

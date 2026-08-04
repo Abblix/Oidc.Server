@@ -34,7 +34,7 @@ public sealed class InMemoryEventOutbox : IEventOutbox
     private readonly ConcurrentDictionary<string, List<OutboxItem>> _queues = new();
 
     /// <inheritdoc />
-    public ValueTask EnqueueAsync(
+    public Task EnqueueAsync(
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
@@ -48,18 +48,18 @@ public sealed class InMemoryEventOutbox : IEventOutbox
             queue.Add(item);
         }
 
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+    public Task<IReadOnlyList<OutboxItem>> PendingAsync(
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
     {
         if (!_queues.TryGetValue(streamId, out var queue))
         {
-            return ValueTask.FromResult<IReadOnlyList<OutboxItem>>([]);
+            return Task.FromResult<IReadOnlyList<OutboxItem>>([]);
         }
 
         lock (queue)
@@ -70,12 +70,12 @@ public sealed class InMemoryEventOutbox : IEventOutbox
                 head = head.Take(limit);
             }
 
-            return ValueTask.FromResult<IReadOnlyList<OutboxItem>>(head.ToArray());
+            return Task.FromResult<IReadOnlyList<OutboxItem>>(head.ToArray());
         }
     }
 
     /// <inheritdoc />
-    public ValueTask AcknowledgeAsync(
+    public Task AcknowledgeAsync(
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
@@ -91,13 +91,13 @@ public sealed class InMemoryEventOutbox : IEventOutbox
             }
         }
 
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default)
+    public Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
     {
         _queues.TryRemove(streamId, out _);
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 }

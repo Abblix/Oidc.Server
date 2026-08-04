@@ -73,7 +73,7 @@ public sealed class DistributedJtiReplayCache(
         : retention;
 
     /// <inheritdoc />
-    public async ValueTask<bool> TryRegisterAsync(
+    public async Task<bool> TryRegisterAsync(
         string issuer,
         string jwtId,
         DateTimeOffset issuedAt,

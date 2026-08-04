@@ -102,7 +102,7 @@ public class InfrastructureIntegrationTests
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(verificationKey));
         services.AddSecurityEvents(options =>
         {
-            options.SigningKeySource = _ => ValueTask.FromResult(signingKey);
+            options.SigningKeySource = _ => Task.FromResult(signingKey);
         });
 
         return services.BuildServiceProvider();
@@ -192,7 +192,7 @@ public class InfrastructureIntegrationTests
         services.AddLogging();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver());
-        services.AddSecurityEvents(options => options.SigningKeySource = _ => ValueTask.FromResult(key));
+        services.AddSecurityEvents(options => options.SigningKeySource = _ => Task.FromResult(key));
         await using var host = services.BuildServiceProvider();
 
         var compact = await SignedCompact(host);

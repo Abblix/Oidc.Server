@@ -37,7 +37,7 @@ public interface IStreamStore
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
     /// <returns>True when stored; false when a stream with the same receiver and identifier
     /// already exists.</returns>
-    ValueTask<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default);
+    Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Finds one stream of one receiver.
@@ -47,7 +47,7 @@ public interface IStreamStore
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
     /// <returns>The stream's state, or null when no such stream exists for this receiver.
     /// </returns>
-    ValueTask<StreamState?> FindAsync(
+    Task<StreamState?> FindAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default);
@@ -58,7 +58,7 @@ public interface IStreamStore
     /// </summary>
     /// <param name="receiverId">The receiver whose streams are listed.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask<IReadOnlyList<StreamState>> ListAsync(
+    Task<IReadOnlyList<StreamState>> ListAsync(
         string receiverId,
         CancellationToken cancellationToken = default);
 
@@ -67,7 +67,7 @@ public interface IStreamStore
     /// against all streams at once.
     /// </summary>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Replaces a stream's state with a new snapshot, keyed by its receiver and identifier.
@@ -75,7 +75,7 @@ public interface IStreamStore
     /// <param name="stream">The new state.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
     /// <returns>True when replaced; false when no such stream exists to replace.</returns>
-    ValueTask<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default);
+    Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a stream (SSF 1.0 Section 8.1.1.5).
@@ -84,7 +84,7 @@ public interface IStreamStore
     /// <param name="streamId">The stream's identifier.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
     /// <returns>True when deleted; false when no such stream existed.</returns>
-    ValueTask<bool> DeleteAsync(
+    Task<bool> DeleteAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default);

@@ -66,12 +66,12 @@ public class PushDeliveryHandlerTests
     {
         public List<ValidatedSecurityEventToken> Consumed { get; } = [];
 
-        public ValueTask<DeliveryError?> ConsumeAsync(
+        public Task<DeliveryError?> ConsumeAsync(
             ValidatedSecurityEventToken token,
             CancellationToken cancellationToken = default)
         {
             Consumed.Add(token);
-            return ValueTask.FromResult(refusal);
+            return Task.FromResult(refusal);
         }
     }
 
@@ -79,12 +79,12 @@ public class PushDeliveryHandlerTests
     {
         private readonly HashSet<(string, string)> _seen = [];
 
-        public ValueTask<bool> TryRegisterAsync(
+        public Task<bool> TryRegisterAsync(
             string issuer,
             string jwtId,
             DateTimeOffset issuedAt,
             CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(_seen.Add((issuer, jwtId)));
+            => Task.FromResult(_seen.Add((issuer, jwtId)));
     }
 
     [Fact]
