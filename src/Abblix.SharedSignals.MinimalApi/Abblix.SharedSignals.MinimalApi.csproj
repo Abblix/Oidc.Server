@@ -11,7 +11,7 @@
     <Title>Abblix Shared Signals Minimal API</Title>
     <Description>ASP.NET Core Minimal API integration for Abblix Shared Signals: maps the SSF 1.0 transmitter endpoints - configuration discovery, stream management, subjects, verification and poll delivery - and the receiver's push intake as route handlers, with no MVC dependency.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Security Identity AspNetCore Minimal-API dotnet</PackageTags>

@@ -11,7 +11,7 @@
     <Title>Abblix JWT</Title>
     <Description>A JWT and JOSE toolkit for .NET: token signing, encryption, validation, custom claims, and JSON Web Key handling. The token layer behind Abblix OIDC Server, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet</PackageTags>

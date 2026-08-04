@@ -11,7 +11,7 @@
     <Title>Abblix JWT Vault Custodian</Title>
     <Description>HashiCorp Vault / OpenBao Transit external-key integration for Abblix OIDC Server. Signs and unwraps with keys held inside Vault Transit (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, wired with an AddVaultCustodian call and the tier choice that follows it.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix JWT Vault OpenBao HashiCorp Transit HSM KMS External-Key Key-Management Custodian Signing Encryption JWKS Security OAuth OIDC dotnet</PackageTags>
