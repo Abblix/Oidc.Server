@@ -69,6 +69,10 @@ public class SubjectIdentifierNegativeTests
     [InlineData("""{"format":"iss_sub","iss":"","sub":"145234573"}""")]
     [InlineData("""{"format":"opaque","id":""}""")]
     [InlineData("""{"format":"aliases","identifiers":null}""")]
+    // An "ip-addresses" entry that is null or empty: every entry must be a non-empty string
+    // (SSF 1.0 Section 3.5.3).
+    [InlineData("""{"format":"ip-addresses","ip-addresses":["203.0.113.1",""]}""")]
+    [InlineData("""{"format":"ip-addresses","ip-addresses":[null]}""")]
     public void MissingOrEmptyRequiredMember_IsRejected(string json)
     {
         // The rejection originates in the subtype's own constructor - the same code path that

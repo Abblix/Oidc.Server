@@ -29,6 +29,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -47,6 +48,32 @@ public class InfrastructureIntegrationTests
     private const string MembershipChanged = "https://tenant.example.com/events/membership-changed";
 
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1754040000);
+
+    [Fact]
+    public void AddJwksKeyResolution_IsSelfSufficient_AndHonorsAHostPreRegistration()
+    {
+        // The extension owes its resolver every dependency it needs; constructing through the
+        // container is the proof of that, where reading the registration list is not.
+        var services = new ServiceCollection();
+        services.AddJwksKeyResolution(options => options.CacheLifetime = TimeSpan.FromMinutes(5));
+
+        using (var provider = services.BuildServiceProvider())
+        {
+            Assert.IsType<JwksIssuerKeyResolver>(provider.GetRequiredService<IIssuerKeyResolver>());
+            Assert.Equal(
+                TimeSpan.FromMinutes(5),
+                provider.GetRequiredService<IOptions<JwksKeyResolutionOptions>>().Value.CacheLifetime);
+        }
+
+        // TryAdd semantics: a host that already chose its resolver keeps it, whatever the order.
+        var preConfigured = new ServiceCollection();
+        var chosen = new FixedKeyResolver();
+        preConfigured.AddSingleton<IIssuerKeyResolver>(chosen);
+        preConfigured.AddJwksKeyResolution();
+
+        using var preProvider = preConfigured.BuildServiceProvider();
+        Assert.Same(chosen, preProvider.GetRequiredService<IIssuerKeyResolver>());
+    }
 
     /// <summary>
     /// A resolver over a fixed key set - the deployment-knowledge seam, which a test supplies

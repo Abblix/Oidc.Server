@@ -177,6 +177,50 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         Assert.Null(await client.GetAsync(streamId, cancellationToken));
     }
 
+    [Fact]
+    public async Task ManagementSurface_ReplacesTheStream_ReadsItsStatus_AndSubjectRemovalStopsMatching()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        var streamId = management.Created.StreamId;
+        var client = management.Client;
+
+        // The status read (SSF 1.0 Section 8.1.2.1): a fresh stream answers enabled, an unknown
+        // stream answers nothing rather than someone else's status.
+        var status = await client.GetStatusAsync(streamId, cancellationToken);
+        Assert.Equal(StreamStatuses.Enabled, status!.Status);
+        Assert.Null(await client.GetStatusAsync("no-such-stream", cancellationToken));
+
+        Assert.True(await client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
+
+        // The PUT replacement (SSF 1.0 Section 8.1.1.4) carries the full receiver-supplied set,
+        // and the answer is the whole configuration with the transmitter's delivery answer in it.
+        var replaced = await client.ReplaceAsync(
+            new UpdateStreamRequest
+            {
+                StreamId = streamId,
+                EventsRequested = [MembershipChanged],
+                Delivery = new PollDeliveryMethod(),
+            },
+            cancellationToken);
+        Assert.NotNull(Assert.IsType<PollDeliveryMethod>(replaced!.Delivery).EndpointUrl);
+        Assert.Equal([MembershipChanged], replaced.EventsDelivered);
+
+        // The subject survived the replacement: the event still fans out to this stream.
+        var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
+        Assert.Equal(1, await dispatcher.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken));
+
+        // Removal's CONSEQUENCE, not its status code: the same event now matches no stream.
+        Assert.True(await client.RemoveSubjectAsync(
+            new RemoveSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
+        Assert.Equal(0, await dispatcher.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken));
+    }
+
     private sealed record ManagementSurface(StreamManagementClient Client, StreamConfiguration Created);
 
     /// <summary>

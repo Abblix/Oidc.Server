@@ -418,6 +418,21 @@ public class SecurityEventTokenValidatorTests
     }
 
     [Fact]
+    public async Task UnconfiguredExpectedAudience_ThrowsAsAConfigurationBug_NotATokenError()
+    {
+        // An empty expectation must never become an "invalid token" verdict: with the check
+        // inverted a receiver would accept every audience for months while the logs blame the
+        // tokens, so AudienceStep treats the hole in the options as the receiver's own defect.
+        var options = new SecurityEventTokenValidationOptions { ExpectedIssuers = [Issuer] };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DefaultValidator().ValidateAsync(
+                ConformantCompact(),
+                options,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task PipelineWithoutATokenProducingStep_FailsLoudly_NotWithANull()
     {
         var validator = new CompositeSecurityEventTokenValidator([new ParseStep()]);

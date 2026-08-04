@@ -22,6 +22,8 @@
 
 using Abblix.SharedSignals.Redis;
 using Abblix.SharedSignals.Transmitter;
+using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 using Xunit;
 
 namespace Abblix.SharedSignals.Redis.UnitTests;
@@ -116,5 +118,51 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         await Task.WhenAll(AcknowledgeAsync(first, "a"), AcknowledgeAsync(second, "b"));
 
         Assert.Empty(await first.PendingAsync(streamId, null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AddSsfRedisOutbox_WinsOverTheRoleRegistration_AndWiresAWorkingOutbox()
+    {
+        // The explicit host choice must win in ANY order relative to the role registration -
+        // that is why the extension uses Replace rather than TryAdd - and the registration must
+        // construct a working instance, which only the container itself can prove.
+        var services = new ServiceCollection();
+        services.AddSingleton<IConnectionMultiplexer>(garnet.Connection);
+        services.AddSingleton<IEventOutbox, NeverCalledOutbox>();
+        services.AddSsfRedisOutbox();
+
+        await using var provider = services.BuildServiceProvider();
+        var outbox = Assert.IsType<RedisEventOutbox>(provider.GetRequiredService<IEventOutbox>());
+
+        var streamId = NewStreamId();
+        await outbox.EnqueueAsync(
+            streamId, new OutboxItem("jti-di", "x.y.z"), TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "jti-di",
+            Assert.Single(await outbox.PendingAsync(streamId, null, TestContext.Current.CancellationToken)).JwtId);
+    }
+
+    /// <summary>
+    /// The role registration the explicit choice must displace; reaching it would mean the
+    /// Replace semantics broke, so every member says so instead of answering.
+    /// </summary>
+    private sealed class NeverCalledOutbox : IEventOutbox
+    {
+        public ValueTask EnqueueAsync(
+            string streamId, OutboxItem item, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+            string streamId, int? maxCount = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public ValueTask AcknowledgeAsync(
+            string streamId,
+            IReadOnlyCollection<string> jwtIds,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }
