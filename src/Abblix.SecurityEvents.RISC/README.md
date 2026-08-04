@@ -25,7 +25,7 @@ dotnet add package Abblix.SecurityEvents.RISC
 | `opt-out-effective` | `OptOutEffectivePayload` |
 | `recovery-activated` | `RecoveryActivatedPayload` |
 | `recovery-information-changed` | `RecoveryInformationChangedPayload` |
-| `sessions-revoked` | `SessionsRevokedPayload` (deprecated by the specification; kept for receiving from older transmitters) |
+| `sessions-revoked` | `SessionsRevokedPayload` (deprecated by the specification; kept so it can still be received from older transmitters) |
 
 The compromised credential's `credential_type` takes its values from the CAEP Credential Change event, per the RISC specification's own cross-reference - the constants live in [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP), which this package depends on.
 
@@ -38,7 +38,7 @@ services.AddSecurityEvents(options => options.Events.RegisterRiscEvents());
 One call teaches the registry the whole dictionary; a validated SET's payloads then arrive as the typed models, and the sink pattern-matches:
 
 ```csharp
-if (token.EventPayloads[RiscEventTypes.CredentialCompromise] is CredentialCompromisePayload compromise)
+if (token.EventPayloads?.GetValueOrDefault(RiscEventTypes.CredentialCompromise) is CredentialCompromisePayload compromise)
 {
     // force a credential reset; compromise.CredentialType names what was burnt
 }

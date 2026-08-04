@@ -14,7 +14,12 @@ dotnet add package Abblix.SecurityEvents
 A SET is a JWT whose claims describe a security event. The builder enforces what the
 specification requires - issuer, token identifier, issue time and at least one event statement -
 and refuses what the profile forbids: the `typ` header is fixed to `secevent+jwt`, and `exp`
-cannot be written, because its absence is what stops a SET doubling as an ID or access token.
+cannot be written.
+
+RFC 8417 Section 2.2 rates `exp` NOT RECOMMENDED for a token that records
+history, and Sections 4.1 and 4.2 make omitting it one of the layers that keep a SET from being
+passed off as an ID or access token - defence in depth alongside explicit typing and a distinct
+audience, all of which this package applies.
 
 ```csharp
 using System.Text.Json;
@@ -45,8 +50,9 @@ signed. `Build()` alone returns the typed, unsigned model for inspection.
 
 Validation is a composed profile behind one interface. The default profile runs the receiver
 checks in their required order - parse, the `secevent+jwt` type header, the absence of `exp`,
-the presence of events, the issuer allowlist, the signature, the audience, the issued-at
-freshness window, and payload deserialization into the registered models.
+the presence of events, the presence of the REQUIRED `jti`, the issuer allowlist, the
+signature, the audience, the issued-at freshness window, and payload deserialization into the
+registered models.
 
 ```csharp
 var result = await validator.ValidateAsync(
@@ -66,9 +72,14 @@ if (result.TryGetSuccess(out var validated))
 
 A consumer profile edits the default steps in place through the composition cursor
 (`services.Decompose<ISecurityEventTokenValidator>()`) - inserting, replacing or removing steps
-without this package changing. A profile that removes or replaces a security-critical default
-must say why through `SecurityEventsOptions.AllowInsecureValidation(reason)`: the acknowledgement
-is logged at startup, and without it the weakened profile refuses to construct.
+without this package changing.
+
+A profile that removes or replaces a security-critical default
+must say why through `SecurityEventsOptions.AllowInsecureValidation(reason)`: the guard demands
+the acknowledgement when the validator is first constructed, logs it as a warning, and otherwise
+refuses to construct. Every door that edits the composition is inside its reach; the one thing it
+cannot cover is a host registering its own `ISecurityEventTokenValidator` after this call, which
+replaces the profile and the guard together - the host visibly taking ownership of validation.
 
 ## Wiring into a host
 
@@ -87,7 +98,9 @@ services.AddDistributedReplayCache(); // receivers: "jti" replay protection over
 A pure receiver registers a key resolver and never configures signing; a pure transmitter does
 the reverse. Event registrations go through `options.Events`: registered event types deserialize
 into their payload models, unregistered ones pass through as `UnknownEventPayload` rather than
-failing. Every registration lets a host pre-registration win.
+failing. Every registration lets a host pre-registration win - with one loud exception: the
+event registry has exactly one door (`options.Events`), and a second registry instance is
+refused at wiring time rather than silently orphaning half the registrations.
 
 ## Delivery types
 
@@ -103,7 +116,9 @@ A Subject Identifier is a JSON object that says who or what an event is about, a
 way that names the identification mechanism rather than leaving it to be guessed. An email
 address, an issuer and subject pair, an opaque database key and a phone number can all identify
 the same subject, and without the format name a receiver cannot tell which mechanism it is
-holding. What the subject *is* - a user, a mailbox, a device - stays between the transmitter and
+holding.
+
+What the subject *is* - a user, a mailbox, a device - stays between the transmitter and
 the receiver: the format never asserts it.
 
 ## What is here today
@@ -190,6 +205,10 @@ var options = new JsonSerializerOptions
 
 A name from the built-in vocabulary - RFC 9493 or Shared Signals - cannot be rebound, so a custom
 format can never change how a standard document is read.
+
+## Part of the Abblix family
+
+The event dictionaries [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) and [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) register their typed payloads over this package's event registry, and [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) carries the tokens built here over managed event streams; the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 

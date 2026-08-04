@@ -1,6 +1,6 @@
 # Abblix.Utils
 
-The foundation layer of the Abblix packages: the small, dependency-light pieces that security-focused code keeps needing - careful URI construction, log sanitization, cryptographic encodings, JSON converters for wire formats, and a Result type for expected failures. Every other Abblix package builds on it; it is equally usable on its own.
+The foundation layer of the Abblix packages: the small, dependency-light pieces that security-focused code keeps needing - careful URI construction, log sanitization, cryptographic encodings, JSON converters for wire formats, and a Result type for expected failures. The JWT, OIDC Server, Security Events and Shared Signals packages all build on it; it is equally usable on its own.
 
 ## Install
 
@@ -25,15 +25,17 @@ return result.Match(RenderTokens, RenderError);
 
 ### Log sanitization
 
-`Sanitized` wraps a value for logging so control characters cannot forge log lines. Anything a caller sent - identifiers, URIs, header values - goes through it before reaching a log template:
+`Sanitized` wraps a value for logging so an ASCII control character cannot forge a log line: at formatting time it escapes line breaks, tabs, quotes and separators, and strips the C0 range and DEL. Wrap anything a caller sent - identifiers, URIs, header values - before it reaches a log template:
 
 ```csharp
-logger.LogWarning("Unknown client {ClientId}", new Sanitized(clientId));
+logger.LogWarning("Unknown client {ClientId}", Sanitized.Value(clientId));
 ```
+
+The stripping runs in `ToString()`, so it protects the formatted message; a sink that serializes the wrapper's `Source` property instead reads the raw value by design.
 
 ### Cryptographic encodings and randomness
 
-`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in, and `CertificateId` with `ICertificateProvider` abstract certificate lookup.
+`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in, and `CertificateId` with `ICertificateProvider` abstracts certificate lookup.
 
 ### JSON converters for wire formats
 
@@ -41,7 +43,7 @@ Custom `System.Text.Json` converters for the shapes protocol messages actually u
 
 ### Distributed cache helpers
 
-`DistributedCacheExtensions` adds the operation `IDistributedCache` lacks for security bookkeeping: `TryAddAsync`, an add-if-absent that makes single-use semantics - replay caches, one-time codes - expressible over any cache backend.
+`DistributedCacheExtensions` adds the operation `IDistributedCache` lacks for security bookkeeping: `TryAddAsync`, an add-if-absent that expresses first-sighting checks - replay caches and similar - over any cache backend. It is Get-then-Set, because the interface exposes no compare-and-set, so the guarantee is probabilistic under concurrency; a domain needing strict exactly-once takes a backend-native atomic (`SET NX EX`, `INSERT ... ON CONFLICT DO NOTHING`) instead.
 
 ### Collections and enums
 

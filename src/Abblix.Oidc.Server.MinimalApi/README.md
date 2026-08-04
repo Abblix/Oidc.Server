@@ -14,11 +14,11 @@
 - **Single Route Group**: `MapOidcEndpoints()` returns the `RouteGroupBuilder`, so cross-cutting conventions (rate limiting, auth, filters) apply to all OIDC endpoints at once
 - **Endpoint Enablement**: each endpoint is mapped only when its flag is set in `OidcOptions.EnabledEndpoints`; a disabled endpoint is never registered and returns 404
 - **Configurable Routes & Prefix**: route templates default to `/connect/*` and `/.well-known/*`, overridable via `OidcRouteOptions`, with an optional path prefix
-- **CORS-aware**: cross-origin endpoints (checksession, token, revoke, userinfo, endsession) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
+- **CORS-aware**: cross-origin endpoints (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
 - **Discovery Endpoint**: auto-configured `/.well-known/openid-configuration` metadata
 - **Dynamic Client Registration**: REST API for client management per RFC 7591/7592
 
-## Installation
+## Install
 
 ```bash
 dotnet add package Abblix.OIDC.Server.MinimalApi
@@ -38,6 +38,9 @@ builder.Services.AddOidcServices(options =>
 
 var app = builder.Build();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapOidcEndpoints();
 
 app.Run();
@@ -56,7 +59,7 @@ An optional prefix mounts every endpoint under a sub-path:
 app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-known/jwks
 ```
 
-Endpoints that allow cross-origin requests (checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them registers a CORS policy named `OidcConstants.CorsPolicyName` and calls `app.UseCors()`.
+Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them must register a CORS policy named `OidcConstants.CorsPolicyName` and call `app.UseCors()`.
 
 ## Migrating from the MVC integration
 
@@ -72,7 +75,7 @@ A host that needs an OIDC endpoint's URL - to point an external identity provide
 var authorizationUrl = resolver.Resolve(OidcEndpoints.Authorize);
 ```
 
-Both integrations register it, so this code is written once and survives a change of adapter. The answer comes from the endpoints as mapped, so a route override or a `MapOidcEndpoints(prefix)` prefix is already in it, and an endpoint the host does not serve resolves to `null`.
+Both transport adapters register it, so this code is written once and survives a change of adapter. The answer comes from the endpoints as mapped, so a route override or a `MapOidcEndpoints(prefix)` prefix is already in it, and an endpoint the host does not serve resolves to `null`.
 
 ## Implemented Standards
 
@@ -89,11 +92,13 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 | Package | Description |
 |---------|-------------|
 | **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | Advanced .NET DI extensions with aliasing, composites, and decorators |
+| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET MVC integration for OIDC server |
-| **Abblix.OIDC.Server.MinimalApi** | ASP.NET Core Minimal API integration for OIDC server *(this package)* |
+| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
+| **Abblix.OIDC.Server.MinimalApi** | ASP.NET Core Minimal API integration *(this package)* |
+| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
+| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
 ## Getting Started
 
@@ -106,6 +111,6 @@ Abblix.OIDC.Server.MinimalApi is licensed under the Abblix license agreement. Se
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

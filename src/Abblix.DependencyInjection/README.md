@@ -48,7 +48,7 @@ Members keep their own lifetimes, the composite adopts the shortest among them, 
 services.Decorate<ITokenValidator, LoggingTokenValidator>();
 ```
 
-Keyed services have mirrored forms: `ComposeKeyed` and `DecorateKeyed`.
+Both operations have keyed counterparts: `ComposeKeyed` and `DecorateKeyed`.
 
 ## Per-call overrides
 

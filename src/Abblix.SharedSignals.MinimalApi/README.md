@@ -25,7 +25,9 @@ var app = builder.Build();
 app.MapSsfTransmitterEndpoints("/ssf").RequireAuthorization("ssf-receivers");
 ```
 
-One call maps the whole management surface under the prefix - streams, status, subjects, verification, poll delivery - plus the configuration document at the well-known address the issuer resolves to. The well-known endpoint stays outside the returned group on purpose: discovery must answer before any receiver has credentials, so the authorization you attach to the group does not cover it.
+One call maps the whole management surface under the prefix - streams, status, subjects, verification, poll delivery - plus the configuration document at the well-known address the issuer resolves to.
+
+The well-known endpoint stays outside the returned group on purpose: discovery must answer before any receiver has credentials, so the authorization you attach to the group does not cover it. What it serves is public metadata - issuer, JWKS location, endpoint addresses, supported delivery methods and authorization schemes - and nothing stream- or receiver-specific; poll delivery sits inside the group, which is where SSF 1.0 Section 7.1.1 wants it.
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SsfEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
@@ -39,7 +41,7 @@ What one call maps, relative to the prefix:
 | `/verify` | POST | verification request, Section 8.1.4 |
 | `/poll/{streamId}` | POST | poll delivery, RFC 8936 |
 
-The configuration document at `/.well-known/ssf-configuration` advertises exactly these addresses, so a receiver never guesses them - and the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else.
+The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address is the one exception: it travels per stream and comes from your `PollEndpointFactory`, so keep that factory aligned with the prefix you pass here.
 
 ## Receiver
 
@@ -47,6 +49,7 @@ The configuration document at `/.well-known/ssf-configuration` advertises exactl
 builder.Services
     .AddSecurityEvents()
     .AddJwksKeyResolution()
+    .AddDistributedMemoryCache()   // or Redis - the replay cache rides the host's IDistributedCache
     .AddDistributedReplayCache()
     .AddSsfReceiver(new SsfValidationOptions
     {
@@ -57,10 +60,13 @@ builder.Services
     .AddSingleton<ISecurityEventSink, MyEventSink>();
 
 var app = builder.Build();
-app.MapSsfPushEndpoint("/events");
+app.MapSsfPushEndpoint("/events")
+    .RequireAuthorization("ssf-transmitters");
 ```
 
 The push endpoint answers the empty 202 or the 400 whose body speaks the RFC 8935 registry vocabulary; where accepted events land is the host's `ISecurityEventSink`.
+
+Signature validation decides whether an event is genuine, but it is not what keeps the endpoint standing: an unauthenticated route spends a cryptographic verification on every body posted to it, which RFC 8935 Section 5.4 names as the recipient's denial-of-service exposure and answers with transmitter authentication and rate limiting. Attach both - the returned builder takes the host's conventions like any other route.
 
 ## License
 

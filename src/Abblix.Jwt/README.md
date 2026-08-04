@@ -14,7 +14,7 @@ dotnet add package Abblix.JWT
 services.AddJsonWebTokens();
 ```
 
-The registration provides `IJsonWebTokenCreator` and `IJsonWebTokenValidator`. Issuing signs the token with the key you pass, and encrypts it when an encryption key is passed too:
+The registration provides `IJsonWebTokenCreator` and `IJsonWebTokenValidator`. Issuing signs the token with the key you pass, and encrypts it when you also pass an encryption key:
 
 ```csharp
 var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
@@ -33,7 +33,9 @@ var jwt = await creator.IssueAsync(
     key);
 ```
 
-Validation is exception-free: the verdict is a `Result` carrying either the parsed token or the error naming what failed, and the parameters carry the checks as delegates, so issuer trust and key resolution stay the caller's policy:
+Validation returns a verdict rather than throwing on a bad token: the result is a `Result` carrying either the parsed token or the error naming what failed - malformed input, unknown algorithm, bad signature, unmet issuer or audience policy - and the parameters carry the checks as delegates, so issuer trust and key resolution stay the caller's policy.
+
+Two classes of failure still surface as exceptions, both after the signature has been verified: an `exp`/`nbf` value that is not a number or falls outside `DateTimeOffset`'s range, and a resolved key carrying no public material - wrap the call if your endpoint must answer every input with a protocol error:
 
 ```csharp
 var result = await validator.ValidateAsync(jwt, new ValidationParameters
@@ -54,11 +56,11 @@ The payload is a `JsonObject` underneath, so claims keep their JSON types - numb
 
 ## Hardening built in
 
-The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm (RFC 7517 Section 4.4), an HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a JWS `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token (RFC 7515 Section 4.1.11).
+The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11).
 
 ## External keys
 
-Signing does not require the private key to live in the process: the custodian seam (`AddKeyCustodian`) delegates the cryptographic operation to an external holder, with ready-made custodians for HashiCorp Vault / OpenBao ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) and Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)).
+Signing and decryption do not require the private key to live in the process: the custodian seam delegates the cryptographic operation to an external holder - `AddVaultCustodian` for HashiCorp Vault / OpenBao ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)), `AddAzureCustodian` for Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)), both built on this package's `AddKeyCustodian`.
 
 ## Implemented standards
 

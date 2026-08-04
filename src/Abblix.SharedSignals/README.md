@@ -1,6 +1,6 @@
 # Abblix.SharedSignals
 
-The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for .NET: transmitter and receiver in one package, built over [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). A transmitter tells its receivers that something security-relevant happened to a shared subject - a session revoked, a credential compromised - and this package carries both ends of that conversation: the event streams, their management API, and delivery over push (RFC 8935) and poll (RFC 8936).
+The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for .NET: transmitter and receiver in one package, built on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). A transmitter tells its receivers that something security-relevant happened to a shared subject - a session revoked, a credential compromised - and this package carries both ends of that conversation: the event streams, their management API, and delivery over push (RFC 8935) and poll (RFC 8936).
 
 ## What is inside
 
@@ -14,8 +14,8 @@ The transmitter side:
 
 The receiver side:
 
-- `TransmitterConfigurationClient` discovers a transmitter, `StreamManagementClient` drives its management API, `PollClient` fetches and acknowledges events.
-- A push intake that runs the full validation pipeline of Abblix.SecurityEvents - signature, issuer, audience, typ, replay - and hands each verified event to the host's `ISecurityEventSink`, exactly once per event.
+- `TransmitterConfigurationClient` discovers a transmitter, `StreamManagementClient` drives its management API, `PollClient` fetches and acknowledges events - transport only, so a poll-based receiver runs the validation profile and the sink itself.
+- A push intake that runs the full validation profile of Abblix.SecurityEvents - typ, `exp` absence, events, the REQUIRED `jti`, issuer, signature, audience, `iat` freshness - and hands each accepted event to the host's `ISecurityEventSink`. Duplicate suppression rides alongside the profile: the opt-in replay cache is consulted after the verdict, so a rejected token can never burn an identifier.
 
 The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi); this package is host-framework-neutral.
 
@@ -23,6 +23,7 @@ The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix
 
 ```bash
 dotnet add package Abblix.SharedSignals
+dotnet add package Abblix.SecurityEvents.CAEP   # the samples below use the CAEP event dictionary
 ```
 
 ## A transmitter
@@ -66,18 +67,20 @@ builder.Services.AddSsfReceiver(new SsfValidationOptions
 builder.Services.AddSingleton<ISecurityEventSink, MySink>();
 ```
 
-The sink is where the host reacts - terminate the local session, force a credential reset - and the pipeline guarantees each event reaches it verified and only once, however many times the transmitter redelivers.
+The sink is where the host reacts - terminate the local session, force a credential reset - and the push pipeline hands it only events that passed the full validation profile, the REQUIRED `jti` included, so every accepted event is trackable.
+
+Duplicate suppression is a separate opt-in tier: register `AddDistributedReplayCache()` backed by a cache shared by every receiver instance, and the pipeline skips a redelivery whose `jti` it has already seen. The underlying add-if-absent is probabilistic rather than strict, and RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier responses - so write the sink to be idempotent and treat duplicate suppression as the second line, not the first.
 
 ## Storage
 
-Stream state and the outbox are deliberately separate tiers:
+Stream state and the outbox are deliberately separate tiers, and both default to in-memory stores (`InMemoryStreamStore`, `InMemoryEventOutbox`):
 
-- Streams can live in configuration: `ConfigurationStreamStore` reads declared streams from `appsettings.json`, which suits a closed deployment where the receivers are known - nothing to back up, nothing to migrate.
-- The outbox holds events between minting and delivery. The in-package `DistributedCacheEventOutbox` is correct for a single transmitter instance; a transmitter running replicas takes [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis), whose server-side atomic operations survive concurrency. Losing the outbox loses pending events, and the protocols budget for that (SSF 1.0 Section 8.1.2.1) - the queue belongs beside caches, not beside data that earns backups.
+- Streams can live in configuration: `AddSsfConfiguredStreams` accepts streams the host declares - typically bound from `appsettings.json` into `ConfiguredStream[]` - which suits a closed deployment where the receivers are known: nothing to back up or migrate.
+- The outbox holds events between minting and delivery. `AddSsfDistributedOutbox()` moves it onto the host's `IDistributedCache` - correct for a single transmitter instance; a transmitter running replicas takes [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis), whose server-side transactions survive concurrency. Losing the outbox loses pending events, and the protocol tolerates that: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held for a paused stream, and neither delivery RFC requires durable queues - so the queue belongs beside caches, the tier that earns no backups.
 
 ## Event dictionaries
 
-The framework carries events; their vocabularies ship as separate dictionary packages registered over the same event registry: [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) for session and access lifecycle, [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) for account risk incidents, and any host-defined events via `EventTypeRegistry.Register`.
+The framework carries events; their vocabularies ship as separate dictionary packages registered in the same event registry: [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) for session and access lifecycle, [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) for account risk incidents, and any host-defined events via `options.Events.Register`.
 
 ## License
 

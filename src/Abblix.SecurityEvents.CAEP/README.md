@@ -32,7 +32,7 @@ services.AddSecurityEvents(options => options.Events.RegisterCaepEvents());
 One call teaches the registry the whole dictionary; a validated SET's payloads then arrive as the typed models, and the sink pattern-matches:
 
 ```csharp
-if (token.EventPayloads[CaepEventTypes.SessionRevoked] is SessionRevokedPayload revoked)
+if (token.EventPayloads?.GetValueOrDefault(CaepEventTypes.SessionRevoked) is SessionRevokedPayload revoked)
 {
     // terminate the local session; revoked.ReasonUser carries the sentence to show
 }
