@@ -28,6 +28,7 @@
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
+    <Project Path="src/Abblix.SecurityEvents.CAEP/Abblix.SecurityEvents.CAEP.csproj" />
     <Project Path="src/Abblix.SharedSignals/Abblix.SharedSignals.csproj" />
     <Project Path="src/Abblix.SharedSignals.MinimalApi/Abblix.SharedSignals.MinimalApi.csproj" />
   </Folder>
@@ -46,6 +47,7 @@
     <Project Path="tests/Abblix.Jwt.Vault.UnitTests/Abblix.Jwt.Vault.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Azure.UnitTests/Abblix.Jwt.Azure.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.UnitTests/Abblix.SecurityEvents.UnitTests.csproj" />
+    <Project Path="tests/Abblix.SecurityEvents.CAEP.UnitTests/Abblix.SecurityEvents.CAEP.UnitTests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.UnitTests/Abblix.SharedSignals.UnitTests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.E2E.Tests/Abblix.SharedSignals.E2E.Tests.csproj" />
   </Folder>
