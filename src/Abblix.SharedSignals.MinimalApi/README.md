@@ -29,6 +29,8 @@ One call maps the whole management surface under the prefix - streams, status, s
 
 The well-known endpoint stays outside the returned group on purpose: discovery must answer before any receiver has credentials, so the authorization you attach to the group does not cover it. What it serves is public metadata - issuer, JWKS location, endpoint addresses, supported delivery methods and authorization schemes - and nothing stream- or receiver-specific; poll delivery sits inside the group, which is where SSF 1.0 Section 7.1.1 wants it.
 
+A gateway-fronted deployment adjusts this without moving the protocol address: `MapSsfTransmitterEndpoints(prefix, mapWellKnownConfiguration: false)` leaves the canonical route to the gateway or CDN in front, and `MapSsfConfigurationDocument(advertisedPrefix, pattern)` serves the same document on an internal route a rewriting proxy maps the canonical address onto - advertising the external prefix, whatever was mapped internally. The external address never moves, because receivers derive it from the issuer.
+
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SsfEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
 What one call maps, relative to the prefix:

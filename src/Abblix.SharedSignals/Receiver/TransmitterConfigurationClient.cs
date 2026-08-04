@@ -53,13 +53,46 @@ public sealed class TransmitterConfigurationClient(HttpClient httpClient)
     /// SSF counterpart of the identity check every discovery protocol makes, without which a
     /// document served on one issuer's path could impersonate another issuer of the same host.
     /// </exception>
-    public async Task<TransmitterConfiguration> GetAsync(
+    public Task<TransmitterConfiguration> GetAsync(
         Uri issuer,
         CancellationToken cancellationToken = default)
     {
-        var address = TransmitterConfiguration.WellKnownAddress(issuer);
+        ArgumentNullException.ThrowIfNull(issuer);
 
-        using var response = await httpClient.GetAsync(address, cancellationToken);
+        return GetAsync(issuer, TransmitterConfiguration.WellKnownAddress(issuer), cancellationToken);
+    }
+
+    /// <summary>
+    /// Fetches the Transmitter Configuration Metadata for <paramref name="issuer"/> from an
+    /// explicitly named address instead of the one the issuer resolves to.
+    /// </summary>
+    /// <remarks>
+    /// The insertion-derived well-known address is the conformant location (SSF 1.0
+    /// Section 7.2) and the parameterless overload is the normal door. This one exists for
+    /// transmitters that publish the document elsewhere - a non-conformant implementation, or a
+    /// deployment quirk the receiver cannot fix from its side. Every check stays in force, the
+    /// issuer identity above all: the address only says where the bytes come from, never who
+    /// they speak for.
+    /// </remarks>
+    /// <param name="issuer">The transmitter's issuer identifier, from a trusted source - still
+    /// the identity the document must assert.</param>
+    /// <param name="metadataAddress">Where the document is fetched from.</param>
+    /// <param name="cancellationToken">Cancels the fetch.</param>
+    /// <returns>The metadata document, its issuer identity confirmed.</returns>
+    /// <exception cref="HttpRequestException">The transmitter answered with an error status.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The document is empty, arrives under a media type other than "application/json", or
+    /// asserts an issuer other than <paramref name="issuer"/>.</exception>
+    public async Task<TransmitterConfiguration> GetAsync(
+        Uri issuer,
+        Uri metadataAddress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(issuer);
+        ArgumentNullException.ThrowIfNull(metadataAddress);
+
+        using var response = await httpClient.GetAsync(metadataAddress, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Section 7.2 requires the document be returned as "application/json", and the check is
@@ -70,13 +103,13 @@ public sealed class TransmitterConfigurationClient(HttpClient httpClient)
         if (!string.Equals(mediaType, MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"The document at '{address}' arrived as '{mediaType ?? "(no content type)"}', where "
+                $"The document at '{metadataAddress}' arrived as '{mediaType ?? "(no content type)"}', where "
                 + "SSF 1.0 Section 7.2 requires \"application/json\".");
         }
 
         var metadata = await response.Content.ReadFromJsonAsync<TransmitterConfiguration>(cancellationToken)
             ?? throw new InvalidOperationException(
-                $"The transmitter configuration document at '{address}' deserialized to null.");
+                $"The transmitter configuration document at '{metadataAddress}' deserialized to null.");
 
         // Compared as normalized absolute URIs, not with Uri.Equals: Uri equality disregards
         // userinfo and fragment, so "https://evil@tr.example.com" would pass for
@@ -87,7 +120,7 @@ public sealed class TransmitterConfigurationClient(HttpClient httpClient)
             || !string.Equals(declaredIssuer.AbsoluteUri, issuer.AbsoluteUri, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"The document at '{address}' asserts the issuer '{metadata.Issuer}', not the "
+                $"The document at '{metadataAddress}' asserts the issuer '{metadata.Issuer}', not the "
                 + $"'{issuer}' it was fetched for; accepting it would let one issuer of a host "
                 + "answer for another (SSF 1.0 Sections 7.1, 7.2).");
         }
