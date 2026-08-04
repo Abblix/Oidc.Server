@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
 /// Applies the protocol-level encoding of an authorization response in the framework-agnostic core:
-/// the <c>iss</c> (RFC 9207) and implicit/hybrid <c>scope</c> gating, and — when the client requested
-/// a JARM (<c>*.jwt</c>) response mode — packing all response parameters into the <c>response</c> JWT
+/// the <c>iss</c> (RFC 9207) and implicit/hybrid <c>scope</c> gating, and - when the client requested
+/// a JARM (<c>*.jwt</c>) response mode - packing all response parameters into the <c>response</c> JWT
 /// and resolving the plaintext delivery mode.
 /// </summary>
 /// <remarks>

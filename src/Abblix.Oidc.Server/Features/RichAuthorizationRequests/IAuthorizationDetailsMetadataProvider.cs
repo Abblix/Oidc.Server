@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <summary>
 /// Discovery metadata contributor for the RFC 9396 Rich Authorization Requests feature.
 /// Sources the set of <c>authorization_details</c> types the server supports, projected from
-/// the same keyed-DI registry that request-time dispatch uses — single source of truth for
+/// the same keyed-DI registry that request-time dispatch uses - single source of truth for
 /// «what does this server understand».
 /// </summary>
 public interface IAuthorizationDetailsMetadataProvider

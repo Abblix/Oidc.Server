@@ -120,7 +120,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
         var accessToken = await ObtainDPoPBoundAccessTokenAsync(client, discovery, bindingKey);
 
-        // Proof signed with a different key — the attacker stole the token but lacks the
+        // Proof signed with a different key - the attacker stole the token but lacks the
         // private key the token was bound to. The AS computes the proof's jkt and finds
         // it doesn't match the token's cnf.jkt. RFC 9449 §7.1: the resource server SHOULD
         // accompany the 401 with a WWW-Authenticate: DPoP challenge so the client knows

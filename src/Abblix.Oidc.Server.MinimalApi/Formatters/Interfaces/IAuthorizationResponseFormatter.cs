@@ -27,7 +27,7 @@ using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 
 /// <summary>
-/// Formats an authorization response into an <see cref="IResult"/> — delivering it to the client's redirect URI via
+/// Formats an authorization response into an <see cref="IResult"/> - delivering it to the client's redirect URI via
 /// query, fragment or form_post, redirecting to an interaction page, or surfacing a no-redirect error.
 /// </summary>
 public interface IAuthorizationResponseFormatter

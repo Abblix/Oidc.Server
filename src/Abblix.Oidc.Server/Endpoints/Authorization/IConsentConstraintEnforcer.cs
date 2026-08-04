@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// <c>authorization_details</c> without intersecting against the request would let a user escalate
 /// their own grant. The provider returning anything outside the request is a defect in the host's
 /// code (or browser tampering its provider failed to defend against), so the enforcer fails loud
-/// with an exception rather than masking it as a recoverable OAuth error — it surfaces in the
+/// with an exception rather than masking it as a recoverable OAuth error - it surfaces in the
 /// debugger, fails the host's tests, and is logged as a server error in production while no
 /// escalated grant is issued.
 /// </remarks>
@@ -54,7 +54,7 @@ public interface IConsentConstraintEnforcer
     /// <param name="granted">The consent decision produced by <see cref="IUserConsentsProvider"/>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="InvalidOperationException">Thrown when the granted set contains a scope,
-    /// resource, resource scope or <c>authorization_details</c> entry absent from — or broader than —
+    /// resource, resource scope or <c>authorization_details</c> entry absent from - or broader than -
     /// the request.</exception>
     Task EnforceAsync(
         ValidAuthorizationRequest request,

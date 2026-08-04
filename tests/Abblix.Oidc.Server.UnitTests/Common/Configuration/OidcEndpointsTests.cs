@@ -26,7 +26,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// Pins the composition of <see cref="OidcEndpoints.Base"/> — the default value of
+/// Pins the composition of <see cref="OidcEndpoints.Base"/> - the default value of
 /// <see cref="OidcOptions.EnabledEndpoints"/>. Base is the always-on interactive OIDC core plus PAR and
 /// RP-initiated logout; the six niche or security-sensitive endpoints are opt-in and must stay out of it. Locking
 /// the set here makes any accidental widening (e.g. adding a new flag to Base) a failing test rather than a

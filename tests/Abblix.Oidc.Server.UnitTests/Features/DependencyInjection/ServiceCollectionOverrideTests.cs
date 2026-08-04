@@ -225,7 +225,7 @@ public class ServiceCollectionOverrideTests
     public void AddClientInformation_HostPreregisteredClientInfoProvider_Wins()
     {
         // Issue #226: the alias registrations must honor a host pre-registration the same
-        // way TryAdd* seams do — "store clients in your own database" is the flagship case.
+        // way TryAdd* seams do - "store clients in your own database" is the flagship case.
         var services = new ServiceCollection();
         var stub = new Mock<IClientInfoProvider>().Object;
         services.AddSingleton<IClientInfoProvider>(stub);
@@ -476,7 +476,7 @@ public class ServiceCollectionOverrideTests
 
     /// <summary>
     /// PBES2 is deliberately absent from the <c>AddJsonWebTokens</c> defaults (the 'p2c' header of an
-    /// inbound token dictates pre-authentication PBKDF2 work — the CVE-2022-36083 class of denial of
+    /// inbound token dictates pre-authentication PBKDF2 work - the CVE-2022-36083 class of denial of
     /// service), and a host that opts in via <c>AddPbes2KeyManagement</c> gets the family registered
     /// and advertised.
     /// </summary>

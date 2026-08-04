@@ -49,7 +49,7 @@ public static class ResponseTypes
 	/// <summary>
 	/// Represents the "none" response type (OAuth 2.0 Multiple Response Type Encoding Practices §4).
 	/// The authorization request runs to completion but the response returns no authorization code and
-	/// no tokens — only <c>state</c> and, when advertised, <c>iss</c> (RFC 9207). It authorizes a grant
+	/// no tokens - only <c>state</c> and, when advertised, <c>iss</c> (RFC 9207). It authorizes a grant
 	/// without returning credentials to the client at that time. This value MUST NOT be combined with
 	/// any other response type.
 	/// </summary>

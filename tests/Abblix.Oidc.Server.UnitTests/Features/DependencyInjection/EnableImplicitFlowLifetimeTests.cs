@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
 /// <summary>
 /// Guards the DI lifetime contract of the authorization response builders. A host that builds its
-/// service provider with scope validation (<c>ValidateScopes</c> / <c>ValidateOnBuild</c> — the
+/// service provider with scope validation (<c>ValidateScopes</c> / <c>ValidateOnBuild</c> - the
 /// ASP.NET Core default in Development and a production best practice) must not hit a captive
 /// dependency. Regression for the v2.3 release cycle: <c>EnableImplicitFlow()</c> registered the
 /// id-token response builder as a singleton that consumed the scoped identity-token service, so

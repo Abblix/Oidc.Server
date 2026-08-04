@@ -116,7 +116,7 @@ public class RequestObjectFetcherTests
     [Fact]
     public async Task FetchAsync_FapiProfileClient_ProcessesStrictlyAndWarnsOnOutsideParameter()
     {
-        // Arrange — the global default stays merge; the FAPI profile is what forces strict for this client.
+        // Arrange - the global default stays merge; the FAPI profile is what forces strict for this client.
         Assert.False(_oidcOptions.IgnoreParametersOutsideRequestObject);
         _logger.Setup(l => l.IsEnabled(LogLevel.Warning)).Returns(true);
         var fetcher = CreateFetcher();
@@ -141,7 +141,7 @@ public class RequestObjectFetcherTests
         // Act
         var result = await fetcher.FetchAsync(request, jwt);
 
-        // Assert — the payload bound onto a fresh model (the outside-only state is gone) and the drop was logged.
+        // Assert - the payload bound onto a fresh model (the outside-only state is gone) and the drop was logged.
         Assert.True(result.TryGetSuccess(out var value));
         Assert.NotSame(request, value);
         Assert.Null(value!.State);
@@ -271,7 +271,7 @@ public class RequestObjectFetcherTests
     [Fact]
     public async Task FetchAsync_WithRequestObjectAlgorithmMismatch_ShouldReturnError()
     {
-        // Arrange — the request object is signed with RS384, but the client registered RS256.
+        // Arrange - the request object is signed with RS384, but the client registered RS256.
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "header.payload.signature";
@@ -286,7 +286,7 @@ public class RequestObjectFetcherTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
-        // Act — the binder is strict and unset, so the alg pin must reject before any binding.
+        // Act - the binder is strict and unset, so the alg pin must reject before any binding.
         var result = await fetcher.FetchAsync(request, jwt, client => client.RequestObjectSigningAlgorithm);
 
         // Assert
@@ -854,13 +854,13 @@ public class RequestObjectFetcherTests
 
     /// <summary>
     /// RFC 9101 §10.5: a client registered with require_signed_request_object committed to SIGNED
-    /// request objects — an unsigned (alg=none) object passes structural validation but must be
+    /// request objects - an unsigned (alg=none) object passes structural validation but must be
     /// rejected by the per-client commitment even when the server-wide requirement is off.
     /// </summary>
     [Fact]
     public async Task FetchAsync_UnsignedObjectFromCommittedClient_ShouldFail()
     {
-        // Arrange — server-wide RequireSignedRequestObject stays off.
+        // Arrange - server-wide RequireSignedRequestObject stays off.
         var fetcher = CreateFetcher();
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
         var jwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
@@ -910,7 +910,7 @@ public class RequestObjectFetcherTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
-        // The binder must receive a FRESH target, not the outer request — that is what makes the
+        // The binder must receive a FRESH target, not the outer request - that is what makes the
         // outer parameters invisible to the merged result.
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(

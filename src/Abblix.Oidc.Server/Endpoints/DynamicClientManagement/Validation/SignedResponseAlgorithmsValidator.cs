@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// signing algorithms; in addition, JARM §3 forbids <c>none</c> for the authorization response.
 /// </summary>
 /// <param name="jwtAlgorithms">Source of supported signing algorithms for outbound tokens. The same
-/// provider feeds the discovery document, so DCR accepts exactly what the server advertises —
+/// provider feeds the discovery document, so DCR accepts exactly what the server advertises -
 /// in particular HS* stays rejected here for the same key-availability reason it is not
 /// advertised (client secrets are stored hashed and cannot serve as HMAC keys).</param>
 public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : SyncClientRegistrationContextValidator
@@ -61,7 +61,7 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     /// <summary>
     /// Validates <c>id_token_signed_response_alg</c>. OIDC Registration 1.0 §2: the value none MUST
     /// NOT be used unless the client uses only response types that return no ID Token from the
-    /// authorization endpoint — an unsigned ID Token delivered through the browser would be
+    /// authorization endpoint - an unsigned ID Token delivered through the browser would be
     /// modifiable in transit.
     /// </summary>
     private OidcError? ValidateIdTokenSignedResponseAlg(Model.ClientRegistrationRequest request)

@@ -7,8 +7,8 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Provides access to the collection of signing algorithms supported by the JWT infrastructure.
 /// Projects the set from the live keyed <see cref="ISignatureAlgorithm{TJsonWebKey}"/> registrations, so
-/// discovery always reflects exactly the signers the host currently has registered — including
-/// algorithms the host added or replaced — with no registration-time bookkeeping to keep in sync.
+/// discovery always reflects exactly the signers the host currently has registered - including
+/// algorithms the host added or replaced - with no registration-time bookkeeping to keep in sync.
 /// </summary>
 /// <remarks>
 /// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenSigner"/>: a signer

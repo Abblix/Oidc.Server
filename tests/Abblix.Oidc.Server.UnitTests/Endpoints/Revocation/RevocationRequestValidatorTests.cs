@@ -143,7 +143,7 @@ public class RevocationRequestValidatorTests
 
     /// <summary>
     /// RFC 7009 §5: "a client's request must contain a valid client_id, in the case of a public
-    /// client, or valid client credentials, in the case of a confidential client" — a public
+    /// client, or valid client credentials, in the case of a confidential client" - a public
     /// client revoking its own token is protocol-legal, and the token-ownership check is the
     /// protection the spec actually mandates. Rejecting public clients here would leave SPA and
     /// native clients unable to revoke their refresh tokens on logout.

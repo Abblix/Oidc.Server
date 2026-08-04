@@ -73,7 +73,7 @@ public class ComposeTests
     /// The core regression. A second composition of the same composite (what a double opt-in produces once the
     /// first Compose has removed the leaves and the second call re-adds them) must throw at registration time
     /// rather than silently building a composite whose alias child resolves back to the composite under
-    /// construction — a singleton that deadlocks forever on first resolve. Asserting the throw is safe because
+    /// construction - a singleton that deadlocks forever on first resolve. Asserting the throw is safe because
     /// the collection is never resolved, so the latent deadlock is never reached.
     /// </summary>
     [Fact]

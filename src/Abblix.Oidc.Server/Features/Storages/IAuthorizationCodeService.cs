@@ -63,13 +63,13 @@ public interface IAuthorizationCodeService
     /// Atomically removes an authorization code from storage and returns the grant it held, in a
     /// single get-and-remove operation. This is how a code is claimed for redemption: it enforces
     /// the single-use guarantee against a race between two simultaneous redemptions of the same
-    /// code (RFC 6749 §4.1.2) — exactly one caller wins and receives the grant, every other caller
+    /// code (RFC 6749 §4.1.2) - exactly one caller wins and receives the grant, every other caller
     /// finds the code already gone and receives an <c>invalid_grant</c> failure.
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
     /// <returns>
     /// The grant on success when this caller won the claim; an <c>invalid_grant</c>
-    /// <see cref="OidcError"/> when the code is absent — already claimed by a concurrent request,
+    /// <see cref="OidcError"/> when the code is absent - already claimed by a concurrent request,
     /// already consumed, expired, or never issued.
     /// </returns>
     /// <remarks>

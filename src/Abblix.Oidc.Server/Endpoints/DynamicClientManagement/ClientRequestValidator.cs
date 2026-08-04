@@ -67,7 +67,7 @@ public class ClientRequestValidator(
             // RFC 7592 §2.3: when the addressed client does not exist, the server responds
             // 401 Unauthorized and the registration access token MUST be immediately revoked.
             // The error is invalid_token, not invalid_client: this endpoint authenticates with a
-            // Bearer token (RFC 6750), and invalid_client would be formatted as a Basic challenge —
+            // Bearer token (RFC 6750), and invalid_client would be formatted as a Basic challenge -
             // an authentication scheme the configuration endpoint never accepts.
             await registrationAccessTokenStore.RemoveAsync(clientId);
             return new OidcError(ErrorCodes.InvalidToken, "Client does not exist on this server");

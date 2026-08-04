@@ -51,7 +51,7 @@ public class JwtEncryptionTests
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
-        // RSA1_5 is deliberately not part of the AddJsonWebTokens defaults — the legacy-interop
+        // RSA1_5 is deliberately not part of the AddJsonWebTokens defaults - the legacy-interop
         // round-trip and Bleichenbacher-mitigation tests below opt in explicitly
         services.AddRsaPkcs1KeyManagement();
         services.AddJsonWebTokens();
@@ -190,7 +190,7 @@ public class JwtEncryptionTests
     /// Verifies the RFC 7516 §11.5 mitigation: when the encrypted Content Encryption Key cannot be
     /// decrypted (here the encrypted-key segment is replaced with random bytes), the decryptor
     /// substitutes a random CEK and still runs the AEAD step, which fails the authentication tag.
-    /// The outcome is a uniform invalid_token result — no exception and no distinct error that
+    /// The outcome is a uniform invalid_token result - no exception and no distinct error that
     /// could serve as a padding oracle.
     /// </summary>
     [Fact]
@@ -235,7 +235,7 @@ public class JwtEncryptionTests
     /// decryption SUCCEEDS with structurally valid PKCS#1 v1.5 padding but produces a wrong-length CEK.
     /// A wrong-length CEK would make the content decryptor fast-fail on its length check before running
     /// the AEAD step, whereas the padding-invalid branch substitutes a correct-length random CEK and runs
-    /// the full step — an observable difference in work. The JWE decryptor must therefore also substitute
+    /// the full step - an observable difference in work. The JWE decryptor must therefore also substitute
     /// a random CEK on a length mismatch, so the content decryptor always receives a correct-length key.
     /// </summary>
     [Fact]
@@ -286,7 +286,7 @@ public class JwtEncryptionTests
             TestContext.Current.CancellationToken);
 
         // The content decryptor must run on a correct-length CEK (32 bytes for A256GCM), not on the
-        // 5-byte value RSA1_5 decrypted — otherwise the fast length-fail leaks PKCS1 padding validity.
+        // 5-byte value RSA1_5 decrypted - otherwise the fast length-fail leaks PKCS1 padding validity.
         Assert.Equal(32, spy.LastKeyLength);
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);

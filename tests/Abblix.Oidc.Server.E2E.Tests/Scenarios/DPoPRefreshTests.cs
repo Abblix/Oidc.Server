@@ -48,7 +48,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     {
         // RFC 9449 §5: when refreshing a DPoP-bound access token, the new token MUST be
         // bound to the same key as the previous one. Abblix enforces this via the §10
-        // carry-over mechanism — the original grant's ProofKeyThumbprint is committed on
+        // carry-over mechanism - the original grant's ProofKeyThumbprint is committed on
         // the refresh token and DPoPTokenEndpointValidator rejects any proof key drift.
         using var proofKey = new DPoPProofGenerator();
         var client = CreateClient();
@@ -77,7 +77,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         // authorization server) are not bound to the DPoP proof public key because
         // they are already sender-constrained with a different existing mechanism»
         // (client authentication). The AS therefore accepts a fresh DPoP key on
-        // refresh and binds the new access token to it — a confidential client may
+        // refresh and binds the new access token to it - a confidential client may
         // rotate keys without re-running the auth-code dance. The strict
         // same-key-MUST rule of §5 applies only to PUBLIC clients; a no-secret
         // seeded client is out of scope for this slice.
@@ -89,7 +89,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         var refreshToken = await ObtainRefreshTokenBoundToAsync(
             client, discovery, TestConstants.DPoPOpportunisticClientId, originalKey);
 
-        // Refresh with a freshly rotated key — must succeed and the new access token
+        // Refresh with a freshly rotated key - must succeed and the new access token
         // must be bound to the rotated key (not the original one).
         var rotatedProof = rotatedKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
         var refreshHttp = await SendRefreshAsync(
@@ -134,7 +134,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Public_client_non_par_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {
-        // RFC 9449 §5 applies regardless of how the initial token was obtained — a
+        // RFC 9449 §5 applies regardless of how the initial token was obtained - a
         // proof at /token alone (no PAR commitment) is enough to bind the access
         // token, and the binding MUST flow through to the refresh token. Pins the
         // TokenRequestProcessor fix: public-flow refreshContext sources its thumbprint
@@ -164,7 +164,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         // refresh path sourced refreshContext from request.AuthorizedGrant.Context,
         // which carried no ProofKeyThumbprint for non-PAR flows; the validator's
         // committed-vs-presented compare then short-circuited (committed = null) and
-        // a rotated key was silently accepted — a §5 MUST violation. Post-fix the
+        // a rotated key was silently accepted - a §5 MUST violation. Post-fix the
         // refresh JWT carries cnf.jkt from authContext (live proof's thumbprint), so
         // the next refresh's mismatched proof is caught.
         using var originalKey = new DPoPProofGenerator();
@@ -190,7 +190,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         // RFC 9449 §5 MUST for public clients: «such a client MUST present a DPoP proof
         // for the same key that was used to obtain the refresh token each time that
         // refresh token is used». A rotated key on refresh is the canonical theft
-        // scenario the constraint exists to close — without a shared secret, the proof
+        // scenario the constraint exists to close - without a shared secret, the proof
         // key is the only thing tying the holder to the original grant. Commitment is
         // anchored at PAR (Abblix §10 carry-over path); a proof on PAR makes the AS
         // pin dpop_jkt onto the stored authorization request, and the public-client
@@ -218,7 +218,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     /// Drives an initial PAR -> /authorize -> /token round with <c>offline_access</c>
     /// in scope, asserts the resulting access token is DPoP-bound to <paramref name="proofKey"/>,
     /// and returns the issued refresh token. Common bootstrap for every refresh-rebinding
-    /// scenario — confidential vs public, PAR-anchored vs non-PAR.
+    /// scenario - confidential vs public, PAR-anchored vs non-PAR.
     /// </summary>
     private static async Task<string> ObtainRefreshTokenBoundToAsync(
         HttpClient client,

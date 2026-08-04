@@ -45,7 +45,7 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Formatters;
 /// public-API <see cref="ClientRegistrationResponse"/> wire-shape, with emphasis on the
 /// RFC 7591 §3.2.1 «echo registered metadata» surface and the RFC 9449 §5.2
 /// <c>dpop_bound_access_tokens</c> field. Without these tests, fields added on
-/// <see cref="ClientRegistrationSuccessResponse"/> stay unsurfaced on the JSON payload —
+/// <see cref="ClientRegistrationSuccessResponse"/> stay unsurfaced on the JSON payload -
 /// the failure mode that prompted writing this suite (slice #108).
 /// </summary>
 public class RegisterClientResponseFormatterTests

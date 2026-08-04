@@ -135,7 +135,7 @@ public static class EncryptionAlgorithms
 		/// from a password with PBKDF2 (native <c>Rfc2898DeriveBytes.Pbkdf2</c>) using the
 		/// 'p2s'/'p2c' header parameters, then wraps the CEK per RFC 3394. Inbound iteration counts
 		/// are bounded to keep an attacker-supplied token from demanding arbitrary PBKDF2 work.
-		/// Opt-in: the PBES2 family is enabled by <c>AddPbes2KeyManagement</c>, not by default —
+		/// Opt-in: the PBES2 family is enabled by <c>AddPbes2KeyManagement</c>, not by default -
 		/// accepting password-based key management from token producers is an explicit hosting decision.
 		/// </summary>
 		public const string Pbes2HmacSha256Aes128KW = "PBES2-HS256+A128KW";

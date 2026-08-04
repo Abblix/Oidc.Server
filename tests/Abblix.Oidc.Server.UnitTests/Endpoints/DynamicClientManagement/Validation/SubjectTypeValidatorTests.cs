@@ -271,7 +271,7 @@ public class SubjectTypeValidatorTests
     /// <summary>
     /// Verifies a shared sector document listing URIs of other clients is accepted.
     /// Per OIDC Core Section 8.1, the document may be shared across several clients of the same
-    /// sector — only the registered redirect URIs must be present in it, extra entries are fine.
+    /// sector - only the registered redirect URIs must be present in it, extra entries are fine.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_SectorContentWithExtraUris_ShouldReturnNull()
@@ -303,7 +303,7 @@ public class SubjectTypeValidatorTests
 
     /// <summary>
     /// Verifies error when a registered redirect URI is absent from the sector document.
-    /// Per OIDC Core Section 8.1, all registered redirect URIs must be included in the document —
+    /// Per OIDC Core Section 8.1, all registered redirect URIs must be included in the document -
     /// otherwise a client could claim a sector it does not belong to.
     /// </summary>
     [Fact]

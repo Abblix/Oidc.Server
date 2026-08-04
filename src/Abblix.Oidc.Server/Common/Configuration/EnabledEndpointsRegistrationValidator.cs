@@ -43,7 +43,7 @@ internal sealed class EndpointRegistrationMarker
 /// were not registered by the matching <c>AddX()</c> opt-in. The flag only advertises and routes the endpoint;
 /// its handler is registered solely by the opt-in, so setting <c>All</c> (or the flag) without the opt-in would
 /// advertise an endpoint that fails on every request. This turns that silent per-request failure into a clear
-/// startup error, honouring RFC 8414 §2 / OpenID Connect Discovery §3 — do not advertise capabilities the server
+/// startup error, honouring RFC 8414 §2 / OpenID Connect Discovery §3 - do not advertise capabilities the server
 /// does not actually serve.
 /// </summary>
 internal sealed class EnabledEndpointsRegistrationValidator(IOptions<EndpointRegistrationMarker> marker)
@@ -64,7 +64,7 @@ internal sealed class EnabledEndpointsRegistrationValidator(IOptions<EndpointReg
         return ValidateOptionsResult.Fail(
             $"EnabledEndpoints advertises {advertisedButUnregistered}, but the matching opt-in feature method was " +
             "not called, so the endpoint's handler is not registered and every request to it would fail at runtime. " +
-            "Call the corresponding Add… method (AddCheckSession, AddRevocation, AddIntrospection, " +
+            "Call the corresponding Add... method (AddCheckSession, AddRevocation, AddIntrospection, " +
             "AddDynamicClientRegistration, AddBackChannelAuthentication, AddDeviceAuthorization) for each advertised " +
             "endpoint, or remove it from EnabledEndpoints.");
     }

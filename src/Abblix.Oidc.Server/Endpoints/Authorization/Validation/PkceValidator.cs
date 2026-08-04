@@ -64,7 +64,7 @@ public class PkceValidator(
 		if (context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue())
 		{
 			// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
-			// rejected — including plain and the non-standard S512 — before the per-client plain check,
+			// rejected - including plain and the non-standard S512 - before the per-client plain check,
 			// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
 			// defaults to plain (RFC 7636 §4.3), which fails this S256 comparison as it should.
 			if (profile.RequireS256CodeChallenge &&

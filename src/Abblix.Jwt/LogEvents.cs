@@ -31,7 +31,7 @@ namespace Abblix.Jwt;
 internal static class LogEvents
 {
     /// <summary>
-    /// Range 1000–1099: JWS signing/validation, JWE encryption/decryption, JWK handling.
+    /// Range 1000-1099: JWS signing/validation, JWE encryption/decryption, JWK handling.
     /// </summary>
     public static class Jwt
     {

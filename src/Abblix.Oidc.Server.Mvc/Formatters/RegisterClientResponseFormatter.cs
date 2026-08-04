@@ -80,7 +80,7 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 : null,
 
             // Prefer the resolved server-side value from `success` (which reflects defaults
-            // applied by the registration pipeline) over the raw request — RFC 7591 §3.2.1
+            // applied by the registration pipeline) over the raw request - RFC 7591 §3.2.1
             // requires the response to echo registered values, not the literal request input.
             InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
             TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,

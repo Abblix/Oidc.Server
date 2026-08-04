@@ -76,7 +76,7 @@ public class SingleOrArrayConverter<T> : JsonConverter<T[]>
                 // Return on EndArray rather than break: a bare break exits only the switch, so the
                 // enclosing while would then read the token AFTER the array. When the array is a
                 // property value inside an object that next token is EndObject (or the next property
-                // name), which the default case rejects — corrupting deserialization of any
+                // name), which the default case rejects - corrupting deserialization of any
                 // single-or-array value that appears as an array (e.g. a multi-valued "resource").
                 case JsonTokenType.EndArray:
                     return values.ToArray();

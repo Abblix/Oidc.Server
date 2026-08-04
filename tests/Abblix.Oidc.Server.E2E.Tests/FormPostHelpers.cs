@@ -31,7 +31,7 @@ internal static class FormPostHelpers
     /// <paramref name="endpoint"/>, optionally attaching a DPoP proof header. Returns
     /// the raw response so callers can inspect status, body, and headers. Used by every
     /// E2E helper that hits /par, /token, /refresh, or other form-based OAuth endpoints
-    /// — keeps the HttpRequestMessage + FormUrlEncodedContent + WithDPoPHeader plumbing
+    /// - keeps the HttpRequestMessage + FormUrlEncodedContent + WithDPoPHeader plumbing
     /// in one place.
     /// </summary>
     public static async Task<HttpResponseMessage> PostFormAsync(

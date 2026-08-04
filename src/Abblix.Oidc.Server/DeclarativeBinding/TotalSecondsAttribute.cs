@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Declares that the value travels on the wire as an integer number of seconds while the model
-/// exposes it as a <see cref="TimeSpan"/> — e.g. the OIDC <c>max_age</c> and CIBA
+/// exposes it as a <see cref="TimeSpan"/> - e.g. the OIDC <c>max_age</c> and CIBA
 /// <c>requested_expiry</c> parameters. Purely semantic: it names the wire format and leaves
 /// the parsing mechanism to the transport layer.
 /// </summary>

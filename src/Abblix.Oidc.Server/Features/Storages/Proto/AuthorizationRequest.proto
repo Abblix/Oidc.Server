@@ -74,7 +74,7 @@ message AuthorizationRequest {
 
   // RFC 9449 §10 dpop_jkt: client's commitment to a DPoP proof-of-possession key
   // measured at the authorize / PAR endpoint. Token endpoint compares this against
-  // the live proof's JWK thumbprint and rejects on mismatch — closing the
+  // the live proof's JWK thumbprint and rejects on mismatch - closing the
   // authorization-code injection window where an attacker swaps in their own key.
   optional string proof_key_thumbprint = 22;
 

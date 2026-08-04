@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 public static class ResponseModeExtensions
 {
     /// <summary>
-    /// Determines whether the given response mode is a JARM (JWT-secured) mode — one of
+    /// Determines whether the given response mode is a JARM (JWT-secured) mode - one of
     /// <see cref="ResponseModes.QueryJwt"/>, <see cref="ResponseModes.FragmentJwt"/>,
     /// <see cref="ResponseModes.FormPostJwt"/> or <see cref="ResponseModes.Jwt"/>.
     /// </summary>

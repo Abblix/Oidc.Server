@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// Registered unconditionally by <see cref="ServiceCollectionExtensions.AddRichAuthorizationRequests"/>
 /// so the server boots cleanly with zero <see cref="IAuthorizationDetailValidator"/>
 /// implementations registered. Per RFC 9396 §5 (the AS MUST refuse unknown types), an empty
-/// registry rejects every RAR-bearing request — this is conformance-mandatory, not a
+/// registry rejects every RAR-bearing request - this is conformance-mandatory, not a
 /// configurable policy.
 /// </remarks>
 public interface IAuthorizationDetailsPolicy
@@ -34,7 +34,7 @@ public interface IAuthorizationDetailsPolicy
     /// validators leave their inputs untouched it is byte-equivalent to the input, but when
     /// a validator narrows / extends per RFC 9396 §5 (e.g. a consent-UI slider, an AS-policy
     /// cap, or canonicalisation), the mutation surfaces here and the pipeline forwards the
-    /// post-validation shape into <c>AuthorizationContext</c> — token emission reflects what
+    /// post-validation shape into <c>AuthorizationContext</c> - token emission reflects what
     /// was actually granted, not the original request.
     /// </remarks>
     /// <param name="raw">The raw <c>authorization_details</c> array off the wire, or
@@ -43,9 +43,9 @@ public interface IAuthorizationDetailsPolicy
     /// drives the allowlist branch.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>
-    /// On success — the raw <see cref="JsonArray"/> that survived validation (or <c>null</c>
-    /// when the input was null / empty / contained no typed entries — there is nothing to
-    /// forward in that case). On failure — a fully-formed <see cref="OidcError"/> with
+    /// On success - the raw <see cref="JsonArray"/> that survived validation (or <c>null</c>
+    /// when the input was null / empty / contained no typed entries - there is nothing to
+    /// forward in that case). On failure - a fully-formed <see cref="OidcError"/> with
     /// <c>error = invalid_authorization_details</c> (RFC 9396 §5) and the rejection
     /// description; the endpoint adapter forwards it as-is when its error type is
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.

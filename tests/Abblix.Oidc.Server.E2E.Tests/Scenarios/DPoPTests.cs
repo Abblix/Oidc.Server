@@ -216,7 +216,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     public async Task Token_endpoint_rejects_proof_whose_htm_does_not_match_the_request_method()
     {
         // RFC 9449 §4.3 step 8: htm MUST match the HTTP method byte-exact. Mint a
-        // proof claiming GET, then POST it to /token — the validator should reject
+        // proof claiming GET, then POST it to /token - the validator should reject
         // and the wire response should carry error=invalid_dpop_proof at HTTP 400.
         using var proofKey = new DPoPProofGenerator();
         var client = CreateClient();
@@ -238,7 +238,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     {
         // RFC 9449 §4.3 step 6: signature MUST verify. Mint a valid proof then
         // flip a byte in the signature segment; downstream signature verification
-        // fails and the validator returns invalid_dpop_proof — pin the wire shape.
+        // fails and the validator returns invalid_dpop_proof - pin the wire shape.
         using var proofKey = new DPoPProofGenerator();
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);

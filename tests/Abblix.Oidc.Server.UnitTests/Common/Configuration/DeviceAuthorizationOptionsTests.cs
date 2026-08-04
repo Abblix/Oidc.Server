@@ -36,15 +36,15 @@ public class DeviceAuthorizationOptionsTests
 {
     [Theory]
     [InlineData(8)]   // 64 bits
-    [InlineData(15)]  // 120 bits — just below the floor
+    [InlineData(15)]  // 120 bits - just below the floor
     public void DeviceCodeLength_BelowEntropyFloor_Throws(int lengthInBytes)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => CreateOptions(lengthInBytes));
     }
 
     [Theory]
-    [InlineData(16)]  // 128 bits — the floor
-    [InlineData(32)]  // 256 bits — the documented default
+    [InlineData(16)]  // 128 bits - the floor
+    [InlineData(32)]  // 256 bits - the documented default
     public void DeviceCodeLength_AtOrAboveEntropyFloor_IsAccepted(int lengthInBytes)
     {
         var options = CreateOptions(lengthInBytes);

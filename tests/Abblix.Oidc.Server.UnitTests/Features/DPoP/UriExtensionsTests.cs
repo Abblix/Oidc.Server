@@ -39,7 +39,7 @@ public class UriExtensionsTests
     // Basic identity: already-canonical URI passes through unchanged.
     [InlineData("https://example.com/path", "https://example.com/path")]
 
-    // Case normalisation per RFC 3986 §6.2.2.1 — scheme and host folded to lowercase,
+    // Case normalisation per RFC 3986 §6.2.2.1 - scheme and host folded to lowercase,
     // path case is significant and stays verbatim.
     [InlineData("HTTPS://Example.COM/Path", "https://example.com/Path")]
 

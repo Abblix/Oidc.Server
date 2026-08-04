@@ -153,7 +153,7 @@ public class ConfigurationResponseFormatter(
     /// <summary>
     /// Resolves the absolute URL for a named endpoint if endpoint path discovery is enabled and the endpoint is
     /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
-    /// the request's PathBase — the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
+    /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
     /// </summary>
     private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag)
     {

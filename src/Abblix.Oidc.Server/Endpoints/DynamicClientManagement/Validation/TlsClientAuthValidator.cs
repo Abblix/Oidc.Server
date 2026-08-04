@@ -83,11 +83,11 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
 
     /// <summary>
     /// Counts how many of the five RFC 8705 §2.1.2 subject-identifier metadata parameters are
-    /// present. A SAN array with several entries still counts as a single parameter — the spec
+    /// present. A SAN array with several entries still counts as a single parameter - the spec
     /// constrains which parameter is registered, not how many values it carries.
     /// </summary>
     /// <param name="request">The client registration request to inspect.</param>
-    /// <returns>The number of populated subject-identifier parameters (0–5).</returns>
+    /// <returns>The number of populated subject-identifier parameters (0-5).</returns>
     private static int CountSubjectIdentifiers(ClientRegistrationRequest request)
     {
         var count = 0;

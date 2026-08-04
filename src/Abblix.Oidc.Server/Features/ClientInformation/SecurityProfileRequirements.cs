@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <summary>
 /// The bundle of controls a <see cref="ClientSecurityProfile"/> forces on a client, expressed as
 /// individual flags the request-pipeline validators consult. This is the single place the
-/// profile-to-controls mapping lives, so a validator never needs to know what "FAPI 2.0" means — it
-/// only reads the one flag it owns — and adding a future profile touches only <see cref="Resolve"/>.
+/// profile-to-controls mapping lives, so a validator never needs to know what "FAPI 2.0" means - it
+/// only reads the one flag it owns - and adding a future profile touches only <see cref="Resolve"/>.
 /// </summary>
 /// <remarks>
 /// Each flag is enforcement-only: it can require a control but never relax one. A profile therefore

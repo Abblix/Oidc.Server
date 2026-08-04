@@ -28,8 +28,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <summary>
 /// Default <see cref="IRegistrationAccessTokenStore"/> backed by the distributed
 /// <see cref="IEntityStorage"/>, so the client-to-token-jti binding is shared across all server
-/// replicas. The entry is stored without expiration — it lives as long as the client is registered
-/// — and is removed when the client is deregistered.
+/// replicas. The entry is stored without expiration - it lives as long as the client is registered
+/// - and is removed when the client is deregistered.
 /// </summary>
 /// <param name="storage">The distributed entity storage holding the bindings.</param>
 /// <param name="keyFactory">The factory that builds the storage key for each client.</param>

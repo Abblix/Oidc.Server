@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// <summary>
 /// Verifies the RFC 8705 certificate-binding rules in
 /// <see cref="TokenAuthorizationContextEvaluator"/>: a refreshed token stays bound to the
-/// certificate the original token was bound to (RFC 8705 §4 — the AS SHOULD bind the refresh
+/// certificate the original token was bound to (RFC 8705 §4 - the AS SHOULD bind the refresh
 /// token to the certificate and check that binding), and an initial token binds to the
 /// certificate presented at issuance (§3). The invariant the refresh tests pin is that a
 /// refresh neither drops the binding (when no certificate is re-presented) nor silently
@@ -38,7 +38,7 @@ public class TokenAuthorizationContextEvaluatorTests
     {
         // A DPoP/mTLS-style bound grant is refreshed on a connection that does not re-present
         // the client certificate. RFC 8705 §4 says the refreshed token should remain bound
-        // to the original certificate — the binding must not be wiped to null.
+        // to the original certificate - the binding must not be wiped to null.
         var request = CreateRefreshRequest(
             boundThumbprint: OriginalThumbprint,
             clientCertificate: null);
@@ -98,7 +98,7 @@ public class TokenAuthorizationContextEvaluatorTests
     public void RequestedResourceNotInGrant_IsDroppedByIntersection()
     {
         // Grant authorized A and B; the request asks for C (registered but never granted). The
-        // intersection is empty — C cannot be escalated into the token's audience.
+        // intersection is empty - C cannot be escalated into the token's audience.
         var request = CreateResourceRequest(
             grantResources: [new Uri("https://api.example/a"), new Uri("https://api.example/b")],
             requestedResources: [new Uri("https://api.example/c")]);
@@ -146,7 +146,7 @@ public class TokenAuthorizationContextEvaluatorTests
 
     /// <summary>
     /// RFC 8705 §3.4: tls_client_certificate_bound_access_tokens binds the issued token to the
-    /// presented certificate even when the client authenticates with a non-mTLS method — the
+    /// presented certificate even when the client authenticates with a non-mTLS method - the
     /// metadata decouples binding from authentication.
     /// </summary>
     [Fact]
@@ -167,7 +167,7 @@ public class TokenAuthorizationContextEvaluatorTests
 
     /// <summary>
     /// Without the RFC 8705 §3.4 flag a non-mTLS-authenticated client gets no certificate binding
-    /// even when a certificate happens to be present on the connection — pins the pre-existing
+    /// even when a certificate happens to be present on the connection - pins the pre-existing
     /// behavior the new flag deliberately does not change.
     /// </summary>
     [Fact]

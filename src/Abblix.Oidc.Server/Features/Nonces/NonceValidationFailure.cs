@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
 /// Reasons a server-issued nonce can fail validation. The categories are for
-/// log filters and metrics — at the protocol layer DPoP-Nonce flows surface
+/// log filters and metrics - at the protocol layer DPoP-Nonce flows surface
 /// every failure as the same RFC 9449 §8 <c>use_dpop_nonce</c> error with a
 /// freshly issued nonce in the response header, regardless of the underlying
 /// reason.
@@ -41,7 +41,7 @@ public enum NonceValidationFailure
 
     /// <summary>
     /// The nonce decoded cleanly but its embedded timestamp is outside the
-    /// configured acceptance window — either older than
+    /// configured acceptance window - either older than
     /// <c>AcceptanceWindow</c> or too far in the future relative to server
     /// clock. Routine for clients that cached a nonce too long.
     /// </summary>

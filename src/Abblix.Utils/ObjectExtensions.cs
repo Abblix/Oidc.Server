@@ -56,7 +56,7 @@ public static class ObjectExtensions
 	/// <summary>
 	/// Wraps a single value as an <see cref="IAsyncEnumerable{T}"/> that yields exactly
 	/// one element. Useful for adapting non-streaming sources to APIs that consume an
-	/// async sequence — for example handing a single signing key to a verifier that
+	/// async sequence - for example handing a single signing key to a verifier that
 	/// expects a candidate-key stream.
 	/// </summary>
 	/// <typeparam name="T">The type of the value to wrap.</typeparam>

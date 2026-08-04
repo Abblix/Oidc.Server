@@ -550,7 +550,7 @@ public class EndSessionRequestProcessorTests
         // Act
         var processTask = _processor.ProcessAsync(request);
 
-        // Assert — the processor must still be awaiting the pending notification, not done.
+        // Assert - the processor must still be awaiting the pending notification, not done.
         Assert.False(processTask.IsCompleted);
 
         notificationGate.SetResult();
@@ -593,7 +593,7 @@ public class EndSessionRequestProcessorTests
         // Act
         var result = await _processor.ProcessAsync(request);
 
-        // Assert — logout succeeds despite the notification failure.
+        // Assert - logout succeeds despite the notification failure.
         Assert.True(result.TryGetSuccess(out _));
     }
 }

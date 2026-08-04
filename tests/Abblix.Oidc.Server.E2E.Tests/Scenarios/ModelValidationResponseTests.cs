@@ -39,7 +39,7 @@ public class ModelValidationResponseTests(TestFactory factory) : TestBase(factor
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
 
             // Not one of the spec-fixed prompt values, so the generated model's [AllowedValues] rejects it
-            // at the model-binding layer, before redirect_uri is validated — hence a direct response, not a
+            // at the model-binding layer, before redirect_uri is validated - hence a direct response, not a
             // redirect with an error.
             [AuthorizationRequest.Parameters.Prompt] = "bogus",
         });

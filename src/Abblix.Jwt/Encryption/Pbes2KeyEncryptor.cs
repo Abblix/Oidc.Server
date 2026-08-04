@@ -65,7 +65,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	// The salt input generated for outbound tokens; comfortably above the spec minimum.
 	private const int SaltInputSize = 16;
 
-	// RFC 7518 §4.8.1.2: "A minimum iteration count of 1000 is RECOMMENDED" — enforced on inbound tokens.
+	// RFC 7518 §4.8.1.2: "A minimum iteration count of 1000 is RECOMMENDED" - enforced on inbound tokens.
 	private const int MinIterationCount = 1000;
 
 	// Hard upper bound on the inbound iteration count: 'p2c' is attacker-controlled, and without a cap a

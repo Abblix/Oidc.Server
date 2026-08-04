@@ -71,7 +71,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
             return "The access token unauthorized";
 
         // RFC 7592 §5: bind the token to the client so a rotated token invalidates its
-        // predecessors. Enforced only when the client records the current jti — a null expectation
+        // predecessors. Enforced only when the client records the current jti - a null expectation
         // keeps statically configured clients and pre-existing records working unchanged.
         if (expectedTokenId != null && token.Payload.JwtId != expectedTokenId)
             return "The access token unauthorized";

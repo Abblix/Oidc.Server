@@ -79,7 +79,7 @@ public class RequestObjectFetchAdapterTests
 
     /// <summary>
     /// OIDC Core §6.1: a request object carrying a different client_id than the OAuth request
-    /// syntax must be rejected — otherwise the object could silently swap the client identity.
+    /// syntax must be rejected - otherwise the object could silently swap the client identity.
     /// </summary>
     [Fact]
     public async Task FetchAsync_ClientIdMismatch_ReturnsError()
@@ -94,7 +94,7 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// OIDC Core §6.1: the same matching rule applies to response_type — a request object must not
+    /// OIDC Core §6.1: the same matching rule applies to response_type - a request object must not
     /// silently switch the flow relative to what the plain OAuth parameters declared.
     /// </summary>
     [Fact]

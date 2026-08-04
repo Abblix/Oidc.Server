@@ -24,9 +24,9 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
 /// Issues and validates server-issued opaque, time-bounded nonces. The current
-/// consumer is DPoP-Nonce per RFC 9449 §8 / §9 — the server returns a nonce
+/// consumer is DPoP-Nonce per RFC 9449 §8 / §9 - the server returns a nonce
 /// via the <c>DPoP-Nonce</c> response header and the client echoes it back in
-/// the <c>nonce</c> claim of a subsequent DPoP proof to prove freshness — but
+/// the <c>nonce</c> claim of a subsequent DPoP proof to prove freshness - but
 /// the primitive is intentionally generic: any future feature needing
 /// challenge-response freshness checks can resolve the same service.
 /// </summary>
@@ -40,7 +40,7 @@ public interface INonceService
 {
     /// <summary>
     /// Mints a fresh nonce string suitable for the <c>DPoP-Nonce</c> response
-    /// header. The returned value is opaque to callers — clients must echo it
+    /// header. The returned value is opaque to callers - clients must echo it
     /// verbatim.
     /// </summary>
     Task<string> IssueAsync(CancellationToken cancellationToken = default);

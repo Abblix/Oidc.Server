@@ -55,7 +55,7 @@ public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : 
     {
         var request = context.Request;
 
-        // request_object_signing_alg may legitimately be "none" (OIDC Core §6.1 — an unsigned request
+        // request_object_signing_alg may legitimately be "none" (OIDC Core §6.1 - an unsigned request
         // object delivered over TLS), so it is validated against the full supported set.
         if (request.RequestObjectSigningAlg is { } requestObjectAlg &&
             !jwtAlgorithms.SigningAlgorithmsSupported.Contains(requestObjectAlg, StringComparer.Ordinal))

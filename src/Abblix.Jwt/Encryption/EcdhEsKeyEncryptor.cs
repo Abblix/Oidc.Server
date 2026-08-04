@@ -39,7 +39,7 @@ namespace Abblix.Jwt.Encryption;
 /// (NIST SP 800-56A §5.8.1, JOSE OtherInfo per RFC 7518 §4.6.2) is run by
 /// <see cref="ConcatKeyDerivation"/>. Expressing the KDF over a raw Z, rather than fusing it with the
 /// agreement, is what lets the identical derivation serve the external-custodian path, where an HSM/KMS
-/// performs the agreement and returns Z. Supports the NIST curves P-256, P-384 and P-521 — the set the
+/// performs the agreement and returns Z. Supports the NIST curves P-256, P-384 and P-521 - the set the
 /// platform <see cref="ECDiffieHellman"/> covers.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>
@@ -65,7 +65,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	/// <inheritdoc />
 	/// <remarks>
 	/// In Direct Key Agreement mode the CEK is not random: it is derived from the ephemeral-static
-	/// agreement, and this method performs the whole derivation — it generates the ephemeral key on
+	/// agreement, and this method performs the whole derivation - it generates the ephemeral key on
 	/// the recipient key's curve, publishes it as the 'epk' header parameter and returns the derived
 	/// key. The key-wrapping variants use the default random CEK; their agreement happens in
 	/// <see cref="EncryptKey"/>, which derives the KEK instead.
@@ -81,7 +81,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	/// <inheritdoc />
 	/// <remarks>
 	/// Per RFC 7518 Section 4.6, in Direct Key Agreement mode the JWE Encrypted Key is the empty
-	/// octet sequence — the agreement already produced the CEK in
+	/// octet sequence - the agreement already produced the CEK in
 	/// <see cref="GenerateContentEncryptionKey"/>. In the key-wrapping variants the agreement
 	/// derives a KEK of the size the algorithm name declares, which then wraps the CEK per RFC 3394.
 	/// </remarks>
@@ -114,7 +114,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 				return false;
 
 			// The originator's ephemeral public key is mandatory and must live on the recipient key's
-			// curve — a point from another curve would make the agreement computation meaningless
+			// curve - a point from another curve would make the agreement computation meaningless
 			// (and is the classic invalid-curve attack shape).
 			if (header.EphemeralPublicKey is not EllipticCurveJsonWebKey { HasPublicKey: true } ephemeralKey
 			    || !string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
@@ -150,7 +150,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		{
 			// Windows CNG surfaces an off-curve ephemeral point as PlatformNotSupportedException
 			// ("the specified curve or its parameters are not valid for this platform") wrapping the
-			// underlying CryptographicException — the same forgery, a different exception shape.
+			// underlying CryptographicException - the same forgery, a different exception shape.
 			decryptedKey = null;
 			return false;
 		}

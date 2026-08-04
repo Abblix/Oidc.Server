@@ -28,8 +28,8 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 
 /// <summary>
 /// Enforces single-use of a pushed authorization <c>request_uri</c> (RFC 9126 §7.3) by decorating the
-/// authorization request processor. Once processing yields a terminal success — an authorization code or
-/// token has been minted — the <c>request_uri</c> is removed from storage so it cannot be replayed within
+/// authorization request processor. Once processing yields a terminal success - an authorization code or
+/// token has been minted - the <c>request_uri</c> is removed from storage so it cannot be replayed within
 /// its remaining time-to-live. Interactive continuations (login, consent, account selection) leave it in
 /// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>.
 /// </summary>

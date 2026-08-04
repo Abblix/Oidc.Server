@@ -110,7 +110,7 @@ public partial class LicenseManager
                 var newLicense = GenerateActiveLicense(utcNow);
 
                 // Adopt the value the CAS actually witnessed. A lost race must re-test against the winner's
-                // value, not the stale local captured before the loop — otherwise the comparand never matches
+                // value, not the stale local captured before the loop - otherwise the comparand never matches
                 // again and the loop spins forever at 100% CPU while holding the read lock, blocking every
                 // subsequent writer (AddLicense) permanently.
                 var witnessed = Interlocked.CompareExchange(ref _currentLicense, newLicense, currentLicense);

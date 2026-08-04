@@ -48,10 +48,10 @@ public class SingleOrArrayConverterTests
     }
 
     [Theory]
-    // Array value followed by another property — the read past EndArray would land on the next
+    // Array value followed by another property - the read past EndArray would land on the next
     // property name and throw before the fix.
     [InlineData("{\"values\":[\"a\",\"b\"],\"other\":\"x\"}", new[] { "a", "b" }, "x")]
-    // Array value as the last property — the read past EndArray would land on the object's EndObject.
+    // Array value as the last property - the read past EndArray would land on the object's EndObject.
     [InlineData("{\"other\":\"x\",\"values\":[\"a\",\"b\"]}", new[] { "a", "b" }, "x")]
     // Single scalar form inside an object still works.
     [InlineData("{\"values\":\"a\",\"other\":\"x\"}", new[] { "a" }, "x")]

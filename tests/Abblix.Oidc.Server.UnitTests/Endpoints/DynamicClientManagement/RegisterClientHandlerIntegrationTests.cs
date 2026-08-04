@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// End-to-end integration tests for the <see cref="IRegisterClientHandler"/> pipeline through
 /// the canonical <c>AddOidcServices</c> bootstrap. Locks the server-level support gates
 /// (<c>SupportedResponseTypeValidator</c>, <c>SupportedGrantTypeValidator</c>) at the
-/// resolved-via-DI layer rather than per-validator level — verifying not only that the
+/// resolved-via-DI layer rather than per-validator level - verifying not only that the
 /// validators exist, but that they participate in the registration pipeline a host actually
 /// invokes via <c>IRegisterClientHandler</c>. Construction of the registration request goes
 /// through the public DTO; resolution goes through DI; rejections come back as OidcError
@@ -58,11 +58,11 @@ public class RegisterClientHandlerIntegrationTests
     {
         var services = new ServiceCollection();
 
-        // Host-level infrastructure prerequisites every real ASP.NET host registers — the DI
+        // Host-level infrastructure prerequisites every real ASP.NET host registers - the DI
         // analog of AddLogging. Oidc.Server's Storages depend on IDistributedCache; the
         // CachingSecureHttpFetcherDecorator depends on IMemoryCache; the password grant
         // handler depends on a host-supplied IUserCredentialsAuthenticator. The host chooses
-        // each implementation — memory-backed caches are the canonical unit-test choices,
+        // each implementation - memory-backed caches are the canonical unit-test choices,
         // and the authenticator is stubbed because ROPC scenarios in this suite don't
         // actually authenticate.
         services.AddDistributedMemoryCache();
@@ -92,7 +92,7 @@ public class RegisterClientHandlerIntegrationTests
             // the test focuses on the response_types / grant_types support gates added by
             // this PR. With RequireInitialAccessToken = true the InitialAccessTokenValidator
             // fires first and short-circuits with «invalid_token» before any support gate
-            // sees the request — masking the very behaviour we want to verify.
+            // sees the request - masking the very behaviour we want to verify.
             opts.RequireInitialAccessToken = false;
 
             // A test that exercises the initial access token gate re-enables it here.
@@ -140,7 +140,7 @@ public class RegisterClientHandlerIntegrationTests
     /// Without <c>EnableImplicitFlow()</c> the host advertises only the Code Flow. A client
     /// trying to register with <c>response_types=["token"]</c> + <c>grant_types=["implicit"]</c>
     /// must be rejected at registration time with <c>invalid_client_metadata</c> per OIDC DCR
-    /// §3.2 — the gap <c>SupportedResponseTypeValidator</c> closes, surfaced through the
+    /// §3.2 - the gap <c>SupportedResponseTypeValidator</c> closes, surfaced through the
     /// full handler pipeline.
     /// </summary>
     [Fact]
@@ -273,8 +273,8 @@ public class RegisterClientHandlerIntegrationTests
     /// RFC 7591 §3.2.1: the registration response echoes registered client metadata so the
     /// client can confirm what was stored without a follow-up read. Locks that the
     /// extended echo (added alongside DPoP) actually surfaces a representative subset of
-    /// fields — <c>redirect_uris</c>, <c>token_endpoint_auth_method</c>, and the
-    /// DPoP-binding flag — rather than only the minimal pre-extension surface.
+    /// fields - <c>redirect_uris</c>, <c>token_endpoint_auth_method</c>, and the
+    /// DPoP-binding flag - rather than only the minimal pre-extension surface.
     /// </summary>
     [Fact]
     public async Task HandleAsync_RegistrationResponse_EchoesRegisteredMetadata()
@@ -378,7 +378,7 @@ public class RegisterClientHandlerIntegrationTests
 
     /// <summary>
     /// OIDC Core §10.1: HS* signing keys on the client_secret, which this server stores only as a
-    /// hash — registration asking for an HMAC-signed id_token must be rejected at DCR time instead
+    /// hash - registration asking for an HMAC-signed id_token must be rejected at DCR time instead
     /// of failing with a server error on the first issued token.
     /// </summary>
     [Theory]
@@ -400,7 +400,7 @@ public class RegisterClientHandlerIntegrationTests
     /// <summary>
     /// RFC 7591 §3.2.1: the response carries grant_types, response_types and scope read back from
     /// the stored registration. Without them a client cannot learn the server-assigned defaults
-    /// (authorization_code / code) when its request omitted these fields — the DCR conformance
+    /// (authorization_code / code) when its request omitted these fields - the DCR conformance
     /// profile checks exactly this.
     /// </summary>
     [Fact]

@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// Per RFC 7591 §3.2.1, the authorization server returns all registered metadata about the client
 /// (including server-assigned defaults for omitted fields) so the client can confirm what was
 /// registered without a separate read round-trip. The shape mirrors
-/// <see cref="Abblix.Oidc.Server.Model.ReadClientSuccessfulResponse"/> by design — register and
+/// <see cref="Abblix.Oidc.Server.Model.ReadClientSuccessfulResponse"/> by design - register and
 /// read responses carry the same metadata surface, differing only in registration-specific timing
 /// (<see cref="ClientIdIssuedAt"/>) the read endpoint does not regenerate.
 /// </summary>
@@ -57,7 +57,7 @@ public record ClientRegistrationSuccessResponse(
 {
     /// <summary>
     /// The client secret assigned to the registered client.
-    /// Optional — only present for confidential clients. Per RFC 7591 §3.2.1.
+    /// Optional - only present for confidential clients. Per RFC 7591 §3.2.1.
     /// </summary>
     public string? ClientSecret { get; init; }
 
@@ -77,14 +77,14 @@ public record ClientRegistrationSuccessResponse(
 
     /// <summary>
     /// The method used for authenticating the client at the token endpoint.
-    /// Optional — server may assign a default. Per RFC 7591 §2.
+    /// Optional - server may assign a default. Per RFC 7591 §2.
     /// </summary>
     [JsonPropertyName(ResponseParameters.TokenEndpointAuthMethod)]
     public string? TokenEndpointAuthMethod { get; init; }
 
     /// <summary>
     /// The type of application for which the client is registered (e.g. <c>web</c>, <c>native</c>).
-    /// Optional — server may assign a default. Per RFC 7591 §2.
+    /// Optional - server may assign a default. Per RFC 7591 §2.
     /// </summary>
     [JsonPropertyName(ResponseParameters.ApplicationType)]
     public string? ApplicationType { get; init; }
@@ -135,14 +135,14 @@ public record ClientRegistrationSuccessResponse(
 
     /// <summary>
     /// The type of subject identifier used (e.g. <c>public</c>, <c>pairwise</c>).
-    /// Optional — server may assign a default. Per OpenID Connect Core §8.
+    /// Optional - server may assign a default. Per OpenID Connect Core §8.
     /// </summary>
     [JsonPropertyName(ResponseParameters.SubjectType)]
     public string? SubjectType { get; init; }
 
     /// <summary>
     /// URL using the <c>https</c> scheme used in calculating pseudonymous identifiers for
-    /// pairwise subject type. Optional — only relevant for pairwise. Per OpenID Connect Core §8.1.
+    /// pairwise subject type. Optional - only relevant for pairwise. Per OpenID Connect Core §8.1.
     /// </summary>
     [JsonPropertyName(ResponseParameters.SectorIdentifierUri)]
     [AbsoluteUri]
@@ -150,7 +150,7 @@ public record ClientRegistrationSuccessResponse(
 
     /// <summary>
     /// URL for the client's JSON Web Key Set document.
-    /// Optional — alternative to providing keys directly. Per RFC 7591 §2.
+    /// Optional - alternative to providing keys directly. Per RFC 7591 §2.
     /// </summary>
     [JsonPropertyName(ResponseParameters.JwksUri)]
     [AbsoluteUri]

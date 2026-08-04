@@ -27,7 +27,7 @@ public class MtlsUserInfoValidatorTests
     [Fact]
     public void UnboundToken_WithoutCertificate_IsAccepted()
     {
-        // No cnf.x5t#S256 — a plain Bearer/DPoP token. The mTLS validator has nothing to
+        // No cnf.x5t#S256 - a plain Bearer/DPoP token. The mTLS validator has nothing to
         // enforce and must not reject it even when no certificate is presented.
         var token = new JsonWebToken();
         var request = new ClientRequest();
@@ -53,7 +53,7 @@ public class MtlsUserInfoValidatorTests
     public void BoundToken_WithoutCertificate_IsRejected()
     {
         // RFC 8705 §3: a certificate-bound token presented over a connection that carries no
-        // client certificate must be rejected — the token is replayable otherwise.
+        // client certificate must be rejected - the token is replayable otherwise.
         var token = CreateBoundToken("some-committed-thumbprint");
         var request = new ClientRequest();
 

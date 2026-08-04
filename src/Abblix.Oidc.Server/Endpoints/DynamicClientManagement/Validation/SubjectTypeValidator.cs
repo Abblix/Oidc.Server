@@ -120,11 +120,11 @@ public partial class SubjectTypeValidator(
         }
 
         // OIDC Core §8.1 / OIDC Registration §5: the values of the registered redirect_uris MUST be
-        // included in the elements of the sector identifier document — the subset check goes from the
+        // included in the elements of the sector identifier document - the subset check goes from the
         // registration towards the document, not the other way around. The document is intentionally
         // shareable across several clients of the same sector, so it may list URIs this client did not
         // register. The inverted check (document minus registration) both rejected such legitimate
-        // shared documents and let a client register a redirect URI absent from the document — i.e.
+        // shared documents and let a client register a redirect URI absent from the document - i.e.
         // claim a sector it does not belong to, breaking pairwise subject isolation.
         var missingUris = redirectUris.Except(sectorIdentifierContent).ToArray();
         if (missingUris.Length > 0)

@@ -57,7 +57,7 @@ public class TryAddEnumerableAliasTests
 
     /// <summary>
     /// Two aliases pointing at the same concrete source must both resolve to that single
-    /// instance — the helper composes cleanly when a type implements multiple interfaces
+    /// instance - the helper composes cleanly when a type implements multiple interfaces
     /// and the host wants every interface to see the same object.
     /// </summary>
     [Fact]
@@ -103,7 +103,7 @@ public class TryAddEnumerableAliasTests
     /// <c>TryAddEnumerable</c> dedupes on <c>(ServiceType, ImplementationType)</c>. The helper
     /// uses a typed factory <c>Func&lt;IServiceProvider, TImpl&gt;</c> so each repeat call
     /// produces a descriptor with the same <c>ImplementationType</c>, and the second call
-    /// is skipped — repeated invocations are idempotent.
+    /// is skipped - repeated invocations are idempotent.
     /// </summary>
     [Fact]
     public void TryAddEnumerableAlias_CalledTwiceForSameImpl_RegisteredOnce()
@@ -127,7 +127,7 @@ public class TryAddEnumerableAliasTests
     /// is the invariant the typed-factory shape (<c>Func&lt;IServiceProvider, TImpl&gt;</c>)
     /// preserves: a more compact untyped <c>ServiceDescriptor.Describe</c> form would bake
     /// the factory as <c>Func&lt;IServiceProvider, object&gt;</c>, making
-    /// <c>GetImplementationType()</c> return <c>typeof(object)</c> — which makes
+    /// <c>GetImplementationType()</c> return <c>typeof(object)</c> - which makes
     /// <c>TryAddEnumerable</c> throw, not dedupe.
     /// </summary>
     [Fact]
@@ -147,7 +147,7 @@ public class TryAddEnumerableAliasTests
     }
 
     /// <summary>
-    /// The dedup key is <c>(ServiceType, ImplementationType)</c> — different impls under
+    /// The dedup key is <c>(ServiceType, ImplementationType)</c> - different impls under
     /// the same TService coexist in the enumerable, but each appears once. Locks against
     /// regression where dedup might collapse to «ServiceType only» (which would silently
     /// drop the second contributor) or expand to «delegate identity» (which would add
@@ -180,7 +180,7 @@ public class TryAddEnumerableAliasTests
 
     /// <summary>
     /// Each helper call creates its own closure capturing <c>sourceServiceType</c>. If dedup
-    /// were keyed off delegate identity (which it is NOT — TryAddEnumerable uses
+    /// were keyed off delegate identity (which it is NOT - TryAddEnumerable uses
     /// implementation type), distinct closures across calls would defeat dedup. This test
     /// pins the typed-factory shape: even though closures are distinct objects, the
     /// generic-arg-1 of <c>Func&lt;IServiceProvider, TImpl&gt;</c> is identical across
@@ -192,7 +192,7 @@ public class TryAddEnumerableAliasTests
         var services = new ServiceCollection();
         services.AddSingleton<ServiceA>();
 
-        // Three calls — three distinct lambda closures captured inside the helper.
+        // Three calls - three distinct lambda closures captured inside the helper.
         services.TryAddEnumerableAlias<IPrimaryService, ServiceA>();
         services.TryAddEnumerableAlias<IPrimaryService, ServiceA>();
         services.TryAddEnumerableAlias<IPrimaryService, ServiceA>();
@@ -249,7 +249,7 @@ public class TryAddEnumerableAliasTests
     }
 
     /// <summary>
-    /// A Transient source produces a fresh instance for every resolution — the «shared»
+    /// A Transient source produces a fresh instance for every resolution - the «shared»
     /// invariant degenerates to «routed through source» since Transient gives a new instance
     /// each call. The alias still goes through the source factory, so behaviour is consistent
     /// with a direct Transient resolution.
@@ -313,7 +313,7 @@ public class TryAddEnumerableAliasTests
     /// The helper uses <c>LastOrDefault</c> on the lookup, so when the same impl is
     /// registered multiple times, the most recent registration's lifetime wins. Locks
     /// against accidental drift if a host re-registers the same type with a different
-    /// lifetime — alias follows whichever wins on resolve.
+    /// lifetime - alias follows whichever wins on resolve.
     /// </summary>
     [Fact]
     public void TryAddEnumerableAlias_PreservesSourceLifetime_NotHardcodedSingleton()
@@ -355,11 +355,11 @@ public class TryAddEnumerableAliasTests
 
     /// <summary>
     /// When the same <typeparamref>TImpl</typeparamref> is aliased to TWO different services,
-    /// the second alias call must still resolve through the original concrete registration —
+    /// the second alias call must still resolve through the original concrete registration -
     /// NOT through the alias the first call just added. Otherwise the second alias's factory
     /// captures <c>sourceServiceType=TFirstAliasInterface</c>, and any later
     /// <c>Compose&lt;TFirstAliasInterface, TComposite&gt;()</c> swaps that resolution to
-    /// <c>TComposite</c> — making the second alias's factory cast a composite to
+    /// <c>TComposite</c> - making the second alias's factory cast a composite to
     /// <c>TImpl</c> and throw <see cref="System.InvalidCastException"/>. This is the failure
     /// mode the «concrete-ServiceType wins over alias-ImplementationType» priority closes.
     /// </summary>

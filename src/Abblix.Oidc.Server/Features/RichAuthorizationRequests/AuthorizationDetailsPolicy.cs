@@ -41,9 +41,9 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <see cref="ServiceCollectionExtensions.AddAuthorizationDetailValidator{TValidator}"/>
 /// serves both O(1) request-time dispatch (this class) and discovery enumeration via
 /// <c>GetKeyedServices&lt;IAuthorizationDetailValidator&gt;(KeyedService.AnyKey)</c> in
-/// slice #132 — no <c>TryAddEnumerable</c> parallel slot. Lookup that returns <c>null</c>
+/// slice #132 - no <c>TryAddEnumerable</c> parallel slot. Lookup that returns <c>null</c>
 /// (no host registration for the requested type) yields
-/// <c>invalid_authorization_details</c> per RFC 9396 §5, never throws — the server boots
+/// <c>invalid_authorization_details</c> per RFC 9396 §5, never throws - the server boots
 /// cleanly with zero per-type validators and rejects RAR requests with a structured error.
 /// </remarks>
 internal sealed class AuthorizationDetailsPolicy(
@@ -89,7 +89,7 @@ internal sealed class AuthorizationDetailsPolicy(
 
         // Rebuild the raw array from the validated typed list (RFC 9396 §5 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
-        // to the original — DeepClone in ToRawJsonArray preserves member order and any
+        // to the original - DeepClone in ToRawJsonArray preserves member order and any
         // type-specific payload. When a validator returned a modified AuthorizationDetail,
         // that mutation surfaces here and the pipeline forwards the post-validation shape
         // (not the original request) into AuthorizationContext, so token emission reflects

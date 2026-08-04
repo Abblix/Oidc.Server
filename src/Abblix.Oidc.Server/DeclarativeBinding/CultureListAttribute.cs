@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Declares that the value travels on the wire as a space-separated list of BCP 47 language tags
-/// while the model exposes it as an array of cultures — e.g. the OIDC <c>ui_locales</c> and
+/// while the model exposes it as an array of cultures - e.g. the OIDC <c>ui_locales</c> and
 /// <c>claims_locales</c> parameters. Purely semantic: it names the wire format and leaves
 /// the parsing mechanism to the transport layer.
 /// </summary>

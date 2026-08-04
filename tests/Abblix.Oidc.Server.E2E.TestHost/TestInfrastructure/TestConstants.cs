@@ -8,7 +8,7 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 /// <summary>
 /// Shared constants for the E2E test suite. Centralising client IDs and the issuer
 /// here keeps the static <c>LicenseChecker._knownIssuers</c> /
-/// <c>_knownClientIds</c> dictionaries small — the same ID across tests collapses
+/// <c>_knownClientIds</c> dictionaries small - the same ID across tests collapses
 /// to a single entry. <see cref="LicenseFixture"/> separately removes the
 /// FreeLicense numeric ceiling, but the constants reduce noise and keep tests
 /// readable when they need to refer to the same client repeatedly.
@@ -32,25 +32,25 @@ public static class TestConstants
     /// <c>ForceAuthorizationDetailsInIdentityToken = true</c>.</summary>
     public const string IdTokenRarClientId = "e2e-idtoken-rar";
 
-    /// <summary>Client with empty allowlist — every RAR request is rejected.</summary>
+    /// <summary>Client with empty allowlist - every RAR request is rejected.</summary>
     public const string EmptyAllowlistClientId = "e2e-empty-allowlist";
 
-    /// <summary>Client with <c>null</c> allowlist — no per-client constraint
+    /// <summary>Client with <c>null</c> allowlist - no per-client constraint
     /// (only the per-type validator gates).</summary>
     public const string UnrestrictedClientId = "e2e-unrestricted";
 
-    /// <summary>Client with <c>RequireDPoP = true</c> — every token request MUST carry a
+    /// <summary>Client with <c>RequireDPoP = true</c> - every token request MUST carry a
     /// valid DPoP proof or the AS rejects with <c>invalid_dpop_proof</c>. RFC 9449 §5.2
     /// mandatory-binding posture.</summary>
     public const string DPoPRequiredClientId = "e2e-dpop-required";
 
-    /// <summary>Client with <c>RequireDPoP = false</c> — token requests may carry a proof
+    /// <summary>Client with <c>RequireDPoP = false</c> - token requests may carry a proof
     /// (and the AS opportunistically binds the issued access token) or omit it (Bearer
     /// issued). RFC 9449 §5.2 opportunistic-binding posture.</summary>
     public const string DPoPOpportunisticClientId = "e2e-dpop-opportunistic";
 
     /// <summary>Public DPoP client (no client secret, <c>token_endpoint_auth_method = none</c>).
-    /// RFC 9449 §5 mandates same-key binding on refresh for public clients — sender
+    /// RFC 9449 §5 mandates same-key binding on refresh for public clients - sender
     /// constraint comes from DPoP alone, not from client authentication.</summary>
     public const string DPoPPublicClientId = "e2e-dpop-public";
 
@@ -60,7 +60,7 @@ public static class TestConstants
 
     /// <summary>Client restricted to the OAuth 2.0 <c>none</c> response type (OAuth 2.0 Multiple
     /// Response Type Encoding Practices §4): the authorization endpoint authorizes the request but
-    /// returns no code or token — only state and iss.</summary>
+    /// returns no code or token - only state and iss.</summary>
     public const string NoneResponseTypeClientId = "e2e-none-response-type";
 
     /// <summary>Client that opts in to the per-client <c>AllowedResponseModes</c> allow-list, pinned to

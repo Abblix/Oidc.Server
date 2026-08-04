@@ -278,7 +278,7 @@ public class ClientJwksConfigurationExtensionsTests
 
     /// <summary>
     /// Compile-time guard: a host that wraps <see cref="ClientInfo"/> in its own derived
-    /// record (with extra metadata like logos, external provider mappings, …) must be able
+    /// record (with extra metadata like logos, external provider mappings, ...) must be able
     /// to assign the extension's return value back to its strongly-typed <c>Clients</c>
     /// array without a cast. Regression for the type-preserving generic signature.
     /// </summary>
@@ -390,13 +390,13 @@ public class ClientJwksConfigurationExtensionsTests
             .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
             .Build();
 
-        // Step 1: same as Program.cs line 98 — configuration.Get<Settings>()
+        // Step 1: same as Program.cs line 98 - configuration.Get<Settings>()
         var settings = config.Get<SettingsLike>();
         Assert.NotNull(settings);
         Assert.Single(settings.Clients);
         Assert.Equal("oidf-fapi2-test", settings.Clients[0].ClientId);
 
-        // CRITICAL — on .NET 10, the binder DOES populate Jwks natively, BUT with what?
+        // CRITICAL - on .NET 10, the binder DOES populate Jwks natively, BUT with what?
         // Inspect raw state.
         // After Get<T>(), the .NET 10 binder pre-creates a non-null JsonWebKeySet with
         // an empty Keys array because it cannot construct the polymorphic JsonWebKey

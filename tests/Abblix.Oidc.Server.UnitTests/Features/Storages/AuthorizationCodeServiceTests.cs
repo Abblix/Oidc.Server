@@ -440,7 +440,7 @@ public class AuthorizationCodeServiceTests
     /// <summary>
     /// Verifies that RemoveAuthorizationCodeAsync performs an atomic get-and-remove
     /// (removeOnRetrieval: true) and returns the claimed grant. The atomic claim is what enforces
-    /// single-use against two concurrent redemptions of the same code — exactly one caller wins.
+    /// single-use against two concurrent redemptions of the same code - exactly one caller wins.
     /// </summary>
     [Fact]
     public async Task RemoveAuthorizationCodeAsync_ShouldGetAndRemoveAtomically()
@@ -470,7 +470,7 @@ public class AuthorizationCodeServiceTests
 
     /// <summary>
     /// Verifies that RemoveAuthorizationCodeAsync returns an invalid_grant failure when the code is
-    /// absent — already claimed by a concurrent request, already consumed, or never issued.
+    /// absent - already claimed by a concurrent request, already consumed, or never issued.
     /// </summary>
     [Fact]
     public async Task RemoveAuthorizationCodeAsync_WithAbsentCode_ReturnsFailure()

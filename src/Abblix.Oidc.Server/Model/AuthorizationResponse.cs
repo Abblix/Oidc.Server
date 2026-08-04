@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// The authorization response delivered to the client's redirect URI (via query, fragment or form_post), carrying
-/// either the success parameters (code/tokens) or the error, or — under JARM — the single packed <c>response</c> JWT.
+/// either the success parameters (code/tokens) or the error, or - under JARM - the single packed <c>response</c> JWT.
 /// This is the framework-neutral wire projection both transport adapters serialize. It is distinct from the domain
 /// result <see cref="Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse"/> (the abstract
 /// pipeline outcome): the formatter flattens that domain result onto this wire shape.
@@ -100,7 +100,7 @@ public record AuthorizationResponse
     [JsonPropertyName(Parameters.Issuer)]
     public string? Issuer { get; set; }
 
-    /// <summary>The JARM response JWT — when set, it is the sole wire parameter (RFC 9101 / JARM).</summary>
+    /// <summary>The JARM response JWT - when set, it is the sole wire parameter (RFC 9101 / JARM).</summary>
     [JsonPropertyName(Parameters.Response)]
     public string? Response { get; set; }
 }

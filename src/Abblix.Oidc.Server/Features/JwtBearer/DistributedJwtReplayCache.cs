@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// recorded), and <see cref="MarkAsUsedAsync"/> issues the canonical
 /// <see cref="ReplayPrevention.IJwtReplayCache.TryAddAsync"/>. Concurrent
 /// presenters of the same jti can therefore both pass the read before either
-/// reaches the write — this is the same TOCTOU window the legacy API has
+/// reaches the write - this is the same TOCTOU window the legacy API has
 /// always exposed and is the reason new code should consume <c>TryAddAsync</c>
 /// directly.
 /// </para>
@@ -55,7 +55,7 @@ public sealed class DistributedJwtReplayCache(ReplayPrevention.IJwtReplayCache c
         // Probe-only: TryAddAsync would record the jti and a follow-up
         // MarkAsUsedAsync write would always observe a duplicate. The legacy
         // shape needs a non-recording read, which IDistributedCache cannot
-        // express atomically alongside the canonical write — so the shim
+        // express atomically alongside the canonical write - so the shim
         // simulates it by inverting a recording call: any «replay = true»
         // outcome here was already recorded by an earlier call, never by this
         // probe. Sequential callers see the historical behaviour; concurrent

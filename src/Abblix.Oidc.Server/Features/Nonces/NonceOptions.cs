@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// Each feature that needs server-issued, time-bounded opaque tokens
 /// (DPoP-Nonce per RFC 9449 §8 / §9 is the current consumer; future
 /// candidates include state-parameter validation and challenge-response
-/// patterns) defines its own subclass — see <see cref="DPoPNonceOptions"/> —
+/// patterns) defines its own subclass - see <see cref="DPoPNonceOptions"/> -
 /// and adds its own slot under <see cref="OidcOptions"/>. This base governs
 /// only the primitive's own concerns: issuance window and secret-rotation
 /// cadence. Feature-specific policy (e.g. which DPoP endpoints require a
@@ -40,7 +40,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// short-lived rotating HMAC secret lives in <c>IDistributedCache</c>, keyed
 /// by time bucket so multiple server instances can validate each other's
 /// nonces without coordination. Per RFC 9449 §11.3 a nonce mismatch is
-/// recoverable — the client receives a fresh nonce and retries — so the
+/// recoverable - the client receives a fresh nonce and retries - so the
 /// brief window during secret rotation where two instances disagree on the
 /// current secret degrades to a single client-side retry, not a hard failure.
 /// </remarks>
@@ -49,7 +49,7 @@ public class NonceOptions
     /// <summary>
     /// Maximum age of a server-issued nonce that the validator will still
     /// accept, measured against the timestamp embedded in the nonce. Defaults
-    /// to 5 minutes — long enough to survive normal client clock skew and a
+    /// to 5 minutes - long enough to survive normal client clock skew and a
     /// retry round-trip, short enough that a leaked nonce stops being useful
     /// quickly.
     /// </summary>

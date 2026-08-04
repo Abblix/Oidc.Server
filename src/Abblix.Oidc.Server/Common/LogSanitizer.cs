@@ -33,8 +33,8 @@ internal static class LogSanitizer
     /// </summary>
     /// <remarks>
     /// A plain-text log sink (e.g. the default console logger) renders a structured-logging
-    /// parameter inline into the message line, so a newline in an attacker-supplied value — such as
-    /// an <c>auth_req_id</c> echoed back on a poll, or a requested scope — would forge an extra log
+    /// parameter inline into the message line, so a newline in an attacker-supplied value - such as
+    /// an <c>auth_req_id</c> echoed back on a poll, or a requested scope - would forge an extra log
     /// line (CRLF injection / log forging). As a library we do not control the host's sink, so we
     /// strip the line breaks at the source to neutralize this regardless of how the host logs.
     /// </remarks>

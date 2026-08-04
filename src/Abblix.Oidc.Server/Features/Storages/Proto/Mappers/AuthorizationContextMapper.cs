@@ -64,7 +64,7 @@ internal static class AuthorizationContextMapper
 
         proto.Resources.AddIfNotNull(source.Resources, r => r.OriginalString);
 
-        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string —
+        // RFC 9396 authorization_details persisted as the raw JsonArray's JSON string -
         // byte-exact (member order, type-specific payload) survives storage round-trip.
         if (source.AuthorizationDetails is { Count: > 0 })
             proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();

@@ -38,7 +38,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <see cref="DPoPUserInfoTests"/> (resource access, §9) so each runs as its own
 /// parallel xunit collection; this non-test base keeps the PAR -> /authorize ->
 /// /token choreography and the <c>cnf.jkt</c> assertions in one place. Helpers are
-/// <c>protected static</c> — section-specific helpers live on the concrete classes.
+/// <c>protected static</c> - section-specific helpers live on the concrete classes.
 /// </summary>
 public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
 {
@@ -94,7 +94,7 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
     /// Pushes a PAR request, retrieves the resulting <c>request_uri</c>, drives /authorize
     /// to consume it, and returns the issued auth code paired with the PKCE verifier so a
     /// caller can complete the flow at /token. Shared bootstrap for the success and
-    /// expecting-error driver variants — keeps the PAR + /authorize choreography in one
+    /// expecting-error driver variants - keeps the PAR + /authorize choreography in one
     /// place even though the two callers diverge on /token-stage expectations.
     /// </summary>
     protected static async Task<(string Verifier, string Code)> PerformParAndAuthorizeAsync(

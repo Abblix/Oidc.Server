@@ -6,11 +6,11 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Provides access to the collections of JWE algorithms supported by the JWT infrastructure.
-/// Projects both sets — key-management algorithms (the JWE <c>alg</c>, e.g. "RSA-OAEP-256") and
-/// content-encryption algorithms (the JWE <c>enc</c>, e.g. "A256GCM") — from the live keyed
+/// Projects both sets - key-management algorithms (the JWE <c>alg</c>, e.g. "RSA-OAEP-256") and
+/// content-encryption algorithms (the JWE <c>enc</c>, e.g. "A256GCM") - from the live keyed
 /// <see cref="IKeyManagementAlgorithm{TJsonWebKey}"/> and <see cref="IContentEncryptionAlgorithm"/> registrations, so
-/// discovery always reflects exactly the encryptors the host currently has registered — including
-/// algorithms the host added or replaced — with no registration-time bookkeeping to keep in sync.
+/// discovery always reflects exactly the encryptors the host currently has registered - including
+/// algorithms the host added or replaced - with no registration-time bookkeeping to keep in sync.
 /// </summary>
 /// <remarks>
 /// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenEncryptor"/>: an

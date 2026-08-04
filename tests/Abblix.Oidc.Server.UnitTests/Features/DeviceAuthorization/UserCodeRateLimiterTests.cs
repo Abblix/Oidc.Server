@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 /// attacks: the per-user-code backoff slows guessing of a single code, while the per-IP counter
 /// caps how many failures a single source may accumulate across many distinct codes. A successful
 /// verification legitimately clears the per-user-code backoff, but it must NOT clear the per-IP
-/// counter — otherwise an attacker who occasionally lands a valid code can reset the cross-code
+/// counter - otherwise an attacker who occasionally lands a valid code can reset the cross-code
 /// brute-force budget at will.
 /// </summary>
 public class UserCodeRateLimiterTests

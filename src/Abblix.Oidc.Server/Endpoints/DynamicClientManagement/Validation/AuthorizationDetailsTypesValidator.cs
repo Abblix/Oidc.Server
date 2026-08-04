@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// allowlist (RFC 9396 §5.1) names any <c>type</c> value the server does not understand,
 /// returning <c>invalid_client_metadata</c> per OIDC DCR §3.2. Without this gate the
 /// registration would succeed and every RAR-bearing request from this client would fail at
-/// the authorize/PAR endpoint with <c>invalid_authorization_details</c> — a worse error
+/// the authorize/PAR endpoint with <c>invalid_authorization_details</c> - a worse error
 /// surface for the deployer who registered with a typo.
 /// </summary>
 /// <remarks>
@@ -39,13 +39,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <see cref="IAuthorizationDetailValidator"/> implementations that request-time dispatch
 /// uses, via <see cref="KeyedService.AnyKey"/>. This makes registration gating, run-time
 /// gating, and discovery's <c>authorization_details_types_supported</c> field share one
-/// source of truth — same shape as <see cref="SupportedGrantTypeValidator"/>.
+/// source of truth - same shape as <see cref="SupportedGrantTypeValidator"/>.
 ///
 /// Semantics of the requested allowlist:
-/// - <c>null</c> — client does not request any constraint; this validator passes.
-/// - Empty array — client explicitly opts out of RAR; passes (a client may legitimately
+/// - <c>null</c> - client does not request any constraint; this validator passes.
+/// - Empty array - client explicitly opts out of RAR; passes (a client may legitimately
 ///   register zero allowed types to disable the feature for itself).
-/// - Non-empty array — every value must appear in the server-supported set, else reject.
+/// - Non-empty array - every value must appear in the server-supported set, else reject.
 /// </remarks>
 public class AuthorizationDetailsTypesValidator(
     IServiceProvider serviceProvider) : SyncClientRegistrationContextValidator

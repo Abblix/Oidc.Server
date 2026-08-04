@@ -34,7 +34,7 @@ public abstract record AuthorizationResponse(AuthorizationRequest Model)
 {
     /// <summary>
     /// Wire-level parameter names returned to the client by the authorization endpoint (via query,
-    /// fragment, form_post, or — under JARM — as claims inside the single <c>response</c> JWT). Shared by
+    /// fragment, form_post, or - under JARM - as claims inside the single <c>response</c> JWT). Shared by
     /// the core response encoder and the MVC serialization DTO so the two never drift.
     /// </summary>
     public static class Parameters

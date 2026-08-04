@@ -31,7 +31,7 @@ using System;
 public static class Base32
 {
     /// <summary>
-    /// Encodes the specified binary data into a Base32 string using the standard RFC 4648 alphabet (A–Z, 2–7).
+    /// Encodes the specified binary data into a Base32 string using the standard RFC 4648 alphabet (A-Z, 2-7).
     /// </summary>
     /// <param name="input">The binary data to encode.</param>
     /// <param name="padding">
@@ -46,7 +46,7 @@ public static class Base32
         => EncodeCore(input, padding, ToChar);
 
     /// <summary>
-    /// Encodes the specified binary data into a Base32hex string using the extended hexadecimal alphabet (0–9, A–V).
+    /// Encodes the specified binary data into a Base32hex string using the extended hexadecimal alphabet (0-9, A-V).
     /// </summary>
     /// <param name="input">The binary data to encode.</param>
     /// <param name="padding">
@@ -142,17 +142,17 @@ public static class Base32
     }
 
     /// <summary>
-    /// Maps a 5-bit value (0–31) to the corresponding Base32 character (A–Z, 2–7).
+    /// Maps a 5-bit value (0-31) to the corresponding Base32 character (A-Z, 2-7).
     /// </summary>
     private static char ToChar(int value) => value < 26 ? (char)('A' + value) : (char)('2' + (value - 26));
 
     /// <summary>
-    /// Maps a 5-bit value (0–31) to the corresponding Base32hex character (0–9, A–V).
+    /// Maps a 5-bit value (0-31) to the corresponding Base32hex character (0-9, A-V).
     /// </summary>
     private static char ToHexChar(int value) => value < 10 ? (char)('0' + value) : (char)('A' + (value - 10));
 
     /// <summary>
-    /// Maps a Base32 character to its numeric value (0–31), accepting both uppercase and lowercase.
+    /// Maps a Base32 character to its numeric value (0-31), accepting both uppercase and lowercase.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown if <paramref name="c"/> is not a valid Base32 symbol.</exception>
     private static int ToValue(char c)
@@ -165,7 +165,7 @@ public static class Base32
         };
 
     /// <summary>
-    /// Maps a Base32hex character to its numeric value (0–31), accepting both uppercase and lowercase.
+    /// Maps a Base32hex character to its numeric value (0-31), accepting both uppercase and lowercase.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown if <paramref name="c"/> is not a valid Base32hex symbol.</exception>
     private static int ToHexValue(char c)

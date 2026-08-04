@@ -89,7 +89,7 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
 
-        // A stored (stateful) access token via the auth-code path, so the introspection endpoint can look it up —
+        // A stored (stateful) access token via the auth-code path, so the introspection endpoint can look it up -
         // unlike the stateless client_credentials JWT. The PAR step also exercises the generated AuthorizationRequest
         // binding from a form POST.
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))

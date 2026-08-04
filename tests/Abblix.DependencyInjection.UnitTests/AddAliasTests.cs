@@ -303,7 +303,7 @@ public class AddAliasTests
 	/// <c>ImplementationType</c> alone misses such registrations; the helper must derive the
 	/// implementation type from the factory's generic argument too. Without that fix
 	/// AddAlias would throw «No registration found» for any host that used the typed-factory
-	/// shape — a silent breakage on .NET 10.
+	/// shape - a silent breakage on .NET 10.
 	/// </summary>
 	[Fact]
 	public void AddAlias_AfterAddSingletonByInterface_FindsSourceViaFactoryGenericArg()

@@ -14,8 +14,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <summary>
 /// RFC 9126 §6 per-client <c>require_pushed_authorization_requests</c> end-to-end: a flagged
 /// client can only start an authorization flow via PAR. The critical property locked here is that
-/// the PAR endpoint itself accepts the flagged client — the requirement must not deadlock the only
-/// entry point the client is allowed to use — while a plain /authorize request is rejected.
+/// the PAR endpoint itself accepts the flagged client - the requirement must not deadlock the only
+/// entry point the client is allowed to use - while a plain /authorize request is rejected.
 /// </summary>
 public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : TestBase(factory)
 {
@@ -40,7 +40,7 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
         Assert.True(
             registered[ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests]!.GetValue<bool>());
 
-        // 2. The PAR endpoint accepts the flagged client and issues a request_uri — the per-client
+        // 2. The PAR endpoint accepts the flagged client and issues a request_uri - the per-client
         // requirement is enforced only at the authorization endpoint.
         var (_, challenge) = GeneratePkcePair();
         var parResponse = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>

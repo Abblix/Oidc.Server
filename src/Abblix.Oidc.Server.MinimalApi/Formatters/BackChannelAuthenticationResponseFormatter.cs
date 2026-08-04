@@ -58,7 +58,7 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status403Forbidden),
 
                 // The base-type property pattern matches every non-null OidcError, so it is the exhaustive
-                // catch-all for the failure branch — a discard arm here would be reachable only for a null
+                // catch-all for the failure branch - a discard arm here would be reachable only for a null
                 // error, which the Result failure value never is, and dereferencing it was the defect.
                 { Error: var err, ErrorDescription: var description }
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status400BadRequest),

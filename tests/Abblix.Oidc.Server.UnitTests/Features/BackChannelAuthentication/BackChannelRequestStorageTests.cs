@@ -49,7 +49,7 @@ public class BackChannelRequestStorageTests
 {
     private const string RequestId = "ciba-req-1";
 
-    // Fixed instant — the storage under test never inspects the timestamps, and TimeProvider is not
+    // Fixed instant - the storage under test never inspects the timestamps, and TimeProvider is not
     // needed because nothing here evaluates expiry.
     private static readonly DateTimeOffset Instant = new(2026, 7, 2, 0, 0, 0, TimeSpan.Zero);
 
@@ -57,7 +57,7 @@ public class BackChannelRequestStorageTests
     /// A faithful in-memory <see cref="IEntityStorage"/> that honours the <c>removeOnRetrieval</c>
     /// contract exactly as <see cref="DistributedCacheStorage"/> does: a read with the flag set consumes
     /// the entry, a read without it leaves the entry in place. Using this rather than a mock of
-    /// <see cref="IBackChannelRequestStorage"/> is deliberate — the defect lives in which flag
+    /// <see cref="IBackChannelRequestStorage"/> is deliberate - the defect lives in which flag
     /// <see cref="BackChannelRequestStorage"/> passes to the underlying storage, so the test must exercise
     /// that flag against a store that actually acts on it.
     /// </summary>

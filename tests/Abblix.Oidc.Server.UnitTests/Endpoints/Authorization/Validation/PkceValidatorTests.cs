@@ -62,7 +62,7 @@ public class PkceValidatorTests
 
     /// <summary>
     /// Verifies that a code_challenge the client already used for a previously issued authorization code is
-    /// rejected when reuse detection is enabled — a code_challenge must be transaction-specific (RFC 9700
+    /// rejected when reuse detection is enabled - a code_challenge must be transaction-specific (RFC 9700
     /// Section 2.1.1). A structurally valid S256 challenge would otherwise pass.
     /// </summary>
     [Fact]
@@ -544,7 +544,7 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Under the FAPI 2.0 profile an S256 challenge is accepted — the profile names S256 as the sole
+    /// Under the FAPI 2.0 profile an S256 challenge is accepted - the profile names S256 as the sole
     /// method.
     /// </summary>
     [Fact]

@@ -70,7 +70,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds <typeparamref name="TService"/> as a SHARED-instance alias for the existing
-    /// <typeparamref name="TImplementation"/> registration — unless <typeparamref name="TService"/>
+    /// <typeparamref name="TImplementation"/> registration - unless <typeparamref name="TService"/>
     /// is already registered. Sister of <see cref="AddAlias{TService,TImplementation}"/> with
     /// <c>TryAdd</c> semantics on the alias service type: a host pre-registration of the aliased
     /// contract wins, which keeps the library-wide "host pre-registration wins" convention on
@@ -100,7 +100,7 @@ public static class ServiceCollectionExtensions
     /// <see cref="AddAlias{TService,TImplementation}"/>: same semantic of «route this service
     /// to that already-registered impl», but adds via <c>TryAddEnumerable</c> (so repeated
     /// calls dedupe on <c>(ServiceType, ImplementationType)</c>) and always uses a typed
-    /// factory delegate that resolves through the source registration — guaranteeing the
+    /// factory delegate that resolves through the source registration - guaranteeing the
     /// alias and the source share one instance.
     /// </summary>
     /// <typeparam name="TService">The enumerable service type to register the alias under.</typeparam>
@@ -131,7 +131,7 @@ public static class ServiceCollectionExtensions
     /// <para>
     /// Two-tier lookup of the source: a concrete registration
     /// (<c>ServiceType == TImpl</c>) wins over an alias registration
-    /// (<c>ImplementationType == TImpl</c>) — without this priority a second alias-helper
+    /// (<c>ImplementationType == TImpl</c>) - without this priority a second alias-helper
     /// call would pick the previous alias as «source», capture the wrong ServiceType, and
     /// break later <c>Compose&lt;&gt;</c>-style replacements with an
     /// <see cref="InvalidCastException"/> at resolve. The fallback derives implementation
@@ -192,7 +192,7 @@ public static class ServiceCollectionExtensions
     /// implementation type, an implementation instance, or a typed factory
     /// <c>Func&lt;IServiceProvider, TImpl&gt;</c> (.NET 10 generic AddSingleton uses the last shape,
     /// so the property alone returns null for those registrations). Supports both plain and keyed
-    /// descriptors — for keyed ones the type is derived from the <c>Keyed*</c> counterparts, including
+    /// descriptors - for keyed ones the type is derived from the <c>Keyed*</c> counterparts, including
     /// the keyed factory shape <c>Func&lt;IServiceProvider, object?, TImpl&gt;</c> produced when
     /// <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/> moves a family
     /// member into its keyed registration.
@@ -284,7 +284,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Creates a keyed alias registration for <typeparamref name="TService"/> under
-    /// <paramref name="serviceKey"/> — unless that (service type, key) pair is already
+    /// <paramref name="serviceKey"/> - unless that (service type, key) pair is already
     /// registered. Sister of <see cref="AddKeyedAlias{TService,TSource}"/> with <c>TryAdd</c>
     /// semantics on the alias identity: a pre-existing registration under the same key wins,
     /// mirroring <see cref="TryAddAlias{TService,TImplementation}"/> for keyed seams and
@@ -458,7 +458,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Opens the composed <typeparamref name="TInterface"/> family for in-place editing: returns a live
     /// <see cref="IComposition{TInterface}"/> cursor over its members. Insert, remove or reorder through the
-    /// cursor and the change is live — the composite reads its members via <c>GetKeyedServices</c> at resolve,
+    /// cursor and the change is live - the composite reads its members via <c>GetKeyedServices</c> at resolve,
     /// so the edit takes effect with no separate recompose. The composite type is derived from the service keys
     /// of the keyed member registrations, so the host never needs to name it.
     /// </summary>
@@ -470,7 +470,7 @@ public static class ServiceCollectionExtensions
     /// both hides them from plain resolution (the singular resolve yields only the composite) and names the
     /// composite they belong to. The cursor edits exactly those descriptors in place.
     /// <see cref="IComposition{TInterface}"/> adds position-aware sugar (<c>AddAfter</c>, <c>AddBefore</c>,
-    /// <c>Remove</c>, …); anchors are matched by implementation type via
+    /// <c>Remove</c>, ...); anchors are matched by implementation type via
     /// <see cref="ResolveImplementationType"/>, which identifies a member even when it was registered through a
     /// typed factory (e.g. by <see cref="TryAddEnumerableAlias{TService,TImplementation}"/>).
     /// <code>
@@ -502,7 +502,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
-    /// <paramref name="serviceKey"/> into a single composite resolvable under that same key — the keyed
+    /// <paramref name="serviceKey"/> into a single composite resolvable under that same key - the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
     /// The members move to keyed registrations under a <see cref="ComposedFamilyKey"/> pairing the service
     /// key with the composite type, so same-interface families under different keys stay isolated and the
@@ -542,7 +542,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Opens the composed keyed <typeparamref name="TInterface"/> family for in-place editing: returns a live
     /// <see cref="IComposition{TInterface}"/> cursor over its members. Insert, remove or reorder through the
-    /// cursor and the change is live — the keyed composite reads its members via <c>GetKeyedServices</c> at
+    /// cursor and the change is live - the keyed composite reads its members via <c>GetKeyedServices</c> at
     /// resolve, so the edit takes effect with no separate recompose. The composite type is derived from the
     /// <see cref="ComposedFamilyKey"/> service keys of the member registrations, so the host never names it.
     /// </summary>
@@ -554,7 +554,7 @@ public static class ServiceCollectionExtensions
     /// The mechanics mirror <see cref="Decompose{TInterface}"/>, except members are keyed by a
     /// <see cref="ComposedFamilyKey"/> pairing the service key with the composite type, so pipelines of the
     /// same interface under different keys stay isolated. <see cref="IComposition{TInterface}"/> adds the same
-    /// position-aware sugar (<c>AddAfter</c>, <c>Remove</c>, …).
+    /// position-aware sugar (<c>AddAfter</c>, <c>Remove</c>, ...).
     /// </remarks>
     /// <exception cref="InvalidOperationException">The family has not been composed under this key.</exception>
     public static IComposition<TInterface> DecomposeKeyed<TInterface>(
@@ -593,7 +593,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
-    /// <paramref name="compositeType"/> under <paramref name="serviceKey"/> — the keyed sibling of
+    /// <paramref name="compositeType"/> under <paramref name="serviceKey"/> - the keyed sibling of
     /// <see cref="EnsureNotComposed"/>. The sanctioned way to edit an already-composed keyed family is
     /// <see cref="DecomposeKeyed{TInterface}"/> and editing the live cursor it returns.
     /// </summary>
@@ -646,7 +646,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Derives the composite type of the <paramref name="interfaceType"/> family from the collection itself:
     /// composition keys the member registrations by the composite type, so the service key of any keyed
-    /// <paramref name="interfaceType"/> descriptor names the composite — the descriptors are the registry.
+    /// <paramref name="interfaceType"/> descriptor names the composite - the descriptors are the registry.
     /// </summary>
     private static Type? FindCompositeType(this IServiceCollection services, Type interfaceType)
         => services
@@ -660,7 +660,7 @@ public static class ServiceCollectionExtensions
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
     /// <paramref name="compositeType"/>. A second composition would rebuild the composite over a member set
     /// that already contains the alias to the first composite, so the new composite would resolve one of its
-    /// own children back to itself — a self-referential singleton that deadlocks on first resolve. This
+    /// own children back to itself - a self-referential singleton that deadlocks on first resolve. This
     /// happens when an opt-in feature is applied twice (e.g. two registration modules both call
     /// AddBackChannelAuthentication or AddDeviceAuthorization) or a public compose-family method is called
     /// before AddOidcCore, which composes it again. The sanctioned way to edit an already-composed family is
@@ -722,7 +722,7 @@ public static class ServiceCollectionExtensions
     {
         var parameterType = ResolveCompositeParameterType(compositeType, typeof(TInterface));
 
-        // The composite adopts the SHORTEST lifetime among its members, so it never outlives one of them —
+        // The composite adopts the SHORTEST lifetime among its members, so it never outlives one of them -
         // a composite that outlived a member would capture a shorter-lived service. Members keep their OWN
         // lifetime: a longer-lived member (a singleton, say) is simply shared across every composite instance,
         // which is safe (the composite is the shorter-lived one) and cheaper than promoting it. ServiceLifetime

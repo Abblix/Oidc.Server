@@ -460,13 +460,13 @@ public class ScopeManagerExtensionsTests
 
     /// <summary>
     /// Verifies a requested scope outside the client's allowed (registered) scope set is rejected.
-    /// RFC 6749 §3.3: the authorization server restricts scope by policy — a client must not obtain
+    /// RFC 6749 §3.3: the authorization server restricts scope by policy - a client must not obtain
     /// a scope it was never registered for, even if that scope is registered server-wide.
     /// </summary>
     [Fact]
     public void Validate_RequestedScopeNotInClientAllowedScopes_ShouldReject()
     {
-        // Arrange — the scope is registered globally, but not in the client's allowed set.
+        // Arrange - the scope is registered globally, but not in the client's allowed set.
         var scopes = new[] { Scopes.OpenId, Scopes.Profile };
         var allowedClientScopes = new[] { Scopes.OpenId };
 

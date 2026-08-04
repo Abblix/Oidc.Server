@@ -65,7 +65,7 @@ public class AuthorizationRequestBindingTests
         // Locks the assumption JsonSerializerModelBinder relies on: a wire
         // authorization_details parameter (a JSON array string after MVC
         // performs its own form/query decoding) round-trips byte-exact via
-        // JsonSerializer.Deserialize<JsonArray> — preserving member order
+        // JsonSerializer.Deserialize<JsonArray> - preserving member order
         // and the type-specific extension payload that downstream protobuf
         // storage and JWT claim emission also preserve byte-exact.
         const string wireJson =

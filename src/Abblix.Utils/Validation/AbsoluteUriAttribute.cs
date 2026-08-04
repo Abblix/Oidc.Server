@@ -28,7 +28,7 @@ namespace Abblix.Utils.Validation;
 
 /// <summary>
 /// A validation attribute that requires the value to be an absolute URI and, optionally, to use a specific scheme.
-/// Absence is valid — combine with <see cref="RequiredAttribute"/> to also reject a missing value. Shared by the MVC
+/// Absence is valid - combine with <see cref="RequiredAttribute"/> to also reject a missing value. Shared by the MVC
 /// and Minimal API OIDC server adapters, whose source generators emit it (with the marker's scheme argument) from the
 /// declarative core <c>AbsoluteUri</c> marker.
 /// <param name="requireScheme">

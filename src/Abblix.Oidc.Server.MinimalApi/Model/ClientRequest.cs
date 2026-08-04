@@ -26,7 +26,7 @@ using Core = Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.MinimalApi.Model;
 
 /// <summary>
-/// The client-authentication context carried alongside a token, revocation or introspection request — the form-posted
+/// The client-authentication context carried alongside a token, revocation or introspection request - the form-posted
 /// secret/assertion, the <c>Authorization</c> header, the mTLS client certificate and the DPoP proof. The bound
 /// properties, <c>BindAsync</c> and the projection onto the core model are generated from
 /// <see cref="Core.ClientRequest"/> by the Minimal API model source generator.

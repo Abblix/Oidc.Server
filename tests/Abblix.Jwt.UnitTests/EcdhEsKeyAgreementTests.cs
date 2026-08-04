@@ -82,7 +82,7 @@ public class EcdhEsKeyAgreementTests
 	/// <summary>
 	/// RFC 7518 Appendix C, the canonical worked ECDH-ES example: deriving with Bob's private key
 	/// and Alice's ephemeral public key must yield exactly the 128-bit CEK the appendix lists.
-	/// This known-answer test pins the whole Concat KDF construction — the length-prefixed
+	/// This known-answer test pins the whole Concat KDF construction - the length-prefixed
 	/// AlgorithmID/PartyUInfo/PartyVInfo, the SuppPubInfo bit length, the round counter and the
 	/// hash-output truncation.
 	/// </summary>
@@ -100,7 +100,7 @@ public class EcdhEsKeyAgreementTests
 
 	/// <summary>
 	/// RFC 7518 §4.6: in Direct Key Agreement mode the JWE Encrypted Key is the empty octet
-	/// sequence — a non-empty value signals a malformed or tampered token and must be rejected.
+	/// sequence - a non-empty value signals a malformed or tampered token and must be rejected.
 	/// </summary>
 	[Fact]
 	public void TryDecryptKey_DirectModeWithNonEmptyEncryptedKey_Fails()
@@ -115,7 +115,7 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct —
+	/// RFC 7518 §4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
 	/// equal values collapse the producer and recipient identities the KDF is meant to bind.
 	/// </summary>
 	[Fact]
@@ -143,7 +143,7 @@ public class EcdhEsKeyAgreementTests
 
 	/// <summary>
 	/// An ephemeral key on a curve different from the recipient key's makes the agreement
-	/// meaningless (and is the classic invalid-curve attack shape) — it must be rejected
+	/// meaningless (and is the classic invalid-curve attack shape) - it must be rejected
 	/// before any computation.
 	/// </summary>
 	[Fact]
@@ -181,7 +181,7 @@ public class EcdhEsKeyAgreementTests
 	/// <summary>
 	/// The encryption side must generate a fresh ephemeral key on the recipient's curve, publish
 	/// it as 'epk' with public members only, and derive a CEK the recipient can re-derive from
-	/// that header — the round-trip at the encryptor level, independent of content encryption.
+	/// that header - the round-trip at the encryptor level, independent of content encryption.
 	/// </summary>
 	[Fact]
 	public void GenerateContentEncryptionKey_DirectMode_PublishesEpkAndDerivesRecoverableCek()
@@ -251,7 +251,7 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// Decrypting with a different EC key than the one the token was encrypted to must fail —
+	/// Decrypting with a different EC key than the one the token was encrypted to must fail -
 	/// the agreement yields a different CEK and the content authentication tag rejects it.
 	/// </summary>
 	[Fact]
@@ -296,7 +296,7 @@ public class EcdhEsKeyAgreementTests
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
 		var jwe = await creator.IssueAsync(token, signingKey, recipientKey, keyManagementAlgorithm, contentEncryption);
 
-		// Assert: JWE structure per RFC 7518 §4.6 — the encrypted key is empty exactly in direct mode
+		// Assert: JWE structure per RFC 7518 §4.6 - the encrypted key is empty exactly in direct mode
 		var parts = jwe.Split('.');
 		Assert.Equal(5, parts.Length);
 		Assert.Equal(emptyEncryptedKey, parts[1].Length == 0);

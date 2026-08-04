@@ -113,7 +113,7 @@ public class TokenRequestProcessor(
 		};
 
 		// RFC 6749 §4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
-		// returns neither a refresh token nor an ID token — the exchanged access token is the whole
+		// returns neither a refresh token nor an ID token - the exchanged access token is the whole
 		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
 		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
 		// cannot mint a credential these grants must never produce. All user-facing grants
@@ -141,7 +141,7 @@ public class TokenRequestProcessor(
 					//     same-key MUST on every refresh. Source the binding from authContext
 					//     (the evaluator stamps the live proof's thumbprint) rather than from
 					//     the original grant context, otherwise a non-PAR initial flow loses
-					//     the binding and the next refresh would accept any key — a §5 violation.
+					//     the binding and the next refresh would accept any key - a §5 violation.
 					//     authContext.ProofKeyThumbprint is null when the request carried no proof,
 					//     which keeps Bearer-only public flows unchanged.
 					_ => authContext.ProofKeyThumbprint,

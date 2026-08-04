@@ -95,7 +95,7 @@ public class EndpointOptInTests
     [Fact]
     public void Each_opt_in_enables_exactly_its_own_endpoint_on_top_of_Base()
     {
-        // The result is Base plus exactly the one opted-in flag — no other opt-in endpoint leaks on.
+        // The result is Base plus exactly the one opted-in flag - no other opt-in endpoint leaks on.
         // (Device is covered separately because its options validator requires configured settings.)
         Assert.Equal(OidcEndpoints.Base | OidcEndpoints.CheckSession,
             EnabledAfter(s => s.AddCheckSession()));
@@ -136,7 +136,7 @@ public class EndpointOptInTests
     [Fact]
     public void All_opt_ins_together_enable_the_full_All_set()
     {
-        // Base plus all six opt-in endpoints reconstitutes the complete OidcEndpoints.All set — the previous
+        // Base plus all six opt-in endpoints reconstitutes the complete OidcEndpoints.All set - the previous
         // every-endpoint-on default is exactly Base with every AddX() applied.
         var enabled = EnabledAfter(s =>
         {

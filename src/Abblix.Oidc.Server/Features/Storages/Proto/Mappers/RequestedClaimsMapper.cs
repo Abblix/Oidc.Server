@@ -101,7 +101,7 @@ internal static class RequestedClaimsMapper
     {
         var proto = new RequestedClaimDetails();
 
-        // OIDC Core 5.5 permits a requested claim to carry a null value (e.g. {"email": null}) — a voluntary
+        // OIDC Core 5.5 permits a requested claim to carry a null value (e.g. {"email": null}) - a voluntary
         // claim with no constraints. Persist it as an empty detail rather than dereferencing the null source.
         if (source is null)
             return proto;

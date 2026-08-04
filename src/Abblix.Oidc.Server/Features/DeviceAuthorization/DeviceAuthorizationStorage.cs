@@ -93,7 +93,7 @@ public class DeviceAuthorizationStorage(
     {
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 §3.2) and gates on expiry first, so polling cannot extend the
-        // code and the TTL here is always positive — no second clock read that could race the expiry boundary
+        // code and the TTL here is always positive - no second clock read that could race the expiry boundary
         return cache.SetAsync(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
             serializer.Serialize(request),

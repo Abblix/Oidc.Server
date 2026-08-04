@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 
 /// <summary>
 /// Builds the <c>id_token</c> response-type component of an authorization endpoint success
-/// response — the OIDC identity-token contributor of the Implicit / Hybrid Flow. Generates
+/// response - the OIDC identity-token contributor of the Implicit / Hybrid Flow. Generates
 /// an ID token via <see cref="IIdentityTokenService"/> and stores it on the running
 /// <see cref="SuccessfullyAuthenticated"/> result. Registered ONLY when a host calls
 /// <c>EnableImplicitFlow()</c>; absent by default per OAuth 2.1 (draft) deprecation guidance.

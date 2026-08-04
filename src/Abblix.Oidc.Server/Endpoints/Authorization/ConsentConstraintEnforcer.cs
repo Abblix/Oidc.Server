@@ -103,7 +103,7 @@ public class ConsentConstraintEnforcer(
             return;
 
         // Type-level subset: every granted entry's type must appear among the requested types. The
-        // per-client allowlist (re-checked below) is not enough on its own — a client allowed types
+        // per-client allowlist (re-checked below) is not enough on its own - a client allowed types
         // {A, B} that requested only {A} must not have a {B} entry injected by the consent decision.
         var requestedTypes = (request.AuthorizationDetails?.ToTypedArray() ?? [])
             .Select(detail => detail.Type)

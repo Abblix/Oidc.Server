@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IAuthorizationResponseEncoder"/>. Applies the <c>iss</c> (RFC 9207) and
-/// implicit/hybrid <c>scope</c> gating, and — for a JARM (<c>*.jwt</c>) response mode — packs the
+/// implicit/hybrid <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
 /// Mutates the response in place; the transport layer only maps the encoded response onto the wire.
 /// </summary>
@@ -79,7 +79,7 @@ public class AuthorizationResponseEncoder(
 			}
 
 			// Interaction responses (login/consent/account-selection) redirect to the AS's own UI,
-			// not the client, so JARM does not apply — leave them untouched.
+			// not the client, so JARM does not apply - leave them untouched.
 		}
 	}
 

@@ -34,7 +34,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.RichAuthorizationRequests;
 
 /// <summary>
-/// Verifies the discovery surface of RAR — the
+/// Verifies the discovery surface of RAR - the
 /// <c>authorization_details_types_supported</c> metadata field is sourced from the same
 /// keyed-DI registry that request-time dispatch uses, and is omitted entirely when zero
 /// per-type validators are registered (OIDC discovery convention: absent = unsupported).

@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Common;
 /// The Bearer challenge attaches <c>error</c> / <c>error_description</c> when the inbound
 /// failure is in fact a Bearer-token failure (<c>invalid_token</c>, <c>insufficient_scope</c>).
 /// When the failure is a DPoP-specific error and Bearer is advertised alongside DPoP, the
-/// Bearer line carries only the realm — RFC 9449 §7.1 example: «the Bearer scheme didn't
+/// Bearer line carries only the realm - RFC 9449 §7.1 example: «the Bearer scheme didn't
 /// fail; the client used the DPoP scheme», so attaching <c>error="invalid_dpop_proof"</c>
 /// to the Bearer line would be misleading.
 /// </remarks>
@@ -54,7 +54,7 @@ public static class WwwAuthenticateBuilder
         challenge.Append("realm", realm);
 
         // RFC 6750 §3.1: when the request carried no authentication information at all, the
-        // challenge must stay bare — no error code or description, just the scheme (and realm).
+        // challenge must stay bare - no error code or description, just the scheme (and realm).
         if (includeError && error is not MissingAuthenticationError)
         {
             challenge.Append("error", error.Error);
@@ -118,8 +118,8 @@ public static class WwwAuthenticateBuilder
 
     /// <summary>
     /// Accumulates a single <c>WWW-Authenticate</c> challenge value as
-    /// <c>scheme name1="v1", name2="v2", …</c>. Owns the comma-vs-space delimiter logic so
-    /// callers stay declarative — they just append name/value pairs and skip empties.
+    /// <c>scheme name1="v1", name2="v2", ...</c>. Owns the comma-vs-space delimiter logic so
+    /// callers stay declarative - they just append name/value pairs and skip empties.
     /// </summary>
     private sealed class Challenge(string scheme)
     {
@@ -138,7 +138,7 @@ public static class WwwAuthenticateBuilder
 
             // RFC 7235 §2.2 / RFC 9110 §5.6.4: inside a quoted-string each `"` MUST be
             // backslash-escaped, and `\` itself MUST be doubled. Anything else (CR/LF
-            // and other control bytes) is rejected upstream — mutating values silently
+            // and other control bytes) is rejected upstream - mutating values silently
             // would obscure malformed inputs.
             foreach (var c in value)
             {

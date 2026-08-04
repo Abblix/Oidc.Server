@@ -37,12 +37,12 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// to the source binding as practical:
 /// <list type="bullet">
 /// <item><description>
-/// <c>settings.Clients.WithJwksFromConfiguration(section)</c> — eager, runs right after
+/// <c>settings.Clients.WithJwksFromConfiguration(section)</c> - eager, runs right after
 /// <c>configuration.Get&lt;Settings&gt;()</c>, so every later consumer of
 /// <c>settings.Clients</c> sees populated <c>Jwks</c>.
 /// </description></item>
 /// <item><description>
-/// <c>options.AddClientJwksFromConfiguration(section)</c> — convenience inside the
+/// <c>options.AddClientJwksFromConfiguration(section)</c> - convenience inside the
 /// <c>AddOidcServices</c> options lambda, equivalent to mutating
 /// <c>options.Clients</c> through <c>WithJwksFromConfiguration</c>.
 /// </description></item>
@@ -56,12 +56,12 @@ public static class ClientJwksConfigurationExtensions
     /// Mutates in place when the input is already a <typeparamref name="T"/> array; otherwise
     /// materialises a fresh array.
     /// </summary>
-    /// <typeparam name="T">A concrete client type — either <see cref="ClientInfo"/> directly
+    /// <typeparam name="T">A concrete client type - either <see cref="ClientInfo"/> directly
     /// or a host-supplied derived type (e.g. carrying app-specific metadata). The return type
     /// preserves <typeparamref name="T"/> so the host can assign the result back to its own
     /// strongly-typed <c>Clients</c> array without casting.</typeparam>
     /// <param name="clients">The clients whose <c>Jwks</c> should be populated.</param>
-    /// <param name="clientsSection">The configuration section that holds the Clients tree —
+    /// <param name="clientsSection">The configuration section that holds the Clients tree -
     /// typically <c>configuration.GetSection("Clients")</c>.</param>
     /// <returns>The same clients (as an array) with any newly populated <c>Jwks</c>.</returns>
     /// <remarks>

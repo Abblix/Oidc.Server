@@ -37,7 +37,7 @@ public class DPoPOptions
     /// Tolerance window applied to the <c>iat</c> claim of an incoming DPoP proof: the
     /// proof is accepted if its <c>iat</c> falls within this duration of the server's
     /// current time. Default is 1 minute. Tighter than the JWT <c>exp</c> machinery
-    /// because DPoP proofs have no expiration claim — <c>iat</c> bounds them.
+    /// because DPoP proofs have no expiration claim - <c>iat</c> bounds them.
     /// </summary>
     public TimeSpan IssuedAtTolerance { get; set; } = TimeSpan.FromMinutes(1);
 

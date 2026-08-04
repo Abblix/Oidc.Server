@@ -71,7 +71,7 @@ public class DecomposeTests
 
         using var provider = services.BuildServiceProvider();
 
-        // Plural resolution yields a single element — the composite; members are keyed, invisible to plain resolve.
+        // Plural resolution yields a single element - the composite; members are keyed, invisible to plain resolve.
         Assert.Single(provider.GetServices<IPipelineStep>());
     }
 
@@ -235,7 +235,7 @@ public class DecomposeTests
     {
         var services = ComposedFamily(); // all singletons, so the composite is a singleton
 
-        // A scoped member is shorter-lived than the singleton composite — it would be captured — so it is rejected.
+        // A scoped member is shorter-lived than the singleton composite - it would be captured - so it is rejected.
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.Decompose<IPipelineStep>()
                 .AddLast(ServiceDescriptor.Scoped<IPipelineStep, StepC>()));
@@ -250,7 +250,7 @@ public class DecomposeTests
         services.AddScoped<IPipelineStep, StepB>();
         services.Compose<IPipelineStep, PipelineComposite>(); // scoped composite
 
-        // A singleton member is longer-lived than the scoped composite — safe, it is simply shared.
+        // A singleton member is longer-lived than the scoped composite - safe, it is simply shared.
         services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -277,7 +277,7 @@ public class DecomposeTests
         Assert.NotSame(composite1, composite2);
         Assert.NotSame(composite1.Steps.OfType<StepB>().Single(), composite2.Steps.OfType<StepB>().Single());
 
-        // ...but the singleton StepA is created once and shared — the SAME instance goes into both composites,
+        // ...but the singleton StepA is created once and shared - the SAME instance goes into both composites,
         // not re-created per scoped composite.
         Assert.Same(composite1.Steps.OfType<StepA>().Single(), composite2.Steps.OfType<StepA>().Single());
     }

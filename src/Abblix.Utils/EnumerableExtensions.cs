@@ -40,12 +40,12 @@ public static class EnumerableExtensions
 	/// Forces a sequence to be evaluated once and returns the result as a non-lazy
 	/// <see cref="IReadOnlyCollection{T}"/> that callers can iterate any number of times.
 	/// Use at any site that needs to enumerate the same <see cref="IEnumerable{T}"/> more than once
-	/// (cost estimate + actual call, log + record, etc.) — a lazy LINQ pipeline or an iterator
+	/// (cost estimate + actual call, log + record, etc.) - a lazy LINQ pipeline or an iterator
 	/// method passed by an upstream caller would otherwise re-execute its source per enumeration.
 	/// </summary>
 	/// <remarks>
 	/// Skips the allocation when <paramref name="source"/> is already a concrete collection
-	/// (<c>T[]</c>, <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, etc.) — only lazy /
+	/// (<c>T[]</c>, <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, etc.) - only lazy /
 	/// iterator-method sources pay for a one-shot copy.
 	/// </remarks>
 	/// <typeparam name="T">The type of elements in the sequence.</typeparam>

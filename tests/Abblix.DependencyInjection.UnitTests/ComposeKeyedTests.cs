@@ -70,7 +70,7 @@ public class ComposeKeyedTests
 
     /// <summary>
     /// Two families of the same interface and composite class under different keys must not leak members into
-    /// each other — the reason members are keyed by a (service key, composite type) pair.
+    /// each other - the reason members are keyed by a (service key, composite type) pair.
     /// </summary>
     [Fact]
     public void ComposeKeyed_TwoFamiliesSameInterfaceAndComposite_StayIsolated()

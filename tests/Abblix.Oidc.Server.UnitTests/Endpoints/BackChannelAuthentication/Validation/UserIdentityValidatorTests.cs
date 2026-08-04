@@ -206,7 +206,7 @@ public class UserIdentityValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert — pin the error code (the stable contract), not the description wording.
+        // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
@@ -234,7 +234,7 @@ public class UserIdentityValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert — pin the error code (the stable contract), not the description wording.
+        // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }

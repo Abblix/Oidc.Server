@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// the implementation keyed by the entry's <c>type</c> value.
 /// </summary>
 /// <remarks>
-/// The library ships no concrete implementations of this interface — each authorization-detail
+/// The library ships no concrete implementations of this interface - each authorization-detail
 /// type (e.g. <c>payment_initiation</c>, <c>consent</c>, OpenID4VC presentation schemas) demands
 /// its own per-type schema and is contributed by the host or a separate package. RFC 9396 §5
 /// requires the AS to refuse any entry whose <c>type</c> is unknown; with zero implementations

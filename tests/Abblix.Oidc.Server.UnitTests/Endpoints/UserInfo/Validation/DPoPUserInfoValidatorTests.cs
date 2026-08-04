@@ -50,7 +50,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo.Validation;
 /// resource-server enforcement matrix: scheme/binding alignment, proof presence,
 /// proof-key thumbprint match against <c>cnf.jkt</c>, and the optional §8 nonce
 /// challenge-response loop. Mirrors the structure of
-/// <see cref="DPoPTokenEndpointValidatorTests"/> — proof JWT structural / signature
+/// <see cref="DPoPTokenEndpointValidatorTests"/> - proof JWT structural / signature
 /// checks belong to <c>ProofValidatorTests</c>, this suite mocks
 /// <see cref="IProofValidator"/> to focus on the binding-decision wiring.
 /// </summary>
@@ -143,7 +143,7 @@ public class DPoPUserInfoValidatorTests
     public async Task ValidateAsync_ProofKeyMismatch_ReturnsInvalidDPoPProof()
     {
         // Proof validates structurally but its key thumbprint does not match the cnf.jkt
-        // committed on the access token — replay with a different key.
+        // committed on the access token - replay with a different key.
         SetupProofValidatorSuccess(BuildProof(thumbprint: OtherThumbprint));
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);

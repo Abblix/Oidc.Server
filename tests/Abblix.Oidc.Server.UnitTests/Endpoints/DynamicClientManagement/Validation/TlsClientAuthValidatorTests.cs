@@ -79,7 +79,7 @@ public class TlsClientAuthValidatorTests
         // Act
         var result = await _validator.ValidateAsync(context);
 
-        // Assert — pin the error code (the stable contract), not the description wording.
+        // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }

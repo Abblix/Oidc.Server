@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// Deliberately a closed enum rather than a set of independent booleans: the value set is fixed by
 /// the library (a host cannot invent a profile), and a single discriminator is what the
 /// effective-policy lookup and the fail-loud self-consistency check both key on. New profiles
-/// (message-signing, HAIP, …) extend this enum; the control mapping lives in
+/// (message-signing, HAIP, ...) extend this enum; the control mapping lives in
 /// <see cref="Features.ClientInformation.SecurityProfileRequirements"/> so adding one touches a
 /// single place.
 /// </remarks>

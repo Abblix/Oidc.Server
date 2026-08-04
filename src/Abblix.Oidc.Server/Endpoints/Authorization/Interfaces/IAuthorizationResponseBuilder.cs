@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// processors: the orchestration logic (auth-session selection, consent, scope checks) lives in the
 /// processor; per-response-type generation lives here. Implicit Flow / Hybrid Flow support is
 /// expressed by registering <c>token</c> and <c>id_token</c> processors. Without those registrations
-/// the corresponding response types simply do not exist in the DI graph — Implicit Flow does not
+/// the corresponding response types simply do not exist in the DI graph - Implicit Flow does not
 /// run, matching OAuth 2.1 (draft) default-off semantics.
 /// </remarks>
 public interface IAuthorizationResponseBuilder : IGrantTypeInformer
