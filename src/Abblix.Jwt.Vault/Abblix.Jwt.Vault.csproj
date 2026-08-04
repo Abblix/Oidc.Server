@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix JWT Vault OpenBao HashiCorp Transit HSM KMS External-Key Custodian Signing Encryption Security OAuth OIDC</PackageTags>
+    <PackageTags>Abblix JWT Vault OpenBao HashiCorp Transit HSM KMS External-Key Key-Management Custodian Signing Encryption JWKS Security OAuth OIDC dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
