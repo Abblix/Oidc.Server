@@ -238,11 +238,20 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
             Issuer = TransmitterIssuer,
             EventsSupported = [MembershipChanged],
         });
-        builder.Services.AddSingleton(new SsfEndpointOptions { ReceiverIdSelector = _ => ReceiverId });
+        // The whole topology in one options object: internal routes, the external prefix the
+        // proxy exposes, and the suppressed canonical address the gateway owns.
+        builder.Services.AddSingleton(new SsfEndpointOptions
+        {
+            ReceiverIdSelector = _ => ReceiverId,
+            MapWellKnownConfiguration = false,
+            ManagementPrefix = "/internal/ssf",
+            AdvertisedPrefix = "/api/ssf",
+            ConfigurationDocumentRoute = "/internal/ssf-config",
+        });
 
         await using var app = builder.Build();
-        app.MapSsfTransmitterEndpoints("/internal/ssf", mapWellKnownConfiguration: false);
-        app.MapSsfConfigurationDocument("/api/ssf", "/internal/ssf-config");
+        app.MapSsfTransmitterEndpoints();
+        app.MapSsfConfigurationDocument();
         await app.StartAsync(cancellationToken);
 
         var http = app.GetTestClient();
@@ -335,7 +344,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         });
 
         var app = builder.Build();
-        app.MapSsfTransmitterEndpoints("/ssf");
+        app.MapSsfTransmitterEndpoints();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }

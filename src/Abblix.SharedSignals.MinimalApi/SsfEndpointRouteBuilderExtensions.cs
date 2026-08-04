@@ -59,8 +59,10 @@ public static class SsfEndpointRouteBuilderExtensions
 
     /// <summary>
     /// Maps the transmitter's endpoints: the Event Stream Management API under
-    /// <paramref name="prefix"/>, poll delivery beside it, and the configuration document at
-    /// the well-known address the issuer resolves to (SSF 1.0 Section 7.2).
+    /// <see cref="SsfEndpointOptions.ManagementPrefix"/>, poll delivery beside it, and the
+    /// configuration document at the well-known address the issuer resolves to
+    /// (SSF 1.0 Section 7.2). Every route comes from <see cref="SsfEndpointOptions"/>, so one
+    /// options object states the whole topology.
     /// </summary>
     /// <remarks>
     /// The returned group carries the management and poll endpoints - attach the host's
@@ -69,27 +71,17 @@ public static class SsfEndpointRouteBuilderExtensions
     /// does not cover it.
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
-    /// <param name="prefix">The route prefix of the management surface.</param>
-    /// <param name="mapWellKnownConfiguration">
-    /// False leaves the well-known address unmapped - for a host whose gateway or CDN answers
-    /// the canonical address itself. The address is fixed by SSF 1.0 Section 7.2 and receivers
-    /// derive it from the issuer, so the flag only suppresses the route, never moves it; a host
-    /// that must serve the document on another internal path - a reverse proxy rewriting paths
-    /// in front of the transmitter - pairs this with
-    /// <see cref="MapSsfConfigurationDocument"/>.</param>
-    public static RouteGroupBuilder MapSsfTransmitterEndpoints(
-        this IEndpointRouteBuilder endpoints,
-        string prefix = "/ssf",
-        bool mapWellKnownConfiguration = true)
+    public static RouteGroupBuilder MapSsfTransmitterEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        if (mapWellKnownConfiguration)
+        var endpointOptions = EndpointOptionsOf(endpoints);
+        if (endpointOptions.MapWellKnownConfiguration)
         {
-            endpoints.MapSsfConfigurationDocument(prefix);
+            endpoints.MapSsfConfigurationDocument();
         }
 
-        var group = endpoints.MapGroup(prefix);
+        var group = endpoints.MapGroup(endpointOptions.ManagementPrefix);
 
         // Every management response travels uncacheable, as the specification's own examples
         // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents.
@@ -115,41 +107,40 @@ public static class SsfEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Maps the transmitter's configuration document (SSF 1.0 Section 7.2) on its own: at the
-    /// well-known address the issuer resolves to, or at a host-chosen internal route.
+    /// Maps the transmitter's configuration document (SSF 1.0 Section 7.2) on its own: at
+    /// <see cref="SsfEndpointOptions.ConfigurationDocumentRoute"/>, or at the well-known
+    /// address the issuer resolves to when that option is null.
     /// </summary>
     /// <remarks>
     /// <see cref="MapSsfTransmitterEndpoints"/> calls this by default, so a plain host never
     /// needs it. It exists for the deployment where the canonical address is answered by
-    /// something in front of the application: a gateway or CDN serving a cached copy (suppress
-    /// the default mapping and do not call this), or a reverse proxy rewriting paths, where the
-    /// document must exist on an internal route the proxy maps the canonical address onto. The
-    /// EXTERNAL address never moves - receivers derive it from the issuer, not from
-    /// configuration - so <paramref name="pattern"/> is deployment plumbing, not a protocol
-    /// choice.
+    /// something in front of the application: a gateway or CDN serving a cached copy (set
+    /// <see cref="SsfEndpointOptions.MapWellKnownConfiguration"/> to false and do not call
+    /// this), or a reverse proxy rewriting paths, where the document must exist on an internal
+    /// route the proxy maps the canonical address onto. The document advertises
+    /// <see cref="SsfEndpointOptions.AdvertisedPrefix"/> - the prefix as the outside world
+    /// reaches it. The EXTERNAL address never moves: receivers derive it from the issuer, not
+    /// from configuration, so the route option is deployment plumbing, not a protocol choice.
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
-    /// <param name="advertisedPrefix">
-    /// The management-surface prefix the document advertises, as the OUTSIDE world reaches it -
-    /// behind a rewriting proxy that is the external prefix, whatever
-    /// <see cref="MapSsfTransmitterEndpoints"/> mapped internally.</param>
-    /// <param name="pattern">
-    /// The route the document is served on; null takes the canonical well-known address derived
-    /// from the issuer.</param>
     public static IEndpointConventionBuilder MapSsfConfigurationDocument(
-        this IEndpointRouteBuilder endpoints,
-        string advertisedPrefix = "/ssf",
-        string? pattern = null)
+        this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
+        var endpointOptions = EndpointOptionsOf(endpoints);
         var options = endpoints.ServiceProvider.GetRequiredService<SsfTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
+        var advertisedPrefix = endpointOptions.AdvertisedPrefix ?? endpointOptions.ManagementPrefix;
 
         return endpoints.MapGet(
-            pattern ?? TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
+            endpointOptions.ConfigurationDocumentRoute
+                ?? TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
+
+    private static SsfEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
+        => endpoints.ServiceProvider.GetService<SsfEndpointOptions>() ?? DefaultEndpointOptions;
 
     /// <summary>
     /// Maps the receiver's push intake (RFC 8935): the endpoint a transmitter POSTs SETs to,
