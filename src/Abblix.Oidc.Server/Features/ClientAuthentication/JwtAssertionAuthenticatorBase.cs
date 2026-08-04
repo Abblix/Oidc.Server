@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
-    IJwtReplayCache replayCache) : IClientAuthenticator
+    IReplayCache replayCache) : IClientAuthenticator
 {
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
@@ -155,7 +155,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
         // One call avoids the read-then-write race a separate status check + mark step would leave
         // between two concurrent presenters of the same assertion.
-        if (!await replayCache.TryAddAsync(jwtId, expiresAt))
+        if (!await replayCache.TryReserveAsync(jwtId, expiresAt))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
             return null;

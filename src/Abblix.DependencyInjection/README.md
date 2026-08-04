@@ -55,9 +55,9 @@ Both operations have keyed counterparts: `ComposeKeyed` and `DecorateKeyed`.
 `Dependency.Override` constructs a service from the container while substituting only the named dependencies - the clean alternative to hand-built factories that freeze a constructor's shape into calling code:
 
 ```csharp
-services.AddSingleton<IJtiReplayCache>(provider =>
-    provider.CreateService<DistributedJtiReplayCache>(
-        Dependency.Override(TimeSpan.FromMinutes(10))));
+services.AddSingleton<IReplayCache>(provider =>
+    provider.CreateService<DistributedReplayCache>(
+        Dependency.Override("Abblix.SecurityEvents:ReplayPrevention:")));
 ```
 
 Overloads accept a type mapping, an instance, or a factory, and the same overrides ride the `AddSingleton` / `AddScoped` / `AddTransient` overloads this package adds. Every dependency not overridden resolves from the container as usual, so a new constructor parameter on the service does not break the factory.

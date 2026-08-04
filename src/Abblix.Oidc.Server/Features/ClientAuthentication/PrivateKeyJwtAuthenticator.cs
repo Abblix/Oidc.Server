@@ -22,7 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
-    IJwtReplayCache replayCache,
+    IReplayCache replayCache,
     IServiceProvider serviceProvider) : JwtAssertionAuthenticatorBase(logger, replayCache)
 {
     /// <summary>

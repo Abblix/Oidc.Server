@@ -27,7 +27,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -51,7 +51,7 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// </remarks>
 internal sealed class ProofValidator(
     IJsonWebTokenValidator jwtValidator,
-    IJwtReplayCache replayCache,
+    IReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
@@ -113,9 +113,10 @@ internal sealed class ProofValidator(
         // TryAddAsync is single-call by contract — atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
         // the documented probabilistic guarantee accepted under RFC 9449 §11.1.
-        var fresh = await replayCache.TryAddAsync(
+        var fresh = await replayCache.TryReserveAsync(
             jwtId,
-            issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance);
+            issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
+            cancellationToken);
 
         if (!fresh)
         {

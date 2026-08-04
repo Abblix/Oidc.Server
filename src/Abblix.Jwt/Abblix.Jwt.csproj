@@ -35,7 +35,10 @@
 
   <ItemGroup>
     <!-- Hosting.Abstractions carries only IHostedService and BackgroundService, which the key ring's refresh
-         service needs. Options carries IOptions<>, which the ring reads its rollover window from. -->
+         service needs. Options carries IOptions<>, which the ring reads its rollover window from.
+         Caching.Abstractions carries only IDistributedCache, the store the replay cache reserves identifiers
+         in; the store itself is the host's to register. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

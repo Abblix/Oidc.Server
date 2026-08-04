@@ -58,6 +58,17 @@ The payload is a `JsonObject` underneath, so claims keep their JSON types - numb
 
 The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11).
 
+## Replay protection
+
+Every JWT profile that forbids replay asks the same question - has this identifier been presented before? - so the primitive lives here rather than in each of them: `IReplayCache` reserves an identifier and answers whether the sighting is the first, in one call, so no caller can read, decide and write in three steps another caller slips between.
+
+```csharp
+services.AddSingleton<IReplayCache>(provider =>
+    provider.CreateService<DistributedReplayCache>(Dependency.Override("MyApp:ReplayPrevention:")));
+```
+
+The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behaviour and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
+
 ## External keys
 
 Signing and decryption do not require the private key to live in the process: the custodian seam delegates the cryptographic operation to an external holder - `AddVaultCustodian` for HashiCorp Vault / OpenBao ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)), `AddAzureCustodian` for Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)), both built on this package's `AddKeyCustodian`.

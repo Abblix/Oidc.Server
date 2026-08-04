@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifi
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -108,11 +109,9 @@ public static class ServiceCollectionExtensions
         ]);
 
         // JWT assertion authenticators (client_secret_jwt / private_key_jwt) record assertion jti
-        // values in the replay cache; defensive TryAdd so deployments that never call AddDPoP or
-        // enable JWT Bearer still resolve the dependency.
-        services.TryAddSingleton<
-            ReplayPrevention.IJwtReplayCache,
-            ReplayPrevention.DistributedJwtReplayCache>();
+        // values in the replay cache; called defensively so deployments that never call AddDPoP
+        // or enable JWT Bearer still resolve the dependency.
+        services.AddReplayPrevention();
 
         return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
     }
@@ -866,9 +865,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDPoP(this IServiceCollection services)
     {
         services.TryAddSingleton<IProofValidator, ProofValidator>();
-        services.TryAddSingleton<
-            ReplayPrevention.IJwtReplayCache,
-            ReplayPrevention.DistributedJwtReplayCache>();
+        services.AddReplayPrevention();
         return services.AddNonces();
     }
 }

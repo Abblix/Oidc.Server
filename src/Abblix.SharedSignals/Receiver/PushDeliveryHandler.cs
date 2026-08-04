@@ -21,7 +21,7 @@
 // info@abblix.com
 
 using System.Net.Http.Headers;
-using Abblix.SecurityEvents.Abstractions;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 
@@ -51,7 +51,7 @@ public sealed class PushDeliveryHandler(
     ISecurityEventTokenValidator validator,
     SsfValidationOptions options,
     ISecurityEventSink sink,
-    IJtiReplayCache? replayCache = null)
+    IReplayCache? replayCache = null)
 {
     /// <summary>
     /// Handles one push transmission.
@@ -110,7 +110,16 @@ public sealed class PushDeliveryHandler(
                     + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
             }
 
-            if (!await replayCache.TryRegisterAsync(issuer, jwtId, issuedAt, cancellationToken))
+            // The issuer belongs in the key because "jti" is unique only "within a particular
+            // event feed" (RFC 8417 Section 2.2), and escaping removes ':' from both halves so
+            // two distinct pairs cannot compose onto one identifier.
+            var identifier =
+                $"{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(jwtId)}";
+
+            if (!await replayCache.TryReserveAsync(
+                    identifier,
+                    issuedAt + options.ReplayRetention,
+                    cancellationToken))
             {
                 // A redelivery of something already processed: acknowledged, never re-consumed.
                 return PushDeliveryResult.Accepted;

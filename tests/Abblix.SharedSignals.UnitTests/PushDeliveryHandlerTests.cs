@@ -22,7 +22,7 @@
 
 using System.Net;
 using Abblix.SecurityEvents;
-using Abblix.SecurityEvents.Abstractions;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Receiver;
@@ -75,16 +75,15 @@ public class PushDeliveryHandlerTests
         }
     }
 
-    private sealed class FakeReplayCache : IJtiReplayCache
+    private sealed class FakeReplayCache : IReplayCache
     {
-        private readonly HashSet<(string, string)> _seen = [];
+        private readonly HashSet<string> _seen = [];
 
-        public Task<bool> TryRegisterAsync(
-            string issuer,
-            string jwtId,
-            DateTimeOffset issuedAt,
+        public Task<bool> TryReserveAsync(
+            string identifier,
+            DateTimeOffset expiresAt,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(_seen.Add((issuer, jwtId)));
+            => Task.FromResult(_seen.Add(identifier));
     }
 
     [Fact]

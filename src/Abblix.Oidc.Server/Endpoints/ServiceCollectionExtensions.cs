@@ -66,8 +66,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using CompositeRequestFetcher = Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching.CompositeRequestFetcher;
-using DistributedJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.DistributedJwtReplayCache;
-using IJwtReplayCache = Abblix.Oidc.Server.Features.ReplayPrevention.IJwtReplayCache;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using JwtBearer = Abblix.Oidc.Server.Features.JwtBearer;
 
 namespace Abblix.Oidc.Server.Endpoints;
@@ -316,12 +315,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtBearerGrant(this IServiceCollection services)
     {
         services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
-        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+        services.AddReplayPrevention();
 
-        // The replay-cache implementation now lives in Features.ReplayPrevention so DPoP
-        // and any future consumer can share it. The JwtBearer-namespaced shim is the
-        // singleton registered concretely; both the canonical interface and the deprecated
-        // JwtBearer.IJwtReplayCache alias resolve to the same instance for back-compat.
+        // The storage now lives in Abblix.JWT so a Security Event Token receiver can share it
+        // without reaching for the OpenID Connect server. Both deprecated spellings still
+        // resolve, and every one of them reserves identifiers in that same store.
 #pragma warning disable CS0618 // intentional registration of the deprecated shim
         services.TryAddSingleton<JwtBearer.IJwtReplayCache, JwtBearer.DistributedJwtReplayCache>();
 #pragma warning restore CS0618

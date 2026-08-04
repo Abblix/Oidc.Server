@@ -28,7 +28,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -416,16 +416,16 @@ public class PrivateKeyJwtAuthenticatorTests
         // Assert
         Assert.NotNull(result);
         mocks.ReplayCache.Verify(
-            r => r.TryAddAsync(
+            r => r.TryReserveAsync(
                 It.Is<string>(id => id == jti),
-                It.Is<DateTimeOffset?>(exp =>
-                    exp.HasValue && Math.Abs((exp.Value - expiresAt).TotalSeconds) < 1)),
+                It.Is<DateTimeOffset>(exp =>
+                    Math.Abs((exp - expiresAt).TotalSeconds) < 1)),
             Times.Once);
     }
 
     /// <summary>
     /// Verifies that a replayed assertion is rejected: the replay cache reports the jti as
-    /// already present, and the single TryAddAsync call makes the reserve-and-check atomic -
+    /// already present, and the single TryReserveAsync call makes the reserve-and-check atomic -
     /// two concurrent presenters of the same assertion cannot both pass.
     /// </summary>
     [Fact]
@@ -444,7 +444,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         mocks.ReplayCache
-            .Setup(r => r.TryAddAsync("replayed-jti", It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync("replayed-jti", It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(false);
 
         var request = new ClientRequest
@@ -492,7 +492,7 @@ public class PrivateKeyJwtAuthenticatorTests
         Assert.Null(result);
         // A rejected assertion is never recorded in the replay cache.
         mocks.ReplayCache.Verify(
-            r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()),
+            r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -573,12 +573,12 @@ public class PrivateKeyJwtAuthenticatorTests
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
-        var replayCache = new Mock<IJwtReplayCache>(MockBehavior.Strict);
+        var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
         var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
 
         // Setup default behavior for the replay cache: every jti is fresh
         replayCache
-            .Setup(r => r.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         // Create service provider with scoped services
@@ -714,7 +714,7 @@ public class PrivateKeyJwtAuthenticatorTests
     private sealed class Mocks
     {
         public Mock<ILogger<PrivateKeyJwtAuthenticator>> Logger { get; init; } = null!;
-        public Mock<IJwtReplayCache> ReplayCache { get; init; } = null!;
+        public Mock<IReplayCache> ReplayCache { get; init; } = null!;
         public Mock<IClientJwtValidator> ClientJwtValidator { get; init; } = null!;
     }
 }
