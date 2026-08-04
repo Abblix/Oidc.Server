@@ -9,12 +9,12 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SharedSignals</PackageId>
     <Title>Abblix Shared Signals</Title>
-    <Description>OpenID Shared Signals Framework 1.0 for .NET: transmitter and receiver in one package - transmitter configuration discovery, event stream management, subjects and verification, plus push (RFC 8935) and poll (RFC 8936) delivery over the Abblix Security Events core.</Description>
+    <Description>OpenID Shared Signals Framework (SSF) 1.0 for .NET: transmitter and receiver in one package - transmitter configuration discovery, event stream management, subjects and verification, plus push (RFC 8935) and poll (RFC 8936) delivery over the Abblix Security Events core.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix SharedSignals SSF SecurityEvent SET RFC8935 RFC8936 CAEP RISC Stream Transmitter Receiver Security Identity</PackageTags>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Push Poll Webhook Security Identity dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

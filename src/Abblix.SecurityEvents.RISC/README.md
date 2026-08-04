@@ -1,6 +1,6 @@
 # Abblix.SecurityEvents.RISC
 
-The OpenID RISC Profile 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the fourteen RISC events, registered over the Security Events core in one call.
+The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the fourteen RISC events, registered over the Security Events core in one call.
 
 ## Events
 

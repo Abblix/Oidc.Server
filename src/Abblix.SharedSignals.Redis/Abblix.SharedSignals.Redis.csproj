@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix SharedSignals SSF SecurityEvent SET Redis Outbox Stream Transmitter Security Identity</PackageTags>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET Redis Outbox Event-Stream Transmitter Security Identity dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

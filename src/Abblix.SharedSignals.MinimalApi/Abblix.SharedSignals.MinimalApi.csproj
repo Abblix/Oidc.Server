@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix SharedSignals SSF SecurityEvent SET RFC8935 RFC8936 CAEP RISC Stream Transmitter Receiver Security Identity AspNetCore Minimal-API</PackageTags>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Security Identity AspNetCore Minimal-API dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

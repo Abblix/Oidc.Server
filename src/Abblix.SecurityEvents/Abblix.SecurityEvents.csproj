@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix SecurityEvent SET RFC8417 RFC9493 SubjectIdentifier SharedSignals SSF CAEP RISC Security Identity</PackageTags>
+    <PackageTags>Abblix Security-Event-Token SET SecEvent RFC8417 RFC9493 Subject-Identifier Shared-Signals SSF CAEP RISC JWT Security Identity dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
