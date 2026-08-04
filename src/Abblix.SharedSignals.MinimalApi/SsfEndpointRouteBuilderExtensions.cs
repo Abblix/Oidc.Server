@@ -81,7 +81,7 @@ public static class SsfEndpointRouteBuilderExtensions
             endpoints.MapSsfConfigurationDocument();
         }
 
-        var group = endpoints.MapGroup(endpointOptions.ManagementPrefix);
+        var group = endpoints.MapGroup(endpointOptions.ManagementPrefix.Value ?? string.Empty);
 
         // Every management response travels uncacheable, as the specification's own examples
         // show (SSF 1.0 Section 8.1) - stream state answers are moments, not documents.
@@ -131,11 +131,14 @@ public static class SsfEndpointRouteBuilderExtensions
         var endpointOptions = EndpointOptionsOf(endpoints);
         var options = endpoints.ServiceProvider.GetRequiredService<SsfTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
-        var advertisedPrefix = endpointOptions.AdvertisedPrefix ?? endpointOptions.ManagementPrefix;
+        var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
+            ? endpointOptions.AdvertisedPrefix
+            : endpointOptions.ManagementPrefix;
 
         return endpoints.MapGet(
-            endpointOptions.ConfigurationDocumentRoute
-                ?? TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
+            endpointOptions.ConfigurationDocumentRoute.HasValue
+                ? endpointOptions.ConfigurationDocumentRoute.Value!
+                : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
 
@@ -316,10 +319,10 @@ public static class SsfEndpointRouteBuilderExtensions
     /// </summary>
     private static TransmitterConfiguration ConfigurationDocumentOf(
         SsfTransmitterOptions options,
-        string prefix)
+        PathString prefix)
     {
         var authority = new Uri(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
-        Uri EndpointOf(string route) => new(authority, prefix + route);
+        Uri EndpointOf(string route) => new(authority, prefix.Add(route).Value!);
 
         var deliveryMethods = new List<string> { PushDeliveryMethod.MethodUri };
         if (options.PollEndpointFactory is not null)

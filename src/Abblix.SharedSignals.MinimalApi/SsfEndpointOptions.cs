@@ -44,15 +44,15 @@ public sealed record SsfEndpointOptions
     /// is the INTERNAL prefix; what the configuration document advertises is
     /// <see cref="AdvertisedPrefix"/>.
     /// </summary>
-    public string ManagementPrefix { get; init; } = "/ssf";
+    public PathString ManagementPrefix { get; init; } = "/ssf";
 
     /// <summary>
     /// The management prefix the configuration document advertises, as the outside world
-    /// reaches it; null advertises <see cref="ManagementPrefix"/>. Set it when a proxy in
+    /// reaches it; unset advertises <see cref="ManagementPrefix"/>. Set it when a proxy in
     /// front rewrites paths, so the document names the external addresses while the routes
     /// stay mapped on the internal ones.
     /// </summary>
-    public string? AdvertisedPrefix { get; init; }
+    public PathString AdvertisedPrefix { get; init; }
 
     /// <summary>
     /// Whether <see cref="SsfEndpointRouteBuilderExtensions.MapSsfTransmitterEndpoints"/> maps
@@ -66,12 +66,13 @@ public sealed record SsfEndpointOptions
     public bool MapWellKnownConfiguration { get; init; } = true;
 
     /// <summary>
-    /// The route the configuration document is served on; null takes the canonical well-known
-    /// address derived from the issuer (SSF 1.0 Section 7.2). A non-null value is deployment
-    /// plumbing for a rewriting proxy that maps the canonical address onto an internal route -
-    /// the EXTERNAL address never moves, because receivers derive it from the issuer.
+    /// The route the configuration document is served on; unset takes the canonical
+    /// well-known address derived from the issuer (SSF 1.0 Section 7.2). A set value is
+    /// deployment plumbing for a rewriting proxy that maps the canonical address onto an
+    /// internal route - the EXTERNAL address never moves, because receivers derive it from
+    /// the issuer.
     /// </summary>
-    public string? ConfigurationDocumentRoute { get; init; }
+    public PathString ConfigurationDocumentRoute { get; init; }
 
     private static string? DefaultReceiverId(HttpContext context)
         => context.User.FindFirst(IanaClaimTypes.Sub)?.Value
