@@ -429,9 +429,10 @@ public static class ServiceCollectionExtensions
     /// composite resolves in registration order; being keyed also hides them from plain resolution, so the
     /// singular resolve yields only the composite. The family thus remains descriptor data in the collection
     /// rather than a snapshot captured in a closure: <see cref="Decompose{TInterface}"/> returns a live cursor
-    /// over that data, and edits through it reach the composite at resolve — without the host ever naming the
-    /// composite type. The whole family shares one lifetime; a set of members with mixed lifetimes is a
-    /// composition error and throws, since a composite may not capture a shorter-lived member.
+    /// over that data, and edits through it reach the composite at resolve - without the host ever naming the
+    /// composite type. Members keep their own lifetimes and the composite adopts the shortest among them, so a
+    /// longer-lived member is simply shared; only a member shorter-lived than the composite is rejected, since
+    /// a composite may not capture something that dies before it.
     /// </remarks>
     public static IServiceCollection Compose<TInterface, TComposite>(
         this IServiceCollection services,

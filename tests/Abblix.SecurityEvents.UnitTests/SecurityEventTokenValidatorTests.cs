@@ -135,6 +135,7 @@ public class SecurityEventTokenValidatorTests
             new TypHeaderStep(),
             new ExpAbsenceStep(),
             new EventsPresenceStep(),
+            new JwtIdPresenceStep(),
             new IssuerAllowlistStep(),
             new SignatureStep(verifier ?? new AcceptingVerifier()),
             new AudienceStep(),
@@ -268,6 +269,23 @@ public class SecurityEventTokenValidatorTests
 
         var error = await ValidateExpectingError($"{header}.{payload}.sig");
         Assert.Equal(SecurityEventTokenErrorCode.MissingEvents, error.Code);
+    }
+
+    [Theory]
+    // Absent, empty, and non-string "jti" are three spellings of the same defect.
+    [InlineData("""{"iss":"https://tenant.example.com","iat":1754040000,"aud":"https://receiver.example.com/events","events":{"https://tenant.example.com/events/membership-changed":{}}}""")]
+    [InlineData("""{"iss":"https://tenant.example.com","jti":"","iat":1754040000,"aud":"https://receiver.example.com/events","events":{"https://tenant.example.com/events/membership-changed":{}}}""")]
+    [InlineData("""{"iss":"https://tenant.example.com","jti":42,"iat":1754040000,"aud":"https://receiver.example.com/events","events":{"https://tenant.example.com/events/membership-changed":{}}}""")]
+    public async Task MissingOrEmptyOrNonStringJwtId_IsMalformed(string claimsJson)
+    {
+        // RFC 8417 Section 2.2 on "jti": "This claim is REQUIRED." A SET without a usable
+        // identifier cannot be tracked by any receiver-side replay accounting, so the profile
+        // rejects it before spending a signature verification on it.
+        var header = Base64Url.EncodeToString("""{"typ":"secevent+jwt","alg":"none"}"""u8);
+        var payload = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(claimsJson));
+
+        var error = await ValidateExpectingError($"{header}.{payload}.sig");
+        Assert.Equal(SecurityEventTokenErrorCode.MalformedToken, error.Code);
     }
 
     [Fact]

@@ -48,6 +48,7 @@ public static class ServiceCollectionExtensions
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, TypHeaderStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ExpAbsenceStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, EventsPresenceStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, JwtIdPresenceStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, IssuerAllowlistStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SignatureStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, AudienceStep>(),
@@ -72,7 +73,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The pipeline is an ordinary composed family: the nine default steps register as
+    /// The pipeline is an ordinary composed family: the ten default steps register as
     /// <see cref="ISecurityEventTokenValidator"/> implementations in execution order and
     /// collapse behind the singular contract. A consumer profile edits them in place afterwards -
     /// <c>services.Decompose&lt;ISecurityEventTokenValidator&gt;()</c> returns the live
