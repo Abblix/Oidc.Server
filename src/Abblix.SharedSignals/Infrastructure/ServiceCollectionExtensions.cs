@@ -124,6 +124,43 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Declares the transmitter's stream set as configuration: the store of a closed
+    /// deployment whose receivers are the operator's own products - nothing to back up,
+    /// lifecycle in the operator's file, API mutations ephemeral until restart.
+    /// </summary>
+    /// <remarks>
+    /// Replace rather than TryAdd, deliberately: this call IS the host's explicit choice of
+    /// store, so it wins whether it runs before or after
+    /// <see cref="AddSsfTransmitter"/>'s in-memory default.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="streams">The declared streams.</param>
+    public static IServiceCollection AddSsfConfiguredStreams(
+        this IServiceCollection services,
+        IReadOnlyList<ConfiguredStream> streams)
+    {
+        ArgumentNullException.ThrowIfNull(streams);
+
+        services.Replace(ServiceDescriptor.Singleton<IStreamStore>(provider =>
+            provider.CreateService<ConfigurationStreamStore>(Dependency.Override(streams))));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Puts the transmitter's outbox on the host's <c>IDistributedCache</c>, so pending events
+    /// survive a process restart when the store behind the cache does. Replace rather than
+    /// TryAdd for the same reason as <see cref="AddSsfConfiguredStreams"/>: an explicit choice
+    /// wins in any order.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection AddSsfDistributedOutbox(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<IEventOutbox, DistributedCacheEventOutbox>());
+        return services;
+    }
+
+    /// <summary>
     /// Both roles build on the Security Events core, and the marker of that call is the one
     /// registration it refuses to duplicate: the event type registry.
     /// </summary>
