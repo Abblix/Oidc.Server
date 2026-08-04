@@ -15,7 +15,7 @@
         <Title>Abblix OIDC Server Model-View-Controller</Title>
         <Description>ASP.NET Core MVC integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Exposes its protocol endpoints through MVC controllers and routing.</Description>
         <Authors>Abblix LLP</Authors>
-        <PackageProjectUrl>https://github.com/Abblix/Oidc.Server</PackageProjectUrl>
+        <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Identity-Provider IdP Authorization-Server Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore MVC dotnet Federation Claims WebApi PKCE DPoP PAR JARM CIBA Device-Flow Token-Exchange FAPI Proof-of-Possession</PackageTags>

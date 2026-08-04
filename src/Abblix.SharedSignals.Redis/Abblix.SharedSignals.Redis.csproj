@@ -11,7 +11,7 @@
     <Title>Abblix Shared Signals Redis</Title>
     <Description>Redis-native event outbox for Abblix Shared Signals: the transmitter's per-stream queues on Redis list and hash structures with atomic server-side operations, correct across transmitter replicas where a plain distributed-cache queue is not.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SharedSignals.Redis</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET Redis Outbox Event-Stream Transmitter Security Identity dotnet</PackageTags>
