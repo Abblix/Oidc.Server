@@ -92,7 +92,8 @@ services.AddSecurityEvents(options =>
 });
 services.AddJwksKeyResolution();      // receivers: issuers' keys from their published JWK Sets
 services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache
-services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store
+services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store,
+                                     // held for SecurityEventTokenValidationOptions.ReplayRetention
 ```
 
 A pure receiver registers a key resolver and never configures signing; a pure transmitter does

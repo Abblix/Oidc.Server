@@ -24,17 +24,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
-partial class DistributedJwtReplayCache
+partial class ConfiguredReplayCache
 {
-	[LoggerMessage(
-		EventId = LogEvents.Tokens.DistributedJwtReplayCache.ReplayDetected,
-		Level = LogLevel.Debug,
-		Message = "JWT replay detected for jti {JwtId}")]
-	private partial void LogReplayDetected(string JwtId);
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.DistributedJwtReplayCache.ReplayDetected,
+        Level = LogLevel.Debug,
+        Message = "JWT replay detected for jti {JwtId}")]
+    private partial void LogReplayDetected(string JwtId);
 
-	[LoggerMessage(
-		EventId = LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed,
-		Level = LogLevel.Debug,
-		Message = "Marked jti {JwtId} as used, expires in {Expiration}")]
-	private partial void LogMarkedAsUsed(string JwtId, TimeSpan Expiration);
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed,
+        Level = LogLevel.Debug,
+        Message = "Marked jti {JwtId} as used, remembered until {ExpiresAt}")]
+    private partial void LogMarkedAsUsed(string JwtId, DateTimeOffset ExpiresAt);
 }

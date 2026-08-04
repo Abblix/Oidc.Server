@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt.ReplayPrevention;
+
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
@@ -29,9 +32,18 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// so a single distributed-cache instance serves every consumer.
 /// </summary>
 /// <remarks>
-/// Implementations should use distributed storage (e.g., Redis) so multi-instance
-/// deployments share the replay-protection state.
+/// The primitive now lives in Abblix.JWT as <see cref="IReplayCache"/>, one layer below this
+/// package, because Security Event Token receivers need the same reserve-and-check and cannot
+/// reference the OpenID Connect server to get it. This contract remains registered and working
+/// for host code that names it, and its default implementation stores through the moved one, so
+/// both spellings share a single set of entries.
 /// </remarks>
+[Obsolete($"Use {nameof(Abblix)}.{nameof(Jwt)}.{nameof(Jwt.ReplayPrevention)}." +
+          $"{nameof(IReplayCache)}.{nameof(IReplayCache.TryReserveAsync)}, which takes the " +
+          "moment the identifier stops being worth remembering rather than a nullable expiry, " +
+          "and accepts a cancellation token.")]
+[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+    Justification = "Backward-compat contract for hosts that implemented it; removal is a major-version concern.")]
 public interface IJwtReplayCache
 {
     /// <summary>
@@ -42,8 +54,8 @@ public interface IJwtReplayCache
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Atomic-capable backends close the race natively: Redis <c>SET … NX EX</c>
-    /// (via <c>StackExchange.Redis</c>), SQL <c>INSERT … ON CONFLICT DO NOTHING</c>,
+    /// Atomic-capable backends close the race natively: Redis <c>SET ... NX EX</c>
+    /// (via <c>StackExchange.Redis</c>), SQL <c>INSERT ... ON CONFLICT DO NOTHING</c>,
     /// Memcached <c>add</c>, in-memory <c>ConcurrentDictionary.TryAdd</c>.
     /// </para>
     /// <para>
@@ -54,7 +66,7 @@ public interface IJwtReplayCache
     /// provides only a probabilistic guarantee: two concurrent presenters of the
     /// same jti can both observe a miss before either writes. The race window is
     /// bounded by the cache round-trip and RFC 9449 §11.1 accepts probabilistic
-    /// replay defence — but hosts that need strict atomicity should override the
+    /// replay defence - but hosts that need strict atomicity should override the
     /// registration with a backend-aware implementation that bypasses
     /// <see cref="Microsoft.Extensions.Caching.Distributed.IDistributedCache"/> and
     /// talks to the chosen backend's atomic primitive directly.

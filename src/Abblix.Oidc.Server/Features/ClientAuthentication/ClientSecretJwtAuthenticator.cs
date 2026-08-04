@@ -26,7 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -50,7 +50,7 @@ public partial class ClientSecretJwtAuthenticator(
     IClientInfoProvider clientInfoProvider,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
-    IJwtReplayCache replayCache) : JwtAssertionAuthenticatorBase(logger, replayCache)
+    IReplayCache replayCache) : JwtAssertionAuthenticatorBase(logger, replayCache)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.

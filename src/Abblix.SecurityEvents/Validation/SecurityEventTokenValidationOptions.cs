@@ -51,4 +51,13 @@ public record SecurityEventTokenValidationOptions
     /// instead of remembering every identifier forever, because anything older fails here first.
     /// </summary>
     public TimeSpan IssuedAtTolerance { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How long past a token's issue time its identifier stays in the replay cache. It must
+    /// cover <see cref="IssuedAtTolerance"/> with a margin, because an identifier forgotten
+    /// while its token still passes the freshness window above is an identifier that token can
+    /// replay on. The default doubles the default tolerance, and raising one without the other
+    /// is the mistake this pairing is written side by side to prevent.
+    /// </summary>
+    public TimeSpan ReplayRetention { get; init; } = TimeSpan.FromMinutes(10);
 }

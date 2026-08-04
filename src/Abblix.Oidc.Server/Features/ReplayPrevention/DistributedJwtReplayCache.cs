@@ -20,77 +20,38 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Utils;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt.ReplayPrevention;
 
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
-/// Distributed cache implementation of <see cref="IJwtReplayCache"/> for JWT replay protection.
-/// Uses <see cref="IDistributedCache"/> to store JTIs, enabling multi-instance deployments.
+/// The deprecated contract's default implementation, kept so a host that resolves
+/// <see cref="IJwtReplayCache"/> still receives a working object. It stores nothing of its own:
+/// every reservation goes to the same <see cref="IReplayCache"/> the server's own consumers use,
+/// so the deprecated and current spellings share one set of entries and cannot disagree about
+/// whether an identifier has been seen.
 /// </summary>
 /// <remarks>
-/// This implementation stores JTIs with automatic expiration matching the JWT's lifetime.
-/// Works with Redis, SQL Server, NCache, or any IDistributedCache implementation.
-/// Clock skew buffer is configurable via <see cref="JwtBearerOptions.ClockSkew"/>.
+/// The only behaviour left here is the one the current contract deliberately dropped: an absent
+/// expiry. The moved contract requires its caller to say when an identifier stops being worth
+/// remembering, because a cache that guesses either outlives or forgets the window its caller
+/// actually validates against. This shim keeps guessing on its callers' behalf, with the hour the
+/// deprecated contract has always used.
 /// </remarks>
-/// <param name="logger">Logger for recording replay detection events.</param>
-/// <param name="cache">The distributed cache for storing JTIs.</param>
-/// <param name="options">JWT Bearer options for configurable settings like clock skew.</param>
-/// <param name="timeProvider">Provides access to the current time.</param>
-public partial class DistributedJwtReplayCache(
-	ILogger<DistributedJwtReplayCache> logger,
-	IDistributedCache cache,
-	IOptionsMonitor<OidcOptions> options,
-	TimeProvider timeProvider) : IJwtReplayCache
+/// <param name="replayCache">Where the reservation lands.</param>
+/// <param name="timeProvider">Turns an absent expiry into an absolute moment.</param>
+[Obsolete($"Use {nameof(Abblix)}.{nameof(Jwt)}.{nameof(Jwt.ReplayPrevention)}." +
+          $"{nameof(IReplayCache)}, registered by the same calls that used to register this type.")]
+[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+    Justification = "Backward-compat shim for hosts that resolve the deprecated contract; removal is a major-version concern.")]
+public class DistributedJwtReplayCache(
+    IReplayCache replayCache,
+    TimeProvider timeProvider) : IJwtReplayCache
 {
-	/// <summary>
-	/// Cache key prefix for JTI entries to avoid collisions with other cache data.
-	/// Stable literal - preserved across the namespace move so existing Redis entries
-	/// from prior deployments stay valid through the rolling upgrade window.
-	/// </summary>
-	private const string CacheKeyPrefix =
-		$"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(ReplayPrevention)}:";
-
-	/// <summary>
-	/// Default expiration time for JTIs when the JWT doesn't specify an expiration.
-	/// </summary>
-	private static readonly TimeSpan DefaultExpiration = TimeSpan.FromHours(1);
-
-	/// <inheritdoc />
-	/// <remarks>
-	/// <see cref="IDistributedCache"/> exposes only Get + Set, no atomic compare-and-set
-	/// primitive. Two concurrent presenters of the same jti can both observe a cache
-	/// miss before either writes, so the duplicate-detection guarantee is probabilistic
-	/// rather than strict; the race window is bounded by the cache round-trip. RFC 9449
-	/// §11.1 accepts probabilistic replay defence for DPoP proofs. Hosts that need
-	/// strict atomicity should plug in a backend-aware implementation (Redis
-	/// <c>SET ... NX EX</c> via <c>StackExchange.Redis</c>, SQL <c>INSERT ... ON CONFLICT
-	/// DO NOTHING</c>, etc.).
-	/// </remarks>
-	public async Task<bool> TryAddAsync(string jti, DateTimeOffset? expiresAt)
-	{
-		var cacheKey = CacheKeyPrefix + jti;
-
-		var now = timeProvider.GetUtcNow();
-		var clockSkew = options.CurrentValue.JwtBearer.ClockSkew;
-
-		// TTL = JWT expiration + clock-skew buffer, or a sane default. The shared primitive
-		// floors a zero/negative result so an expiry-already-past still records the sighting.
-		var expiration = expiresAt.HasValue
-			? expiresAt.Value - now + clockSkew
-			: DefaultExpiration;
-
-		if (!await cache.TryAddAsync(cacheKey, expiration))
-		{
-			LogReplayDetected(jti);
-			return false;
-		}
-
-		LogMarkedAsUsed(jti, expiration);
-		return true;
-	}
+    /// <inheritdoc />
+    public Task<bool> TryAddAsync(string jti, DateTimeOffset? expiresAt)
+        => replayCache.TryReserveAsync(
+            jti,
+            expiresAt ?? timeProvider.GetUtcNow() + ConfiguredReplayCache.DefaultExpiration);
 }

@@ -69,7 +69,9 @@ public class ProofValidatorTests
         services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
         services.AddSingleton<TimeProvider>(_time);
         services.AddSingleton(_requestInfo.Object);
-        services.AddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
+        // Through the library's own wiring rather than a hand-picked implementation, so this
+        // suite exercises the replay cache a deployment actually gets, decorator included.
+        services.AddReplayPrevention();
         services.AddSingleton<IProofValidator, ProofValidator>();
         var sp = services.BuildServiceProvider();
         _sut = sp.GetRequiredService<IProofValidator>();

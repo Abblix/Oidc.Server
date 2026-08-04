@@ -27,6 +27,7 @@ using System.Threading.Tasks;
 
 using Abblix.Jwt;
 using Abblix.Jwt.Encryption;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
@@ -38,6 +39,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -166,6 +168,57 @@ public class ServiceCollectionOverrideTests
         services.AddDPoP();
 
         Assert.Single(services, d => d.ServiceType == typeof(IProofValidator));
+    }
+
+    [Fact]
+    public async Task AddDPoP_HostImplementedTheDeprecatedReplayCache_StaysInCharge()
+    {
+        // The contract moved to Abblix.JWT and the server's own consumers moved with it. A host
+        // that had replaced the deprecated one - to get a strictly atomic backend, the reason the
+        // seam exists - must not have that silently stop applying while its registration still
+        // looks healthy: the bridge is what keeps the override deciding.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDistributedMemoryCache();
+        services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
+
+#pragma warning disable CS0618 // the deprecated contract is exactly what this test covers
+        var host = new Mock<IJwtReplayCache>();
+        host.Setup(cache => cache.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(false);
+        services.AddSingleton(host.Object);
+#pragma warning restore CS0618
+
+        services.AddDPoP();
+
+        await using var provider = services.BuildServiceProvider();
+        var reserved = await provider.GetRequiredService<IReplayCache>()
+            .TryReserveAsync(
+                "jti-1",
+                DateTimeOffset.FromUnixTimeSeconds(1754040000),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(reserved);
+#pragma warning disable CS0618 // the deprecated contract is exactly what this test covers
+        host.Verify(
+            cache => cache.TryAddAsync("jti-1", It.IsAny<DateTimeOffset?>()),
+            Times.Once);
+#pragma warning restore CS0618
+    }
+
+    [Fact]
+    public void AddDPoP_AndClientAuthentication_RegisterOneReplayCache()
+    {
+        // Three feature registrations wire replay prevention, and the server's policy is applied
+        // by decoration - so a second call must not wrap the cache again, which would skew the
+        // retention window twice over and log every reservation twice.
+        var services = new ServiceCollection();
+
+        services.AddDPoP();
+        services.AddClientAuthentication();
+        services.AddDPoP();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IReplayCache));
     }
 
     [Fact]

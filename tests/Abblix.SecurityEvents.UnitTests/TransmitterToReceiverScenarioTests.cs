@@ -24,6 +24,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
@@ -143,8 +144,10 @@ public class TransmitterToReceiverScenarioTests
         Assert.True(result.TryGetSuccess(out var validated), "Validation unexpectedly failed.");
 
         var token = validated.Token;
-        var isFirstDelivery = await receiver.GetRequiredService<IJtiReplayCache>().TryRegisterAsync(
-            token.Issuer!, token.JwtId!, token.IssuedAt!.Value, TestContext.Current.CancellationToken);
+        var isFirstDelivery = await receiver.GetRequiredService<IReplayCache>().TryReserveAsync(
+            $"{token.Issuer}:{token.JwtId}",
+            token.IssuedAt!.Value + TimeSpan.FromMinutes(10),
+            TestContext.Current.CancellationToken);
 
         if (isFirstDelivery)
         {

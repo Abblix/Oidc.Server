@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Validation;
@@ -182,29 +183,39 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers the replay cache over the host's <c>IDistributedCache</c> as the
-    /// <see cref="IJtiReplayCache"/>.
+    /// <see cref="IReplayCache"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The store itself is the host's choice and is deliberately not registered here:
     /// <c>AddDistributedMemoryCache()</c> gives a single-instance receiver process-local
     /// behavior, Redis or another backend gives a scaled-out one a shared memory - the same
     /// registration either way.
+    /// </para>
+    /// <para>
+    /// How long an identifier is remembered comes from the validation profile rather than from
+    /// here, because the retention only makes sense against the freshness window it has to
+    /// outlive - see <see cref="SecurityEventTokenValidationOptions.ReplayRetention"/>. The
+    /// contract itself lives in Abblix.JWT, so a host that also runs the OpenID Connect server
+    /// shares one replay store between its DPoP proofs, its client assertions and its events.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    /// <param name="retention">
-    /// How long identifiers are remembered past their tokens' issue time; must cover the
-    /// validation profile's issued-at tolerance with a margin. The default doubles the default
-    /// tolerance of <see cref="SecurityEventTokenValidationOptions.IssuedAtTolerance"/>.</param>
-    public static IServiceCollection AddDistributedReplayCache(
-        this IServiceCollection services,
-        TimeSpan? retention = null)
+    public static IServiceCollection AddDistributedReplayCache(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddSingleton<IJtiReplayCache>(
-            provider => provider.CreateService<DistributedJtiReplayCache>(
-                Dependency.Override(retention ?? TimeSpan.FromMinutes(10))));
+        services.TryAddSingleton<IReplayCache>(
+            provider => provider.CreateService<DistributedReplayCache>(
+                Dependency.Override(CacheKeyPrefix)));
 
         return services;
     }
+
+    /// <summary>
+    /// Keeps these entries out of the way of whatever else shares the host's cache. A stable
+    /// literal: entries written under one prefix are unreachable under another, so a rolling
+    /// upgrade that changed it would run without replay protection until they aged out.
+    /// </summary>
+    private const string CacheKeyPrefix = "Abblix.SecurityEvents:ReplayPrevention:";
 
 }
