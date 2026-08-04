@@ -232,7 +232,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddSecurityEvents(options =>
-            options.SigningKeySource = _ => ValueTask.FromResult(_key));
+            options.SigningKeySource = _ => Task.FromResult(_key));
         builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
         {
             Issuer = TransmitterIssuer,
@@ -328,7 +328,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddSecurityEvents(options =>
-            options.SigningKeySource = _ => ValueTask.FromResult(_key));
+            options.SigningKeySource = _ => Task.FromResult(_key));
         builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
         {
             Issuer = TransmitterIssuer,
@@ -378,12 +378,12 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
     {
         public List<ValidatedSecurityEventToken> Consumed { get; } = [];
 
-        public ValueTask<DeliveryError?> ConsumeAsync(
+        public Task<DeliveryError?> ConsumeAsync(
             ValidatedSecurityEventToken token,
             CancellationToken cancellationToken = default)
         {
             Consumed.Add(token);
-            return ValueTask.FromResult<DeliveryError?>(null);
+            return Task.FromResult<DeliveryError?>(null);
         }
     }
 

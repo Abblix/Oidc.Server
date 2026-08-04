@@ -55,7 +55,7 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
 
     /// <inheritdoc />
-    public async ValueTask EnqueueAsync(
+    public async Task EnqueueAsync(
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
@@ -78,7 +78,7 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+    public async Task<IReadOnlyList<OutboxItem>> PendingAsync(
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
@@ -91,7 +91,7 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     }
 
     /// <inheritdoc />
-    public async ValueTask AcknowledgeAsync(
+    public async Task AcknowledgeAsync(
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
@@ -121,7 +121,7 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     }
 
     /// <inheritdoc />
-    public async ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default)
+    public async Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
         => await cache.RemoveAsync(CacheKeyPrefix + streamId, cancellationToken);
 
     /// <inheritdoc />

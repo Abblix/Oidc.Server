@@ -61,9 +61,9 @@ public sealed class ConfigurationStreamStore : IStreamStore
 
         foreach (var declared in streams)
         {
-            // The in-memory seed answers synchronously; AsTask keeps the wait an ordinary,
-            // rule-clean one for the constructor's single pass.
-            var created = _streams.TryCreateAsync(Materialize(options, declared)).AsTask();
+            // The in-memory seed answers synchronously, so the constructor's single-pass wait
+            // never blocks.
+            var created = _streams.TryCreateAsync(Materialize(options, declared));
             if (!created.GetAwaiter().GetResult())
             {
                 throw new InvalidOperationException(
@@ -74,32 +74,32 @@ public sealed class ConfigurationStreamStore : IStreamStore
     }
 
     /// <inheritdoc />
-    public ValueTask<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
         => _streams.TryCreateAsync(stream, cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask<StreamState?> FindAsync(
+    public Task<StreamState?> FindAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default)
         => _streams.FindAsync(receiverId, streamId, cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<StreamState>> ListAsync(
+    public Task<IReadOnlyList<StreamState>> ListAsync(
         string receiverId,
         CancellationToken cancellationToken = default)
         => _streams.ListAsync(receiverId, cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
         => _streams.ListAllAsync(cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
         => _streams.UpdateAsync(stream, cancellationToken);
 
     /// <inheritdoc />
-    public ValueTask<bool> DeleteAsync(
+    public Task<bool> DeleteAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default)

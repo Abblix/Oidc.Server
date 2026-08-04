@@ -38,7 +38,7 @@ public interface IEventOutbox
     /// <param name="streamId">The stream the SET was minted for.</param>
     /// <param name="item">The minted SET.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask EnqueueAsync(string streamId, OutboxItem item, CancellationToken cancellationToken = default);
+    Task EnqueueAsync(string streamId, OutboxItem item, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads the unacknowledged head of a stream's queue, oldest first, without removing
@@ -49,7 +49,7 @@ public interface IEventOutbox
     /// The most items to return; null returns everything pending, mirroring an absent
     /// "maxEvents" (RFC 8936 Section 2.2).</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+    Task<IReadOnlyList<OutboxItem>> PendingAsync(
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default);
@@ -62,7 +62,7 @@ public interface IEventOutbox
     /// <param name="streamId">The stream whose queue is acknowledged.</param>
     /// <param name="jwtIds">The "jti" values being acknowledged.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask AcknowledgeAsync(
+    Task AcknowledgeAsync(
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default);
@@ -73,5 +73,5 @@ public interface IEventOutbox
     /// </summary>
     /// <param name="streamId">The stream whose queue is dropped.</param>
     /// <param name="cancellationToken">Cancels I/O a durable implementation performs.</param>
-    ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default);
+    Task ClearAsync(string streamId, CancellationToken cancellationToken = default);
 }

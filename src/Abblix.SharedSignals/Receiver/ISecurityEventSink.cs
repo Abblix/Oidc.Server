@@ -54,7 +54,7 @@ public interface ISecurityEventSink
     /// <param name="cancellationToken">Cancels the processing.</param>
     /// <returns>Null to acknowledge the event, or the error the delivery response carries.
     /// </returns>
-    ValueTask<DeliveryError?> ConsumeAsync(
+    Task<DeliveryError?> ConsumeAsync(
         ValidatedSecurityEventToken token,
         CancellationToken cancellationToken = default);
 }

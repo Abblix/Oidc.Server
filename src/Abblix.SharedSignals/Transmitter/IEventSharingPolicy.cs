@@ -41,7 +41,7 @@ public interface IEventSharingPolicy
     /// <param name="cancellationToken">Cancels I/O the decision performs.</param>
     /// <returns>True to let the delivery proceed; false to withhold it, silently - a receiver
     /// learns nothing from what does not arrive (SSF 1.0 Section 9.2).</returns>
-    ValueTask<bool> IsSharingPermittedAsync(
+    Task<bool> IsSharingPermittedAsync(
         StreamState stream,
         SecurityEventDescriptor descriptor,
         CancellationToken cancellationToken = default);

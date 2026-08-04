@@ -35,33 +35,33 @@ public sealed class InMemoryStreamStore : IStreamStore
     private readonly ConcurrentDictionary<(string ReceiverId, string StreamId), StreamState> _streams = new();
 
     /// <inheritdoc />
-    public ValueTask<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        return ValueTask.FromResult(_streams.TryAdd(KeyOf(stream), stream));
+        return Task.FromResult(_streams.TryAdd(KeyOf(stream), stream));
     }
 
     /// <inheritdoc />
-    public ValueTask<StreamState?> FindAsync(
+    public Task<StreamState?> FindAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default)
-        => ValueTask.FromResult(_streams.GetValueOrDefault((receiverId, streamId)));
+        => Task.FromResult(_streams.GetValueOrDefault((receiverId, streamId)));
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<StreamState>> ListAsync(
+    public Task<IReadOnlyList<StreamState>> ListAsync(
         string receiverId,
         CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<IReadOnlyList<StreamState>>(
+        => Task.FromResult<IReadOnlyList<StreamState>>(
             _streams.Values.Where(stream => stream.ReceiverId == receiverId).ToArray());
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<IReadOnlyList<StreamState>>(_streams.Values.ToArray());
+    public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<StreamState>>(_streams.Values.ToArray());
 
     /// <inheritdoc />
-    public ValueTask<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
@@ -71,19 +71,19 @@ public sealed class InMemoryStreamStore : IStreamStore
         {
             if (_streams.TryUpdate(KeyOf(stream), stream, existing))
             {
-                return ValueTask.FromResult(true);
+                return Task.FromResult(true);
             }
         }
 
-        return ValueTask.FromResult(false);
+        return Task.FromResult(false);
     }
 
     /// <inheritdoc />
-    public ValueTask<bool> DeleteAsync(
+    public Task<bool> DeleteAsync(
         string receiverId,
         string streamId,
         CancellationToken cancellationToken = default)
-        => ValueTask.FromResult(_streams.TryRemove((receiverId, streamId), out _));
+        => Task.FromResult(_streams.TryRemove((receiverId, streamId), out _));
 
     private static (string, string) KeyOf(StreamState stream) => (stream.ReceiverId, stream.StreamId);
 }

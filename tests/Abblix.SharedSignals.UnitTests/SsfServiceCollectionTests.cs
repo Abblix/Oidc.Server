@@ -135,10 +135,10 @@ public class SsfServiceCollectionTests
 
     private sealed class NullSink : ISecurityEventSink
     {
-        public ValueTask<DeliveryError?> ConsumeAsync(
+        public Task<DeliveryError?> ConsumeAsync(
             ValidatedSecurityEventToken token,
             CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<DeliveryError?>(null);
+            => Task.FromResult<DeliveryError?>(null);
     }
 
     private sealed class FakeSigner : ISecurityEventTokenSigner

@@ -30,7 +30,7 @@ dotnet add package Abblix.SecurityEvents.CAEP   # the samples below use the CAEP
 
 ```csharp
 builder.Services.AddSecurityEvents(options =>
-    options.SigningKeySource = _ => ValueTask.FromResult(signingKey));
+    options.SigningKeySource = _ => Task.FromResult(signingKey));
 
 builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
 {

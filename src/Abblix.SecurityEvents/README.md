@@ -88,7 +88,7 @@ services.AddSecurityEvents(options =>
 {
     options.Events.Register<MembershipChangedPayload>(
         "https://tenant.example.com/events/membership-changed");
-    options.SigningKeySource = _ => ValueTask.FromResult(signingKey); // transmitters only
+    options.SigningKeySource = _ => Task.FromResult(signingKey); // transmitters only
 });
 services.AddJwksKeyResolution();      // receivers: issuers' keys from their published JWK Sets
 services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache

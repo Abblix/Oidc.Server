@@ -148,21 +148,21 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// </summary>
     private sealed class NeverCalledOutbox : IEventOutbox
     {
-        public ValueTask EnqueueAsync(
+        public Task EnqueueAsync(
             string streamId, OutboxItem item, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public ValueTask<IReadOnlyList<OutboxItem>> PendingAsync(
+        public Task<IReadOnlyList<OutboxItem>> PendingAsync(
             string streamId, int? maxCount = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public ValueTask AcknowledgeAsync(
+        public Task AcknowledgeAsync(
             string streamId,
             IReadOnlyCollection<string> jwtIds,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public ValueTask ClearAsync(string streamId, CancellationToken cancellationToken = default)
+        public Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 }

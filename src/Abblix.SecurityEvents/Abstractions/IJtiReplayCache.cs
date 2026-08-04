@@ -56,7 +56,7 @@ public interface IJtiReplayCache
     /// <param name="cancellationToken">Cancels I/O a distributed implementation performs.</param>
     /// <returns>True when the identifier is new and now registered; false when it was seen before.
     /// </returns>
-    ValueTask<bool> TryRegisterAsync(
+    Task<bool> TryRegisterAsync(
         string issuer,
         string jwtId,
         DateTimeOffset issuedAt,
