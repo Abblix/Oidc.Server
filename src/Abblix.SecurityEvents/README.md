@@ -3,6 +3,12 @@
 Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
 Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
 
+## Install
+
+```bash
+dotnet add package Abblix.SecurityEvents
+```
+
 ## Building a Security Event Token
 
 A SET is a JWT whose claims describe a security event. The builder enforces what the
@@ -189,3 +195,9 @@ format can never change how a standard document is read.
 
 Abblix.SecurityEvents is licensed under the Abblix license agreement. See
 [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

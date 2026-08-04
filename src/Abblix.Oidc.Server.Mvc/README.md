@@ -13,7 +13,7 @@
 
 ## Key Features
 
-- **Standard MVC Integration**: Uses ASP.NET controller classes, model binding, and attribute routing — no custom middleware required
+- **Standard MVC Integration**: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
 - **OIDC Endpoint Controllers**: Authorization, token, userinfo, introspection, revocation, device authorization, and more
 - **Session Management**: Check session iframe and RP-initiated logout with CSP nonce support
 - **Front-Channel & Back-Channel Logout**: Complete logout notification via both channels
@@ -66,10 +66,16 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
 | **Abblix.OIDC.Server.MVC** | ASP.NET MVC integration for OIDC server *(this package)* |
+| **[Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi)** | The same endpoints as Minimal API route handlers, without MVC |
 
 ## Getting Started
 
 To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+
+## License
+
+Abblix.OIDC.Server.MVC is licensed under the Abblix license agreement. See
+[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 

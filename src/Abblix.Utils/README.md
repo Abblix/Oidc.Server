@@ -1,41 +1,63 @@
-# Abblix Utils
+# Abblix.Utils
 
-**Abblix.Utils** is a comprehensive utility library for .NET that provides essential cross-cutting functionalities used throughout the Abblix OIDC Server ecosystem. It includes advanced URI and string manipulation tools, cryptographic helpers, custom JSON converters, and asynchronous utilities — all designed for security-focused applications.
+The foundation layer of the Abblix packages: the small, dependency-light pieces that security-focused code keeps needing - careful URI construction, log sanitization, cryptographic encodings, JSON converters for wire formats, and a Result type for expected failures. Every other Abblix package builds on it; it is equally usable on its own.
 
-## Key Features
-
-- **URI Manipulation**: Advanced parsing and construction of complex URI components, including query strings and fragment handling
-- **String Extensions**: Extended string operations for common patterns in authentication and authorization workflows
-- **Cryptographic Utilities**: Secure random data generation, Base32/Base64URL encoding, and key material helpers using .NET crypto primitives
-- **JSON Serialization**: Custom `System.Text.Json` converters for efficient processing of security tokens and protocol messages
-- **Asynchronous Utilities**: Helpers for async enumeration and task coordination
-- **Caching Abstractions**: Extensions for `IDistributedCache` with typed serialization support
-- **HTTP Abstractions**: Lightweight HTTP request/response helpers built on `Microsoft.AspNetCore.Http.Abstractions`
-
-## Installation
+## Install
 
 ```bash
 dotnet add package Abblix.Utils
 ```
 
-## Part of the Abblix OIDC Server Ecosystem
+## What is inside
 
-Abblix.Utils is the foundational utility layer used by all other Abblix packages:
+### URIs and parameters
 
-| Package | Description |
-|---------|-------------|
-| **Abblix.Utils** | Utility library *(this package)* |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | Advanced .NET DI extensions with aliasing, composites, and decorators |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET MVC integration for OIDC server |
+`UriBuilder`, `UriExtensions` and `ParametersBuilder` construct and take apart URIs with explicit control over query and fragment parts - the difference that matters when a redirect URI must carry a response exactly where the protocol says, and nowhere else.
 
-## Getting Started
+### Result: expected failures as values
 
-To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+`Result<TSuccess, TFailure>` models an operation whose failure is an expected outcome rather than an exception - validation, protocol errors, lookups that legitimately find nothing. Both outcomes are values, `Match` and the `MapSuccess`/`MapFailure` combinators compose them railway-style, and `TryGetSuccess`/`TryGetFailure` unwrap at the edges:
+
+```csharp
+Result<AuthorizedGrant, AuthError> result = await AuthorizeAsync(request);
+return result.Match(RenderTokens, RenderError);
+```
+
+### Log sanitization
+
+`Sanitized` wraps a value for logging so control characters cannot forge log lines. Anything a caller sent - identifiers, URIs, header values - goes through it before reaching a log template:
+
+```csharp
+logger.LogWarning("Unknown client {ClientId}", new Sanitized(clientId));
+```
+
+### Cryptographic encodings and randomness
+
+`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in, and `CertificateId` with `ICertificateProvider` abstract certificate lookup.
+
+### JSON converters for wire formats
+
+Custom `System.Text.Json` converters for the shapes protocol messages actually use: unix-seconds timestamps (`DateTimeOffsetUnixTimeSecondsConverter`), durations as integer seconds (`TimeSpanSecondsConverter`), space-separated lists such as OAuth scopes (`SpaceSeparatedValuesConverter`), values that arrive as either a single item or an array (`SingleOrArrayConverter`), base64url binary (`Base64UrlTextEncoderConverter`), and null-dropping serialization (`JsonIgnoreNullsAttribute`).
+
+### Distributed cache helpers
+
+`DistributedCacheExtensions` adds the operation `IDistributedCache` lacks for security bookkeeping: `TryAddAsync`, an add-if-absent that makes single-use semantics - replay caches, one-time codes - expressible over any cache backend.
+
+### Collections and enums
+
+`ArrayExtensions`, `EnumerableExtensions`, `EnumFlagExtensions` and `ObjectExtensions` carry the small operations that otherwise get re-implemented per project.
+
+## Part of the Abblix family
+
+Abblix.Utils sits under [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT), [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server), [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents) and the rest of the family; the full set lives in the [repository](https://github.com/Abblix/Oidc.Server).
+
+## License
+
+Abblix.Utils is licensed under the Abblix license agreement. See
+[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

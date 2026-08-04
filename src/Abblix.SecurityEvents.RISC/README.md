@@ -1,6 +1,12 @@
 # Abblix.SecurityEvents.RISC
 
-The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the fourteen RISC events, registered over the Security Events core in one call.
+The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the fourteen RISC events, registered over the Security Events core in one call. RISC is how providers protect a shared user together - a credential found in a breach or an account hijacked at one provider becomes a signal every other provider holding the same identifier can act on.
+
+## Install
+
+```bash
+dotnet add package Abblix.SecurityEvents.RISC
+```
 
 ## Events
 
@@ -58,7 +64,17 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+## Part of the Abblix family
+
+The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter and receiver; the sibling dictionary for session and access lifecycle is [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP), and both compose on one registry.
+
 ## License
 
 Abblix.SecurityEvents.RISC is licensed under the Abblix license agreement. See
 [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

@@ -1,6 +1,12 @@
 # Abblix.SecurityEvents.CAEP
 
-The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the eight CAEP events, registered over the Security Events core in one call.
+The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the eight CAEP events, registered over the Security Events core in one call. CAEP is how cooperating services keep reacting to each other AFTER login - one provider revokes a session or sees a risk level shift, and every subscribed service learns of it without waiting for the next authentication.
+
+## Install
+
+```bash
+dotnet add package Abblix.SecurityEvents.CAEP
+```
 
 ## Events
 
@@ -48,7 +54,17 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+## Part of the Abblix family
+
+The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter and receiver; the sibling dictionary for account risk incidents is [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC), and both compose on one registry.
+
 ## License
 
 Abblix.SecurityEvents.CAEP is licensed under the Abblix license agreement. See
 [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

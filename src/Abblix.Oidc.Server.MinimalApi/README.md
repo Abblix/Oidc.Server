@@ -99,6 +99,11 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
 
+## License
+
+Abblix.OIDC.Server.MinimalApi is licensed under the Abblix license agreement. See
+[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+
 ## Contacts
 
 - **General inquiries**: [info@abblix.com](mailto:info@abblix.com)

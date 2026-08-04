@@ -1,6 +1,6 @@
 # Abblix OIDC Server
 
-**Abblix OIDC Server** is a robust .NET library that implements the OpenID Connect protocol on the server side. Designed with modular and hexagonal architecture patterns, it provides a compliant, extensible framework for adding OIDC-based authentication and authorization to .NET applications. It supports Dependency Injection using the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
+**Abblix OIDC Server** is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a certified provider you embed in your own ASP.NET Core application instead of running a separate identity product. It is certified by the OpenID Foundation across all login and logout profiles, builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
 
 ## What's New in Version 2.3
 
@@ -63,21 +63,31 @@ Abblix OIDC Server implements a comprehensive suite of standards for authorizati
 dotnet add package Abblix.OIDC.Server
 ```
 
-> **Note**: Most applications should use [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) which includes this package plus ASP.NET MVC integration with controllers, model binding, and routing.
+> **Note**: Most applications should use [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) or [Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi), which include this package plus the ASP.NET Core endpoint wiring.
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
 | **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | Advanced .NET DI extensions with aliasing, composites, and decorators |
+| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
+| **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | Signing keys held in HashiCorp Vault / OpenBao Transit |
+| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Signing keys held in Azure Key Vault |
 | **Abblix.OIDC.Server** | Core OpenID Connect server implementation *(this package)* |
-| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET MVC integration for OIDC server |
+| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
+| **[Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi)** | ASP.NET Core Minimal API integration |
+| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) with subject identifiers, delivery and validation |
+| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
 ## Getting Started
 
 To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+
+## License
+
+Abblix.OIDC.Server is licensed under the Abblix license agreement. See
+[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 

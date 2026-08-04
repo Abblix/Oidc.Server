@@ -1,6 +1,12 @@
 # Abblix.SharedSignals.Redis
 
-The Redis-native event outbox for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): each stream's queue on Redis list and hash structures, every mutation a server-side atomic operation.
+The Redis-native event outbox for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): each stream's queue on Redis list and hash structures, every mutation a server-side atomic operation. Take this package the day the transmitter scales past one replica.
+
+## Install
+
+```bash
+dotnet add package Abblix.SharedSignals.Redis
+```
 
 ## Why native structures
 
@@ -24,3 +30,9 @@ The queue and item keys of one stream share a cluster hash tag, so the outbox wo
 
 Abblix.SharedSignals.Redis is licensed under the Abblix license agreement. See
 [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
