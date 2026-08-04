@@ -59,6 +59,50 @@ public class TransmitterConfigurationClientTests
     }
 
     [Fact]
+    public async Task GetFromExplicitAddress_FetchesThatAddress_AndStillReturnsTheMetadata()
+    {
+        // The overload for transmitters publishing the document off the well-known path: the
+        // address changes, nothing else does.
+        var handler = new StubHttpHandler().Enqueue(
+            HttpStatusCode.OK,
+            """
+            {
+                "issuer": "https://tr.example.com/issuer1",
+                "jwks_uri": "https://tr.example.com/issuer1/jwks.json"
+            }
+            """);
+        var client = new TransmitterConfigurationClient(handler.CreateClient());
+
+        var metadata = await client.GetAsync(
+            new Uri("https://tr.example.com/issuer1"),
+            new Uri("https://tr.example.com/internal/ssf-config"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new Uri("https://tr.example.com/internal/ssf-config"),
+            Assert.Single(handler.Requests).Address);
+        Assert.Equal("https://tr.example.com/issuer1", metadata.Issuer);
+    }
+
+    [Fact]
+    public async Task GetFromExplicitAddress_DocumentAssertingAnotherIssuer_IsStillRefused()
+    {
+        // The address says where the bytes come from, never who they speak for: the issuer
+        // identity check binds this overload exactly as it binds the well-known one.
+        var handler = new StubHttpHandler().Enqueue(
+            HttpStatusCode.OK, """{"issuer": "https://tr.example.com/issuer2"}""");
+        var client = new TransmitterConfigurationClient(handler.CreateClient());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await client.GetAsync(
+                new Uri("https://tr.example.com/issuer1"),
+                new Uri("https://tr.example.com/internal/ssf-config"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("issuer2", exception.Message);
+    }
+
+    [Fact]
     public async Task Get_DocumentAssertingAnotherIssuer_IsRefused()
     {
         // Without the identity check, a document served on one issuer's well-known path could

@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
@@ -219,6 +220,52 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         Assert.Equal(0, await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
             cancellationToken));
+    }
+
+    [Fact]
+    public async Task GatewayFrontedTransmitter_SuppressesWellKnown_AndServesTheDocumentOnItsOwnRoute()
+    {
+        // The deployment behind a rewriting proxy: the canonical well-known address is answered
+        // by the gateway, the application serves the same document on an internal route, and the
+        // document advertises the EXTERNAL prefix the proxy exposes.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSecurityEvents(options =>
+            options.SigningKeySource = _ => ValueTask.FromResult(_key));
+        builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
+        {
+            Issuer = TransmitterIssuer,
+            EventsSupported = [MembershipChanged],
+        });
+        builder.Services.AddSingleton(new SsfEndpointOptions { ReceiverIdSelector = _ => ReceiverId });
+
+        await using var app = builder.Build();
+        app.MapSsfTransmitterEndpoints("/internal/ssf", mapWellKnownConfiguration: false);
+        app.MapSsfConfigurationDocument("/api/ssf", "/internal/ssf-config");
+        await app.StartAsync(cancellationToken);
+
+        var http = app.GetTestClient();
+
+        // The canonical address is deliberately silent here - the gateway in front owns it.
+        using var wellKnown = await http.GetAsync("/.well-known/ssf-configuration", cancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wellKnown.StatusCode);
+
+        // The receiver's client reads the internal route through its explicit-address overload,
+        // and the identity check still binds the document to the issuer.
+        var metadata = await new TransmitterConfigurationClient(http).GetAsync(
+            new Uri(TransmitterIssuer),
+            new Uri($"{TransmitterIssuer}/internal/ssf-config"),
+            cancellationToken);
+
+        Assert.Equal(TransmitterIssuer, metadata.Issuer);
+        Assert.StartsWith(
+            $"{TransmitterIssuer}/api/ssf/",
+            metadata.ConfigurationEndpoint!.AbsoluteUri);
+
+        // The management surface itself answers where it was actually mapped.
+        using var streams = await http.GetAsync("/internal/ssf/stream", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, streams.StatusCode);
     }
 
     private sealed record ManagementSurface(StreamManagementClient Client, StreamConfiguration Created);

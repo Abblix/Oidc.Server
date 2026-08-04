@@ -70,18 +70,24 @@ public static class SsfEndpointRouteBuilderExtensions
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
     /// <param name="prefix">The route prefix of the management surface.</param>
+    /// <param name="mapWellKnownConfiguration">
+    /// False leaves the well-known address unmapped - for a host whose gateway or CDN answers
+    /// the canonical address itself. The address is fixed by SSF 1.0 Section 7.2 and receivers
+    /// derive it from the issuer, so the flag only suppresses the route, never moves it; a host
+    /// that must serve the document on another internal path - a reverse proxy rewriting paths
+    /// in front of the transmitter - pairs this with
+    /// <see cref="MapSsfConfigurationDocument"/>.</param>
     public static RouteGroupBuilder MapSsfTransmitterEndpoints(
         this IEndpointRouteBuilder endpoints,
-        string prefix = "/ssf")
+        string prefix = "/ssf",
+        bool mapWellKnownConfiguration = true)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var options = endpoints.ServiceProvider.GetRequiredService<SsfTransmitterOptions>();
-        var issuer = new Uri(options.Issuer, UriKind.Absolute);
-
-        endpoints.MapGet(
-            TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
-            (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, prefix)));
+        if (mapWellKnownConfiguration)
+        {
+            endpoints.MapSsfConfigurationDocument(prefix);
+        }
 
         var group = endpoints.MapGroup(prefix);
 
@@ -106,6 +112,43 @@ public static class SsfEndpointRouteBuilderExtensions
         group.MapPost(Routes.Poll + "/{streamId}", PollAsync);
 
         return group;
+    }
+
+    /// <summary>
+    /// Maps the transmitter's configuration document (SSF 1.0 Section 7.2) on its own: at the
+    /// well-known address the issuer resolves to, or at a host-chosen internal route.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="MapSsfTransmitterEndpoints"/> calls this by default, so a plain host never
+    /// needs it. It exists for the deployment where the canonical address is answered by
+    /// something in front of the application: a gateway or CDN serving a cached copy (suppress
+    /// the default mapping and do not call this), or a reverse proxy rewriting paths, where the
+    /// document must exist on an internal route the proxy maps the canonical address onto. The
+    /// EXTERNAL address never moves - receivers derive it from the issuer, not from
+    /// configuration - so <paramref name="pattern"/> is deployment plumbing, not a protocol
+    /// choice.
+    /// </remarks>
+    /// <param name="endpoints">The route builder.</param>
+    /// <param name="advertisedPrefix">
+    /// The management-surface prefix the document advertises, as the OUTSIDE world reaches it -
+    /// behind a rewriting proxy that is the external prefix, whatever
+    /// <see cref="MapSsfTransmitterEndpoints"/> mapped internally.</param>
+    /// <param name="pattern">
+    /// The route the document is served on; null takes the canonical well-known address derived
+    /// from the issuer.</param>
+    public static IEndpointConventionBuilder MapSsfConfigurationDocument(
+        this IEndpointRouteBuilder endpoints,
+        string advertisedPrefix = "/ssf",
+        string? pattern = null)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        var options = endpoints.ServiceProvider.GetRequiredService<SsfTransmitterOptions>();
+        var issuer = new Uri(options.Issuer, UriKind.Absolute);
+
+        return endpoints.MapGet(
+            pattern ?? TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
+            (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
 
     /// <summary>
