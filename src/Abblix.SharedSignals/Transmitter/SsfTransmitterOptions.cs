@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Nodes;
 using Abblix.SharedSignals.Model;
 
 namespace Abblix.SharedSignals.Transmitter;
@@ -81,6 +82,20 @@ public sealed record SsfTransmitterOptions
     /// (SSF 1.0 Sections 8.1.1, 8.1.4.2); null advertises no bound and throttles nothing.
     /// </summary>
     public TimeSpan? MinVerificationInterval { get; init; }
+
+    /// <summary>
+    /// Where this transmitter publishes the JWK Set its SETs verify against, advertised as
+    /// "jwks_uri" (SSF 1.0 Section 7.1); null publishes no key location, leaving key
+    /// distribution to some out-of-band agreement.
+    /// </summary>
+    public Uri? JwksUri { get; init; }
+
+    /// <summary>
+    /// The authorization scheme descriptions the configuration metadata advertises
+    /// (SSF 1.0 Section 7.1.1), kept as raw JSON because their shape is scheme-specific and
+    /// authorization itself is the host's, not this package's.
+    /// </summary>
+    public IReadOnlyList<JsonObject>? AuthorizationSchemes { get; init; }
 
     /// <summary>
     /// The "default_subjects" value the mode advertises, kept beside the enum so the wire word

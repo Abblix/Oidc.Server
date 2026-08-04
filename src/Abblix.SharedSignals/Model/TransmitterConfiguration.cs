@@ -131,6 +131,18 @@ public sealed record TransmitterConfiguration
     }
 
     /// <summary>
+    /// The values the "spec_version" member may carry (SSF 1.0 Section 7.1): the numerical
+    /// portions of the specification versions, per the working group's naming convention.
+    /// </summary>
+    public static class SpecVersions
+    {
+        /// <summary>
+        /// The final Shared Signals Framework 1.0 specification.
+        /// </summary>
+        public const string Final = "1_0";
+    }
+
+    /// <summary>
     /// The values the "default_subjects" member may carry (SSF 1.0 Section 7.1).
     /// </summary>
     public static class DefaultSubjectBehaviors

@@ -29,6 +29,7 @@
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
     <Project Path="src/Abblix.SharedSignals/Abblix.SharedSignals.csproj" />
+    <Project Path="src/Abblix.SharedSignals.MinimalApi/Abblix.SharedSignals.MinimalApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
