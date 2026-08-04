@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Receiver;
@@ -92,138 +93,17 @@ public static class SsfEndpointRouteBuilderExtensions
             return await next(context);
         });
 
-        group.MapPost(Routes.Stream, async (
-                HttpContext http,
-                StreamManagementService service,
-                CreateStreamRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.CreateStreamAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapGet(Routes.Stream, async (
-            HttpContext http,
-            StreamManagementService service,
-            [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
-            CancellationToken cancellationToken) =>
-        {
-            if (ReceiverIdOf(http) is not { } receiverId)
-            {
-                return Results.Unauthorized();
-            }
-
-            return streamId is null
-                ? Render(await service.ListStreamsAsync(receiverId, cancellationToken))
-                : Render(await service.GetStreamAsync(receiverId, streamId, cancellationToken));
-        });
-
-        group.MapPatch(Routes.Stream, async (
-                HttpContext http,
-                StreamManagementService service,
-                UpdateStreamRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.UpdateStreamAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapPut(Routes.Stream, async (
-                HttpContext http,
-                StreamManagementService service,
-                UpdateStreamRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.ReplaceStreamAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapDelete(Routes.Stream, async (
-            HttpContext http,
-            StreamManagementService service,
-            [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
-            CancellationToken cancellationToken) =>
-        {
-            if (ReceiverIdOf(http) is not { } receiverId)
-            {
-                return Results.Unauthorized();
-            }
-
-            // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
-            // without it there is nothing to delete.
-            return streamId is null
-                ? Results.BadRequest()
-                : Render(await service.DeleteStreamAsync(receiverId, streamId, cancellationToken));
-        });
-
-        group.MapGet(Routes.Status, async (
-            HttpContext http,
-            StreamManagementService service,
-            [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
-            CancellationToken cancellationToken) =>
-        {
-            if (ReceiverIdOf(http) is not { } receiverId)
-            {
-                return Results.Unauthorized();
-            }
-
-            // The status read has no list fallback: "stream_id" is its REQUIRED parameter
-            // (SSF 1.0 Section 8.1.2.1).
-            return streamId is null
-                ? Results.BadRequest()
-                : Render(await service.GetStreamStatusAsync(receiverId, streamId, cancellationToken));
-        });
-
-        group.MapPost(Routes.Status, async (
-                HttpContext http,
-                StreamManagementService service,
-                StreamStatus request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.UpdateStreamStatusAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapPost(Routes.AddSubject, async (
-                HttpContext http,
-                StreamManagementService service,
-                AddSubjectRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.AddSubjectAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapPost(Routes.RemoveSubject, async (
-                HttpContext http,
-                StreamManagementService service,
-                RemoveSubjectRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.RemoveSubjectAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapPost(Routes.Verify, async (
-                HttpContext http,
-                StreamManagementService service,
-                VerificationRequest request,
-                CancellationToken cancellationToken)
-            => ReceiverIdOf(http) is { } receiverId
-                ? Render(await service.RequestVerificationAsync(receiverId, request, cancellationToken))
-                : Results.Unauthorized());
-
-        group.MapPost(Routes.Poll + "/{streamId}", async (
-            HttpContext http,
-            IStreamStore store,
-            PollEndpointHandler handler,
-            string streamId,
-            Abblix.SecurityEvents.Delivery.PollRequest request,
-            CancellationToken cancellationToken) =>
-        {
-            if (ReceiverIdOf(http) is not { } receiverId)
-            {
-                return Results.Unauthorized();
-            }
-
-            return await store.FindAsync(receiverId, streamId, cancellationToken) is { } stream
-                ? Results.Json(await handler.HandleAsync(stream, request, cancellationToken))
-                : Results.NotFound();
-        });
+        group.MapPost(Routes.Stream, CreateStreamAsync);
+        group.MapGet(Routes.Stream, GetStreamsAsync);
+        group.MapPatch(Routes.Stream, UpdateStreamAsync);
+        group.MapPut(Routes.Stream, ReplaceStreamAsync);
+        group.MapDelete(Routes.Stream, DeleteStreamAsync);
+        group.MapGet(Routes.Status, GetStatusAsync);
+        group.MapPost(Routes.Status, UpdateStatusAsync);
+        group.MapPost(Routes.AddSubject, AddSubjectAsync);
+        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync);
+        group.MapPost(Routes.Verify, RequestVerificationAsync);
+        group.MapPost(Routes.Poll + "/{streamId}", PollAsync);
 
         return group;
     }
@@ -240,19 +120,159 @@ public static class SsfEndpointRouteBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        return endpoints.MapPost(pattern, async (
-            HttpRequest request,
-            PushDeliveryHandler handler,
-            CancellationToken cancellationToken) =>
-        {
-            using var reader = new StreamReader(request.Body);
-            var body = await reader.ReadToEndAsync(cancellationToken);
+        return endpoints.MapPost(pattern, HandlePushAsync);
+    }
 
-            var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
-            return result.Error is { } error
-                ? Results.Json(error, statusCode: (int)result.StatusCode)
-                : Results.StatusCode((int)result.StatusCode);
-        });
+    private static async Task<IResult> CreateStreamAsync(
+        HttpContext http,
+        StreamManagementService service,
+        CreateStreamRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.CreateStreamAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    /// <summary>
+    /// One route, two reads: with "stream_id" the single configuration, without it the list -
+    /// where an empty list is a receiver with no streams, never an error
+    /// (SSF 1.0 Section 8.1.1.2).
+    /// </summary>
+    private static async Task<IResult> GetStreamsAsync(
+        HttpContext http,
+        StreamManagementService service,
+        [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
+        CancellationToken cancellationToken)
+    {
+        if (ReceiverIdOf(http) is not { } receiverId)
+        {
+            return Results.Unauthorized();
+        }
+
+        return streamId is null
+            ? Render(await service.ListStreamsAsync(receiverId, cancellationToken))
+            : Render(await service.GetStreamAsync(receiverId, streamId, cancellationToken));
+    }
+
+    private static async Task<IResult> UpdateStreamAsync(
+        HttpContext http,
+        StreamManagementService service,
+        UpdateStreamRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.UpdateStreamAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> ReplaceStreamAsync(
+        HttpContext http,
+        StreamManagementService service,
+        UpdateStreamRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.ReplaceStreamAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> DeleteStreamAsync(
+        HttpContext http,
+        StreamManagementService service,
+        [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
+        CancellationToken cancellationToken)
+    {
+        if (ReceiverIdOf(http) is not { } receiverId)
+        {
+            return Results.Unauthorized();
+        }
+
+        // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
+        // without it there is nothing to delete.
+        return streamId is null
+            ? Results.BadRequest()
+            : Render(await service.DeleteStreamAsync(receiverId, streamId, cancellationToken));
+    }
+
+    private static async Task<IResult> GetStatusAsync(
+        HttpContext http,
+        StreamManagementService service,
+        [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
+        CancellationToken cancellationToken)
+    {
+        if (ReceiverIdOf(http) is not { } receiverId)
+        {
+            return Results.Unauthorized();
+        }
+
+        // The status read has no list fallback: "stream_id" is its REQUIRED parameter
+        // (SSF 1.0 Section 8.1.2.1).
+        return streamId is null
+            ? Results.BadRequest()
+            : Render(await service.GetStreamStatusAsync(receiverId, streamId, cancellationToken));
+    }
+
+    private static async Task<IResult> UpdateStatusAsync(
+        HttpContext http,
+        StreamManagementService service,
+        StreamStatus request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.UpdateStreamStatusAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> AddSubjectAsync(
+        HttpContext http,
+        StreamManagementService service,
+        AddSubjectRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.AddSubjectAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> RemoveSubjectAsync(
+        HttpContext http,
+        StreamManagementService service,
+        RemoveSubjectRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.RemoveSubjectAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> RequestVerificationAsync(
+        HttpContext http,
+        StreamManagementService service,
+        VerificationRequest request,
+        CancellationToken cancellationToken)
+        => ReceiverIdOf(http) is { } receiverId
+            ? Render(await service.RequestVerificationAsync(receiverId, request, cancellationToken))
+            : Results.Unauthorized();
+
+    private static async Task<IResult> PollAsync(
+        HttpContext http,
+        IStreamStore store,
+        PollEndpointHandler handler,
+        string streamId,
+        PollRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (ReceiverIdOf(http) is not { } receiverId)
+        {
+            return Results.Unauthorized();
+        }
+
+        return await store.FindAsync(receiverId, streamId, cancellationToken) is { } stream
+            ? Results.Json(await handler.HandleAsync(stream, request, cancellationToken))
+            : Results.NotFound();
+    }
+
+    private static async Task<IResult> HandlePushAsync(
+        HttpRequest request,
+        PushDeliveryHandler handler,
+        CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync(cancellationToken);
+
+        var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
+        return result.Error is { } error
+            ? Results.Json(error, statusCode: (int)result.StatusCode)
+            : Results.StatusCode((int)result.StatusCode);
     }
 
     /// <summary>
