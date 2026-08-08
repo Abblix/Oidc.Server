@@ -97,8 +97,8 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds <typeparamref name="TService"/> to an enumerable strategy set as a SHARED-instance
     /// alias for the existing <typeparamref name="TImplementation"/> registration. Sister of
-    /// <see cref="AddAlias{TService,TImplementation}"/>: same semantic of «route this service
-    /// to that already-registered impl», but adds via <c>TryAddEnumerable</c> (so repeated
+    /// <see cref="AddAlias{TService,TImplementation}"/>: same semantic of "route this service
+    /// to that already-registered impl", but adds via <c>TryAddEnumerable</c> (so repeated
     /// calls dedupe on <c>(ServiceType, ImplementationType)</c>) and always uses a typed
     /// factory delegate that resolves through the source registration - guaranteeing the
     /// alias and the source share one instance.
@@ -132,7 +132,7 @@ public static class ServiceCollectionExtensions
     /// Two-tier lookup of the source: a concrete registration
     /// (<c>ServiceType == TImpl</c>) wins over an alias registration
     /// (<c>ImplementationType == TImpl</c>) - without this priority a second alias-helper
-    /// call would pick the previous alias as «source», capture the wrong ServiceType, and
+    /// call would pick the previous alias as "source", capture the wrong ServiceType, and
     /// break later <c>Compose&lt;&gt;</c>-style replacements with an
     /// <see cref="InvalidCastException"/> at resolve. The fallback derives implementation
     /// type through <see cref="ResolveImplementationType"/> so the lookup works for the
@@ -145,7 +145,7 @@ public static class ServiceCollectionExtensions
     /// factory descriptor is derived from the factory delegate's generic-arg-1. The
     /// untyped <c>ServiceDescriptor.Describe(Type, Func&lt;IServiceProvider, object&gt;, Lifetime)</c>
     /// overload bakes the factory as <c>Func&lt;IServiceProvider, object&gt;</c>, so dedup
-    /// sees <c>ImplementationType = object</c>, hits the «implementationType == typeof(object)»
+    /// sees <c>ImplementationType = object</c>, hits the "implementationType == typeof(object)"
     /// guard, and <c>TryAddEnumerable</c> throws. The typed
     /// <c>Singleton&lt;TService, TImpl&gt;(factory)</c> / <c>Scoped&lt;TService, TImpl&gt;(factory)</c>
     /// / <c>Transient&lt;TService, TImpl&gt;(factory)</c> overloads bake
@@ -501,6 +501,53 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers <typeparamref name="TImplementation"/> as a member of the <typeparamref name="TService"/>
+    /// family exactly once, whether or not that family has already been composed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
+    /// alone cannot do this. It deduplicates against PLAIN descriptors, while composing a family moves its
+    /// members to KEYED ones - so once a family is composed it neither sees the member already in there nor
+    /// puts a new one where the composite looks. What it leaves instead is a plain descriptor beside the
+    /// composite, which then wins the singular resolve, silently, because last registration wins.
+    /// <para>
+    /// Reach for this wherever a method that contributes a family member can run more than once by design,
+    /// with a composition possibly in between - which is any registration method a host may call directly
+    /// and another registration method calls for it.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TService">The family interface to register the member under.</typeparam>
+    /// <typeparam name="TImplementation">The member implementation type.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
+    /// <param name="lifetime">The lifetime of the member registration.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection TryAddToFamily<TService, TImplementation>(
+        this IServiceCollection services, ServiceLifetime lifetime)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        // Present already, in either form: a second copy would be a duplicate member of the family.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TService) &&
+                                       descriptor.ResolveImplementationType() == typeof(TImplementation)))
+            return services;
+
+        // Keyed descriptors under the family's own service type are what a composition leaves behind,
+        // whichever composite performed it - so this recognises a family the caller composed itself as
+        // readily as one composed through Compose.
+        var composed = services.Any(
+            descriptor => descriptor.IsKeyedService && descriptor.ServiceType == typeof(TService));
+
+        var member = new ServiceDescriptor(typeof(TService), typeof(TImplementation), lifetime);
+
+        if (composed)
+            services.Decompose<TService>().AddLast(member);
+        else
+            services.TryAddEnumerable(member);
+
+        return services;
+    }
+
+    /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
     /// <paramref name="serviceKey"/> into a single composite resolvable under that same key - the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
@@ -661,10 +708,9 @@ public static class ServiceCollectionExtensions
     /// <paramref name="compositeType"/>. A second composition would rebuild the composite over a member set
     /// that already contains the alias to the first composite, so the new composite would resolve one of its
     /// own children back to itself - a self-referential singleton that deadlocks on first resolve. This
-    /// happens when an opt-in feature is applied twice (e.g. two registration modules both call
-    /// AddBackChannelAuthentication or AddDeviceAuthorization) or a public compose-family method is called
-    /// before AddOidcCore, which composes it again. The sanctioned way to edit an already-composed family is
-    /// <see cref="Decompose{TInterface}"/> and editing the live cursor it returns.
+    /// happens when two registration methods each compose the same family, or when a caller composes a family
+    /// that a registration method it also calls composes for it. The sanctioned way to edit an
+    /// already-composed family is <see cref="Decompose{TInterface}"/> and editing the live cursor it returns.
     /// </summary>
     private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType, Type compositeType)
     {
@@ -673,9 +719,10 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException(
                 $"{compositeType.Name} is already registered, so the {interfaceType.Name} pipeline has " +
                 "already been composed. Composing it a second time would build a self-referential composite that " +
-                $"deadlocks on the first resolve. Register all {interfaceType.Name} implementations before " +
-                "AddOidcCore/AddOidcServices, which composes each family once, or call Decompose and edit the " +
-                "live cursor it returns.");
+                $"deadlocks on the first resolve. Register every {interfaceType.Name} implementation before " +
+                "whichever method composes the family, and compose it once. To add a member to a family that is " +
+                $"already composed, call {nameof(Decompose)} and edit the live cursor it returns - or " +
+                $"{nameof(TryAddToFamily)}, which picks the right one of the two for you.");
         }
     }
 

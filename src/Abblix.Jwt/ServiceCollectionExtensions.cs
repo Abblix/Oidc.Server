@@ -35,44 +35,6 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Puts <typeparamref name="TBackend"/> into the <typeparamref name="TSeam"/> family exactly once, whether or
-    /// not that family has already been composed.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
-    /// alone cannot do this. It deduplicates against PLAIN descriptors, and composing a family moves its members to
-    /// KEYED ones - so after a composition it neither sees the member already there nor adds one where the composite
-    /// would find it. What it does instead is leave a plain descriptor beside the composite, which then wins the
-    /// singular resolve, silently, because last registration wins.
-    /// <para>
-    /// That matters because this method's callers are called more than once by design: the OIDC registration
-    /// performs the JWT one, and so does the security-event registration, so any host that composes in between
-    /// would otherwise lose the composed seam with no error anywhere.
-    /// </para>
-    /// </remarks>
-    private static void AddBackendToSeam<TSeam, TBackend>(this IServiceCollection services)
-        where TSeam : class
-        where TBackend : class, TSeam
-    {
-        // Present already, in either form: a second copy would be a duplicate member of the pipeline.
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(TSeam) &&
-                (descriptor.IsKeyedService
-                    ? descriptor.KeyedImplementationType
-                    : descriptor.ImplementationType) == typeof(TBackend)))
-            return;
-
-        // Keyed descriptors under the family's own service type are what a composition leaves behind, whichever
-        // composite type performed it - so this recognises a family composed by the host as readily as our own.
-        var composed = services.Any(
-            descriptor => descriptor.IsKeyedService && descriptor.ServiceType == typeof(TSeam));
-
-        if (composed)
-            services.Decompose<TSeam>().AddLast(ServiceDescriptor.Singleton<TSeam, TBackend>());
-        else
-            services.TryAddEnumerable(ServiceDescriptor.Singleton<TSeam, TBackend>());
-    }
-
-    /// <summary>
     /// Registers the external backends for the wired <see cref="IKeyCustodian"/> - <see cref="ExternalKeySigner"/>
     /// on the signing seam and <see cref="ExternalKeyDecryptor"/> on the key-recovery seam - and composes each
     /// with its in-process peer, so a key routes to the backend that owns it: a public-only signing key routes its
@@ -130,15 +92,17 @@ public static class ServiceCollectionExtensions
         // the family; the composite then routes each key to the backend that owns it and fails closed when
         // none does.
         //
-        // Placed through the helper rather than TryAddEnumerable directly, because this method is called more
-        // than once by design and a composition may have happened in between. See the helper for what goes wrong.
-        services.AddBackendToSeam<IDataSigner, LocalKeySigner>();
+        // Placed through TryAddToFamily rather than TryAddEnumerable directly, because this method is called
+        // more than once by design - the OIDC registration performs it, and so does the security-event one -
+        // so a host may well have composed the family in between, and TryAddEnumerable would then leave a
+        // plain descriptor beside the composite that silently wins the resolve.
+        services.TryAddToFamily<IDataSigner, LocalKeySigner>(ServiceLifetime.Singleton);
 
         // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam in every respect: the
         // in-process LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default.
         // Encryption (wrapping the CEK) uses the recipient's public half or a local secret and never routes here,
         // so there is no encryptor seam.
-        services.AddBackendToSeam<IContentKeyDecryptor, LocalKeyDecryptor>();
+        services.TryAddToFamily<IContentKeyDecryptor, LocalKeyDecryptor>(ServiceLifetime.Singleton);
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is
