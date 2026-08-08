@@ -58,6 +58,10 @@ jobs:
       contents: read
     env:
       ACTIONLINT_VERSION: '1.7.10'
+      # Сверка обязательна: без неё шаг доверяет тому, что вернёт сеть, и исполняет это с
+      # правами задания. Обновляя версию, возьмите сумму из actionlint_<версия>_checksums.txt
+      # того же релиза.
+      ACTIONLINT_SHA256: 'f4c76b71db5755a713e6055cbb0857ed07e103e028bda117817660ebadb4386f'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -67,6 +71,7 @@ jobs:
       - name: Install actionlint
         run: |
           curl --proto '=https' -fsSL -o actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum --check --strict
           tar -xzf actionlint.tar.gz actionlint
           chmod +x actionlint
 
