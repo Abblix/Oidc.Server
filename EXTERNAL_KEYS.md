@@ -27,7 +27,7 @@ The second step is required. A custodian registered without it fails at startup,
 
 ## You do not need the OIDC server for this
 
-Both steps live in [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT). Nothing above mentions a client, an endpoint or a discovery document, and nothing in it needs one: a host that signs JSON Web Tokens without being an OpenID Provider - a transmitter signing Security Event Tokens, a service protecting its own state - wires a custodian with that one package reference.
+The *placement* step lives in [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT), and so does `AddCustodian<T>` for a custodian of your own; the two backend packages above add only the transport for their vault. Nothing in any of it mentions a client, an endpoint or a discovery document, and nothing in it needs one: a host that signs JSON Web Tokens without being an OpenID Provider - a transmitter signing Security Event Tokens, a service protecting its own state - wires a custodian without the OIDC server anywhere in its graph.
 
 What such a host does not get is the key *provider* an OpenID Provider has, which decides what `/jwks` publishes and what each token is signed with. It reads the placement itself instead:
 
@@ -38,12 +38,21 @@ var custodian = provider.GetRequiredService<IKeyCustodian>();
 
 var versions = await custodian.GetKeyVersionsAsync(keys.SigningKeyName, cancellationToken).ToListAsync(cancellationToken);
 var signingKey = versions
-    .ProduceFirst(version => version.CreatedAt, timeProvider.GetUtcNow(), propagation)
-    .Select(version => version.PublicKey with { Algorithm = keys.SigningAlgorithm })
+    .ProduceFirst(version => version.CreatedAt, timeProvider.GetUtcNow(), rolloverPropagation)
+    .Select(version => version.PublicKey with
+    {
+        Algorithm = keys.SigningAlgorithm,
+
+        // Falling back to the key NAME matters for a custodian that does not version its keys and leaves the kid
+        // unset: signing refuses a key with no kid, because the kid is the custodian's handle for it.
+        KeyId = version.PublicKey.KeyId ?? keys.SigningKeyName,
+    })
     .First();
 ```
 
-The key that comes back is public-only, which is the whole signal: the signing seam reads `HasPrivateKey`, finds nothing, and routes the signature to the custodian by `kid`. `ProduceFirst` is the same rollover arithmetic the OIDC server's provider uses, so a host that adopts it publishes and signs on the same schedule described under [Rotation](#rotation).
+The key that comes back is public-only, which is the whole signal: the signing seam reads `HasPrivateKey`, finds nothing, and routes the signature to the custodian by `kid`.
+
+`rolloverPropagation` is yours to choose here - `OidcOptions.KeyRolloverPropagation`, which the [Rotation](#rotation) section names, belongs to the OIDC server this host does not have. Pick your slowest consumer's key-cache lifetime, and use the same value everywhere the key set is published, or publication and signing drift apart. `ProduceFirst` is the same arithmetic the OIDC server's provider runs, so with that one value chosen the schedule below applies unchanged.
 
 ## The two placements
 
@@ -112,6 +121,8 @@ builder.Services
     .AddCustodian<MyCustodian>()
     .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
 ```
+
+`AddCustodian<T>` builds your custodian through the container, so it may depend on your own services. If you registered it yourself instead - as a typed `HttpClient`, or as an instance you built - call `RequireKeyPlacement()` in its place: it registers nothing and only opens the placement choice, which is the step that must not be skipped. Either way the custodian must be a singleton, because the signing and decryption backends that reach it are; a shorter lifetime is refused at the placement call rather than left to pin one scope's custodian for the life of the process.
 
 Implement only the operations your keys need, and the placement narrows that further: `UseKeysInProcess` calls only `UnwrapKeyAsync` and the version enumeration, because the signing runs in the process, while `UseKeysInCustodian` also needs `SignAsync`. A signing-only custodian leaves unwrap and agree unreachable. Address every private operation by the `kid` you published for that key version. Direct encryption (`dir`) and password-based key management (PBES2) have no external form, since the CEK is the secret itself or is derived from it, so they never route to a custodian and fail closed.
 

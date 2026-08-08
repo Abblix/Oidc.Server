@@ -47,10 +47,12 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection, for chaining.</returns>
     /// <remarks>
     /// This is the bare seam: it wires the custodian and nothing else, so the host decides for itself which keys
-    /// are public-only and therefore route here. A host that wants the library to hold it to a named security
-    /// posture - and to refuse to start when nobody named one - uses
+    /// are public-only and therefore route here. It records no key placement, which makes it the wrong call inside
+    /// an OpenID Provider: that server refuses to serve keys once a custodian is registered and no placement was
+    /// named, so <c>/jwks</c> and every token issuance would fail. Such a host uses
     /// <see cref="ExternalKeys.ExternalKeysServiceCollectionExtensions.AddCustodian{TCustodian}"/> with a placement
-    /// call instead. Not both: each composes the external backends, and composing a family twice fails at startup.
+    /// call. Never both: each composes the external backends, and <c>Compose</c> refuses the second composition on
+    /// the spot, at the registration call rather than at startup.
     /// </remarks>
     public static IServiceCollection AddKeyCustodian<TCustodian>(this IServiceCollection services)
         where TCustodian : class, IKeyCustodian
@@ -88,6 +90,20 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton(custodianFactory);
         return services.ComposeExternalKeyBackends();
+    }
+
+    /// <summary>
+    /// Registers <typeparamref name="TBackend"/> into the <typeparamref name="TSeam"/> family, unless that family
+    /// has already been composed - which is what the presence of <typeparamref name="TComposite"/> means, the same
+    /// test <c>Compose</c> itself uses to refuse a second composition.
+    /// </summary>
+    private static void AddBackendUnlessComposed<TSeam, TComposite, TBackend>(this IServiceCollection services)
+        where TSeam : class
+        where TComposite : class, TSeam
+        where TBackend : class, TSeam
+    {
+        if (services.All(descriptor => descriptor.ServiceType != typeof(TComposite)))
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<TSeam, TBackend>());
     }
 
     /// <summary>
@@ -131,16 +147,23 @@ public static class ServiceCollectionExtensions
 
         // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
         // the in-process LocalKeySigner owns private-bearing keys and is the sole backend by default. A host
-        // adds HSM/KMS/vault signing by wiring an IKeyCustodian via AddKeyCustodian, which adds an external
-        // backend and composes the family; the composite then routes each key to the backend that owns it and
-        // fails closed when none does.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
+        // adds HSM/KMS/vault signing by wiring an IKeyCustodian, which adds an external backend and composes
+        // the family; the composite then routes each key to the backend that owns it and fails closed when
+        // none does.
+        //
+        // Skipped once that composition has happened, and this is load-bearing rather than an optimisation.
+        // TryAddEnumerable deduplicates against PLAIN descriptors, while a composed family keeps its members as
+        // KEYED ones, so the local backend would be added a second time as a plain descriptor sitting beside the
+        // composite - and win the singular resolve, silently, because last registration wins. This method is
+        // called more than once by design (AddOidcCore and AddSecurityEvents both perform it), so a host that
+        // chose a key placement before either of them would lose its external signer with no error anywhere.
+        services.AddBackendUnlessComposed<IDataSigner, CompositeSigner, LocalKeySigner>();
 
-        // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam: the in-process
-        // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. The same
-        // AddKeyCustodian call wires the external decryption backend. Encryption (wrapping the CEK) uses the
-        // recipient's public half or a local secret and never routes here, so there is no encryptor seam.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, LocalKeyDecryptor>());
+        // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam, including that skip:
+        // the in-process LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by
+        // default. Encryption (wrapping the CEK) uses the recipient's public half or a local secret and never
+        // routes here, so there is no encryptor seam.
+        services.AddBackendUnlessComposed<IContentKeyDecryptor, CompositeDecryptor, LocalKeyDecryptor>();
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is

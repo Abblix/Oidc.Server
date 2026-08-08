@@ -28,7 +28,8 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
-/// Registers the HashiCorp Vault / OpenBao Transit custodian for the Abblix OIDC Server.
+/// Registers the HashiCorp Vault / OpenBao Transit custodian for any host that signs or decrypts JSON Web Tokens,
+/// whether or not it is an OpenID Provider.
 /// </summary>
 public static class ServiceCollectionExtensions
 {

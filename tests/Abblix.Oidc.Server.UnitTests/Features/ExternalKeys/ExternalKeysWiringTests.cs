@@ -94,9 +94,8 @@ public class ExternalKeysWiringTests
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
 
-        // Before AddAuthServiceJwt, which is the ordering the crypto composition permits and the old registration
-        // did not: it replaced the provider at the placement call, so the server's own TryAdd afterwards was a
-        // no-op only by luck of ordering.
+        // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
+        // that: nothing here has to be ordered against the placement call.
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
         services.AddAuthServiceJwt();
 
@@ -108,9 +107,11 @@ public class ExternalKeysWiringTests
     [Fact]
     public void HostRegistrationStillWins_WhenItBringsItsOwnProvider()
     {
+        var chosen = Mock.Of<IAuthServiceKeysProvider>();
+
         var services = new ServiceCollection();
         services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
-        services.AddSingleton(Mock.Of<IAuthServiceKeysProvider>());
+        services.AddSingleton(chosen);
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
@@ -121,7 +122,9 @@ public class ExternalKeysWiringTests
 
         // The placement decides which provider the LIBRARY would install, never that one must be installed: a host
         // layering its own provider over the placement's is the documented way to cache the custodian's key list.
-        Assert.IsNotType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+        // Same, not merely "not the external one": anything wrapping the seam would satisfy the weaker assertion
+        // while the host's provider had in fact stopped answering.
+        Assert.Same(chosen, provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Theory]

@@ -79,7 +79,8 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <returns>The builder whose placement call completes the wiring.</returns>
     /// <remarks>
     /// Do not combine this with <c>AddKeyCustodian</c>: that path composes the external crypto backends itself,
-    /// which the placement call here also does, and composing a family twice fails at startup. Use one or the other.
+    /// which the placement call here also does, and <c>Compose</c> refuses the second composition on the spot, at
+    /// the registration call rather than at startup. Use one or the other.
     /// </remarks>
     public static IKeyCustodianBuilder AddCustodian<TCustodian>(this IServiceCollection services)
         where TCustodian : class, IKeyCustodian
@@ -114,20 +115,28 @@ public static class ExternalKeysServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Keeps the private halves out of this process, resolving the key selection from the container. Suits a host
-    /// whose key names come from a service (configuration, a tenant lookup); a host with literal names uses
+    /// Keeps the private halves out of this process, reading the key selection from a service instead of a literal.
+    /// Suits a host whose key names come from its configuration; a host with literal names uses
     /// <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>. See that overload for what this
     /// placement means and when to call it.
     /// </summary>
     /// <param name="builder">The builder returned by the custodian registration.</param>
     /// <param name="keys">Resolves the key selection from the service provider, once.</param>
     /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// The selection is a singleton, so the factory runs once per container and the answer is fixed for the life of
+    /// the process. That rules out anything varying per request or per tenant: a host needing that registers its own
+    /// key provider rather than varying this.
+    /// </remarks>
     public static IServiceCollection UseKeysInCustodian(
         this IKeyCustodianBuilder builder,
         Func<IServiceProvider, CustodianHeldKeys> keys)
     {
         var services = ChoosePlacement(builder, KeyPlacement.Custodian, nameof(UseKeysInCustodian));
 
+        // Replace, for the reason the sibling overload gives: this argument IS the host's key selection. Note the
+        // registered service type is CustodianHeldKeys, not the delegate - overload resolution prefers the factory
+        // overload here, so both overloads leave the collection in the same shape and either can follow the other.
         services.Replace(ServiceDescriptor.Singleton(keys));
         return services;
     }
@@ -166,8 +175,8 @@ public static class ExternalKeysServiceCollectionExtensions
                 (choice, serviceProvider) =>
                     choice.ChosenPlacement != KeyPlacement.InProcess ||
                     serviceProvider.GetService<IKeyRingStore>() is not null,
-                $"{nameof(UseKeysInProcess)} needs a key ring to share the keys it mints, and none is registered. "
-                + "Follow it with a PersistRingTo... call from the custodian's package.")
+                $"{nameof(UseKeysInProcess)} needs an {nameof(IKeyRingStore)} to share the keys it mints, and none "
+                + "is registered. Follow it with a PersistRingTo... call from the custodian's package.")
             .ValidateOnStart();
 
         return services.AddKeyRing(policy);
@@ -193,11 +202,26 @@ public static class ExternalKeysServiceCollectionExtensions
         // family: running before the JWT registration would build no composite, and the external backend would then
         // lose the singular resolve to the local one registered after it. Nothing detects that later - the seam
         // simply reports it cannot sign a key it should have routed here - so fail where the mistake is.
+        //
+        // Only AddJsonWebTokens is named. Whichever registration the host wrote performs it (an OpenID Provider's
+        // does, and so does the security-event one), and naming those here would be a literal for a method in an
+        // assembly this one does not reference: nothing would keep it true through a rename, and it would advise a
+        // host that has no such method to call it.
         if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
             throw new InvalidOperationException(
-                $"Call {placementCall} after {nameof(ServiceCollectionExtensions.AddJsonWebTokens)}, which the OIDC "
-                + "registration (AddOidcServices / AddOidcCore) performs for you. It composes the external crypto "
+                $"Call {placementCall} after {nameof(ServiceCollectionExtensions.AddJsonWebTokens)}, which every "
+                + "registration that adds JSON Web Token services performs. It composes the external crypto "
                 + "backends with their in-process peers, and none are registered yet.");
+
+        // The backends that route a private operation out of process are singletons, so a custodian shorter-lived
+        // than they are is a captive dependency. It would be caught by ValidateScopes in Development and by nothing
+        // at all in Production, where the first resolve pins one scope's custodian for the process lifetime.
+        var custodian = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IKeyCustodian));
+        if (custodian is { Lifetime: not ServiceLifetime.Singleton })
+            throw new InvalidOperationException(
+                $"{nameof(IKeyCustodian)} is registered as {custodian.Lifetime} and must be a "
+                + $"{ServiceLifetime.Singleton}: the signing and decryption backends that reach it are singletons, "
+                + "so a shorter lifetime would pin one scope's custodian for the life of the process.");
 
         // Satisfies the startup validation the custodian registration armed: the wiring is now complete.
         services.Configure<KeyPlacementChoice>(choice => choice.ChosenPlacement = placement);

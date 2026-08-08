@@ -31,7 +31,8 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Jwt.Azure;
 
 /// <summary>
-/// Registers the Azure Key Vault custodian for the Abblix OIDC Server.
+/// Registers the Azure Key Vault custodian for any host that signs or decrypts JSON Web Tokens, whether or not it
+/// is an OpenID Provider.
 /// </summary>
 public static class ServiceCollectionExtensions
 {

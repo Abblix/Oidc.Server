@@ -68,17 +68,27 @@ public class CustodianHeldSigningTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<IKeyCustodian>(custodian);
 
+        // Deferred so the key source reads the container rather than this method's locals. That is not a
+        // formality: reading CustodianHeldKeys back is the only thing that proves the placement REGISTERED the
+        // selection, and a lambda closing over the literals would pass with that registration deleted.
+        IServiceProvider? resolved = null;
+
         services.AddSecurityEvents(options => options.SigningKeySource = async cancellationToken =>
         {
-            // What a transmitter does with the placement: ask the custodian for the named key's versions and hand
-            // on the public half. Everything used here is public in Abblix.Jwt.
+            var provider = resolved!;
+
+            // What a transmitter does with the placement: ask which keys it named, then ask the custodian for that
+            // key's versions and hand on the public half. Everything used here is public in Abblix.Jwt.
+            var chosen = provider.GetRequiredService<CustodianHeldKeys>();
+            var keyCustodian = provider.GetRequiredService<IKeyCustodian>();
+
             var versions = new List<KeyVersion>();
-            await foreach (var version in custodian.GetKeyVersionsAsync(SigningKeyName, cancellationToken))
+            await foreach (var version in keyCustodian.GetKeyVersionsAsync(chosen.SigningKeyName, cancellationToken))
                 versions.Add(version);
 
             return versions
                 .ProduceFirst(version => version.CreatedAt, Now, TimeSpan.FromHours(1))
-                .Select(version => version.PublicKey with { Algorithm = SigningAlgorithms.RS256 })
+                .Select(version => version.PublicKey with { Algorithm = chosen.SigningAlgorithm })
                 .First();
         });
 
@@ -91,6 +101,7 @@ public class CustodianHeldSigningTests
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(publicHalf));
 
         await using var host = services.BuildServiceProvider();
+        resolved = host;
 
         // Startup validation is satisfied: the guard the custodian registration armed has an answer.
         host.GetRequiredService<IStartupValidator>().Validate();
