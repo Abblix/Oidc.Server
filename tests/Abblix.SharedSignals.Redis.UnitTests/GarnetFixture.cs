@@ -43,6 +43,12 @@ public sealed class GarnetFixture : IDisposable
         _server = new GarnetServer(new GarnetServerOptions
         {
             EndPoints = [endPoint],
+
+            // The stream store replaces what a stream is with one server-side script, so the fixture
+            // has to speak EVAL. LuaOptions is not optional beside the flag: the server dereferences
+            // it while starting and fails with a null reference if only the flag is set.
+            EnableLua = true,
+            LuaOptions = new LuaOptions(),
         });
         _server.Start();
 

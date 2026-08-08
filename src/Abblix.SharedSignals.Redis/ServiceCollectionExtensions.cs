@@ -27,7 +27,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Abblix.SharedSignals.Redis;
 
 /// <summary>
-/// Wires the Redis-native outbox into a host's service collection.
+/// Wires the Redis-native transmitter storage - the event outbox and the stream registry - into a
+/// host's service collection.
 /// </summary>
 public static class ServiceCollectionExtensions
 {

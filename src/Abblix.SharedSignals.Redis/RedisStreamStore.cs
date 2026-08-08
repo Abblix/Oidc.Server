@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Abblix.SharedSignals.Transmitter;
 using StackExchange.Redis;
 
@@ -31,19 +32,44 @@ namespace Abblix.SharedSignals.Redis;
 /// whose streams must outlive its process, without a database of its own.
 /// </summary>
 /// <remarks>
-/// One hash rather than a key per stream, because the dispatcher's view is "every stream at once" on
-/// every event: HGETALL over a transmitter's handful of registrations beats a SCAN walking a shared
-/// keyspace, and a single key stays valid under Redis Cluster without hash-tag ceremony. Losing Redis
-/// loses registrations - a tier above the outbox's, deliberately below a database's: a receiver
-/// re-asserts its stream on its own schedule (SSF 1.0 Section 7 makes discovery and re-registration
-/// cheap), and the window without one is priced by the receiver's cache TTL. A deployment that cannot
-/// accept that window keeps its registrations in its own database instead.
+/// <para>One hash rather than a key per stream, because the dispatcher's view is "every stream at
+/// once" on every event: HGETALL over a transmitter's registrations beats a SCAN walking a shared
+/// keyspace, and a single key stays valid under Redis Cluster without hash-tag ceremony. The cost of
+/// that shape is that the whole registry travels on every dispatched event and lives on one cluster
+/// slot - fine for the tens of receivers a transmitter serves, and the reason this store is not the
+/// answer for thousands.</para>
+/// <para>The key carries the transmitter's own issuer, so two deployments sharing one Redis - a
+/// staging and a production, two products - keep separate registries. Without it they would share a
+/// hash, and each would read the other's streams out of <see cref="ListAllAsync"/> and deliver its own
+/// signed events to the other's receivers.</para>
+/// <para>Losing Redis loses registrations - deliberately a tier below a database. The consequence is
+/// worth stating plainly: the transmitter stops delivering to everybody until each receiver creates
+/// its stream again (SSF 1.0 Section 8.1.1.1), and whether a receiver ever does is a property of that
+/// receiver, not of the protocol. A deployment that cannot accept that keeps its registrations in its
+/// own database, which is what the interface is for.</para>
+/// <para>Registrations carry the receivers' delivery credentials
+/// (<c>authorization_header</c>), so this Redis holds secrets and deserves the protection of one:
+/// TLS, authentication, and a database of its own.</para>
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
-public sealed class RedisStreamStore(IConnectionMultiplexer connection) : IStreamStore
+/// <param name="options">The transmitter's options, read for the issuer the key is scoped by.</param>
+public sealed class RedisStreamStore(IConnectionMultiplexer connection, SsfTransmitterOptions options)
+    : IStreamStore
 {
-    private static readonly RedisKey HashKey =
-        $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}";
+    /// <summary>
+    /// Enum members travel as their names. The default is the ordinal, which turns reordering a
+    /// vocabulary - an edit with no wire consequence anywhere else - into a silent reinterpretation of
+    /// every stored registration: <see cref="StreamSubjectsMode.All"/> would read back as
+    /// <see cref="StreamSubjectsMode.None"/>, and a stream covering everyone would cover nobody.
+    /// </summary>
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    private readonly RedisKey _hashKey =
+        $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}:"
+        + Uri.EscapeDataString(options.Issuer);
 
     private readonly IDatabase _database = connection.GetDatabase();
 
@@ -51,7 +77,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection) : IStrea
     /// Joins receiver and stream into the hash field. Both parts are escaped before the separator
     /// joins them: the receiver id is whatever the host's authentication produced and may contain
     /// anything, and a composite key that trusts its inputs' alphabet is ambiguous the day one input
-    /// widens.
+    /// widens - <c>("a|b", "c")</c> and <c>("a", "b|c")</c> address one field unescaped.
     /// </summary>
     private static RedisValue FieldOf(string receiverId, string streamId)
         => $"{Uri.EscapeDataString(receiverId)}|{Uri.EscapeDataString(streamId)}";
@@ -60,13 +86,14 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection) : IStrea
     public async Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        cancellationToken.ThrowIfCancellationRequested();
 
         // HSETNX: only the field's first writer wins, and Redis itself is the arbiter - a prior
         // existence check would lose the race a concurrent create of the same stream opens.
         return await _database.HashSetAsync(
-            HashKey,
+            _hashKey,
             FieldOf(stream.ReceiverId, stream.StreamId),
-            JsonSerializer.SerializeToUtf8Bytes(stream),
+            JsonSerializer.SerializeToUtf8Bytes(stream, SerializerOptions),
             When.NotExists);
     }
 
@@ -74,8 +101,14 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection) : IStrea
     public async Task<StreamState?> FindAsync(
         string receiverId, string streamId, CancellationToken cancellationToken = default)
     {
-        var stored = await _database.HashGetAsync(HashKey, FieldOf(receiverId, streamId));
-        return stored.IsNull ? null : Deserialize(stored);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var field = FieldOf(receiverId, streamId);
+        var stored = await _database.HashGetAsync(_hashKey, field);
+
+        // Unreadable is an error HERE, unlike in the listings below: the caller named this one stream,
+        // so answering null would report it as absent and invite a create that then collides.
+        return stored.IsNull ? null : Deserialize(stored, field);
     }
 
     /// <inheritdoc />
@@ -88,35 +121,80 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection) : IStrea
     /// <inheritdoc />
     public async Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
     {
-        var entries = await _database.HashGetAllAsync(HashKey);
-        return entries.Select(entry => Deserialize(entry.Value)).ToArray();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entries = await _database.HashGetAllAsync(_hashKey);
+
+        // An unreadable entry is skipped rather than thrown, and the asymmetry with FindAsync is the
+        // point. This list is the dispatcher's view of who to deliver to, read on EVERY event: one
+        // entry a newer or older version wrote in a shape this one cannot parse would otherwise stop
+        // every signal to every receiver. Losing one registration is the smaller failure, and it is
+        // the one confined to whoever owns the broken entry.
+        var streams = new List<StreamState>(entries.Length);
+        foreach (var entry in entries)
+        {
+            if (TryDeserialize(entry.Value, out var stream))
+                streams.Add(stream);
+        }
+
+        return streams;
     }
 
     /// <inheritdoc />
     public async Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Replace-if-exists as one conditioned transaction: Update must refuse a stream nobody
-        // created, and a separate exists-then-set would let a concurrent delete be silently undone by
-        // the set that lost the race. No Lua on purpose - MULTI/EXEC with a watched condition is the
-        // portable form, and the wire-compatible servers the tests run on speak it natively.
-        var transaction = _database.CreateTransaction();
-        transaction.AddCondition(Condition.HashExists(HashKey, FieldOf(stream.ReceiverId, stream.StreamId)));
-        _ = transaction.HashSetAsync(
-            HashKey,
-            FieldOf(stream.ReceiverId, stream.StreamId),
-            JsonSerializer.SerializeToUtf8Bytes(stream));
+        // Replace-if-exists as one server-side script, and the script is what makes the answer mean
+        // what the interface says. The obvious alternative - a transaction conditioned on the field
+        // existing - watches the KEY, and this store keeps every stream under one key: a write by any
+        // other connection between the watch and the commit aborts it, and the abort is
+        // indistinguishable from "no such stream". The management service turns that into a 404 while
+        // the update is silently lost, and it happens exactly under the load this package exists for,
+        // a transmitter running more than one replica. Measured: unnoticeable from a single
+        // multiplexer, the majority of updates from two.
+        var replaced = await _database.ScriptEvaluateAsync(
+            """
+            if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 1 then
+                redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+                return 1
+            end
+            return 0
+            """,
+            [_hashKey],
+            [FieldOf(stream.ReceiverId, stream.StreamId),
+             (RedisValue)JsonSerializer.SerializeToUtf8Bytes(stream, SerializerOptions)]);
 
-        return await transaction.ExecuteAsync();
+        return (long)replaced == 1;
     }
 
     /// <inheritdoc />
     public async Task<bool> DeleteAsync(
         string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => await _database.HashDeleteAsync(HashKey, FieldOf(receiverId, streamId));
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return await _database.HashDeleteAsync(_hashKey, FieldOf(receiverId, streamId));
+    }
 
-    private static StreamState Deserialize(RedisValue stored)
-        => JsonSerializer.Deserialize<StreamState>((byte[])stored!)
-           ?? throw new InvalidOperationException("A stored stream registration deserialized to null.");
+    private static StreamState Deserialize(RedisValue stored, RedisValue field)
+        => TryDeserialize(stored, out var stream)
+            ? stream
+            : throw new InvalidOperationException(
+                $"The stored stream registration '{field}' could not be read.");
+
+    private static bool TryDeserialize(RedisValue stored, out StreamState stream)
+    {
+        try
+        {
+            var read = JsonSerializer.Deserialize<StreamState>((byte[])stored!, SerializerOptions);
+            stream = read!;
+            return read is not null;
+        }
+        catch (JsonException)
+        {
+            stream = null!;
+            return false;
+        }
+    }
 }
