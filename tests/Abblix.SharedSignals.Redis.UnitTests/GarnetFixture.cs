@@ -43,14 +43,36 @@ public sealed class GarnetFixture : IDisposable
         _server = new GarnetServer(new GarnetServerOptions
         {
             EndPoints = [endPoint],
+
+            // The stream store replaces what a stream is with one server-side script, so the fixture
+            // has to speak EVAL. LuaOptions is not optional beside the flag: the server dereferences
+            // it while starting and fails with a null reference if only the flag is set.
+            EnableLua = true,
+            LuaOptions = new LuaOptions(),
         });
         _server.Start();
+        _endPoint = endPoint;
 
-        Connection = ConnectionMultiplexer.Connect(
-            new ConfigurationOptions { EndPoints = { endPoint } });
+        Connection = CreateConnection();
     }
 
+    private readonly IPEndPoint _endPoint;
+
     public ConnectionMultiplexer Connection { get; }
+
+    /// <summary>
+    /// Opens ANOTHER connection to the same server, for the tests that need two replicas rather than
+    /// two objects.
+    /// </summary>
+    /// <remarks>
+    /// Two instances sharing one multiplexer are indistinguishable from one instance: the client holds
+    /// the physical connection for the duration of a transaction, so their commands never actually
+    /// interleave at the server. A test built that way measures concurrency it has excluded - which is
+    /// exactly the blind spot that let a stream-store defect through, invisible from one multiplexer
+    /// and present in the majority of operations from two.
+    /// </remarks>
+    public ConnectionMultiplexer CreateConnection()
+        => ConnectionMultiplexer.Connect(new ConfigurationOptions { EndPoints = { _endPoint } });
 
     public void Dispose()
     {
