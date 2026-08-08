@@ -29,9 +29,11 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <summary>
 /// The outbox over the host's <see cref="IDistributedCache"/>: one entry per stream holding the
 /// queue, so pending events survive a process restart when the store behind the cache does. The
-/// tier is deliberate - the queue is short-lived, and the delivery protocols budget for losing
-/// it (a transmitter MAY drop held events, SSF 1.0 Section 8.1.2.1), so it belongs in the
-/// cache tier, not beside data that earns backups.
+/// tier is deliberate, and it is our decision rather than a permission the specification grants:
+/// SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is PAUSED, and
+/// requires transmission for an enabled one. Treating the whole queue as cache-tier follows the
+/// delivery protocols' own tolerance for loss over a broken transport, and is why it belongs in
+/// the cache tier rather than beside data that earns backups.
 /// </summary>
 /// <remarks>
 /// <see cref="IDistributedCache"/> reads and writes whole values with no compare-and-set, so

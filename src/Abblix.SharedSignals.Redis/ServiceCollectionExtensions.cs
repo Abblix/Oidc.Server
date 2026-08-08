@@ -40,8 +40,14 @@ public static class ServiceCollectionExtensions
     /// relative to the role registration.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisOutbox(this IServiceCollection services)
+    /// <param name="options">
+    /// What the queue may keep, and for how long; the defaults apply when it is omitted. Registered
+    /// with TryAdd, so a host pre-registering its own wins.
+    /// </param>
+    public static IServiceCollection AddSsfRedisOutbox(
+        this IServiceCollection services, RedisOutboxOptions? options = null)
     {
+        services.TryAddSingleton(options ?? new RedisOutboxOptions());
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, RedisEventOutbox>());
         return services;
     }
