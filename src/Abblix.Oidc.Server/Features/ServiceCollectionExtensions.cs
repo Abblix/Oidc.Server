@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -40,6 +41,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -351,7 +353,28 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
-        services.TryAddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>();
+        // Which provider serves this server's keys follows from where the host put the private halves, and that
+        // choice is made by a call in Abblix.Jwt which may run either side of this one. So it is read at resolve
+        // rather than acted on at registration: nothing here has to be ordered against the placement call, and a
+        // host that never wires a custodian simply lands on the static-configuration provider.
+        //
+        // TryAdd, so a host that registered its own key provider keeps it whichever placement it then chooses -
+        // which is how the custodian's key listing gets cached in production, since the provider below does not
+        // cache. The placement decides what the LIBRARY would install, never that one must be installed.
+        services.TryAddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
+            serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement switch
+            {
+                // No custodian at all, or one registered with the placement call forgotten. This provider reads the
+                // static keys of OidcOptions and refuses outright in the second case, so a half-wired host cannot
+                // quietly serve local keys while believing its keys are in an HSM.
+                null => serviceProvider.CreateService<OidcOptionsKeysProvider>(),
+
+                KeyPlacement.Custodian => serviceProvider.CreateService<ExternalKeysProvider>(),
+                KeyPlacement.InProcess => serviceProvider.CreateService<MintedKeysProvider>(),
+
+                var unknown => throw new InvalidOperationException(
+                    $"No {nameof(IAuthServiceKeysProvider)} serves the {nameof(KeyPlacement)} '{unknown}'."),
+            });
 
         // The write-role counterpart to the reader above. The default is the read-only static
         // configuration that fails loud if asked to persist a generated key; a persistent store (shipped

@@ -36,23 +36,25 @@ namespace Abblix.Jwt.ExternalKeys;
 public sealed class KeyPlacementChoice
 {
     /// <summary>
-    /// The placement call that completed the custodian wiring, or null when none did. Recording the name rather than
-    /// inspecting the registered provider keeps the check independent of a host that layers its own provider
-    /// over the placement's.
+    /// Where the placement call put the private halves, or null when no placement call ran. Recording the choice
+    /// rather than inspecting the registered provider keeps the check independent of a host that layers its own
+    /// provider over the placement's.
     /// </summary>
-    public string? ChosenPlacement { get; set; }
+    public KeyPlacement? ChosenPlacement { get; set; }
 
     /// <summary>
     /// What a host is told when it registered a custodian and never said how its keys are used.
     /// </summary>
     /// <remarks>
     /// Held here rather than on whichever guard reports it, because more than one does: the startup validation
-    /// says it when the host has a lifetime to run validators, and a stand-in key provider says it when
-    /// something asks for keys without one. Two guards saying different things about the same omission would
-    /// read as two different problems.
+    /// says it when the host has a lifetime to run validators, and the key provider says it when something asks
+    /// for keys without one. Two guards saying different things about the same omission would read as two
+    /// different problems.
     /// </remarks>
     public const string PlacementNotChosenMessage =
         "A key custodian is registered, but where its private keys live was never chosen. "
-        + "Follow the custodian registration with UseKeysInCustodian() to keep the private half inside the "
-        + "custodian, or UseKeysInProcess() to mint keys locally and seal them to it.";
+        + $"Follow the custodian registration with {nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian)}"
+        + "() to keep the private half inside the custodian, or "
+        + $"{nameof(ExternalKeysServiceCollectionExtensions.UseKeysInProcess)}() to mint keys locally and seal them "
+        + "to it.";
 }

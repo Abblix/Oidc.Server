@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.JWT.Vault</PackageId>
     <Title>Abblix JWT Vault Custodian</Title>
-    <Description>HashiCorp Vault / OpenBao Transit external-key integration for Abblix OIDC Server. Signs and unwraps with keys held inside Vault Transit (their private halves never enter the process) and publishes the public halves to the JWKS endpoint, wired with an AddVaultCustodian call and the tier choice that follows it.</Description>
+    <Description>HashiCorp Vault / OpenBao Transit external-key integration for Abblix JWT and Abblix OIDC Server. Signs and unwraps with keys held inside Vault Transit, whose private halves never enter the process, or mints keys locally and seals them to a Transit key. Wired with an AddVaultCustodian call and the key placement that follows it.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt.Vault</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

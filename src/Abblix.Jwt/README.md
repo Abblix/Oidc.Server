@@ -71,7 +71,20 @@ The shipped implementation stores in the host's `IDistributedCache`, so a single
 
 ## External keys
 
-Signing and decryption do not require the private key to live in the process: the custodian seam delegates the cryptographic operation to an external holder - `AddVaultCustodian` for HashiCorp Vault / OpenBao ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)), `AddAzureCustodian` for Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)), both built on this package's `AddKeyCustodian`.
+Signing and decryption do not require the private key to live in the process: the custodian seam delegates the cryptographic operation to an external holder - `AddVaultCustodian` for HashiCorp Vault / OpenBao ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)), `AddAzureCustodian` for Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)), `AddCustodian<T>` for one of your own.
+
+Each opens a placement choice you then name, and that is the security posture: `UseKeysInCustodian` keeps every private half outside the process, `UseKeysInProcess` mints keys here and has the custodian only seal them.
+
+The placement calls live in this package, which is what lets a host consume JWTs without being an OpenID Provider and still wire a custodian - no OIDC server anywhere in its graph. A backend package adds the transport for its own vault; with your own custodian this reference is the only one you need:
+
+```csharp
+services
+    .AddJsonWebTokens()
+    .AddCustodian<MyCustodian>()
+    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "sign" });
+```
+
+[EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) is the shared model, including what a host without our key provider does to publish the custodian's keys itself.
 
 ## Implemented standards
 

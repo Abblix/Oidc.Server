@@ -57,6 +57,7 @@
   <ItemGroup>
     <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
     <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="..\..\EXTERNAL_KEYS.md" Link="EXTERNAL_KEYS.md" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 

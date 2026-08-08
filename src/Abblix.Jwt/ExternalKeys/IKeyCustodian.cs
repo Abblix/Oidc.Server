@@ -28,7 +28,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// published public-only routes its private operation here by <c>kid</c>: SIGNING for a signing key, and for a
 /// decryption key an RSA/symmetric UNWRAP or an ECDH-ES AGREEMENT. The public operations - signature
 /// verification, and wrapping a CEK with the recipient's public half - stay in process and never reach the
-/// custodian. Wire it with <c>AddKeyCustodian</c>; a host with no external keys leaves it unregistered.
+/// custodian. Wire it with <c>AddCustodian</c> and a placement call; a host with no external keys leaves it
+/// unregistered.
 /// </summary>
 /// <remarks>
 /// Every private operation is addressed by <c>kid</c>, the custodian's handle for that exact key version,

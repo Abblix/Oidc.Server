@@ -35,59 +35,61 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys, wiring one external <see cref="IKeyCustodian"/> into
-    /// both crypto seams: a public-only signing key routes its signing to the custodian, and a public-only
-    /// decryption key routes its RSA/symmetric unwrap or ECDH-ES agreement to it, while keys that carry their
-    /// private/secret material keep working in process. The public operations - signature verification and
-    /// wrapping a CEK with the recipient's public half - stay local and never reach the custodian. Call after
-    /// <see cref="AddJsonWebTokens"/>; the custodian is DI-constructed, so it can depend on a typed client.
+    /// Puts <typeparamref name="TBackend"/> into the <typeparamref name="TSeam"/> family exactly once, whether or
+    /// not that family has already been composed.
     /// </summary>
-    /// <typeparam name="TCustodian">The host custodian implementation.</typeparam>
-    /// <param name="services">The service collection to configure.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddKeyCustodian<TCustodian>(this IServiceCollection services)
-        where TCustodian : class, IKeyCustodian
+    /// <remarks>
+    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
+    /// alone cannot do this. It deduplicates against PLAIN descriptors, and composing a family moves its members to
+    /// KEYED ones - so after a composition it neither sees the member already there nor adds one where the composite
+    /// would find it. What it does instead is leave a plain descriptor beside the composite, which then wins the
+    /// singular resolve, silently, because last registration wins.
+    /// <para>
+    /// That matters because this method's callers are called more than once by design: the OIDC registration
+    /// performs the JWT one, and so does the security-event registration, so any host that composes in between
+    /// would otherwise lose the composed seam with no error anywhere.
+    /// </para>
+    /// </remarks>
+    private static void AddBackendToSeam<TSeam, TBackend>(this IServiceCollection services)
+        where TSeam : class
+        where TBackend : class, TSeam
     {
-        services.TryAddSingleton<IKeyCustodian, TCustodian>();
-        return services.ComposeExternalKeyBackends();
-    }
+        // Present already, in either form: a second copy would be a duplicate member of the pipeline.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TSeam) &&
+                (descriptor.IsKeyedService
+                    ? descriptor.KeyedImplementationType
+                    : descriptor.ImplementationType) == typeof(TBackend)))
+            return;
 
-    /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys using a ready <paramref name="custodian"/> instance,
-    /// wiring it into both crypto seams. The instance overload suits a pre-built custodian or a test fake; a
-    /// custodian that needs DI-resolved dependencies uses <see cref="AddKeyCustodian{TCustodian}"/> instead. See
-    /// that overload for the full routing description.
-    /// </summary>
-    /// <param name="services">The service collection to configure.</param>
-    /// <param name="custodian">The external key custodian serving signing, RSA/symmetric unwrap and ECDH agreement.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddKeyCustodian(this IServiceCollection services, IKeyCustodian custodian)
-    {
-        services.AddSingleton(custodian);
-        return services.ComposeExternalKeyBackends();
-    }
+        // Keyed descriptors under the family's own service type are what a composition leaves behind, whichever
+        // composite type performed it - so this recognises a family composed by the host as readily as our own.
+        var composed = services.Any(
+            descriptor => descriptor.IsKeyedService && descriptor.ServiceType == typeof(TSeam));
 
-    /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys using a <paramref name="custodianFactory"/> that resolves
-    /// the custodian from the container, wiring it into both crypto seams. Suits a custodian that is a typed client
-    /// (built from <c>IHttpClientFactory</c>) or otherwise needs DI to construct. The factory runs once, so the
-    /// custodian is a singleton. See <see cref="AddKeyCustodian{TCustodian}"/> for the full routing description.
-    /// </summary>
-    /// <param name="services">The service collection to configure.</param>
-    /// <param name="custodianFactory">Resolves the external key custodian from the service provider.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddKeyCustodian(
-        this IServiceCollection services, Func<IServiceProvider, IKeyCustodian> custodianFactory)
-    {
-        services.AddSingleton(custodianFactory);
-        return services.ComposeExternalKeyBackends();
+        if (composed)
+            services.Decompose<TSeam>().AddLast(ServiceDescriptor.Singleton<TSeam, TBackend>());
+        else
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<TSeam, TBackend>());
     }
 
     /// <summary>
     /// Registers the external backends for the wired <see cref="IKeyCustodian"/> - <see cref="ExternalKeySigner"/>
     /// on the signing seam and <see cref="ExternalKeyDecryptor"/> on the key-recovery seam - and composes each
-    /// with its in-process peer, so a key routes to the backend that owns it.
+    /// with its in-process peer, so a key routes to the backend that owns it: a public-only signing key routes its
+    /// signing to the custodian, a public-only decryption key routes its unwrap or ECDH-ES agreement there, and
+    /// keys carrying their private material keep working in process.
     /// </summary>
+    /// <remarks>
+    /// The raw seam, for a host that manages key material entirely on its own terms. It records no key placement,
+    /// which makes it the wrong call inside an OpenID Provider: that server refuses to serve keys once a custodian
+    /// is registered and no placement was named, so <c>/jwks</c> and every token issuance would fail. Such a host
+    /// calls <see cref="ExternalKeys.ExternalKeysServiceCollectionExtensions.AddCustodian{TCustodian}"/> and a
+    /// placement, which perform this too. Never both: <c>Compose</c> refuses the second composition on the spot.
+    /// <para>
+    /// Call after <see cref="AddJsonWebTokens"/>, whose in-process backends this composes with. Register the
+    /// custodian first, by any means the container accepts - it is resolved, not passed in here.
+    /// </para>
+    /// </remarks>
     public static IServiceCollection ComposeExternalKeyBackends(this IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
@@ -124,16 +126,19 @@ public static class ServiceCollectionExtensions
 
         // The signing seam behind IJsonWebTokenSigner is a composition of key-owning backends (IDataSigner):
         // the in-process LocalKeySigner owns private-bearing keys and is the sole backend by default. A host
-        // adds HSM/KMS/vault signing by wiring an IKeyCustodian via AddKeyCustodian, which adds an external
-        // backend and composes the family; the composite then routes each key to the backend that owns it and
-        // fails closed when none does.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, LocalKeySigner>());
+        // adds HSM/KMS/vault signing by wiring an IKeyCustodian, which adds an external backend and composes
+        // the family; the composite then routes each key to the backend that owns it and fails closed when
+        // none does.
+        //
+        // Placed through the helper rather than TryAddEnumerable directly, because this method is called more
+        // than once by design and a composition may have happened in between. See the helper for what goes wrong.
+        services.AddBackendToSeam<IDataSigner, LocalKeySigner>();
 
-        // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam: the in-process
-        // LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default. The same
-        // AddKeyCustodian call wires the external decryption backend. Encryption (wrapping the CEK) uses the
-        // recipient's public half or a local secret and never routes here, so there is no encryptor seam.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IContentKeyDecryptor, LocalKeyDecryptor>());
+        // The key-recovery seam behind IJsonWebTokenEncryptor mirrors the signing seam in every respect: the
+        // in-process LocalKeyDecryptor owns keys that carry their secret half and is the sole backend by default.
+        // Encryption (wrapping the CEK) uses the recipient's public half or a local secret and never routes here,
+        // so there is no encryptor seam.
+        services.AddBackendToSeam<IContentKeyDecryptor, LocalKeyDecryptor>();
 
         // Discovery providers project the advertised algorithm sets from the live keyed
         // registrations, so an algorithm the host registers under its own 'alg'/'enc' key is

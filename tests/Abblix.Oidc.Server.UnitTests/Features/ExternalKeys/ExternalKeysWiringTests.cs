@@ -21,121 +21,147 @@
 // info@abblix.com
 
 using System;
-using System.Security.Cryptography;
+using System.Linq;
+using System.Threading.Tasks;
 using Abblix.Jwt;
-using Abblix.Jwt.Signing;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ExternalKeys;
 
 /// <summary>
-/// Pins the wiring contract every custodian shares, against a stub one, since none of it depends on which
-/// custodian is registered: the placement choice is enforced at startup, the key provider guards a resolve until the
-/// choice arrives, and the placement call must follow the OIDC registration.
+/// Pins the one part of external key custody that IS this server's own: which key provider answers, given where the
+/// host put its private halves. Everything else about the wiring - the placement choice, the guard that a custodian
+/// without one trips, the ordering against the crypto registration - belongs to Abblix.Jwt and is asserted there,
+/// once, against a stub custodian.
 /// </summary>
 /// <remarks>
-/// The ordering is the subtle one. The placement call composes the external crypto backends with their in-process
-/// peers, so those peers must already be registered: run first, it finds a one-member family, composes nothing,
-/// and the external backend then loses the singular resolve to the local one that arrives after it. Nothing
-/// detects that at runtime - the signing seam simply reports it cannot sign a key it should have routed to the
-/// custodian - so it is asserted here.
+/// The selection is read at resolve rather than written at registration, which is what frees the placement call from
+/// having to run after this server's own. So each case here builds the container in a different order on purpose.
 /// </remarks>
 public class ExternalKeysWiringTests
 {
-    private static JsonWebKey PublicOnlyKey()
-    {
-        using var rsa = RSA.Create(2048);
-        return new RsaJsonWebKey { KeyId = "oidc-sign" }.Apply(rsa.ExportParameters(false));
-    }
+    private static CustodianHeldKeys Keys => new() { SigningKeyName = "oidc-sign" };
 
-    private static IServiceCollection WithCustodian(IServiceCollection services)
+    private static IServiceCollection AnOidcHost()
     {
+        var services = new ServiceCollection();
         services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddJsonWebTokens();
+        services.AddAuthServiceJwt();
         return services;
     }
 
-    private static CustodianHeldKeys Keys => new() { SigningKeyName = "oidc-sign" };
-
     [Fact]
-    public void ExternalSignerOwnsAPublicOnlyKey_WhenTheTierCallFollowsTheOidcRegistration()
+    public void CustodianHeldPlacementIsServedByTheExternalProvider()
     {
-        var services = WithCustodian(new ServiceCollection());
-        services.AddJsonWebTokens();
-        services.AddCustodian().UseKeysInCustodian(Keys);
+        var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInCustodian(Keys);
 
         using var provider = services.BuildServiceProvider();
 
-        // A public-only key is the signal that routes signing to the custodian, so the composed seam must own it.
-        // The in-process signer alone would not, having no private material to sign with.
-        Assert.True(provider.GetRequiredService<IDataSigner>().CanSign(PublicOnlyKey()));
+        Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]
-    public void TierCallFailsFast_WhenItRunsBeforeTheOidcRegistration()
+    public void MintingPlacementIsServedByTheMintedProvider()
     {
-        var services = WithCustodian(new ServiceCollection());
-
-        // The mistake: the placement call has no in-process peer to compose with yet.
-        var error = Assert.Throws<InvalidOperationException>(
-            () => services.AddCustodian().UseKeysInCustodian(Keys));
-
-        Assert.Contains("AddOidcServices", error.Message);
-    }
-
-    [Fact]
-    public void StartupValidationFails_WhenTheTierIsNeverChosen()
-    {
-        var services = WithCustodian(new ServiceCollection());
-        services.AddJsonWebTokens();
-        services.AddCustodian();
+        var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" });
+        services.AddSingleton(new Mock<IKeyRingStore>(MockBehavior.Loose).Object);
 
         using var provider = services.BuildServiceProvider();
 
-        // The host runs the startup validators before it starts the hosted service that opens the HTTP port, so
-        // this is the failure a misconfigured deployment actually meets: no port, no token, and no silent
-        // fallback to the static keys of OidcOptions.
-        var error = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
-
-        // The message names the calls that exist. It used to name "HoldKeysIn...", which never did, and this
-        // assertion is what pinned the mistake in place: a message nobody can act on reads as a correct
-        // message to a test that only checks a substring.
-        Assert.Contains(
-            nameof(Server.Features.ExternalKeys.ServiceCollectionExtensions.UseKeysInCustodian),
-            Assert.Single(error.Failures));
+        Assert.IsType<MintedKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]
-    public void StartupValidationPasses_WhenTheTierIsChosen()
+    public void PlacementChosenBeforeTheServerRegistration_IsStillServed()
     {
-        var services = WithCustodian(new ServiceCollection());
+        var services = new ServiceCollection();
+        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
-        services.AddCustodian().UseKeysInCustodian(Keys);
+
+        // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
+        // that: nothing here has to be ordered against the placement call.
+        services.RequireKeyPlacement().UseKeysInCustodian(Keys);
+        services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        Assert.IsType<ExternalKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
     }
 
     [Fact]
-    public void KeyProviderStillGuards_WhenTheTierIsNeverChosen()
+    public void HostRegistrationStillWins_WhenItBringsItsOwnProvider()
     {
-        var services = WithCustodian(new ServiceCollection());
+        var chosen = Mock.Of<IAuthServiceKeysProvider>();
+
+        var services = new ServiceCollection();
+        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(chosen);
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
-        services.AddCustodian();
+        services.AddAuthServiceJwt();
+        services.RequireKeyPlacement().UseKeysInCustodian(Keys);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The placement decides which provider the LIBRARY would install, never that one must be installed: a host
+        // layering its own provider over the placement's is the documented way to cache the custodian's key list.
+        // Same, not merely "not the external one": anything wrapping the seam would satisfy the weaker assertion
+        // while the host's provider had in fact stopped answering.
+        Assert.Same(chosen, provider.GetRequiredService<IAuthServiceKeysProvider>());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConfiguredKeysAreRefused_WhenACustodianIsRegisteredAndNoPlacementChosen(bool signing)
+    {
+        var services = AnOidcHost();
 
         using var provider = services.BuildServiceProvider();
         var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
-        // The second line, for a host that resolves keys with no host lifetime to run the startup validation.
-        var error = Assert.Throws<InvalidOperationException>(() => keysProvider.GetSigningKeys());
+        Assert.IsType<OidcOptionsKeysProvider>(keysProvider);
 
-        Assert.Contains("HoldKeysIn", error.Message);
+        // Both roles, because both fail the same silent way: the host believes its private halves are in the
+        // custodian and they are in a settings file, with nothing anywhere saying so.
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await (signing ? keysProvider.GetSigningKeys() : keysProvider.GetEncryptionKeys())
+                .ToListAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains(nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian), error.Message);
+    }
+
+    [Fact]
+    public async Task ConfiguredKeysAreServed_WhenNoCustodianIsRegisteredAtAll()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddJsonWebTokens();
+        services.AddAuthServiceJwt();
+
+        using var provider = services.BuildServiceProvider();
+        var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
+
+        // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected by it.
+        Assert.Empty(await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken));
     }
 }
