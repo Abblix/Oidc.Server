@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -137,7 +137,7 @@ public class ExternalKeyDecryptorTests
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
-        services.AddJsonWebTokens(); // no AddKeyCustodian: LocalKeyDecryptor is the sole seam
+        services.AddJsonWebTokens(); // no custodian wired: LocalKeyDecryptor is the sole seam
         await using var provider = services.BuildServiceProvider();
 
         var seam = provider.GetRequiredService<IContentKeyDecryptor>();
@@ -188,7 +188,10 @@ public class ExternalKeyDecryptorTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddKeyCustodian(custodian); // the host wires its key custodian into both seams
+        // The host wires its key custodian into both seams. The raw seam rather than a placement call: this
+        // suite is about which backend owns a key, not about the security posture a host declares.
+        services.AddSingleton<IKeyCustodian>(custodian);
+        services.ComposeExternalKeyBackends();
         return services.BuildServiceProvider();
     }
 

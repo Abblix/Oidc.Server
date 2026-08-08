@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -78,9 +78,9 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to configure.</param>
     /// <returns>The builder whose placement call completes the wiring.</returns>
     /// <remarks>
-    /// Do not combine this with <c>AddKeyCustodian</c>: that path composes the external crypto backends itself,
-    /// which the placement call here also does, and <c>Compose</c> refuses the second composition on the spot, at
-    /// the registration call rather than at startup. Use one or the other.
+    /// Do not combine this with <c>ComposeExternalKeyBackends</c>: the placement call performs that itself, and
+    /// <c>Compose</c> refuses the second composition on the spot, at the registration call rather than at
+    /// startup. Use this path, or that one, never both.
     /// </remarks>
     public static IKeyCustodianBuilder AddCustodian<TCustodian>(this IServiceCollection services)
         where TCustodian : class, IKeyCustodian

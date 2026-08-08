@@ -35,64 +35,6 @@ namespace Abblix.Jwt;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys, wiring one external <see cref="IKeyCustodian"/> into
-    /// both crypto seams: a public-only signing key routes its signing to the custodian, and a public-only
-    /// decryption key routes its RSA/symmetric unwrap or ECDH-ES agreement to it, while keys that carry their
-    /// private/secret material keep working in process. The public operations - signature verification and
-    /// wrapping a CEK with the recipient's public half - stay local and never reach the custodian. Call after
-    /// <see cref="AddJsonWebTokens"/>; the custodian is DI-constructed, so it can depend on a typed client.
-    /// </summary>
-    /// <typeparam name="TCustodian">The host custodian implementation.</typeparam>
-    /// <param name="services">The service collection to configure.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    /// <remarks>
-    /// This is the bare seam: it wires the custodian and nothing else, so the host decides for itself which keys
-    /// are public-only and therefore route here. It records no key placement, which makes it the wrong call inside
-    /// an OpenID Provider: that server refuses to serve keys once a custodian is registered and no placement was
-    /// named, so <c>/jwks</c> and every token issuance would fail. Such a host uses
-    /// <see cref="ExternalKeys.ExternalKeysServiceCollectionExtensions.AddCustodian{TCustodian}"/> with a placement
-    /// call. Never both: each composes the external backends, and <c>Compose</c> refuses the second composition on
-    /// the spot, at the registration call rather than at startup.
-    /// </remarks>
-    public static IServiceCollection AddKeyCustodian<TCustodian>(this IServiceCollection services)
-        where TCustodian : class, IKeyCustodian
-    {
-        services.TryAddSingleton<IKeyCustodian, TCustodian>();
-        return services.ComposeExternalKeyBackends();
-    }
-
-    /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys using a ready <paramref name="custodian"/> instance,
-    /// wiring it into both crypto seams. The instance overload suits a pre-built custodian or a test fake; a
-    /// custodian that needs DI-resolved dependencies uses <see cref="AddKeyCustodian{TCustodian}"/> instead. See
-    /// that overload for the full routing description.
-    /// </summary>
-    /// <param name="services">The service collection to configure.</param>
-    /// <param name="custodian">The external key custodian serving signing, RSA/symmetric unwrap and ECDH agreement.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddKeyCustodian(this IServiceCollection services, IKeyCustodian custodian)
-    {
-        services.AddSingleton(custodian);
-        return services.ComposeExternalKeyBackends();
-    }
-
-    /// <summary>
-    /// Adds HSM/KMS/vault handling for public-only keys using a <paramref name="custodianFactory"/> that resolves
-    /// the custodian from the container, wiring it into both crypto seams. Suits a custodian that is a typed client
-    /// (built from <c>IHttpClientFactory</c>) or otherwise needs DI to construct. The factory runs once, so the
-    /// custodian is a singleton. See <see cref="AddKeyCustodian{TCustodian}"/> for the full routing description.
-    /// </summary>
-    /// <param name="services">The service collection to configure.</param>
-    /// <param name="custodianFactory">Resolves the external key custodian from the service provider.</param>
-    /// <returns>The service collection, for chaining.</returns>
-    public static IServiceCollection AddKeyCustodian(
-        this IServiceCollection services, Func<IServiceProvider, IKeyCustodian> custodianFactory)
-    {
-        services.AddSingleton(custodianFactory);
-        return services.ComposeExternalKeyBackends();
-    }
-
-    /// <summary>
     /// Registers <typeparamref name="TBackend"/> into the <typeparamref name="TSeam"/> family, unless that family
     /// has already been composed - which is what the presence of <typeparamref name="TComposite"/> means, the same
     /// test <c>Compose</c> itself uses to refuse a second composition.
@@ -109,8 +51,21 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers the external backends for the wired <see cref="IKeyCustodian"/> - <see cref="ExternalKeySigner"/>
     /// on the signing seam and <see cref="ExternalKeyDecryptor"/> on the key-recovery seam - and composes each
-    /// with its in-process peer, so a key routes to the backend that owns it.
+    /// with its in-process peer, so a key routes to the backend that owns it: a public-only signing key routes its
+    /// signing to the custodian, a public-only decryption key routes its unwrap or ECDH-ES agreement there, and
+    /// keys carrying their private material keep working in process.
     /// </summary>
+    /// <remarks>
+    /// The raw seam, for a host that manages key material entirely on its own terms. It records no key placement,
+    /// which makes it the wrong call inside an OpenID Provider: that server refuses to serve keys once a custodian
+    /// is registered and no placement was named, so <c>/jwks</c> and every token issuance would fail. Such a host
+    /// calls <see cref="ExternalKeys.ExternalKeysServiceCollectionExtensions.AddCustodian{TCustodian}"/> and a
+    /// placement, which perform this too. Never both: <c>Compose</c> refuses the second composition on the spot.
+    /// <para>
+    /// Call after <see cref="AddJsonWebTokens"/>, whose in-process backends this composes with. Register the
+    /// custodian first, by any means the container accepts - it is resolved, not passed in here.
+    /// </para>
+    /// </remarks>
     public static IServiceCollection ComposeExternalKeyBackends(this IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
