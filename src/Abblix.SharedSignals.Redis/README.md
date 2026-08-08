@@ -38,3 +38,7 @@ Abblix.SharedSignals.Redis is licensed under the Abblix license agreement. See
 - General inquiries: [info@abblix.com](mailto:info@abblix.com)
 - Support and security reports: [support@abblix.com](mailto:support@abblix.com)
 - Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+
+## Stream registrations on Redis
+
+`AddSsfRedisStreamStore()` keeps stream registrations on one Redis hash - the durable `IStreamStore` for a transmitter whose streams must outlive its process without a database of its own. Losing Redis loses registrations, deliberately a tier below a database: a receiver re-asserts its stream on its own schedule, and the window without one is priced by the receiver's cache TTL.

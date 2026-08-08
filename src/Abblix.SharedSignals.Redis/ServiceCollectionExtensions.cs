@@ -44,4 +44,17 @@ public static class ServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, RedisEventOutbox>());
         return services;
     }
+
+    /// <summary>
+    /// Puts the transmitter's stream registrations on one Redis hash - the durable store for a
+    /// transmitter whose streams must outlive its process without a database of its own. The host
+    /// registers its <c>IConnectionMultiplexer</c>; this call uses Replace for the same reason as the
+    /// outbox above: it IS the host's explicit choice of store and wins in any registration order.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection AddSsfRedisStreamStore(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
+        return services;
+    }
 }
