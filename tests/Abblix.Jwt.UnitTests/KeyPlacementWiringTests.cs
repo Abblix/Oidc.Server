@@ -221,6 +221,25 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
+    public void AKeyedSignerOfTheHostIsNotTheSigningFamily()
+    {
+        var services = new ServiceCollection();
+
+        // A host may keep a signer of its own under a key it resolves by name. That is neither a member of the
+        // signing family nor a composition of it, so the JWT registration must not read it as either - taken for
+        // a composition it aborts the whole registration, taken for a member it withholds the local backend and
+        // leaves nothing to sign with.
+        services.AddKeyedSingleton<IDataSigner, HostSigner>("hsm");
+
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<LocalKeySigner>(provider.GetRequiredService<IDataSigner>());
+        Assert.IsType<HostSigner>(provider.GetRequiredKeyedService<IDataSigner>("hsm"));
+    }
+
+    [Fact]
     public void ALocalBackendJoinsAFamilyTheHostComposedItself()
     {
         var services = new ServiceCollection();

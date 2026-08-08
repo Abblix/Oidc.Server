@@ -521,25 +521,34 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
     /// <param name="lifetime">The lifetime of the member registration.</param>
     /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    /// <exception cref="InvalidOperationException">The family is composed and <paramref name="lifetime"/> is
+    /// shorter than the composite's, which would let the composite outlive the member it captures. Composition
+    /// fixes the family's lifetime, so on a composed family the member must match it or outlive it.</exception>
     public static IServiceCollection TryAddToFamily<TService, TImplementation>(
         this IServiceCollection services, ServiceLifetime lifetime)
         where TService : class
         where TImplementation : class, TService
     {
-        // Present already, in either form: a second copy would be a duplicate member of the family.
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(TService) &&
-                                       descriptor.ResolveImplementationType() == typeof(TImplementation)))
-            return services;
+        // The family, and only the family. Before composition its members are the PLAIN descriptors of the
+        // service type; after it they are the ones keyed by the composite. Anything else keyed under the same
+        // interface belongs to whoever asked for that key - a keyed composition of the same interface, or a
+        // plain keyed registration the host resolves by name - and neither is this family's business.
+        var compositeType = services.FindCompositeType(typeof(TService));
 
-        // Keyed descriptors under the family's own service type are what a composition leaves behind,
-        // whichever composite performed it - so this recognises a family the caller composed itself as
-        // readily as one composed through Compose.
-        var composed = services.Any(
-            descriptor => descriptor.IsKeyedService && descriptor.ServiceType == typeof(TService));
+        bool IsMember(ServiceDescriptor descriptor)
+            => descriptor.ServiceType == typeof(TService) &&
+               (compositeType is null
+                   ? !descriptor.IsKeyedService
+                   : Equals(descriptor.ServiceKey, compositeType));
+
+        // Present already, in either form: a second copy would be a duplicate member of the family.
+        if (services.Any(descriptor =>
+                IsMember(descriptor) && descriptor.ResolveImplementationType() == typeof(TImplementation)))
+            return services;
 
         var member = new ServiceDescriptor(typeof(TService), typeof(TImplementation), lifetime);
 
-        if (composed)
+        if (compositeType is not null)
             services.Decompose<TService>().AddLast(member);
         else
             services.TryAddEnumerable(member);
@@ -659,7 +668,8 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException(
                 $"{compositeType.Name} is already composed for the {interfaceType.Name} pipeline keyed by " +
                 $"'{serviceKey}'. Composing it a second time would build a self-referential composite that " +
-                "deadlocks on the first resolve. Call DecomposeKeyed and edit the live cursor it returns.");
+                $"deadlocks on the first resolve. Call {nameof(DecomposeKeyed)} and edit the live cursor it " +
+                "returns.");
         }
     }
 
