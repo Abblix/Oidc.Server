@@ -52,6 +52,8 @@ var signingKey = versions
 
 The key that comes back is public-only, which is the whole signal: the signing seam reads `HasPrivateKey`, finds nothing, and routes the signature to the custodian by `kid`.
 
+The rest of this document is written from an OpenID Provider's side, because that is the host with the most moving parts. Read `/jwks` as "wherever you publish your public keys", `OidcOptions` as "your own settings", and the key provider as "whatever you wrote in place of the block above". Everything about the custodian, the placements, provisioning and rotation applies unchanged.
+
 `rolloverPropagation` is yours to choose here - `OidcOptions.KeyRolloverPropagation`, which the [Rotation](#rotation) section names, belongs to the OIDC server this host does not have. Pick your slowest consumer's key-cache lifetime, and use the same value everywhere the key set is published, or publication and signing drift apart. `ProduceFirst` is the same arithmetic the OIDC server's provider runs, so with that one value chosen the schedule below applies unchanged.
 
 ## The two placements

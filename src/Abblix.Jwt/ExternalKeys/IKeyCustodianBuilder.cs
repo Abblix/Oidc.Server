@@ -39,6 +39,6 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </remarks>
 public interface IKeyCustodianBuilder
 {
-    /// <summary>The collection the placement call registers its key provider into.</summary>
+    /// <summary>The collection the placement call records its choice into.</summary>
     IServiceCollection Services { get; }
 }

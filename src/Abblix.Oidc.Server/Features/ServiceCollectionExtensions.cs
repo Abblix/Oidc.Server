@@ -357,6 +357,10 @@ public static class ServiceCollectionExtensions
         // choice is made by a call in Abblix.Jwt which may run either side of this one. So it is read at resolve
         // rather than acted on at registration: nothing here has to be ordered against the placement call, and a
         // host that never wires a custodian simply lands on the static-configuration provider.
+        //
+        // TryAdd, so a host that registered its own key provider keeps it whichever placement it then chooses -
+        // which is how the custodian's key listing gets cached in production, since the provider below does not
+        // cache. The placement decides what the LIBRARY would install, never that one must be installed.
         services.TryAddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement switch
             {

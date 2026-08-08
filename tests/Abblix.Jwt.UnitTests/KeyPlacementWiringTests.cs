@@ -22,9 +22,11 @@
 
 using System;
 using System.Security.Cryptography;
+using Abblix.DependencyInjection;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -52,6 +54,12 @@ public class KeyPlacementWiringTests
         var services = new ServiceCollection();
         services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
         return services;
+    }
+
+    private static JsonWebKey PrivateBearingKey()
+    {
+        using var rsa = RSA.Create(2048);
+        return new RsaJsonWebKey { KeyId = SigningKeyName }.Apply(rsa.ExportParameters(true));
     }
 
     private static JsonWebKey PublicOnlyKey()
@@ -164,18 +172,75 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void ACustodianShorterLivedThanItsCallersIsRefused()
+    public void APlacementWithNoCustodianIsRefused()
     {
         var services = new ServiceCollection();
         services.AddJsonWebTokens();
-        services.AddScoped<IKeyCustodian, StubCustodian>();
 
-        // The backends reaching the custodian are singletons. ValidateScopes would catch this in Development and
-        // nothing would catch it in Production, so the registration call refuses instead.
+        // Half a sentence: a placement says where a CUSTODIAN's keys live. Recorded rather than refused, it passes
+        // startup validation - the choice looks made - and dies on the first key operation as the container's own
+        // "unable to resolve IKeyCustodian", naming neither this call nor the registration that is missing.
+        var error = Assert.Throws<InvalidOperationException>(
+            () => services.RequireKeyPlacement().UseKeysInCustodian(Keys));
+
+        Assert.Contains(nameof(IKeyCustodian), error.Message);
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void ACustodianShorterLivedThanItsCallersIsRefused(ServiceLifetime lifetime)
+    {
+        var services = new ServiceCollection();
+        services.AddJsonWebTokens();
+        services.Add(new ServiceDescriptor(typeof(IKeyCustodian), typeof(StubCustodian), lifetime));
+
+        // The backends reaching the custodian are singletons. ValidateScopes would catch the scoped case in
+        // Development and nothing would catch either in Production, so the registration call refuses instead.
         var error = Assert.Throws<InvalidOperationException>(
             () => services.RequireKeyPlacement().UseKeysInCustodian(Keys));
 
         Assert.Contains(nameof(ServiceLifetime.Singleton), error.Message);
+        Assert.Contains(lifetime.ToString(), error.Message);
+    }
+
+    [Fact]
+    public void HostPreRegisteredCustodianWins()
+    {
+        var chosen = new StubCustodian();
+
+        var services = new ServiceCollection();
+        services.AddJsonWebTokens();
+        services.AddSingleton<IKeyCustodian>(chosen);
+        services.AddCustodian<DependentCustodian>().UseKeysInCustodian(Keys);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The library never beats a host that already chose, which is what TryAdd in AddCustodian is for.
+        Assert.Same(chosen, provider.GetRequiredService<IKeyCustodian>());
+    }
+
+    [Fact]
+    public void ALocalBackendJoinsAFamilyTheHostComposedItself()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+
+        // A host may bring its own IDataSigner and compose the family under its own composite. The local backend
+        // must still end up INSIDE that family: added beside it, it would win the singular resolve; skipped
+        // entirely, nothing would sign a key that carries its private half.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, HostSigner>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDataSigner, ExternalKeySigner>());
+        services.Compose<IDataSigner, CompositeSigner>();
+
+        services.AddJsonWebTokens();
+
+        using var provider = services.BuildServiceProvider();
+        var signer = provider.GetRequiredService<IDataSigner>();
+
+        Assert.IsType<CompositeSigner>(signer);
+        Assert.True(signer.CanSign(PublicOnlyKey()));
+        Assert.True(signer.CanSign(PrivateBearingKey()));
     }
 
     [Fact]
@@ -246,6 +311,15 @@ public class KeyPlacementWiringTests
     private sealed class DependentCustodian(TimeProvider timeProvider) : StubCustodian
     {
         public TimeProvider TimeProvider { get; } = timeProvider;
+    }
+
+    private sealed class HostSigner : IDataSigner
+    {
+        public bool CanSign(JsonWebKey key) => false;
+
+        public Task<byte[]> SignAsync(
+            JsonWebKey key, string algorithm, byte[] data, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
     }
 
     private class StubCustodian : IKeyCustodian

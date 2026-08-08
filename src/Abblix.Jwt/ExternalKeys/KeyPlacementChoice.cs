@@ -47,11 +47,11 @@ public sealed class KeyPlacementChoice
     /// </summary>
     /// <remarks>
     /// Held here rather than on whichever guard reports it, because more than one does: the startup validation
-    /// says it when the host has a lifetime to run validators, and a stand-in key provider says it when
-    /// something asks for keys without one. Two guards saying different things about the same omission would
-    /// read as two different problems.
+    /// says it when the host has a lifetime to run validators, and the key provider says it when something asks
+    /// for keys without one. Two guards saying different things about the same omission would read as two
+    /// different problems.
     /// </remarks>
-    public static readonly string PlacementNotChosenMessage =
+    public const string PlacementNotChosenMessage =
         "A key custodian is registered, but where its private keys live was never chosen. "
         + $"Follow the custodian registration with {nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian)}"
         + "() to keep the private half inside the custodian, or "

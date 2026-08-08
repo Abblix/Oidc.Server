@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -108,8 +108,8 @@ public static class ExternalKeysServiceCollectionExtensions
     {
         var services = ChoosePlacement(builder, KeyPlacement.Custodian, nameof(UseKeysInCustodian));
 
-        // Replace rather than Add: this argument IS the host's key selection, so exactly one lives in the
-        // collection however many times the wiring is revisited, and the latest call is the one that speaks.
+        // Replace rather than Add: this argument IS the host's key selection, so exactly one selection lives in
+        // the collection, ahead of anything the host registered earlier.
         services.Replace(ServiceDescriptor.Singleton(keys));
         return services;
     }
@@ -136,7 +136,7 @@ public static class ExternalKeysServiceCollectionExtensions
 
         // Replace, for the reason the sibling overload gives: this argument IS the host's key selection. Note the
         // registered service type is CustodianHeldKeys, not the delegate - overload resolution prefers the factory
-        // overload here, so both overloads leave the collection in the same shape and either can follow the other.
+        // overload here, so both overloads leave the collection in the same shape.
         services.Replace(ServiceDescriptor.Singleton(keys));
         return services;
     }
@@ -176,8 +176,7 @@ public static class ExternalKeysServiceCollectionExtensions
                     choice.ChosenPlacement != KeyPlacement.InProcess ||
                     serviceProvider.GetService<IKeyRingStore>() is not null,
                 $"{nameof(UseKeysInProcess)} needs an {nameof(IKeyRingStore)} to share the keys it mints, and none "
-                + "is registered. Follow it with a PersistRingTo... call from the custodian's package.")
-            .ValidateOnStart();
+                + "is registered. Follow it with a PersistRingTo... call from the custodian's package.");
 
         return services.AddKeyRing(policy);
     }
@@ -213,11 +212,20 @@ public static class ExternalKeysServiceCollectionExtensions
                 + "registration that adds JSON Web Token services performs. It composes the external crypto "
                 + "backends with their in-process peers, and none are registered yet.");
 
+        // A placement says where a CUSTODIAN's keys live, so one without a custodian is half a sentence. It
+        // would otherwise pass every guard here and at startup - the placement is recorded, so the choice looks
+        // made - and surface on the first key operation as the container's own "unable to resolve IKeyCustodian",
+        // which names neither this call nor the registration that is missing.
+        var custodian = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IKeyCustodian))
+            ?? throw new InvalidOperationException(
+                $"{placementCall} says where a key custodian's private keys live, but no {nameof(IKeyCustodian)} "
+                + $"is registered. Register one first - {nameof(AddCustodian)} does it, as does each backend "
+                + "package's own AddVaultCustodian or AddAzureCustodian.");
+
         // The backends that route a private operation out of process are singletons, so a custodian shorter-lived
         // than they are is a captive dependency. It would be caught by ValidateScopes in Development and by nothing
         // at all in Production, where the first resolve pins one scope's custodian for the process lifetime.
-        var custodian = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IKeyCustodian));
-        if (custodian is { Lifetime: not ServiceLifetime.Singleton })
+        if (custodian.Lifetime != ServiceLifetime.Singleton)
             throw new InvalidOperationException(
                 $"{nameof(IKeyCustodian)} is registered as {custodian.Lifetime} and must be a "
                 + $"{ServiceLifetime.Singleton}: the signing and decryption backends that reach it are singletons, "
