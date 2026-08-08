@@ -54,6 +54,10 @@ internal class OidcOptionsKeysProvider(
 	/// Startup validation catches the same mistake earlier and names it better, but only for a host that runs
 	/// validators. This covers the host that resolves keys without one, and it does so without the custodian
 	/// packages having to arm anything: the thing a downgrade would land on simply declines to be landed on.
+	///
+	/// It guards BOTH key roles. An encryption key configured here while a custodian was meant to hold it is the
+	/// same mistake with the same silence: clients would encrypt to a key whose private half sits in a settings
+	/// file, and the provider would decrypt with it and log nothing unusual.
 	/// </remarks>
 	private void RefuseIfPlacementNotChosen()
 	{
@@ -68,6 +72,8 @@ internal class OidcOptionsKeysProvider(
 	/// <returns>An asynchronous stream of <see cref="JsonWebKey"/> for encryption purposes.</returns>
 	public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
 	{
+		RefuseIfPlacementNotChosen();
+
 		var jsonWebKeys =
 			from jwk in options.Value.EncryptionKeys
 			select SanitizeAllowingPublicOnly(jwk, includePrivateKeys);

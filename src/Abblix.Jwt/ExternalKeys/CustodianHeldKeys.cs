@@ -23,11 +23,10 @@
 namespace Abblix.Jwt.ExternalKeys;
 
 /// <summary>
-/// Selects which of the custodian's keys the OIDC provider produces with, for a host that chose to keep its private keys where
-/// the private halves never leave the custodian (<c>UseKeysInCustodian</c>). The keys belong to the operator:
-/// they are already provisioned in the custodian, so this only names them. Each algorithm is advertised on the
-/// published key and forwarded to the custodian on every operation, so it must be one the custodian provisions
-/// for that key.
+/// Selects which of the custodian's keys the host produces with, for a host that chose to keep the private halves
+/// where they never leave the custodian (<c>UseKeysInCustodian</c>). The keys belong to the operator: they are
+/// already provisioned in the custodian, so this only names them. Each algorithm is advertised on the published key
+/// and forwarded to the custodian on every operation, so it must be one the custodian provisions for that key.
 /// </summary>
 /// <remarks>
 /// A name here is the custodian's name for the LOGICAL key, not a published <c>kid</c>. Every version of that key
@@ -39,9 +38,8 @@ namespace Abblix.Jwt.ExternalKeys;
 public sealed record CustodianHeldKeys
 {
     /// <summary>
-    /// The custodian's name for the signing key, whose versions are published and signed with. Required: a
-    /// provider with no signing key cannot issue a token at all, so the compiler asks for it instead of a startup
-    /// failure.
+    /// The custodian's name for the signing key, whose versions are published and signed with. Required: a host
+    /// with no signing key cannot issue a token at all, so the compiler asks for it instead of a startup failure.
     /// </summary>
     public required string SigningKeyName { get; init; }
 

@@ -57,11 +57,11 @@ A default Transit key is software-protected inside Vault's barrier, so the ring 
 
 ## Usage
 
-Point the custodian at Vault, then name the Transit keys to produce with. Chain both calls after the OIDC registration:
+Point the custodian at Vault, then name the Transit keys to produce with. Chain both calls after `AddJsonWebTokens`, which the OIDC registration performs for you:
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Vault;
 
 builder.Services

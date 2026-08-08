@@ -1,6 +1,6 @@
 # External key custodians
 
-How the Abblix OIDC Server uses signing and encryption keys that live outside the process, in an HSM, a cloud KMS, or a vault. This document is the shared model. It applies to every custodian package:
+How signing and encryption keys that live outside the process - in an HSM, a cloud KMS, or a vault - are used. This document is the shared model. It applies to every custodian package:
 
 | Package | Custodian |
 |---------|-----------|
@@ -11,7 +11,7 @@ Each package's README covers what is specific to its backend: how to provision t
 
 ## The model
 
-A custodian is whatever holds your keys, or the key that seals them, and uses them on your behalf. With `UseKeysInCustodian` it never hands the private half over; with `UseKeysInProcess` it hands back only a key the server first sealed to it. The library talks to it through one seam, `IKeyCustodian`, with three private operations (sign, unwrap a Content Encryption Key, agree an ECDH-ES shared secret) plus an enumeration of a key's versions. The public halves come back over that same seam and are published at `/jwks`.
+A custodian is whatever holds your keys, or the key that seals them, and uses them on your behalf. With `UseKeysInCustodian` it never hands the private half over; with `UseKeysInProcess` it hands back only a key the library first sealed to it. The library talks to it through one seam, `IKeyCustodian`, with three private operations (sign, unwrap a Content Encryption Key, agree an ECDH-ES shared secret) plus an enumeration of a key's versions. The public halves come back over that same seam, and an OpenID Provider publishes them at `/jwks`.
 
 Wiring is two steps for `UseKeysInCustodian`, three for `UseKeysInProcess` (the third names where the sealed ring lives). They are separate on purpose:
 
@@ -23,7 +23,27 @@ builder.Services
 
 The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site.
 
-The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the library's default key provider reads static keys from `OidcOptions`, so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after the OIDC registration (`AddOidcServices` / `AddOidcCore`), because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered.
+The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from `OidcOptions`, so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
+
+## You do not need the OIDC server for this
+
+Both steps live in [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT). Nothing above mentions a client, an endpoint or a discovery document, and nothing in it needs one: a host that signs JSON Web Tokens without being an OpenID Provider - a transmitter signing Security Event Tokens, a service protecting its own state - wires a custodian with that one package reference.
+
+What such a host does not get is the key *provider* an OpenID Provider has, which decides what `/jwks` publishes and what each token is signed with. It reads the placement itself instead:
+
+```csharp
+// Which keys the placement named, and the custodian that holds them, are both resolvable.
+var keys = provider.GetRequiredService<CustodianHeldKeys>();
+var custodian = provider.GetRequiredService<IKeyCustodian>();
+
+var versions = await custodian.GetKeyVersionsAsync(keys.SigningKeyName, cancellationToken).ToListAsync(cancellationToken);
+var signingKey = versions
+    .ProduceFirst(version => version.CreatedAt, timeProvider.GetUtcNow(), propagation)
+    .Select(version => version.PublicKey with { Algorithm = keys.SigningAlgorithm })
+    .First();
+```
+
+The key that comes back is public-only, which is the whole signal: the signing seam reads `HasPrivateKey`, finds nothing, and routes the signature to the custodian by `kid`. `ProduceFirst` is the same rollover arithmetic the OIDC server's provider uses, so a host that adopts it publishes and signs on the same schedule described under [Rotation](#rotation).
 
 ## The two placements
 

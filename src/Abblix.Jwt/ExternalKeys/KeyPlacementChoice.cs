@@ -36,11 +36,11 @@ namespace Abblix.Jwt.ExternalKeys;
 public sealed class KeyPlacementChoice
 {
     /// <summary>
-    /// The placement call that completed the custodian wiring, or null when none did. Recording the name rather than
-    /// inspecting the registered provider keeps the check independent of a host that layers its own provider
-    /// over the placement's.
+    /// Where the placement call put the private halves, or null when no placement call ran. Recording the choice
+    /// rather than inspecting the registered provider keeps the check independent of a host that layers its own
+    /// provider over the placement's.
     /// </summary>
-    public string? ChosenPlacement { get; set; }
+    public KeyPlacement? ChosenPlacement { get; set; }
 
     /// <summary>
     /// What a host is told when it registered a custodian and never said how its keys are used.

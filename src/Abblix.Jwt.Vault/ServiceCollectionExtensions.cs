@@ -33,12 +33,12 @@ namespace Abblix.Jwt.Vault;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers Vault / OpenBao Transit as the custodian of the OIDC provider's keys and opens the placement choice
-    /// that completes the wiring. This call is only the transport: it points a client at the Vault server and
-    /// carries the auth token. Which keys are used - and whether their private halves ever enter this process - is
-    /// the placement call chained onto the returned builder, which must follow: a custodian without one fails at
-    /// startup rather than silently falling back to the static keys in <c>OidcOptions</c>. Chain both calls AFTER
-    /// the OIDC registration, which the placement call composes onto.
+    /// Registers Vault / OpenBao Transit as the custodian of the host's keys and opens the placement choice that
+    /// completes the wiring. This call is only the transport: it points a client at the Vault server and carries
+    /// the auth token. Which keys are used - and whether their private halves ever enter this process - is the
+    /// placement call chained onto the returned builder, which must follow: a custodian without one fails at
+    /// startup rather than silently falling back to whatever keys the configuration carries. Chain both calls
+    /// AFTER <c>AddJsonWebTokens</c> (the OIDC registration performs it), which the placement call composes onto.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the Vault address, auth token and Transit mount.</param>

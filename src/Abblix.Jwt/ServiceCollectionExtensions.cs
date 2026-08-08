@@ -45,6 +45,13 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TCustodian">The host custodian implementation.</typeparam>
     /// <param name="services">The service collection to configure.</param>
     /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// This is the bare seam: it wires the custodian and nothing else, so the host decides for itself which keys
+    /// are public-only and therefore route here. A host that wants the library to hold it to a named security
+    /// posture - and to refuse to start when nobody named one - uses
+    /// <see cref="ExternalKeys.ExternalKeysServiceCollectionExtensions.AddCustodian{TCustodian}"/> with a placement
+    /// call instead. Not both: each composes the external backends, and composing a family twice fails at startup.
+    /// </remarks>
     public static IServiceCollection AddKeyCustodian<TCustodian>(this IServiceCollection services)
         where TCustodian : class, IKeyCustodian
     {
