@@ -114,15 +114,21 @@ public class ComposeKeyedTests
     }
 
     [Fact]
-    public void DecomposeKeyed_WithoutPriorCompose_Throws()
+    public void DecomposeKeyed_WithoutPriorCompose_EditsTheMembersUnderThatKey()
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
+        services.AddKeyedSingleton<IPipelineStep, StepC>(SmsKey);
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => services.DecomposeKeyed<IPipelineStep>(EmailKey));
-        Assert.Contains(nameof(IPipelineStep), exception.Message);
-        Assert.Contains(EmailKey, exception.Message);
+        services.DecomposeKeyed<IPipelineStep>(EmailKey)
+            .AddLast(ServiceDescriptor.KeyedSingleton<IPipelineStep, StepB>(EmailKey));
+
+        using var provider = services.BuildServiceProvider();
+
+        // The key still isolates the families: the one under SmsKey is untouched.
+        Assert.Equal(
+            ["A", "B"], provider.GetKeyedServices<IPipelineStep>(EmailKey).Select(step => step.Name));
+        Assert.Equal(["C"], provider.GetKeyedServices<IPipelineStep>(SmsKey).Select(step => step.Name));
     }
 
     [Fact]

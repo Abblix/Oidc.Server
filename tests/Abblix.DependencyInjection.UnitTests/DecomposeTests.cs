@@ -76,13 +76,65 @@ public class DecomposeTests
     }
 
     [Fact]
-    public void Decompose_WithoutPriorCompose_Throws()
+    public void Decompose_WithoutPriorCompose_EditsThePlainMembers()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep, StepA>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
-        Assert.Contains(nameof(IPipelineStep), exception.Message);
+        // A family that has not been composed is still a family, and editing its members is the only reason to
+        // ask for the cursor. Where the members live is the cursor's business, not the caller's.
+        services.Decompose<IPipelineStep>().AddLast(Step<StepB>());
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(["A", "B"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
+    }
+
+    [Fact]
+    public void Decompose_OnAnUnregisteredFamily_StartsItEmpty()
+    {
+        var services = new ServiceCollection();
+
+        var composition = services.Decompose<IPipelineStep>();
+
+        Assert.Empty(composition);
+
+        composition.AddLast(Step<StepA>());
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(["A"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
+    }
+
+    [Fact]
+    public void Decompose_OnAnEmptiedComposedFamily_StillKnowsItsComposite()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>().Clear();
+
+        // Nothing is left keyed, so the members no longer name the composite. Read from them, the family would
+        // look as if it had never been composed, and the composite - a plain registration of the interface -
+        // would be taken for a member of the family it heads.
+        var composition = services.Decompose<IPipelineStep>();
+        Assert.Empty(composition);
+
+        composition.AddLast(Step<StepC>());
+
+        Assert.Equal("C", Resolve(services));
+        Assert.IsType<PipelineComposite>(services.BuildServiceProvider().GetRequiredService<IPipelineStep>());
+    }
+
+    [Fact]
+    public void Decompose_SurvivesTheCompositionOfTheFamilyItIsEditing()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+
+        services.Decompose<IPipelineStep>().AddLast(Step<StepB>());
+        services.Compose<IPipelineStep, PipelineComposite>();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // The same call adds a member before and after composition, and both land inside the family.
+        Assert.Equal("A,B,C", Resolve(services));
     }
 
     [Fact]
