@@ -48,14 +48,20 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     /// <summary>Inserts <paramref name="member"/> as the first step of the family.</summary>
     IComposition<TInterface> AddFirst(ServiceDescriptor member)
     {
+        EnsureAbsent(member, nameof(AddFirst));
         Insert(0, member);
         return this;
     }
 
-    /// <summary>Appends <paramref name="member"/> as the last step of the family.</summary>
+    /// <summary>
+    /// Ensures <paramref name="member"/> is in the family, appending it as the last step when it is not.
+    /// A member already there stays where it is: a family holds one member per implementation type, so there
+    /// is nothing to add and no second copy to place.
+    /// </summary>
     IComposition<TInterface> AddLast(ServiceDescriptor member)
     {
-        Add(member);
+        if (!Contains(member))
+            Add(member);
         return this;
     }
 
@@ -63,6 +69,7 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> AddBefore<TExisting>(ServiceDescriptor member)
         where TExisting : TInterface
     {
+        EnsureAbsent(member, nameof(AddBefore));
         Insert(IndexOf(typeof(TExisting), nameof(AddBefore)), member);
         return this;
     }
@@ -71,8 +78,28 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
     IComposition<TInterface> AddAfter<TExisting>(ServiceDescriptor member)
         where TExisting : TInterface
     {
+        EnsureAbsent(member, nameof(AddAfter));
         Insert(IndexOf(typeof(TExisting), nameof(AddAfter)) + 1, member);
         return this;
+    }
+
+    /// <summary>
+    /// Refuses a member the family already holds. The positional methods are asked for a place, so silently
+    /// keeping the one that is there would ignore what the caller asked for, while adding a second copy would
+    /// make every anchor ambiguous - <see cref="AddBefore{TExisting}"/>, <see cref="AddAfter{TExisting}"/>,
+    /// <see cref="Remove{TExisting}"/> and <see cref="Replace{TExisting}"/> all resolve by implementation type
+    /// and would silently take the first.
+    /// </summary>
+    private void EnsureAbsent(ServiceDescriptor member, string operation)
+    {
+        if (!Contains(member))
+            return;
+
+        var implementationType = member.ResolveImplementationType();
+        throw new InvalidOperationException(
+            $"{operation} failed: {implementationType?.Name} is already a member of the " +
+            $"{typeof(TInterface).Name} family, which holds one member per implementation type. Use " +
+            $"{nameof(Replace)} to change it in place, or {nameof(Remove)} it first to move it.");
     }
 
     /// <summary>Removes the existing <typeparamref name="TExisting"/> step from the family.</summary>

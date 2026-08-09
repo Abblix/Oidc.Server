@@ -28,10 +28,11 @@ using Xunit;
 namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
-/// Locks <see cref="ServiceCollectionExtensions.TryAddToFamily{TService,TImplementation}"/>: a family member
-/// lands exactly once and reaches the composite, whether the family is still loose or already composed.
+/// Locks what it means to be a member of a family: a member lands exactly once and reaches the composite,
+/// whether the family is still loose or already composed, and a registration keyed under the same interface
+/// by someone else is none of the family's business.
 /// </summary>
-public class TryAddToFamilyTests
+public class FamilyMembershipTests
 {
     private static ServiceCollection LooseFamily()
     {
@@ -55,45 +56,45 @@ public class TryAddToFamilyTests
     }
 
     [Fact]
-    public void TryAddToFamily_AddsTheMemberToALooseFamily()
+    public void AddsTheMemberToALooseFamily()
     {
         var services = LooseFamily();
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         using var provider = services.BuildServiceProvider();
         Assert.Equal(["A", "B", "C"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
     }
 
     [Fact]
-    public void TryAddToFamily_AddsTheMemberOnlyOnce()
+    public void AddsTheMemberOnlyOnce()
     {
         var services = LooseFamily();
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         using var provider = services.BuildServiceProvider();
         Assert.Single(provider.GetServices<IPipelineStep>(), step => step.Name == "C");
     }
 
     [Fact]
-    public void TryAddToFamily_ReachesTheCompositeWhenTheFamilyIsAlreadyComposed()
+    public void ReachesTheCompositeWhenTheFamilyIsAlreadyComposed()
     {
         var services = ComposedFamily();
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         // The member joined the family rather than landing beside it: the composite reports it as a child.
         Assert.Equal("A,B,C", Resolve(services));
     }
 
     [Fact]
-    public void TryAddToFamily_LeavesAComposedFamilyAloneWhenTheMemberIsAlreadyInIt()
+    public void LeavesAComposedFamilyAloneWhenTheMemberIsAlreadyInIt()
     {
         var services = ComposedFamily();
 
-        services.TryAddToFamily<IPipelineStep, StepA>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
 
         Assert.Equal("A,B", Resolve(services));
 
@@ -103,19 +104,19 @@ public class TryAddToFamilyTests
     }
 
     [Fact]
-    public void TryAddToFamily_SkipsAnImplementationTheFamilyHoldsAsAnInstance()
+    public void SkipsAnImplementationTheFamilyHoldsAsAnInstance()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep>(new StepA());
 
-        services.TryAddToFamily<IPipelineStep, StepA>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
 
         using var provider = services.BuildServiceProvider();
         Assert.Single(provider.GetServices<IPipelineStep>());
     }
 
     [Fact]
-    public void TryAddToFamily_IgnoresAKeyedRegistrationThatIsNotAComposition()
+    public void IgnoresAKeyedRegistrationThatIsNotAComposition()
     {
         var services = LooseFamily();
 
@@ -123,21 +124,21 @@ public class TryAddToFamilyTests
         // not make the family composed.
         services.AddKeyedSingleton<IPipelineStep, StepA>("dispatch");
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         using var provider = services.BuildServiceProvider();
         Assert.Equal(["A", "B", "C"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
     }
 
     [Fact]
-    public void TryAddToFamily_LeavesAKeyedCompositionOfTheSameInterfaceAlone()
+    public void LeavesAKeyedCompositionOfTheSameInterfaceAlone()
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>("primary");
         services.ComposeKeyed<IPipelineStep, PipelineComposite>("primary");
         services.AddSingleton<IPipelineStep, StepB>();
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         // The keyed family is a different family: the member joins the plain one.
         using var provider = services.BuildServiceProvider();
@@ -145,7 +146,7 @@ public class TryAddToFamilyTests
     }
 
     [Fact]
-    public void TryAddToFamily_AddsAMemberTheFamilyLacksThoughAKeyedRegistrationNamesIt()
+    public void AddsAMemberTheFamilyLacksThoughAKeyedRegistrationNamesIt()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep, StepA>();
@@ -154,14 +155,14 @@ public class TryAddToFamilyTests
         // this family, so it is no reason to withhold the member.
         services.AddKeyedSingleton<IPipelineStep, StepC>("dispatch");
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>());
 
         using var provider = services.BuildServiceProvider();
         Assert.Equal(["A", "C"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
     }
 
     [Fact]
-    public void TryAddToFamily_SkipsAMemberAComposedFamilyHoldsAsAnInstance()
+    public void SkipsAMemberAComposedFamilyHoldsAsAnInstance()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep>(new StepA());
@@ -170,17 +171,17 @@ public class TryAddToFamilyTests
 
         // Composition preserves an instance member as a keyed instance, so only ResolveImplementationType
         // can tell that StepA is already in the family.
-        services.TryAddToFamily<IPipelineStep, StepA>(ServiceLifetime.Singleton);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
 
         Assert.Equal("A,B", Resolve(services));
     }
 
     [Fact]
-    public void TryAddToFamily_HonoursTheRequestedLifetime()
+    public void HonoursTheRequestedLifetime()
     {
         var services = LooseFamily();
 
-        services.TryAddToFamily<IPipelineStep, StepC>(ServiceLifetime.Scoped);
+        services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Scoped<IPipelineStep, StepC>());
 
         var member = Assert.Single(services, descriptor => descriptor.ImplementationType == typeof(StepC));
         Assert.Equal(ServiceLifetime.Scoped, member.Lifetime);

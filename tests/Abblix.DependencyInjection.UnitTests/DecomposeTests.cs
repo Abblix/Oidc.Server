@@ -234,9 +234,33 @@ public class DecomposeTests
 
         services.Decompose<IPipelineStep>()
             .AddFirst(Step<StepC>())
-            .AddAfter<StepA>(Step<StepC>());
+            .AddAfter<StepA>(Step<StepD>());
 
-        Assert.Equal("C,A,C,B", Resolve(services));
+        Assert.Equal("C,A,D,B", Resolve(services));
+    }
+
+    [Fact]
+    public void AddFirst_RefusesAMemberTheFamilyAlreadyHas()
+    {
+        var services = ComposedFamily();
+
+        // A family holds one member per implementation type, because every anchor resolves by it. A second
+        // copy would make AddAfter<StepA>, Remove<StepA> and Replace<StepA> silently mean the first one.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>().AddFirst(Step<StepA>()));
+
+        Assert.Contains(nameof(StepA), exception.Message);
+    }
+
+    [Fact]
+    public void AddLast_LeavesAMemberTheFamilyAlreadyHasWhereItIs()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>().AddLast(Step<StepA>());
+
+        // Not moved to the end, and not duplicated: it is already in the family, so there is nothing to add.
+        Assert.Equal("A,B", Resolve(services));
     }
 
     [Fact]

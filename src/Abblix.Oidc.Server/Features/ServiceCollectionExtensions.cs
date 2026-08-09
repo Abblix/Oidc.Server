@@ -227,7 +227,8 @@ public static class ServiceCollectionExtensions
         // may well arrive after the composition. Through TryAddEnumerable the notifier would land beside the
         // composite and win the singular resolve, leaving the other channel unnotified while the discovery
         // document still advertised it.
-        services.TryAddToFamily<ILogoutNotifier, BackChannelLogoutNotifier>(ServiceLifetime.Scoped);
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
         services.TryAddSingleton<ILogoutTokenService, LogoutTokenService>();
         // The back-channel logout URI is a client-supplied URL, so POSTing logout tokens to it must
         // run through the SSRF-validating handler and carry a bounded timeout, like every other
@@ -249,7 +250,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
-        services.TryAddToFamily<ILogoutNotifier, FrontChannelLogoutNotifier>(ServiceLifetime.Scoped);
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;
     }
 

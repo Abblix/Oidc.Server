@@ -513,47 +513,6 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers <typeparamref name="TImplementation"/> as a member of the <typeparamref name="TService"/>
-    /// family exactly once, whether or not that family has already been composed.
-    /// </summary>
-    /// <remarks>
-    /// What a registration method should call instead of
-    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
-    /// when it contributes a family member. That one deduplicates against PLAIN descriptors, while composing a
-    /// family moves its members to KEYED ones - so once a family is composed it neither sees the member already
-    /// in there nor puts a new one where the composite looks. What it leaves instead is a plain descriptor
-    /// beside the composite, which then wins the singular resolve, silently, because last registration wins.
-    /// <para>
-    /// The case is any registration method a host may call directly and another registration method calls on
-    /// its behalf: it runs twice by design, with a composition possibly in between.
-    /// <see cref="Decompose{TInterface}"/> is what knows where a family keeps its members; this adds the
-    /// once-only rule on top, so the safe call is also the short one.
-    /// </para>
-    /// </remarks>
-    /// <typeparam name="TService">The family interface to register the member under.</typeparam>
-    /// <typeparam name="TImplementation">The member implementation type.</typeparam>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add to.</param>
-    /// <param name="lifetime">The lifetime of the member registration.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-    /// <exception cref="InvalidOperationException">The family is composed and <paramref name="lifetime"/> is
-    /// shorter than the composite's, which would let the composite outlive the member it captures. Composition
-    /// fixes the family's lifetime, so on a composed family the member must match it or outlive it.</exception>
-    public static IServiceCollection TryAddToFamily<TService, TImplementation>(
-        this IServiceCollection services, ServiceLifetime lifetime)
-        where TService : class
-        where TImplementation : class, TService
-    {
-        var family = services.Decompose<TService>();
-        var member = new ServiceDescriptor(typeof(TService), typeof(TImplementation), lifetime);
-
-        // Contains matches by implementation type, which is the identity a family uses for its members.
-        if (!family.Contains(member))
-            family.AddLast(member);
-
-        return services;
-    }
-
-    /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
     /// <paramref name="serviceKey"/> into a single composite resolvable under that same key - the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
@@ -742,10 +701,9 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException(
                 $"{compositeType.Name} is already registered, so the {interfaceType.Name} pipeline has " +
                 "already been composed. Composing it a second time would build a self-referential composite that " +
-                $"deadlocks on the first resolve. Register every {interfaceType.Name} implementation before " +
-                "whichever method composes the family, and compose it once. To add a member to a family that is " +
-                $"already composed, call {nameof(Decompose)} and edit the live cursor it returns - or " +
-                $"{nameof(TryAddToFamily)}, which picks the right one of the two for you.");
+                $"deadlocks on the first resolve. Compose the family once, and add every {interfaceType.Name} " +
+                $"member through {nameof(Decompose)}, whose cursor edits the family whether or not it has been " +
+                "composed yet.");
         }
     }
 
