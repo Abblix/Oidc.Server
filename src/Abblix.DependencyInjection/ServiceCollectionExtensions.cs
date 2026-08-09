@@ -428,7 +428,7 @@ public static class ServiceCollectionExtensions
     /// The existing registrations are moved into keyed registrations (key = the composite type) that the
     /// composite resolves in registration order; being keyed also hides them from plain resolution, so the
     /// singular resolve yields only the composite. The family thus remains descriptor data in the collection
-    /// rather than a snapshot captured in a closure: <see cref="Decompose{TInterface}"/> returns a live cursor
+    /// rather than a snapshot captured in a closure: <see cref="Decompose{TInterface}(IServiceCollection)"/> returns a live cursor
     /// over that data, and edits through it reach the composite at resolve - without the host ever naming the
     /// composite type. Members keep their own lifetimes and the composite adopts the shortest among them, so a
     /// longer-lived member is simply shared; only a member shorter-lived than the composite is rejected, since
@@ -499,6 +499,50 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// The members of the <typeparamref name="TInterface"/> family as the container will run them - the
+    /// resolve-time counterpart of <see cref="Decompose{TInterface}(IServiceCollection)"/>, which edits the
+    /// same family before the container is built.
+    /// </summary>
+    /// <remarks>
+    /// Whether the family was composed is this method's business, not the caller's: composed, the members are
+    /// keyed and hidden from plain resolution; loose, they are the plain registrations. Asking for them by the
+    /// key composition happens to use is what a caller must not do, because a key that is merely out of date
+    /// answers with an empty set rather than an error - and an empty set reads as a family with nothing in it.
+    /// <para>
+    /// For that reason an empty family is refused rather than returned. A caller that wants a possibly-empty
+    /// answer is asking about registrations rather than about a family, and
+    /// <see cref="ServiceProviderServiceExtensions.GetServices{T}(IServiceProvider)"/> is that question.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TInterface">The family interface.</typeparam>
+    /// <param name="serviceProvider">The provider built from the collection the family lives in.</param>
+    /// <param name="serviceKey">The key a keyed family lives under, or null for a plain family.</param>
+    /// <returns>The family's members, in execution order.</returns>
+    /// <exception cref="InvalidOperationException">The family has no members.</exception>
+    public static IReadOnlyList<TInterface> Decompose<TInterface>(
+        this IServiceProvider serviceProvider, object? serviceKey = null)
+        where TInterface : class
+    {
+        var key = new CompositionKey(typeof(TInterface), serviceKey);
+
+        IEnumerable<TInterface> Uncomposed() => serviceKey is null
+            ? serviceProvider.GetServices<TInterface>()
+            : serviceProvider.GetKeyedServices<TInterface>(serviceKey);
+
+        var family = (serviceProvider.GetKeyedService<IComposition<TInterface>>(key) is not null
+            ? serviceProvider.GetKeyedServices<TInterface>(key)
+            : Uncomposed()).ToArray();
+        if (family.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"The {typeof(TInterface).Name} family has no members" +
+                (serviceKey is null ? "." : $" under the key '{serviceKey}'."));
+        }
+
+        return family;
+    }
+
+    /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
     /// <paramref name="serviceKey"/> into a single composite resolvable under that same key - the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
@@ -550,7 +594,7 @@ public static class ServiceCollectionExtensions
     /// <param name="serviceKey">The service key the family was composed under.</param>
     /// <returns>A live cursor over the family's members, in execution order.</returns>
     /// <remarks>
-    /// The mechanics mirror <see cref="Decompose{TInterface}"/>, except the family's key carries the service
+    /// The mechanics mirror <see cref="Decompose{TInterface}(IServiceCollection)"/>, except the family's key carries the service
     /// key too, so pipelines of the same interface under different keys stay isolated.
     /// <see cref="IComposition{TInterface}"/> adds the same position-aware sugar
     /// (<c>AddAfter</c>, <c>Remove</c>, ...).
@@ -686,7 +730,7 @@ public static class ServiceCollectionExtensions
     /// own children back to itself - a self-referential singleton that deadlocks on first resolve. This
     /// happens when two registration methods each compose the same family, or when a caller composes a family
     /// that a registration method it also calls composes for it. The sanctioned way to edit an
-    /// already-composed family is <see cref="Decompose{TInterface}"/> and editing the live cursor it returns.
+    /// already-composed family is <see cref="Decompose{TInterface}(IServiceCollection)"/> and editing the live cursor it returns.
     /// </summary>
     private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType, Type compositeType)
     {
@@ -789,7 +833,7 @@ public static class ServiceCollectionExtensions
     /// instance-based descriptors translate directly; factory-based descriptors are wrapped into a keyed
     /// factory typed by the member's implementation type, so <see cref="ResolveImplementationType"/> keeps
     /// identifying the member after the move. Descriptors that are already keyed (returned by
-    /// <see cref="Decompose{TInterface}"/>) are re-keyed with the family key and lifetime.
+    /// <see cref="Decompose{TInterface}(IServiceCollection)"/>) are re-keyed with the family key and lifetime.
     /// </summary>
     internal static ServiceDescriptor ToKeyedFamilyMember(
         this ServiceDescriptor descriptor,

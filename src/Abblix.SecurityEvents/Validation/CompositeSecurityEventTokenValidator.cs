@@ -43,13 +43,6 @@ public sealed class CompositeSecurityEventTokenValidator(ISecurityEventTokenVali
             + "configuration bug, not a permissive profile.",
             nameof(steps));
 
-    /// <summary>
-    /// The steps this composite runs, in order. A guard that has to judge the profile asks the composite it
-    /// wraps rather than the container, so what it reads is the pipeline that will actually run, however the
-    /// members were registered.
-    /// </summary>
-    public IReadOnlyList<ISecurityEventTokenValidator> Steps => _steps;
-
     /// <inheritdoc />
     public async ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
         SecurityEventTokenValidationContext context,

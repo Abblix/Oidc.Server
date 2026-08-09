@@ -27,7 +27,7 @@ namespace Abblix.DependencyInjection;
 
 /// <summary>
 /// A live editing cursor over a family's members.
-/// Returned by <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/>,
+/// Returned by <see cref="ServiceCollectionExtensions.Decompose{TInterface}(IServiceCollection)"/>,
 /// it is an <see cref="IList{T}"/> of the member descriptors backed directly by the service collection:
 /// inserting, removing or reordering through it mutates the family's registrations in place.
 /// A composed family's composite reads its members via <c>GetKeyedServices</c> at resolve time,

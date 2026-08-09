@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -47,18 +48,19 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
 
     public InsecureValidationGuard(
         ISecurityEventTokenValidator inner,
+        IServiceProvider serviceProvider,
         IOptions<SecurityEventsOptions> options,
         ILogger<InsecureValidationGuard> logger)
     {
         _inner = inner;
 
-        // Ask the validator being wrapped what it will run. A composite answers with its steps; anything else
-        // is the whole profile by itself. Reading the members out of the container instead would mean naming
-        // the key composition happens to store them under, which is machinery this package should not know,
-        // and which says nothing about a profile a host assembled some other way.
-        var memberTypes = (inner is CompositeSecurityEventTokenValidator composite
-                ? composite.Steps.Select(step => step.GetType())
-                : [inner.GetType()])
+        // Ask the family what it holds, and let it answer for its own arrangement - composed or not, behind
+        // whatever composite. Naming a key to read the members by is what this must not do: a key that is
+        // merely out of date answers with an empty set, and an empty set reads here as every critical step
+        // being absent, which turns a guard into a refusal to start.
+        var memberTypes = serviceProvider
+            .Decompose<ISecurityEventTokenValidator>()
+            .Select(step => step.GetType())
             .ToHashSet();
 
         var missing = ServiceCollectionExtensions.CriticalDefaultSteps
