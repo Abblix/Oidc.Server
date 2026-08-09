@@ -68,6 +68,28 @@ public static class ServiceCollectionExtensions
         .ToArray();
 
     /// <summary>
+    /// Declares <typeparamref name="TStep"/> as a step the profile may not lose without an allowance on record.
+    /// </summary>
+    /// <remarks>
+    /// A package that contributes a step carrying <see cref="ISecurityCriticalValidator"/> declares it here,
+    /// beside the registration that adds it. Without the declaration the marker means nothing outside this
+    /// package: the guard would hold the profile only to the steps this one ships, and a step from anywhere
+    /// else could be removed through the same cursor that added it, in silence.
+    /// </remarks>
+    /// <typeparam name="TStep">The step type, which must carry the marker to be declared at all.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> the step was contributed to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+    public static IServiceCollection AddCriticalValidationStep<TStep>(this IServiceCollection services)
+        where TStep : class, ISecurityCriticalValidator
+        => services.AddCriticalValidationStep(typeof(TStep));
+
+    private static IServiceCollection AddCriticalValidationStep(this IServiceCollection services, Type stepType)
+    {
+        services.Add(ServiceDescriptor.Singleton(new CriticalValidationStep(stepType)));
+        return services;
+    }
+
+    /// <summary>
     /// Registers the security-event core: the default validation profile as a composed
     /// validator family behind the singular contract, the event registry, and the default
     /// verifier and signer over the Abblix JWT core.
@@ -149,6 +171,10 @@ public static class ServiceCollectionExtensions
         // behind the singular contract, and the guard decorates the result so a weakened profile
         // cannot construct without a reasoned acknowledgement - whichever door edited it.
         services.TryAddEnumerable(DefaultPipelineSteps);
+
+        foreach (var step in CriticalDefaultSteps)
+            services.AddCriticalValidationStep(step);
+
         services.Compose<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>();
         services.Decorate<ISecurityEventTokenValidator, InsecureValidationGuard>();
 

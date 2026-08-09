@@ -63,7 +63,12 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
             .Select(step => step.GetType())
             .ToHashSet();
 
-        var missing = ServiceCollectionExtensions.CriticalDefaultSteps
+        // Every package that contributes a step carrying the marker declares it, so the set grows with the
+        // profile instead of describing only the steps this package ships.
+        var missing = serviceProvider
+            .GetServices<CriticalValidationStep>()
+            .Select(step => step.StepType)
+            .Distinct()
             .Where(critical => !memberTypes.Contains(critical))
             .ToArray();
 
