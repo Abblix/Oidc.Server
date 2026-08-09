@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Linq;
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
@@ -66,7 +67,19 @@ public class AddLogoutNotificationTests
     }
 
     [Fact]
-    public void AChannelAddedAfterTheFullRegistrationResolvesToTheCompositeOfBoth()
+    public void BackChannelAddedAfterTheFullRegistrationLeavesBothChannelsServed()
+        => AssertBothChannelsSurvive(services => services.AddBackChannelLogout());
+
+    [Fact]
+    public void FrontChannelAddedAfterTheFullRegistrationLeavesBothChannelsServed()
+        => AssertBothChannelsSurvive(services => services.AddFrontChannelLogout());
+
+    /// <summary>
+    /// The host asks for one channel explicitly after the whole server is already registered. The call is
+    /// redundant - AddOidcServices registered both - and it used to be destructive, replacing the composite
+    /// with the single notifier it re-registered.
+    /// </summary>
+    private static void AssertBothChannelsSurvive(Action<IServiceCollection> hostCall)
     {
         var services = new ServiceCollection();
         services.AddDistributedMemoryCache();
@@ -79,9 +92,7 @@ public class AddLogoutNotificationTests
             options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
         });
 
-        // The host asks for back-channel logout explicitly, after the whole server is already registered - which
-        // is redundant, since AddOidcServices registered both channels, and used to be destructive.
-        services.AddBackChannelLogout();
+        hostCall(services);
 
         using var provider = services.BuildServiceProvider();
         var notifier = provider.CreateScope().ServiceProvider.GetRequiredService<ILogoutNotifier>();
