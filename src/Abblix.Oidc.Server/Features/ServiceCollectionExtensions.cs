@@ -212,6 +212,13 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddLogoutNotification(this IServiceCollection services)
     {
+        // The two channel calls go away in the next major, leaving each one an opt-in the host makes (#344).
+        // Registering both unconditionally decides for the deployment what it supports, and the discovery
+        // document then says so: CompositeLogoutNotifier reports a channel as supported when any member
+        // supports it, and ConfigurationHandler publishes that as frontchannel_logout_supported and
+        // backchannel_logout_supported. So every provider advertises both channels whether or not its
+        // operator wants either, and back-channel logout carries an outbound HTTP client with it.
+        // Removing them here is a breaking change for a host that relies on the default, hence the major.
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()
@@ -223,7 +230,12 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBackChannelLogout(this IServiceCollection services)
     {
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
+        // This method is public and AddLogoutNotification composes the family, so a host calling it directly
+        // may well arrive after the composition. Through TryAddEnumerable the notifier would land beside the
+        // composite and win the singular resolve, leaving the other channel unnotified while the discovery
+        // document still advertised it.
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
         services.TryAddSingleton<ILogoutTokenService, LogoutTokenService>();
         // The back-channel logout URI is a client-supplied URL, so POSTing logout tokens to it must
         // run through the SSRF-validating handler and carry a bounded timeout, like every other
@@ -245,7 +257,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;
     }
 

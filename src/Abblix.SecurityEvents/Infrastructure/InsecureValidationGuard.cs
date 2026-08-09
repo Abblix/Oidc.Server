@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -47,22 +48,27 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
 
     public InsecureValidationGuard(
         ISecurityEventTokenValidator inner,
-        IServiceProvider provider,
+        IServiceProvider serviceProvider,
         IOptions<SecurityEventsOptions> options,
         ILogger<InsecureValidationGuard> logger)
     {
         _inner = inner;
 
-        // After composition the members live as keyed services under the composite type; a family
-        // the host collapsed to a single member never composed, and then the inner validator IS
-        // the whole profile.
-        var memberTypes = provider
-            .GetKeyedServices<ISecurityEventTokenValidator>(typeof(CompositeSecurityEventTokenValidator))
-            .Select(member => member.GetType())
-            .DefaultIfEmpty(inner.GetType())
+        // Ask the family what it holds, and let it answer for its own arrangement - composed or not, behind
+        // whatever composite. Naming a key to read the members by is what this must not do: a key that is
+        // merely out of date answers with an empty set, and an empty set reads here as every critical step
+        // being absent, which turns a guard into a refusal to start.
+        var memberTypes = serviceProvider
+            .Decompose<ISecurityEventTokenValidator>()
+            .Select(step => step.GetType())
             .ToHashSet();
 
-        var missing = ServiceCollectionExtensions.CriticalDefaultSteps
+        // Every package that contributes a step carrying the marker declares it, so the set grows with the
+        // profile instead of describing only the steps this package ships.
+        var missing = serviceProvider
+            .GetServices<CriticalValidationStep>()
+            .Select(step => step.StepType)
+            .Distinct()
             .Where(critical => !memberTypes.Contains(critical))
             .ToArray();
 

@@ -33,6 +33,13 @@ internal interface IPipelineStep
 internal sealed class StepA : IPipelineStep { public string Name => "A"; }
 internal sealed class StepB : IPipelineStep { public string Name => "B"; }
 internal sealed class StepC : IPipelineStep { public string Name => "C"; }
+internal sealed class StepD : IPipelineStep { public string Name => "D"; }
+
+/// <summary>Wraps whatever answers <see cref="IPipelineStep"/>, so a test can decorate a composed family.</summary>
+internal sealed class PipelineDecorator(IPipelineStep inner) : IPipelineStep
+{
+    public string Name => $"[{inner.Name}]";
+}
 
 /// <summary>
 /// Composite over <see cref="IPipelineStep"/> that reports its children in execution order, so tests can

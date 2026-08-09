@@ -42,12 +42,53 @@ internal sealed class PrimaryServiceComposite : IPrimaryService
 }
 
 /// <summary>
+/// A second composite over the same interface, so a test can compose a family twice under two different
+/// composite types - the shape a guard asking about the composite rather than about the family lets past.
+/// </summary>
+internal sealed class SecondPrimaryServiceComposite : IPrimaryService
+{
+    private readonly IPrimaryService[] _inner;
+    public SecondPrimaryServiceComposite(IPrimaryService[] inner) => _inner = inner;
+    public string GetValue() => string.Join("|", _inner.Select(x => x.GetValue()));
+}
+
+/// <summary>
 /// Locks the composition contract of <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/>:
 /// a family is composed once, and a second composition of the same composite is rejected loudly instead of
 /// building a self-referential composite that deadlocks on first resolve (the double-opt-in defect).
 /// </summary>
 public class ComposeTests
 {
+    [Fact]
+    public void Compose_CoversAFamilyOfOne()
+    {
+        var services = new ServiceCollection();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPrimaryService, ServiceA>());
+
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Skipping a family of one leaves the caller believing in a composite that is not there, and every
+        // later decision - the guard against a second composition, the cursor's choice of path, the routing
+        // the composite performs - reads that state differently from the caller.
+        using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredService<IPrimaryService>();
+
+        Assert.IsType<PrimaryServiceComposite>(resolved);
+        Assert.StartsWith(nameof(ServiceA), resolved.GetValue());
+    }
+
+    [Fact]
+    public void Compose_LeavesAFamilyOfNoneAlone()
+    {
+        var services = new ServiceCollection();
+
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Nothing to compose, and registering a composite over nothing would make the service resolvable
+        // where the host registered none.
+        Assert.Empty(services);
+    }
+
     /// <summary>
     /// The happy path stays intact: composing a family once yields a single composite that wraps every leaf.
     /// </summary>
@@ -92,6 +133,23 @@ public class ComposeTests
         var ex = Assert.Throws<InvalidOperationException>(
             () => services.Compose<IPrimaryService, PrimaryServiceComposite>());
 
-        Assert.Contains(nameof(PrimaryServiceComposite), ex.Message);
+        Assert.Contains(nameof(IPrimaryService), ex.Message);
+    }
+
+    [Fact]
+    public void Compose_SecondTimeForADifferentComposite_ThrowsToo()
+    {
+        var services = new ServiceCollection();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPrimaryService, ServiceA>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPrimaryService, ServiceB>());
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // The question is whether THIS FAMILY is composed, not whether that composite type is registered. Asked
+        // the second way, this passes - and then the first composite's own alias, the one plain registration of
+        // the interface left standing, becomes a member of the family it heads. The resolve never returns.
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => services.Compose<IPrimaryService, SecondPrimaryServiceComposite>());
+
+        Assert.Contains(nameof(IPrimaryService), ex.Message);
     }
 }

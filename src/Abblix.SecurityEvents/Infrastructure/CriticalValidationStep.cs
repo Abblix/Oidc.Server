@@ -20,14 +20,17 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.DependencyInjection;
+namespace Abblix.SecurityEvents.Infrastructure;
 
 /// <summary>
-/// The service key that members of a composed keyed family are stored under: pairs the family's original
-/// service key with the composite type. The pairing keeps same-interface families under different keys
-/// isolated (even when they share the composite class) and keeps the descriptors self-describing - both
-/// the original key and the composite type are recoverable from any member, so no side registry exists.
+/// A step the validation profile may not quietly lose, declared by whichever package contributes it.
 /// </summary>
-/// <param name="ServiceKey">The service key the family was composed under.</param>
-/// <param name="CompositeType">The composite type the family was composed into.</param>
-public sealed record ComposedFamilyKey(object ServiceKey, Type CompositeType);
+/// <remarks>
+/// The declaration lives beside the registration that adds the step, so the two cannot drift: a package that
+/// stops contributing a step stops declaring it in the same edit. Read as a set, the declarations are what
+/// <see cref="InsecureValidationGuard"/> holds the composed profile to - which is how
+/// <see cref="Validation.ISecurityCriticalValidator"/> keeps the promise its own documentation makes for every
+/// step that carries it, rather than only for the ones this package happens to ship.
+/// </remarks>
+/// <param name="StepType">The step's implementation type, as it appears among the family's members.</param>
+internal sealed record CriticalValidationStep(Type StepType);

@@ -29,9 +29,9 @@ namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
 /// Locks the keyed live-cursor family API: several pipelines of one interface, each composed under its own key,
-/// stay isolated (members keyed by a <see cref="ComposedFamilyKey"/> pairing the service key with the composite
-/// type); DecomposeKeyed returns a live cursor whose edits reach the keyed composite at resolve; and the plain
-/// and keyed families coexist.
+/// stay isolated, because a family's identity carries its service key and its members are keyed by that
+/// identity; DecomposeKeyed returns a live cursor whose edits reach the keyed composite at resolve; and the
+/// plain and keyed families coexist.
 /// </summary>
 public class ComposeKeyedTests
 {
@@ -114,15 +114,21 @@ public class ComposeKeyedTests
     }
 
     [Fact]
-    public void DecomposeKeyed_WithoutPriorCompose_Throws()
+    public void DecomposeKeyed_WithoutPriorCompose_EditsTheMembersUnderThatKey()
     {
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IPipelineStep, StepA>(EmailKey);
+        services.AddKeyedSingleton<IPipelineStep, StepC>(SmsKey);
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => services.DecomposeKeyed<IPipelineStep>(EmailKey));
-        Assert.Contains(nameof(IPipelineStep), exception.Message);
-        Assert.Contains(EmailKey, exception.Message);
+        services.DecomposeKeyed<IPipelineStep>(EmailKey)
+            .AddLast(ServiceDescriptor.KeyedSingleton<IPipelineStep, StepB>(EmailKey));
+
+        using var provider = services.BuildServiceProvider();
+
+        // The key still isolates the families: the one under SmsKey is untouched.
+        Assert.Equal(
+            ["A", "B"], provider.GetKeyedServices<IPipelineStep>(EmailKey).Select(step => step.Name));
+        Assert.Equal(["C"], provider.GetKeyedServices<IPipelineStep>(SmsKey).Select(step => step.Name));
     }
 
     [Fact]

@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Events;
+using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.SharedSignals.Receiver;
@@ -118,6 +119,12 @@ public static class ServiceCollectionExtensions
                     ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
                 .AddLast(
                     ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+
+            // Two of the three carry the security-critical marker, and the marker only binds a profile that
+            // knows about them: declared here, beside the registration that adds them, so the two statements
+            // cannot drift apart.
+            services.AddCriticalValidationStep<ForbidSubStep>();
+            services.AddCriticalValidationStep<StreamIssuerStep>();
         }
 
         return services;
