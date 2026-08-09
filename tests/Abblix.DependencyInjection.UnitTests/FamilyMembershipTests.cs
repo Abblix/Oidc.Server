@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -174,6 +175,32 @@ public class FamilyMembershipTests
         services.Decompose<IPipelineStep>().AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepA>());
 
         Assert.Equal("A,B", Resolve(services));
+    }
+
+    [Fact]
+    public void AMemberWithNoImplementationTypeIsRefusedRatherThanMistakenForAnother()
+    {
+        var services = ComposedFamily();
+
+        // The single-generic factory overload types its delegate by the family interface, so the descriptor
+        // carries no implementation type. Two such members would compare equal to each other, and AddLast would
+        // drop the second in silence.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>()
+                .AddLast(ServiceDescriptor.Singleton<IPipelineStep>(_ => new StepC())));
+
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
+    public void AMemberNamingItsImplementationInAFactoryIsAccepted()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>()
+            .AddLast(ServiceDescriptor.Singleton<IPipelineStep, StepC>(_ => new StepC()));
+
+        Assert.Equal("A,B,C", Resolve(services));
     }
 
     [Fact]

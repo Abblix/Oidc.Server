@@ -169,6 +169,42 @@ public class DecomposeTests
     }
 
     [Fact]
+    public void ComposedFamilyMembers_AreInvisibleToTheUnkeyedLookups()
+    {
+        var services = ComposedFamily();
+
+        // The members are keyed registrations of the same interface, so a lookup that counted them would find
+        // several where the caller expects one and refuse to answer - which is what ChangeLifetime does.
+        var descriptor = Assert.IsAssignableFrom<ServiceDescriptor>(services.Find<IPipelineStep>());
+        Assert.Equal(typeof(PipelineComposite), descriptor.ResolveImplementationType());
+
+        services.ChangeLifetime<IPipelineStep>(ServiceLifetime.Scoped);
+
+        Assert.Equal("A,B", Resolve(services));
+    }
+
+    [Fact]
+    public void ACursorTakenBeforeCompositionEditsTheComposedFamily()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddSingleton<IPipelineStep, StepB>();
+
+        var cursor = services.Decompose<IPipelineStep>();
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        // Held across the composition, a cursor that still looked for plain descriptors would find one - the
+        // composite's own registration - call it a member, and add beside it, which is the silent unseating.
+        Assert.Equal(
+            [typeof(StepA), typeof(StepB)],
+            cursor.Select(member => member.ResolveImplementationType()).ToArray());
+
+        cursor.AddLast(Step<StepC>());
+
+        Assert.Equal("A,B,C", Resolve(services));
+    }
+
+    [Fact]
     public void Decompose_SurvivesTheCompositionOfTheFamilyItIsEditing()
     {
         var services = new ServiceCollection();

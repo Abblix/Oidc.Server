@@ -495,7 +495,9 @@ public static class ServiceCollectionExtensions
         // interface, and the cursor edits those. The caller wanted to change the family's members, which is the
         // only reason to be here, and whether a composite exists yet is not its business.
         return services.OpenComposition<TInterface>(serviceKey: null)
-               ?? new Composition<TInterface>(services, memberKey: null, lifetime: null);
+               ?? new Composition<TInterface>(
+                   services, new CompositionKey(typeof(TInterface), ServiceKey: null), looseMemberKey: null,
+                   lifetime: null);
     }
 
     /// <summary>
@@ -611,7 +613,8 @@ public static class ServiceCollectionExtensions
         // Uncomposed, the family's members are the descriptors registered under the service key itself, and the
         // cursor edits those - the keyed mirror of what Decompose does for a plain family.
         return services.OpenComposition<TInterface>(serviceKey)
-               ?? new Composition<TInterface>(services, serviceKey, lifetime: null);
+               ?? new Composition<TInterface>(
+                   services, new CompositionKey(typeof(TInterface), serviceKey), serviceKey, lifetime: null);
     }
 
     /// <summary>
@@ -721,7 +724,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services, CompositionKey key, ServiceLifetime lifetime)
         where TInterface : class
         => services.Add(new ServiceDescriptor(
-            typeof(IComposition<TInterface>), key, new Composition<TInterface>(services, key, lifetime)));
+            typeof(IComposition<TInterface>), key,
+            new Composition<TInterface>(services, key, looseMemberKey: null, lifetime)));
 
     /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed. A second
@@ -1310,14 +1314,14 @@ public static class ServiceCollectionExtensions
         => services.Find<T>() ?? throw new InvalidOperationException($"A service descriptor was not found for type {typeof(T)}");
 
     /// <summary>
-    /// Finds the first registered service descriptor for type <typeparamref name="T"/>,
-    /// or returns <c>null</c> if none exists.
+    /// Finds the registered service descriptor for type <typeparamref name="T"/>, or returns <c>null</c> if
+    /// none exists.
     /// </summary>
     /// <typeparam name="T">The service type to locate.</typeparam>
     /// <param name="services">The service collection to search.</param>
     /// <returns>The matching <see cref="ServiceDescriptor"/>, or <c>null</c> if not found.</returns>
     public static ServiceDescriptor? Find<T>(this IServiceCollection services)
-        => services.SingleOrDefault(s => s.ServiceType == typeof(T));
+        => services.SingleOrDefault(descriptor => descriptor.Registers<T>());
 
     /// <summary>
     /// Finds all registered service descriptors for type <typeparamref name="T"/>.
@@ -1326,5 +1330,16 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to search.</param>
     /// <returns>An <see cref="IEnumerable{T}"/> of matching <see cref="ServiceDescriptor"/> instances.</returns>
     public static IEnumerable<ServiceDescriptor> FindAll<T>(this IServiceCollection services)
-        => services.Where(s => s.ServiceType == typeof(T));
+        => services.Where(descriptor => descriptor.Registers<T>());
+
+    /// <summary>
+    /// Whether the descriptor is one an unkeyed resolve of <typeparamref name="T"/> would reach.
+    /// </summary>
+    /// <remarks>
+    /// A keyed registration answers only to its key, as it does in the container itself, so the lookups above
+    /// pass over it. Without that a composed family breaks them all: its members are keyed registrations of the
+    /// same interface, and a lookup expecting one descriptor finds several and refuses to answer at all.
+    /// </remarks>
+    private static bool Registers<T>(this ServiceDescriptor descriptor)
+        => descriptor is { IsKeyedService: false } && descriptor.ServiceType == typeof(T);
 }

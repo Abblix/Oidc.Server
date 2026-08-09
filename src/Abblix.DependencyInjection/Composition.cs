@@ -142,18 +142,35 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
 /// </summary>
 internal sealed class Composition<TInterface>(
     IServiceCollection services,
-    object? memberKey,
+    CompositionKey familyKey,
+    object? looseMemberKey,
     ServiceLifetime? lifetime) : IComposition<TInterface> where TInterface : class
 {
-    // Where a family keeps its members depends on one thing: whether it has been composed. Composed, they are
-    // keyed by the family key; loose, they are the plain descriptors of the interface. A null member key means
-    // the second, and every operation on the cursor follows from here - so a caller never has to ask which
-    // state the family is in, and no second opinion about it can disagree with this one.
+    /// <summary>
+    /// Where the family keeps its members right now. Composed, they are keyed by the family key; loose, they
+    /// are the plain descriptors of the interface, or the ones under the family's own service key.
+    /// </summary>
+    /// <remarks>
+    /// Asked on every operation rather than fixed when the cursor is made, because a cursor can outlive the
+    /// answer: taken before the family is composed and used after, one that still looked for plain descriptors
+    /// would take the composite's own registration for a member and add beside it, which is the silent unseating
+    /// this whole mechanism exists to prevent.
+    /// </remarks>
+    private object? MemberKey
+        => services.Any(descriptor => descriptor is { IsKeyedService: true } &&
+                                      descriptor.ServiceType == typeof(IComposition<TInterface>) &&
+                                      Equals(descriptor.ServiceKey, familyKey))
+            ? familyKey
+            : looseMemberKey;
+
     private bool IsMember(ServiceDescriptor descriptor)
-        => descriptor.ServiceType == typeof(TInterface) &&
-           (memberKey is null
-               ? !descriptor.IsKeyedService
-               : descriptor.IsKeyedService && Equals(descriptor.ServiceKey, memberKey));
+    {
+        var memberKey = MemberKey;
+        return descriptor.ServiceType == typeof(TInterface) &&
+               (memberKey is null
+                   ? !descriptor.IsKeyedService
+                   : descriptor.IsKeyedService && Equals(descriptor.ServiceKey, memberKey));
+    }
 
     /// <summary>The collection indices of the family's members, in registration (execution) order.</summary>
     private List<int> MemberIndices()
@@ -174,6 +191,8 @@ internal sealed class Composition<TInterface>(
     /// </summary>
     private ServiceDescriptor AsFamilyMember(ServiceDescriptor member)
     {
+        var memberKey = MemberKey;
+
         // Nothing captures a member until the family is composed, so a loose family imposes no lifetime rule.
         // Compose applies it to the whole member set when it runs.
         if (memberKey is null)
@@ -248,6 +267,22 @@ internal sealed class Composition<TInterface>(
     public int IndexOf(ServiceDescriptor item)
     {
         var target = item.ResolveImplementationType();
+
+        // Two descriptor shapes carry no implementation type to be identified by: an untyped factory, which
+        // resolves to nothing, and the single-generic factory overload, whose delegate returns the family
+        // interface and so resolves to that. Both would compare equal to each other and to nothing else, which
+        // silently makes distinct members one - so the question is refused rather than answered wrongly.
+        if (target is null || target == typeof(TInterface))
+        {
+            throw new InvalidOperationException(
+                $"A member of the {typeof(TInterface).Name} family cannot be identified from this descriptor: " +
+                "its implementation type is " + (target is null ? "unknown" : "the family interface itself") +
+                ". Members are told apart by implementation type, which is also what the AddAfter, AddBefore, " +
+                "Remove and Replace anchors resolve. Register it through an overload that names the " +
+                $"implementation, such as {nameof(ServiceDescriptor)}.{nameof(ServiceDescriptor.Singleton)}" +
+                "<TService, TImplementation>(factory).");
+        }
+
         var indices = MemberIndices();
         for (var position = 0; position < indices.Count; position++)
         {
