@@ -158,7 +158,7 @@ internal sealed class Composition<TInterface>(
     /// </remarks>
     private object? MemberKey
         => services.Any(descriptor => descriptor is { IsKeyedService: true } &&
-                                      descriptor.ServiceType == typeof(IComposition<TInterface>) &&
+                                      descriptor.ServiceType == typeof(ComposedFamily) &&
                                       Equals(descriptor.ServiceKey, familyKey))
             ? familyKey
             : looseMemberKey;

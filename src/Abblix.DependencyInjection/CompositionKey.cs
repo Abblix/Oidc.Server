@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Abblix.DependencyInjection;
 
 /// <summary>
@@ -36,3 +38,17 @@ namespace Abblix.DependencyInjection;
 /// <param name="InterfaceType">The family interface.</param>
 /// <param name="ServiceKey">The key a keyed family lives under, or null for a plain family.</param>
 internal sealed record CompositionKey(Type InterfaceType, object? ServiceKey);
+
+/// <summary>
+/// What a composition leaves in the collection under its family's <see cref="CompositionKey"/>: the presence
+/// of the entry is what makes the family composed, and it carries the composite's lifetime, which is the one
+/// thing about the family a cursor cannot derive.
+/// </summary>
+/// <remarks>
+/// A value rather than a ready-made cursor, because a cursor is bound to the collection it was built on while
+/// descriptors are values that get copied between collections. Stored as an object, a copied family would hand
+/// out a cursor over the collection it was composed on: edits would land in one collection while the caller
+/// held the other, silently, and the member would be missing from the provider actually built.
+/// </remarks>
+/// <param name="Lifetime">The lifetime the composite was registered with, which its members must not undercut.</param>
+internal sealed record ComposedFamily(ServiceLifetime Lifetime);

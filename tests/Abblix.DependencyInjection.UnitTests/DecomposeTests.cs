@@ -131,8 +131,12 @@ public class DecomposeTests
 
         // Nothing in this API removes it. Should anything ever manage to, the members are still there and still
         // keyed as members, so answering with a fresh cursor would read the family as never composed.
-        var cursor = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IComposition<IPipelineStep>));
-        services.Remove(cursor);
+        // The entry a composition leaves is keyed and is the only registration in the collection whose service
+        // type is neither the family interface nor the composite - its type is internal to the library.
+        var entry = Assert.Single(
+            services,
+            descriptor => descriptor.IsKeyedService && descriptor.ServiceType != typeof(IPipelineStep));
+        services.Remove(entry);
 
         var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
         Assert.Contains(nameof(IPipelineStep), exception.Message);
@@ -181,6 +185,24 @@ public class DecomposeTests
         services.ChangeLifetime<IPipelineStep>(ServiceLifetime.Scoped);
 
         Assert.Equal("A,B", Resolve(services));
+    }
+
+    [Fact]
+    public void ACopiedFamilyIsEditedInTheCollectionItWasCopiedInto()
+    {
+        var source = ComposedFamily();
+
+        IServiceCollection target = new ServiceCollection();
+        foreach (var descriptor in source)
+            target.Add(descriptor);
+
+        target.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // Descriptors are values and get copied between collections. A cursor is not: handed out ready-made it
+        // would carry the collection it was composed on, and the member would land there instead - in silence,
+        // with the cursor's count going up and the provider built from this collection missing it.
+        Assert.Equal("A,B,C", Resolve(target));
+        Assert.Equal("A,B", Resolve(source));
     }
 
     [Fact]

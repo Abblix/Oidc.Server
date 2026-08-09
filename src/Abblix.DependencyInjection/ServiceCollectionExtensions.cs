@@ -531,7 +531,7 @@ public static class ServiceCollectionExtensions
             ? serviceProvider.GetServices<TInterface>()
             : serviceProvider.GetKeyedServices<TInterface>(serviceKey);
 
-        var family = (serviceProvider.GetKeyedService<IComposition<TInterface>>(key) is not null
+        var family = (serviceProvider.GetKeyedService<ComposedFamily>(key) is not null
             ? serviceProvider.GetKeyedServices<TInterface>(key)
             : GetRegisteredServices()).ToArray();
         if (family.Length == 0)
@@ -629,14 +629,7 @@ public static class ServiceCollectionExtensions
         // The cursor a composition stores under the family's identity, so this asks about this family under
         // this key and nothing else - two families of the same interface under different keys are separate
         // compositions and neither blocks the other.
-        var compositionType = typeof(IComposition<>).MakeGenericType(interfaceType);
-        var key = new CompositionKey(interfaceType, serviceKey);
-
-        var alreadyComposed = services.Any(
-            descriptor => descriptor is { IsKeyedService: true } &&
-                          descriptor.ServiceType == compositionType &&
-                          Equals(descriptor.ServiceKey, key));
-        if (alreadyComposed)
+        if (services.FindComposedFamily(new CompositionKey(interfaceType, serviceKey)) is not null)
         {
             throw new InvalidOperationException(
                 $"{compositeType.Name} is already composed for the {interfaceType.Name} pipeline keyed by " +
@@ -663,7 +656,7 @@ public static class ServiceCollectionExtensions
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
             compositeType, key, members, dependencies, out var lifetime);
 
-        services.StoreComposition<TInterface>(key, lifetime);
+        services.StoreComposition(key, lifetime);
 
         // Register the composite as a keyed service under the original key. The factory is typed by the
         // composite (via TypedFactoryWrapper), so ResolveImplementationType identifies it and
@@ -691,14 +684,10 @@ public static class ServiceCollectionExtensions
     {
         var key = new CompositionKey(typeof(TInterface), serviceKey);
 
-        var stored = services.FirstOrDefault(
-                descriptor => descriptor is { IsKeyedService: true } &&
-                              descriptor.ServiceType == typeof(IComposition<TInterface>) &&
-                              Equals(descriptor.ServiceKey, key))
-            ?.KeyedImplementationInstance;
-
-        if (stored is IComposition<TInterface> composition)
-            return composition;
+        // Built over the collection this was asked of, never handed out ready-made: a cursor is bound to one
+        // collection, and descriptors are values that get copied into another.
+        if (services.FindComposedFamily(key) is { } family)
+            return new Composition<TInterface>(services, key, looseMemberKey: null, family.Lifetime);
 
         // A member carries a CompositionKey, which nothing outside this assembly can build, so members present
         // without their cursor mean the cursor was removed from the collection. Answering with a fresh one
@@ -720,12 +709,17 @@ public static class ServiceCollectionExtensions
     /// Stores the cursor over a family just composed, under the family's identity, so the family answers for
     /// itself rather than being inferred from registrations that its own cursor can remove.
     /// </summary>
-    private static void StoreComposition<TInterface>(
+    private static void StoreComposition(
         this IServiceCollection services, CompositionKey key, ServiceLifetime lifetime)
-        where TInterface : class
-        => services.Add(new ServiceDescriptor(
-            typeof(IComposition<TInterface>), key,
-            new Composition<TInterface>(services, key, looseMemberKey: null, lifetime)));
+        => services.Add(new ServiceDescriptor(typeof(ComposedFamily), key, new ComposedFamily(lifetime)));
+
+    /// <summary>The entry a composition left for this family, or null when the family has never been composed.</summary>
+    private static ComposedFamily? FindComposedFamily(this IServiceCollection services, CompositionKey key)
+        => services.FirstOrDefault(
+                descriptor => descriptor is { IsKeyedService: true } &&
+                              descriptor.ServiceType == typeof(ComposedFamily) &&
+                              Equals(descriptor.ServiceKey, key))
+            ?.KeyedImplementationInstance as ComposedFamily;
 
     /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed. A second
@@ -744,15 +738,7 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType)
     {
-        var compositionType = typeof(IComposition<>).MakeGenericType(interfaceType);
-        var key = new CompositionKey(interfaceType, ServiceKey: null);
-
-        var alreadyComposed = services.Any(
-            descriptor => descriptor is { IsKeyedService: true } &&
-                          descriptor.ServiceType == compositionType &&
-                          Equals(descriptor.ServiceKey, key));
-
-        if (alreadyComposed)
+        if (services.FindComposedFamily(new CompositionKey(interfaceType, ServiceKey: null)) is not null)
         {
             throw new InvalidOperationException(
                 $"The {interfaceType.Name} family is already composed. Composing it a second time would build " +
@@ -777,7 +763,7 @@ public static class ServiceCollectionExtensions
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
             compositeType, key, members, dependencies, out var lifetime);
 
-        services.StoreComposition<TInterface>(key, lifetime);
+        services.StoreComposition(key, lifetime);
 
         // Register the composite type itself (so it can be aliased and located by Decompose) and the
         // interface routing to it. The alias factory is typed by the composite (via TypedFactoryWrapper),
