@@ -446,7 +446,12 @@ public static class ServiceCollectionExtensions
                                  descriptor.ServiceType == typeof(TInterface))
             .ToArray();
 
-        if (members.Length <= 1)
+        // One member is a family too. Skipping it would leave the caller believing a composite exists where
+        // none does, and everything downstream reads that state differently from the caller: the guard against
+        // a second composition has nothing to find, the cursor takes the loose path, and the lone member
+        // answers the singular resolve directly - without the routing and the closed door the composite is
+        // there to provide. An empty family is the one case with nothing to compose.
+        if (members.Length == 0)
             return services;
 
         foreach (var member in members)
@@ -578,7 +583,8 @@ public static class ServiceCollectionExtensions
                                  Equals(descriptor.ServiceKey, serviceKey))
             .ToArray();
 
-        if (members.Length <= 1)
+        // As in Compose: one member is a family, none is not.
+        if (members.Length == 0)
             return services;
 
         foreach (var member in members)

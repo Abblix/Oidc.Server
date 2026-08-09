@@ -48,6 +48,36 @@ internal sealed class PrimaryServiceComposite : IPrimaryService
 /// </summary>
 public class ComposeTests
 {
+    [Fact]
+    public void Compose_CoversAFamilyOfOne()
+    {
+        var services = new ServiceCollection();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPrimaryService, ServiceA>());
+
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Skipping a family of one leaves the caller believing in a composite that is not there, and every
+        // later decision - the guard against a second composition, the cursor's choice of path, the routing
+        // the composite performs - reads that state differently from the caller.
+        using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredService<IPrimaryService>();
+
+        Assert.IsType<PrimaryServiceComposite>(resolved);
+        Assert.StartsWith(nameof(ServiceA), resolved.GetValue());
+    }
+
+    [Fact]
+    public void Compose_LeavesAFamilyOfNoneAlone()
+    {
+        var services = new ServiceCollection();
+
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Nothing to compose, and registering a composite over nothing would make the service resolvable
+        // where the host registered none.
+        Assert.Empty(services);
+    }
+
     /// <summary>
     /// The happy path stays intact: composing a family once yields a single composite that wraps every leaf.
     /// </summary>
