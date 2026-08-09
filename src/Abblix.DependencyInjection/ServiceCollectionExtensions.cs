@@ -525,13 +525,13 @@ public static class ServiceCollectionExtensions
     {
         var key = new CompositionKey(typeof(TInterface), serviceKey);
 
-        IEnumerable<TInterface> Uncomposed() => serviceKey is null
+        IEnumerable<TInterface> GetServices() => serviceKey is null
             ? serviceProvider.GetServices<TInterface>()
             : serviceProvider.GetKeyedServices<TInterface>(serviceKey);
 
         var family = (serviceProvider.GetKeyedService<IComposition<TInterface>>(key) is not null
             ? serviceProvider.GetKeyedServices<TInterface>(key)
-            : Uncomposed()).ToArray();
+            : GetServices()).ToArray();
         if (family.Length == 0)
         {
             throw new InvalidOperationException(
