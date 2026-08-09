@@ -512,15 +512,17 @@ public static class ServiceCollectionExtensions
     /// family exactly once, whether or not that family has already been composed.
     /// </summary>
     /// <remarks>
+    /// What a registration method should call instead of
     /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection,ServiceDescriptor)"/>
-    /// alone cannot do this. It deduplicates against PLAIN descriptors, while composing a family moves its
-    /// members to KEYED ones - so once a family is composed it neither sees the member already in there nor
-    /// puts a new one where the composite looks. What it leaves instead is a plain descriptor beside the
-    /// composite, which then wins the singular resolve, silently, because last registration wins.
+    /// when it contributes a family member. That one deduplicates against PLAIN descriptors, while composing a
+    /// family moves its members to KEYED ones - so once a family is composed it neither sees the member already
+    /// in there nor puts a new one where the composite looks. What it leaves instead is a plain descriptor
+    /// beside the composite, which then wins the singular resolve, silently, because last registration wins.
     /// <para>
-    /// Reach for this wherever a method that contributes a family member can run more than once by design,
-    /// with a composition possibly in between - which is any registration method a host may call directly
-    /// and another registration method calls for it.
+    /// The case is any registration method a host may call directly and another registration method calls on
+    /// its behalf: it runs twice by design, with a composition possibly in between.
+    /// <see cref="Decompose{TInterface}"/> is what knows where a family keeps its members; this adds the
+    /// once-only rule on top, so the safe call is also the short one.
     /// </para>
     /// </remarks>
     /// <typeparam name="TService">The family interface to register the member under.</typeparam>
@@ -536,10 +538,6 @@ public static class ServiceCollectionExtensions
         where TService : class
         where TImplementation : class, TService
     {
-        // The family, and only the family. Before composition its members are the PLAIN descriptors of the
-        // service type; after it they are the ones keyed by the composite. Anything else keyed under the same
-        // interface belongs to whoever asked for that key - a keyed composition of the same interface, or a
-        // plain keyed registration the host resolves by name - and neither is this family's business.
         var family = services.Decompose<TService>();
         var member = new ServiceDescriptor(typeof(TService), typeof(TImplementation), lifetime);
 
