@@ -411,7 +411,7 @@ public class DecomposeTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.Compose<IPipelineStep, PipelineComposite>());
-        Assert.Contains(nameof(PipelineComposite), exception.Message);
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
     }
 
     [Fact]

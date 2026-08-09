@@ -439,7 +439,7 @@ public static class ServiceCollectionExtensions
         params Dependency[] dependencies)
         where TInterface : class where TComposite : class, TInterface
     {
-        services.EnsureNotComposed(typeof(TInterface), typeof(TComposite));
+        services.EnsureNotComposed(typeof(TInterface));
 
         var members = services
             .Where(descriptor => descriptor is { IsKeyedService: false } &&
@@ -525,13 +525,13 @@ public static class ServiceCollectionExtensions
     {
         var key = new CompositionKey(typeof(TInterface), serviceKey);
 
-        IEnumerable<TInterface> GetServices() => serviceKey is null
+        IEnumerable<TInterface> GetRegisteredServices() => serviceKey is null
             ? serviceProvider.GetServices<TInterface>()
             : serviceProvider.GetKeyedServices<TInterface>(serviceKey);
 
         var family = (serviceProvider.GetKeyedService<IComposition<TInterface>>(key) is not null
             ? serviceProvider.GetKeyedServices<TInterface>(key)
-            : GetServices()).ToArray();
+            : GetRegisteredServices()).ToArray();
         if (family.Length == 0)
         {
             throw new InvalidOperationException(
@@ -724,24 +724,37 @@ public static class ServiceCollectionExtensions
             typeof(IComposition<TInterface>), key, new Composition<TInterface>(services, key, lifetime)));
 
     /// <summary>
-    /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
-    /// <paramref name="compositeType"/>. A second composition would rebuild the composite over a member set
-    /// that already contains the alias to the first composite, so the new composite would resolve one of its
-    /// own children back to itself - a self-referential singleton that deadlocks on first resolve. This
-    /// happens when two registration methods each compose the same family, or when a caller composes a family
-    /// that a registration method it also calls composes for it. The sanctioned way to edit an
-    /// already-composed family is <see cref="Decompose{TInterface}(IServiceCollection)"/> and editing the live cursor it returns.
+    /// Fails loud when the <paramref name="interfaceType"/> family has already been composed. A second
+    /// composition would rebuild the composite over a member set that already contains the alias to the first
+    /// composite, so the new composite would resolve one of its own children back to itself - a
+    /// self-referential singleton that deadlocks on first resolve. This happens when two registration methods
+    /// each compose the same family, or when a caller composes a family that a registration method it also
+    /// calls composes for it. The sanctioned way to edit an already-composed family is
+    /// <see cref="Decompose{TInterface}(IServiceCollection)"/> and editing the live cursor it returns.
     /// </summary>
-    private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType, Type compositeType)
+    /// <remarks>
+    /// The question is whether THIS FAMILY is composed, which is what the stored cursor answers - not whether
+    /// the composite type is registered. Those differ exactly when the second composition names a different
+    /// composite, and that is the case the deadlock is reachable through: the guard lets it past, and the
+    /// first composite's own alias becomes a member of the family it heads.
+    /// </remarks>
+    private static void EnsureNotComposed(this IServiceCollection services, Type interfaceType)
     {
-        if (services.Any(descriptor => descriptor.ServiceType == compositeType))
+        var compositionType = typeof(IComposition<>).MakeGenericType(interfaceType);
+        var key = new CompositionKey(interfaceType, ServiceKey: null);
+
+        var alreadyComposed = services.Any(
+            descriptor => descriptor is { IsKeyedService: true } &&
+                          descriptor.ServiceType == compositionType &&
+                          Equals(descriptor.ServiceKey, key));
+
+        if (alreadyComposed)
         {
             throw new InvalidOperationException(
-                $"{compositeType.Name} is already registered, so the {interfaceType.Name} pipeline has " +
-                "already been composed. Composing it a second time would build a self-referential composite that " +
-                $"deadlocks on the first resolve. Compose the family once, and add every {interfaceType.Name} " +
-                $"member through {nameof(Decompose)}, whose cursor edits the family whether or not it has been " +
-                "composed yet.");
+                $"The {interfaceType.Name} family is already composed. Composing it a second time would build " +
+                "a self-referential composite that deadlocks on the first resolve. Compose the family once, " +
+                $"and add every {interfaceType.Name} member through {nameof(Decompose)}, whose cursor edits " +
+                "the family whether or not it has been composed yet.");
         }
     }
 
