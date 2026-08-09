@@ -223,6 +223,22 @@ public class DecomposeTests
     }
 
     [Fact]
+    public void Decompose_RefusesAFamilyWhoseCompositeWasRemoved()
+    {
+        var services = ComposedFamily();
+
+        // RemoveAll takes the registrations an unkeyed resolve would reach, which for a composed family is the
+        // composite alone. Answering with a cursor afterwards would accept members into a family nothing
+        // resolves any more, and report success for a registration that can never take effect.
+        services.RemoveAll<IPipelineStep>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
+
+        // Named precisely, so this cannot pass on the sibling refusal for a family whose mark was removed.
+        Assert.Contains("composite that heads it", exception.Message);
+    }
+
+    [Fact]
     public void ACopiedFamilyIsEditedInTheCollectionItWasCopiedInto()
     {
         var source = ComposedFamily();

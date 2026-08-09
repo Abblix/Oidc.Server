@@ -423,11 +423,12 @@ public static class ServiceCollectionExtensions
     /// <param name="dependencies">The dependencies required by the composite service.</param>
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
-    /// This method replaces multiple service registrations of the same type with a single composite registration.
+    /// This method replaces the registrations of a service type with a single composite registration over them.
     /// The composite type must have a constructor that accepts an array of the interface type.
-    /// The existing registrations are moved into keyed registrations (key = the composite type) that the
-    /// composite resolves in registration order; being keyed also hides them from plain resolution, so the
-    /// singular resolve yields only the composite. The family thus remains descriptor data in the collection
+    /// The existing registrations move to keyed ones that the composite resolves in registration order; being
+    /// keyed also hides them from plain resolution, so the singular resolve yields only the composite. Their key
+    /// is private to this library and deliberately unnamed here: a key written down in documentation goes stale,
+    /// and a stale key answers a lookup with an empty sequence rather than an error. The family thus remains descriptor data in the collection
     /// rather than a snapshot captured in a closure: <see cref="Decompose{TInterface}(IServiceCollection)"/> returns a live cursor
     /// over that data, and edits through it reach the composite at resolve - without the host ever naming the
     /// composite type. Members keep their own lifetimes and the composite adopts the shortest among them, so a
@@ -471,10 +472,10 @@ public static class ServiceCollectionExtensions
     /// <returns>A live cursor over the family's members, in execution order.</returns>
     /// <remarks>
     /// Whether the family has been composed is the cursor's business, not the caller's: editing its members is
-    /// the only reason to ask for one. Composed, the members live as keyed descriptors whose service key is the
-    /// composite type, which both hides them from plain resolution and names the composite they belong to.
-    /// Uncomposed, they are the plain descriptors of the interface, and a later <c>Compose</c> takes them as
-    /// they stand. The cursor edits whichever of the two the family currently holds, so the same call adds a
+    /// the only reason to ask for one. Composed, the members live as keyed descriptors under a key private to
+    /// this library, which hides them from plain resolution; this cursor and its resolve-time counterpart
+    /// <see cref="Decompose{TInterface}(IServiceProvider,object)"/> are the only ways to reach them. Uncomposed,
+    /// they are the plain descriptors of the interface, and a later <c>Compose</c> takes them as they stand. The cursor edits whichever of the two the family currently holds, so the same call adds a
     /// member before and after composition.
     /// <see cref="IComposition{TInterface}"/> adds position-aware sugar (<c>AddAfter</c>, <c>AddBefore</c>,
     /// <c>Remove</c>, ...); anchors are matched by implementation type via
@@ -486,8 +487,9 @@ public static class ServiceCollectionExtensions
     ///     .Remove&lt;UnwantedStep&gt;();
     /// </code>
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The family is composed but its composite registration is
-    /// missing, which no sequence of calls on this API produces.</exception>
+    /// <exception cref="InvalidOperationException">The family is composed but what a composition leaves behind
+    /// is no longer intact - either the mark over its members or the composite that heads them has been removed
+    /// from the collection. No sequence of calls on this API produces that.</exception>
     public static IComposition<TInterface> Decompose<TInterface>(this IServiceCollection services)
         where TInterface : class
     {
@@ -601,8 +603,9 @@ public static class ServiceCollectionExtensions
     /// <see cref="IComposition{TInterface}"/> adds the same position-aware sugar
     /// (<c>AddAfter</c>, <c>Remove</c>, ...).
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The family is composed under this key but its composite
-    /// registration is missing, which no sequence of calls on this API produces.</exception>
+    /// <exception cref="InvalidOperationException">The family is composed under this key but what a composition
+    /// leaves behind is no longer intact - either the mark over its members or the composite that heads them has
+    /// been removed from the collection. No sequence of calls on this API produces that.</exception>
     public static IComposition<TInterface> DecomposeKeyed<TInterface>(
         this IServiceCollection services,
         object serviceKey)
@@ -773,9 +776,11 @@ public static class ServiceCollectionExtensions
 
         services.StoreComposition(key);
 
-        // Register the composite type itself (so it can be aliased and located by Decompose) and the
-        // interface routing to it. The alias factory is typed by the composite (via TypedFactoryWrapper),
-        // so ResolveImplementationType identifies it and Decompose can strip it.
+        // Register the composite type itself, so a host can alias it, and the interface routing to it. That
+        // second registration is also where the family's lifetime is read back from: it outlives everything
+        // the family does to itself, since Clear removes members only and Decorate replaces it in place
+        // keeping its lifetime. The factory is typed by the composite through TypedFactoryWrapper, so
+        // ResolveImplementationType names the composite rather than the interface.
         services.Add(ServiceDescriptor.Describe(compositeType, compositeFactory, lifetime));
         services.Add(ServiceDescriptor.Describe(
             typeof(TInterface), CreateTypedFactoryWrapper(compositeType).WrapResolve(), lifetime));
