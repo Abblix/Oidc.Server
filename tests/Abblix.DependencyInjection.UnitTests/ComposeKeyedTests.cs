@@ -29,9 +29,9 @@ namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
 /// Locks the keyed live-cursor family API: several pipelines of one interface, each composed under its own key,
-/// stay isolated (members keyed by a <see cref="ComposedFamilyKey"/> pairing the service key with the composite
-/// type); DecomposeKeyed returns a live cursor whose edits reach the keyed composite at resolve; and the plain
-/// and keyed families coexist.
+/// stay isolated, because a family's identity carries its service key and its members are keyed by that
+/// identity; DecomposeKeyed returns a live cursor whose edits reach the keyed composite at resolve; and the
+/// plain and keyed families coexist.
 /// </summary>
 public class ComposeKeyedTests
 {

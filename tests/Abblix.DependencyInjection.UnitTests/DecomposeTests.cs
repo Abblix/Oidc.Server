@@ -125,6 +125,20 @@ public class DecomposeTests
     }
 
     [Fact]
+    public void Decompose_RefusesAComposedFamilyWhoseCursorWasRemoved()
+    {
+        var services = ComposedFamily();
+
+        // Nothing in this API removes it. Should anything ever manage to, the members are still there and still
+        // keyed as members, so answering with a fresh cursor would read the family as never composed.
+        var cursor = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IComposition<IPipelineStep>));
+        services.Remove(cursor);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
     public void Decompose_TellsComposedFamiliesApart()
     {
         var services = new ServiceCollection();

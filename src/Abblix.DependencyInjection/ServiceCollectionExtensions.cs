@@ -612,11 +612,11 @@ public static class ServiceCollectionExtensions
         Dependency[] dependencies)
         where TInterface : class
     {
-        var memberKey = new ComposedFamilyKey(serviceKey, compositeType);
+        var key = new CompositionKey(typeof(TInterface), serviceKey);
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
-            compositeType, memberKey, members, dependencies, out var lifetime);
+            compositeType, key, members, dependencies, out var lifetime);
 
-        services.StoreComposition<TInterface>(serviceKey, memberKey, lifetime);
+        services.StoreComposition<TInterface>(key, lifetime);
 
         // Register the composite as a keyed service under the original key. The factory is typed by the
         // composite (via TypedFactoryWrapper), so ResolveImplementationType identifies it and
@@ -644,11 +644,29 @@ public static class ServiceCollectionExtensions
     {
         var key = new CompositionKey(typeof(TInterface), serviceKey);
 
-        return services.FirstOrDefault(
+        var stored = services.FirstOrDefault(
                 descriptor => descriptor is { IsKeyedService: true } &&
                               descriptor.ServiceType == typeof(IComposition<TInterface>) &&
                               Equals(descriptor.ServiceKey, key))
-            ?.KeyedImplementationInstance as IComposition<TInterface>;
+            ?.KeyedImplementationInstance;
+
+        if (stored is IComposition<TInterface> composition)
+            return composition;
+
+        // A member carries a CompositionKey, which nothing outside this assembly can build, so members present
+        // without their cursor mean the cursor was removed from the collection. Answering with a fresh one
+        // would read the family as never composed and take the composite - a registration of the interface
+        // like any other - for a member of the family it heads.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TInterface) &&
+                                       Equals(descriptor.ServiceKey, key)))
+        {
+            throw new InvalidOperationException(
+                $"The {typeof(TInterface).Name} family is composed, but the cursor over its members is missing "
+                + "from the collection, so its members can no longer be told apart from the composite over "
+                + "them. Something removed it; no sequence of calls on this API does.");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -656,12 +674,10 @@ public static class ServiceCollectionExtensions
     /// itself rather than being inferred from registrations that its own cursor can remove.
     /// </summary>
     private static void StoreComposition<TInterface>(
-        this IServiceCollection services, object? serviceKey, object memberKey, ServiceLifetime lifetime)
+        this IServiceCollection services, CompositionKey key, ServiceLifetime lifetime)
         where TInterface : class
         => services.Add(new ServiceDescriptor(
-            typeof(IComposition<TInterface>),
-            new CompositionKey(typeof(TInterface), serviceKey),
-            new Composition<TInterface>(services, memberKey, lifetime)));
+            typeof(IComposition<TInterface>), key, new Composition<TInterface>(services, key, lifetime)));
 
     /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
@@ -696,12 +712,11 @@ public static class ServiceCollectionExtensions
         Dependency[] dependencies)
         where TInterface : class
     {
-        // The member key is the composite type: a caller holding the composite can enumerate the family from a
-        // built provider with GetKeyedServices, which the guards that inspect a composed pipeline rely on.
+        var key = new CompositionKey(typeof(TInterface), ServiceKey: null);
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
-            compositeType, compositeType, members, dependencies, out var lifetime);
+            compositeType, key, members, dependencies, out var lifetime);
 
-        services.StoreComposition<TInterface>(serviceKey: null, compositeType, lifetime);
+        services.StoreComposition<TInterface>(key, lifetime);
 
         // Register the composite type itself (so it can be aliased and located by Decompose) and the
         // interface routing to it. The alias factory is typed by the composite (via TypedFactoryWrapper),
