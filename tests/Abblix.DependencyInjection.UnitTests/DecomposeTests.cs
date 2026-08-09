@@ -187,6 +187,41 @@ public class DecomposeTests
         Assert.Equal("A,B", Resolve(services));
     }
 
+    /// <summary>
+    /// A canary, not a feature. The cursor needs the lifetime the composite was registered with, so that a
+    /// member shorter-lived than the composite is refused instead of being captured by it. That lifetime is not
+    /// stored anywhere: it is read back off the composite's own registration, which works only while
+    /// <see cref="ServiceCollectionExtensions.Decorate{TInterface,TDecorator}"/> keeps replacing that
+    /// registration in place with its lifetime intact.
+    /// </summary>
+    /// <remarks>
+    /// If this goes red, the derivation underneath it is already wrong: a decorated family reports whatever
+    /// lifetime the decorator was given, so the captive-member check silently starts judging against the wrong
+    /// one. Do not adjust the assertion. Either restore decoration's lifetime, or stop deriving - put the
+    /// lifetime back into <c>ComposedFamily</c>, which is where it lived before and costs one field.
+    /// </remarks>
+    [Fact]
+    public void DecoratingAFamilyKeepsTheLifetimeItsMembersAreJudgedAgainst()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IPipelineStep, StepA>();
+        services.AddScoped<IPipelineStep, StepB>();
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        services.Decorate<IPipelineStep, PipelineDecorator>();
+
+        var composite = Assert.Single(
+            services, descriptor => !descriptor.IsKeyedService && descriptor.ServiceType == typeof(IPipelineStep));
+        Assert.Equal(ServiceLifetime.Scoped, composite.Lifetime);
+
+        // And the derived lifetime still does its job: a Transient member would outlive nothing and be captured.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>()
+                .AddLast(ServiceDescriptor.Transient<IPipelineStep, StepC>()));
+
+        Assert.Contains(nameof(ServiceLifetime.Scoped), exception.Message);
+    }
+
     [Fact]
     public void ACopiedFamilyIsEditedInTheCollectionItWasCopiedInto()
     {
