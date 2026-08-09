@@ -47,19 +47,18 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
 
     public InsecureValidationGuard(
         ISecurityEventTokenValidator inner,
-        IServiceProvider provider,
         IOptions<SecurityEventsOptions> options,
         ILogger<InsecureValidationGuard> logger)
     {
         _inner = inner;
 
-        // After composition the members live as keyed services under the composite type; a family
-        // the host collapsed to a single member never composed, and then the inner validator IS
-        // the whole profile.
-        var memberTypes = provider
-            .GetKeyedServices<ISecurityEventTokenValidator>(typeof(CompositeSecurityEventTokenValidator))
-            .Select(member => member.GetType())
-            .DefaultIfEmpty(inner.GetType())
+        // Ask the validator being wrapped what it will run. A composite answers with its steps; anything else
+        // is the whole profile by itself. Reading the members out of the container instead would mean naming
+        // the key composition happens to store them under, which is machinery this package should not know,
+        // and which says nothing about a profile a host assembled some other way.
+        var memberTypes = (inner is CompositeSecurityEventTokenValidator composite
+                ? composite.Steps.Select(step => step.GetType())
+                : [inner.GetType()])
             .ToHashSet();
 
         var missing = ServiceCollectionExtensions.CriticalDefaultSteps
