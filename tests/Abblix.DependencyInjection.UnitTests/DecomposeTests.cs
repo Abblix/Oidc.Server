@@ -22,6 +22,7 @@
 
 using System;
 using System.Linq;
+using Abblix.DependencyInjection.UnitTests.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -121,6 +122,36 @@ public class DecomposeTests
 
         Assert.Equal("C", Resolve(services));
         Assert.IsType<PipelineComposite>(services.BuildServiceProvider().GetRequiredService<IPipelineStep>());
+    }
+
+    [Fact]
+    public void Decompose_TellsComposedFamiliesApart()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddSingleton<IPipelineStep, StepB>();
+        services.AddSingleton<IPrimaryService, ServiceA>();
+        services.AddSingleton<IPrimaryService, ServiceB>();
+
+        services.Compose<IPipelineStep, PipelineComposite>();
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Emptying one family is where a shared record would show: the other family's cursor would then read
+        // the surviving record and take a composite that heads someone else's family.
+        services.Decompose<IPipelineStep>().Clear();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // The other family's CURSOR is where a shared record shows: resolving it from the container never asks
+        // which composite it has, so a collision would leave the container correct and the cursor blind.
+        Assert.Equal(
+            [typeof(ServiceA), typeof(ServiceB)],
+            services.Decompose<IPrimaryService>().Select(member => member.ResolveImplementationType()).ToArray());
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<PipelineComposite>(provider.GetRequiredService<IPipelineStep>());
+        Assert.Equal("C", provider.GetRequiredService<IPipelineStep>().Name);
+        Assert.IsType<PrimaryServiceComposite>(provider.GetRequiredService<IPrimaryService>());
     }
 
     [Fact]
