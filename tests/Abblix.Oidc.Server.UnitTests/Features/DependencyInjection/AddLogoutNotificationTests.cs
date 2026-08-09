@@ -22,9 +22,14 @@
 
 using System.Linq;
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
@@ -58,5 +63,31 @@ public class AddLogoutNotificationTests
         // Both channels are still inside it.
         Assert.Equal(2, services.Count(
             descriptor => descriptor.ServiceType == typeof(ILogoutNotifier) && descriptor.IsKeyedService));
+    }
+
+    [Fact]
+    public void AChannelAddedAfterTheFullRegistrationResolvesToTheCompositeOfBoth()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
+        services.AddMemoryCache();
+        services.AddSingleton(Mock.Of<IUserInfoProvider>());
+
+        services.AddOidcServices(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+
+        // The host asks for back-channel logout explicitly, after the whole server is already registered - which
+        // is redundant, since AddOidcServices registered both channels, and used to be destructive.
+        services.AddBackChannelLogout();
+
+        using var provider = services.BuildServiceProvider();
+        var notifier = provider.CreateScope().ServiceProvider.GetRequiredService<ILogoutNotifier>();
+
+        Assert.IsType<CompositeLogoutNotifier>(notifier);
+        Assert.True(notifier.FrontChannelLogoutSupported);
+        Assert.True(notifier.BackChannelLogoutSupported);
     }
 }
