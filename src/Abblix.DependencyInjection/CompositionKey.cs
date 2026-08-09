@@ -23,15 +23,16 @@
 namespace Abblix.DependencyInjection;
 
 /// <summary>
-/// The service key that members of a composed keyed family are stored under: pairs the family's original
-/// service key with the composite type. The pairing keeps same-interface families under different keys
-/// isolated, even when they share the composite class, and keeps every member self-describing.
+/// Identifies one composed family: the interface it is a family of, plus the service key when the family lives
+/// under one. It is the service key of both things a composition leaves in the collection - the member
+/// registrations and the cursor over them - so a family is found by one key comparison and same-interface
+/// families under different keys never meet.
 /// </summary>
 /// <remarks>
-/// A member key is public in the way that matters: it is how a family's members are enumerated from a built
-/// provider, with <c>GetKeyedServices</c>. A plain family keys its members by the composite type itself, and a
-/// keyed one by this pairing, so both are derivable by a caller holding the composite type.
+/// Being internal, it is also what makes a member unforgeable: nothing outside this assembly can register a
+/// descriptor that a cursor would mistake for a member of a family it composed, and a host keying a service of
+/// the same interface by a name of its own stays its own business.
 /// </remarks>
-/// <param name="ServiceKey">The service key the family was composed under.</param>
-/// <param name="CompositeType">The composite type the family was composed into.</param>
-public sealed record ComposedFamilyKey(object ServiceKey, Type CompositeType);
+/// <param name="InterfaceType">The family interface.</param>
+/// <param name="ServiceKey">The key a keyed family lives under, or null for a plain family.</param>
+internal sealed record CompositionKey(Type InterfaceType, object? ServiceKey);

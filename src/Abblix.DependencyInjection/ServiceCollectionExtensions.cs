@@ -491,34 +491,20 @@ public static class ServiceCollectionExtensions
     public static IComposition<TInterface> Decompose<TInterface>(this IServiceCollection services)
         where TInterface : class
     {
-        var compositeType = services.FindCompositeType(typeof(TInterface));
-
         // A family that has not been composed is still a family: its members are the plain descriptors of the
         // interface, and the cursor edits those. The caller wanted to change the family's members, which is the
         // only reason to be here, and whether a composite exists yet is not its business.
-        if (compositeType is null)
-            return new Composition<TInterface>(services, memberKey: null, lifetime: null);
-
-        var compositeDescriptor = services.FirstOrDefault(
-                descriptor => descriptor is { IsKeyedService: false } &&
-                              descriptor.ServiceType == compositeType)
-            ?? throw new InvalidOperationException(
-                $"The {typeof(TInterface).Name} family is in an inconsistent state: keyed members exist " +
-                "but the composite registration is missing.");
-
-        // The family stays composed. The cursor edits the keyed members in place, and the composite reads
-        // them via GetKeyedServices at resolve, so edits take effect with no recompose. For a plain family
-        // the member key IS the composite type.
-        return new Composition<TInterface>(services, compositeType, compositeDescriptor.Lifetime);
+        return services.OpenComposition<TInterface>(serviceKey: null)
+               ?? new Composition<TInterface>(services, memberKey: null, lifetime: null);
     }
 
     /// <summary>
     /// Composes keyed implementations of <typeparamref name="TInterface"/> registered under
     /// <paramref name="serviceKey"/> into a single composite resolvable under that same key - the keyed
     /// counterpart of <see cref="Compose{TInterface,TComposite}(IServiceCollection,Dependency[])"/>.
-    /// The members move to keyed registrations under a <see cref="ComposedFamilyKey"/> pairing the service
-    /// key with the composite type, so same-interface families under different keys stay isolated and the
-    /// family remains editable descriptor data for <see cref="DecomposeKeyed{TInterface}"/>.
+    /// The members move to keyed registrations under the family's own key, so same-interface families under
+    /// different keys stay isolated and the family remains editable descriptor data for
+    /// <see cref="DecomposeKeyed{TInterface}"/>.
     /// </summary>
     /// <typeparam name="TInterface">The interface type to be composed.</typeparam>
     /// <typeparam name="TComposite">The composite implementation type.</typeparam>
@@ -564,10 +550,10 @@ public static class ServiceCollectionExtensions
     /// <param name="serviceKey">The service key the family was composed under.</param>
     /// <returns>A live cursor over the family's members, in execution order.</returns>
     /// <remarks>
-    /// The mechanics mirror <see cref="Decompose{TInterface}"/>, except members are keyed by a
-    /// <see cref="ComposedFamilyKey"/> pairing the service key with the composite type, so pipelines of the
-    /// same interface under different keys stay isolated. <see cref="IComposition{TInterface}"/> adds the same
-    /// position-aware sugar (<c>AddAfter</c>, <c>Remove</c>, ...).
+    /// The mechanics mirror <see cref="Decompose{TInterface}"/>, except the family's key carries the service
+    /// key too, so pipelines of the same interface under different keys stay isolated.
+    /// <see cref="IComposition{TInterface}"/> adds the same position-aware sugar
+    /// (<c>AddAfter</c>, <c>Remove</c>, ...).
     /// </remarks>
     /// <exception cref="InvalidOperationException">The family is composed under this key but its composite
     /// registration is missing, which no sequence of calls on this API produces.</exception>
@@ -578,27 +564,10 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(serviceKey);
 
-        var compositeType = services.FindCompositeType(typeof(TInterface), serviceKey);
-
         // Uncomposed, the family's members are the descriptors registered under the service key itself, and the
         // cursor edits those - the keyed mirror of what Decompose does for a plain family.
-        if (compositeType is null)
-            return new Composition<TInterface>(services, serviceKey, lifetime: null);
-
-        var memberKey = new ComposedFamilyKey(serviceKey, compositeType);
-
-        var compositeDescriptor = services.FirstOrDefault(
-                descriptor => descriptor is { IsKeyedService: true } &&
-                              descriptor.ServiceType == typeof(TInterface) &&
-                              Equals(descriptor.ServiceKey, serviceKey) &&
-                              descriptor.ResolveImplementationType() == compositeType)
-            ?? throw new InvalidOperationException(
-                $"The {typeof(TInterface).Name} family keyed by '{serviceKey}' is in an inconsistent state: " +
-                "keyed members exist but the composite registration is missing.");
-
-        // The family stays composed. The cursor edits the keyed members (keyed by the ComposedFamilyKey that
-        // pairs the service key with the composite type) in place, live at resolve.
-        return new Composition<TInterface>(services, memberKey, compositeDescriptor.Lifetime);
+        return services.OpenComposition<TInterface>(serviceKey)
+               ?? new Composition<TInterface>(services, serviceKey, lifetime: null);
     }
 
     /// <summary>
@@ -610,13 +579,16 @@ public static class ServiceCollectionExtensions
     private static void EnsureNotComposedKeyed(
         this IServiceCollection services, Type interfaceType, Type compositeType, object serviceKey)
     {
-        var memberKey = new ComposedFamilyKey(serviceKey, compositeType);
+        // The cursor a composition stores under the family's identity, so this asks about this family under
+        // this key and nothing else - two families of the same interface under different keys are separate
+        // compositions and neither blocks the other.
+        var compositionType = typeof(IComposition<>).MakeGenericType(interfaceType);
+        var key = new CompositionKey(interfaceType, serviceKey);
+
         var alreadyComposed = services.Any(
             descriptor => descriptor is { IsKeyedService: true } &&
-                          descriptor.ServiceType == interfaceType &&
-                          (Equals(descriptor.ServiceKey, memberKey) ||
-                           Equals(descriptor.ServiceKey, serviceKey) &&
-                           descriptor.ResolveImplementationType() == compositeType));
+                          descriptor.ServiceType == compositionType &&
+                          Equals(descriptor.ServiceKey, key));
         if (alreadyComposed)
         {
             throw new InvalidOperationException(
@@ -628,9 +600,9 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The keyed composition tail over <see cref="KeyFamilyMembers{TInterface}"/>: keys the members by a
-    /// <see cref="ComposedFamilyKey"/> and registers the composite as a keyed service under the family's
-    /// original service key. The members must already be detached from the collection.
+    /// The keyed composition tail over <see cref="KeyFamilyMembers{TInterface}"/>: keys the members by the
+    /// family's key and registers the composite as a keyed service under the family's original service key.
+    /// The members must already be detached from the collection.
     /// </summary>
     private static IServiceCollection ComposeKeyedFamily<TInterface>(
         this IServiceCollection services,
@@ -644,7 +616,7 @@ public static class ServiceCollectionExtensions
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
             compositeType, memberKey, members, dependencies, out var lifetime);
 
-        services.RecordComposedFamily(typeof(TInterface), compositeType, serviceKey);
+        services.StoreComposition<TInterface>(serviceKey, memberKey, lifetime);
 
         // Register the composite as a keyed service under the original key. The factory is typed by the
         // composite (via TypedFactoryWrapper), so ResolveImplementationType identifies it and
@@ -657,33 +629,39 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The composite of the <paramref name="interfaceType"/> family, or null when the family has never been
-    /// composed. Read from the <see cref="ComposedFamily"/> entry a composition leaves rather than from the
-    /// member keys, which say nothing once the members have been removed through the cursor.
+    /// The cursor a composition left over the <typeparamref name="TInterface"/> family, or null when the family
+    /// has never been composed.
     /// </summary>
-    private static Type? FindCompositeType(
-        this IServiceCollection services, Type interfaceType, object? serviceKey = null)
+    /// <remarks>
+    /// The cursor holds no copy of the member list, so the one stored at composition time stays correct for the
+    /// life of the collection. Storing it rather than the composite type is what lets a family answer for
+    /// itself: every member can be removed through the cursor, and a composite derived from the members would
+    /// then be underivable, leaving an emptied family reading as one that was never composed.
+    /// </remarks>
+    private static IComposition<TInterface>? OpenComposition<TInterface>(
+        this IServiceCollection services, object? serviceKey)
+        where TInterface : class
     {
-        var familyId = new ComposedFamilyId(interfaceType, serviceKey);
+        var key = new CompositionKey(typeof(TInterface), serviceKey);
 
         return services.FirstOrDefault(
-                descriptor => descriptor is { IsKeyedService: true, ServiceType: var type } &&
-                              type == typeof(ComposedFamily) &&
-                              Equals(descriptor.ServiceKey, familyId))
-            ?.KeyedImplementationInstance is ComposedFamily family
-            ? family.CompositeType
-            : null;
+                descriptor => descriptor is { IsKeyedService: true } &&
+                              descriptor.ServiceType == typeof(IComposition<TInterface>) &&
+                              Equals(descriptor.ServiceKey, key))
+            ?.KeyedImplementationInstance as IComposition<TInterface>;
     }
 
     /// <summary>
-    /// Stores which composite a family was composed into, keyed by the family's identity.
+    /// Stores the cursor over a family just composed, under the family's identity, so the family answers for
+    /// itself rather than being inferred from registrations that its own cursor can remove.
     /// </summary>
-    private static void RecordComposedFamily(
-        this IServiceCollection services, Type interfaceType, Type compositeType, object? serviceKey)
+    private static void StoreComposition<TInterface>(
+        this IServiceCollection services, object? serviceKey, object memberKey, ServiceLifetime lifetime)
+        where TInterface : class
         => services.Add(new ServiceDescriptor(
-            typeof(ComposedFamily),
-            new ComposedFamilyId(interfaceType, serviceKey),
-            new ComposedFamily(compositeType)));
+            typeof(IComposition<TInterface>),
+            new CompositionKey(typeof(TInterface), serviceKey),
+            new Composition<TInterface>(services, memberKey, lifetime)));
 
     /// <summary>
     /// Fails loud when the <paramref name="interfaceType"/> family has already been composed into
@@ -718,11 +696,12 @@ public static class ServiceCollectionExtensions
         Dependency[] dependencies)
         where TInterface : class
     {
-        // For plain families the member key IS the composite type, so every member names its composite.
+        // The member key is the composite type: a caller holding the composite can enumerate the family from a
+        // built provider with GetKeyedServices, which the guards that inspect a composed pipeline rely on.
         var compositeFactory = services.KeyFamilyMembers<TInterface>(
             compositeType, compositeType, members, dependencies, out var lifetime);
 
-        services.RecordComposedFamily(typeof(TInterface), compositeType, serviceKey: null);
+        services.StoreComposition<TInterface>(serviceKey: null, compositeType, lifetime);
 
         // Register the composite type itself (so it can be aliased and located by Decompose) and the
         // interface routing to it. The alias factory is typed by the composite (via TypedFactoryWrapper),
