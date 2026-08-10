@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,6 +31,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// HTTP-based implementation of backchannel notification service for CIBA ping and push modes.
 /// Sends HTTP POST notifications to client endpoints with authentication request status updates or token delivery.
 /// </summary>
+/// <remarks>
+/// Delivery is a single attempt, deliberately: a notification is best-effort, and what a failed one costs is the
+/// client waiting out its own timeout rather than a lost protocol state. A deployment that wants more configures the
+/// named client - see <see cref="BackChannelNotificationTransport.HttpClientName"/> - and gets retries without this
+/// type holding any state.
+/// </remarks>
 /// <param name="logger">Logger for tracking notification attempts and failures.</param>
 /// <param name="httpClientFactory">Factory for creating HTTP clients.</param>
 public partial class HttpNotificationDeliveryService(
@@ -53,7 +59,7 @@ public partial class HttpNotificationDeliveryService(
     {
         try
         {
-            var httpClient = httpClientFactory.CreateClient(nameof(HttpNotificationDeliveryService));
+            var httpClient = httpClientFactory.CreateClient(BackChannelNotificationTransport.HttpClientName);
 
             var request = new HttpRequestMessage(HttpMethod.Post, clientNotificationEndpoint);
             request.AddBearerToken(clientNotificationToken);

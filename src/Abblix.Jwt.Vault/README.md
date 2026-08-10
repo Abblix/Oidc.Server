@@ -113,6 +113,17 @@ The `Token` is presented as the `X-Vault-Token` header. Source it from the envir
 
 Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the placement you chose above.
 
+### The HTTP pipeline
+
+Both engines share one named client from the host's `IHttpClientFactory`, and its name is published, so retries, timeouts, a proxy or a client certificate are configured without copying a string:
+
+```csharp
+services.AddHttpClient(VaultTransport.HttpClientName)
+    .AddStandardResilienceHandler();   // Microsoft.Extensions.Http.Resilience
+```
+
+Call it before or after `AddVaultCustodian` - `AddHttpClient` adds to the same client either way. What you chain applies to every Vault call the custodian and the key ring make.
+
 ## Rotation
 
 With `UseKeysInCustodian`, rotate in Transit:

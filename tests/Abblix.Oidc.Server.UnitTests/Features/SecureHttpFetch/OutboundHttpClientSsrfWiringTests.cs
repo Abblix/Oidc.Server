@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,9 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -38,18 +41,11 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 public class OutboundHttpClientSsrfWiringTests
 {
     [Theory]
-    [InlineData(nameof(HttpNotificationDeliveryService))]
-    [InlineData("ILogoutTokenSender")] // default logical name of the typed BackChannelLogoutTokenSender client
+    [InlineData(BackChannelNotificationTransport.HttpClientName)]
+    [InlineData(nameof(ILogoutTokenSender))] // default logical name of the typed BackChannelLogoutTokenSender client
     public void ClientCallbackHttpClients_RouteThroughSsrfValidatingHandler(string clientName)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddOptions();
-        services.AddSecureHttpFetch();
-        services.AddBackChannelAuthentication();
-        services.AddBackChannelLogout();
-
-        using var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = BuildHost().BuildServiceProvider();
         var handlerFactory = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>();
 
         using var handler = handlerFactory.CreateHandler(clientName);
@@ -59,14 +55,66 @@ public class OutboundHttpClientSsrfWiringTests
             $"HTTP client '{clientName}' must include {nameof(SsrfValidatingHttpMessageHandler)} in its handler chain.");
     }
 
-    private static bool ChainContainsSsrfHandler(HttpMessageHandler handler)
+    /// <summary>
+    /// The published client name is what a host configures resilience through, so it must reach the very client the
+    /// library resolves - and the SSRF validation must survive whatever the host chains onto it.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are asserted on one chain because they are one guarantee. The host's handler being present proves
+    /// the name is the right one - a wrong name would configure a client nobody uses and read as success - and the
+    /// validation sitting DEEPER proves every attempt of a retry pipeline is validated afresh, which is what a
+    /// client-supplied address needs when it can start resolving to an internal one between attempts.
+    /// </remarks>
+    [Fact]
+    public void HostConfiguration_ByPublishedName_ReachesTheClient_AndStaysOutsideSsrfValidation()
     {
-        for (var current = handler; current is DelegatingHandler delegating; current = delegating.InnerHandler!)
-        {
-            if (current is SsrfValidatingHttpMessageHandler)
-                return true;
-        }
+        var services = BuildHost();
 
-        return false;
+        // What a host writes to add a resilience pipeline, with a handler standing in for one.
+        services.AddHttpClient(BackChannelNotificationTransport.HttpClientName)
+            .AddHttpMessageHandler(() => new HostHandler());
+
+        using var serviceProvider = services.BuildServiceProvider();
+        using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(BackChannelNotificationTransport.HttpClientName);
+
+        var chain = Chain(handler).ToList();
+
+        var hostPosition = chain.FindIndex(link => link is HostHandler);
+        Assert.True(hostPosition >= 0, "The host's handler must be in the chain of the client the library resolves.");
+
+        var ssrfPosition = chain.FindIndex(link => link is SsrfValidatingHttpMessageHandler);
+        Assert.True(
+            ssrfPosition > hostPosition,
+            "SSRF validation must sit deeper than the host's handler, so a retried attempt is validated again.");
     }
+
+    private static ServiceCollection BuildHost()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSecureHttpFetch();
+        services.AddBackChannelAuthentication();
+        services.AddBackChannelLogout();
+        return services;
+    }
+
+    private static bool ChainContainsSsrfHandler(HttpMessageHandler handler)
+        => Chain(handler).Any(link => link is SsrfValidatingHttpMessageHandler);
+
+    /// <summary>
+    /// Walks the handler chain from the outermost handler inwards, ending with the primary one.
+    /// </summary>
+    private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)
+    {
+        for (var current = handler; current is not null;)
+        {
+            yield return current;
+            current = current is DelegatingHandler delegating ? delegating.InnerHandler : null;
+        }
+    }
+
+    /// <summary>Stands in for whatever a host chains onto the client - a resilience pipeline, a proxy.</summary>
+    private sealed class HostHandler : DelegatingHandler;
 }

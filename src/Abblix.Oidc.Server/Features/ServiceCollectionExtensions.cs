@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -639,7 +639,7 @@ public static class ServiceCollectionExtensions
 
         // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime
         // Use configuration callback to get handler lifetime from OidcOptions
-        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpNotificationDeliveryService))
+        services.AddOptions<HttpClientFactoryOptions>(BackChannelNotificationTransport.HttpClientName)
             .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
             {
                 httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
@@ -648,7 +648,7 @@ public static class ServiceCollectionExtensions
         // The notification endpoint is a client-supplied URL, so server-initiated POSTs to it must
         // run through the SSRF-validating handler (blocks internal hosts, private IPs, DNS rebinding)
         // and carry a bounded timeout, exactly like every other outbound fetch in this library.
-        services.AddSsrfHttpClient(nameof(HttpNotificationDeliveryService), (serviceProvider, client) =>
+        services.AddSsrfHttpClient(BackChannelNotificationTransport.HttpClientName, (serviceProvider, client) =>
         {
             client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>()
                 .Value.BackChannelAuthentication.NotificationHttpClientTimeout;

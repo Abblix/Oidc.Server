@@ -48,7 +48,7 @@ internal sealed partial class KeyValueStore(
     : IKeyRingStore
 {
     /// <summary>The shared client, held for this singleton's lifetime; see the custodian for why it is by name.</summary>
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(Transport.ClientName);
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(VaultTransport.HttpClientName);
 
     private VaultKeyValueOptions Options => options.Value;
 

@@ -1,4 +1,4 @@
-# Abblix.Jwt.Azure
+﻿# Abblix.Jwt.Azure
 
 **Abblix.Jwt.Azure** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls the vault. The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy. No provider private key crosses that pipeline; what does is the signing input, the wrapped keys, and the plaintext key an unwrap returns, which a handler on this pipeline can observe, so scope logging accordingly.
 
@@ -95,6 +95,17 @@ builder.Services
 When the tenant, client and secret are all set, the custodian authenticates with a client-secret credential. Leave all three blank to fall back to `DefaultAzureCredential`, which covers a managed identity in production, an Azure CLI sign-in during development, or the `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` environment variables.
 
 Blank is an opt-in, and it looks identical to a typo: a misspelled configuration key leaves the field empty and silently selects the credential chain instead of the service principal you meant. Prefer a managed identity and leave all three unset, or bind them from a source that fails when a key is missing. Source the secret from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
+
+### The HTTP pipeline
+
+Both transports come from the host's `IHttpClientFactory`, so retries, timeouts, a proxy or a client certificate are configured without copying a string. The vault client is a typed one; the key ring rides a named client whose name is published:
+
+```csharp
+services.AddHttpClient<KeyVaultClient>().AddStandardResilienceHandler();
+services.AddHttpClient(AzureKeyRingTransport.HttpClientName).AddStandardResilienceHandler();
+```
+
+Call either before or after the registration - `AddHttpClient` adds to the same client. Note that the credential authenticates over its own transport, so what you chain here does not cover the token requests.
 
 ## Rotation
 
