@@ -116,7 +116,7 @@ public sealed class EventsCollection(JsonObject json) : IReadOnlyCollection<KeyV
 
         // Without this check the serializer throws its own "node already has a parent", which
         // names neither the event nor the way out.
-        if (payload?.Parent is not null)
+        if (payload is { Parent: not null })
         {
             throw new ArgumentException(
                 $"The payload for '{eventType}' is attached to another JSON tree - typically a "

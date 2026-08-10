@@ -141,6 +141,35 @@ public class SecurityEventTokenBuilderTests
     }
 
     [Fact]
+    public void WithEvent_PayloadTakenFromAnotherToken_IsRejected_NamingTheWayOut()
+    {
+        // Moving a node between JSON trees is what parsing a token and reusing its payload does. The
+        // serializer's own complaint names neither the event nor the remedy, so the collection refuses first.
+        var parsed = JsonNode.Parse("""{"events":{"https://example.com/events/other":{"a":1}}}""")!.AsObject();
+        var attached = parsed["events"]!["https://example.com/events/other"]!.AsObject();
+
+        var builder = MinimalValidBuilder();
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => builder.WithEvent("https://example.com/events/second", attached));
+
+        Assert.Contains(nameof(JsonNode.DeepClone), exception.Message);
+    }
+
+    [Fact]
+    public void WithEvent_PayloadOfItsOwn_IsAccepted()
+    {
+        // The other side of the same guard: a payload with no parent is the ordinary case, and a check written
+        // to reject "attached" must not reject "absent" along with it.
+        var token = MinimalValidBuilder()
+            .WithEvent("https://example.com/events/second", new JsonObject { ["a"] = 1 })
+            .Build();
+
+        Assert.True(token.Events!.TryGetPayload("https://example.com/events/second", out var payload));
+        Assert.Equal(1, payload["a"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void WithEvent_WithoutPayload_WritesTheEmptyObject()
     {
         // "An event with no payload claims SHALL be represented as the empty JSON object"
