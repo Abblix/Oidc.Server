@@ -124,6 +124,43 @@ public class OutboundHttpClientResilienceTests
     }
 
     /// <summary>
+    /// The path a host is told to take: adding the real resilience pipeline leaves the SSRF validation in place,
+    /// so retries and a circuit breaker cost nothing in security.
+    /// </summary>
+    /// <remarks>
+    /// Asserted with the shipping <c>AddStandardResilienceHandler</c> rather than a stand-in handler, because the
+    /// promise is about that call specifically: it adds to the chain instead of replacing the primary handler the
+    /// validation lives in.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackChannelNotificationTransport.HttpClientName)]
+    [InlineData(BackChannelLogoutTransport.HttpClientName)]
+    [InlineData(SecureFetchTransport.HttpClientName)]
+    public void AddingAResiliencePipeline_KeepsTheSsrfValidation(string clientName)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSecureHttpFetch();
+        services.AddBackChannelAuthentication();
+        services.AddBackChannelLogout();
+
+        services.AddHttpClient(clientName).AddResilienceOfATypicalHost();
+
+        using var provider = services.BuildServiceProvider();
+        using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
+
+        var guarded = false;
+        for (HttpMessageHandler? link = handler; link is not null;)
+        {
+            if (link is SsrfValidatingHttpMessageHandler) guarded = true;
+            link = link is DelegatingHandler delegating ? delegating.InnerHandler : null;
+        }
+
+        Assert.True(guarded, $"The resilience pipeline must not displace SSRF validation on '{clientName}'.");
+    }
+
+    /// <summary>
     /// Each client is configured on its own: a pipeline put on one leaves its neighbours as they were, so a host
     /// can retry a client's notifications hard while leaving a metadata fetch to fail fast.
     /// </summary>

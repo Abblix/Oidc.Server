@@ -436,6 +436,17 @@ internal static class LogEvents
             public const int JwksEmpty = Base + 2;
             public const int JwksFetchFailed = Base + 3;
         }
+
+        /// <summary>
+        /// <c>Features/SecureHttpFetch/SsrfGuardWatch.cs</c> - reports a client whose SSRF validation
+        /// was replaced by the host's own primary handler (sub-range 6040-6059).
+        /// </summary>
+        public static class SsrfGuardWatch
+        {
+            private const int Base = 6040;
+
+            public const int ValidationReplaced = Base + 1;
+        }
     }
 
     /// <summary>
