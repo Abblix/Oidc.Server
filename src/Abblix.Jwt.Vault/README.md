@@ -115,14 +115,22 @@ Reach Vault over TLS in every environment that is not a local dev container: the
 
 ### The HTTP pipeline
 
-Both engines share one named client from the host's `IHttpClientFactory`, and its name is published, so retries, timeouts, a proxy or a client certificate are configured without copying a string:
+Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+
+To make every outbound client of your application resilient, including this one, name none of them:
+
+```csharp
+services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
+```
+
+To configure this package's client alone - a longer retry for Vault than for anything else, say - name it:
 
 ```csharp
 services.AddHttpClient(VaultTransport.HttpClientName)
     .AddStandardResilienceHandler();   // Microsoft.Extensions.Http.Resilience
 ```
 
-Call it before or after `AddVaultCustodian` - `AddHttpClient` adds to the same client either way. What you chain applies to every Vault call the custodian and the key ring make.
+Either call goes before or after `AddVaultCustodian`; both reach the same client. What you chain applies to every Vault call the custodian and the key ring make, and to no other client.
 
 ## Rotation
 

@@ -20,8 +20,11 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -144,6 +147,43 @@ public class AddAzureCustodianTests
             .CreateHandler(AzureKeyRingTransport.HttpClientName);
 
         Assert.Contains(Chain(handler), link => link is HostHandler);
+    }
+
+    /// <summary>
+    /// The shortest path a host has to resilience on this package's clients: one call naming none of them, which
+    /// must cover the typed vault client and the named ring client alike.
+    /// </summary>
+    [Theory]
+    [InlineData(AzureKeyVaultTransport.HttpClientName)]
+    [InlineData(AzureKeyRingTransport.HttpClientName)]
+    public async Task OneHostCall_MakesEveryClientOfThisPackageResilient(string clientName)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+
+        // The whole of what a host writes, naming nothing this library owns.
+        services.ConfigureHttpClientDefaults(builder => builder.AddResilienceOfATypicalHost());
+
+        services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"));
+        services
+            .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
+            .PersistRingToAzureBlob(blob => blob.ServiceUri = new Uri("https://contoso.blob.core.windows.net"));
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
+
+        var origin = new FlakyOriginHandler(failuresBeforeSuccess: 2);
+        services.AddHttpClient(clientName).ConfigurePrimaryHttpMessageHandler(() => origin);
+
+        using var provider = services.BuildServiceProvider();
+        using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
+        using var httpClient = new HttpClient(handler, disposeHandler: false);
+
+        var response = await httpClient.GetAsync(
+            new Uri("https://origin.test/"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(3, origin.Requests);
     }
 
     private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)

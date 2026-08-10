@@ -98,14 +98,22 @@ Blank is an opt-in, and it looks identical to a typo: a misspelled configuration
 
 ### The HTTP pipeline
 
-Both transports come from the host's `IHttpClientFactory`, so retries, timeouts, a proxy or a client certificate are configured without copying a string. The vault client is a typed one; the key ring rides a named client whose name is published:
+Both transports come from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+
+To make every outbound client of your application resilient, including these two, name none of them:
 
 ```csharp
-services.AddHttpClient<KeyVaultClient>().AddStandardResilienceHandler();
+services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
+```
+
+To configure one alone, name it. The vault client is typed; the key ring rides a named client:
+
+```csharp
+services.AddHttpClient(AzureKeyVaultTransport.HttpClientName).AddStandardResilienceHandler();
 services.AddHttpClient(AzureKeyRingTransport.HttpClientName).AddStandardResilienceHandler();
 ```
 
-Call either before or after the registration - `AddHttpClient` adds to the same client. Note that the credential authenticates over its own transport, so what you chain here does not cover the token requests.
+Either call goes before or after the registration; both reach the same client. Note that the credential authenticates over a transport of its own, so what you chain here does not cover the token requests.
 
 ## Rotation
 

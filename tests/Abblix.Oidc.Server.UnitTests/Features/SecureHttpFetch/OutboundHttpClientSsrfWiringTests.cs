@@ -42,7 +42,7 @@ public class OutboundHttpClientSsrfWiringTests
 {
     [Theory]
     [InlineData(BackChannelNotificationTransport.HttpClientName)]
-    [InlineData(nameof(ILogoutTokenSender))] // default logical name of the typed BackChannelLogoutTokenSender client
+    [InlineData(BackChannelLogoutTransport.HttpClientName)] // default logical name of the typed BackChannelLogoutTokenSender client
     public void ClientCallbackHttpClients_RouteThroughSsrfValidatingHandler(string clientName)
     {
         using var serviceProvider = BuildHost().BuildServiceProvider();

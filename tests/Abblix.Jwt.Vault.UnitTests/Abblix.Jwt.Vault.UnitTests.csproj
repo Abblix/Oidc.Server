@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -33,4 +33,9 @@
         <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
     </ItemGroup>
 
+
+    <ItemGroup>
+        <!-- One statement of what a host is promised, compiled into every package's suite. -->
+        <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+    </ItemGroup>
 </Project>
