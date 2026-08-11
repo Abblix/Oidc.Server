@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -51,33 +52,16 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// </remarks>
 public class SsrfValidatingHttpMessageHandler(
     IOptions<SecureHttpFetchOptions> options,
-    ISecureUriValidator uriValidator) : DelegatingHandler(
-    new HttpClientHandler
-    {
-        // CRITICAL: Disable automatic redirects to prevent SSRF bypass via redirect chains
-        // Attackers could redirect from public URL to private network (e.g., 169.254.169.254)
-        AllowAutoRedirect = false,
-
-        // Use system default credentials (none) - prevent NTLM auth to internal servers
-        UseDefaultCredentials = false,
-
-        // Disable decompression to prevent zip bomb attacks
-        AutomaticDecompression = DecompressionMethods.None,
-    })
+    ISecureUriValidator uriValidator) : AddressValidatingHttpMessageHandler
 {
     /// <summary>
-    /// Sends HTTP request with comprehensive SSRF validation immediately before making the request.
-    /// Validates both hostname patterns and DNS resolution to prevent SSRF and DNS rebinding attacks.
+    /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,
+    /// hostname and IP-literal rules, then a DNS re-resolution that catches rebinding. The base handler owns the
+    /// no-redirect, no-decompression transport and calls this once per send.
     /// </summary>
-    protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken)
+    protected override async Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
     {
-        var uri = request.RequestUri;
-        if (uri == null)
-        {
-            throw new InvalidOperationException("Request URI cannot be null");
-        }
+        var uri = requestUri;
 
         // Synchronous policy (scheme, internal hostname, private/reserved IP literal), shared with
         // registration-time validation. A null result means the URI passed these checks.
@@ -120,8 +104,5 @@ public class SsrfValidatingHttpMessageHandler(
                     $"a public IP during initial validation but now resolves to a private IP.");
             }
         }
-
-        // All checks passed, proceed with request
-        return await base.SendAsync(request, cancellationToken);
     }
 }
