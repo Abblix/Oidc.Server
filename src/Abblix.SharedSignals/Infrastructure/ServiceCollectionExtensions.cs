@@ -69,6 +69,10 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<StreamManagementService>();
         services.TryAddSingleton<PollEndpointHandler>();
+
+        // A receiver names the address its stream is delivered to, so that address is input from outside and is
+        // judged before every delivery.
+        services.TryAddSingleton<ReceiverAddressPolicy>();
         services.AddHttpClient<PushDeliverySender>();
 
         return services;

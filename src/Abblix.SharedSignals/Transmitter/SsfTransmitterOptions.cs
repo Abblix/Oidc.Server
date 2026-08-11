@@ -98,6 +98,19 @@ public sealed record SsfTransmitterOptions
     public IReadOnlyList<JsonObject>? AuthorizationSchemes { get; init; }
 
     /// <summary>
+    /// The receiver origins this deployment may deliver to whatever their address, matched by scheme, host and
+    /// port. Empty leaves every receiver to the ordinary rules: HTTPS, and an address outside the deployment's
+    /// own network.
+    /// </summary>
+    /// <remarks>
+    /// A receiver names its own delivery endpoint, so the address arrives from outside and is refused when it
+    /// points inside the network. That refusal is wrong for exactly one deployment shape: a receiver of the
+    /// operator's own, reached at a private address. Naming it here is how an operator says so, and it is
+    /// deliberately an origin rather than a switch, so permitting one receiver does not permit the rest.
+    /// </remarks>
+    public IReadOnlyList<Uri> AllowedReceiverAddresses { get; init; } = [];
+
+    /// <summary>
     /// The "default_subjects" value the mode advertises, kept beside the enum so the wire word
     /// and the behavior cannot drift apart.
     /// </summary>

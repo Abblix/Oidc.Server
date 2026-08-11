@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -75,6 +75,30 @@ public static class DeliveryErrorCodes
     /// holding the expected state can reach, which is why no validation error maps to it.
     /// </summary>
     public const string InvalidState = "invalid_state";
+
+    /// <summary>
+    /// Tells whether a receiver's verdict would still hold if the same bytes arrived again.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8935 Section 4 draws this line for the transmitter and gives both directions by example:
+    /// "invalid_request" indicates a structural error "that is likely to remain when retransmitting the same SET",
+    /// while others "such as 'access_denied' may be transient, for example, if the SET Transmitter refreshes
+    /// expired credentials prior to retransmission". So the verdicts about the TOKEN are final, and the verdicts
+    /// about the transmitter's standing with the receiver are not: credentials get refreshed and grants get fixed
+    /// without the event changing at all.
+    /// <para>
+    /// An unrecognised code counts as final. The registry is extensible (Section 2.4), so a code from outside it
+    /// says nothing about repeatability, and keeping the event would hold the head of a queue on a verdict nobody
+    /// can interpret.
+    /// </para>
+    /// </remarks>
+    /// <param name="errorCode">The "err" value the receiver answered with.</param>
+    /// <returns>True when redelivery cannot change the answer.</returns>
+    public static bool IsFinal(string? errorCode) => errorCode switch
+    {
+        AuthenticationFailed or AccessDenied => false,
+        _ => true,
+    };
 
     /// <summary>
     /// Translates a validation verdict into the registry code a delivery response carries.
