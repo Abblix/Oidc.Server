@@ -36,7 +36,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// transmitter's own network position.
 /// <para>
 /// The rules about which addresses are internal are shared with every other outbound caller in this family, so
-/// they come from <see cref="InternalNetworkAddresses"/> rather than being restated here.
+/// they come from <see cref="PrivateNetworks"/> rather than being restated here.
 /// </para>
 /// </remarks>
 public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
@@ -65,14 +65,14 @@ public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
                 + "a subject, and cleartext exposes them to anyone on the path";
         }
 
-        if (InternalNetworkAddresses.IsInternalHostname(endpoint.Host))
+        if (PrivateNetworks.IsInternalHostname(endpoint.Host))
         {
             return $"the host '{endpoint.Host}' names the deployment's own network rather than a public receiver";
         }
 
         if (IPAddress.TryParse(endpoint.Host, out var literal))
         {
-            return InternalNetworkAddresses.IsPrivateOrReserved(literal)
+            return PrivateNetworks.IsPrivateOrReserved(literal)
                 ? $"the address '{literal}' is private or reserved"
                 : null;
         }
@@ -91,7 +91,7 @@ public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
 
         // Every answer has to be acceptable, not just the first: a name answering with one public address and one
         // private address would otherwise be reachable by whichever the connection happened to pick.
-        var refused = Array.Find(addresses, InternalNetworkAddresses.IsPrivateOrReserved);
+        var refused = Array.Find(addresses, PrivateNetworks.IsPrivateOrReserved);
         return refused is null
             ? null
             : $"the host '{endpoint.Host}' resolves to '{refused}', which is private or reserved";

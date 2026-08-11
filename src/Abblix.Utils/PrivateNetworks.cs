@@ -39,7 +39,7 @@ namespace Abblix.Utils;
 /// all, and which destinations an operator has deliberately permitted are policy, and policy differs by feature.
 /// </para>
 /// </remarks>
-public static class InternalNetworkAddresses
+public static class PrivateNetworks
 {
     /// <summary>
     /// Hostnames that typically resolve inside a private network.
