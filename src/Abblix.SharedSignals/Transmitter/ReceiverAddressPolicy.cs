@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -39,8 +39,24 @@ namespace Abblix.SharedSignals.Transmitter;
 /// they come from <see cref="PrivateNetworks"/> rather than being restated here.
 /// </para>
 /// </remarks>
-public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
+/// <param name="options">The deployment's transmitter settings, including the operator's allow-list.</param>
+/// <param name="resolveHost">
+/// Resolves a hostname to its addresses; defaults to <see cref="Dns.GetHostAddressesAsync(string,
+/// CancellationToken)"/>. A test supplies its own so the resolved-address branch, the only part of this policy
+/// that is not a string comparison, can be driven in both directions without a live DNS.</param>
+public sealed class ReceiverAddressPolicy(
+    SsfTransmitterOptions options,
+    ReceiverAddressPolicy.HostResolver? resolveHost = null)
 {
+    /// <summary>
+    /// Resolves a hostname to the addresses a connection to it would use.
+    /// </summary>
+    /// <param name="host">The hostname to resolve.</param>
+    /// <param name="cancellationToken">Cancels the resolution.</param>
+    public delegate Task<IPAddress[]> HostResolver(string host, CancellationToken cancellationToken);
+
+    private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+
     /// <summary>
     /// Judges the address of a delivery endpoint.
     /// </summary>
@@ -82,7 +98,7 @@ public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
         IPAddress[] addresses;
         try
         {
-            addresses = await Dns.GetHostAddressesAsync(endpoint.Host, cancellationToken);
+            addresses = await _resolveHost(endpoint.Host, cancellationToken);
         }
         catch (Exception exception) when (exception is SocketException or ArgumentException)
         {

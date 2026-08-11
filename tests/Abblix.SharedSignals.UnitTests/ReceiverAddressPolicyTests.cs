@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net;
+using System.Net.Sockets;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
@@ -40,6 +41,10 @@ public class ReceiverAddressPolicyTests
         Issuer = "https://tr.example.com",
         AllowedReceiverAddresses = allowed,
     });
+
+    private static ReceiverAddressPolicy PolicyResolving(params IPAddress[] answers) => new(
+        new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
+        (_, _) => Task.FromResult(answers));
 
     [Theory]
     [InlineData("https://169.254.169.254/events")]     // cloud metadata
@@ -85,6 +90,57 @@ public class ReceiverAddressPolicyTests
 
         var rejection = await policy.RejectionOf(
             new Uri("https://10.1.2.4/events"), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(rejection);
+    }
+
+    /// <summary>
+    /// The only "allow" verdict production traffic actually reaches: an ordinary public receiver, whose name
+    /// resolves to a public address, is permitted. Without this case the resolved-address branch could be
+    /// inverted and the suite would stay green.
+    /// </summary>
+    [Fact]
+    public async Task AResolvedPublicAddressIsPermitted()
+    {
+        var policy = PolicyResolving(IPAddress.Parse("93.184.216.34"));
+
+        var rejection = await policy.RejectionOf(
+            new Uri("https://receiver.example.com/events"), TestContext.Current.CancellationToken);
+
+        Assert.Null(rejection);
+    }
+
+    /// <summary>
+    /// Every resolved address must be acceptable, not just the first: a name answering with one public and one
+    /// private address is refused, because the connection could take either.
+    /// </summary>
+    [Fact]
+    public async Task ANameResolvingToAnyPrivateAddressIsRefused()
+    {
+        var policy = PolicyResolving(IPAddress.Parse("93.184.216.34"), IPAddress.Parse("10.0.0.5"));
+
+        var rejection = await policy.RejectionOf(
+            new Uri("https://receiver.example.com/events"), TestContext.Current.CancellationToken);
+
+        // Named on the private answer, not the public one: the refusal is about the address that would have let
+        // the connection inside, which pins the "every answer" rule rather than "the first answer".
+        Assert.NotNull(rejection);
+        Assert.Contains("10.0.0.5", rejection);
+    }
+
+    /// <summary>
+    /// A name that does not resolve is refused rather than delivered to: an unresolvable endpoint is not a public
+    /// receiver.
+    /// </summary>
+    [Fact]
+    public async Task ANameThatDoesNotResolveIsRefused()
+    {
+        var policy = new ReceiverAddressPolicy(
+            new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
+            (host, _) => throw new SocketException());
+
+        var rejection = await policy.RejectionOf(
+            new Uri("https://receiver.example.com/events"), TestContext.Current.CancellationToken);
 
         Assert.NotNull(rejection);
     }
