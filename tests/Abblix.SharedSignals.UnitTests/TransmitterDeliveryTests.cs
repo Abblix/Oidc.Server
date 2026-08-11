@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System.Net;
+using System.Net.Mime;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
@@ -55,6 +56,20 @@ public class TransmitterDeliveryTests
         },
     };
 
+    /// <summary>
+    /// Permits the receiver these tests deliver to, so the address policy is not what they are measuring.
+    /// </summary>
+    /// <remarks>
+    /// Named as an operator permission rather than a relaxation: without it the policy would resolve
+    /// "receiver.example.com" over the network, which is neither this suite's subject nor its business.
+    /// The policy's own rules are covered in <see cref="ReceiverAddressPolicyTests"/>.
+    /// </remarks>
+    private static ReceiverAddressPolicy ReachingTheTestReceiver => new(new SsfTransmitterOptions
+    {
+        Issuer = "https://tr.example.com",
+        AllowedReceiverAddresses = [new Uri("https://receiver.example.com")],
+    });
+
     private static async Task<InMemoryEventOutbox> OutboxWithAsync(params OutboxItem[] items)
     {
         var outbox = new InMemoryEventOutbox();
@@ -73,7 +88,7 @@ public class TransmitterDeliveryTests
             .Enqueue(HttpStatusCode.Accepted)
             .Enqueue(HttpStatusCode.Accepted);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -95,7 +110,7 @@ public class TransmitterDeliveryTests
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"),
             new OutboxItem("jti-3", "c.c.c"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -104,6 +119,54 @@ public class TransmitterDeliveryTests
             ["jti-2", "jti-3"],
             (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
+    }
+
+    /// <summary>
+    /// A 400 about the transmitter rather than about the event keeps the event queued: RFC 8935 Section 4 names
+    /// exactly this case as one a retransmission can succeed at, "if the SET Transmitter refreshes expired
+    /// credentials prior to retransmission".
+    /// </summary>
+    [Theory]
+    [InlineData(DeliveryErrorCodes.AuthenticationFailed)]
+    [InlineData(DeliveryErrorCodes.AccessDenied)]
+    public async Task Push_BadRequestAboutTheTransmitter_KeepsTheEventQueued(string errorCode)
+    {
+        var handler = new StubHttpHandler()
+            .Enqueue(HttpStatusCode.BadRequest, $$"""{"err": "{{errorCode}}", "description": "-"}""");
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", "a.a.a"),
+            new OutboxItem("jti-2", "b.b.b"));
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+
+        var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        // Nothing delivered, nothing dropped, and the pass stopped rather than spending the queue on a receiver
+        // that is refusing this transmitter for a reason a deployment can fix.
+        Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 0), outcome);
+        Assert.Equal(
+            ["jti-1", "jti-2"],
+            (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
+            .Select(item => item.JwtId));
+    }
+
+    /// <summary>
+    /// A 400 whose body cannot be read as a verdict is treated as final, because the alternative lets a receiver
+    /// answering with an error page hold the head of the queue indefinitely.
+    /// </summary>
+    [Theory]
+    [InlineData("not json at all", MediaTypeNames.Text.Html)]
+    [InlineData("""{"err": "something_the_registry_does_not_have", "description": "-"}""",
+        MediaTypeNames.Application.Json)]
+    public async Task Push_BadRequestWithoutAReadableVerdict_DropsTheEvent(string body, string mediaType)
+    {
+        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.BadRequest, body, mediaType);
+        var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+
+        var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 1), outcome);
+        Assert.Empty(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -115,7 +178,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b", IsStatusAnnouncement: true));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
 
         var outcome = await sender.SendPendingAsync(
             PushStream(StreamStatuses.Paused), TestContext.Current.CancellationToken);

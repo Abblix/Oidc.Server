@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -36,9 +36,6 @@ namespace Abblix.Jwt.Azure;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>Names the HTTP client the blob ring rides, so it shares the package's pipeline conventions.</summary>
-    private const string BlobRingClient = "Abblix.Jwt.Azure.KeyRing";
-
     /// <summary>
     /// Registers Azure Key Vault as the custodian of the host's keys and opens the placement choice that completes
     /// the wiring. This call is only the transport: it registers the vault client and its credential. Which keys
@@ -135,7 +132,7 @@ public static class ServiceCollectionExtensions
         // promises it, and without it the ring gets none of the host's handlers or logging, and no
         // PooledConnectionLifetime to recycle connections for DNS changes.
         services
-            .AddHttpClient(BlobRingClient)
+            .AddHttpClient(AzureKeyRingTransport.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(provider =>
             {
                 var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
@@ -155,7 +152,7 @@ public static class ServiceCollectionExtensions
             var credential = KeyVaultClient.BuildCredential(
                 provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
 
-            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(BlobRingClient);
+            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(AzureKeyRingTransport.HttpClientName);
             var options = new BlobClientOptions { Transport = new HttpClientTransport(httpClient) };
 
             var service = new BlobServiceClient(ring.ServiceUri, credential, options);

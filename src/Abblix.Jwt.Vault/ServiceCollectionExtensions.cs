@@ -116,7 +116,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddTransient<TokenHandler>();
 
-        services.AddHttpClient(Transport.ClientName, (provider, http) =>
+        services.AddHttpClient(VaultTransport.HttpClientName, (provider, http) =>
         {
             // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
             // different ones, so each spells its own into every path.

@@ -33,14 +33,25 @@ namespace Abblix.Jwt.Vault;
 /// token, so they resolve one named client from <see cref="IHttpClientFactory"/> and share its connection pool and
 /// the one place where the auth header, its redaction and the connection lifetime are settled. The send itself is a
 /// function over an <see cref="HttpClient"/>, with no state of its own, so it is an extension rather than a service.
+/// <para>
+/// The type is public for one member, <see cref="HttpClientName"/>: the transport is what a host configures, and
+/// its consumers are internal, so there is nowhere narrower to publish the name from. Everything else stays
+/// internal.
+/// </para>
 /// </remarks>
-internal static class Transport
+public static class VaultTransport
 {
     /// <summary>
-    /// The name the shared client is registered and resolved under. It is a name of its own rather than a typed
-    /// client of whichever engine came first, because both engines share it.
+    /// The name the transport's client is registered under, published so a host can configure it without copying
+    /// the string: <c>services.AddHttpClient(VaultTransport.HttpClientName)</c> reaches the same client both
+    /// engines resolve, and whatever it chains - a resilience pipeline, a proxy, a client certificate - applies to
+    /// every Vault call.
     /// </summary>
-    internal const string ClientName = "Abblix.Jwt.Vault";
+    /// <remarks>
+    /// It is a name of its own rather than a typed client of whichever engine came first, because both engines
+    /// share it.
+    /// </remarks>
+    public const string HttpClientName = "Abblix.Jwt.Vault";
 
     /// <summary>
     /// Sends a request and hands back what Vault answered, whatever the status. A failure status is not thrown on,

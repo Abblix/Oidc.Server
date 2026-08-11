@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -318,7 +318,8 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
 
         var sender = new PushDeliverySender(
             _receiver.GetTestClient(),
-            _transmitter.Services.GetRequiredService<IEventOutbox>());
+            _transmitter.Services.GetRequiredService<IEventOutbox>(),
+            _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>());
 
         return await sender.SendPendingAsync(stream!, cancellationToken);
     }
@@ -334,6 +335,10 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
             Issuer = TransmitterIssuer,
             EventsSupported = [MembershipChanged],
             PollEndpointFactory = streamId => new Uri($"{TransmitterIssuer}/ssf/poll/{streamId}"),
+
+            // The receiver in this suite is a test server rather than a host on the network, so the address
+            // policy is told about it the way an operator tells it about a receiver of its own.
+            AllowedReceiverAddresses = [new Uri(PushEndpoint)],
         });
 
         // The test host's stand-in for authentication: every request is the one receiver. A
