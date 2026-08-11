@@ -65,14 +65,14 @@ public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
                 + "a subject, and cleartext exposes them to anyone on the path";
         }
 
-        if (PrivateNetworks.IsInternalHostname(endpoint.Host))
+        if (PrivateNetworks.IsPrivateHostname(endpoint.Host))
         {
             return $"the host '{endpoint.Host}' names the deployment's own network rather than a public receiver";
         }
 
         if (IPAddress.TryParse(endpoint.Host, out var literal))
         {
-            return PrivateNetworks.IsPrivateOrReserved(literal)
+            return PrivateNetworks.IsPrivateOrReservedAddress(literal)
                 ? $"the address '{literal}' is private or reserved"
                 : null;
         }
@@ -91,7 +91,7 @@ public sealed class ReceiverAddressPolicy(SsfTransmitterOptions options)
 
         // Every answer has to be acceptable, not just the first: a name answering with one public address and one
         // private address would otherwise be reachable by whichever the connection happened to pick.
-        var refused = Array.Find(addresses, PrivateNetworks.IsPrivateOrReserved);
+        var refused = Array.Find(addresses, PrivateNetworks.IsPrivateOrReservedAddress);
         return refused is null
             ? null
             : $"the host '{endpoint.Host}' resolves to '{refused}', which is private or reserved";

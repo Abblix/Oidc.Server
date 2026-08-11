@@ -35,6 +35,12 @@ namespace Abblix.Utils;
 /// everywhere at once, and a second copy of these rules would drift silently, since neither copy fails when they
 /// disagree.
 /// <para>
+/// "Private" is this type's term and it is wider than the RFC 1918 ranges the phrase usually names: it covers
+/// everything a server-initiated request has no business reaching, so loopback, link-local (where a cloud's
+/// metadata service lives), carrier-grade NAT, multicast and the unspecified address count too, as do hostnames
+/// that resolve inside a network rather than on the internet.
+/// </para>
+/// <para>
 /// What surrounds the question stays with each caller: which schemes are allowed, whether the check applies at
 /// all, and which destinations an operator has deliberately permitted are policy, and policy differs by feature.
 /// </para>
@@ -42,7 +48,7 @@ namespace Abblix.Utils;
 public static class PrivateNetworks
 {
     /// <summary>
-    /// Hostnames that typically resolve inside a private network.
+    /// Hostnames that typically resolve inside a network rather than on the internet.
     /// </summary>
     private static readonly string[] BlockedHostnames = [
         "localhost",
@@ -58,7 +64,7 @@ public static class PrivateNetworks
     ];
 
     /// <summary>
-    /// Top-level domains commonly used for internal networks.
+    /// Top-level domains commonly used for networks of an organisation's own.
     /// </summary>
     private static readonly string[] BlockedTlds = [
         ".local",
@@ -71,11 +77,11 @@ public static class PrivateNetworks
     ];
 
     /// <summary>
-    /// Reports whether a hostname looks internal or otherwise non-public.
+    /// Reports whether a hostname belongs to a network rather than to the internet.
     /// </summary>
     /// <param name="hostname">The host component of the address about to be reached.</param>
     /// <returns>True when the name should not be reached from a server-initiated request.</returns>
-    public static bool IsInternalHostname(string hostname)
+    public static bool IsPrivateHostname(string hostname)
     {
         var normalizedHost = hostname.ToLowerInvariant();
 
@@ -98,7 +104,7 @@ public static class PrivateNetworks
     /// </summary>
     /// <param name="address">The address a name resolved to, or the literal in the URI.</param>
     /// <returns>True when the address belongs to the deployment's own network rather than the internet.</returns>
-    public static bool IsPrivateOrReserved(IPAddress address)
+    public static bool IsPrivateOrReservedAddress(IPAddress address)
     {
         // Collapse an IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 / ::ffff:169.254.169.254) to its IPv4 form
         // FIRST - RFC 4291 Section 2.5.5 - so every rule below, including the loopback check, inspects the embedded

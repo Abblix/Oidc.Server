@@ -99,11 +99,12 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
     /// Checks if a hostname appears to be internal or non-public.
     /// </summary>
     /// <remarks>
-    /// The rules live in <see cref="PrivateNetworks"/>, where every package that must refuse an internal
-    /// address reads them, so a name added there takes effect here too.
+    /// The rules live in <see cref="PrivateNetworks"/>, where every package that must refuse such an address
+    /// reads them, so a name added there takes effect here too. The wording of this member is kept as shipped:
+    /// it is public, and a rename would break a host that calls it for nothing but a synonym.
     /// </remarks>
     public static bool IsInternalHostname(string hostname)
-        => PrivateNetworks.IsInternalHostname(hostname);
+        => PrivateNetworks.IsPrivateHostname(hostname);
 
     /// <summary>
     /// Checks if an IP address is private, loopback, link-local, or otherwise reserved.
@@ -112,5 +113,5 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
     /// Delegates to <see cref="PrivateNetworks"/> for the same reason as the hostname rules above.
     /// </remarks>
     public static bool IsPrivateOrReservedAddress(IPAddress address)
-        => PrivateNetworks.IsPrivateOrReserved(address);
+        => PrivateNetworks.IsPrivateOrReservedAddress(address);
 }
