@@ -134,7 +134,7 @@ public class ExternalKeysWiringTests
     {
         var services = AnOidcHost();
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         Assert.IsType<OidcOptionsKeysProvider>(keysProvider);
@@ -158,7 +158,7 @@ public class ExternalKeysWiringTests
         services.AddJsonWebTokens();
         services.AddAuthServiceJwt();
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
         // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected by it.

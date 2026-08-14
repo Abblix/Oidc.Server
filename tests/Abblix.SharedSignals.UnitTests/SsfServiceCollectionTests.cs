@@ -104,7 +104,7 @@ public class SsfServiceCollectionTests
         });
         services.AddSingleton<ISecurityEventSink, NullSink>();
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var validator = provider.GetRequiredService<ISecurityEventTokenValidator>();
 
         var verdict = await validator.ValidateAsync(

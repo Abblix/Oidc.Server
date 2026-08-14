@@ -23,7 +23,6 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using CorePushedAuthorizationResponse =

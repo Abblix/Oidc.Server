@@ -22,11 +22,11 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Abblix.SecurityEvents.Caep;
+using Abblix.SecurityEvents.CAEP;
 using Abblix.SecurityEvents.Events;
 using Xunit;
 
-namespace Abblix.SecurityEvents.Risc.UnitTests;
+namespace Abblix.SecurityEvents.RISC.UnitTests;
 
 /// <summary>
 /// Pins the payload models to the specification's own examples: every fixture here is the event

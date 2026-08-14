@@ -24,7 +24,6 @@ using System.Net;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -175,7 +174,7 @@ public class AddAzureCustodianTests
         var origin = new FlakyOriginHandler(failuresBeforeSuccess: 2);
         services.AddHttpClient(clientName).ConfigurePrimaryHttpMessageHandler(() => origin);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
         using var httpClient = new HttpClient(handler, disposeHandler: false);
 

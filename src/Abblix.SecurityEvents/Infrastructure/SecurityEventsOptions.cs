@@ -22,7 +22,6 @@
 
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Events;
-using Abblix.SecurityEvents.Validation;
 
 namespace Abblix.SecurityEvents.Infrastructure;
 

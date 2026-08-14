@@ -222,6 +222,9 @@ static async Task LoadEmbeddedTestLicenseAsync()
 
 // Marker for WebApplicationFactory<Program>. Must stay public so the factory
 // can bind cross-assembly; private ctor satisfies S1118 (no instance state).
+// It also has to stay in the GLOBAL namespace, which is where the compiler puts the class it
+// generates for top-level statements: this declaration is the same partial class, and moving it
+// under a namespace of its own makes it a second, empty type the factory cannot start.
 public partial class Program
 {
     private Program() { }

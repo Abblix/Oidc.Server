@@ -20,13 +20,12 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Net;
+using Abblix.Tests.Shared;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
-using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -70,7 +69,7 @@ public class PushDeliveryResilienceTests
         var receiver = new FlakyOriginHandler(failuresBeforeSuccess: 2);
         services.AddHttpClient(PushDeliveryTransport.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => receiver);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var outbox = provider.GetRequiredService<IEventOutbox>();
         await outbox.EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
