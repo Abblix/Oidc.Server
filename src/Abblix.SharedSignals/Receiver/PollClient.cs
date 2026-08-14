@@ -54,12 +54,15 @@ public sealed class PollClient(HttpClient httpClient)
         // A delivery without the URL is a receiver's own PROPOSAL of poll, not a pollable
         // stream: the URL is transmitter-supplied, so only the configuration the transmitter
         // returned carries it (SSF 1.0 Sections 6.1.2, 8.1.1.1).
-        return delivery.EndpointUrl is { } endpoint
-            ? PollAsync(endpoint, request, cancellationToken)
-            : throw new InvalidOperationException(
+        if (delivery.EndpointUrl is not { } endpoint)
+        {
+            throw new InvalidOperationException(
                 $"The poll delivery carries no '{StreamDeliveryMethod.ParameterNames.EndpointUrl}': poll "
                 + "the delivery of a transmitter-returned stream configuration, not a receiver-side "
                 + "proposal (SSF 1.0 Sections 6.1.2, 8.1.1.1).");
+        }
+
+        return PollAsync(endpoint, request, cancellationToken);
     }
 
     /// <summary>
@@ -81,9 +84,14 @@ public sealed class PollClient(HttpClient httpClient)
         using var response = await httpClient.PostAsJsonAsync(endpoint, request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        return await response.Content.ReadFromJsonAsync<PollResponse>(cancellationToken)
-            ?? throw new InvalidOperationException(
+        var pollResponse = await response.Content.ReadFromJsonAsync<PollResponse>(cancellationToken);
+        if (pollResponse == null)
+        {
+            throw new InvalidOperationException(
                 "The poll response deserialized to null; a transmitter with nothing to deliver "
                 + "answers with an empty \"sets\" object (RFC 8936 Section 2.3).");
+        }
+
+        return pollResponse;
     }
 }
