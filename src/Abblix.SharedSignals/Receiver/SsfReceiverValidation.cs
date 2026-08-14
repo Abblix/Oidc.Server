@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Jwt;
+
 namespace Abblix.SharedSignals.Receiver;
 
 /// <summary>
@@ -31,9 +33,13 @@ namespace Abblix.SharedSignals.Receiver;
 public static class SsfReceiverValidation
 {
     /// <summary>
-    /// The profile's service key. Public because a host that adds its OWN steps to the
-    /// receiver's validation - a deployment-specific issuer pin, say - reaches the profile's
-    /// cursor by this key; everything this package needs is already bound to it.
+    /// The profile's service key: the SET's own <c>typ</c> value. The key is the wire
+    /// discriminator of the token kind because that is precisely what profiles part over - each
+    /// pins its <c>typ</c> and shapes the claims that kind demands - so "which profile" and
+    /// "which token kind" are one question with one spelling. Public because a host that adds
+    /// its OWN steps to the receiver's validation - a deployment-specific issuer pin, say -
+    /// reaches the profile's cursor by this key. A second consumer of the SAME token kind does
+    /// not share it: a profile has one owner, and that consumer names a key of its own.
     /// </summary>
-    public const string ProfileKey = "Abblix.SharedSignals.Receiver";
+    public const string ProfileKey = JsonWebTokenTypes.SecurityEvent;
 }
