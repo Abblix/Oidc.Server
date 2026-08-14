@@ -35,6 +35,13 @@ namespace Abblix.SecurityEvents.Validation;
 /// belongs after the verdict, in the consumer. That split is why replay protection is not a step:
 /// registering a "jti" is a mutation, and a pipeline that mutated on a token later steps might
 /// still reject would need an undo.
+/// <para>
+/// The return type is <see cref="ValueTask{TResult}"/> deliberately: all but one of the default
+/// steps answer synchronously - only signature verification performs I/O, for key retrieval -
+/// and the pipeline calls every step on every token, so a <see cref="Task{TResult}"/> here would
+/// allocate once per synchronous step per token for nothing. The usual ValueTask hazard, a
+/// second await, has no doorway: the composite and the guard each await a step exactly once.
+/// </para>
 /// </remarks>
 public interface ISecurityEventTokenValidator
 {

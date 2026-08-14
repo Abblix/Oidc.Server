@@ -50,23 +50,28 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         ISecurityEventTokenValidator inner,
         IServiceProvider serviceProvider,
         IOptions<SecurityEventsOptions> options,
-        ILogger<InsecureValidationGuard> logger)
+        ILogger<InsecureValidationGuard> logger,
+        ValidationProfileIdentity profile)
     {
         _inner = inner;
 
         // Ask the family what it holds, and let it answer for its own arrangement - composed or not, behind
-        // whatever composite. Naming a key to read the members by is what this must not do: a key that is
-        // merely out of date answers with an empty set, and an empty set reads here as every critical step
-        // being absent, which turns a guard into a refusal to start.
+        // whatever composite. The key here is the profile's own identity, supplied by the registration that
+        // decorated this guard over that very family - never a guess that could go stale and answer empty.
         var memberTypes = serviceProvider
-            .Decompose<ISecurityEventTokenValidator>()
+            .Decompose<ISecurityEventTokenValidator>(profile.Key)
             .Select(step => step.GetType())
             .ToHashSet();
 
-        // Every package that contributes a step carrying the marker declares it, so the set grows with the
-        // profile instead of describing only the steps this package ships.
-        var missing = serviceProvider
-            .GetServices<CriticalValidationStep>()
+        // Every package that contributes a step carrying the marker declares it - globally for the plain
+        // family, keyed to the profile for a named one - so each profile is judged only by the declarations
+        // meant for it: a global set would make this guard demand another consumer's steps of a profile that
+        // was never supposed to carry them.
+        var criticalSteps = profile.Key is null
+            ? serviceProvider.GetServices<CriticalValidationStep>()
+            : serviceProvider.GetKeyedServices<CriticalValidationStep>(profile.Key);
+
+        var missing = criticalSteps
             .Select(step => step.StepType)
             .Distinct()
             .Where(critical => !memberTypes.Contains(critical))
@@ -78,7 +83,10 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         }
 
         var missingNames = string.Join(", ", missing.Select(type => type.Name));
-        var allowances = options.Value.InsecureValidationAllowances;
+
+        // A named profile carries its own allowances; the plain default keeps recording them in
+        // the options, where its owners have always put them.
+        var allowances = profile.Allowances ?? options.Value.InsecureValidationAllowances;
 
         if (allowances.Count == 0)
         {

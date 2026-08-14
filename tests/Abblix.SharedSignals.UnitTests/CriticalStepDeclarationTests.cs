@@ -58,15 +58,19 @@ public class CriticalStepDeclarationTests
             .AddSsfReceiver(new SsfValidationOptions());
     }
 
+    // The receiver validates under its own named profile, so the resolve, the removal and the
+    // census below all address that profile's family - the plain one no longer carries SSF steps.
     private static ISecurityEventTokenValidator Resolve(IServiceCollection services)
     {
         using var provider = services.BuildServiceProvider();
-        return provider.GetRequiredService<ISecurityEventTokenValidator>();
+        return provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
+            SsfReceiverValidation.ProfileKey);
     }
 
     private static void RemoveStep(IServiceCollection services, Type stepType)
     {
-        var family = services.Decompose<ISecurityEventTokenValidator>();
+        var family = services.DecomposeKeyed<ISecurityEventTokenValidator>(
+            SsfReceiverValidation.ProfileKey);
         family.RemoveAt(family.ToList().FindIndex(
             member => member.ResolveImplementationType() == stepType));
     }
@@ -106,7 +110,7 @@ public class CriticalStepDeclarationTests
         using var provider = services.BuildServiceProvider();
 
         return provider
-            .Decompose<ISecurityEventTokenValidator>()
+            .Decompose<ISecurityEventTokenValidator>(SsfReceiverValidation.ProfileKey)
             .Select(step => step.GetType())
             .Where(type => typeof(ISecurityCriticalValidator).IsAssignableFrom(type))
             .ToArray();

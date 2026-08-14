@@ -176,7 +176,89 @@ public static class ServiceCollectionExtensions
             services.AddCriticalValidationStep(step);
 
         services.Compose<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>();
-        services.Decorate<ISecurityEventTokenValidator, InsecureValidationGuard>();
+        services.Decorate<ISecurityEventTokenValidator, InsecureValidationGuard>(
+            Dependency.Override(ValidationProfileIdentity.Default));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Creates a NAMED validation profile: a keyed copy of the default step family that
+    /// <paramref name="configure"/> edits without touching any other profile, resolvable as a
+    /// keyed <see cref="ISecurityEventTokenValidator"/> under <paramref name="profileKey"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for the host whose consumers contradict each other. One composed family per
+    /// host was enough until two token kinds met in one container: Back-Channel Logout REQUIRES
+    /// <c>exp</c> and pins <c>typ</c> to its own value, a Shared Signals SET forbids the former
+    /// and pins the latter differently - so whichever consumer edits the shared family breaks the
+    /// other, and the breakage surfaces as every token of the other kind being refused. A named
+    /// profile gives each consumer its own copy to shape, and the plain family stays whole for
+    /// whoever relies on it.
+    /// </para>
+    /// <para>
+    /// The copy is taken from the DEFAULTS, not from the current state of the plain family: a
+    /// profile owner reasons from the documented baseline, and copying another consumer's edits
+    /// would smuggle one profile's decisions into another depending on registration order.
+    /// Critical-step accounting is per profile for the same reason - the defaults' critical steps
+    /// seed the profile, <see cref="ValidationProfile.AddCriticalStep{TStep}"/> adds to it, and
+    /// the guard judges each profile only by its own declarations and allowances.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="profileKey">The key the profile's validator resolves under.</param>
+    /// <param name="configure">Shapes the profile: step edits, critical declarations, allowances.</param>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="AddSecurityEvents"/> has not run, or a profile already exists under this key -
+    /// re-shaping an existing profile through a second registration would let two owners edit one
+    /// copy, which is the situation profiles exist to end.
+    /// </exception>
+    public static IServiceCollection AddSecurityEventValidationProfile(
+        this IServiceCollection services,
+        object profileKey,
+        Action<ValidationProfile>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(profileKey);
+
+        if (services.All(descriptor => descriptor.ServiceType != typeof(ISecurityEventTokenValidator)))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddSecurityEventValidationProfile)} needs the default steps to copy: call "
+                + $"{nameof(AddSecurityEvents)} first.");
+        }
+
+        if (services.Any(descriptor => descriptor is { IsKeyedService: true } &&
+                                       descriptor.ServiceType == typeof(ISecurityEventTokenValidator) &&
+                                       Equals(descriptor.ServiceKey, profileKey)))
+        {
+            throw new InvalidOperationException(
+                $"A validation profile already exists under '{profileKey}'. A profile has one owner; "
+                + "a second registration under the same key would let two owners edit one copy.");
+        }
+
+        foreach (var step in DefaultPipelineSteps)
+        {
+            services.Add(ServiceDescriptor.DescribeKeyed(
+                typeof(ISecurityEventTokenValidator), profileKey, step.ImplementationType!, step.Lifetime));
+        }
+
+        foreach (var critical in CriticalDefaultSteps)
+        {
+            services.Add(ServiceDescriptor.KeyedSingleton(
+                profileKey, (_, _) => new CriticalValidationStep(critical)));
+        }
+
+        services.ComposeKeyed<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>(profileKey);
+
+        var profile = new ValidationProfile(services, profileKey);
+        configure?.Invoke(profile);
+
+        // Decorated AFTER configure so the identity carries the profile's recorded allowances.
+        // The guard itself still judges the final composition at first resolve, so later cursor
+        // edits stay inside its reach.
+        services.DecorateKeyed<ISecurityEventTokenValidator, InsecureValidationGuard>(
+            profileKey, Dependency.Override(profile.ToIdentity()));
 
         return services;
     }

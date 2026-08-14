@@ -105,7 +105,11 @@ public class SsfServiceCollectionTests
         services.AddSingleton<ISecurityEventSink, NullSink>();
 
         using var provider = services.BuildServiceProvider();
-        var validator = provider.GetRequiredService<ISecurityEventTokenValidator>();
+
+        // Resolved from the receiver's own profile: the plain validator no longer carries the
+        // SSF steps, and asking it would prove the wiring of a family the receiver does not use.
+        var validator = provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
+            SsfReceiverValidation.ProfileKey);
 
         var verdict = await validator.ValidateAsync(
             UnsignedToken(payload: """{"sub": "user-1", "events": {"urn:example": {}}}"""),
