@@ -53,7 +53,7 @@ namespace Abblix.SharedSignals.Receiver;
 /// entirely to the sink's contract.</param>
 public sealed class PushDeliveryHandler(
     [FromKeyedServices(SsfReceiverValidation.ProfileKey)] ISecurityEventTokenValidator validator,
-    SsfValidationOptions options,
+    SharedSignalsValidationOptions options,
     ISecurityEventSink sink,
     IReplayCache? replayCache = null)
 {

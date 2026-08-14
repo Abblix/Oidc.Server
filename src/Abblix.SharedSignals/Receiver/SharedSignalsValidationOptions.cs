@@ -31,7 +31,7 @@ namespace Abblix.SharedSignals.Receiver;
 /// declared critical subject members. The SSF steps refuse to run against the base options type,
 /// so a profile wired with the wrong flavor fails loudly on its first token.
 /// </summary>
-public sealed record SsfValidationOptions : SecurityEventTokenValidationOptions
+public sealed record SharedSignalsValidationOptions : SecurityEventTokenValidationOptions
 {
     /// <summary>
     /// The issuer of the stream the events arrive on, from its Stream Configuration. SSF 1.0

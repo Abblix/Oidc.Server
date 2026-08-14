@@ -363,7 +363,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
             options.Events.Register<VerificationEventPayload>(SsfEventTypes.Verification));
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddDistributedReplayCache();
-        builder.Services.AddSsfReceiver(new SsfValidationOptions
+        builder.Services.AddSsfReceiver(new SharedSignalsValidationOptions
         {
             ExpectedAudience = ReceiverId,
             ExpectedIssuers = [TransmitterIssuer],

@@ -98,7 +98,7 @@ public class SsfServiceCollectionTests
         // ForbidSubStep produces, and it earns it BEFORE any signature work - the token below
         // has no valid signature, so reaching a signature error instead would mean the step is
         // ordered wrong, and reaching success would mean it is not wired at all.
-        var services = SecurityEventsBase().AddSsfReceiver(new SsfValidationOptions
+        var services = SecurityEventsBase().AddSsfReceiver(new SharedSignalsValidationOptions
         {
             StreamIssuer = "https://tr.example.com",
         });
@@ -113,7 +113,7 @@ public class SsfServiceCollectionTests
 
         var verdict = await validator.ValidateAsync(
             UnsignedToken(payload: """{"sub": "user-1", "events": {"urn:example": {}}}"""),
-            provider.GetRequiredService<SsfValidationOptions>(),
+            provider.GetRequiredService<SharedSignalsValidationOptions>(),
             TestContext.Current.CancellationToken);
 
         Assert.True(verdict.TryGetFailure(out var error));
@@ -125,7 +125,7 @@ public class SsfServiceCollectionTests
     public void Receiver_RegisteredTwice_AddsEachStepOnce()
     {
         var services = SecurityEventsBase();
-        var options = new SsfValidationOptions();
+        var options = new SharedSignalsValidationOptions();
 
         services.AddSsfReceiver(options).AddSsfReceiver(options);
 

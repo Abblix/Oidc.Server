@@ -50,10 +50,10 @@ public sealed class CriticalSubjectMembersStep : ISecurityEventTokenValidator
     {
         context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
-        if (context.Options is not SsfValidationOptions options)
+        if (context.Options is not SharedSignalsValidationOptions options)
         {
             throw new InvalidOperationException(
-                $"{nameof(CriticalSubjectMembersStep)} requires {nameof(SsfValidationOptions)}: the "
+                $"{nameof(CriticalSubjectMembersStep)} requires {nameof(SharedSignalsValidationOptions)}: the "
                 + "critical member names and the subject vocabulary live there.");
         }
 

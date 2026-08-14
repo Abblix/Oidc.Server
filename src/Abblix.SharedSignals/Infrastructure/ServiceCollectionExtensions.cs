@@ -113,10 +113,10 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="options">
     /// What this receiver expects of every token; registered as the shared instance, so a host
-    /// pre-registering its own <see cref="SsfValidationOptions"/> wins.</param>
+    /// pre-registering its own <see cref="SharedSignalsValidationOptions"/> wins.</param>
     public static IServiceCollection AddSsfReceiver(
         this IServiceCollection services,
-        SsfValidationOptions options)
+        SharedSignalsValidationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         RequireSecurityEvents(services, nameof(AddSsfReceiver));

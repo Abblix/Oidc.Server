@@ -34,7 +34,7 @@ namespace Abblix.SharedSignals.Receiver;
 /// Section 4.1.6 names two values to match - the Stream Configuration's "iss" and the issuer
 /// the Transmitter Configuration was requested from. The receiver proved those equal when it
 /// accepted the stream (Sections 7.2.2, 8.1.1.1), so the single comparison here carries both
-/// halves of the rule; see <see cref="SsfValidationOptions.StreamIssuer"/>.
+/// halves of the rule; see <see cref="SharedSignalsValidationOptions.StreamIssuer"/>.
 /// </remarks>
 public sealed class StreamIssuerStep : ISecurityCriticalValidator
 {
@@ -48,11 +48,11 @@ public sealed class StreamIssuerStep : ISecurityCriticalValidator
         // A missing expectation is a configuration bug, not a token defect: without the stream's
         // issuer there is nothing to bind the event to, and reporting that as a token error would
         // blame every token for the receiver's wiring.
-        if (context.Options is not SsfValidationOptions { StreamIssuer: { Length: > 0 } streamIssuer })
+        if (context.Options is not SharedSignalsValidationOptions { StreamIssuer: { Length: > 0 } streamIssuer })
         {
             throw new InvalidOperationException(
-                $"{nameof(StreamIssuerStep)} requires {nameof(SsfValidationOptions)}."
-                + $"{nameof(SsfValidationOptions.StreamIssuer)} to be configured with the issuer from the "
+                $"{nameof(StreamIssuerStep)} requires {nameof(SharedSignalsValidationOptions)}."
+                + $"{nameof(SharedSignalsValidationOptions.StreamIssuer)} to be configured with the issuer from the "
                 + "stream's configuration (SSF 1.0 Section 4.1.6).");
         }
 

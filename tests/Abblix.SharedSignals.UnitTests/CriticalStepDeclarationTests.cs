@@ -50,7 +50,7 @@ public class CriticalStepDeclarationTests
 
         return services
             .AddSecurityEvents()
-            .AddSsfReceiver(new SsfValidationOptions());
+            .AddSsfReceiver(new SharedSignalsValidationOptions());
     }
 
     // The receiver validates under its own named profile, so the resolve, the removal and the
