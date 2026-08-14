@@ -22,6 +22,7 @@
 
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -23,7 +23,7 @@
 using System.Net;
 using Abblix.SecurityEvents.Delivery;
 
-namespace Abblix.SharedSignals.Receiver.SecurityEvent;
+namespace Abblix.SecurityEvents.Delivery;
 
 /// <summary>
 /// What a push delivery request earns: the status code the transport answers with, and - only

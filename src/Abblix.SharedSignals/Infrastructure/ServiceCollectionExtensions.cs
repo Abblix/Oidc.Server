@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.DependencyInjection;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
@@ -107,7 +108,7 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// The host still owes two registrations of its own: an
-    /// <see cref="Abblix.SharedSignals.Receiver.SecurityEvent.ISecurityEventSink"/>, because where events
+    /// <see cref="ISecurityEventSink"/>, because where events
     /// land is the application, and key resolution (for example
     /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. A replay cache
     /// (<c>AddDistributedReplayCache</c>) is optional and picked up when present.
@@ -126,7 +127,16 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
-        services.TryAddSingleton<PushDeliveryHandler>();
+
+        // The push intake is RFC 8935's, not this framework's, so it takes the profile, the
+        // expectations and the sink as parameters. Bound here because only this call knows which
+        // profile is meant - and a keyed-service attribute could not say it, since an attribute
+        // takes a compile-time constant while the key belongs to the registration.
+        services.TryAddSingleton(provider => provider.CreateService<PushDeliveryHandler>(
+            Dependency.Override<ISecurityEventTokenValidator>(
+                serviceProvider => serviceProvider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
+                    SharedSignalsValidationProfiles.SecurityEvent)),
+            Dependency.Override<SecurityEventTokenValidationOptions>(options)));
 
         services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.SecurityEvent, profile =>
         {

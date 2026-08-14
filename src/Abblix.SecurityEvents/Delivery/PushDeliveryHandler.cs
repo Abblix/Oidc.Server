@@ -22,38 +22,45 @@
 
 using System.Net.Http.Headers;
 using Abblix.Jwt.ReplayPrevention;
-using Microsoft.Extensions.DependencyInjection;
-using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.SecurityEvent;
+namespace Abblix.SecurityEvents.Delivery;
 
 /// <summary>
-/// The host-agnostic core of a push delivery endpoint (RFC 8935, carried by SSF 1.0
-/// Section 6.1.1): one method from the raw transmission - content type and body - to the
-/// <see cref="PushDeliveryResult"/> the transport renders. A host adapter owns routing and
-/// transmitter authentication; this type owns everything the specifications say about the SET
-/// itself.
+/// The host-agnostic core of a push delivery endpoint (RFC 8935): one method from the raw
+/// transmission - content type and body - to the <see cref="PushDeliveryResult"/> the transport
+/// renders. A host adapter owns routing and transmitter authentication; this type owns everything
+/// the specifications say about the SET itself.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The order inside is the security order. Validation decides first; the replay cache is asked
 /// only about a token that proved itself, so an attacker cannot burn identifiers with forgeries;
 /// and the sink consumes only what both let through. A repeat is acknowledged without
 /// re-processing - RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier
 /// responses, so a duplicate is the protocol working, not failing.
+/// </para>
+/// <para>
+/// Nothing here knows which profile of SET it carries. RFC 8935 is a delivery specification and
+/// the kinds it delivers are somebody else's business, so the three things that differ between
+/// consumers - the validation profile, what that profile expects, and where events land - arrive
+/// as parameters. The consumer's own registration binds them, which is also why the profile
+/// cannot be named by a keyed-service attribute here: an attribute takes a compile-time constant,
+/// and the key belongs to whoever registers this.
+/// </para>
 /// </remarks>
 /// <param name="validator">
-/// The validation pipeline, resolved from the receiver's own named profile
-/// (<see cref="SharedSignalsValidationProfiles.SecurityEvent"/>) - never the host's plain family, which
-/// another consumer of security event tokens may have shaped to refuse every SET.</param>
-/// <param name="options">What this receiver expects of every token on the stream.</param>
+/// The validation pipeline, which the registering consumer resolves from its OWN named profile -
+/// never the host's plain family, which another consumer of security event tokens may have shaped
+/// to refuse every SET of this kind.</param>
+/// <param name="options">What that consumer expects of every token it accepts.</param>
 /// <param name="sink">Where validated events land.</param>
 /// <param name="replayCache">
 /// Tells first deliveries from repeats; null runs without replay tracking, leaving idempotency
 /// entirely to the sink's contract.</param>
 public sealed class PushDeliveryHandler(
-    [FromKeyedServices(SharedSignalsValidationProfiles.SecurityEvent)] ISecurityEventTokenValidator validator,
-    SharedSignalsValidationOptions options,
+    ISecurityEventTokenValidator validator,
+    SecurityEventTokenValidationOptions options,
     ISecurityEventSink sink,
     IReplayCache? replayCache = null)
 {

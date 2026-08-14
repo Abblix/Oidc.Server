@@ -22,7 +22,7 @@
 
 using Abblix.Jwt.ReplayPrevention;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SecurityEvents.Delivery;
 
 /// <summary>
 /// Composes what a receiver reserves in <see cref="IReplayCache"/> for one token.

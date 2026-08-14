@@ -25,11 +25,9 @@ using Abblix.SecurityEvents;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
-using Abblix.SharedSignals.Receiver;
-using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Xunit;
 
-namespace Abblix.SharedSignals.UnitTests;
+namespace Abblix.SecurityEvents.UnitTests;
 
 /// <summary>
 /// Pins the push intake core (RFC 8935 Sections 2.1-2.4): what earns the empty 202, what earns
@@ -92,7 +90,7 @@ public class PushDeliveryHandlerTests
     {
         var validator = new StubValidator(error: null, token: BuildToken());
         var sink = new RecordingSink();
-        var handler = new PushDeliveryHandler(validator, new SharedSignalsValidationOptions(), sink);
+        var handler = new PushDeliveryHandler(validator, new SecurityEventTokenValidationOptions(), sink);
 
         var result = await handler.HandleAsync(
             "application/json", "a.b.c", TestContext.Current.CancellationToken);
@@ -108,7 +106,7 @@ public class PushDeliveryHandlerTests
     {
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: BuildToken()),
-            new SharedSignalsValidationOptions(),
+            new SecurityEventTokenValidationOptions(),
             new RecordingSink());
 
         var result = await handler.HandleAsync(
@@ -123,7 +121,7 @@ public class PushDeliveryHandlerTests
     {
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: BuildToken()),
-            new SharedSignalsValidationOptions(),
+            new SecurityEventTokenValidationOptions(),
             new RecordingSink());
 
         var result = await handler.HandleAsync(SetMediaType, "", TestContext.Current.CancellationToken);
@@ -142,7 +140,7 @@ public class PushDeliveryHandlerTests
                 SecurityEventTokenErrorCode.AudienceMismatch, "not for this receiver"),
             token: null);
         var sink = new RecordingSink();
-        var handler = new PushDeliveryHandler(validator, new SharedSignalsValidationOptions(), sink);
+        var handler = new PushDeliveryHandler(validator, new SecurityEventTokenValidationOptions(), sink);
 
         var result = await handler.HandleAsync(
             SetMediaType, "a.b.c", TestContext.Current.CancellationToken);
@@ -159,7 +157,7 @@ public class PushDeliveryHandlerTests
         var token = BuildToken();
         var sink = new RecordingSink();
         var handler = new PushDeliveryHandler(
-            new StubValidator(error: null, token: token), new SharedSignalsValidationOptions(), sink);
+            new StubValidator(error: null, token: token), new SecurityEventTokenValidationOptions(), sink);
 
         var result = await handler.HandleAsync(
             SetMediaType, "a.b.c", TestContext.Current.CancellationToken);
@@ -176,7 +174,7 @@ public class PushDeliveryHandlerTests
         var refusal = new DeliveryError(DeliveryErrorCodes.InvalidState, "state mismatch");
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: BuildToken()),
-            new SharedSignalsValidationOptions(),
+            new SecurityEventTokenValidationOptions(),
             new RecordingSink(refusal));
 
         var result = await handler.HandleAsync(
@@ -199,7 +197,7 @@ public class PushDeliveryHandlerTests
         var sink = new RecordingSink();
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: jtiless),
-            new SharedSignalsValidationOptions(),
+            new SecurityEventTokenValidationOptions(),
             sink,
             new FakeReplayCache());
 
@@ -219,7 +217,7 @@ public class PushDeliveryHandlerTests
         var sink = new RecordingSink();
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: BuildToken()),
-            new SharedSignalsValidationOptions(),
+            new SecurityEventTokenValidationOptions(),
             sink,
             new FakeReplayCache());
 

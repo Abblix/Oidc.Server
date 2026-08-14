@@ -20,10 +20,10 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.SharedSignals.Receiver;
+using Abblix.SecurityEvents.Delivery;
 using Xunit;
 
-namespace Abblix.SharedSignals.UnitTests;
+namespace Abblix.SecurityEvents.UnitTests;
 
 /// <summary>
 /// The one property both receivers depend on and neither can check for itself: two different
