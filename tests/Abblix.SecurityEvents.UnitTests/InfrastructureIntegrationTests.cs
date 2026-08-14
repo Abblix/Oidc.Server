@@ -104,6 +104,8 @@ public class InfrastructureIntegrationTests
             options.SigningKeySource = _ => Task.FromResult(signingKey);
         });
 
+        services.AddSecurityEventValidationProfile("test");
+
         return services.BuildServiceProvider();
     }
 
@@ -132,7 +134,7 @@ public class InfrastructureIntegrationTests
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test")
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated), "Validation unexpectedly failed.");
@@ -154,7 +156,7 @@ public class InfrastructureIntegrationTests
         var segments = compact.Split('.');
         var tampered = $"{segments[0]}.{segments[1][..^2]}AA.{segments[2]}";
 
-        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test")
             .ValidateAsync(tampered, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -173,7 +175,7 @@ public class InfrastructureIntegrationTests
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test")
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -192,11 +194,12 @@ public class InfrastructureIntegrationTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver());
         services.AddSecurityEvents(options => options.SigningKeySource = _ => Task.FromResult(key));
+        services.AddSecurityEventValidationProfile("test");
         await using var host = services.BuildServiceProvider();
 
         var compact = await SignedCompact(host);
 
-        var result = await host.GetRequiredService<ISecurityEventTokenValidator>()
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test")
             .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -210,6 +213,7 @@ public class InfrastructureIntegrationTests
         services.AddLogging();
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver());
         services.AddSecurityEvents();
+        services.AddSecurityEventValidationProfile("test");
         await using var host = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
@@ -228,6 +232,7 @@ public class InfrastructureIntegrationTests
         var hostVerifier = new HostVerifier();
         services.AddSingleton<ISecurityEventTokenVerifier>(hostVerifier);
         services.AddSecurityEvents();
+        services.AddSecurityEventValidationProfile("test");
         await using var host = services.BuildServiceProvider();
 
         Assert.Same(hostVerifier, host.GetRequiredService<ISecurityEventTokenVerifier>());
@@ -240,6 +245,7 @@ public class InfrastructureIntegrationTests
         services.AddLogging();
         services.AddSecurityEvents(options =>
             options.Events.Register<MembershipChangedPayload>(MembershipChanged));
+        services.AddSecurityEventValidationProfile("test");
         await using var host = services.BuildServiceProvider();
 
         Assert.True(

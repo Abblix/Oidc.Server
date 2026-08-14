@@ -24,7 +24,6 @@ using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.SecurityEvents.Infrastructure;
 
@@ -49,24 +48,24 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
     public InsecureValidationGuard(
         ISecurityEventTokenValidator inner,
         IServiceProvider serviceProvider,
-        IOptions<SecurityEventsOptions> options,
-        ILogger<InsecureValidationGuard> logger)
+        ILogger<InsecureValidationGuard> logger,
+        ValidationProfileIdentity profile)
     {
         _inner = inner;
 
         // Ask the family what it holds, and let it answer for its own arrangement - composed or not, behind
-        // whatever composite. Naming a key to read the members by is what this must not do: a key that is
-        // merely out of date answers with an empty set, and an empty set reads here as every critical step
-        // being absent, which turns a guard into a refusal to start.
+        // whatever composite. The key here is the profile's own identity, supplied by the registration that
+        // decorated this guard over that very family - never a guess that could go stale and answer empty.
         var memberTypes = serviceProvider
-            .Decompose<ISecurityEventTokenValidator>()
+            .Decompose<ISecurityEventTokenValidator>(profile.Key)
             .Select(step => step.GetType())
             .ToHashSet();
 
-        // Every package that contributes a step carrying the marker declares it, so the set grows with the
-        // profile instead of describing only the steps this package ships.
+        // Every package that contributes a step carrying the marker declares it keyed to its profile, so
+        // each profile is judged only by the declarations meant for it: a global set would make this guard
+        // demand another consumer's steps of a profile that was never supposed to carry them.
         var missing = serviceProvider
-            .GetServices<CriticalValidationStep>()
+            .GetKeyedServices<CriticalValidationStep>(profile.Key)
             .Select(step => step.StepType)
             .Distinct()
             .Where(critical => !memberTypes.Contains(critical))
@@ -78,15 +77,15 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         }
 
         var missingNames = string.Join(", ", missing.Select(type => type.Name));
-        var allowances = options.Value.InsecureValidationAllowances;
+        var allowances = profile.Allowances;
 
         if (allowances.Count == 0)
         {
             throw new InvalidOperationException(
-                $"The validation profile lacks security-critical default steps ({missingNames}) and no "
-                + $"allowance is on record; call {nameof(SecurityEventsOptions)}."
-                + $"{nameof(SecurityEventsOptions.AllowInsecureValidation)}(reason) so the weakening is a "
-                + "visible decision instead of an accident.");
+                $"The validation profile '{profile.Key}' lacks security-critical steps ({missingNames}) "
+                + $"and no allowance is on record; call {nameof(ValidationProfile)}."
+                + $"{nameof(ValidationProfile.AllowInsecureValidation)}(reason) on the profile so the "
+                + "weakening is a visible decision instead of an accident.");
         }
 
         foreach (var allowance in allowances)

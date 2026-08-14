@@ -99,6 +99,7 @@ public class CustodianHeldSigningTests
             .Apply(rsa.ExportParameters(false));
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(publicHalf));
 
+        services.AddSecurityEventValidationProfile("test");
         await using var host = services.BuildServiceProvider();
         resolved = host;
 
@@ -115,7 +116,7 @@ public class CustodianHeldSigningTests
 
         Assert.Equal(1, custodian.SignatureCount);
 
-        var result = await host.GetRequiredService<ISecurityEventTokenValidator>().ValidateAsync(
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test").ValidateAsync(
             compact,
             new SecurityEventTokenValidationOptions
             {

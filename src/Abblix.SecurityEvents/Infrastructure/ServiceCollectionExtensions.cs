@@ -68,46 +68,20 @@ public static class ServiceCollectionExtensions
         .ToArray();
 
     /// <summary>
-    /// Declares <typeparamref name="TStep"/> as a step the profile may not lose without an allowance on record.
-    /// </summary>
-    /// <remarks>
-    /// A package that contributes a step carrying <see cref="ISecurityCriticalValidator"/> declares it here,
-    /// beside the registration that adds it. Without the declaration the marker means nothing outside this
-    /// package: the guard would hold the profile only to the steps this one ships, and a step from anywhere
-    /// else could be removed through the same cursor that added it, in silence.
-    /// </remarks>
-    /// <typeparam name="TStep">The step type, which must carry the marker to be declared at all.</typeparam>
-    /// <param name="services">The <see cref="IServiceCollection"/> the step was contributed to.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-    public static IServiceCollection AddCriticalValidationStep<TStep>(this IServiceCollection services)
-        where TStep : class, ISecurityCriticalValidator
-        => services.AddCriticalValidationStep(typeof(TStep));
-
-    private static IServiceCollection AddCriticalValidationStep(this IServiceCollection services, Type stepType)
-    {
-        services.Add(ServiceDescriptor.Singleton(new CriticalValidationStep(stepType)));
-        return services;
-    }
-
-    /// <summary>
-    /// Registers the security-event core: the default validation profile as a composed
-    /// validator family behind the singular contract, the event registry, and the default
-    /// verifier and signer over the Abblix JWT core.
+    /// Registers the security-event core: the event registry and the default verifier and
+    /// signer over the Abblix JWT core. Validation is NOT wired here - each consumer creates
+    /// its own named profile with <see cref="AddSecurityEventValidationProfile"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The pipeline is an ordinary composed family: the ten default steps register as
-    /// <see cref="ISecurityEventTokenValidator"/> implementations in execution order and
-    /// collapse behind the singular contract. A consumer profile edits them in place afterwards -
-    /// <c>services.Decompose&lt;ISecurityEventTokenValidator&gt;()</c> returns the live
-    /// cursor with its position-aware operations - and a profile that drops or replaces a
-    /// security-critical default acknowledges that through
-    /// <see cref="SecurityEventsOptions.AllowInsecureValidation"/>: the guard decorating the
-    /// composed result demands the acknowledgement at construction, so no door that edits the
-    /// composition bypasses it. The one door outside its reach is standard container semantics:
-    /// a singular <see cref="ISecurityEventTokenValidator"/> registration made after this call
-    /// replaces the guarded profile wholesale (last registration wins), guard included - that is
-    /// the host visibly taking ownership of validation, not an edit of this profile.
+    /// This call registers NO validator: validation lives in named profiles, each created by
+    /// <see cref="AddSecurityEventValidationProfile"/> from the documented default steps and
+    /// owned by the one consumer that names it. There is deliberately no unnamed shared family.
+    /// It existed once, and it is the shape that produced the collision this API replaces: two
+    /// consumers of security event tokens in one host shaped one family to contradictory demands,
+    /// the outcome depended on registration order, and the loser saw every one of its tokens
+    /// refused. An unnamed family invites exactly that consumer back - each editor believes the
+    /// shared copy is its own - so the ceremony of naming a profile is the point, not a cost.
     /// </para>
     /// <para>
     /// Two of the defaults ask for more configuration before they resolve, and each fails loudly
@@ -119,7 +93,7 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    /// <param name="configure">Configures the event dictionary, signing, and allowances.</param>
+    /// <param name="configure">Configures the event dictionary and signing.</param>
     public static IServiceCollection AddSecurityEvents(
         this IServiceCollection services,
         Action<SecurityEventsOptions>? configure = null)
@@ -167,16 +141,85 @@ public static class ServiceCollectionExtensions
                     + $"register your own {nameof(ISecurityEventTokenSigner)}.");
         });
 
-        // TryAddEnumerable keeps the registrations idempotent, Compose collapses the family
-        // behind the singular contract, and the guard decorates the result so a weakened profile
-        // cannot construct without a reasoned acknowledgement - whichever door edited it.
-        services.TryAddEnumerable(DefaultPipelineSteps);
+        return services;
+    }
 
-        foreach (var step in CriticalDefaultSteps)
-            services.AddCriticalValidationStep(step);
+    /// <summary>
+    /// Creates a NAMED validation profile: a keyed copy of the default step family that
+    /// <paramref name="configure"/> edits without touching any other profile, resolvable as a
+    /// keyed <see cref="ISecurityEventTokenValidator"/> under <paramref name="profileKey"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for the host whose consumers contradict each other. One composed family per
+    /// host was enough until two token kinds met in one container: Back-Channel Logout REQUIRES
+    /// <c>exp</c> and pins <c>typ</c> to its own value, a Shared Signals SET forbids the former
+    /// and pins the latter differently - so whichever consumer edits the shared family breaks the
+    /// other, and the breakage surfaces as every token of the other kind being refused. A named
+    /// profile gives each consumer its own copy to shape - and no unnamed shared family exists
+    /// to collide over at all.
+    /// </para>
+    /// <para>
+    /// The copy is taken from the documented DEFAULTS, so a profile owner reasons from the
+    /// baseline and no other consumer's decisions can reach it through registration order.
+    /// Critical-step accounting is per profile for the same reason - the defaults' critical steps
+    /// seed the profile, <see cref="ValidationProfile.AddCriticalStep{TStep}"/> adds to it, and
+    /// the guard judges each profile only by its own declarations and allowances.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="profileKey">The key the profile's validator resolves under.</param>
+    /// <param name="configure">Shapes the profile: step edits, critical declarations, allowances.</param>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="AddSecurityEvents"/> has not run, or a profile already exists under this key -
+    /// re-shaping an existing profile through a second registration would let two owners edit one
+    /// copy, which is the situation profiles exist to end.
+    /// </exception>
+    public static IServiceCollection AddSecurityEventValidationProfile(
+        this IServiceCollection services,
+        object profileKey,
+        Action<ValidationProfile>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(profileKey);
 
-        services.Compose<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>();
-        services.Decorate<ISecurityEventTokenValidator, InsecureValidationGuard>();
+        if (services.All(descriptor => descriptor.ServiceType != typeof(EventTypeRegistry)))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddSecurityEventValidationProfile)} builds on the security-event core: call "
+                + $"{nameof(AddSecurityEvents)} first.");
+        }
+
+        if (services.Any(descriptor => descriptor is { IsKeyedService: true } &&
+                                       descriptor.ServiceType == typeof(ISecurityEventTokenValidator) &&
+                                       Equals(descriptor.ServiceKey, profileKey)))
+        {
+            throw new InvalidOperationException(
+                $"A validation profile already exists under '{profileKey}'. A profile has one owner; "
+                + "a second registration under the same key would let two owners edit one copy.");
+        }
+
+        foreach (var step in DefaultPipelineSteps)
+        {
+            services.Add(ServiceDescriptor.DescribeKeyed(
+                typeof(ISecurityEventTokenValidator), profileKey, step.ImplementationType!, step.Lifetime));
+        }
+
+        foreach (var critical in CriticalDefaultSteps)
+        {
+            services.Add(ServiceDescriptor.KeyedSingleton(
+                profileKey, (_, _) => new CriticalValidationStep(critical)));
+        }
+
+        services.ComposeKeyed<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>(profileKey);
+
+        var profile = new ValidationProfile(services, profileKey);
+        configure?.Invoke(profile);
+
+        // Decorated AFTER configure so the identity carries the profile's recorded allowances.
+        // The guard itself still judges the final composition at first resolve, so later cursor
+        // edits stay inside its reach.
+        services.DecorateKeyed<ISecurityEventTokenValidator, InsecureValidationGuard>(
+            profileKey, Dependency.Override(profile.ToIdentity()));
 
         return services;
     }

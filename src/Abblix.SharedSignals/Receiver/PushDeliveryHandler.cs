@@ -22,6 +22,7 @@
 
 using System.Net.Http.Headers;
 using Abblix.Jwt.ReplayPrevention;
+using Microsoft.Extensions.DependencyInjection;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 
@@ -41,14 +42,17 @@ namespace Abblix.SharedSignals.Receiver;
 /// re-processing - RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier
 /// responses, so a duplicate is the protocol working, not failing.
 /// </remarks>
-/// <param name="validator">The validation profile - typically the composed pipeline.</param>
+/// <param name="validator">
+/// The validation pipeline, resolved from the receiver's own named profile
+/// (<see cref="SsfReceiverValidation.ProfileKey"/>) - never the host's plain family, which
+/// another consumer of security event tokens may have shaped to refuse every SET.</param>
 /// <param name="options">What this receiver expects of every token on the stream.</param>
 /// <param name="sink">Where validated events land.</param>
 /// <param name="replayCache">
 /// Tells first deliveries from repeats; null runs without replay tracking, leaving idempotency
 /// entirely to the sink's contract.</param>
 public sealed class PushDeliveryHandler(
-    ISecurityEventTokenValidator validator,
+    [FromKeyedServices(SsfReceiverValidation.ProfileKey)] ISecurityEventTokenValidator validator,
     SsfValidationOptions options,
     ISecurityEventSink sink,
     IReplayCache? replayCache = null)

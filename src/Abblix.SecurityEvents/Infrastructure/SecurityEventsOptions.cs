@@ -34,7 +34,6 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// </summary>
 public sealed class SecurityEventsOptions
 {
-    private readonly List<string> _insecureValidationAllowances = [];
 
     /// <summary>
     /// The event dictionary: which event identifier URIs deserialize into which payload models.
@@ -49,32 +48,5 @@ public sealed class SecurityEventsOptions
     /// </summary>
     public Func<CancellationToken, Task<JsonWebKey>>? SigningKeySource { get; set; }
 
-    /// <summary>
-    /// The reasons given for composing a validation pipeline without the default
-    /// security-critical steps, surfaced in the boot log when the validator is built.
-    /// </summary>
-    public IReadOnlyList<string> InsecureValidationAllowances => _insecureValidationAllowances;
 
-    /// <summary>
-    /// Acknowledges that this host's validation profile deliberately drops or replaces
-    /// security-critical steps of the default pipeline, with the reason that will be logged at
-    /// startup.
-    /// </summary>
-    /// <remarks>
-    /// The check this feeds guards the RESULT of composition, not any particular editing door: at
-    /// validator construction, a missing default critical step - the explicit-typing check, the
-    /// exp-absence check, the signature check - demands an acknowledgement on record, however the
-    /// pipeline came to lack it. "Temporarily, for a test" therefore cannot ride into production
-    /// silently through any API, this package's or the composition cursor's.
-    /// </remarks>
-    /// <param name="reason">
-    /// Why weakening the default validation is acceptable here - named concretely enough that
-    /// reading it in a production boot log answers the question it raises.</param>
-    public SecurityEventsOptions AllowInsecureValidation(string reason)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(reason);
-
-        _insecureValidationAllowances.Add(reason);
-        return this;
-    }
 }

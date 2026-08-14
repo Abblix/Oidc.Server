@@ -84,17 +84,31 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the receiver role: the push intake handler over the composed validation
-    /// pipeline, with the three SSF profile steps joined into that pipeline in their required
-    /// positions - the cheap "sub" rejection among the unverified checks, the stream-issuer
-    /// binding among the trusted ones, the critical-members check last.
+    /// Registers the receiver role: the push intake handler over the receiver's OWN validation
+    /// profile, with the three SSF steps joined in their required positions - the cheap "sub"
+    /// rejection among the unverified checks, the stream-issuer binding among the trusted ones,
+    /// the critical-members check last.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The receiver validates under its own named profile
+    /// (<see cref="SsfReceiverValidation.ProfileKey"/>) rather than by editing the host's plain
+    /// family. The plain family is shared, and another consumer of security event tokens in the
+    /// same host - Back-Channel Logout is the live example - shapes it to demands a SET
+    /// contradicts outright: its <c>typ</c> replacement refuses everything that is not a logout
+    /// token, its <c>exp</c> replacement requires the claim a SET must not carry. Editing the
+    /// shared family therefore either breaks that consumer or is broken by it, depending on
+    /// registration order, and the loser sees every one of its tokens refused. A named profile
+    /// removes the ordering from the outcome: each consumer owns its copy, and this package's
+    /// steps and critical declarations bind to this profile alone.
+    /// </para>
+    /// <para>
     /// The host still owes two registrations of its own: an
     /// <see cref="Abblix.SharedSignals.Receiver.ISecurityEventSink"/>, because where events
     /// land is the application, and key resolution (for example
     /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. A replay cache
     /// (<c>AddDistributedReplayCache</c>) is optional and picked up when present.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="options">
@@ -111,29 +125,28 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(options);
         services.TryAddSingleton<PushDeliveryHandler>();
 
-        // The SSF steps join the already-composed family through the live cursor; re-running
-        // the registration must not double them, so each is added only on first sight. The
-        // members live as KEYED descriptors, whose implementation type sits behind the keyed
-        // property - the unkeyed one is null there, and a guard reading it would re-add on
-        // every call.
-        if (services.All(descriptor =>
-                (descriptor.IsKeyedService
-                    ? descriptor.KeyedImplementationType
-                    : descriptor.ImplementationType) != typeof(ForbidSubStep)))
+        // Re-running the registration must not double the profile, so it is created only on
+        // first sight; the profile registration itself refuses a second creation loudly, which
+        // is the right answer for anyone ELSE claiming this package's key.
+        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SsfReceiverValidation.ProfileKey)))
         {
-            services.Decompose<ISecurityEventTokenValidator>()
-                .AddAfter<ExpAbsenceStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
-                .AddAfter<AudienceStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
-                .AddLast(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+            services.AddSecurityEventValidationProfile(SsfReceiverValidation.ProfileKey, profile =>
+            {
+                profile.Steps
+                    .AddAfter<ExpAbsenceStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
+                    .AddAfter<AudienceStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
+                    .AddLast(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
 
-            // Two of the three carry the security-critical marker, and the marker only binds a profile that
-            // knows about them: declared here, beside the registration that adds them, so the two statements
-            // cannot drift apart.
-            services.AddCriticalValidationStep<ForbidSubStep>();
-            services.AddCriticalValidationStep<StreamIssuerStep>();
+                // Two of the three carry the security-critical marker, and the marker only binds a
+                // profile that knows about them: declared here, beside the edit that adds them, so
+                // the two statements cannot drift apart.
+                profile
+                    .AddCriticalStep<ForbidSubStep>()
+                    .AddCriticalStep<StreamIssuerStep>();
+            });
         }
 
         return services;

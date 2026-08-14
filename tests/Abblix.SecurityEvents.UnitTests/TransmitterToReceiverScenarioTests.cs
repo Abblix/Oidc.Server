@@ -100,6 +100,8 @@ public class TransmitterToReceiverScenarioTests
         services.AddDistributedMemoryCache();
         services.AddDistributedReplayCache();
 
+        services.AddSecurityEventValidationProfile("test");
+
         return services.BuildServiceProvider();
     }
 
@@ -131,7 +133,7 @@ public class TransmitterToReceiverScenarioTests
         string compact,
         List<MembershipChangedPayload> processed)
     {
-        var result = await receiver.GetRequiredService<ISecurityEventTokenValidator>().ValidateAsync(
+        var result = await receiver.GetRequiredKeyedService<ISecurityEventTokenValidator>("test").ValidateAsync(
             compact,
             new SecurityEventTokenValidationOptions
             {
