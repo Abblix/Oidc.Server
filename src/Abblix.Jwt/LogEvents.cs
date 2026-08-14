@@ -41,4 +41,14 @@ internal static class LogEvents
         public const int NoMatchingKey = Base + 2;
         public const int RsaEncryptionFailed = Base + 3;
     }
+
+    /// <summary>
+    /// Range 1100-1199: the key ring - minting, sealing, sharing and refreshing the server's own keys.
+    /// </summary>
+    public static class KeyRing
+    {
+        private const int Base = 1100;
+
+        public const int RefreshFailed = Base + 1;
+    }
 }

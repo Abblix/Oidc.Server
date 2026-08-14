@@ -22,6 +22,7 @@
 
 
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
@@ -35,8 +36,15 @@ namespace Abblix.Jwt.ExternalKeys;
 /// than letting it serve without keys. Later refreshes tick on the propagation window rather than the rotation
 /// interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
 /// active every pod has to be able to verify it.
+/// <para>
+/// The two differ deliberately in what a failure means. At startup there is nothing to serve, so failing is the
+/// honest answer. Afterwards the ring is already open in memory and signing needs no custodian at all, which is
+/// the whole point of this placement - so a later failure costs only freshness, and taking the process down for
+/// it would convert a custodian outage into an outage of everything the server does.
+/// </para>
 /// </remarks>
-internal sealed class KeyRingRefreshService(
+internal sealed partial class KeyRingRefreshService(
+    ILogger<KeyRingRefreshService> logger,
     KeyRing ring,
     IOptions<KeyRingOptions> options,
     TimeProvider timeProvider) : BackgroundService
@@ -58,7 +66,18 @@ internal sealed class KeyRingRefreshService(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            await ring.RefreshAsync(stoppingToken);
+            try
+            {
+                await ring.RefreshAsync(stoppingToken);
+            }
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+            {
+                // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
+                // Letting it escape would end ExecuteAsync, and the host's default behaviour for a faulted
+                // background service is to stop the process - so the pods would leave one after another over a
+                // single rotation window while still holding perfectly good keys.
+                LogRefreshFailed(exception, period);
+            }
         }
     }
 }
