@@ -24,7 +24,6 @@ using Abblix.DependencyInjection;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.SecurityEvents.Infrastructure;
 
@@ -49,7 +48,6 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
     public InsecureValidationGuard(
         ISecurityEventTokenValidator inner,
         IServiceProvider serviceProvider,
-        IOptions<SecurityEventsOptions> options,
         ILogger<InsecureValidationGuard> logger,
         ValidationProfileIdentity profile)
     {
@@ -63,15 +61,11 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
             .Select(step => step.GetType())
             .ToHashSet();
 
-        // Every package that contributes a step carrying the marker declares it - globally for the plain
-        // family, keyed to the profile for a named one - so each profile is judged only by the declarations
-        // meant for it: a global set would make this guard demand another consumer's steps of a profile that
-        // was never supposed to carry them.
-        var criticalSteps = profile.Key is null
-            ? serviceProvider.GetServices<CriticalValidationStep>()
-            : serviceProvider.GetKeyedServices<CriticalValidationStep>(profile.Key);
-
-        var missing = criticalSteps
+        // Every package that contributes a step carrying the marker declares it keyed to its profile, so
+        // each profile is judged only by the declarations meant for it: a global set would make this guard
+        // demand another consumer's steps of a profile that was never supposed to carry them.
+        var missing = serviceProvider
+            .GetKeyedServices<CriticalValidationStep>(profile.Key)
             .Select(step => step.StepType)
             .Distinct()
             .Where(critical => !memberTypes.Contains(critical))
@@ -83,18 +77,15 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
         }
 
         var missingNames = string.Join(", ", missing.Select(type => type.Name));
-
-        // A named profile carries its own allowances; the plain default keeps recording them in
-        // the options, where its owners have always put them.
-        var allowances = profile.Allowances ?? options.Value.InsecureValidationAllowances;
+        var allowances = profile.Allowances;
 
         if (allowances.Count == 0)
         {
             throw new InvalidOperationException(
-                $"The validation profile lacks security-critical default steps ({missingNames}) and no "
-                + $"allowance is on record; call {nameof(SecurityEventsOptions)}."
-                + $"{nameof(SecurityEventsOptions.AllowInsecureValidation)}(reason) so the weakening is a "
-                + "visible decision instead of an accident.");
+                $"The validation profile '{profile.Key}' lacks security-critical steps ({missingNames}) "
+                + $"and no allowance is on record; call {nameof(ValidationProfile)}."
+                + $"{nameof(ValidationProfile.AllowInsecureValidation)}(reason) on the profile so the "
+                + "weakening is a visible decision instead of an accident.");
         }
 
         foreach (var allowance in allowances)

@@ -37,8 +37,8 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// Signals SET forbids it, and each pins its own <c>typ</c> - so no single pipeline can serve both.
 /// A profile is a keyed copy of the default family that one consumer owns outright: it edits its
 /// copy, declares its own critical steps, records its own allowances, and resolves its validator by
-/// its key, while every other profile - the plain default included - stays exactly as its owner
-/// composed it.
+/// its key, while every other profile stays exactly as its owner composed it. There is no
+/// unnamed profile to fall back to: naming is what makes ownership visible.
 /// </remarks>
 public sealed class ValidationProfile
 {
@@ -64,8 +64,7 @@ public sealed class ValidationProfile
 
     /// <summary>
     /// Declares <typeparamref name="TStep"/> as a step THIS profile may not lose without an
-    /// allowance on record - the profile-scoped sibling of
-    /// <see cref="ServiceCollectionExtensions.AddCriticalValidationStep{TStep}"/>.
+    /// allowance on record.
     /// </summary>
     /// <remarks>
     /// Scoped rather than global on purpose: a package's step is critical for the profile that
@@ -80,8 +79,8 @@ public sealed class ValidationProfile
     }
 
     /// <summary>
-    /// Acknowledges that this profile drops or replaces a security-critical step, and why - the
-    /// profile-scoped sibling of <see cref="SecurityEventsOptions.AllowInsecureValidation"/>.
+    /// Acknowledges that this profile drops or replaces a security-critical step, and why. The
+    /// guard logs every allowance at first resolve, so the weakening stays visible in the boot log.
     /// </summary>
     public ValidationProfile AllowInsecureValidation(string reason)
     {
@@ -98,14 +97,6 @@ public sealed class ValidationProfile
 /// What the <see cref="InsecureValidationGuard"/> needs to know about the profile it decorates:
 /// which family to read and which allowances excuse a missing critical step.
 /// </summary>
-/// <param name="Key">The profile's service key, or null for the plain default profile.</param>
-/// <param name="Allowances">
-/// The profile's own allowances, or null for the default profile - whose allowances live in
-/// <see cref="SecurityEventsOptions"/> and are read from options at construction, because that is
-/// where its owners have always recorded them.
-/// </param>
-internal sealed record ValidationProfileIdentity(object? Key, IReadOnlyList<string>? Allowances)
-{
-    /// <summary>The plain default profile: the unkeyed family, allowances from options.</summary>
-    public static readonly ValidationProfileIdentity Default = new(Key: null, Allowances: null);
-}
+/// <param name="Key">The profile's service key.</param>
+/// <param name="Allowances">The profile's own allowances - the only ones that can excuse it.</param>
+internal sealed record ValidationProfileIdentity(object Key, IReadOnlyList<string> Allowances);

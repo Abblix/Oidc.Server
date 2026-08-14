@@ -206,34 +206,40 @@ public class BackChannelLogoutProfileTests
 
     private static ISecurityEventTokenValidator LogoutProfileValidator()
     {
-        // The profile is composed the way a real consumer composes it: the package's defaults,
-        // edited in place through the live composition cursor, with the two critical departures
-        // acknowledged where the boot log will surface them.
+        // The profile is composed the way a real consumer composes it: a NAMED profile of the
+        // package's defaults, edited through its own cursor, with the two critical departures
+        // acknowledged on the profile itself - where the boot log will surface them.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<ISecurityEventTokenVerifier>(new AcceptingVerifier());
-        services.AddSecurityEvents(options => options
-            .AllowInsecureValidation(
-                "Back-Channel Logout types its token 'logout+jwt'; the replacement pins that value and is "
-                + "itself security-critical")
-            .AllowInsecureValidation(
-                "Back-Channel Logout REQUIRES 'exp', inverting the SET default; the replacement polices the "
-                + "same claim with the opposite sign"));
+        services.AddSecurityEvents();
 
-        services.Decompose<ISecurityEventTokenValidator>()
-            .Replace<TypHeaderStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
-            .Replace<ExpAbsenceStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ExpRequiredStep>())
-            .AddAfter<ParseStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
-            .AddAfter<SignatureStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireSidOrSubStep>())
-            .AddAfter<RequireSidOrSubStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireLogoutEventTypeStep>());
+        services.AddSecurityEventValidationProfile("logout", profile =>
+        {
+            profile.Steps
+                .Replace<TypHeaderStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
+                .Replace<ExpAbsenceStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ExpRequiredStep>())
+                .AddAfter<ParseStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
+                .AddAfter<SignatureStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireSidOrSubStep>())
+                .AddAfter<RequireSidOrSubStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireLogoutEventTypeStep>());
 
-        return services.BuildServiceProvider().GetRequiredService<ISecurityEventTokenValidator>();
+            profile
+                .AllowInsecureValidation(
+                    "Back-Channel Logout types its token 'logout+jwt'; the replacement pins that value and "
+                    + "is itself security-critical")
+                .AllowInsecureValidation(
+                    "Back-Channel Logout REQUIRES 'exp', inverting the SET default; the replacement polices "
+                    + "the same claim with the opposite sign");
+        });
+
+        return services.BuildServiceProvider()
+            .GetRequiredKeyedService<ISecurityEventTokenValidator>("logout");
     }
 
     private static string LogoutCompact(Action<JsonWebToken>? mutate = null)

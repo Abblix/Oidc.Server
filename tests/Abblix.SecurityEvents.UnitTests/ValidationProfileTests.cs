@@ -62,54 +62,55 @@ public class ValidationProfileTests
     }
 
     /// <summary>
-    /// The scenario profiles exist for: one consumer REPLACES a critical step in the plain
-    /// family, another needs that same step intact - and each resolves a validator arranged its
-    /// own way, in one container, regardless of who registered first.
+    /// The scenario profiles exist for: one consumer REPLACES a critical step in its profile,
+    /// another needs that same step intact in its own - and each resolves a validator arranged
+    /// its own way, in one container, regardless of who registered first.
     /// </summary>
     [Fact]
     public void TwoContradictoryProfiles_ResolveSideBySide()
     {
-        var services = Host(options => options.AllowInsecureValidation(
-            "The test replaces exp-absence in the plain family, standing in for Back-Channel Logout."));
+        var services = Host();
 
-        // The first consumer shapes the PLAIN family: exp becomes required.
-        services.Decompose<ISecurityEventTokenValidator>()
-            .Replace<ExpAbsenceStep>(
+        // The first consumer requires exp - Back-Channel Logout's shape.
+        services.AddSecurityEventValidationProfile("logout", profile =>
+        {
+            profile.Steps.Replace<ExpAbsenceStep>(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireExpStep>());
+            profile.AllowInsecureValidation(
+                "The test replaces exp-absence, standing in for Back-Channel Logout.");
+        });
 
-        // The second creates its own profile, where the default exp-absence step must survive.
-        services.AddSecurityEventValidationProfile("second");
+        // The second keeps the default, where exp is forbidden - a SET receiver's shape.
+        services.AddSecurityEventValidationProfile("set-receiver");
 
         var provider = services.BuildServiceProvider();
 
-        var plainSteps = provider.Decompose<ISecurityEventTokenValidator>()
+        var logoutSteps = provider.Decompose<ISecurityEventTokenValidator>("logout")
             .Select(step => step.GetType()).ToArray();
-        var profileSteps = provider.Decompose<ISecurityEventTokenValidator>("second")
+        var receiverSteps = provider.Decompose<ISecurityEventTokenValidator>("set-receiver")
             .Select(step => step.GetType()).ToArray();
 
-        Assert.Contains(typeof(RequireExpStep), plainSteps);
-        Assert.DoesNotContain(typeof(ExpAbsenceStep), plainSteps);
-        Assert.Contains(typeof(ExpAbsenceStep), profileSteps);
-        Assert.DoesNotContain(typeof(RequireExpStep), profileSteps);
+        Assert.Contains(typeof(RequireExpStep), logoutSteps);
+        Assert.DoesNotContain(typeof(ExpAbsenceStep), logoutSteps);
+        Assert.Contains(typeof(ExpAbsenceStep), receiverSteps);
+        Assert.DoesNotContain(typeof(RequireExpStep), receiverSteps);
 
-        // Both singular validators construct: the plain one under its options allowance, the
-        // profile untouched and needing none.
-        Assert.NotNull(provider.GetRequiredService<ISecurityEventTokenValidator>());
-        Assert.NotNull(provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("second"));
+        Assert.NotNull(provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("logout"));
+        Assert.NotNull(provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("set-receiver"));
     }
 
     /// <summary>
-    /// A profile copies the DEFAULTS, not the plain family's current state: another consumer's
+    /// A profile copies the DEFAULTS, never a sibling profile's current state: one consumer's
     /// edits must not leak into a copy whose owner reasons from the documented baseline.
     /// </summary>
     [Fact]
-    public void AProfile_CopiesTheDefaults_NotTheEditedFamily()
+    public void AProfile_CopiesTheDefaults_NotASiblingProfile()
     {
         var services = Host();
 
-        services.Decompose<ISecurityEventTokenValidator>()
-            .AddAfter<ParseStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, PinIssuerStep>());
+        services.AddSecurityEventValidationProfile("edited", profile =>
+            profile.Steps.AddAfter<ParseStep>(
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, PinIssuerStep>()));
 
         services.AddSecurityEventValidationProfile("clean");
 
@@ -121,14 +122,18 @@ public class ValidationProfileTests
     }
 
     /// <summary>
-    /// A profile that drops one of ITS critical steps is held to an allowance of ITS OWN: the
-    /// options allowances belong to the plain family and must not excuse a named profile.
+    /// A profile that drops one of ITS critical steps is held to an allowance of ITS OWN: a
+    /// sibling profile's allowance must not excuse it.
     /// </summary>
     [Fact]
     public void AProfileDroppingACriticalStep_NeedsItsOwnAllowance()
     {
-        var services = Host(options => options.AllowInsecureValidation(
-            "An allowance recorded for the PLAIN family; the profile below must not inherit it."));
+        var services = Host();
+
+        // A sibling records an allowance of its own; it must not leak into "weakened".
+        services.AddSecurityEventValidationProfile("sibling", profile =>
+            profile.AllowInsecureValidation(
+                "An allowance recorded for a SIBLING; the profile below must not inherit it."));
 
         services.AddSecurityEventValidationProfile(
             "weakened", profile => profile.Steps.Remove<SignatureStep>());
@@ -157,11 +162,11 @@ public class ValidationProfileTests
     }
 
     /// <summary>
-    /// A critical step declared FOR a profile binds to that profile alone - the plain family's
+    /// A critical step declared FOR a profile binds to that profile alone - a sibling profile's
     /// guard must not start demanding another consumer's steps.
     /// </summary>
     [Fact]
-    public void AProfileScopedCriticalStep_DoesNotBindThePlainFamily()
+    public void AProfileScopedCriticalStep_DoesNotBindASiblingProfile()
     {
         var services = Host();
 
@@ -172,10 +177,12 @@ public class ValidationProfileTests
             profile.AddCriticalStep<ProfileCriticalStep>();
         });
 
-        // The plain family lacks ProfileCriticalStep and must still construct without any
-        // allowance: the declaration was scoped to "strict".
+        // The sibling lacks ProfileCriticalStep and must still construct without any allowance:
+        // the declaration was scoped to "strict".
+        services.AddSecurityEventValidationProfile("sibling");
+
         Assert.NotNull(services.BuildServiceProvider()
-            .GetRequiredService<ISecurityEventTokenValidator>());
+            .GetRequiredKeyedService<ISecurityEventTokenValidator>("sibling"));
     }
 
     private sealed class ProfileCriticalStep : ISecurityCriticalValidator

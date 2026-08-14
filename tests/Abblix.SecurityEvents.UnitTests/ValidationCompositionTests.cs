@@ -61,10 +61,18 @@ public class ValidationCompositionTests
         return services;
     }
 
-    private static Type[] PipelineTypes(IServiceCollection services)
-        => services.Decompose<ISecurityEventTokenValidator>()
+    // Every family question is asked of a named profile: there is no unnamed family to ask.
+    private static Type[] PipelineTypes(IServiceCollection services, string profileKey = "test")
+        => services.DecomposeKeyed<ISecurityEventTokenValidator>(profileKey)
             .Select(descriptor => descriptor.ResolveImplementationType()!)
             .ToArray();
+
+    private static ServiceCollection HostWithProfile(Action<ValidationProfile>? configure = null)
+    {
+        var services = Host();
+        services.AddSecurityEventValidationProfile("test", configure);
+        return services;
+    }
 
     [Fact]
     public void DefaultPipeline_HoldsTheTenStepsInOrder()
@@ -82,7 +90,7 @@ public class ValidationCompositionTests
                 typeof(IssuedAtWindowStep),
                 typeof(PayloadDeserializationStep),
             ],
-            PipelineTypes(Host()));
+            PipelineTypes(HostWithProfile()));
     }
 
     [Fact]
@@ -105,10 +113,9 @@ public class ValidationCompositionTests
     [Fact]
     public void AddAfter_PlacesTheStepRightAfterItsAnchor()
     {
-        var services = Host();
-        services.Decompose<ISecurityEventTokenValidator>()
+        var services = HostWithProfile(profile => profile.Steps
             .AddAfter<SignatureStep>(
-                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CustomStep>());
+                ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CustomStep>()));
 
         var types = PipelineTypes(services);
         Assert.Equal(Array.IndexOf(types, typeof(SignatureStep)) + 1, Array.IndexOf(types, typeof(CustomStep)));
@@ -117,11 +124,10 @@ public class ValidationCompositionTests
     [Fact]
     public void RemovingANonCriticalStep_NeedsNoAllowance()
     {
-        var services = Host();
-        services.Decompose<ISecurityEventTokenValidator>().Remove<AudienceStep>();
+        var services = HostWithProfile(profile => profile.Steps.Remove<AudienceStep>());
 
         using var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetRequiredService<ISecurityEventTokenValidator>());
+        Assert.NotNull(provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("test"));
     }
 
     [Theory]
@@ -131,61 +137,67 @@ public class ValidationCompositionTests
     [InlineData(typeof(SignatureStep))]
     public void RemovingACriticalStep_WithoutAnAllowance_FailsValidatorConstruction(Type criticalStep)
     {
-        var services = Host();
-        var cursor = services.Decompose<ISecurityEventTokenValidator>();
-        var member = cursor.Single(descriptor => descriptor.ResolveImplementationType() == criticalStep);
-        cursor.Remove(member);
+        var services = HostWithProfile(profile =>
+        {
+            var member = profile.Steps.Single(
+                descriptor => descriptor.ResolveImplementationType() == criticalStep);
+            profile.Steps.Remove(member);
+        });
 
         using var provider = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<ISecurityEventTokenValidator>());
+            () => provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("test"));
 
         Assert.Contains(criticalStep.Name, exception.Message);
-        Assert.Contains(nameof(SecurityEventsOptions.AllowInsecureValidation), exception.Message);
+        Assert.Contains(nameof(ValidationProfile.AllowInsecureValidation), exception.Message);
     }
 
     [Fact]
     public void RemovingACriticalStep_WithAnAllowance_Constructs()
     {
-        var services = Host(options => options.AllowInsecureValidation(
-            "integration test profile: tokens are minted unsigned by the test host"));
-        services.Decompose<ISecurityEventTokenValidator>().Remove<SignatureStep>();
+        var services = HostWithProfile(profile =>
+        {
+            profile.Steps.Remove<SignatureStep>();
+            profile.AllowInsecureValidation(
+                "integration test profile: tokens are minted unsigned by the test host");
+        });
 
         using var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetRequiredService<ISecurityEventTokenValidator>());
+        Assert.NotNull(provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("test"));
     }
 
     [Fact]
     public void TheGuard_JudgesTheResult_NotTheDoor()
     {
-        // Replace goes through the cursor's own operation - an editing door this package does
-        // not provide - and the guard still fires, because it inspects what was composed rather
-        // than intercepting any API.
-        var services = Host();
-        services.Decompose<ISecurityEventTokenValidator>()
+        // The edit happens AFTER the profile registration, through a cursor reopened by key - an
+        // editing door the profile builder does not provide - and the guard still fires, because
+        // it inspects what was composed rather than intercepting any API.
+        var services = HostWithProfile();
+        services.DecomposeKeyed<ISecurityEventTokenValidator>("test")
             .Replace<TypHeaderStep>(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CustomStep>());
 
         using var provider = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<ISecurityEventTokenValidator>());
+            () => provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("test"));
 
         Assert.Contains(nameof(TypHeaderStep), exception.Message);
     }
 
     [Fact]
-    public void HostRegisteredStep_BeforeAddSecurityEvents_JoinsTheFamily()
+    public void AStrayUnkeyedRegistration_DoesNotEnterAnyProfile()
     {
-        // The standard family door: a member registered ahead of composition composes in ahead of
-        // the defaults, exactly as every composed family in the product line behaves.
+        // With no unnamed family, an unkeyed validator registration joins nothing: a profile
+        // copies the documented defaults, and the only doors into it are its own cursor and key.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
         services.AddSingleton<ISecurityEventTokenValidator, CustomStep>();
         services.AddSecurityEvents();
+        services.AddSecurityEventValidationProfile("test");
 
-        Assert.Equal(typeof(CustomStep), PipelineTypes(services)[0]);
+        Assert.DoesNotContain(typeof(CustomStep), PipelineTypes(services));
     }
 }
