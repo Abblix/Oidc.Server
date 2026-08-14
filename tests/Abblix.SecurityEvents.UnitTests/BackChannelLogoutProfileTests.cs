@@ -214,7 +214,7 @@ public class BackChannelLogoutProfileTests
         services.AddSingleton<ISecurityEventTokenVerifier>(new AcceptingVerifier());
         services.AddSecurityEvents();
 
-        services.AddSecurityEventValidationProfile(JsonWebTokenTypes.LogoutToken, profile =>
+        services.AddSecurityEventValidationProfile(BackChannelLogoutValidation.ProfileKey, profile =>
         {
             profile.Steps
                 .Replace<TypHeaderStep>(
@@ -238,7 +238,7 @@ public class BackChannelLogoutProfileTests
         });
 
         return services.BuildServiceProvider()
-            .GetRequiredKeyedService<ISecurityEventTokenValidator>(JsonWebTokenTypes.LogoutToken);
+            .GetRequiredKeyedService<ISecurityEventTokenValidator>(BackChannelLogoutValidation.ProfileKey);
     }
 
     private static string LogoutCompact(Action<JsonWebToken>? mutate = null)
