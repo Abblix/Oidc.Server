@@ -67,7 +67,9 @@ public static class ProduceFirstOrdering
         if (activeIndex < 0)
             activeIndex = 0;
 
-        return byNewest.Skip(activeIndex).Take(1)
+        return byNewest
+            .Skip(activeIndex)
+            .Take(1)
             .Concat(byNewest.Take(activeIndex))
             .Concat(byNewest.Skip(activeIndex + 1));
     }
