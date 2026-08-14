@@ -23,15 +23,13 @@
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Tests.Shared;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
-using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
@@ -67,7 +65,7 @@ public class OutboundHttpClientResilienceTests
             .AddResilienceOfATypicalHost()
             .ConfigurePrimaryHttpMessageHandler(() => origin);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
         using var httpClient = new HttpClient(handler, disposeHandler: false);
 
@@ -112,7 +110,7 @@ public class OutboundHttpClientResilienceTests
         var origin = new FlakyOriginHandler(failuresBeforeSuccess: 2);
         services.AddHttpClient(clientName).ConfigurePrimaryHttpMessageHandler(() => origin);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
         using var httpClient = new HttpClient(handler, disposeHandler: false);
 
@@ -188,7 +186,7 @@ public class OutboundHttpClientResilienceTests
         services.AddHttpClient(BackChannelLogoutTransport.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => logoutOrigin);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var handlerFactory = provider.GetRequiredService<IHttpMessageHandlerFactory>();
 
         using var notificationHandler =

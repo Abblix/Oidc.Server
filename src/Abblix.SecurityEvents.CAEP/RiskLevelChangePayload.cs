@@ -22,7 +22,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace Abblix.SecurityEvents.Caep;
+namespace Abblix.SecurityEvents.CAEP;
 
 /// <summary>
 /// Risk Level Change (CAEP 1.0 Section 3.8): the transmitter's assessed risk level for the

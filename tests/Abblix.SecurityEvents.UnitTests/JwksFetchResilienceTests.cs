@@ -21,14 +21,12 @@
 // info@abblix.com
 
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using Abblix.Jwt;
+using Abblix.Tests.Shared;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
-using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Xunit;
 
 namespace Abblix.SecurityEvents.UnitTests;
@@ -62,7 +60,7 @@ public class JwksFetchResilienceTests
         var issuer = new FlakyKeySetOrigin(failuresBeforeSuccess: 2);
         services.AddHttpClient(JwksTransport.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => issuer);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var resolver = provider.GetRequiredService<IIssuerKeyResolver>();
 
         var keys = new List<JsonWebKey>();

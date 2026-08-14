@@ -10,7 +10,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
@@ -55,7 +54,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [Fact]
     public async Task Custom_prefix_mounts_all_endpoints_under_the_prefix()
     {
-        using var prefixed = factory.WithWebHostBuilder(builder =>
+        await using var prefixed = factory.WithWebHostBuilder(builder =>
             builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
@@ -77,7 +76,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var introspectPath = new Uri(discovery[ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath;
 
         // A host that clears the Introspection flag never maps the endpoint, so the same path is a 404.
-        using var disabled = factory.WithWebHostBuilder(builder =>
+        await using var disabled = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                     new PostConfigureOptions<OidcOptions>(
@@ -98,7 +97,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
             [ConfigurationResponse.Parameters.IntrospectionEndpoint]!.GetValue<string>()).AbsolutePath;
 
         // Reset the host to the default OidcEndpoints.Base set - the state of a server that opts into nothing.
-        using var baseHost = factory.WithWebHostBuilder(builder =>
+        await using var baseHost = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                     new PostConfigureOptions<OidcOptions>(
@@ -154,7 +153,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     {
         // The adapter registers every formatter via TryAdd, so a host that registers its own implementation is used
         // instead of the default - this is the host-extensibility contract the adapter promises.
-        using var overridden = factory.WithWebHostBuilder(builder =>
+        await using var overridden = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddScoped<IConfigurationResponseFormatter, MarkerConfigurationFormatter>()));
         var client = ClientOf(overridden);
@@ -170,7 +169,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [Fact]
     public async Task Discovery_document_urls_carry_the_route_prefix()
     {
-        using var prefixed = factory.WithWebHostBuilder(builder =>
+        await using var prefixed = factory.WithWebHostBuilder(builder =>
             builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
@@ -194,7 +193,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     [Fact]
     public async Task Registration_client_uri_carries_the_route_prefix()
     {
-        using var prefixed = factory.WithWebHostBuilder(builder =>
+        await using var prefixed = factory.WithWebHostBuilder(builder =>
             builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 

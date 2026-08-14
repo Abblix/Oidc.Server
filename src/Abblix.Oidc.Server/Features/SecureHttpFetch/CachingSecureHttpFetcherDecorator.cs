@@ -21,10 +21,8 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Utils;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 

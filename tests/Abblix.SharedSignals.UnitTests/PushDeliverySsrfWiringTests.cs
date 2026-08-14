@@ -21,12 +21,10 @@
 // info@abblix.com
 
 using System.Net;
-using System.Net.Http;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;

@@ -35,7 +35,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.RichAuthorizationRequests;
+namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
 /// Unit tests for the composite <see cref="IAuthorizationDetailsPolicy"/> registered via

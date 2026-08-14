@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Model;

@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.Caep;
+namespace Abblix.SecurityEvents.CAEP;
 
 /// <summary>
 /// The event type URIs CAEP 1.0 defines (its Section 3), and the one registration call that

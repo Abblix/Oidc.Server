@@ -26,7 +26,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Constants;
 
 namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 

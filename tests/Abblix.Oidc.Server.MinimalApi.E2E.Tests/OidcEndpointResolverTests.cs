@@ -1,13 +1,11 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
-using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Xunit;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -78,7 +76,7 @@ public sealed class OidcEndpointResolverTests(TestFactory factory) : IClassFixtu
     [Fact]
     public async Task A_route_prefix_is_reflected_in_what_the_resolver_answers()
     {
-        using var prefixed = factory.WithWebHostBuilder(builder =>
+        await using var prefixed = factory.WithWebHostBuilder(builder =>
             builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 

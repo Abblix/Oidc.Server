@@ -22,14 +22,11 @@
 
 using System;
 using System.Threading.Tasks;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 

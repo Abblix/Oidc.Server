@@ -61,7 +61,6 @@ using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.PushedAuthorization;
-using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;

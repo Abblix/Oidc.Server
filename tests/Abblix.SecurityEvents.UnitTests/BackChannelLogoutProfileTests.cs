@@ -32,7 +32,6 @@ using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

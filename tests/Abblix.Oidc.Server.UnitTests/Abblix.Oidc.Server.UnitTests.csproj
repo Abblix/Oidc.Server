@@ -46,5 +46,8 @@
     <ItemGroup>
         <!-- One statement of what a host is promised, compiled into every package's suite. -->
         <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+        <Compile Include="..\Shared\FlakyOriginHandler.cs">
+          <Link>Shared\FlakyOriginHandler.cs</Link>
+        </Compile>
     </ItemGroup>
 </Project>

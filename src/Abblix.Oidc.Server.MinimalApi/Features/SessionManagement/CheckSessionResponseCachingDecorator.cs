@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 

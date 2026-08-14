@@ -74,7 +74,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // The whole point of CIBA is that issuing an auth_req_id is not consent - the user has not been asked
         // yet. A server that hands out tokens for a pending request lets any client that knows a phone number
         // or an email address mint an access token for that person without them ever touching a device.
-        using var host = CreateCibaHost();
+        await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var ciba = await RegisterCibaClientAsync(client, discovery);
@@ -99,7 +99,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // auth_req_id is the only handle, and it travels back to a client over an ordinary HTTP response.
         // Without an ownership check any registered client that obtained or guessed one could collect the
         // tokens the user approved for someone else.
-        using var host = CreateCibaHost();
+        await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -122,7 +122,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // CIBA has no browser leg, so the hint is the only thing that names the person to be contacted.
         // A server that accepts a hintless request has to guess whom to authenticate, and any answer it
         // picks is an authentication attempt aimed at a user nobody asked for.
-        using var host = CreateCibaHost();
+        await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var ciba = await RegisterCibaClientAsync(client, discovery);

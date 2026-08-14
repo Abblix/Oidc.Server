@@ -24,12 +24,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using Abblix.Tests.Shared;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
-using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Xunit;
 

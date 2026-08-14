@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.Risc;
+namespace Abblix.SecurityEvents.RISC;
 
 /// <summary>
 /// The event type URIs RISC 1.0 defines (its Section 2), and the one registration call that
