@@ -255,14 +255,27 @@ public static class ExternalKeysServiceCollectionExtensions
     {
         services.TryAddSingleton<KeyEnvelope>();
 
+        // Both the ring and the loop that keeps it current read the clock, and this package is consumable without
+        // the registrations that would otherwise have supplied one. TryAdd, so a host's own clock still wins.
+        services.TryAddSingleton(TimeProvider.System);
+
+        var builder = new MintedKeysBuilder(services, policy);
+
         // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
-        // container knows nothing about: everything else the ring needs is resolved normally.
-        services.TryAddSingleton<IKeyRing>(
-            serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(policy)));
+        // container knows nothing about: everything else the ring needs is resolved normally. It is read off the
+        // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
+        // ring: this factory runs when the container builds, by which time the whole chain has run.
+        services.TryAddSingleton(
+            serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(builder.Policy)));
+
+        // The concrete type is what is constructed, and the contract is an alias to it. Registering the contract
+        // with its own factory instead would build a SECOND ring: the refresh service would keep one current
+        // while every consumer read the other, which fails as a server publishing keys it never rotates.
+        services.TryAddSingleton<IKeyRing>(serviceProvider => serviceProvider.GetRequiredService<KeyRing>());
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
 
-        return new MintedKeysBuilder(services);
+        return builder;
     }
 
     /// <summary>
@@ -294,6 +307,10 @@ public static class ExternalKeysServiceCollectionExtensions
                 + $"{nameof(IKeyRingStore)} is registered, which is how keys are shared between processes. "
                 + $"The store would be ignored. Use {nameof(AddKeyRing)} with a custodian to share keys, or "
                 + "drop the store if a single instance is intended.");
+
+        // The ring reads the clock, and this package is consumable without the registrations that would otherwise
+        // have supplied one.
+        services.TryAddSingleton(TimeProvider.System);
 
         services.TryAddSingleton<IKeyRing>(
             serviceProvider => serviceProvider.CreateService<InMemoryKeyRing>(Dependency.Override(policy)));

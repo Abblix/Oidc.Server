@@ -89,9 +89,13 @@ internal sealed class KeyRing(
     {
         var entries = await store.LoadAsync(cancellationToken);
 
-        if (await MintDueKeysAsync(entries, cancellationToken))
+        // Adoption first, and in the same refresh as the first mint: the adopted key is dated a period back, so
+        // the key minted below trails it rather than taking over the instant it appears.
+        var adopted = await AdoptExistingKeysAsync(entries, cancellationToken);
+
+        if (await MintDueKeysAsync(entries, cancellationToken) || adopted)
         {
-            // Something was minted, by this pod or by another that won the race: re-read so the ring holds the
+            // Something was written, by this pod or by another that won the race: re-read so the ring holds the
             // winner's key rather than the one generated here.
             entries = await store.LoadAsync(cancellationToken);
         }
@@ -199,15 +203,69 @@ internal sealed class KeyRing(
         return minted;
     }
 
+    /// <summary>
+    /// Takes the keys the server already signs with into an empty ring, and reports whether anything was written.
+    /// </summary>
+    /// <remarks>
+    /// Only into an EMPTY ring, which is what lets the call stay in a host's registration forever: the moment the
+    /// ring holds anything, adoption is over. A key that has since retired is therefore not brought back, and the
+    /// ring cannot empty itself to make it look otherwise - the newest key serving a role never retires.
+    /// <para>
+    /// The entry is named after the key's own thumbprint (RFC 7638), so every pod computes the same id for the
+    /// same key and the store's insert-if-absent settles the race exactly as it does for minting. The id also
+    /// cannot collide with a period id, which is built from a role and an instant.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> AdoptExistingKeysAsync(
+        IReadOnlyList<StoredKey> entries,
+        CancellationToken cancellationToken)
+    {
+        if (entries.Count > 0 || policy.AdoptedKeys.Count == 0)
+            return false;
+
+        // Dated one rotation period back, which is what makes it the active key: the key minted in this same
+        // refresh is younger than the propagation window, so it is published and verifiable while this one keeps
+        // producing, and it takes over once the window has passed.
+        var createdAt = timeProvider.GetUtcNow() - policy.RotateEvery;
+        var keyEncryptionKey = await NewestKeyEncryptionKeyAsync(cancellationToken);
+        var adopted = false;
+
+        foreach (var key in policy.AdoptedKeys)
+        {
+            if (!key.HasPrivateKey)
+            {
+                throw new InvalidOperationException(
+                    $"The key '{key.KeyId}' has no private half, so it cannot be adopted: an adopted key is the " +
+                    "one that produces until the minted key's propagation window has passed, and producing needs " +
+                    "the private half. Pass the key as it is loaded from its certificate or store.");
+            }
+
+            var entry = new StoredKey
+            {
+                Id = $"adopted-{key.ComputeJwkThumbprintBase64Url()}",
+                Jwe = await SealAsync(key, keyEncryptionKey, cancellationToken),
+                CreatedAt = createdAt,
+            };
+
+            adopted |= await store.TryAddAsync(entry, cancellationToken);
+        }
+
+        return adopted;
+    }
+
     /// <summary>Generates a key for the role and seals it to the newest KEK version.</summary>
     private async Task<string> SealNewKeyAsync(string usage, string algorithm, CancellationToken cancellationToken)
     {
         var key = JsonWebKeyFactory.CreateRsa(usage, algorithm, policy.RsaKeySize);
         var keyEncryptionKey = await NewestKeyEncryptionKeyAsync(cancellationToken);
 
-        return await envelope.SealAsync(
-            key, keyEncryptionKey, policy.KeyWrapAlgorithm, policy.ContentEncryptionAlgorithm, cancellationToken);
+        return await SealAsync(key, keyEncryptionKey, cancellationToken);
     }
+
+    /// <summary>Seals a key to the given KEK version, which is what the ring stores.</summary>
+    private Task<string> SealAsync(JsonWebKey key, JsonWebKey keyEncryptionKey, CancellationToken cancellationToken)
+        => envelope.SealAsync(
+            key, keyEncryptionKey, policy.KeyWrapAlgorithm, policy.ContentEncryptionAlgorithm, cancellationToken);
 
     /// <summary>
     /// The KEK version to seal with: the newest one. A KEK needs no propagation window, unlike a signing key,

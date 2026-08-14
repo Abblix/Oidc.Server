@@ -90,4 +90,24 @@ public sealed record MintedKeys
 
     /// <summary>The JWE <c>enc</c> sealing an entry: how the key itself is encrypted.</summary>
     public string ContentEncryptionAlgorithm { get; init; } = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
+
+    /// <summary>
+    /// Keys the server already signs with, taken into an EMPTY ring so the move to minted keys does not change
+    /// which key is producing on the day it happens. Normally set through
+    /// <see cref="IMintedKeysBuilder.AdoptExistingKeys"/> rather than written here.
+    /// </summary>
+    /// <remarks>
+    /// Without this the ring starts empty, and a ring of one key has nothing to trail behind: the freshly minted
+    /// key produces from its first second, so every client whose JWKS copy predates that second meets a token it
+    /// cannot verify. An adopted key is dated one rotation period back, which is what makes it the active one
+    /// while the minted key serves out its propagation window - the old key keeps signing, the new one is
+    /// published, and the changeover happens once clients have had the window to fetch it.
+    /// <para>
+    /// Adoption happens only into an empty ring. That is what makes leaving the call in place harmless: once the
+    /// ring holds anything the keys are never taken again, so a key that has since retired is not resurrected,
+    /// and pods racing to adopt settle it the same way they settle minting - one insert wins and the rest drop
+    /// what they built.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<JsonWebKey> AdoptedKeys { get; init; } = [];
 }
