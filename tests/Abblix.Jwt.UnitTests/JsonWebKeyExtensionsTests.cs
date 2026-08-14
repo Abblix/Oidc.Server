@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -76,5 +76,46 @@ public class JsonWebKeyExtensionsTests
         var notBefore = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var notAfter = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return request.CreateSelfSigned(notBefore, notAfter);
+    }
+
+    /// <summary>
+    /// A key declaring no algorithm is answerable, not unknown: RFC 7518 section 3.1 binds each signature
+    /// algorithm to a key type and section 3.4 binds each ECDSA one to a single curve, so the material settles
+    /// what the declaration left open. This is the ordinary case for a certificate-imported key, which never
+    /// carries an <c>alg</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, true)]
+    [InlineData(SigningAlgorithms.PS512, true)]
+    [InlineData(SigningAlgorithms.ES256, false)]   // needs an EC key on P-256
+    [InlineData(SigningAlgorithms.HS256, false)]   // needs a symmetric key
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
+    [InlineData(SigningAlgorithms.None, false)]
+    [InlineData("made-up", false)]
+    public void RsaKey_SupportsExactlyTheAlgorithmsItsMaterialCanPerform(string algorithm, bool expected)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+
+        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// ECDSA is the case where the key type is not enough: the algorithm names the curve, so a P-256 key
+    /// performs ES256 and neither of the other two. Getting this wrong would surface as a signature failure
+    /// rather than a selection failure, one layer away from the cause.
+    /// </summary>
+    [Theory]
+    [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.ES256, true)]
+    [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.ES384, false)]
+    [InlineData(EllipticCurveTypes.P384, SigningAlgorithms.ES384, true)]
+    [InlineData(EllipticCurveTypes.P521, SigningAlgorithms.ES512, true)]
+    [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.RS256, false)]
+    [InlineData(EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs, true)]
+    public void EllipticCurveKey_IsJudgedByItsCurve(string curve, string algorithm, bool expected)
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
+
+        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
     }
 }
