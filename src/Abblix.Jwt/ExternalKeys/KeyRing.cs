@@ -64,10 +64,22 @@ internal sealed class KeyRing(
     /// decryption do. Publication must not.</param>
     public IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys)
         => _keys
-            .Where(opened => opened.Key.Usage == usage)
+            .Where(opened => Serves(opened.Key, usage))
             .ToList()
             .ProduceFirst(opened => opened.CreatedAt, timeProvider.GetUtcNow(), options.Value.KeyRolloverPropagation)
             .Select(opened => opened.Key.Sanitize(includePrivateKeys));
+
+    /// <summary>
+    /// Whether a key may serve a role: either it names that role, or it names none and is therefore unrestricted.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7517 section 4.2 makes <c>use</c> OPTIONAL and single-valued, so a key permitted to both sign and
+    /// encrypt is expressed by omitting the member, never by a multi-valued one. Reading an absent <c>use</c> as
+    /// "no role" rather than "any role" would drop exactly those keys, and silently: they match no role, so they
+    /// leave the published set without anything reporting a loss. A certificate permitting both signing and
+    /// encipherment produces precisely such a key.
+    /// </remarks>
+    private static bool Serves(JsonWebKey key, string usage) => key.Usage is null || key.Usage == usage;
 
     /// <summary>
     /// Mints whatever the current period is missing, then reloads and opens the ring into memory.
@@ -119,12 +131,20 @@ internal sealed class KeyRing(
         var propagation = options.Value.KeyRolloverPropagation;
         var keepRetiredFor = policy.KeepRetiredFor ?? policy.RotateEvery;
 
-        var live = new List<OpenedKey>(opened.Count);
-        foreach (var group in opened.GroupBy(key => key.Key.Usage))
+        // Retirement is decided per ROLE, and a key is kept if any role it serves still needs it. That is what
+        // makes an unrestricted key (no `use`, so it serves both) safe to hold: it leaves only once BOTH roles
+        // have moved on, and a role nobody mints for - encryption, when no encryption algorithm is named - keeps
+        // it indefinitely, which is correct, since it is the only key that role has.
+        var expired = new HashSet<string>(opened.Select(key => key.Id));
+
+        foreach (var usage in new[] { PublicKeyUsages.Signature, PublicKeyUsages.Encryption })
         {
-            // Oldest first, so each key's successor is simply the next one along. The newest of a role has no
-            // successor and therefore never retires: it is the key currently signing, or the one about to.
-            var byOldest = group.OrderBy(key => key.CreatedAt).ToList();
+            // Oldest first, so each key's successor is simply the next one along. The newest serving a role has
+            // no successor and therefore never retires: it is the key currently producing, or the one about to.
+            var byOldest = opened
+                .Where(key => Serves(key.Key, usage))
+                .OrderBy(key => key.CreatedAt)
+                .ToList();
 
             for (var index = 0; index < byOldest.Count; index++)
             {
@@ -132,13 +152,20 @@ internal sealed class KeyRing(
                 var successor = index + 1 < byOldest.Count ? byOldest[index + 1] : null;
 
                 if (successor is null || now <= successor.CreatedAt + propagation + keepRetiredFor)
-                {
-                    live.Add(key);
-                    continue;
-                }
-
-                await store.RemoveAsync(key.Id, cancellationToken);
+                    expired.Remove(key.Id);
             }
+        }
+
+        var live = new List<OpenedKey>(opened.Count);
+        foreach (var key in opened)
+        {
+            if (!expired.Contains(key.Id))
+            {
+                live.Add(key);
+                continue;
+            }
+
+            await store.RemoveAsync(key.Id, cancellationToken);
         }
 
         return live;
