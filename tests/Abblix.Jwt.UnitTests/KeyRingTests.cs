@@ -23,6 +23,7 @@
 using System.Diagnostics;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -119,7 +120,8 @@ public sealed class KeyRingTests : IDisposable
         DateTimeOffset? now = null,
         string? encryptionAlgorithm = null,
         TimeSpan? keepRetiredFor = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IReadOnlyList<JsonWebKey>? adoptedKeys = null)
     {
         store ??= new FakeStore();
 
@@ -160,6 +162,7 @@ public sealed class KeyRingTests : IDisposable
                 RotateEvery = TimeSpan.FromDays(30),
                 EncryptionAlgorithm = encryptionAlgorithm,
                 KeepRetiredFor = keepRetiredFor,
+                AdoptedKeys = adoptedKeys ?? [],
             },
             Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
             time);
@@ -463,6 +466,162 @@ public sealed class KeyRingTests : IDisposable
                 TestContext.Current.CancellationToken),
             CreatedAt = createdAt,
         });
+    }
+
+    /// <summary>
+    /// An adopted key keeps producing while the key minted alongside it serves out its propagation window. That
+    /// is the whole reason adoption exists: into an empty ring a minted key would produce from its first second,
+    /// and every client holding a JWKS copy from the second before would meet a token it cannot verify.
+    /// </summary>
+    [Fact]
+    public async Task AnAdoptedKeyProduces_WhileTheKeyMintedBesideItIsStillAnnounced()
+    {
+        var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "from-certificate" };
+
+        var (ring, store) = CreateRing(adoptedKeys: [existing]);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Both are published - that is the overlap - and the adopted one leads, so it is the one signing.
+        var published = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
+        Assert.Equal(2, published.Count);
+        Assert.Equal("from-certificate", published[0].KeyId);
+
+        // The store holds ciphertext for the adopted key too: it is sealed on the way in like any other entry.
+        var adopted = Assert.Single(store.Entries, entry => entry.Id.StartsWith("adopted-"));
+        Assert.Equal(5, adopted.Jwe.Split('.').Length);
+    }
+
+    /// <summary>
+    /// The control for the test above, and the reason adoption dates the key backwards: once the propagation
+    /// window has passed, the minted key takes over and the adopted one merely stays published.
+    /// </summary>
+    [Fact]
+    public async Task TheMintedKeyTakesOver_OnceThePropagationWindowHasPassed()
+    {
+        var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "from-certificate" };
+
+        var propagation = TimeSpan.FromHours(1);
+        var store = new FakeStore();
+        var (ring, _) = CreateRing(store, propagation: propagation, adoptedKeys: [existing]);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var (later, _) = CreateRing(
+            store, propagation: propagation, now: Now + propagation + TimeSpan.FromMinutes(1));
+        await later.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var published = later.Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
+        Assert.Equal(2, published.Count);
+        Assert.NotEqual("from-certificate", published[0].KeyId);
+        Assert.Contains(published, key => key.KeyId == "from-certificate");
+    }
+
+    /// <summary>
+    /// Adoption happens only into an empty ring, which is what makes leaving the call in a host's registration
+    /// harmless: a key the ring has since retired is not brought back by the next refresh.
+    /// </summary>
+    [Fact]
+    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAnything()
+    {
+        var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "from-certificate" };
+
+        var store = new FakeStore();
+        var (ring, _) = CreateRing(store, adoptedKeys: [existing]);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Stands in for the day the adopted key retires: the ring still holds the minted key, so it is not empty.
+        var adopted = Assert.Single(store.Entries, entry => entry.Id.StartsWith("adopted-"));
+        store.Entries.Remove(adopted);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(store.Entries, entry => entry.Id.StartsWith("adopted-"));
+    }
+
+    /// <summary>
+    /// A key with no private half is refused where it is named, not where it fails. Adopted dated backwards, it
+    /// would be the ACTIVE key, so accepting it would mean a server that publishes a full ring and cannot sign.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithNoPrivateHalfIsRefused()
+    {
+        var publicOnly = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "public-only" };
+
+        var (ring, _) = CreateRing(adoptedKeys: [publicOnly]);
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("public-only", refusal.Message);
+    }
+
+    /// <summary>
+    /// The builder call reaches the ring. Everything above constructs the ring directly, which proves the
+    /// behaviour and nothing about the wiring - and a registration method that quietly reaches nobody reads
+    /// exactly like one that works.
+    /// </summary>
+    [Fact]
+    public async Task AdoptExistingKeys_ReachesTheRing_ThroughTheHostedService()
+    {
+        var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "from-certificate" };
+
+        var store = new FakeStore();
+        var time = new Mock<TimeProvider>();
+        time.Setup(t => t.GetUtcNow()).Returns(Now);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(store);
+        services.AddSingleton(time.Object);
+        services.ComposeExternalKeyBackends();
+        services
+            .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName })
+            .AdoptExistingKeys(existing);
+
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        // Started the way a host starts it: the first refresh runs in StartAsync, which is the door production
+        // walks through.
+        var refresher = provider.GetServices<IHostedService>().Single();
+        await refresher.StartAsync(TestContext.Current.CancellationToken);
+        await refresher.StopAsync(TestContext.Current.CancellationToken);
+
+        var published = provider.GetRequiredService<IKeyRing>()
+            .Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
+
+        Assert.Equal(2, published.Count);
+        Assert.Equal("from-certificate", published[0].KeyId);
+    }
+
+    /// <summary>
+    /// The refresh service resolves, and over the same ring every consumer reads. Registering the contract with
+    /// its own factory would build a second ring, and nothing at runtime would say so: the loop would keep one
+    /// current while the JWKS endpoint served the other, which surfaces as keys that never rotate.
+    /// </summary>
+    [Fact]
+    public void TheRefreshServiceResolves_OverTheRingEveryoneElseReads()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        Assert.IsType<KeyRingRefreshService>(Assert.Single(provider.GetServices<IHostedService>()));
+        Assert.Same(provider.GetRequiredService<KeyRing>(), provider.GetRequiredService<IKeyRing>());
     }
 
     /// <summary>
