@@ -318,56 +318,107 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// A key naming no role must be refused loudly, because <see cref="KeyRing.Get"/> selects by an exact match:
-    /// such a key belongs to neither role and would leave the ring silently, taking its JWKS entry with it and
-    /// leaving the role with nothing to produce. This is how a certificate arrives - one permitting both signing
-    /// and encipherment maps to no <c>use</c> at all, per RFC 7517 section 4.2 - so the refusal has to name the
-    /// entry rather than let the set come back one shorter than it went in.
+    /// A key naming no role serves BOTH, because RFC 7517 section 4.2 makes <c>use</c> optional and
+    /// single-valued: a key permitted to sign and to encrypt is expressed by omitting the member, never by a
+    /// multi-valued one. Reading its absence as "no role" would drop exactly those keys from the published set,
+    /// and silently. A certificate permitting both signing and encipherment produces precisely such a key.
     /// </summary>
     [Fact]
-    public async Task RefusesAnEntry_WhoseKeyNamesNoRole()
+    public async Task AKeyNamingNoRole_ServesBoth()
     {
         var store = new FakeStore();
         var (ring, _) = CreateRing(store);
 
-        // Sealed the same way the ring seals its own, so only the missing role distinguishes it.
-        var roleless = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
-            with { Usage = null, KeyId = "roleless" };
+        await AddUnrestrictedKey(store, "adopted", Now);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
-        var envelope = new KeyEnvelope(
-            _providers[^1].GetRequiredService<IJsonWebTokenEncryptor>());
+        Assert.Contains(
+            ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false),
+            key => key.KeyId == "unrestricted");
+
+        Assert.Contains(
+            ring.Get(PublicKeyUsages.Encryption, includePrivateKeys: false),
+            key => key.KeyId == "unrestricted");
+    }
+
+    /// <summary>
+    /// Retirement is decided per role, and a key is kept while ANY role it serves still needs it. So an
+    /// unrestricted key outlives its signing successor: the encryption role has not moved on, and dropping the
+    /// key would leave that role with nothing at all.
+    /// </summary>
+    [Fact]
+    public async Task AKeyNamingNoRole_OutlivesASuccessorInOneRoleOnly()
+    {
+        var store = new FakeStore();
+
+        // The ring mints signing keys only - no encryption algorithm is named - so the unrestricted key is the
+        // one and only key the encryption role has.
+        await AddUnrestrictedKey(store, "adopted", Now.AddDays(-400));
+
+        var (ring, _) = CreateRing(store, now: Now);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            ring.Get(PublicKeyUsages.Encryption, includePrivateKeys: false),
+            key => key.KeyId == "unrestricted");
+
+        Assert.Contains(store.Entries, entry => entry.Id == "adopted");
+    }
+
+    /// <summary>
+    /// The control for the pair above: once BOTH roles have a successor past the window, the unrestricted key
+    /// does leave. Without this the tests would hold equally for a ring that never retires anything.
+    /// </summary>
+    [Fact]
+    public async Task AKeyNamingNoRole_RetiresOnceBothRolesMovedOn()
+    {
+        var store = new FakeStore();
+        await AddUnrestrictedKey(store, "adopted", Now.AddDays(-400));
+
+        // Both roles mint here, so both gain a successor; then time passes far beyond window plus retention.
+        var (ring, _) = CreateRing(
+            store,
+            now: Now,
+            encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var (later, _) = CreateRing(
+            store,
+            now: Now.AddDays(120),
+            encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256);
+
+        await later.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(store.Entries, entry => entry.Id == "adopted");
+    }
+
+    /// <summary>Seals a key carrying no role and stores it, the way an existing certificate would arrive.</summary>
+    private async Task AddUnrestrictedKey(FakeStore store, string entryId, DateTimeOffset createdAt)
+    {
+        var unrestricted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { Usage = null, KeyId = "unrestricted" };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.ComposeExternalKeyBackends();
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var envelope = new KeyEnvelope(provider.GetRequiredService<IJsonWebTokenEncryptor>());
 
         store.Entries.Add(new StoredKey
         {
-            Id = "adopted-no-role",
+            Id = entryId,
             Jwe = await envelope.SealAsync(
-                roleless,
+                unrestricted,
                 _keyEncryptionKey,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
                 EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
                 TestContext.Current.CancellationToken),
-            CreatedAt = Now,
+            CreatedAt = createdAt,
         });
-
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
-
-        // The message must point at something addressable: the operator's next step is to find that entry.
-        Assert.Contains("adopted-no-role", error.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The control for the test above: the same path with a role named must succeed. Without it, a ring that
-    /// threw on every entry would satisfy the refusal test and the assertion would measure nothing.
-    /// </summary>
-    [Fact]
-    public async Task AcceptsAnEntry_WhoseKeyNamesItsRole()
-    {
-        var store = new FakeStore();
-        var (ring, _) = CreateRing(store);
-
-        await ring.RefreshAsync(TestContext.Current.CancellationToken);
-
-        Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
     }
 }

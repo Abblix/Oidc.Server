@@ -64,10 +64,22 @@ internal sealed class KeyRing(
     /// decryption do. Publication must not.</param>
     public IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys)
         => _keys
-            .Where(opened => opened.Key.Usage == usage)
+            .Where(opened => Serves(opened.Key, usage))
             .ToList()
             .ProduceFirst(opened => opened.CreatedAt, timeProvider.GetUtcNow(), options.Value.KeyRolloverPropagation)
             .Select(opened => opened.Key.Sanitize(includePrivateKeys));
+
+    /// <summary>
+    /// Whether a key may serve a role: either it names that role, or it names none and is therefore unrestricted.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7517 section 4.2 makes <c>use</c> OPTIONAL and single-valued, so a key permitted to both sign and
+    /// encrypt is expressed by omitting the member, never by a multi-valued one. Reading an absent <c>use</c> as
+    /// "no role" rather than "any role" would drop exactly those keys, and silently: they match no role, so they
+    /// leave the published set without anything reporting a loss. A certificate permitting both signing and
+    /// encipherment produces precisely such a key.
+    /// </remarks>
+    private static bool Serves(JsonWebKey key, string usage) => key.Usage is null || key.Usage == usage;
 
     /// <summary>
     /// Mints whatever the current period is missing, then reloads and opens the ring into memory.
@@ -91,39 +103,10 @@ internal sealed class KeyRing(
         foreach (var entry in entries)
         {
             var key = await envelope.OpenAsync(entry.Jwe, versions.ToAsyncEnumerable(), cancellationToken);
-            RequireNamedRole(key, entry.Id);
             opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 
         _keys = await RetireExpiredAsync(opened, cancellationToken);
-    }
-
-    /// <summary>
-    /// Refuses a ring entry whose key does not name the role it serves.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Get"/> selects by an exact match on the role, so a key naming none matches neither and leaves
-    /// the ring through a hole rather than a door: the JWKS quietly loses an entry, the role it was meant to fill
-    /// ends up with nothing to produce with, and the cause sits in a stored envelope nobody reads. Refusing here
-    /// costs one comparison and names the entry.
-    ///
-    /// A certificate is the way this arrives. A JWK derived from one that permits both signing and encipherment
-    /// carries no <c>use</c> at all, because RFC 7517 section 4.2 makes the member a single value and expresses
-    /// "unrestricted" by omitting it. The same section allows an application to require its presence, and this
-    /// ring does: a key it cannot file under a role is a key it cannot serve.
-    /// </remarks>
-    /// <param name="key">The key just opened from its envelope.</param>
-    /// <param name="entryId">The ring entry it came from, so the message points at something addressable.</param>
-    private static void RequireNamedRole(JsonWebKey key, string entryId)
-    {
-        if (key.Usage is PublicKeyUsages.Signature or PublicKeyUsages.Encryption)
-            return;
-
-        throw new InvalidOperationException(
-            $"The key in ring entry '{entryId}' names no role: its '{nameof(JsonWebKey.Usage)}' is " +
-            $"'{key.Usage ?? "(none)"}', while the ring serves only '{PublicKeyUsages.Signature}' and " +
-            $"'{PublicKeyUsages.Encryption}'. A key derived from a certificate that permits both signing and " +
-            "encipherment carries no role, so set one explicitly before storing it.");
     }
 
     /// <summary>
@@ -148,12 +131,20 @@ internal sealed class KeyRing(
         var propagation = options.Value.KeyRolloverPropagation;
         var keepRetiredFor = policy.KeepRetiredFor ?? policy.RotateEvery;
 
-        var live = new List<OpenedKey>(opened.Count);
-        foreach (var group in opened.GroupBy(key => key.Key.Usage))
+        // Retirement is decided per ROLE, and a key is kept if any role it serves still needs it. That is what
+        // makes an unrestricted key (no `use`, so it serves both) safe to hold: it leaves only once BOTH roles
+        // have moved on, and a role nobody mints for - encryption, when no encryption algorithm is named - keeps
+        // it indefinitely, which is correct, since it is the only key that role has.
+        var expired = new HashSet<string>(opened.Select(key => key.Id));
+
+        foreach (var usage in new[] { PublicKeyUsages.Signature, PublicKeyUsages.Encryption })
         {
-            // Oldest first, so each key's successor is simply the next one along. The newest of a role has no
-            // successor and therefore never retires: it is the key currently signing, or the one about to.
-            var byOldest = group.OrderBy(key => key.CreatedAt).ToList();
+            // Oldest first, so each key's successor is simply the next one along. The newest serving a role has
+            // no successor and therefore never retires: it is the key currently producing, or the one about to.
+            var byOldest = opened
+                .Where(key => Serves(key.Key, usage))
+                .OrderBy(key => key.CreatedAt)
+                .ToList();
 
             for (var index = 0; index < byOldest.Count; index++)
             {
@@ -161,13 +152,20 @@ internal sealed class KeyRing(
                 var successor = index + 1 < byOldest.Count ? byOldest[index + 1] : null;
 
                 if (successor is null || now <= successor.CreatedAt + propagation + keepRetiredFor)
-                {
-                    live.Add(key);
-                    continue;
-                }
-
-                await store.RemoveAsync(key.Id, cancellationToken);
+                    expired.Remove(key.Id);
             }
+        }
+
+        var live = new List<OpenedKey>(opened.Count);
+        foreach (var key in opened)
+        {
+            if (!expired.Contains(key.Id))
+            {
+                live.Add(key);
+                continue;
+            }
+
+            await store.RemoveAsync(key.Id, cancellationToken);
         }
 
         return live;
