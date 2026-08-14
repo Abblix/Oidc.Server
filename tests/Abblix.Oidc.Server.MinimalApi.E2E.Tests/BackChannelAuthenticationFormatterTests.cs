@@ -65,14 +65,14 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
 {
     private const string LoginHint = "someone@example.com";
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
             BaseAddress = TestFactory.BaseAddress,
         });
 
-    private WebApplicationFactory<Program> HostRefusingWith(OidcError refusal)
+    private WebApplicationFactory<TestHost.Program> HostRefusingWith(OidcError refusal)
         => factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.Replace(ServiceDescriptor.Scoped<IUserDeviceAuthenticationHandler>(

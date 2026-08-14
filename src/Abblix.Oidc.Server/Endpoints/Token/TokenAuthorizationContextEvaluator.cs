@@ -26,6 +26,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using System.Security.Cryptography;
 
 using System.Buffers.Text;
+using Abblix.Utils.Polyfills;
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
 

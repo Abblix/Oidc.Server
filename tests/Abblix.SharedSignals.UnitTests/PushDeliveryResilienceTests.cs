@@ -26,7 +26,6 @@ using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
-using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

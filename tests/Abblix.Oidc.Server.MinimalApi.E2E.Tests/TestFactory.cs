@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// generated request models' <c>BindAsync</c> and the <c>IResult</c> formatters over a real ASP.NET
 /// Core request pipeline - the same way a consumer of the Abblix.Oidc.Server.MinimalApi package would.
 /// </summary>
-public sealed class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public sealed class TestFactory : WebApplicationFactory<TestHost.Program>, IAsyncLifetime
 {
     /// <summary>
     /// The in-memory TestServer base address. It is HTTPS on purpose: MapOidcEndpoints enforces TLS on the OIDC

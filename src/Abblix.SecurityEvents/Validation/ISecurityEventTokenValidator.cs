@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Abblix.SecurityEvents.Validation;
 
 /// <summary>
@@ -48,10 +51,3 @@ public interface ISecurityEventTokenValidator
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken);
 }
-
-/// <summary>
-/// Marks a validation step whose removal or replacement makes accepting a forged or mistyped
-/// token possible. The pipeline builder refuses to touch such a step without an explicit,
-/// reasoned acknowledgement - "temporarily for a test" must not ride into production silently.
-/// </summary>
-public interface ISecurityCriticalValidator : ISecurityEventTokenValidator;

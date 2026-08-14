@@ -58,7 +58,7 @@ public sealed class InteractionRedirectTests(TestFactory factory) : IClassFixtur
     private const string AccountSelectionPath = "/select-account";
     private const string RegistrationPath = "/register";
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

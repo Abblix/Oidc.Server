@@ -25,6 +25,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
+using Abblix.Utils.Polyfills;
 
 namespace Abblix.Jwt;
 

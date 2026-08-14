@@ -251,7 +251,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     }
 
 
-    private WebApplicationFactory<Program> CreateHost()
+    private WebApplicationFactory<TestHost.Program> CreateHost()
     {
         var secret = new ClientSecret
         {
@@ -299,7 +299,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             }));
     }
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

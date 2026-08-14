@@ -7,7 +7,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 
-namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
 
 /// <summary>
 /// Test-host user-info claims provider: returns a fixed identity

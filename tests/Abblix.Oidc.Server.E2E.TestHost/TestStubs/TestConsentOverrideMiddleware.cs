@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 
-namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
+namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
 
 /// <summary>
 /// Test-only middleware that lifts a per-test consent override out of an HTTP request header

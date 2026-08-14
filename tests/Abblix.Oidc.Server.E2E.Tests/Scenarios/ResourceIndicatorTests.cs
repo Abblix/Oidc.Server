@@ -283,7 +283,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     /// Builds an isolated host stating a default resource indicator, leaving the shared suite on the
     /// client-identifier fallback that every existing deployment still gets.
     /// </summary>
-    private WebApplicationFactory<Program> CreateHostWithDefaultResource()
+    private WebApplicationFactory<TestHost.Program> CreateHostWithDefaultResource()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
@@ -330,7 +330,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     /// server holds an encryption key of its own. Both being present is what makes the assertion meaningful:
     /// the token could have been encrypted to either, and the header says which one was chosen.
     /// </summary>
-    private WebApplicationFactory<Program> CreateHostWithResourceKey(JsonWebKey resourceKey)
+    private WebApplicationFactory<TestHost.Program> CreateHostWithResourceKey(JsonWebKey resourceKey)
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
@@ -354,7 +354,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
                             ];
                         }))));
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

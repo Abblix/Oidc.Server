@@ -24,6 +24,7 @@ using System.Buffers.Binary;
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
+using Abblix.Utils.Polyfills;
 
 namespace Abblix.Jwt.Encryption;
 

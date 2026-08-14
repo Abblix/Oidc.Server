@@ -25,6 +25,7 @@ using System.Text;
 using Abblix.Jwt.Encryption;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils.Polyfills;
 
 namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 

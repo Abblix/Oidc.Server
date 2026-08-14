@@ -21,36 +21,12 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using Abblix.DependencyInjection.UnitTests.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Abblix.DependencyInjection.UnitTests;
-
-/// <summary>
-/// Composite over <see cref="IPrimaryService"/> with the public array-accepting constructor that
-/// <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/> discovers by reflection.
-/// Declared internal (like the production composites) so the same-assembly ActivatorUtilities path resolves it.
-/// </summary>
-internal sealed class PrimaryServiceComposite : IPrimaryService
-{
-    private readonly IPrimaryService[] _inner;
-    public PrimaryServiceComposite(IPrimaryService[] inner) => _inner = inner;
-    public string GetValue() => string.Join(",", _inner.Select(x => x.GetValue()));
-}
-
-/// <summary>
-/// A second composite over the same interface, so a test can compose a family twice under two different
-/// composite types - the shape a guard asking about the composite rather than about the family lets past.
-/// </summary>
-internal sealed class SecondPrimaryServiceComposite : IPrimaryService
-{
-    private readonly IPrimaryService[] _inner;
-    public SecondPrimaryServiceComposite(IPrimaryService[] inner) => _inner = inner;
-    public string GetValue() => string.Join("|", _inner.Select(x => x.GetValue()));
-}
 
 /// <summary>
 /// Locks the composition contract of <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/>:

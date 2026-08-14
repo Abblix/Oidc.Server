@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.Risc;
+namespace Abblix.SecurityEvents.RISC;
 
 /// <summary>
 /// Sessions Revoked (RISC 1.0 Section 2.11): all sessions of the account identified by the

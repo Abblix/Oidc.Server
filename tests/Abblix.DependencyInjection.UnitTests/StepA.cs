@@ -20,34 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Linq;
-
 namespace Abblix.DependencyInjection.UnitTests;
 
-/// <summary>Shared pipeline fixtures for the composed-family tests.</summary>
-internal interface IPipelineStep
-{
-    string Name { get; }
-}
-
 internal sealed class StepA : IPipelineStep { public string Name => "A"; }
-internal sealed class StepB : IPipelineStep { public string Name => "B"; }
-internal sealed class StepC : IPipelineStep { public string Name => "C"; }
-internal sealed class StepD : IPipelineStep { public string Name => "D"; }
-
-/// <summary>Wraps whatever answers <see cref="IPipelineStep"/>, so a test can decorate a composed family.</summary>
-internal sealed class PipelineDecorator(IPipelineStep inner) : IPipelineStep
-{
-    public string Name => $"[{inner.Name}]";
-}
-
-/// <summary>
-/// Composite over <see cref="IPipelineStep"/> that reports its children in execution order, so tests can
-/// assert the exact family composition after edits.
-/// </summary>
-internal sealed class PipelineComposite : IPipelineStep
-{
-    public PipelineComposite(IPipelineStep[] steps) => Steps = steps;
-    public IPipelineStep[] Steps { get; }
-    public string Name => string.Join(",", Steps.Select(step => step.Name));
-}

@@ -5,10 +5,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
-using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -18,6 +17,7 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
+using Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -186,7 +186,7 @@ await app.RunAsync();
 
 static async Task LoadEmbeddedTestLicenseAsync()
 {
-    var assembly = typeof(Program).Assembly;
+    var assembly = typeof(Abblix.Oidc.Server.MinimalApi.E2E.TestHost.Program).Assembly;
     const string resourceName = "Abblix.Oidc.Server.MinimalApi.E2E.TestHost.Resources.test-license.jwt";
     await using var stream = assembly.GetManifestResourceStream(resourceName)
         ?? throw new InvalidOperationException(
@@ -199,7 +199,10 @@ static async Task LoadEmbeddedTestLicenseAsync()
 
 // Marker for WebApplicationFactory<Program>. Must stay public so the factory
 // can bind cross-assembly; private ctor satisfies S1118 (no instance state).
-public partial class Program
+namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost
 {
-    private Program() { }
+    public partial class Program
+    {
+        private Program() { }
+    }
 }

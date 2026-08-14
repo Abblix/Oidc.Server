@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Utils;
+using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.DPoP;

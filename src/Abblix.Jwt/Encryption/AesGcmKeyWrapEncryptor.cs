@@ -24,6 +24,7 @@ using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using Abblix.Utils;
+using Abblix.Utils.Polyfills;
 
 namespace Abblix.Jwt.Encryption;
 

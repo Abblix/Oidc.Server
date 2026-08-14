@@ -51,14 +51,14 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 {
     private static readonly Uri MtlsBaseUri = new("https://mtls.example.com");
 
-    private HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
             BaseAddress = TestFactory.BaseAddress,
         });
 
-    private WebApplicationFactory<Program> HostWith(Action<OidcOptions> configure)
+    private WebApplicationFactory<TestHost.Program> HostWith(Action<OidcOptions> configure)
         => factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services => services.PostConfigure(configure)));
 

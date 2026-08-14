@@ -207,7 +207,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
     /// of issuance and a test can reach the approval check without waiting out the shared host's interval. The
     /// shared default host is left untouched for the rest of the suite.
     /// </summary>
-    private WebApplicationFactory<Program> CreateHostWithoutPollingDelay()
+    private WebApplicationFactory<TestHost.Program> CreateHostWithoutPollingDelay()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
@@ -215,7 +215,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
                         Options.DefaultName,
                         options => options.DeviceAuthorization!.PollingInterval = TimeSpan.Zero))));
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

@@ -36,7 +36,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     private const string OriginHeader = "Origin";
     private const string AllowOriginHeader = "Access-Control-Allow-Origin";
 
-    private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
+    private static HttpClient ClientOf(WebApplicationFactory<TestHost.Program> f) => f.CreateClient(
         new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestFactory.BaseAddress });
 
     [Fact]

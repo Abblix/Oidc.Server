@@ -31,7 +31,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.RichAuthorizationRequests;
+namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
 /// Verifies the discovery surface of RAR - the

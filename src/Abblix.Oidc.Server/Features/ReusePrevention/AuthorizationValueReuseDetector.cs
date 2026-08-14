@@ -25,6 +25,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ReusePrevention;

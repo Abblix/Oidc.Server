@@ -23,7 +23,7 @@
 using System.Text.Json.Serialization;
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.Risc;
+namespace Abblix.SecurityEvents.RISC;
 
 /// <summary>
 /// Identifier Changed (RISC 1.0 Section 2.5): the identifier in the subject has changed. The

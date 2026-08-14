@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.Risc;
+namespace Abblix.SecurityEvents.RISC;
 
 /// <summary>
 /// Account Credential Change Required (RISC 1.0 Section 2.1): the account identified by the
