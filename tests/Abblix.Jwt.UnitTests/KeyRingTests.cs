@@ -316,4 +316,58 @@ public sealed class KeyRingTests : IDisposable
         await with.RefreshAsync(TestContext.Current.CancellationToken);
         Assert.Single(with.Get(PublicKeyUsages.Encryption, includePrivateKeys: false));
     }
+
+    /// <summary>
+    /// A key naming no role must be refused loudly, because <see cref="KeyRing.Get"/> selects by an exact match:
+    /// such a key belongs to neither role and would leave the ring silently, taking its JWKS entry with it and
+    /// leaving the role with nothing to produce. This is how a certificate arrives - one permitting both signing
+    /// and encipherment maps to no <c>use</c> at all, per RFC 7517 section 4.2 - so the refusal has to name the
+    /// entry rather than let the set come back one shorter than it went in.
+    /// </summary>
+    [Fact]
+    public async Task RefusesAnEntry_WhoseKeyNamesNoRole()
+    {
+        var store = new FakeStore();
+        var (ring, _) = CreateRing(store);
+
+        // Sealed the same way the ring seals its own, so only the missing role distinguishes it.
+        var roleless = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { Usage = null, KeyId = "roleless" };
+
+        var envelope = new KeyEnvelope(
+            _providers[^1].GetRequiredService<IJsonWebTokenEncryptor>());
+
+        store.Entries.Add(new StoredKey
+        {
+            Id = "adopted-no-role",
+            Jwe = await envelope.SealAsync(
+                roleless,
+                _keyEncryptionKey,
+                EncryptionAlgorithms.KeyManagement.RsaOaep256,
+                EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+                TestContext.Current.CancellationToken),
+            CreatedAt = Now,
+        });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        // The message must point at something addressable: the operator's next step is to find that entry.
+        Assert.Contains("adopted-no-role", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The control for the test above: the same path with a role named must succeed. Without it, a ring that
+    /// threw on every entry would satisfy the refusal test and the assertion would measure nothing.
+    /// </summary>
+    [Fact]
+    public async Task AcceptsAnEntry_WhoseKeyNamesItsRole()
+    {
+        var store = new FakeStore();
+        var (ring, _) = CreateRing(store);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+    }
 }

@@ -91,10 +91,39 @@ internal sealed class KeyRing(
         foreach (var entry in entries)
         {
             var key = await envelope.OpenAsync(entry.Jwe, versions.ToAsyncEnumerable(), cancellationToken);
+            RequireNamedRole(key, entry.Id);
             opened.Add(new OpenedKey(entry.Id, key, entry.CreatedAt));
         }
 
         _keys = await RetireExpiredAsync(opened, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses a ring entry whose key does not name the role it serves.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Get"/> selects by an exact match on the role, so a key naming none matches neither and leaves
+    /// the ring through a hole rather than a door: the JWKS quietly loses an entry, the role it was meant to fill
+    /// ends up with nothing to produce with, and the cause sits in a stored envelope nobody reads. Refusing here
+    /// costs one comparison and names the entry.
+    ///
+    /// A certificate is the way this arrives. A JWK derived from one that permits both signing and encipherment
+    /// carries no <c>use</c> at all, because RFC 7517 section 4.2 makes the member a single value and expresses
+    /// "unrestricted" by omitting it. The same section allows an application to require its presence, and this
+    /// ring does: a key it cannot file under a role is a key it cannot serve.
+    /// </remarks>
+    /// <param name="key">The key just opened from its envelope.</param>
+    /// <param name="entryId">The ring entry it came from, so the message points at something addressable.</param>
+    private static void RequireNamedRole(JsonWebKey key, string entryId)
+    {
+        if (key.Usage is PublicKeyUsages.Signature or PublicKeyUsages.Encryption)
+            return;
+
+        throw new InvalidOperationException(
+            $"The key in ring entry '{entryId}' names no role: its '{nameof(JsonWebKey.Usage)}' is " +
+            $"'{key.Usage ?? "(none)"}', while the ring serves only '{PublicKeyUsages.Signature}' and " +
+            $"'{PublicKeyUsages.Encryption}'. A key derived from a certificate that permits both signing and " +
+            "encipherment carries no role, so set one explicitly before storing it.");
     }
 
     /// <summary>
