@@ -26,6 +26,7 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using Xunit;

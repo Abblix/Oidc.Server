@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using System.Buffers.Text;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.Jwt;
 

@@ -27,7 +27,7 @@ public sealed class OidcEndpointResolverTests(TestFactory factory) : IClassFixtu
 {
     private const string RoutePrefix = "/oauth";
 
-    private static HttpClient ClientOf(WebApplicationFactory<TestHost.Program> f) => f.CreateClient(
+    private static HttpClient ClientOf(WebApplicationFactory<Program> f) => f.CreateClient(
         new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = TestFactory.BaseAddress });
 
     private static async Task<string> ResolveAsync(HttpClient client, OidcEndpoints endpoint)

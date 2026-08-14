@@ -22,7 +22,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace Abblix.SecurityEvents.CAEP;
+namespace Abblix.SecurityEvents.Caep;
 
 /// <summary>
 /// Assurance Level Change (CAEP 1.0 Section 3.4): the subject's authentication strength changed

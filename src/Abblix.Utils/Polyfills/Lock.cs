@@ -23,7 +23,7 @@
 
 #if NET8_0
 
-namespace Abblix.Utils.Polyfills;
+namespace System.Threading;
 
 /// <summary>
 /// Stands in for <c>System.Threading.Lock</c>, which arrived in .NET 9.

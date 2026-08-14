@@ -22,7 +22,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace Abblix.SecurityEvents.CAEP;
+namespace Abblix.SecurityEvents.Caep;
 
 /// <summary>
 /// Session Presented (CAEP 1.0 Section 3.7): the transmitter observed the subject's session to

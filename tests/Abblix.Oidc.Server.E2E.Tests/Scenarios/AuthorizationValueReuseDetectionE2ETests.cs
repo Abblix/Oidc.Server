@@ -86,7 +86,7 @@ public class AuthorizationValueReuseDetectionE2ETests(TestFactory factory) : Tes
     /// Builds an isolated host with constant-value reuse detection turned on, leaving the shared default host
     /// (and the rest of the suite) untouched.
     /// </summary>
-    private WebApplicationFactory<TestHost.Program> CreateDetectingHost()
+    private WebApplicationFactory<Program> CreateDetectingHost()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
@@ -94,7 +94,7 @@ public class AuthorizationValueReuseDetectionE2ETests(TestFactory factory) : Tes
                         Options.DefaultName,
                         options => options.PkceAndNonceReuseDetectionInterval = TimeSpan.FromMinutes(5)))));
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

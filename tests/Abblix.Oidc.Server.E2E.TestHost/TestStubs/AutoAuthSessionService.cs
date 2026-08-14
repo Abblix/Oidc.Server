@@ -3,7 +3,7 @@
 
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
-namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
+namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 
 /// <summary>
 /// Test-host auth session stub: every request resolves to the same

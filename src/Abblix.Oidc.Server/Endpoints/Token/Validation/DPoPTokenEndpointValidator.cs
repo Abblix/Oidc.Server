@@ -28,7 +28,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
-using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

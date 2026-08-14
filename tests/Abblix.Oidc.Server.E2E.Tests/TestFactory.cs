@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// (no Initial Access Token) - are applied here; everything else is
 /// what a real consumer of Abblix.Oidc.Server gets.
 /// </summary>
-public class TestFactory : WebApplicationFactory<TestHost.Program>, IAsyncLifetime
+public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     /// <summary>
     /// Eagerly builds the single shared host once, before the parallel test classes touch it.

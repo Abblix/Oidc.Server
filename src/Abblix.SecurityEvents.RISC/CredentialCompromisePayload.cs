@@ -21,11 +21,11 @@
 // info@abblix.com
 
 using System.Text.Json.Serialization;
-using Abblix.SecurityEvents.CAEP;
+using Abblix.SecurityEvents.Caep;
 using Abblix.SecurityEvents.Events;
 using Abblix.Utils.Json;
 
-namespace Abblix.SecurityEvents.RISC;
+namespace Abblix.SecurityEvents.Risc;
 
 /// <summary>
 /// Credential Compromise (RISC 1.0 Section 2.7): a credential of the subject was found to be

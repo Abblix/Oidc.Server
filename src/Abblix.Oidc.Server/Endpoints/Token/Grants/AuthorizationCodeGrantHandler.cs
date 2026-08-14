@@ -31,7 +31,6 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
 using System.Buffers.Text;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 

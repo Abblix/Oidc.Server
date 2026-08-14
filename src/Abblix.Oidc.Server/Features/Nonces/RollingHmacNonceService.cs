@@ -23,7 +23,6 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

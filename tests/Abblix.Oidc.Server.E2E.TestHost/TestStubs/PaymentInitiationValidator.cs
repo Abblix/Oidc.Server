@@ -8,7 +8,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
+namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 
 /// <summary>
 /// Test validator for the RFC 9396 <c>payment_initiation</c> authorization-detail type.

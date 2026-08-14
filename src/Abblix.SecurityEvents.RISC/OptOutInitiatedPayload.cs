@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.RISC;
+namespace Abblix.SecurityEvents.Risc;
 
 /// <summary>
 /// Opt Out Initiated (RISC 1.0 Section 2.8.2): the account identified by the subject asked to

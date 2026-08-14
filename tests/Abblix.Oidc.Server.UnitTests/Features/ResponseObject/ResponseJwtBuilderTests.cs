@@ -37,7 +37,7 @@ using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
-namespace Abblix.Oidc.Server.UnitTests.Features.ResponseObject;
+namespace Abblix.Oidc.Server.UnitTests.Features.Jarm;
 
 /// <summary>
 /// Unit tests for <see cref="ResponseJwtBuilder"/> verifying JARM (JWT Secured Authorization Response

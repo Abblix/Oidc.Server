@@ -27,7 +27,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 

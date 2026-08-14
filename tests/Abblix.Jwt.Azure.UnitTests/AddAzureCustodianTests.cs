@@ -22,6 +22,7 @@
 
 using System.Net;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;

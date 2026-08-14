@@ -25,7 +25,7 @@ using System.Text.Json.Nodes;
 using Abblix.SecurityEvents.Events;
 using Xunit;
 
-namespace Abblix.SecurityEvents.CAEP.UnitTests;
+namespace Abblix.SecurityEvents.Caep.UnitTests;
 
 /// <summary>
 /// Pins the dictionary's contract rather than any one figure: the registration teaches the

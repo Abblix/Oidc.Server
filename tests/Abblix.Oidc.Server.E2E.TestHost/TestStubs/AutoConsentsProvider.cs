@@ -7,7 +7,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
-namespace Abblix.Oidc.Server.MinimalApi.E2E.TestHost;
+namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 
 /// <summary>
 /// Test-host consent provider: marks every requested scope / resource as already granted,

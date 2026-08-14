@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.RISC;
+namespace Abblix.SecurityEvents.Risc;
 
 /// <summary>
 /// Identifier Recycled (RISC 1.0 Section 2.6): the identifier in the subject was recycled and

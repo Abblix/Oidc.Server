@@ -25,6 +25,33 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
+/// The lifecycle state of a service key as it moves through generation, activation, retirement and
+/// deletion. The transitions themselves are driven by the rotation engine; this contract only names the
+/// states so a persistent store and the read seam agree on their meaning.
+/// </summary>
+public enum KeyLifecycleStatus
+{
+    /// <summary>
+    /// Generated and published for verification, but not yet used for signing. Publishing a key before it
+    /// signs (publish-before-sign) gives relying parties time to fetch it, so the first token it signs
+    /// already verifies against a key they hold.
+    /// </summary>
+    Pending,
+
+    /// <summary>The current signing key: within its <c>not_before</c> / <c>not_after</c> window.</summary>
+    Active,
+
+    /// <summary>
+    /// Past <c>not_after</c>, so it no longer signs, but still published so tokens it already signed keep
+    /// verifying until they expire.
+    /// </summary>
+    Retiring,
+
+    /// <summary>Past <c>delete_after</c>: no live token can reference it, so it is removed from publication.</summary>
+    Retired,
+}
+
+/// <summary>
 /// A service key together with the lifecycle metadata that lives AROUND it, never on it - the
 /// <see cref="JsonWebKey"/> stays a pure JOSE / RFC 7517 model. This is the unit a persistent store saves
 /// at generation and the read seam gates by time; the durable backend and the rotation that advances

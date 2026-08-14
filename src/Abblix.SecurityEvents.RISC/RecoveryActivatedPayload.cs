@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Events;
 
-namespace Abblix.SecurityEvents.RISC;
+namespace Abblix.SecurityEvents.Risc;
 
 /// <summary>
 /// Recovery Activated (RISC 1.0 Section 2.9): the account identified by the subject activated a

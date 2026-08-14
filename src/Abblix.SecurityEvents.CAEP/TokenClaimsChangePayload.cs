@@ -23,7 +23,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
-namespace Abblix.SecurityEvents.CAEP;
+namespace Abblix.SecurityEvents.Caep;
 
 /// <summary>
 /// Token Claims Change (CAEP 1.0 Section 3.2): a claim in the token identified by the subject -

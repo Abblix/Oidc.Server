@@ -26,7 +26,6 @@ using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 using System.Buffers.Text;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 

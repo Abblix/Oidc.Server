@@ -28,7 +28,6 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 using System.Buffers.Text;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.Jwt;
 

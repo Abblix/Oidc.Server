@@ -25,7 +25,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Utils.Polyfills;
 
 namespace Abblix.SecurityEvents.Validation.Steps;
 

@@ -24,7 +24,7 @@ using System.Text.Json.Serialization;
 using Abblix.SecurityEvents.Events;
 using Abblix.Utils.Json;
 
-namespace Abblix.SecurityEvents.CAEP;
+namespace Abblix.SecurityEvents.Caep;
 
 /// <summary>
 /// The claims every CAEP event may carry (CAEP 1.0 Section 2): when it happened, who set it in

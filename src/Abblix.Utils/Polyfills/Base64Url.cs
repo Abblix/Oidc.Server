@@ -22,7 +22,7 @@
 
 #if NET8_0
 
-namespace Abblix.Utils.Polyfills;
+namespace System.Buffers.Text;
 
 /// <summary>
 /// Polyfill of the BCL <see cref="Base64Url"/> shipping in net9.0+, providing strict RFC 7515 §3

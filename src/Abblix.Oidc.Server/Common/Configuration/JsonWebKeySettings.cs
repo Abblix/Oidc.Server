@@ -22,7 +22,6 @@
 
 using System.Buffers.Text;
 using Abblix.Jwt;
-using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Configuration;
 
 namespace Abblix.Oidc.Server.Common.Configuration;

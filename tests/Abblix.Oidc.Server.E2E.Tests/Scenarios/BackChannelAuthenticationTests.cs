@@ -284,13 +284,13 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// poll came back <c>slow_down</c> instead of <c>authorization_pending</c>; that is what #281 changed,
     /// and the workaround left with it.
     /// </remarks>
-    private WebApplicationFactory<TestHost.Program> CreateCibaHost()
+    private WebApplicationFactory<Program> CreateCibaHost()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services.Replace(ServiceDescriptor
                     .Scoped<IUserDeviceAuthenticationHandler, ReachableUserDeviceHandler>())));
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

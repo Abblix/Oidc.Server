@@ -21,7 +21,6 @@
 // info@abblix.com
 
 
-using Abblix.Utils.Polyfills;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;

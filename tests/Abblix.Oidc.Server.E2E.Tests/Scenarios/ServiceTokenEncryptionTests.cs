@@ -108,7 +108,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     /// shared default host (and the rest of the suite) stays untouched. The key is generated once and captured,
     /// so the same key pair encrypts and later decrypts within the host.
     /// </summary>
-    private WebApplicationFactory<TestHost.Program> CreateHost(Action<OidcOptions> configure)
+    private WebApplicationFactory<Program> CreateHost(Action<OidcOptions> configure)
     {
         var encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
         return Factory.WithWebHostBuilder(builder =>
@@ -123,7 +123,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
                         }))));
     }
 
-    private static HttpClient CreateClientFor(WebApplicationFactory<TestHost.Program> host)
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
