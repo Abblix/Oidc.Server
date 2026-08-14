@@ -116,7 +116,7 @@ public class ClientJwtFormatterTests
 
     /// <summary>
     /// Verifies that FormatAsync uses client encryption key when available.
-    /// Per RFC 7516, JWE encrypts tokens for confidentiality (ID tokens with sensitive claims).
+    /// Per RFC 7516, JWE encrypts a token for confidentiality when the client has published a key.
     /// Client keys are retrieved from IClientKeysProvider based on ClientInfo.
     /// </summary>
     [Fact]
@@ -221,12 +221,12 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies complete JWT formatting for ID token with signing and encryption.
-    /// Tests end-to-end flow for typical OpenID Connect ID token scenario.
-    /// Per OIDC Core 1.0 Section 2, ID tokens contain user authentication claims.
+    /// The whole flow for a token this overload recognises: signed with the service key the header's algorithm
+    /// selects, then encrypted to the client's published key. Its neighbours each check one collaborator; this
+    /// one requires all three to have been asked, exactly once.
     /// </summary>
     [Fact]
-    public async Task FormatAsync_ForIdToken_ShouldProduceSignedAndEncryptedJwt()
+    public async Task FormatAsync_ForLogoutToken_ShouldProduceSignedAndEncryptedJwt()
     {
         // Arrange
         var token = new JsonWebToken
@@ -308,11 +308,19 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that the formatter selects the client's encryption metadata by JWT type: an
-    /// id_token uses id_token_encrypted_response_alg, while a UserInfo response (which carries no
-    /// id_token/logout type) uses userinfo_encrypted_response_alg. The encryption key here has no
-    /// algorithm of its own, so the registered value is what reaches the JWT creator.
+    /// Verifies that the obsolete overload selects the client's encryption metadata by JWT type: a token typed
+    /// as a logout token uses <c>id_token_encrypted_response_*</c>, and a token carrying no type at all uses
+    /// <c>userinfo_encrypted_response_*</c>. The encryption key here has no algorithm of its own, so the
+    /// registered value is what reaches the JWT creator - with a key that names one, only the content
+    /// encryption would tell the two apart.
     /// </summary>
+    /// <remarks>
+    /// The untyped arm covers the ID TOKEN as well, and that is the counter-intuitive part worth stating: an ID
+    /// token carries no type of its own, so this overload cannot recognise it and gives it the userinfo
+    /// registration rather than the id_token one. That is not a defect to fix here but the reason the overload
+    /// is obsolete - inferring an encryption policy from a header no specification defines was never sound, and
+    /// real issuance passes the policy explicitly.
+    /// </remarks>
     [Fact]
     public async Task FormatAsync_SelectsEncryptionAlgorithmByTokenType()
     {
@@ -344,23 +352,25 @@ public class ClientJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        // Act & Assert - id_token uses the id_token encryption metadata (both alg and enc).
-        var idToken = new JsonWebToken
+        // Act & Assert - a logout token is the one type this overload recognises, and it takes the id_token
+        // encryption metadata (both alg and enc).
+        var logoutToken = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
             Payload = { Audiences = [ClientId] },
         };
-        await _formatter.FormatAsync(idToken, clientInfo);
+        await _formatter.FormatAsync(logoutToken, clientInfo);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedKeyAlgorithm);
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capturedContentEncryption);
 
-        // A UserInfo response carries no id_token/logout type and uses the userinfo metadata.
-        var userInfoToken = new JsonWebToken
+        // Everything else falls to the default arm and uses the userinfo metadata: a UserInfo response, and an
+        // ID TOKEN too, since it carries no type of its own.
+        var untypedToken = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload = { Audiences = [ClientId] },
         };
-        await _formatter.FormatAsync(userInfoToken, clientInfo);
+        await _formatter.FormatAsync(untypedToken, clientInfo);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capturedKeyAlgorithm);
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512, capturedContentEncryption);
     }
