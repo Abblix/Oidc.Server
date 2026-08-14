@@ -121,6 +121,5 @@ public static class JsonWebKeyExtensions
     /// selection. Asking the material settles it, and RFC 7518 sections 3.1 and 3.4 make the answer exact.
     /// </remarks>
     private static bool CanPerform(this JsonWebKey key, string algorithm)
-        => key.Algorithm == algorithm ||
-           (key.Algorithm is null && key.SupportsAlgorithm(algorithm));
+        => key.Algorithm is not null ? key.Algorithm == algorithm : key.SupportsAlgorithm(algorithm);
 }
