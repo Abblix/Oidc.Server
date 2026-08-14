@@ -33,13 +33,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
-
-        <!-- Only for the profile keys in SharedSignalsValidationProfiles: the back-channel logout suite
-             composes a profile under one of them, and the keys are published there rather than beside
-             each profile's owner. Nothing else in this suite touches Shared Signals. -->
-        <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" />
     </ItemGroup>
-
 
     <ItemGroup>
         <!-- One statement of what a host is promised, compiled into every package's suite. -->

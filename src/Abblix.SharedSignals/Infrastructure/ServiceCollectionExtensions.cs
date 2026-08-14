@@ -25,7 +25,9 @@ using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.BackChannelLogout;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -143,6 +145,88 @@ public static class ServiceCollectionExtensions
                 profile
                     .AddCriticalStep<ForbidSubStep>()
                     .AddCriticalStep<StreamIssuerStep>();
+            });
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the receiver of Logout Tokens a provider posts to this application
+    /// (OpenID Connect Back-Channel Logout 1.0 Section 2.6), as its own named validation profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Logout Token is a security event token whose profile contradicts the security-event
+    /// default on two points, which is what a named profile is for: the default forbids <c>exp</c>
+    /// where Section 2.6 requires it, and pins the SET's own type where Section 4.1 forbids
+    /// requiring any. Both replacements go through the reasoned allowance door, so a host reading
+    /// its boot log sees which critical defaults this profile does not carry and why.
+    /// </para>
+    /// <para>
+    /// Registering this is the whole opt-in: an application that does not call it has nothing that
+    /// accepts a Logout Token. The host still owes key resolution (for example
+    /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge, and it owns the
+    /// endpoint and the sessions - Section 2.7 makes locating and clearing them the RP's, since
+    /// only the RP knows where it keeps them.
+    /// </para>
+    /// <para>
+    /// Step 8, the replay check, is optional in the specification and taken up here, because the
+    /// request carrying the token is unauthenticated and the token is a bearer credential in the
+    /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>; a deployment
+    /// wanting a strictly atomic reservation registers its own <see cref="IReplayCache"/> first.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="options">
+    /// What this receiver expects of every Logout Token: the provider as the issuer and this
+    /// application's client identifier as the audience. Registered as the shared instance, so a
+    /// host pre-registering its own wins.</param>
+    public static IServiceCollection AddBackChannelLogoutReceiver(
+        this IServiceCollection services,
+        BackChannelLogoutValidationOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        RequireSecurityEvents(services, nameof(AddBackChannelLogoutReceiver));
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(options);
+        services.AddDistributedReplayCache();
+        services.TryAddSingleton<ILogoutTokenValidator, LogoutTokenValidator>();
+
+        // Re-running the registration must not double the profile, so it is created only on
+        // first sight; the profile registration itself refuses a second creation loudly, which
+        // is the right answer for anyone ELSE claiming this package's key.
+        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SharedSignalsValidationProfiles.LogoutToken)))
+        {
+            services.AddSecurityEventValidationProfile(SharedSignalsValidationProfiles.LogoutToken, profile =>
+            {
+                profile.Steps
+                    .Replace<TypHeaderStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
+                    .Replace<ExpAbsenceStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
+                    .AddAfter<ParseStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
+                    .AddAfter<SignatureStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
+                    .AddAfter<SubjectOrSessionStep>(
+                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
+
+                // Declared beside the edit that adds them, so the two statements cannot drift.
+                profile
+                    .AddCriticalStep<LogoutTokenTypeStep>()
+                    .AddCriticalStep<LogoutTokenExpiryStep>();
+
+                profile
+                    .AllowInsecureValidation(
+                        "A Logout Token may carry no 'typ' at all - Section 4.1 says requiring one 'will "
+                        + "break most existing deployments' - so the replacement refuses a foreign type "
+                        + "and accepts an absent one, which is a lower wall than the SET default's")
+                    .AllowInsecureValidation(
+                        "Back-Channel Logout REQUIRES 'exp' (Section 2.6), inverting the SET default; the "
+                        + "replacement polices the same claim with the opposite sign and also refuses one "
+                        + "already past");
             });
         }
 
