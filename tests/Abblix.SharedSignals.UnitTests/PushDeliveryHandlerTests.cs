@@ -26,6 +26,7 @@ using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;

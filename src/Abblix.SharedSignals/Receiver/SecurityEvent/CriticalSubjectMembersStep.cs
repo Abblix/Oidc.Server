@@ -24,7 +24,7 @@ using System.Text.Json;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// Enforces the receiver half of subject processing (SSF 1.0 Section 3.6): an event whose

@@ -28,6 +28,7 @@ using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.BackChannelLogout;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -106,7 +107,7 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// The host still owes two registrations of its own: an
-    /// <see cref="Abblix.SharedSignals.Receiver.ISecurityEventSink"/>, because where events
+    /// <see cref="Abblix.SharedSignals.Receiver.SecurityEvent.ISecurityEventSink"/>, because where events
     /// land is the application, and key resolution (for example
     /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. A replay cache
     /// (<c>AddDistributedReplayCache</c>) is optional and picked up when present.
@@ -127,26 +128,20 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(options);
         services.TryAddSingleton<PushDeliveryHandler>();
 
-        // Re-running the registration must not double the profile, so it is created only on
-        // first sight; the profile registration itself refuses a second creation loudly, which
-        // is the right answer for anyone ELSE claiming this package's key.
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SharedSignalsValidationProfiles.SecurityEvent)))
+        services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.SecurityEvent, profile =>
         {
-            services.AddSecurityEventValidationProfile(SharedSignalsValidationProfiles.SecurityEvent, profile =>
-            {
-                profile.Steps
-                    .AddAfter<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
-                    .AddAfter<AudienceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
-                    .AddLast(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+            profile.Steps
+                .AddAfter<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
+                .AddAfter<AudienceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
+                .AddLast(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
 
-                // Two of the three carry the security-critical marker, and the marker only binds a
-                // profile that knows about them: declared here, beside the edit that adds them, so
-                // the two statements cannot drift apart.
-                profile
-                    .AddCriticalStep<ForbidSubStep>()
-                    .AddCriticalStep<StreamIssuerStep>();
-            });
-        }
+            // Two of the three carry the security-critical marker, and the marker only binds a
+            // profile that knows about them: declared here, beside the edit that adds them, so
+            // the two statements cannot drift apart.
+            profile
+                .AddCriticalStep<ForbidSubStep>()
+                .AddCriticalStep<StreamIssuerStep>();
+        });
 
         return services;
     }
@@ -194,41 +189,35 @@ public static class ServiceCollectionExtensions
         services.AddDistributedReplayCache();
         services.TryAddSingleton<ILogoutTokenValidator, LogoutTokenValidator>();
 
-        // Re-running the registration must not double the profile, so it is created only on
-        // first sight; the profile registration itself refuses a second creation loudly, which
-        // is the right answer for anyone ELSE claiming this package's key.
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SharedSignalsValidationProfiles.LogoutToken)))
+        services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.LogoutToken, profile =>
         {
-            services.AddSecurityEventValidationProfile(SharedSignalsValidationProfiles.LogoutToken, profile =>
-            {
-                profile.Steps
-                    .Replace<TypHeaderStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
-                    .Replace<ExpAbsenceStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
-                    .AddAfter<ParseStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
-                    .AddAfter<SignatureStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
-                    .AddAfter<SubjectOrSessionStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
+            profile.Steps
+                .Replace<TypHeaderStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
+                .Replace<ExpAbsenceStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
+                .AddAfter<ParseStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
+                .AddAfter<SignatureStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
+                .AddAfter<SubjectOrSessionStep>(
+                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
 
-                // Declared beside the edit that adds them, so the two statements cannot drift.
-                profile
-                    .AddCriticalStep<LogoutTokenTypeStep>()
-                    .AddCriticalStep<LogoutTokenExpiryStep>();
+            // Declared beside the edit that adds them, so the two statements cannot drift.
+            profile
+                .AddCriticalStep<LogoutTokenTypeStep>()
+                .AddCriticalStep<LogoutTokenExpiryStep>();
 
-                profile
-                    .AllowInsecureValidation(
-                        "A Logout Token may carry no 'typ' at all - Section 4.1 says requiring one 'will "
-                        + "break most existing deployments' - so the replacement refuses a foreign type "
-                        + "and accepts an absent one, which is a lower wall than the SET default's")
-                    .AllowInsecureValidation(
-                        "Back-Channel Logout REQUIRES 'exp' (Section 2.6), inverting the SET default; the "
-                        + "replacement polices the same claim with the opposite sign and also refuses one "
-                        + "already past");
-            });
-        }
+            profile
+                .AllowInsecureValidation(
+                    "A Logout Token may carry no 'typ' at all - Section 4.1 says requiring one 'will "
+                    + "break most existing deployments' - so the replacement refuses a foreign type "
+                    + "and accepts an absent one, which is a lower wall than the SET default's")
+                .AllowInsecureValidation(
+                    "Back-Channel Logout REQUIRES 'exp' (Section 2.6), inverting the SET default; the "
+                    + "replacement polices the same claim with the opposite sign and also refuses one "
+                    + "already past");
+        });
 
         return services;
     }
@@ -268,6 +257,29 @@ public static class ServiceCollectionExtensions
     {
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, DistributedCacheEventOutbox>());
         return services;
+    }
+
+    /// <summary>
+    /// Creates a receiver's named profile, and only on first sight of its key.
+    /// </summary>
+    /// <remarks>
+    /// Re-running a receiver's registration must not double its profile, so the key is looked for
+    /// before the profile is created; the profile registration itself refuses a second creation
+    /// loudly, which is the right answer for anyone ELSE claiming one of this package's keys.
+    /// <para>
+    /// One helper for every receiver, because the two answer the same question of the container
+    /// and a second copy of the question is what drifts: this package now registers two profiles,
+    /// and a third would otherwise arrive with its own spelling of "has this been created yet".
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="profileKey">The key the profile's validator resolves under.</param>
+    /// <param name="configure">Shapes the profile: step edits, critical declarations, allowances.</param>
+    private static void AddReceiverProfileOnce(
+        this IServiceCollection services, string profileKey, Action<ValidationProfile> configure)
+    {
+        if (services.All(descriptor => !Equals(descriptor.ServiceKey, profileKey)))
+            services.AddSecurityEventValidationProfile(profileKey, configure);
     }
 
     /// <summary>

@@ -24,7 +24,7 @@ using System.Net.Http.Json;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model.Delivery;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// The receiver's side of poll-based delivery (RFC 8936, carried by SSF 1.0 Section 6.1.2): one

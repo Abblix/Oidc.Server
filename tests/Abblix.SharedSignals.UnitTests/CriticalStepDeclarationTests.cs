@@ -29,6 +29,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

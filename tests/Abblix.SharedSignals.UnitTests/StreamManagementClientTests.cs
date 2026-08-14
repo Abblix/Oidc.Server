@@ -25,6 +25,7 @@ using System.Text.Json.Nodes;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;

@@ -23,7 +23,7 @@
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// Where validated events land: the application's half of a receiver, called once per accepted

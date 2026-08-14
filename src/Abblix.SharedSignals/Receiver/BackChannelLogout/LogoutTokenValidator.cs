@@ -84,9 +84,9 @@ public sealed class LogoutTokenValidator(
     /// short window Section 4 asks providers to use, nothing but a record of what has been seen
     /// tells a replay from the original.
     /// <para>
-    /// The identifier reserved is the issuer and the token's own together, for the reason
-    /// <see cref="IReplayCache"/> states: a "jti" is unique per issuer, so reserving it alone would
-    /// let one provider's identifier refuse another provider's token.
+    /// What is reserved is composed by <see cref="ReplayIdentifier"/>, which both receivers in this
+    /// package share: they reserve into one cache, so composing the value twice would be one rule
+    /// with two derivations and no failure on the day they part.
     /// </para>
     /// <para>
     /// A token with no "jti" or no "exp" cannot reach this method - the profile's own steps require
@@ -110,7 +110,8 @@ public sealed class LogoutTokenValidator(
                         ?? throw new LogoutTokenValidationException(
                             "The Logout Token carries no expiry, so there is no window to remember it for.");
 
-        if (!await replayCache.TryReserveAsync($"{issuer}\n{tokenId}", expiresAt, cancellationToken))
+        if (!await replayCache.TryReserveAsync(
+                ReplayIdentifier.ForToken(issuer, tokenId), expiresAt, cancellationToken))
         {
             throw new LogoutTokenValidationException(
                 "This Logout Token has already been acted on, so it is a replay.");

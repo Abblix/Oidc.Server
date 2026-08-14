@@ -24,7 +24,7 @@ using System.Net.Http.Json;
 using System.Net.Mime;
 using Abblix.SharedSignals.Model;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// Fetches a transmitter's configuration metadata from the well-known address its issuer

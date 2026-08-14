@@ -26,7 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// The host-agnostic core of a push delivery endpoint (RFC 8935, carried by SSF 1.0
@@ -114,14 +114,8 @@ public sealed class PushDeliveryHandler(
                     + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
             }
 
-            // The issuer belongs in the key because "jti" is unique only "within a particular
-            // event feed" (RFC 8417 Section 2.2), and escaping removes ':' from both halves so
-            // two distinct pairs cannot compose onto one identifier.
-            var identifier =
-                $"{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(jwtId)}";
-
             if (!await replayCache.TryReserveAsync(
-                    identifier,
+                    ReplayIdentifier.ForToken(issuer, jwtId),
                     issuedAt + options.ReplayRetention,
                     cancellationToken))
             {
