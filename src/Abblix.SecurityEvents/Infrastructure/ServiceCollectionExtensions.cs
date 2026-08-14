@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
     /// marker interface, never kept as a second hand-maintained list - a new critical default
     /// joins this set by being registered, not by being remembered.
     /// </summary>
-    internal static readonly Type[] CriticalDefaultSteps = DefaultPipelineSteps
+    private static readonly Type[] CriticalDefaultSteps = DefaultPipelineSteps
         .Select(descriptor => descriptor.ImplementationType!)
         .Where(type => typeof(ISecurityCriticalValidator).IsAssignableFrom(type))
         .ToArray();

@@ -99,7 +99,7 @@ public class SsfServiceCollectionTests
         // ForbidSubStep produces, and it earns it BEFORE any signature work - the token below
         // has no valid signature, so reaching a signature error instead would mean the step is
         // ordered wrong, and reaching success would mean it is not wired at all.
-        var services = SecurityEventsBase().AddSsfReceiver(new SharedSignalsValidationOptions
+        var services = SecurityEventsBase().AddSecurityEventReceiver(new SharedSignalsValidationOptions
         {
             StreamIssuer = "https://tr.example.com",
         });
@@ -128,7 +128,7 @@ public class SsfServiceCollectionTests
         var services = SecurityEventsBase();
         var options = new SharedSignalsValidationOptions();
 
-        services.AddSsfReceiver(options).AddSsfReceiver(options);
+        services.AddSecurityEventReceiver(options).AddSecurityEventReceiver(options);
 
         // The composed members are keyed descriptors, so the implementation type sits behind
         // the keyed property.

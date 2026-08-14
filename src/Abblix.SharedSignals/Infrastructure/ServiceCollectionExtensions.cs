@@ -117,12 +117,12 @@ public static class ServiceCollectionExtensions
     /// <param name="options">
     /// What this receiver expects of every token; registered as the shared instance, so a host
     /// pre-registering its own <see cref="SharedSignalsValidationOptions"/> wins.</param>
-    public static IServiceCollection AddSsfReceiver(
+    public static IServiceCollection AddSecurityEventReceiver(
         this IServiceCollection services,
         SharedSignalsValidationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        RequireSecurityEvents(services, nameof(AddSsfReceiver));
+        RequireSecurityEvents(services, nameof(AddSecurityEventReceiver));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
@@ -160,10 +160,13 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// Registering this is the whole opt-in: an application that does not call it has nothing that
-    /// accepts a Logout Token. The host still owes key resolution (for example
-    /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge, and it owns the
-    /// endpoint and the sessions - Section 2.7 makes locating and clearing them the RP's, since
-    /// only the RP knows where it keeps them.
+    /// accepts a Logout Token. The host still owes two registrations of its own: an
+    /// <see cref="ILogoutNotificationSink"/>, because Section 2.7 makes locating and clearing the
+    /// sessions the RP's and only the RP knows where it keeps them, and key resolution (for
+    /// example <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. The
+    /// request and the response themselves are this package's:
+    /// <see cref="BackChannelLogoutHandler"/> reads the posted form and shapes the answer, leaving
+    /// a host adapter nothing to decide but how to render it.
     /// </para>
     /// <para>
     /// Step 8, the replay check, is optional in the specification and taken up here, because the
@@ -188,20 +191,16 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(options);
         services.AddDistributedReplayCache();
         services.TryAddSingleton<ILogoutTokenValidator, LogoutTokenValidator>();
+        services.TryAddSingleton<BackChannelLogoutHandler>();
 
         services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.LogoutToken, profile =>
         {
             profile.Steps
-                .Replace<TypHeaderStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
-                .Replace<ExpAbsenceStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
-                .AddAfter<ParseStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
-                .AddAfter<SignatureStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
-                .AddAfter<SubjectOrSessionStep>(
-                    ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
+                .Replace<TypHeaderStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
+                .Replace<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
+                .AddAfter<ParseStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
+                .AddAfter<SignatureStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
+                .AddAfter<SubjectOrSessionStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
 
             // Declared beside the edit that adds them, so the two statements cannot drift.
             profile
@@ -276,7 +275,9 @@ public static class ServiceCollectionExtensions
     /// <param name="profileKey">The key the profile's validator resolves under.</param>
     /// <param name="configure">Shapes the profile: step edits, critical declarations, allowances.</param>
     private static void AddReceiverProfileOnce(
-        this IServiceCollection services, string profileKey, Action<ValidationProfile> configure)
+        this IServiceCollection services,
+        string profileKey,
+        Action<ValidationProfile> configure)
     {
         if (services.All(descriptor => !Equals(descriptor.ServiceKey, profileKey)))
             services.AddSecurityEventValidationProfile(profileKey, configure);
