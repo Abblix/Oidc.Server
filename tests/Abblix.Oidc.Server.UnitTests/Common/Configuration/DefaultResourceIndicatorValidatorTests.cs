@@ -21,7 +21,6 @@
 // info@abblix.com
 
 using System;
-using System.Linq;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Xunit;

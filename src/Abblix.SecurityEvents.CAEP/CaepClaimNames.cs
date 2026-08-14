@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.SecurityEvents.Caep;
+namespace Abblix.SecurityEvents.CAEP;
 
 /// <summary>
 /// The wire names of the CAEP event claims (CAEP 1.0 Sections 2, 3): one registry, because the

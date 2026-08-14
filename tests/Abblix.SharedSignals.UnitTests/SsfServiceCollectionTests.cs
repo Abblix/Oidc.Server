@@ -104,10 +104,10 @@ public class SsfServiceCollectionTests
         });
         services.AddSingleton<ISecurityEventSink, NullSink>();
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
-        // Resolved from the receiver's own profile: the plain validator no longer carries the
-        // SSF steps, and asking it would prove the wiring of a family the receiver does not use.
+        // Resolved from the receiver's own profile: no other validator family exists, and the
+        // profile's key is the token kind this receiver validates.
         var validator = provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
             SsfReceiverValidation.ProfileKey);
 

@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Linq;
-
 namespace Abblix.Utils.UnitTests;
 
 /// <summary>

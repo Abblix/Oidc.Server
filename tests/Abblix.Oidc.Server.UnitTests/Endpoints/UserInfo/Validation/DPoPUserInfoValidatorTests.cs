@@ -34,6 +34,7 @@ using Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 using Abblix.Utils;
 
 using Microsoft.Extensions.Logging;

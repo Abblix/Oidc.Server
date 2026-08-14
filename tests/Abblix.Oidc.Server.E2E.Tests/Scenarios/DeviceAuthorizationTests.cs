@@ -24,7 +24,6 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -82,7 +81,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         // first permitted poll one interval after issuance, so a poll there is throttled before the pending
         // check is ever reached - that throttle has its own test below. Removing the wait isolates the
         // approval gate itself.
-        using var host = CreateHostWithoutPollingDelay();
+        await using var host = CreateHostWithoutPollingDelay();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var device = await RegisterDeviceClientAsync(client, discovery, "pending-poll");

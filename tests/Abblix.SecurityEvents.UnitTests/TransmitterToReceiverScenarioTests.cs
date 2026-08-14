@@ -31,7 +31,6 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

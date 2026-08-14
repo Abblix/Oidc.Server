@@ -20,7 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-namespace Abblix.SecurityEvents.Risc;
+namespace Abblix.SecurityEvents.RISC;
 
 /// <summary>
 /// The wire names of the event-specific claims RISC 1.0 defines, spelled exactly as the

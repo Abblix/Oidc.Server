@@ -22,7 +22,6 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;

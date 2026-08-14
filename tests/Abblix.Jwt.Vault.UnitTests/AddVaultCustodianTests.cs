@@ -29,7 +29,6 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Polly;
-using Polly.Retry;
 using Xunit;
 
 namespace Abblix.Jwt.Vault.UnitTests;
@@ -131,7 +130,7 @@ public class AddVaultCustodianTests
         var hostHandler = new StubVaultHandler();
         services.AddHttpClient(VaultTransport.HttpClientName).AddHttpMessageHandler(() => hostHandler);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var custodian = provider.GetRequiredService<IKeyCustodian>();
 
         var signature = await custodian.SignAsync(
@@ -167,7 +166,7 @@ public class AddVaultCustodianTests
         }));
         builder.AddHttpMessageHandler(() => vault);
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var custodian = provider.GetRequiredService<IKeyCustodian>();
 
         var signature = await custodian.SignAsync(
