@@ -75,7 +75,7 @@ public class SsfReceiverProfileTests
         jwt.Payload.Subject = "user-1";
 
         var context = new SecurityEventTokenValidationContext(
-            "compact-not-under-test", new SsfValidationOptions())
+            "compact-not-under-test", new SharedSignalsValidationOptions())
         {
             UnverifiedPayload = jwt.Payload,
         };
@@ -92,7 +92,7 @@ public class SsfReceiverProfileTests
     public async Task ForbidSub_AbsentSub_Passes()
     {
         var context = new SecurityEventTokenValidationContext(
-            "compact-not-under-test", new SsfValidationOptions())
+            "compact-not-under-test", new SharedSignalsValidationOptions())
         {
             UnverifiedPayload = new JsonWebToken().Payload,
         };
@@ -104,7 +104,7 @@ public class SsfReceiverProfileTests
     [Fact]
     public async Task StreamIssuer_MatchingIssuer_Passes()
     {
-        var context = TrustedContext(BuildToken(), new SsfValidationOptions { StreamIssuer = StreamIssuer });
+        var context = TrustedContext(BuildToken(), new SharedSignalsValidationOptions { StreamIssuer = StreamIssuer });
 
         Assert.Null(await new StreamIssuerStep().ValidateAsync(context, TestContext.Current.CancellationToken));
     }
@@ -116,7 +116,7 @@ public class SsfReceiverProfileTests
         // event must come from THE stream's issuer (Section 4.1.6), or events replay across
         // streams.
         var context = TrustedContext(
-            BuildToken(), new SsfValidationOptions { StreamIssuer = "https://other.example.com" });
+            BuildToken(), new SharedSignalsValidationOptions { StreamIssuer = "https://other.example.com" });
 
         var error = await new StreamIssuerStep().ValidateAsync(context, TestContext.Current.CancellationToken);
 
@@ -130,7 +130,7 @@ public class SsfReceiverProfileTests
     {
         // A missing expectation is the receiver's wiring bug: reported as a token error it would
         // reject every token while the logs blame the transmitters.
-        var unconfigured = TrustedContext(BuildToken(), new SsfValidationOptions());
+        var unconfigured = TrustedContext(BuildToken(), new SharedSignalsValidationOptions());
         var wrongFlavor = TrustedContext(BuildToken(), new SecurityEventTokenValidationOptions());
 
         foreach (var context in new[] { unconfigured, wrongFlavor })
@@ -138,7 +138,7 @@ public class SsfReceiverProfileTests
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await new StreamIssuerStep().ValidateAsync(context, TestContext.Current.CancellationToken));
 
-            Assert.Contains(nameof(SsfValidationOptions.StreamIssuer), exception.Message);
+            Assert.Contains(nameof(SharedSignalsValidationOptions.StreamIssuer), exception.Message);
         }
     }
 
@@ -155,7 +155,7 @@ public class SsfReceiverProfileTests
         };
         var context = TrustedContext(
             BuildToken(builder => builder.WithSubjectId(subject)),
-            new SsfValidationOptions { CriticalSubjectMembers = ["workload"] });
+            new SharedSignalsValidationOptions { CriticalSubjectMembers = ["workload"] });
 
         var error = await new CriticalSubjectMembersStep()
             .ValidateAsync(context, TestContext.Current.CancellationToken);
@@ -176,7 +176,7 @@ public class SsfReceiverProfileTests
             {
                 User = new EmailSubject("bar@example.com"),
             })),
-            new SsfValidationOptions { CriticalSubjectMembers = ["user"] });
+            new SharedSignalsValidationOptions { CriticalSubjectMembers = ["user"] });
 
         Assert.Null(await new CriticalSubjectMembersStep()
             .ValidateAsync(context, TestContext.Current.CancellationToken));
@@ -187,7 +187,7 @@ public class SsfReceiverProfileTests
     {
         // Critical members bind members WITHIN a Complex Subject (Sections 3.6, 7.1); a simple
         // subject has none, and whether "sub_id" must be present at all is the event's rule.
-        var options = new SsfValidationOptions { CriticalSubjectMembers = ["user"] };
+        var options = new SharedSignalsValidationOptions { CriticalSubjectMembers = ["user"] };
         var step = new CriticalSubjectMembersStep();
 
         var simple = TrustedContext(
@@ -209,7 +209,7 @@ public class SsfReceiverProfileTests
             [SubjectMemberNames.Format] = "x-proprietary",
             ["reference"] = "abc",
         };
-        var context = TrustedContext(token, new SsfValidationOptions());
+        var context = TrustedContext(token, new SharedSignalsValidationOptions());
 
         var error = await new CriticalSubjectMembersStep()
             .ValidateAsync(context, TestContext.Current.CancellationToken);
