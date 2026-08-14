@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -69,11 +70,23 @@ public class IdTokenHintValidatorTests
         return new EndSessionValidationContext(request);
     }
 
+    /// <summary>
+    /// A fixed instant, so the suite cannot drift with the clock. Every token built here is long expired
+    /// by the time any run reads it, which is the state a hint is normally in: it names a session that has
+    /// already ended, and the validator turns the lifetime check off for exactly that reason.
+    /// </summary>
+    private static readonly DateTimeOffset Issued = DateTimeOffset.FromUnixTimeSeconds(1754040000);
+
     private static JsonWebToken CreateValidIdToken(params string[] audiences)
     {
         // No type is set: an ID token carries none of its own, so this is what a real one looks like.
+        // The lifetime is what makes it one. OpenID Connect Core 1.0 Section 2 makes exp REQUIRED, the
+        // token service writes it on every ID token, and it is what the validator parts an ID token from
+        // an untyped sibling by - so a fixture without it would be a shape this service never issues.
         var token = new JsonWebToken();
         token.Payload.Audiences = audiences;
+        token.Payload.IssuedAt = Issued;
+        token.Payload.ExpiresAt = Issued + TimeSpan.FromMinutes(5);
         return token;
     }
 
@@ -221,6 +234,45 @@ public class IdTokenHintValidatorTests
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// RFC 8725 §3.12 again, for the one own-issued token the type check cannot see. A signed UserInfo
+    /// response (OpenID Connect Core 1.0 §5.3.2) carries no type either, names the same client in
+    /// <c>aud</c> and is signed by the same key, so it clears every check above. What refuses it is
+    /// <c>exp</c>: §2 makes it REQUIRED in an ID Token, §5.3.2 requires only <c>iss</c> and <c>aud</c>,
+    /// and neither UserInfo formatter writes one.
+    /// </summary>
+    /// <remarks>
+    /// The description is asserted rather than the code, for the reason the type case above gives: every
+    /// refusal here answers <c>invalid_request</c>, so asserting the code alone passes on whichever check
+    /// happened to fire - and a token with no audience match would fail further down regardless.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_WithUserInfoResponseAsHint_ShouldReturnError()
+    {
+        // Arrange - the shape the UserInfo formatters emit: an issue time, the client as the audience,
+        // and neither a type nor a lifetime.
+        var context = CreateContext("userinfo_response_as_hint");
+        var userInfoResponse = new JsonWebToken();
+        userInfoResponse.Payload.Audiences = [TestConstants.DefaultClientId];
+        userInfoResponse.Payload.IssuedAt = Issued;
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(
+                "userinfo_response_as_hint",
+                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
+            .ReturnsAsync(userInfoResponse);
+
+        // Act
+        var error = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(
+            "The id token hint is not an ID Token: it has no expiration time",
+            error.ErrorDescription);
     }
 
     /// <summary>
