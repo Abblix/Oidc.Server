@@ -73,6 +73,19 @@ public class IdTokenHintValidator(
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
 
+            // A refusal by type cannot reach the one other own-issued JWT that carries no type either:
+            // a signed UserInfo response, which this service signs with the same key and addresses to the
+            // same client, so signature and audience both pass. What parts the two is a claim rather than
+            // a header, which RFC 8725 §3.12 lists as an equal way to keep the rules mutually exclusive:
+            // OpenID Connect Core 1.0 §2 makes exp REQUIRED in an ID Token, while §5.3.2 requires a signed
+            // UserInfo response to carry iss and aud and nothing more.
+            //
+            // Presence alone is the test. A hint is accepted after expiry on purpose - it names a session
+            // that has ended - so the lifetime check stays switched off above.
+            if (idToken.Payload.ExpiresAt is null)
+                return new OidcError(
+                    ErrorCodes.InvalidRequest, "The id token hint is not an ID Token: it has no expiration time");
+
             var audiences = idToken.Payload.Audiences;
             if (!request.ClientId.HasValue())
             {
