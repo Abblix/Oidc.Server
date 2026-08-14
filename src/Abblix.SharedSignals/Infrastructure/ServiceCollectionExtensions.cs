@@ -92,7 +92,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// <para>
     /// The receiver validates under its own named profile
-    /// (<see cref="SsfReceiverValidation.ProfileKey"/>) rather than by editing the host's plain
+    /// (<see cref="SharedSignalsValidationProfiles.SecurityEvent"/>) rather than by editing the host's plain
     /// family. The plain family is shared, and another consumer of security event tokens in the
     /// same host - Back-Channel Logout is the live example - shapes it to demands a SET
     /// contradicts outright: its <c>typ</c> replacement refuses everything that is not a logout
@@ -128,17 +128,14 @@ public static class ServiceCollectionExtensions
         // Re-running the registration must not double the profile, so it is created only on
         // first sight; the profile registration itself refuses a second creation loudly, which
         // is the right answer for anyone ELSE claiming this package's key.
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SsfReceiverValidation.ProfileKey)))
+        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SharedSignalsValidationProfiles.SecurityEvent)))
         {
-            services.AddSecurityEventValidationProfile(SsfReceiverValidation.ProfileKey, profile =>
+            services.AddSecurityEventValidationProfile(SharedSignalsValidationProfiles.SecurityEvent, profile =>
             {
                 profile.Steps
-                    .AddAfter<ExpAbsenceStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
-                    .AddAfter<AudienceStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
-                    .AddLast(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+                    .AddAfter<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
+                    .AddAfter<AudienceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
+                    .AddLast(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
 
                 // Two of the three carry the security-critical marker, and the marker only binds a
                 // profile that knows about them: declared here, beside the edit that adds them, so

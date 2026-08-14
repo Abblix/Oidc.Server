@@ -109,7 +109,7 @@ public class SsfServiceCollectionTests
         // Resolved from the receiver's own profile: no other validator family exists, and the
         // profile's key is the token kind this receiver validates.
         var validator = provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
-            SsfReceiverValidation.ProfileKey);
+            SharedSignalsValidationProfiles.SecurityEvent);
 
         var verdict = await validator.ValidateAsync(
             UnsignedToken(payload: """{"sub": "user-1", "events": {"urn:example": {}}}"""),

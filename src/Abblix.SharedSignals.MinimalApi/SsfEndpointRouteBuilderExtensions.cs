@@ -101,7 +101,7 @@ public static class SsfEndpointRouteBuilderExtensions
         group.MapPost(Routes.AddSubject, AddSubjectAsync);
         group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync);
         group.MapPost(Routes.Verify, RequestVerificationAsync);
-        group.MapPost(Routes.Poll + "/{streamId}", PollAsync);
+        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync);
 
         return group;
     }
@@ -137,7 +137,7 @@ public static class SsfEndpointRouteBuilderExtensions
 
         return endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
-                ? endpointOptions.ConfigurationDocumentRoute.Value!
+                ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }

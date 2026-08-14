@@ -30,6 +30,7 @@ using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
+using Abblix.SharedSignals.Receiver;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -214,7 +215,7 @@ public class BackChannelLogoutProfileTests
         services.AddSingleton<ISecurityEventTokenVerifier>(new AcceptingVerifier());
         services.AddSecurityEvents();
 
-        services.AddSecurityEventValidationProfile(BackChannelLogoutValidation.ProfileKey, profile =>
+        services.AddSecurityEventValidationProfile(SharedSignalsValidationProfiles.LogoutToken, profile =>
         {
             profile.Steps
                 .Replace<TypHeaderStep>(
@@ -238,7 +239,7 @@ public class BackChannelLogoutProfileTests
         });
 
         return services.BuildServiceProvider()
-            .GetRequiredKeyedService<ISecurityEventTokenValidator>(BackChannelLogoutValidation.ProfileKey);
+            .GetRequiredKeyedService<ISecurityEventTokenValidator>(SharedSignalsValidationProfiles.LogoutToken);
     }
 
     private static string LogoutCompact(Action<JsonWebToken>? mutate = null)

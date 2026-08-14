@@ -44,7 +44,7 @@ namespace Abblix.SharedSignals.Receiver;
 /// </remarks>
 /// <param name="validator">
 /// The validation pipeline, resolved from the receiver's own named profile
-/// (<see cref="SsfReceiverValidation.ProfileKey"/>) - never the host's plain family, which
+/// (<see cref="SharedSignalsValidationProfiles.SecurityEvent"/>) - never the host's plain family, which
 /// another consumer of security event tokens may have shaped to refuse every SET.</param>
 /// <param name="options">What this receiver expects of every token on the stream.</param>
 /// <param name="sink">Where validated events land.</param>
@@ -52,7 +52,7 @@ namespace Abblix.SharedSignals.Receiver;
 /// Tells first deliveries from repeats; null runs without replay tracking, leaving idempotency
 /// entirely to the sink's contract.</param>
 public sealed class PushDeliveryHandler(
-    [FromKeyedServices(SsfReceiverValidation.ProfileKey)] ISecurityEventTokenValidator validator,
+    [FromKeyedServices(SharedSignalsValidationProfiles.SecurityEvent)] ISecurityEventTokenValidator validator,
     SharedSignalsValidationOptions options,
     ISecurityEventSink sink,
     IReplayCache? replayCache = null)

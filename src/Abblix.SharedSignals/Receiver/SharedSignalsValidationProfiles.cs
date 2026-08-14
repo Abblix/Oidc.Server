@@ -22,30 +22,34 @@
 
 using Abblix.Jwt;
 
-namespace Abblix.SecurityEvents.UnitTests;
+namespace Abblix.SharedSignals.Receiver;
 
 /// <summary>
-/// Names the Back-Channel Logout receiver's validation profile, as
-/// <c>Abblix.SharedSignals.Receiver.SsfReceiverValidation</c> names the Shared Signals one:
-/// whoever creates, edits and resolves a profile spells its key in one place, so the registration
-/// and the resolve cannot part.
+/// Names the receiver's validation profile: the keyed
+/// <c>ISecurityEventTokenValidator</c> family this package creates, edits and resolves, so its
+/// demands on a SET never collide with what another consumer of security event tokens in the same
+/// host demands of its own kind.
 /// </summary>
-/// <remarks>
-/// The type lives in the test assembly because that is where the owner lives: nothing in the
-/// library receives back-channel logout tokens yet, and this suite is the only thing composing the
-/// profile. A key published from a package that neither registers nor resolves it would be a name
-/// with no owner, and a public constant is frozen the moment it ships, since consumers spell it
-/// literally. On the day a receiver exists, this file moves to its package unchanged.
-/// </remarks>
-public static class BackChannelLogoutValidation
+public static class SharedSignalsValidationProfiles
 {
+    /// <summary>
+    /// The profile's service key: the SET's own <c>typ</c> value. The key is the wire
+    /// discriminator of the token kind because that is precisely what profiles part over - each
+    /// pins its <c>typ</c> and shapes the claims that kind demands - so "which profile" and
+    /// "which token kind" are one question with one spelling. Public because a host that adds
+    /// its OWN steps to the receiver's validation - a deployment-specific issuer pin, say -
+    /// reaches the profile's cursor by this key. A second consumer of the SAME token kind does
+    /// not share it: a profile has one owner, and that consumer names a key of its own.
+    /// </summary>
+    public const string SecurityEvent = JsonWebTokenTypes.SecurityEvent;
+
     /// <summary>
     /// The profile's service key: the token's own <c>typ</c>, fixed by OpenID Connect
     /// Back-Channel Logout 1.0 Section 2.4. The key is the wire discriminator of the token kind
     /// because that is precisely what profiles part over, but the two readings stay spelled apart
-    /// on purpose - <see cref="JsonWebTokenTypes.LogoutToken"/> stands wherever a wire value is
+    /// on purpose - <see cref="Abblix.Jwt.JsonWebTokenTypes.LogoutToken"/> stands wherever a wire value is
     /// meant, the header the profile pins and the header a fixture writes, and this name stands
     /// where the question is which profile.
     /// </summary>
-    public const string ProfileKey = JsonWebTokenTypes.LogoutToken;
+    public const string LogoutToken = JsonWebTokenTypes.LogoutToken;
 }
