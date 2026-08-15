@@ -23,6 +23,7 @@
 // Spelled out rather than left to ImplicitUsings, because this file is compiled into suites that do not enable it.
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,7 +34,11 @@ namespace Abblix.Tests.Shared;
 /// than inferred from the presence of a handler.
 /// </summary>
 /// <param name="failuresBeforeSuccess">How many attempts are refused before one succeeds.</param>
-public sealed class FlakyOriginHandler(int failuresBeforeSuccess) : HttpMessageHandler
+/// <param name="successContent">
+/// The JSON body the successful answer carries, for a client that reads one. Null answers with an empty body,
+/// which is enough for a client that only checks the status.</param>
+public sealed class FlakyOriginHandler(int failuresBeforeSuccess, string? successContent = null)
+    : HttpMessageHandler
 {
     /// <summary>How many attempts reached the origin.</summary>
     public int Requests { get; private set; }
@@ -47,7 +52,13 @@ public sealed class FlakyOriginHandler(int failuresBeforeSuccess) : HttpMessageH
 
         // 503 is what the standard pipeline treats as worth retrying; a 400 would prove nothing, since the
         // pipeline is right not to repeat it.
-        return Task.FromResult(new HttpResponseMessage(
-            Requests <= failuresBeforeSuccess ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK));
+        if (Requests <= failuresBeforeSuccess)
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK);
+        if (successContent is not null)
+            response.Content = new StringContent(successContent, Encoding.UTF8, "application/json");
+
+        return Task.FromResult(response);
     }
 }

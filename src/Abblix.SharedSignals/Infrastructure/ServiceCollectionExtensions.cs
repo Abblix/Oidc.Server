@@ -127,6 +127,19 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
 
+        // Every call this receiver makes outward goes through the factory, so one line of a host's
+        // - ConfigureHttpClientDefaults, or a call naming one of the published transport names -
+        // reaches all of them. A client the library merely ACCEPTS an HttpClient for is not on
+        // that path: the host would have to build and wire it, and nothing would say so.
+        services.AddHttpClient<PollClient>();
+        services.AddHttpClient<TransmitterConfigurationClient>();
+
+        // Named rather than typed, because the client it feeds is paired with the transmitter's
+        // metadata, which a receiver learns at run time - so the factory builds it, not the
+        // container.
+        services.AddHttpClient(StreamManagementTransport.HttpClientName);
+        services.TryAddSingleton<StreamManagementClientFactory>();
+
         // The push intake is RFC 8935's, not this framework's, so it takes the profile, the
         // expectations and the sink as parameters. Bound here because only this call knows which
         // profile is meant - and a keyed-service attribute could not say it, since an attribute
