@@ -48,7 +48,6 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
         string pattern)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-
         return endpoints.MapPost(pattern, HandleAsync);
     }
 
