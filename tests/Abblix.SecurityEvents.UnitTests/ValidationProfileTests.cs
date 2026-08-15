@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -77,7 +77,7 @@ public class ValidationProfileTests
             profile.UseDefaultPipeline();
             profile.Steps.Replace<ExpAbsenceStep>(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireExpStep>());
-            profile.AllowInsecureValidation(
+            profile.AllowInsecureValidation<ExpAbsenceStep>(
                 "The test replaces exp-absence, standing in for Back-Channel Logout.");
         });
 
@@ -133,7 +133,7 @@ public class ValidationProfileTests
 
         // A sibling records an allowance of its own; it must not leak into "weakened".
         services.AddSecurityEventValidationProfile("sibling", profile =>
-            profile.UseDefaultPipeline().AllowInsecureValidation(
+            profile.UseDefaultPipeline().AllowInsecureValidation<SignatureStep>(
                 "An allowance recorded for a SIBLING; the profile below must not inherit it."));
 
         services.AddSecurityEventValidationProfile(
@@ -156,7 +156,8 @@ public class ValidationProfileTests
         {
             profile.UseDefaultPipeline();
             profile.Steps.Remove<SignatureStep>();
-            profile.AllowInsecureValidation("The test weakens its own profile and says so here.");
+            profile.AllowInsecureValidation<SignatureStep>(
+                "The test weakens its own profile and says so here.");
         });
 
         Assert.NotNull(services.BuildServiceProvider()

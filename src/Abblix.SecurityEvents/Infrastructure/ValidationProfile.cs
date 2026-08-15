@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -43,7 +43,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 public sealed class ValidationProfile
 {
     private readonly IServiceCollection _services;
-    private readonly List<string> _allowances = [];
+    private readonly List<ValidationAllowance> _allowances = [];
 
     private IComposition<ISecurityEventTokenValidator>? _steps;
 
@@ -161,13 +161,24 @@ public sealed class ValidationProfile
     }
 
     /// <summary>
-    /// Acknowledges that this profile drops or replaces a security-critical step, and why. The
-    /// guard logs every allowance at first resolve, so the weakening stays visible in the boot log.
+    /// Acknowledges that this profile drops or replaces <typeparamref name="TStep"/>, a
+    /// security-critical default, and why. The guard logs every allowance at first resolve, so the
+    /// weakening stays visible in the boot log.
     /// </summary>
-    public ValidationProfile AllowInsecureValidation(string reason)
+    /// <remarks>
+    /// The allowance names the step it excuses, and excuses only that one. An allowance that
+    /// excused "some critical step" would excuse every future one too: a profile carrying two
+    /// reasoned departures would silently absorb a third, added to the core long after anyone read
+    /// this profile - and the third could be the step that keeps an attacker-named issuer from
+    /// deciding which keys are fetched.
+    /// </remarks>
+    /// <typeparam name="TStep">The security-critical default this profile does not carry.</typeparam>
+    /// <param name="reason">Why this profile is right not to carry it.</param>
+    public ValidationProfile AllowInsecureValidation<TStep>(string reason)
+        where TStep : class, ISecurityEventTokenValidator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        _allowances.Add(reason);
+        _allowances.Add(new ValidationAllowance(typeof(TStep), reason));
         return this;
     }
 

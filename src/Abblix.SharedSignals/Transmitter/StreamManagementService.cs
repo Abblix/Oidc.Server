@@ -326,6 +326,20 @@ public sealed class StreamManagementService(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // A Complex Subject "MUST contain at least one Simple Subject Member" (SSF 1.0 Section 3.3),
+        // and here that rule is not a formality: matching asks whether every member the stream
+        // named agrees with the event's, so a subject that named none agrees with every event.
+        // Added to a stream whose mode is None - the conservative default, chosen so that a
+        // misconfigured stream leaks nothing - one such request turns it into a subscription to
+        // everything. The shape is refused where it arrives, since nothing downstream can tell it
+        // from a deliberate partial match.
+        if (request.Subject is ComplexSubject { HasMembers: false })
+        {
+            return ManagementResult<object>.BadRequest(
+                "A complex subject carries at least one member (SSF 1.0 Section 3.3); one with none "
+                + "would match every event on the stream.");
+        }
+
         if (await store.FindAsync(receiverId, request.StreamId, cancellationToken) is not { } stream)
         {
             return NoSuchStream<object>(request.StreamId);

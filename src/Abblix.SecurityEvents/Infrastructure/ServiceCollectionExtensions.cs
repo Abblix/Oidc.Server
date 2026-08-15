@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -261,10 +261,16 @@ public static class ServiceCollectionExtensions
     /// Creates a named validation profile, and only on first sight of its key.
     /// </summary>
     /// <remarks>
-    /// A consumer's registration must survive being run twice without doubling its profile, so the
-    /// key is looked for before the profile is created. Creating one outright refuses a second
-    /// creation loudly, which stays the right answer for anyone ELSE claiming a key already taken;
-    /// this is the narrower promise a consumer makes about its OWN registration.
+    /// A consumer's registration must survive being run twice without doubling its profile. What
+    /// it must NOT survive is somebody else having taken the key first: that is the collision
+    /// named profiles exist to end, and the loser sees every one of its tokens refused by a
+    /// pipeline shaped for another kind.
+    /// <para>
+    /// Those two cases look identical from the key alone - a profile is there either way - so this
+    /// leaves a marker of its own and reads that instead. A second call by the same registration
+    /// finds its marker and does nothing; a foreign profile under the same key leaves no marker,
+    /// so the strict registration runs and refuses loudly, naming the key.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="profileKey">The key the profile's validator resolves under.</param>
@@ -274,11 +280,24 @@ public static class ServiceCollectionExtensions
         string profileKey,
         Action<ValidationProfile> configure)
     {
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, profileKey)))
-            services.AddSecurityEventValidationProfile(profileKey, configure);
+        ArgumentNullException.ThrowIfNull(profileKey);
+
+        var marker = new ProfileCreatedMarker(profileKey);
+        if (services.Any(descriptor => Equals(descriptor.ImplementationInstance, marker)))
+            return services;
+
+        services.AddSecurityEventValidationProfile(profileKey, configure);
+        services.AddSingleton(marker);
 
         return services;
     }
+
+    /// <summary>
+    /// The record that THIS registration created the profile under a key, as opposed to the key
+    /// merely being taken.
+    /// </summary>
+    /// <param name="ProfileKey">The key whose profile was created here.</param>
+    private sealed record ProfileCreatedMarker(string ProfileKey);
 
     /// <summary>
     /// Registers the receiver of Logout Tokens a provider posts to this application
@@ -355,11 +374,11 @@ public static class ServiceCollectionExtensions
                 .AddCriticalStep<LogoutTokenExpiryStep>();
 
             profile
-                .AllowInsecureValidation(
+                .AllowInsecureValidation<TypHeaderStep>(
                     "A Logout Token may carry no 'typ' at all - Section 4.1 says requiring one 'will "
                     + "break most existing deployments' - so the replacement refuses a foreign type "
                     + "and accepts an absent one, which is a lower wall than the SET default's")
-                .AllowInsecureValidation(
+                .AllowInsecureValidation<ExpAbsenceStep>(
                     "Back-Channel Logout REQUIRES 'exp' (Section 2.6), inverting the SET default; the "
                     + "replacement polices the same claim with the opposite sign and also refuses one "
                     + "already past");

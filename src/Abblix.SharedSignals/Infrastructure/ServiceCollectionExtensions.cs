@@ -148,7 +148,12 @@ public static class ServiceCollectionExtensions
             Dependency.Override<ISecurityEventTokenValidator>(
                 serviceProvider => serviceProvider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
                     ValidationProfileKeys.SecurityEvent)),
-            Dependency.Override<SecurityEventTokenValidationOptions>(options)));
+            // Resolved, not captured. TryAddSingleton above lets a host's own instance win, so
+            // closing over the argument would judge tokens by the placeholder while every other
+            // reader of the container saw the host's - one value with two sources, disagreeing
+            // silently.
+            Dependency.Override<SecurityEventTokenValidationOptions>(
+                serviceProvider => serviceProvider.GetRequiredService<SharedSignalsValidationOptions>())));
 
         services.AddSecurityEventValidationProfileOnce(ValidationProfileKeys.SecurityEvent, profile =>
         {

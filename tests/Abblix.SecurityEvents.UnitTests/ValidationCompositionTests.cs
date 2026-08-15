@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -164,7 +164,7 @@ public class ValidationCompositionTests
         var services = HostWithProfile(profile =>
         {
             profile.Steps.Remove<SignatureStep>();
-            profile.AllowInsecureValidation(
+            profile.AllowInsecureValidation<SignatureStep>(
                 "integration test profile: tokens are minted unsigned by the test host");
         });
 

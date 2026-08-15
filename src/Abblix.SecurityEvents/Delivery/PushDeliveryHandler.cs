@@ -108,32 +108,56 @@ public sealed class PushDeliveryHandler(
 
         verdict.TryGetSuccess(out var validated);
 
-        if (replayCache is not null)
+        // The default profile requires each of these envelope claims with its own step, so a miss
+        // here means a weakened profile let an incomplete envelope through - and a token replay
+        // accounting cannot track must not slip past it. The miss fails closed.
+        if (replayCache is not null
+            && validated!.Token is not { Issuer: not null, JwtId: not null, IssuedAt: not null })
         {
-            // The default profile requires each of these envelope claims with its own step, so a
-            // miss here means a weakened profile let an incomplete envelope through - and a token
-            // replay accounting cannot track must not slip past it. The miss fails closed.
-            if (validated!.Token is not { Issuer: { } issuer, JwtId: { } jwtId, IssuedAt: { } issuedAt })
-            {
-                return PushDeliveryResult.BadRequest(new DeliveryError(
-                    DeliveryErrorCodes.InvalidRequest,
-                    "The SET lacks an envelope claim replay accounting keys on: 'iss', 'jti' and "
-                    + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
-            }
-
-            if (!await replayCache.TryReserveAsync(
-                    ReplayIdentifier.ForToken(issuer, jwtId),
-                    issuedAt + options.ReplayRetention,
-                    cancellationToken))
-            {
-                // A redelivery of something already processed: acknowledged, never re-consumed.
-                return PushDeliveryResult.Accepted;
-            }
+            return PushDeliveryResult.BadRequest(new DeliveryError(
+                DeliveryErrorCodes.InvalidRequest,
+                "The SET lacks an envelope claim replay accounting keys on: 'iss', 'jti' and "
+                + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
         }
 
         var refusal = await sink.ConsumeAsync(validated!, cancellationToken);
-        return refusal is null
-            ? PushDeliveryResult.Accepted
-            : PushDeliveryResult.BadRequest(refusal);
+        if (refusal is not null)
+            return PushDeliveryResult.BadRequest(refusal);
+
+        await RecordAsync(validated!, cancellationToken);
+        return PushDeliveryResult.Accepted;
+    }
+
+    /// <summary>
+    /// Records an accepted token, so a host reading the cache sees what this receiver consumed.
+    /// </summary>
+    /// <remarks>
+    /// After the sink, never before it. A reservation made first stands whatever the sink then
+    /// answers, so a delivery the sink refused would be remembered as handled - and the
+    /// transmitter's retry, which RFC 8935 Section 2 both permits and expects, would be answered
+    /// 202 without the sink ever seeing the event. That is the one path in this handler that loses
+    /// a security event outright while reporting success.
+    /// <para>
+    /// The consequence is that a repeat reaches the sink again rather than being short-circuited
+    /// here. That is what <see cref="ISecurityEventSink"/> already requires of it - "Processing
+    /// must be idempotent" - and it is the only correct short-circuit available while
+    /// <see cref="IReplayCache"/> can reserve but not release: a cache entry cannot be undone when
+    /// the work it stands for failed, so it must not be written until that work has succeeded.
+    /// </para>
+    /// </remarks>
+    private async Task RecordAsync(
+        ValidatedSecurityEventToken validated, CancellationToken cancellationToken)
+    {
+        if (replayCache is null)
+            return;
+
+        var token = validated.Token;
+        if (token is { Issuer: { } issuer, JwtId: { } jwtId, IssuedAt: { } issuedAt })
+        {
+            await replayCache.TryReserveAsync(
+                ReplayIdentifier.ForToken(issuer, jwtId),
+                issuedAt + options.ReplayRetention,
+                cancellationToken);
+        }
     }
 }

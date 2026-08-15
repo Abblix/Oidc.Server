@@ -247,6 +247,34 @@ public class StreamManagementServiceTests
             created.StreamId, null, TestContext.Current.CancellationToken));
     }
 
+    /// <summary>
+    /// A Complex Subject naming no member is refused: SSF 1.0 Section 3.3 requires at least one,
+    /// and here the rule is load-bearing rather than formal.
+    /// </summary>
+    /// <remarks>
+    /// Matching asks whether every member the stream named agrees with the event's, so a subject
+    /// that named none agrees with everything. Added to a stream in the conservative default mode -
+    /// the one chosen so that a misconfigured stream leaks nothing - one such request would turn it
+    /// into a subscription to every event the transmitter has.
+    /// </remarks>
+    [Fact]
+    public async Task Subjects_AnEmptyComplexSubject_IsRefused_RatherThanCoveringEverything()
+    {
+        var harness = CreateHarness();
+        var created = await CreatedStreamAsync(harness);
+
+        var addition = await harness.Service.AddSubjectAsync(
+            Receiver,
+            new AddSubjectRequest { StreamId = created.StreamId, Subject = new ComplexSubject() },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, addition.StatusCode);
+
+        var state = await harness.Store.FindAsync(
+            Receiver, created.StreamId, TestContext.Current.CancellationToken);
+        Assert.Empty(state!.AddedSubjects);
+    }
+
     [Fact]
     public async Task Subjects_AdditionCovers_AndRemovalAnswersSuccessEvenForTheNeverAdded()
     {

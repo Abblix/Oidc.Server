@@ -26,6 +26,7 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
+using Abblix.SecurityEvents.MinimalApi;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Events;
@@ -78,7 +79,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DiscoveryToPushDelivery_CarriesAVerifiedEvent_AndARedeliveryIsAcknowledgedOnce()
+    public async Task DiscoveryToPushDelivery_CarriesAVerifiedEvent_AndARedeliveryIsAcknowledged()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
@@ -118,12 +119,13 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
         Assert.Equal(2, _sink.Consumed.Count);
 
-        // RFC 8935 Section 2 lets the transmitter redeliver regardless of earlier responses:
-        // the repeat earns the same 202 and the queue empties, but the receiver's replay cache
-        // keeps the sink at one processing per event.
+        // RFC 8935 Section 2 lets the transmitter redeliver regardless of earlier responses, and
+        // asks the receiver to answer as though it had not seen the token before: the repeat earns
+        // the same 202 and reaches the sink again, whose contract is idempotency. Short-circuiting
+        // it here is what used to swallow a delivery the sink had refused.
         await outbox.EnqueueAsync(stream.StreamId, minted, cancellationToken);
         Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
-        Assert.Equal(2, _sink.Consumed.Count);
+        Assert.Equal(3, _sink.Consumed.Count);
     }
 
     [Fact]
@@ -373,7 +375,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         builder.Services.AddSingleton<ISecurityEventSink>(_sink);
 
         var app = builder.Build();
-        app.MapSsfPushEndpoint("/events");
+        app.MapPushDeliveryEndpoint("/events");
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }

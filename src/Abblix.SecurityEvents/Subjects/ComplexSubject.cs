@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -32,9 +32,9 @@ namespace Abblix.SecurityEvents.Subjects;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Section 3.3 requires at least one member, a rule spanning all of them at once; it belongs to
-/// a validation pass over the whole document, not to any single property, and is not enforced
-/// here. What IS enforced per member is simplicity: a Complex Subject holds Simple Subject
+/// Section 3.3 requires at least one member, a rule spanning all of them at once, so it belongs to
+/// no single property; <see cref="HasMembers"/> is how a caller asks it, and the transmitter's
+/// subject door refuses the empty shape. What IS enforced per member is simplicity: a Complex Subject holds Simple Subject
 /// Members, so a nested Complex Subject is refused on the way in - built in code or read off
 /// the wire alike.
 /// </para>
@@ -140,6 +140,25 @@ public sealed class ComplexSubject() : SubjectIdentifier(SubjectFormats.Complex)
     /// </summary>
     [JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalMembers { get; init; }
+
+    /// <summary>
+    /// Whether this subject names anything at all.
+    /// </summary>
+    /// <remarks>
+    /// Section 3.3's "at least one member" spans every property at once, so it cannot live on any
+    /// one of them - but the question can be asked here and answered where a subject enters. It is
+    /// worth asking rather than shrugging at: a matcher reads an absent member as "no restriction
+    /// on this field", so a subject naming none restricts nothing and stands for every event.
+    /// </remarks>
+    public bool HasMembers
+        => User is not null
+           || Device is not null
+           || Session is not null
+           || Application is not null
+           || Tenant is not null
+           || OrgUnit is not null
+           || Group is not null
+           || AdditionalMembers is { Count: > 0 };
 
     /// <summary>
     /// Returns <paramref name="value"/> unless it is itself a Complex Subject: the members of a
