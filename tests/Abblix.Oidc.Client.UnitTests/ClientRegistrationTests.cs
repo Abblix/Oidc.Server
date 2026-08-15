@@ -30,7 +30,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.Revocation;
@@ -58,7 +57,6 @@ public class ClientRegistrationTests
             options.PostLogoutRedirectUri = new Uri("https://client.example.com/signed-out"))
         .AddUserInfo()
         .AddAuthorizationResponseHandling()
-        .AddBackChannelLogout()
         .AddOidcClientFacade()
         .BuildServiceProvider(new ServiceProviderOptions
         {

@@ -25,7 +25,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Context;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.Discovery;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
@@ -146,8 +145,7 @@ public class OidcClientTests
             new ClaimsPrincipalFactory(Options.Create(new ClaimsPrincipalOptions())),
             new UnusedUserInfoService(),
             new UnusedRevocationService(),
-            new UnusedEndSessionRequestBuilder(),
-            new UnusedLogoutTokenValidator());
+            new UnusedEndSessionRequestBuilder());
 
     /// <summary>
     /// A code-flow callback produces a signed-in user carrying what the login yielded.
@@ -305,13 +303,6 @@ public class OidcClientTests
             string? state = null,
             string? logoutHint = null,
             CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-    }
-
-    private sealed class UnusedLogoutTokenValidator : ILogoutTokenValidator
-    {
-        public Task<LogoutNotification> ValidateAsync(
-            string logoutToken, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

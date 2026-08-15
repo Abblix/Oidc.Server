@@ -25,7 +25,6 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.EndSession;
 using Abblix.Oidc.Client.Features.IdentityTokens;
 using Abblix.Oidc.Client.Features.Principal;
@@ -51,10 +50,9 @@ namespace Abblix.Oidc.Client;
 /// <param name="userInfoService">Reads the UserInfo endpoint.</param>
 /// <param name="revocationService">Revokes tokens.</param>
 /// <param name="endSessionRequestBuilder">Builds logout addresses.</param>
-/// <param name="logoutTokenValidator">Validates Logout Tokens the provider posts.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
     Justification = "The count is the feature list. This type is the facade a host talks to instead of "
-        + "resolving eleven services itself, so each parameter is one capability it exposes and the "
+        + "resolving ten services itself, so each parameter is one capability it exposes and the "
         + "constructor is where that composition is stated. Gathering them behind an options object would "
         + "add a type whose only purpose is to shorten this line, and would hide from a reader which "
         + "features the client is made of. The rule is aimed at a method that grew arguments; this is a "
@@ -69,8 +67,7 @@ public sealed class OidcClient(
     IClaimsPrincipalFactory principalFactory,
     IUserInfoService userInfoService,
     ITokenRevocationService revocationService,
-    IEndSessionRequestBuilder endSessionRequestBuilder,
-    ILogoutTokenValidator logoutTokenValidator) : IOidcClient
+    IEndSessionRequestBuilder endSessionRequestBuilder) : IOidcClient
 {
     /// <inheritdoc />
     public Task<AuthorizationRequest> CreateAuthorizationRequestAsync(
@@ -116,11 +113,6 @@ public sealed class OidcClient(
         string? logoutHint = null,
         CancellationToken cancellationToken = default)
         => endSessionRequestBuilder.CreateAsync(identityToken, state, logoutHint, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<LogoutNotification> ValidateBackChannelLogoutAsync(
-        string logoutToken, CancellationToken cancellationToken = default)
-        => logoutTokenValidator.ValidateAsync(logoutToken, cancellationToken);
 
     /// <inheritdoc />
     public async Task<SessionCheck?> CreateSessionCheckAsync(

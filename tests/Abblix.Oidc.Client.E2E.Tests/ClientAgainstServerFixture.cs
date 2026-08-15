@@ -24,7 +24,6 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
 using Abblix.Oidc.Client.Features.Authorization.Responses;
 using Abblix.Oidc.Client.Features.BackChannelAuthentication;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.ClientAuthentication;
 using Abblix.Oidc.Client.Features.DeviceAuthorization;
 using Abblix.Oidc.Client.Features.Discovery;
@@ -158,7 +157,6 @@ public sealed class ClientAgainstServerFixture : WebApplicationFactory<Program>,
             .AddBackChannelAuthentication()
             .AddTokenRevocation()
             .AddUserInfo()
-            .AddBackChannelLogout()
 
             // No post-logout address: RP-Initiated Logout 1.0 section 2 requires one to have been
             // registered with the provider beforehand, and this host registers none for this client. Asking

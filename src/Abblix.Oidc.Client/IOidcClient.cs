@@ -22,7 +22,6 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Client.Features.Authorization.Requests;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.Revocation;
 using Abblix.Oidc.Client.Features.SessionManagement;
 using Abblix.Oidc.Client.Features.Tokens;
@@ -121,12 +120,6 @@ public interface IOidcClient
         string? state = null,
         string? logoutHint = null,
         CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Validates a Logout Token the provider posted, and says which sessions it ends.
-    /// </summary>
-    Task<LogoutNotification> ValidateBackChannelLogoutAsync(
-        string logoutToken, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gathers what a page needs in order to watch whether the end-user is still logged in at the provider.

@@ -32,7 +32,6 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Client.AspNetCore;
-using Abblix.Oidc.Client.Features.BackChannelLogout;
 using Abblix.Oidc.Client.Features.FrontChannelLogout;
 using Abblix.Oidc.Client.Features.ProtectedResources;
 using Abblix.Oidc.Client.Features.SessionManagement;
@@ -80,11 +79,6 @@ public sealed class ClientHostFixture : IAsyncLifetime
     public const string ProtectedPath = "/protected";
 
     /// <summary>
-    /// Where the provider would post a Logout Token.
-    /// </summary>
-    public const string BackChannelLogoutPath = "/backchannel-logout";
-
-    /// <summary>
     /// Where a test can read the ID Token this application is holding for the signed-in user.
     /// </summary>
     public const string IdentityTokenPath = "/id-token";
@@ -130,11 +124,6 @@ public sealed class ClientHostFixture : IAsyncLifetime
     /// captured, so the two hosts can each be told about the other despite being built in order.
     /// </summary>
     private HttpMessageHandler ClientHostHandler => Server.CreateHandler();
-
-    /// <summary>
-    /// The subjects this application was told to log out, in the order the provider asked.
-    /// </summary>
-    public List<string> LoggedOutSubjects { get; } = [];
 
     /// <summary>
     /// The front-channel logout requests this application acted on.
@@ -314,8 +303,6 @@ public sealed class ClientHostFixture : IAsyncLifetime
                     ],
                     TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
                     RedirectUris = [new Uri(ClientAgainstServerFixture.RedirectUri)],
-                    BackChannelLogout = new BackChannelLogoutOptions(
-                        new Uri($"{BaseAddress}{BackChannelLogoutPath}")),
                     OfflineAccessAllowed = true,
                 },
             ]);
@@ -422,20 +409,7 @@ public sealed class ClientHostFixture : IAsyncLifetime
                             return Task.CompletedTask;
                         },
                         cancellationToken));
-
-            endpoints.MapPost(
-                BackChannelLogoutPath,
-                (HttpRequest request, CancellationToken cancellationToken) =>
-                    BackChannelLogoutEndpoint.HandleAsync(request, OnLogout, cancellationToken));
         });
-    }
-
-    private Task OnLogout(LogoutNotification notification, CancellationToken cancellationToken)
-    {
-        if (notification.Subject is { } subject)
-            LoggedOutSubjects.Add(subject);
-
-        return Task.CompletedTask;
     }
 
     /// <summary>
