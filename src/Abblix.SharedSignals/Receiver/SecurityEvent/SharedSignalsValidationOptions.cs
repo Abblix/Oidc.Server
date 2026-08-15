@@ -23,7 +23,7 @@
 using System.Text.Json;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// The validation expectations of an SSF receiver: everything the core profile expects of a SET,

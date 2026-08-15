@@ -24,7 +24,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Abblix.SharedSignals.Model;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// The receiver's side of the Event Stream Management API of one transmitter

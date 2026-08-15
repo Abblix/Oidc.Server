@@ -145,7 +145,7 @@ public static class JwtTypes
 	/// </summary>
 	private static readonly string[] Known =
 	[
-		.. JsonWebTokenTypes.Known,
+		..JsonWebTokenTypes.Known,
 		RefreshToken,
 		RegistrationAccessToken,
 		InitialAccessToken,

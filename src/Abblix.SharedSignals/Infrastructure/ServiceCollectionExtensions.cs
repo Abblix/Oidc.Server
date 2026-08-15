@@ -21,11 +21,14 @@
 // info@abblix.com
 
 using Abblix.DependencyInjection;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -92,7 +95,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// <para>
     /// The receiver validates under its own named profile
-    /// (<see cref="SsfReceiverValidation.ProfileKey"/>) rather than by editing the host's plain
+    /// (<see cref="ValidationProfileKeys.SecurityEvent"/>) rather than by editing the host's plain
     /// family. The plain family is shared, and another consumer of security event tokens in the
     /// same host - Back-Channel Logout is the live example - shapes it to demands a SET
     /// contradicts outright: its <c>typ</c> replacement refuses everything that is not a logout
@@ -104,7 +107,7 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// The host still owes two registrations of its own: an
-    /// <see cref="Abblix.SharedSignals.Receiver.ISecurityEventSink"/>, because where events
+    /// <see cref="ISecurityEventSink"/>, because where events
     /// land is the application, and key resolution (for example
     /// <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. A replay cache
     /// (<c>AddDistributedReplayCache</c>) is optional and picked up when present.
@@ -114,40 +117,68 @@ public static class ServiceCollectionExtensions
     /// <param name="options">
     /// What this receiver expects of every token; registered as the shared instance, so a host
     /// pre-registering its own <see cref="SharedSignalsValidationOptions"/> wins.</param>
-    public static IServiceCollection AddSsfReceiver(
+    public static IServiceCollection AddSecurityEventReceiver(
         this IServiceCollection services,
         SharedSignalsValidationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        RequireSecurityEvents(services, nameof(AddSsfReceiver));
+        RequireSecurityEvents(services, nameof(AddSecurityEventReceiver));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
-        services.TryAddSingleton<PushDeliveryHandler>();
 
-        // Re-running the registration must not double the profile, so it is created only on
-        // first sight; the profile registration itself refuses a second creation loudly, which
-        // is the right answer for anyone ELSE claiming this package's key.
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, SsfReceiverValidation.ProfileKey)))
+        // Every call this receiver makes outward goes through the factory, so one line of a host's
+        // - ConfigureHttpClientDefaults, or a call naming one of the published transport names -
+        // reaches all of them. A client the library merely ACCEPTS an HttpClient for is not on
+        // that path: the host would have to build and wire it, and nothing would say so.
+        services.AddHttpClient<PollClient>();
+        services.AddHttpClient<TransmitterConfigurationClient>();
+
+        // Named rather than typed, because the client it feeds is paired with the transmitter's
+        // metadata, which a receiver learns at run time - so the factory builds it, not the
+        // container.
+        services.AddHttpClient(StreamManagementTransport.HttpClientName);
+        services.TryAddSingleton<StreamManagementClientFactory>();
+
+        // The push intake is RFC 8935's, not this framework's, so it takes the profile, the
+        // expectations and the sink as parameters. Bound here because only this call knows which
+        // profile is meant - and a keyed-service attribute could not say it, since an attribute
+        // takes a compile-time constant while the key belongs to the registration.
+        services.TryAddSingleton(provider => provider.CreateService<PushDeliveryHandler>(
+            Dependency.Override<ISecurityEventTokenValidator>(
+                serviceProvider => serviceProvider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
+                    ValidationProfileKeys.SecurityEvent)),
+            Dependency.Override<SecurityEventTokenValidationOptions>(options)));
+
+        services.AddSecurityEventValidationProfileOnce(ValidationProfileKeys.SecurityEvent, profile =>
         {
-            services.AddSecurityEventValidationProfile(SsfReceiverValidation.ProfileKey, profile =>
-            {
-                profile.Steps
-                    .AddAfter<ExpAbsenceStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
-                    .AddAfter<AudienceStep>(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
-                    .AddLast(
-                        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+            // The whole order a SET is judged in, written out: parse, then the rejections cheap
+            // enough to make before any signature work, then the signature, then the checks that
+            // read claims the issuer has now vouched for. The three SSF steps sit where that order
+            // puts them - "sub" among the cheap ones, the stream issuer beside the audience it
+            // qualifies, the critical members last, once payloads are typed.
+            profile
+                .Use<ParseStep>()
+                .Use<TypHeaderStep>()
+                .Use<ExpAbsenceStep>()
+                .Use<ForbidSubStep>()
+                .Use<EventsPresenceStep>()
+                .Use<JwtIdPresenceStep>()
+                .Use<IssuerAllowlistStep>()
+                .Use<SignatureStep>()
+                .Use<AudienceStep>()
+                .Use<StreamIssuerStep>()
+                .Use<IssuedAtWindowStep>()
+                .Use<PayloadDeserializationStep>()
+                .Use<CriticalSubjectMembersStep>();
 
-                // Two of the three carry the security-critical marker, and the marker only binds a
-                // profile that knows about them: declared here, beside the edit that adds them, so
-                // the two statements cannot drift apart.
-                profile
-                    .AddCriticalStep<ForbidSubStep>()
-                    .AddCriticalStep<StreamIssuerStep>();
-            });
-        }
+            // Two of the three carry the security-critical marker, and the marker only binds a
+            // profile that knows about them: declared here, beside the listing that adds them, so
+            // the two statements cannot drift apart.
+            profile
+                .AddCriticalStep<ForbidSubStep>()
+                .AddCriticalStep<StreamIssuerStep>();
+        });
 
         return services;
     }

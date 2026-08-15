@@ -29,6 +29,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -50,7 +51,7 @@ public class CriticalStepDeclarationTests
 
         return services
             .AddSecurityEvents()
-            .AddSsfReceiver(new SharedSignalsValidationOptions());
+            .AddSecurityEventReceiver(new SharedSignalsValidationOptions());
     }
 
     // The receiver validates under its own named profile, so the resolve, the removal and the
@@ -59,13 +60,13 @@ public class CriticalStepDeclarationTests
     {
         using var provider = services.BuildServiceProvider();
         return provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
-            SsfReceiverValidation.ProfileKey);
+            ValidationProfileKeys.SecurityEvent);
     }
 
     private static void RemoveStep(IServiceCollection services, Type stepType)
     {
         var family = services.DecomposeKeyed<ISecurityEventTokenValidator>(
-            SsfReceiverValidation.ProfileKey);
+            ValidationProfileKeys.SecurityEvent);
         family.RemoveAt(family.ToList().FindIndex(
             member => member.ResolveImplementationType() == stepType));
     }
@@ -105,7 +106,7 @@ public class CriticalStepDeclarationTests
         using var provider = services.BuildServiceProvider();
 
         return provider
-            .Decompose<ISecurityEventTokenValidator>(SsfReceiverValidation.ProfileKey)
+            .Decompose<ISecurityEventTokenValidator>(ValidationProfileKeys.SecurityEvent)
             .Select(step => step.GetType())
             .Where(type => typeof(ISecurityCriticalValidator).IsAssignableFrom(type))
             .ToArray();

@@ -21,50 +21,23 @@
 // info@abblix.com
 
 using System.Net.Http.Json;
-using Abblix.SecurityEvents.Delivery;
-using Abblix.SharedSignals.Model.Delivery;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SecurityEvents.Delivery;
 
 /// <summary>
-/// The receiver's side of poll-based delivery (RFC 8936, carried by SSF 1.0 Section 6.1.2): one
-/// POST that acknowledges what was processed and asks for what waits. The wire shapes live in
-/// the Security Events core; this type owns only the transport.
+/// The receiver's side of poll-based delivery (RFC 8936): one POST that acknowledges what was
+/// processed and asks for what waits. The wire shapes live beside it; this type owns only the
+/// transport.
 /// </summary>
+/// <remarks>
+/// It knows nothing of how the endpoint was learned. RFC 8936 leaves that to whatever arranged
+/// the feed, so a framework that carries poll deliveries in its own configuration - Shared
+/// Signals does - adds the step from its model to this URL on its own side.
+/// </remarks>
 /// <param name="httpClient">The client polls are spoken through. Authentication is its
 /// configuration, not this type's concern.</param>
 public sealed class PollClient(HttpClient httpClient)
 {
-    /// <summary>
-    /// Polls the endpoint of a stream's poll delivery for pending Security Event Tokens.
-    /// </summary>
-    /// <param name="delivery">The stream's poll delivery, whose endpoint URL the transmitter
-    /// supplied at stream creation (SSF 1.0 Sections 6.1.2, 8.1.1.1).</param>
-    /// <param name="request">What to acknowledge and what to return; the empty request is a
-    /// valid default poll (RFC 8936 Section 2.2).</param>
-    /// <param name="cancellationToken">Cancels the poll - the way a caller bounds a long poll
-    /// the transmitter holds open.</param>
-    public Task<PollResponse> PollAsync(
-        PollDeliveryMethod delivery,
-        PollRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(delivery);
-
-        // A delivery without the URL is a receiver's own PROPOSAL of poll, not a pollable
-        // stream: the URL is transmitter-supplied, so only the configuration the transmitter
-        // returned carries it (SSF 1.0 Sections 6.1.2, 8.1.1.1).
-        if (delivery.EndpointUrl is not { } endpoint)
-        {
-            throw new InvalidOperationException(
-                $"The poll delivery carries no '{StreamDeliveryMethod.ParameterNames.EndpointUrl}': poll "
-                + "the delivery of a transmitter-returned stream configuration, not a receiver-side "
-                + "proposal (SSF 1.0 Sections 6.1.2, 8.1.1.1).");
-        }
-
-        return PollAsync(endpoint, request, cancellationToken);
-    }
-
     /// <summary>
     /// Polls <paramref name="endpoint"/> for pending Security Event Tokens.
     /// </summary>

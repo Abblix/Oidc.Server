@@ -34,6 +34,7 @@ using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
@@ -363,7 +364,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
             options.Events.Register<VerificationEventPayload>(SsfEventTypes.Verification));
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddDistributedReplayCache();
-        builder.Services.AddSsfReceiver(new SharedSignalsValidationOptions
+        builder.Services.AddSecurityEventReceiver(new SharedSignalsValidationOptions
         {
             ExpectedAudience = ReceiverId,
             ExpectedIssuers = [TransmitterIssuer],

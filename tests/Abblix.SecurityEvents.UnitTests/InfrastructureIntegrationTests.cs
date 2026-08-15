@@ -104,7 +104,7 @@ public class InfrastructureIntegrationTests
             options.SigningKeySource = _ => Task.FromResult(signingKey);
         });
 
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
 
         return services.BuildServiceProvider();
     }
@@ -194,7 +194,7 @@ public class InfrastructureIntegrationTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver());
         services.AddSecurityEvents(options => options.SigningKeySource = _ => Task.FromResult(key));
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
         await using var host = services.BuildServiceProvider();
 
         var compact = await SignedCompact(host);
@@ -213,7 +213,7 @@ public class InfrastructureIntegrationTests
         services.AddLogging();
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver());
         services.AddSecurityEvents();
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
         await using var host = services.BuildServiceProvider();
 
         var exception = Assert.Throws<InvalidOperationException>(
@@ -232,7 +232,7 @@ public class InfrastructureIntegrationTests
         var hostVerifier = new HostVerifier();
         services.AddSingleton<ISecurityEventTokenVerifier>(hostVerifier);
         services.AddSecurityEvents();
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
         await using var host = services.BuildServiceProvider();
 
         Assert.Same(hostVerifier, host.GetRequiredService<ISecurityEventTokenVerifier>());
@@ -245,7 +245,7 @@ public class InfrastructureIntegrationTests
         services.AddLogging();
         services.AddSecurityEvents(options =>
             options.Events.Register<MembershipChangedPayload>(MembershipChanged));
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
         await using var host = services.BuildServiceProvider();
 
         Assert.True(

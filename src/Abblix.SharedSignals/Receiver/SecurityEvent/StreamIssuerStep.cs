@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver;
+namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
 /// Binds each event to the stream it arrived on: the "iss" claim must equal the Stream
