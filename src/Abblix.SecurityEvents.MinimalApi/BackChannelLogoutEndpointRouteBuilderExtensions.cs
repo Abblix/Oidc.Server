@@ -80,26 +80,7 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
         // no-store value" (Section 2.8). Set on the refusal as well as the success: a cached 400
         // would keep answering for a token that was only invalid the first time, which is exactly
         // the interference the header exists to prevent.
-        return new NoStore(httpResult);
-    }
-
-    /// <summary>
-    /// Writes the one header Section 2.8 asks for, then renders what the handler decided.
-    /// </summary>
-    /// <remarks>
-    /// A wrapper rather than a line touching the response before the result is returned, so the
-    /// header cannot be attached to one answer and forgotten on the other: both answers travel
-    /// through here by construction.
-    /// </remarks>
-    /// <param name="inner">The answer being rendered.</param>
-    private sealed class NoStore(IResult inner) : IResult
-    {
-        public Task ExecuteAsync(HttpContext httpContext)
-        {
-            ArgumentNullException.ThrowIfNull(httpContext);
-
-            httpContext.Response.Headers.CacheControl = CacheControlHeaderValue.NoStoreString;
-            return inner.ExecuteAsync(httpContext);
-        }
+        return httpResult.WithHeaders(
+            headers => headers.CacheControl = CacheControlHeaderValue.NoStoreString);
     }
 }

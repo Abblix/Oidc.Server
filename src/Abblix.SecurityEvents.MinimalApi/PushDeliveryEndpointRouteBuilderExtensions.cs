@@ -70,7 +70,7 @@ public static class PushDeliveryEndpointRouteBuilderExtensions
 
         // "The response MUST include a 'Content-Language' header field whose value indicates the
         // language of the error descriptions included in the response body" (RFC 8935 Section 2.3).
-        request.HttpContext.Response.Headers.ContentLanguage = PushDeliveryResult.ErrorLanguage;
-        return Results.Json(error, statusCode: (int)result.StatusCode);
+        return Results.Json(error, statusCode: (int)result.StatusCode)
+            .WithHeaders(headers => headers.ContentLanguage = PushDeliveryResult.ErrorLanguage);
     }
 }
