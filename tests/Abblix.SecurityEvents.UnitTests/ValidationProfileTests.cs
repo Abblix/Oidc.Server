@@ -74,6 +74,7 @@ public class ValidationProfileTests
         // The first consumer requires exp - Back-Channel Logout's shape.
         services.AddSecurityEventValidationProfile("logout", profile =>
         {
+            profile.UseDefaultPipeline();
             profile.Steps.Replace<ExpAbsenceStep>(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, RequireExpStep>());
             profile.AllowInsecureValidation(
@@ -81,7 +82,7 @@ public class ValidationProfileTests
         });
 
         // The second keeps the default, where exp is forbidden - a SET receiver's shape.
-        services.AddSecurityEventValidationProfile("set-receiver");
+        services.AddSecurityEventValidationProfile("set-receiver", profile => profile.UseDefaultPipeline());
 
         var provider = services.BuildServiceProvider();
 
@@ -109,10 +110,10 @@ public class ValidationProfileTests
         var services = Host();
 
         services.AddSecurityEventValidationProfile("edited", profile =>
-            profile.Steps.AddAfter<ParseStep>(
+            profile.UseDefaultPipeline().Steps.AddAfter<ParseStep>(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, PinIssuerStep>()));
 
-        services.AddSecurityEventValidationProfile("clean");
+        services.AddSecurityEventValidationProfile("clean", profile => profile.UseDefaultPipeline());
 
         var profileSteps = services.BuildServiceProvider()
             .Decompose<ISecurityEventTokenValidator>("clean")
@@ -132,11 +133,11 @@ public class ValidationProfileTests
 
         // A sibling records an allowance of its own; it must not leak into "weakened".
         services.AddSecurityEventValidationProfile("sibling", profile =>
-            profile.AllowInsecureValidation(
+            profile.UseDefaultPipeline().AllowInsecureValidation(
                 "An allowance recorded for a SIBLING; the profile below must not inherit it."));
 
         services.AddSecurityEventValidationProfile(
-            "weakened", profile => profile.Steps.Remove<SignatureStep>());
+            "weakened", profile => profile.UseDefaultPipeline().Steps.Remove<SignatureStep>());
 
         var provider = services.BuildServiceProvider();
 
@@ -153,12 +154,72 @@ public class ValidationProfileTests
 
         services.AddSecurityEventValidationProfile("weakened", profile =>
         {
+            profile.UseDefaultPipeline();
             profile.Steps.Remove<SignatureStep>();
             profile.AllowInsecureValidation("The test weakens its own profile and says so here.");
         });
 
         Assert.NotNull(services.BuildServiceProvider()
             .GetRequiredKeyedService<ISecurityEventTokenValidator>("weakened"));
+    }
+
+    /// <summary>
+    /// The guarantee listing rests on: a profile that never lists a security-critical default is
+    /// judged exactly as one that removed it.
+    /// </summary>
+    /// <remarks>
+    /// Without this, listing would be the way around the guard - the step would simply not be
+    /// there, with nothing to notice its absence - and the guard would only ever catch the author
+    /// who reached for the removal door. It is also what makes a critical default added to the
+    /// core LATER a decision for every profile's owner rather than a step injected into profiles
+    /// designed before it existed.
+    /// </remarks>
+    [Fact]
+    public void AProfileOmittingACriticalStep_NeedsAnAllowance_AsIfItHadRemovedIt()
+    {
+        var services = Host();
+
+        // The documented order, minus the signature, listed rather than edited.
+        services.AddSecurityEventValidationProfile("omitting", profile => profile
+            .Use<ParseStep>()
+            .Use<TypHeaderStep>()
+            .Use<ExpAbsenceStep>()
+            .Use<EventsPresenceStep>()
+            .Use<JwtIdPresenceStep>()
+            .Use<IssuerAllowlistStep>()
+            .Use<AudienceStep>()
+            .Use<IssuedAtWindowStep>()
+            .Use<PayloadDeserializationStep>());
+
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => provider.GetRequiredKeyedService<ISecurityEventTokenValidator>("omitting"));
+
+        Assert.Contains(nameof(SignatureStep), refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A profile that lists nothing is refused where it is written, not where its first token is.
+    /// </summary>
+    /// <remarks>
+    /// Composing an empty family is a no-op rather than an error, so such a profile would end up
+    /// with no validator at all - and the shape is reachable exactly because steps are listed now
+    /// rather than inherited.
+    /// </remarks>
+    [Fact]
+    public void AProfileListingNoSteps_IsRefusedNamingBothDoors()
+    {
+        var services = Host();
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => services.AddSecurityEventValidationProfile("empty"));
+
+        Assert.Contains(nameof(ValidationProfile.Use), refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            nameof(Infrastructure.ServiceCollectionExtensions.UseDefaultPipeline),
+            refusal.Message,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -172,6 +233,7 @@ public class ValidationProfileTests
 
         services.AddSecurityEventValidationProfile("strict", profile =>
         {
+            profile.UseDefaultPipeline();
             profile.Steps.AddLast(
                 ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ProfileCriticalStep>());
             profile.AddCriticalStep<ProfileCriticalStep>();
@@ -179,7 +241,7 @@ public class ValidationProfileTests
 
         // The sibling lacks ProfileCriticalStep and must still construct without any allowance:
         // the declaration was scoped to "strict".
-        services.AddSecurityEventValidationProfile("sibling");
+        services.AddSecurityEventValidationProfile("sibling", profile => profile.UseDefaultPipeline());
 
         Assert.NotNull(services.BuildServiceProvider()
             .GetRequiredKeyedService<ISecurityEventTokenValidator>("sibling"));
@@ -197,7 +259,7 @@ public class ValidationProfileTests
     public void ASecondProfile_UnderTheSameKey_IsRefused()
     {
         var services = Host();
-        services.AddSecurityEventValidationProfile("taken");
+        services.AddSecurityEventValidationProfile("taken", profile => profile.UseDefaultPipeline());
 
         var refusal = Assert.Throws<InvalidOperationException>(
             () => services.AddSecurityEventValidationProfile("taken"));

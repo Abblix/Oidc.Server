@@ -100,7 +100,7 @@ public class TransmitterToReceiverScenarioTests
         services.AddDistributedMemoryCache();
         services.AddDistributedReplayCache();
 
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
 
         return services.BuildServiceProvider();
     }

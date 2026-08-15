@@ -140,13 +140,28 @@ public static class ServiceCollectionExtensions
 
         services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.SecurityEvent, profile =>
         {
-            profile.Steps
-                .AddAfter<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidSubStep>())
-                .AddAfter<AudienceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, StreamIssuerStep>())
-                .AddLast(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, CriticalSubjectMembersStep>());
+            // The whole order a SET is judged in, written out: parse, then the rejections cheap
+            // enough to make before any signature work, then the signature, then the checks that
+            // read claims the issuer has now vouched for. The three SSF steps sit where that order
+            // puts them - "sub" among the cheap ones, the stream issuer beside the audience it
+            // qualifies, the critical members last, once payloads are typed.
+            profile
+                .Use<ParseStep>()
+                .Use<TypHeaderStep>()
+                .Use<ExpAbsenceStep>()
+                .Use<ForbidSubStep>()
+                .Use<EventsPresenceStep>()
+                .Use<JwtIdPresenceStep>()
+                .Use<IssuerAllowlistStep>()
+                .Use<SignatureStep>()
+                .Use<AudienceStep>()
+                .Use<StreamIssuerStep>()
+                .Use<IssuedAtWindowStep>()
+                .Use<PayloadDeserializationStep>()
+                .Use<CriticalSubjectMembersStep>();
 
             // Two of the three carry the security-critical marker, and the marker only binds a
-            // profile that knows about them: declared here, beside the edit that adds them, so
+            // profile that knows about them: declared here, beside the listing that adds them, so
             // the two statements cannot drift apart.
             profile
                 .AddCriticalStep<ForbidSubStep>()
@@ -205,14 +220,27 @@ public static class ServiceCollectionExtensions
 
         services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.LogoutToken, profile =>
         {
-            profile.Steps
-                .Replace<TypHeaderStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenTypeStep>())
-                .Replace<ExpAbsenceStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutTokenExpiryStep>())
-                .AddAfter<ParseStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, ForbidNonceStep>())
-                .AddAfter<SignatureStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SubjectOrSessionStep>())
-                .AddAfter<SubjectOrSessionStep>(ServiceDescriptor.Singleton<ISecurityEventTokenValidator, LogoutEventStep>());
+            // The whole order a Logout Token is judged in. Two steps stand where the SET defaults
+            // put their own and answer the opposite question - the type rule of Section 4.1, the
+            // expiry of Section 2.6 - and three are this kind's alone. Written out rather than as
+            // edits to the SET order, because a reader of a profile that departs from the baseline
+            // twice should not have to reconstruct the baseline to see what it does.
+            profile
+                .Use<ParseStep>()
+                .Use<ForbidNonceStep>()
+                .Use<LogoutTokenTypeStep>()
+                .Use<LogoutTokenExpiryStep>()
+                .Use<EventsPresenceStep>()
+                .Use<JwtIdPresenceStep>()
+                .Use<IssuerAllowlistStep>()
+                .Use<SignatureStep>()
+                .Use<SubjectOrSessionStep>()
+                .Use<LogoutEventStep>()
+                .Use<AudienceStep>()
+                .Use<IssuedAtWindowStep>()
+                .Use<PayloadDeserializationStep>();
 
-            // Declared beside the edit that adds them, so the two statements cannot drift.
+            // Declared beside the listing that adds them, so the two statements cannot drift.
             profile
                 .AddCriticalStep<LogoutTokenTypeStep>()
                 .AddCriticalStep<LogoutTokenExpiryStep>();

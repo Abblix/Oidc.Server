@@ -198,22 +198,32 @@ public static class ServiceCollectionExtensions
                 + "a second registration under the same key would let two owners edit one copy.");
         }
 
-        foreach (var step in DefaultPipelineSteps)
-        {
-            services.Add(ServiceDescriptor.DescribeKeyed(
-                typeof(ISecurityEventTokenValidator), profileKey, step.ImplementationType!, step.Lifetime));
-        }
-
+        // No steps are laid down here. A profile states its own pipeline, in order, so the order a
+        // token is judged in is readable where it is decided rather than being a baseline the
+        // reader must know plus the edits made to it. What IS laid down is the expectation below:
+        // the security-critical defaults, which the guard then demands of whatever the profile
+        // turned out to contain.
+        //
+        // The two halves are deliberately independent. Seeding the pipeline as well would make a
+        // future critical default arrive in every profile silently, including profiles designed
+        // before it existed and possibly broken by it; seeding only the expectation makes the same
+        // addition surface as "this profile does not carry it - allow it or add it", which is a
+        // decision its owner takes rather than a change nobody reviewed.
         foreach (var critical in CriticalDefaultSteps)
         {
             services.Add(ServiceDescriptor.KeyedSingleton(
                 profileKey, (_, _) => new CriticalValidationStep(critical)));
         }
 
-        services.ComposeKeyed<ISecurityEventTokenValidator, CompositeSecurityEventTokenValidator>(profileKey);
-
+        // Composition happens after the profile is shaped, not before it: it gathers the members
+        // registered under this key, so calling it first would gather nothing. That is not an
+        // error it reports - composing an empty family is a no-op - so the profile would end up
+        // with no validator at all and the failure would surface far from here.
         var profile = new ValidationProfile(services, profileKey);
         configure?.Invoke(profile);
+
+        // Refuses a profile that listed nothing, which is where the no-op above would surface.
+        profile.EnsureComposed();
 
         // Decorated AFTER configure so the identity carries the profile's recorded allowances.
         // The guard itself still judges the final composition at first resolve, so later cursor
@@ -222,6 +232,27 @@ public static class ServiceCollectionExtensions
             profileKey, Dependency.Override(profile.ToIdentity()));
 
         return services;
+    }
+
+    /// <summary>
+    /// Lays down the documented default pipeline, in its required order: parse, then the cheap
+    /// unverified rejections, then the signature, then the checks that read trusted claims.
+    /// </summary>
+    /// <remarks>
+    /// For a profile that wants the baseline and departs from it by editing - the shape most
+    /// consumers of a plain SET want. A profile that judges a different KIND of token lists its own
+    /// steps instead, because the departures are then the point rather than the exception, and a
+    /// reader should not have to hold this order in mind to know what that profile does.
+    /// </remarks>
+    /// <param name="profile">The profile being shaped.</param>
+    public static ValidationProfile UseDefaultPipeline(this ValidationProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        foreach (var step in DefaultPipelineSteps)
+            profile.UseStep(step.ImplementationType!, step.Lifetime);
+
+        return profile;
     }
 
     /// <summary>

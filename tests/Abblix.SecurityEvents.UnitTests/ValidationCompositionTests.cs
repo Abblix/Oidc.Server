@@ -69,7 +69,13 @@ public class ValidationCompositionTests
     private static ServiceCollection HostWithProfile(Action<ValidationProfile>? configure = null)
     {
         var services = Host();
-        services.AddSecurityEventValidationProfile("test", configure);
+        // The documented order first, since these cases are about editing it; a profile listing
+        // its own steps is the other suite's subject.
+        services.AddSecurityEventValidationProfile("test", profile =>
+        {
+            profile.UseDefaultPipeline();
+            configure?.Invoke(profile);
+        });
         return services;
     }
 
@@ -195,7 +201,7 @@ public class ValidationCompositionTests
         services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
         services.AddSingleton<ISecurityEventTokenValidator, CustomStep>();
         services.AddSecurityEvents();
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
 
         Assert.DoesNotContain(typeof(CustomStep), PipelineTypes(services));
     }

@@ -99,7 +99,7 @@ public class CustodianHeldSigningTests
             .Apply(rsa.ExportParameters(false));
         services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(publicHalf));
 
-        services.AddSecurityEventValidationProfile("test");
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
         await using var host = services.BuildServiceProvider();
         resolved = host;
 
