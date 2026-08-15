@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Refuses a Logout Token that carries a <c>nonce</c> - step 7 of OpenID Connect Back-Channel

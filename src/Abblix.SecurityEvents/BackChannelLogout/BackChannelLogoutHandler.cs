@@ -23,7 +23,7 @@
 using System.Net.Http.Headers;
 using System.Net.Mime;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Takes one back-channel logout request from the transport and answers it: reads the

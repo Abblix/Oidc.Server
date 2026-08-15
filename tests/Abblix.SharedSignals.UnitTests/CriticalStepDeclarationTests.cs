@@ -60,13 +60,13 @@ public class CriticalStepDeclarationTests
     {
         using var provider = services.BuildServiceProvider();
         return provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
-            SharedSignalsValidationProfiles.SecurityEvent);
+            ValidationProfileKeys.SecurityEvent);
     }
 
     private static void RemoveStep(IServiceCollection services, Type stepType)
     {
         var family = services.DecomposeKeyed<ISecurityEventTokenValidator>(
-            SharedSignalsValidationProfiles.SecurityEvent);
+            ValidationProfileKeys.SecurityEvent);
         family.RemoveAt(family.ToList().FindIndex(
             member => member.ResolveImplementationType() == stepType));
     }
@@ -106,7 +106,7 @@ public class CriticalStepDeclarationTests
         using var provider = services.BuildServiceProvider();
 
         return provider
-            .Decompose<ISecurityEventTokenValidator>(SharedSignalsValidationProfiles.SecurityEvent)
+            .Decompose<ISecurityEventTokenValidator>(ValidationProfileKeys.SecurityEvent)
             .Select(step => step.GetType())
             .Where(type => typeof(ISecurityCriticalValidator).IsAssignableFrom(type))
             .ToArray();

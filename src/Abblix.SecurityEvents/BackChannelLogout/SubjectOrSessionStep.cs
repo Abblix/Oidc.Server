@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Requires a <c>sub</c>, a <c>sid</c>, or both - step 5 of OpenID Connect Back-Channel Logout 1.0

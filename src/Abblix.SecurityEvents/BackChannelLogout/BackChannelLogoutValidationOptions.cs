@@ -23,7 +23,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// What a back-channel logout receiver expects of every Logout Token: the provider it talks to as

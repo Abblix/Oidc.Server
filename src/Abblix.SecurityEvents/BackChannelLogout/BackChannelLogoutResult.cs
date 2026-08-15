@@ -22,7 +22,7 @@
 
 using System.Net;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// What a back-channel logout request earns: the status code the transport answers with, and -

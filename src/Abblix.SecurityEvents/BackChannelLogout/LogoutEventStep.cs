@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Requires the <c>events</c> claim to name the back-channel logout event - step 6 of OpenID

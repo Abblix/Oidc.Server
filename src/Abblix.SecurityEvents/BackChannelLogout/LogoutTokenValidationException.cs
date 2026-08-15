@@ -21,7 +21,7 @@
 // info@abblix.com
 
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Thrown when a Logout Token failed one of the validation steps of section 2.6.

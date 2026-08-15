@@ -21,12 +21,12 @@
 // info@abblix.com
 
 using Abblix.Jwt.ReplayPrevention;
-using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Delivery;
+using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Validates Logout Tokens arriving at this receiver's back-channel logout endpoint.
@@ -44,13 +44,13 @@ namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
 /// </remarks>
 /// <param name="validator">
 /// The validation pipeline, resolved from this receiver's own named profile
-/// (<see cref="SharedSignalsValidationProfiles.LogoutToken"/>) - never the host's plain family,
+/// (<see cref="ValidationProfileKeys.LogoutToken"/>) - never the host's plain family,
 /// which another consumer of security event tokens may have shaped to refuse every Logout Token.
 /// </param>
 /// <param name="options">What this receiver expects of every Logout Token.</param>
 /// <param name="replayCache">Remembers tokens already acted on, which is step 8.</param>
 public sealed class LogoutTokenValidator(
-    [FromKeyedServices(SharedSignalsValidationProfiles.LogoutToken)] ISecurityEventTokenValidator validator,
+    [FromKeyedServices(ValidationProfileKeys.LogoutToken)] ISecurityEventTokenValidator validator,
     BackChannelLogoutValidationOptions options,
     IReplayCache replayCache) : ILogoutTokenValidator
 {

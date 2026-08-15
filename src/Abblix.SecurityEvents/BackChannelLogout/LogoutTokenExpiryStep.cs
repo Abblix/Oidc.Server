@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Requires <c>exp</c> to be present and still in the future, inverting the rule of the step it

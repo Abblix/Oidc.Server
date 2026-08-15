@@ -35,10 +35,10 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// A profile exists because two consumers of security event tokens in one host can demand
 /// CONTRADICTORY things of the same claim - Back-Channel Logout requires <c>exp</c> where a Shared
 /// Signals SET forbids it, and each pins its own <c>typ</c> - so no single pipeline can serve both.
-/// A profile is a keyed copy of the default family that one consumer owns outright: it edits its
-/// copy, declares its own critical steps, records its own allowances, and resolves its validator by
-/// its key, while every other profile stays exactly as its owner composed it. There is no
-/// unnamed profile to fall back to: naming is what makes ownership visible.
+/// A profile is a keyed family one consumer owns outright: it lists its own steps in the order they
+/// judge a token, declares its own critical steps, records its own allowances, and resolves its
+/// validator by its key, while every other profile stays exactly as its owner composed it. There is
+/// no unnamed profile to fall back to: naming is what makes ownership visible.
 /// </remarks>
 public sealed class ValidationProfile
 {
@@ -174,11 +174,3 @@ public sealed class ValidationProfile
     /// <summary>The identity the guard judges this profile by, frozen at registration time.</summary>
     internal ValidationProfileIdentity ToIdentity() => new(Key, _allowances);
 }
-
-/// <summary>
-/// What the <see cref="InsecureValidationGuard"/> needs to know about the profile it decorates:
-/// which family to read and which allowances excuse a missing critical step.
-/// </summary>
-/// <param name="Key">The profile's service key.</param>
-/// <param name="Allowances">The profile's own allowances - the only ones that can excuse it.</param>
-internal sealed record ValidationProfileIdentity(object Key, IReadOnlyList<string> Allowances);

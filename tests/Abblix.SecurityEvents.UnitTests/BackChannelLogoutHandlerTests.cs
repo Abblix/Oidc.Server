@@ -22,10 +22,10 @@
 
 using System.Net;
 using System.Net.Mime;
-using Abblix.SharedSignals.Receiver.BackChannelLogout;
+using Abblix.SecurityEvents.BackChannelLogout;
 using Xunit;
 
-namespace Abblix.SharedSignals.UnitTests;
+namespace Abblix.SecurityEvents.UnitTests;
 
 /// <summary>
 /// The intake: what a back-channel logout request must look like to be read at all

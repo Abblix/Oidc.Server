@@ -22,7 +22,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// The part of a Logout Token that only its own specification defines, named as on the wire.

@@ -28,7 +28,6 @@ using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SharedSignals.Receiver;
-using Abblix.SharedSignals.Receiver.BackChannelLogout;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
@@ -96,7 +95,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// <para>
     /// The receiver validates under its own named profile
-    /// (<see cref="SharedSignalsValidationProfiles.SecurityEvent"/>) rather than by editing the host's plain
+    /// (<see cref="ValidationProfileKeys.SecurityEvent"/>) rather than by editing the host's plain
     /// family. The plain family is shared, and another consumer of security event tokens in the
     /// same host - Back-Channel Logout is the live example - shapes it to demands a SET
     /// contradicts outright: its <c>typ</c> replacement refuses everything that is not a logout
@@ -135,10 +134,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(provider => provider.CreateService<PushDeliveryHandler>(
             Dependency.Override<ISecurityEventTokenValidator>(
                 serviceProvider => serviceProvider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
-                    SharedSignalsValidationProfiles.SecurityEvent)),
+                    ValidationProfileKeys.SecurityEvent)),
             Dependency.Override<SecurityEventTokenValidationOptions>(options)));
 
-        services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.SecurityEvent, profile =>
+        services.AddSecurityEventValidationProfileOnce(ValidationProfileKeys.SecurityEvent, profile =>
         {
             // The whole order a SET is judged in, written out: parse, then the rejections cheap
             // enough to make before any signature work, then the signature, then the checks that
@@ -166,94 +165,6 @@ public static class ServiceCollectionExtensions
             profile
                 .AddCriticalStep<ForbidSubStep>()
                 .AddCriticalStep<StreamIssuerStep>();
-        });
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers the receiver of Logout Tokens a provider posts to this application
-    /// (OpenID Connect Back-Channel Logout 1.0 Section 2.6), as its own named validation profile.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A Logout Token is a security event token whose profile contradicts the security-event
-    /// default on two points, which is what a named profile is for: the default forbids <c>exp</c>
-    /// where Section 2.6 requires it, and pins the SET's own type where Section 4.1 forbids
-    /// requiring any. Both replacements go through the reasoned allowance door, so a host reading
-    /// its boot log sees which critical defaults this profile does not carry and why.
-    /// </para>
-    /// <para>
-    /// Registering this is the whole opt-in: an application that does not call it has nothing that
-    /// accepts a Logout Token. The host still owes two registrations of its own: an
-    /// <see cref="ILogoutNotificationSink"/>, because Section 2.7 makes locating and clearing the
-    /// sessions the RP's and only the RP knows where it keeps them, and key resolution (for
-    /// example <c>AddJwksKeyResolution</c>), because key trust is deployment knowledge. The
-    /// request and the response themselves are this package's:
-    /// <see cref="BackChannelLogoutHandler"/> reads the posted form and shapes the answer, leaving
-    /// a host adapter nothing to decide but how to render it.
-    /// </para>
-    /// <para>
-    /// Step 8, the replay check, is optional in the specification and taken up here, because the
-    /// request carrying the token is unauthenticated and the token is a bearer credential in the
-    /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>; a deployment
-    /// wanting a strictly atomic reservation registers its own <see cref="IReplayCache"/> first.
-    /// </para>
-    /// </remarks>
-    /// <param name="services">The service collection.</param>
-    /// <param name="options">
-    /// What this receiver expects of every Logout Token: the provider as the issuer and this
-    /// application's client identifier as the audience. Registered as the shared instance, so a
-    /// host pre-registering its own wins.</param>
-    public static IServiceCollection AddBackChannelLogoutReceiver(
-        this IServiceCollection services,
-        BackChannelLogoutValidationOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        RequireSecurityEvents(services, nameof(AddBackChannelLogoutReceiver));
-
-        services.TryAddSingleton(TimeProvider.System);
-        services.TryAddSingleton(options);
-        services.AddDistributedReplayCache();
-        services.TryAddSingleton<ILogoutTokenValidator, LogoutTokenValidator>();
-        services.TryAddSingleton<BackChannelLogoutHandler>();
-
-        services.AddReceiverProfileOnce(SharedSignalsValidationProfiles.LogoutToken, profile =>
-        {
-            // The whole order a Logout Token is judged in. Two steps stand where the SET defaults
-            // put their own and answer the opposite question - the type rule of Section 4.1, the
-            // expiry of Section 2.6 - and three are this kind's alone. Written out rather than as
-            // edits to the SET order, because a reader of a profile that departs from the baseline
-            // twice should not have to reconstruct the baseline to see what it does.
-            profile
-                .Use<ParseStep>()
-                .Use<ForbidNonceStep>()
-                .Use<LogoutTokenTypeStep>()
-                .Use<LogoutTokenExpiryStep>()
-                .Use<EventsPresenceStep>()
-                .Use<JwtIdPresenceStep>()
-                .Use<IssuerAllowlistStep>()
-                .Use<SignatureStep>()
-                .Use<SubjectOrSessionStep>()
-                .Use<LogoutEventStep>()
-                .Use<AudienceStep>()
-                .Use<IssuedAtWindowStep>()
-                .Use<PayloadDeserializationStep>();
-
-            // Declared beside the listing that adds them, so the two statements cannot drift.
-            profile
-                .AddCriticalStep<LogoutTokenTypeStep>()
-                .AddCriticalStep<LogoutTokenExpiryStep>();
-
-            profile
-                .AllowInsecureValidation(
-                    "A Logout Token may carry no 'typ' at all - Section 4.1 says requiring one 'will "
-                    + "break most existing deployments' - so the replacement refuses a foreign type "
-                    + "and accepts an absent one, which is a lower wall than the SET default's")
-                .AllowInsecureValidation(
-                    "Back-Channel Logout REQUIRES 'exp' (Section 2.6), inverting the SET default; the "
-                    + "replacement polices the same claim with the opposite sign and also refuses one "
-                    + "already past");
         });
 
         return services;
@@ -294,31 +205,6 @@ public static class ServiceCollectionExtensions
     {
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, DistributedCacheEventOutbox>());
         return services;
-    }
-
-    /// <summary>
-    /// Creates a receiver's named profile, and only on first sight of its key.
-    /// </summary>
-    /// <remarks>
-    /// Re-running a receiver's registration must not double its profile, so the key is looked for
-    /// before the profile is created; the profile registration itself refuses a second creation
-    /// loudly, which is the right answer for anyone ELSE claiming one of this package's keys.
-    /// <para>
-    /// One helper for every receiver, because the two answer the same question of the container
-    /// and a second copy of the question is what drifts: this package now registers two profiles,
-    /// and a third would otherwise arrive with its own spelling of "has this been created yet".
-    /// </para>
-    /// </remarks>
-    /// <param name="services">The service collection.</param>
-    /// <param name="profileKey">The key the profile's validator resolves under.</param>
-    /// <param name="configure">Shapes the profile: step edits, critical declarations, allowances.</param>
-    private static void AddReceiverProfileOnce(
-        this IServiceCollection services,
-        string profileKey,
-        Action<ValidationProfile> configure)
-    {
-        if (services.All(descriptor => !Equals(descriptor.ServiceKey, profileKey)))
-            services.AddSecurityEventValidationProfile(profileKey, configure);
     }
 
     /// <summary>

@@ -22,7 +22,7 @@
 
 using Abblix.Jwt;
 
-namespace Abblix.SharedSignals.Receiver.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout;
 
 /// <summary>
 /// Which sessions a validated Logout Token says to end.

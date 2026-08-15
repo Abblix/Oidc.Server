@@ -28,15 +28,13 @@ using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
-using Abblix.SharedSignals.Infrastructure;
-using Abblix.SharedSignals.Receiver;
-using Abblix.SharedSignals.Receiver.BackChannelLogout;
+using Abblix.SecurityEvents.BackChannelLogout;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-namespace Abblix.SharedSignals.UnitTests;
+namespace Abblix.SecurityEvents.UnitTests;
 
 /// <summary>
 /// The Back-Channel Logout profile as a host gets it, resolved from the registration rather than
@@ -98,7 +96,7 @@ public class BackChannelLogoutProfileTests
 
         return services.BuildServiceProvider()
             .GetRequiredKeyedService<ISecurityEventTokenValidator>(
-                SharedSignalsValidationProfiles.LogoutToken);
+                ValidationProfileKeys.LogoutToken);
     }
 
     private static SecurityEventTokenValidationOptions ReceiverOptions() => new()
