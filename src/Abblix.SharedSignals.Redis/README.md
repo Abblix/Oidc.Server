@@ -48,12 +48,19 @@ The key carries the transmitter's own issuer, so two deployments sharing one Red
 
 `AddSsfRedisConfiguredStreams(streams)` is the configuration-declared stream set with its runtime half in Redis, for a closed deployment that also runs replicas.
 
+The host does the binding, which is why the call takes the declarations rather than an `IConfiguration`: the section's name is the host's to choose, and the declarations can equally come from environment variables, a database or code.
+
 ```csharp
+var streams = builder.Configuration.GetSection("Ssf:Streams").Get<IReadOnlyList<ConfiguredStream>>()
+    ?? throw new InvalidOperationException("The 'Ssf:Streams' configuration section is missing.");
+
 builder.Services
     .AddSecurityEvents(...)
     .AddSsfTransmitter(...)
-    .AddSsfRedisConfiguredStreams(builder.Configuration.GetSection("Ssf:Streams").Get<ConfiguredStream[]>()!);
+    .AddSsfRedisConfiguredStreams(streams);
 ```
+
+A missing section binds to null rather than to an empty set, and the two mean opposite things - "nobody configured this" against "this transmitter serves nobody" - so refuse it at startup instead of starting a transmitter with no receivers and no complaint. What the binder cannot check for you is a member left out of a stream that IS declared: `required` is a compile-time rule and binding ignores it, so an omitted `ReceiverId` arrives as null. That one the store refuses itself, naming the position in the section.
 
 At startup each declaration is written over what Redis holds and the receiver's own half is carried across: the status it set, the subjects it added and removed, and when it last asked for verification. So editing the file reaches every instance at its next start, while a pause a receiver asked for reaches them all at once - where the in-package version honours it only in the instance that took the request.
 
