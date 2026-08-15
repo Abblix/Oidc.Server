@@ -20,11 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using System.Net;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
-using Microsoft.AspNetCore.WebUtilities;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;

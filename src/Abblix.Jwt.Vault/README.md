@@ -1,6 +1,6 @@
 # Abblix.Jwt.Vault
 
-**Abblix.Jwt.Vault** lets the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way the public halves are published at `/jwks` and verified locally, which never calls Transit.
+**Abblix.Jwt.Vault** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls Transit.
 
 Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the placement call is required. This README covers only what is specific to Vault.
 
@@ -57,11 +57,11 @@ A default Transit key is software-protected inside Vault's barrier, so the ring 
 
 ## Usage
 
-Point the custodian at Vault, then name the Transit keys to produce with. Chain both calls after the OIDC registration:
+Point the custodian at Vault, then name the Transit keys to produce with. Chain both calls after `AddJsonWebTokens`, which the OIDC registration performs for you:
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Vault;
 
 builder.Services
@@ -112,6 +112,25 @@ builder.Services
 The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
 
 Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the placement you chose above.
+
+### The HTTP pipeline
+
+Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+
+To make every outbound client of your application resilient, including this one, name none of them:
+
+```csharp
+services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
+```
+
+To configure this package's client alone - a longer retry for Vault than for anything else, say - name it:
+
+```csharp
+services.AddHttpClient(VaultTransport.HttpClientName)
+    .AddStandardResilienceHandler();   // Microsoft.Extensions.Http.Resilience
+```
+
+Either call goes before or after `AddVaultCustodian`; both reach the same client. What you chain applies to every Vault call the custodian and the key ring make, and to no other client.
 
 ## Rotation
 

@@ -1,14 +1,11 @@
 // Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
-using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;

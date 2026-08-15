@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -22,6 +22,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -40,6 +41,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.ExternalKeys;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -210,6 +212,13 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddLogoutNotification(this IServiceCollection services)
     {
+        // The two channel calls go away in the next major, leaving each one an opt-in the host makes (#344).
+        // Registering both unconditionally decides for the deployment what it supports, and the discovery
+        // document then says so: CompositeLogoutNotifier reports a channel as supported when any member
+        // supports it, and ConfigurationHandler publishes that as frontchannel_logout_supported and
+        // backchannel_logout_supported. So every provider advertises both channels whether or not its
+        // operator wants either, and back-channel logout carries an outbound HTTP client with it.
+        // Removing them here is a breaking change for a host that relies on the default, hence the major.
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()
@@ -221,7 +230,12 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBackChannelLogout(this IServiceCollection services)
     {
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
+        // This method is public and AddLogoutNotification composes the family, so a host calling it directly
+        // may well arrive after the composition. Through TryAddEnumerable the notifier would land beside the
+        // composite and win the singular resolve, leaving the other channel unnotified while the discovery
+        // document still advertised it.
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, BackChannelLogoutNotifier>());
         services.TryAddSingleton<ILogoutTokenService, LogoutTokenService>();
         // The back-channel logout URI is a client-supplied URL, so POSTing logout tokens to it must
         // run through the SSRF-validating handler and carry a bounded timeout, like every other
@@ -243,7 +257,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;
     }
 
@@ -351,7 +366,28 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
     {
-        services.TryAddSingleton<IAuthServiceKeysProvider, OidcOptionsKeysProvider>();
+        // Which provider serves this server's keys follows from where the host put the private halves, and that
+        // choice is made by a call in Abblix.Jwt which may run either side of this one. So it is read at resolve
+        // rather than acted on at registration: nothing here has to be ordered against the placement call, and a
+        // host that never wires a custodian simply lands on the static-configuration provider.
+        //
+        // TryAdd, so a host that registered its own key provider keeps it whichever placement it then chooses -
+        // which is how the custodian's key listing gets cached in production, since the provider below does not
+        // cache. The placement decides what the LIBRARY would install, never that one must be installed.
+        services.TryAddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
+            serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement switch
+            {
+                // No custodian at all, or one registered with the placement call forgotten. This provider reads the
+                // static keys of OidcOptions and refuses outright in the second case, so a half-wired host cannot
+                // quietly serve local keys while believing its keys are in an HSM.
+                null => serviceProvider.CreateService<OidcOptionsKeysProvider>(),
+
+                KeyPlacement.Custodian => serviceProvider.CreateService<ExternalKeysProvider>(),
+                KeyPlacement.InProcess => serviceProvider.CreateService<MintedKeysProvider>(),
+
+                var unknown => throw new InvalidOperationException(
+                    $"No {nameof(IAuthServiceKeysProvider)} serves the {nameof(KeyPlacement)} '{unknown}'."),
+            });
 
         // The write-role counterpart to the reader above. The default is the read-only static
         // configuration that fails loud if asked to persist a generated key; a persistent store (shipped
@@ -603,7 +639,7 @@ public static class ServiceCollectionExtensions
 
         // Register HTTP client for backchannel notifications (ping and push modes) with configurable handler lifetime
         // Use configuration callback to get handler lifetime from OidcOptions
-        services.AddOptions<HttpClientFactoryOptions>(nameof(HttpNotificationDeliveryService))
+        services.AddOptions<HttpClientFactoryOptions>(BackChannelNotificationTransport.HttpClientName)
             .Configure<IOptions<OidcOptions>>((httpOptions, oidcOptions) =>
             {
                 httpOptions.HandlerLifetime = oidcOptions.Value.BackChannelAuthentication.NotificationHttpClientHandlerLifetime;
@@ -612,7 +648,7 @@ public static class ServiceCollectionExtensions
         // The notification endpoint is a client-supplied URL, so server-initiated POSTs to it must
         // run through the SSRF-validating handler (blocks internal hosts, private IPs, DNS rebinding)
         // and carry a bounded timeout, exactly like every other outbound fetch in this library.
-        services.AddSsrfHttpClient(nameof(HttpNotificationDeliveryService), (serviceProvider, client) =>
+        services.AddSsrfHttpClient(BackChannelNotificationTransport.HttpClientName, (serviceProvider, client) =>
         {
             client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>()
                 .Value.BackChannelAuthentication.NotificationHttpClientTimeout;

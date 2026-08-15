@@ -30,6 +30,7 @@
     <Project Path="src/Abblix.Oidc.Client/Abblix.Oidc.Client.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
     <Project Path="src/Abblix.SecurityEvents.CAEP/Abblix.SecurityEvents.CAEP.csproj" />
+    <Project Path="src/Abblix.SecurityEvents.MinimalApi/Abblix.SecurityEvents.MinimalApi.csproj" />
     <Project Path="src/Abblix.SecurityEvents.RISC/Abblix.SecurityEvents.RISC.csproj" />
     <Project Path="src/Abblix.SharedSignals/Abblix.SharedSignals.csproj" />
     <Project Path="src/Abblix.SharedSignals.MinimalApi/Abblix.SharedSignals.MinimalApi.csproj" />
@@ -55,6 +56,7 @@
     <Project Path="tests/Abblix.SecurityEvents.CAEP.UnitTests/Abblix.SecurityEvents.CAEP.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.RISC.UnitTests/Abblix.SecurityEvents.RISC.UnitTests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.UnitTests/Abblix.SharedSignals.UnitTests.csproj" />
+    <Project Path="tests/Abblix.SecurityEvents.E2E.Tests/Abblix.SecurityEvents.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.E2E.Tests/Abblix.SharedSignals.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.Redis.UnitTests/Abblix.SharedSignals.Redis.UnitTests.csproj" />
   </Folder>

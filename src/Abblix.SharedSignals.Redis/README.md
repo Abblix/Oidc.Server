@@ -1,6 +1,6 @@
 # Abblix.SharedSignals.Redis
 
-The Redis-native event outbox for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): each stream's queue on Redis list and hash structures, every mutation a server-side transaction over keys that share one cluster hash tag. Take this package the day the transmitter scales past one replica.
+The Redis-native transmitter storage for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): the event outbox and the stream registry: each stream's queue on Redis list and hash structures, every mutation a server-side transaction over keys that share one cluster hash tag. Take this package the day the transmitter scales past one replica.
 
 ## Install
 
@@ -12,7 +12,7 @@ dotnet add package Abblix.SharedSignals.Redis
 
 The in-package distributed-cache outbox stores each queue as one value, so its mutations are read-modify-write - correct for a single transmitter instance serializing them in-process, and silently lossy the day the transmitter scales to replicas: one replica's enqueue overwrites another's. This outbox appends, removes by value and deletes fields on the server, inside a transaction, so concurrent replicas compose instead of overwriting each other.
 
-What that buys is that no enqueue or acknowledgement is lost; what it does not buy is single delivery, because a delivery pass reads and then acknowledges rather than leasing - two replicas draining one stream can send the same SET twice. RFC 8935 Section 2 lets a transmitter redeliver regardless, and the receiver's replay cache is where that is absorbed.
+What that buys is that no enqueue or acknowledgement is lost; what it does not buy is single delivery, because a delivery pass reads and then acknowledges rather than leasing. Both replicas read the whole queue and both walk all of it, so with N replicas draining one stream each SET is transmitted N times - measured, not occasional. RFC 8935 Section 2 permits redelivery ("The SET Transmitter MAY transmit the same SET to the SET Recipient multiple times, regardless of the response"), and the receiver's replay cache absorbs it; but the same section adds that a transmitter "SHOULD NOT retransmit a SET" outside a suspected recoverable failure, and should delay retransmission "to avoid overwhelming the SET Recipient". A same-instant race between replicas is neither. Take this outbox for the concurrency safety of its mutations; if the duplication matters at your replica count, lease the items instead of reading them - `LMOVE` into a per-replica in-flight list turns N transmissions into one in the common case.
 
 ## Usage
 
@@ -26,7 +26,27 @@ builder.Services
     .AddSsfRedisOutbox();
 ```
 
-The queue and item keys of one stream share a cluster hash tag, so the outbox works unchanged under Redis Cluster. Losing Redis loses pending events - the tier is deliberate: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held for a paused stream, and neither delivery RFC requires durable queues, so the queue belongs beside caches, the tier that earns no backups.
+The queue and item keys of one stream share a cluster hash tag, so the outbox works unchanged under Redis Cluster. A stream identifier that would empty that tag - an empty one, or one opening with `}` - is refused, because its two keys would land on different slots and every multi-key call would fail; nested braces are fine.
+
+A queue expires after `RedisOutboxOptions.Retention` without a new event, seven days by default. The clock measures inactivity, so a stream still receiving events never reaches it, and only the queue of a departed receiver is reclaimed. Losing Redis loses pending events - the tier is deliberate, and it is a decision rather than a permission: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is **paused**, and requires transmission for an enabled one. Neither delivery RFC requires durable queues, so the queue belongs beside caches, the tier that earns no backups.
+
+## Stream registrations
+
+`AddSsfRedisStreamStore()` puts the transmitter's stream registrations on one Redis hash - the durable `IStreamStore` for a transmitter whose streams must outlive its process without a database of its own.
+
+```csharp
+builder.Services
+    .AddSecurityEvents(...)
+    .AddSsfTransmitter(...)
+    .AddSsfRedisOutbox()
+    .AddSsfRedisStreamStore();
+```
+
+The key carries the transmitter's own issuer, so two deployments sharing one Redis keep separate registries; without that they would read each other's streams and deliver their own signed events to each other's receivers.
+
+Two properties of the shape are worth knowing before adopting it. The whole registry travels on every dispatched event and lives on one cluster slot, which suits the tens of receivers a transmitter serves and does not suit thousands. And registrations carry the receivers' delivery credentials, so this Redis holds secrets and deserves the protection of one.
+
+Losing Redis loses registrations - deliberately a tier below a database. Stated plainly: the transmitter stops delivering to everybody until each receiver creates its stream again (SSF 1.0 Section 8.1.1.1), and whether a receiver ever does is a property of that receiver rather than of the protocol. A deployment that cannot accept that keeps its registrations in its own database, which is what `IStreamStore` is for.
 
 ## License
 

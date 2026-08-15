@@ -22,6 +22,7 @@
 
 using System;
 using System.Linq;
+using Abblix.DependencyInjection.UnitTests.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -76,13 +77,218 @@ public class DecomposeTests
     }
 
     [Fact]
-    public void Decompose_WithoutPriorCompose_Throws()
+    public void Decompose_WithoutPriorCompose_EditsThePlainMembers()
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPipelineStep, StepA>();
 
+        // A family that has not been composed is still a family, and editing its members is the only reason to
+        // ask for the cursor. Where the members live is the cursor's business, not the caller's.
+        services.Decompose<IPipelineStep>().AddLast(Step<StepB>());
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(["A", "B"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
+    }
+
+    [Fact]
+    public void Decompose_OnAnUnregisteredFamily_StartsItEmpty()
+    {
+        var services = new ServiceCollection();
+
+        var composition = services.Decompose<IPipelineStep>();
+
+        Assert.Empty(composition);
+
+        composition.AddLast(Step<StepA>());
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(["A"], provider.GetServices<IPipelineStep>().Select(step => step.Name));
+    }
+
+    [Fact]
+    public void Decompose_OnAnEmptiedComposedFamily_StillKnowsItsComposite()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>().Clear();
+
+        // Nothing is left keyed, so the members no longer name the composite. Read from them, the family would
+        // look as if it had never been composed, and the composite - a plain registration of the interface -
+        // would be taken for a member of the family it heads.
+        var composition = services.Decompose<IPipelineStep>();
+        Assert.Empty(composition);
+
+        composition.AddLast(Step<StepC>());
+
+        Assert.Equal("C", Resolve(services));
+        Assert.IsType<PipelineComposite>(services.BuildServiceProvider().GetRequiredService<IPipelineStep>());
+    }
+
+    [Fact]
+    public void Decompose_RefusesAComposedFamilyWhoseCursorWasRemoved()
+    {
+        var services = ComposedFamily();
+
+        // Nothing in this API removes it. Should anything ever manage to, the members are still there and still
+        // keyed as members, so answering with a fresh cursor would read the family as never composed.
+        // The entry a composition leaves is keyed and is the only registration in the collection whose service
+        // type is neither the family interface nor the composite - its type is internal to the library.
+        var entry = Assert.Single(
+            services,
+            descriptor => descriptor.IsKeyedService && descriptor.ServiceType != typeof(IPipelineStep));
+        services.Remove(entry);
+
         var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
         Assert.Contains(nameof(IPipelineStep), exception.Message);
+    }
+
+    [Fact]
+    public void Decompose_TellsComposedFamiliesApart()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddSingleton<IPipelineStep, StepB>();
+        services.AddSingleton<IPrimaryService, ServiceA>();
+        services.AddSingleton<IPrimaryService, ServiceB>();
+
+        services.Compose<IPipelineStep, PipelineComposite>();
+        services.Compose<IPrimaryService, PrimaryServiceComposite>();
+
+        // Emptying one family is where a shared record would show: the other family's cursor would then read
+        // the surviving record and take a composite that heads someone else's family.
+        services.Decompose<IPipelineStep>().Clear();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // The other family's CURSOR is where a shared record shows: resolving it from the container never asks
+        // which composite it has, so a collision would leave the container correct and the cursor blind.
+        Assert.Equal(
+            [typeof(ServiceA), typeof(ServiceB)],
+            services.Decompose<IPrimaryService>().Select(member => member.ResolveImplementationType()).ToArray());
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<PipelineComposite>(provider.GetRequiredService<IPipelineStep>());
+        Assert.Equal("C", provider.GetRequiredService<IPipelineStep>().Name);
+        Assert.IsType<PrimaryServiceComposite>(provider.GetRequiredService<IPrimaryService>());
+    }
+
+    [Fact]
+    public void ComposedFamilyMembers_AreInvisibleToTheUnkeyedLookups()
+    {
+        var services = ComposedFamily();
+
+        // The members are keyed registrations of the same interface, so a lookup that counted them would find
+        // several where the caller expects one and refuse to answer - which is what ChangeLifetime does.
+        var descriptor = Assert.IsAssignableFrom<ServiceDescriptor>(services.Find<IPipelineStep>());
+        Assert.Equal(typeof(PipelineComposite), descriptor.ResolveImplementationType());
+
+        services.ChangeLifetime<IPipelineStep>(ServiceLifetime.Scoped);
+
+        Assert.Equal("A,B", Resolve(services));
+    }
+
+    /// <summary>
+    /// A canary, not a feature. The cursor needs the lifetime the composite was registered with, so that a
+    /// member shorter-lived than the composite is refused instead of being captured by it. That lifetime is not
+    /// stored anywhere: it is read back off the composite's own registration, which works only while
+    /// <see cref="ServiceCollectionExtensions.Decorate{TInterface,TDecorator}"/> keeps replacing that
+    /// registration in place with its lifetime intact.
+    /// </summary>
+    /// <remarks>
+    /// If this goes red, the derivation underneath it is already wrong: a decorated family reports whatever
+    /// lifetime the decorator was given, so the captive-member check silently starts judging against the wrong
+    /// one. Do not adjust the assertion. Either restore decoration's lifetime, or stop deriving - put the
+    /// lifetime back into <c>ComposedFamily</c>, which is where it lived before and costs one field.
+    /// </remarks>
+    [Fact]
+    public void DecoratingAFamilyKeepsTheLifetimeItsMembersAreJudgedAgainst()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IPipelineStep, StepA>();
+        services.AddScoped<IPipelineStep, StepB>();
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        services.Decorate<IPipelineStep, PipelineDecorator>();
+
+        var composite = Assert.Single(
+            services, descriptor => !descriptor.IsKeyedService && descriptor.ServiceType == typeof(IPipelineStep));
+        Assert.Equal(ServiceLifetime.Scoped, composite.Lifetime);
+
+        // And the derived lifetime still does its job: a Transient member would outlive nothing and be captured.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>()
+                .AddLast(ServiceDescriptor.Transient<IPipelineStep, StepC>()));
+
+        Assert.Contains(nameof(ServiceLifetime.Scoped), exception.Message);
+    }
+
+    [Fact]
+    public void Decompose_RefusesAFamilyWhoseCompositeWasRemoved()
+    {
+        var services = ComposedFamily();
+
+        // RemoveAll takes the registrations an unkeyed resolve would reach, which for a composed family is the
+        // composite alone. Answering with a cursor afterwards would accept members into a family nothing
+        // resolves any more, and report success for a registration that can never take effect.
+        services.RemoveAll<IPipelineStep>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.Decompose<IPipelineStep>());
+
+        // Named precisely, so this cannot pass on the sibling refusal for a family whose mark was removed.
+        Assert.Contains("composite that heads it", exception.Message);
+    }
+
+    [Fact]
+    public void ACopiedFamilyIsEditedInTheCollectionItWasCopiedInto()
+    {
+        var source = ComposedFamily();
+
+        IServiceCollection target = new ServiceCollection();
+        foreach (var descriptor in source)
+            target.Add(descriptor);
+
+        target.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // Descriptors are values and get copied between collections. A cursor is not: handed out ready-made it
+        // would carry the collection it was composed on, and the member would land there instead - in silence,
+        // with the cursor's count going up and the provider built from this collection missing it.
+        Assert.Equal("A,B,C", Resolve(target));
+        Assert.Equal("A,B", Resolve(source));
+    }
+
+    [Fact]
+    public void ACursorTakenBeforeCompositionEditsTheComposedFamily()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+        services.AddSingleton<IPipelineStep, StepB>();
+
+        var cursor = services.Decompose<IPipelineStep>();
+        services.Compose<IPipelineStep, PipelineComposite>();
+
+        // Held across the composition, a cursor that still looked for plain descriptors would find one - the
+        // composite's own registration - call it a member, and add beside it, which is the silent unseating.
+        Assert.Equal(
+            [typeof(StepA), typeof(StepB)],
+            cursor.Select(member => member.ResolveImplementationType()).ToArray());
+
+        cursor.AddLast(Step<StepC>());
+
+        Assert.Equal("A,B,C", Resolve(services));
+    }
+
+    [Fact]
+    public void Decompose_SurvivesTheCompositionOfTheFamilyItIsEditing()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPipelineStep, StepA>();
+
+        services.Decompose<IPipelineStep>().AddLast(Step<StepB>());
+        services.Compose<IPipelineStep, PipelineComposite>();
+        services.Decompose<IPipelineStep>().AddLast(Step<StepC>());
+
+        // The same call adds a member before and after composition, and both land inside the family.
+        Assert.Equal("A,B,C", Resolve(services));
     }
 
     [Fact]
@@ -182,9 +388,33 @@ public class DecomposeTests
 
         services.Decompose<IPipelineStep>()
             .AddFirst(Step<StepC>())
-            .AddAfter<StepA>(Step<StepC>());
+            .AddAfter<StepA>(Step<StepD>());
 
-        Assert.Equal("C,A,C,B", Resolve(services));
+        Assert.Equal("C,A,D,B", Resolve(services));
+    }
+
+    [Fact]
+    public void AddFirst_RefusesAMemberTheFamilyAlreadyHas()
+    {
+        var services = ComposedFamily();
+
+        // A family holds one member per implementation type, because every anchor resolves by it. A second
+        // copy would make AddAfter<StepA>, Remove<StepA> and Replace<StepA> silently mean the first one.
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.Decompose<IPipelineStep>().AddFirst(Step<StepA>()));
+
+        Assert.Contains(nameof(StepA), exception.Message);
+    }
+
+    [Fact]
+    public void AddLast_LeavesAMemberTheFamilyAlreadyHasWhereItIs()
+    {
+        var services = ComposedFamily();
+
+        services.Decompose<IPipelineStep>().AddLast(Step<StepA>());
+
+        // Not moved to the end, and not duplicated: it is already in the family, so there is nothing to add.
+        Assert.Equal("A,B", Resolve(services));
     }
 
     [Fact]
@@ -290,7 +520,7 @@ public class DecomposeTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.Compose<IPipelineStep, PipelineComposite>());
-        Assert.Contains(nameof(PipelineComposite), exception.Message);
+        Assert.Contains(nameof(IPipelineStep), exception.Message);
     }
 
     [Fact]

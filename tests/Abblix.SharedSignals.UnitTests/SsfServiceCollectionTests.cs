@@ -31,6 +31,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver;
+using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -98,18 +99,22 @@ public class SsfServiceCollectionTests
         // ForbidSubStep produces, and it earns it BEFORE any signature work - the token below
         // has no valid signature, so reaching a signature error instead would mean the step is
         // ordered wrong, and reaching success would mean it is not wired at all.
-        var services = SecurityEventsBase().AddSsfReceiver(new SsfValidationOptions
+        var services = SecurityEventsBase().AddSecurityEventReceiver(new SharedSignalsValidationOptions
         {
             StreamIssuer = "https://tr.example.com",
         });
         services.AddSingleton<ISecurityEventSink, NullSink>();
 
-        using var provider = services.BuildServiceProvider();
-        var validator = provider.GetRequiredService<ISecurityEventTokenValidator>();
+        await using var provider = services.BuildServiceProvider();
+
+        // Resolved from the receiver's own profile: no other validator family exists, and the
+        // profile's key is the token kind this receiver validates.
+        var validator = provider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
+            ValidationProfileKeys.SecurityEvent);
 
         var verdict = await validator.ValidateAsync(
             UnsignedToken(payload: """{"sub": "user-1", "events": {"urn:example": {}}}"""),
-            provider.GetRequiredService<SsfValidationOptions>(),
+            provider.GetRequiredService<SharedSignalsValidationOptions>(),
             TestContext.Current.CancellationToken);
 
         Assert.True(verdict.TryGetFailure(out var error));
@@ -121,9 +126,9 @@ public class SsfServiceCollectionTests
     public void Receiver_RegisteredTwice_AddsEachStepOnce()
     {
         var services = SecurityEventsBase();
-        var options = new SsfValidationOptions();
+        var options = new SharedSignalsValidationOptions();
 
-        services.AddSsfReceiver(options).AddSsfReceiver(options);
+        services.AddSecurityEventReceiver(options).AddSecurityEventReceiver(options);
 
         // The composed members are keyed descriptors, so the implementation type sits behind
         // the keyed property.

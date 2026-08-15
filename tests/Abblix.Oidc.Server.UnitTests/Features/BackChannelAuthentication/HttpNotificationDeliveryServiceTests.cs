@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -78,7 +78,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
 // Act
@@ -115,7 +115,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.NoContent));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act
@@ -152,7 +152,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.BadRequest));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act & Assert (should not throw)
@@ -189,7 +189,7 @@ public class HttpNotificationDeliveryServiceTests
             .ThrowsAsync(expectedException);
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act & Assert (should not throw)
@@ -226,7 +226,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act
@@ -257,7 +257,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act
@@ -266,7 +266,7 @@ public class HttpNotificationDeliveryServiceTests
 
         // Assert
         _httpClientFactory.Verify(
-            f => f.CreateClient(nameof(HttpNotificationDeliveryService)),
+            f => f.CreateClient(BackChannelNotificationTransport.HttpClientName),
             Times.Once);
     }
 
@@ -290,7 +290,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act
@@ -322,7 +322,7 @@ public class HttpNotificationDeliveryServiceTests
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
 
         var httpClient = new HttpClient(mockHandler.Object);
-        _httpClientFactory.Setup(f => f.CreateClient(nameof(HttpNotificationDeliveryService)))
+        _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))
             .Returns(httpClient);
 
         // Act

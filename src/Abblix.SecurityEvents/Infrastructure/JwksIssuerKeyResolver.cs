@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -49,7 +49,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// </para>
 /// </remarks>
 /// <param name="httpClientFactory">
-/// Supplies the HTTP client, created per fetch under <see cref="HttpClientName"/> so a host can
+/// Supplies the HTTP client, created per fetch under <see cref="JwksTransport.HttpClientName"/> so a host can
 /// configure the named client - timeouts, proxy, resilience - without touching this type.</param>
 /// <param name="clock">Drives cache expiry and the rollover cooldown.</param>
 /// <param name="options">Where key sets live and how long they answer from cache.</param>
@@ -58,12 +58,6 @@ public sealed class JwksIssuerKeyResolver(
     TimeProvider clock,
     IOptions<JwksKeyResolutionOptions> options) : IIssuerKeyResolver
 {
-    /// <summary>
-    /// The name of the HTTP client this resolver fetches with; configure the named client to
-    /// shape its networking.
-    /// </summary>
-    public const string HttpClientName = "Abblix.SecurityEvents.Jwks";
-
     private sealed record CachedKeySet(IReadOnlyList<JsonWebKey> Keys, DateTimeOffset FetchedAt);
 
     private readonly ConcurrentDictionary<string, CachedKeySet> _cache = new(StringComparer.Ordinal);
@@ -122,7 +116,7 @@ public sealed class JwksIssuerKeyResolver(
                 + "or use a loopback address for local development.");
         }
 
-        using var client = httpClientFactory.CreateClient(HttpClientName);
+        using var client = httpClientFactory.CreateClient(JwksTransport.HttpClientName);
         var keySet = await client.GetFromJsonAsync<JsonWebKeySet>(jwksUri, cancellationToken)
             ?? throw new InvalidOperationException($"The JWK Set document at '{jwksUri}' deserialized to null.");
 

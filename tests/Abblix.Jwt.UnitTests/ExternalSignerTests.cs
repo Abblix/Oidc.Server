@@ -30,7 +30,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Verifies external (key-custodian) signing: a signing key published public-only, whose private half lives
-/// behind a host <c>IKeyCustodian</c> registered with <c>AddKeyCustodian</c>, produces a token that
+/// behind a host <c>IKeyCustodian</c> on the composed crypto seam, produces a token that
 /// validates against the public key - proving the library never loads private material yet issues a
 /// verifiable signature. Also verifies the fail-closed behaviour when a public-only key has no external
 /// signer wired.
@@ -54,7 +54,10 @@ public class ExternalSignerTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.AddKeyCustodian(custodian); // the host wires its key custodian into both seams
+        // The host wires its key custodian into both seams. The raw seam rather than a placement call: this
+        // suite is about which backend owns a key, not about the security posture a host declares.
+        services.AddSingleton<IKeyCustodian>(custodian);
+        services.ComposeExternalKeyBackends();
         await using var provider = services.BuildServiceProvider();
 
         var token = new JsonWebToken
@@ -123,7 +126,7 @@ public class ExternalSignerTests
     /// <summary>
     /// Stands in for an HSM/KMS/vault: holds the private half the library never sees and signs with it,
     /// recording how it was called so the test can assert the routing addressed it by kid and algorithm. It is
-    /// wired via <c>AddKeyCustodian</c>; holding no decryption keys, it leaves unwrap and agree unreachable.
+    /// wired onto the composed seam; holding no decryption keys, it leaves unwrap and agree unreachable.
     /// </summary>
     private sealed class FakeCustodian(RsaJsonWebKey privateKey) : IKeyCustodian
     {

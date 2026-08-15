@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -31,19 +31,18 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Jwt.Azure;
 
 /// <summary>
-/// Registers the Azure Key Vault custodian for the Abblix OIDC Server.
+/// Registers the Azure Key Vault custodian for any host that signs or decrypts JSON Web Tokens, whether or not it
+/// is an OpenID Provider.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>Names the HTTP client the blob ring rides, so it shares the package's pipeline conventions.</summary>
-    private const string BlobRingClient = "Abblix.Jwt.Azure.KeyRing";
-
     /// <summary>
-    /// Registers Azure Key Vault as the custodian of the OIDC provider's keys and opens the placement choice that
-    /// completes the wiring. This call is only the transport: it registers the vault client and its credential.
-    /// Which keys are used - and whether their private halves ever enter this process - is the placement call chained
-    /// onto the returned builder, which must follow: a custodian without one fails loud on first key use rather
-    /// than silently falling back to the static keys in <c>OidcOptions</c>.
+    /// Registers Azure Key Vault as the custodian of the host's keys and opens the placement choice that completes
+    /// the wiring. This call is only the transport: it registers the vault client and its credential. Which keys
+    /// are used - and whether their private halves ever enter this process - is the placement call chained onto
+    /// the returned builder, which must follow: a custodian without one fails at startup rather than silently
+    /// falling back to whatever keys the configuration carries. Chain both calls AFTER <c>AddJsonWebTokens</c>
+    /// (the OIDC registration performs it), which the placement call composes onto.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the vault URI and the service-principal credentials.</param>
@@ -133,7 +132,7 @@ public static class ServiceCollectionExtensions
         // promises it, and without it the ring gets none of the host's handlers or logging, and no
         // PooledConnectionLifetime to recycle connections for DNS changes.
         services
-            .AddHttpClient(BlobRingClient)
+            .AddHttpClient(AzureKeyRingTransport.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(provider =>
             {
                 var options = provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>();
@@ -153,7 +152,7 @@ public static class ServiceCollectionExtensions
             var credential = KeyVaultClient.BuildCredential(
                 provider.GetRequiredService<IOptions<AzureKeyVaultOptions>>().Value);
 
-            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(BlobRingClient);
+            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(AzureKeyRingTransport.HttpClientName);
             var options = new BlobClientOptions { Transport = new HttpClientTransport(httpClient) };
 
             var service = new BlobServiceClient(ring.ServiceUri, credential, options);

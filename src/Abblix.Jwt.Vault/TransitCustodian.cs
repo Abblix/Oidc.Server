@@ -50,7 +50,7 @@ internal sealed partial class TransitCustodian(
     /// The shared client, held for this singleton's lifetime. Resolved by name rather than injected, because the
     /// factory's own clients are transient and the key ring shares this one.
     /// </summary>
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(Transport.ClientName);
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient(VaultTransport.HttpClientName);
 
     /// <summary>
     /// The Transit mount, spelled into every path. The client stops at <c>/v1/</c> because it is shared with the

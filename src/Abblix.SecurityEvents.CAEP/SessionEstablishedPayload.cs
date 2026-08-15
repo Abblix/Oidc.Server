@@ -22,7 +22,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace Abblix.SecurityEvents.Caep;
+namespace Abblix.SecurityEvents.CAEP;
 
 /// <summary>
 /// Session Established (CAEP 1.0 Section 3.6): the transmitter established a new session for

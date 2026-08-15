@@ -22,7 +22,6 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;

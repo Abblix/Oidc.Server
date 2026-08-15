@@ -27,7 +27,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Abblix.SharedSignals.Redis;
 
 /// <summary>
-/// Wires the Redis-native outbox into a host's service collection.
+/// Wires the Redis-native transmitter storage - the event outbox and the stream registry - into a
+/// host's service collection.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -39,9 +40,28 @@ public static class ServiceCollectionExtensions
     /// relative to the role registration.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisOutbox(this IServiceCollection services)
+    /// <param name="options">
+    /// What the queue may keep, and for how long; the defaults apply when it is omitted. Registered
+    /// with TryAdd, so a host pre-registering its own wins.
+    /// </param>
+    public static IServiceCollection AddSsfRedisOutbox(
+        this IServiceCollection services, RedisOutboxOptions? options = null)
     {
+        services.TryAddSingleton(options ?? new RedisOutboxOptions());
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, RedisEventOutbox>());
+        return services;
+    }
+
+    /// <summary>
+    /// Puts the transmitter's stream registrations on one Redis hash - the durable store for a
+    /// transmitter whose streams must outlive its process without a database of its own. The host
+    /// registers its <c>IConnectionMultiplexer</c>; this call uses Replace for the same reason as the
+    /// outbox above: it IS the host's explicit choice of store and wins in any registration order.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection AddSsfRedisStreamStore(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
         return services;
     }
 }

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -20,7 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Net;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -111,4 +113,87 @@ public class AddAzureCustodianTests
 
         Assert.Contains("ServiceUri", error.Message);
     }
+
+    /// <summary>
+    /// The published name is what a host configures the ring's transport through - a resilience pipeline, a proxy -
+    /// so what it names must be the client the ring registration builds.
+    /// </summary>
+    /// <remarks>
+    /// Asserted on the handler chain rather than by making the ring load: the store authenticates through a
+    /// credential of its own, which does not travel over this client, so driving a real load would reach for a
+    /// token over the network. Registration and consumption of this name sit in one method, so what a wider test
+    /// would add is the compiler's job here.
+    /// </remarks>
+    [Fact]
+    public void HostConfiguration_ByPublishedName_ReachesTheRingClient()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"));
+        services
+            .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
+            .PersistRingToAzureBlob(blob => blob.ServiceUri = new Uri("https://contoso.blob.core.windows.net"));
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
+
+        // What a host writes to add a resilience pipeline, with a handler standing in for one.
+        services.AddHttpClient(AzureKeyRingTransport.HttpClientName)
+            .AddHttpMessageHandler(() => new HostHandler());
+
+        using var provider = services.BuildServiceProvider();
+        using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(AzureKeyRingTransport.HttpClientName);
+
+        Assert.Contains(Chain(handler), link => link is HostHandler);
+    }
+
+    /// <summary>
+    /// The shortest path a host has to resilience on this package's clients: one call naming none of them, which
+    /// must cover the typed vault client and the named ring client alike.
+    /// </summary>
+    [Theory]
+    [InlineData(AzureKeyVaultTransport.HttpClientName)]
+    [InlineData(AzureKeyRingTransport.HttpClientName)]
+    public async Task OneHostCall_MakesEveryClientOfThisPackageResilient(string clientName)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+
+        // The whole of what a host writes, naming nothing this library owns.
+        services.ConfigureHttpClientDefaults(builder => builder.AddResilienceOfATypicalHost());
+
+        services.AddAzureCustodian(options => options.KeyVaultUri = new Uri("https://contoso.vault.azure.net/"));
+        services
+            .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" })
+            .PersistRingToAzureBlob(blob => blob.ServiceUri = new Uri("https://contoso.blob.core.windows.net"));
+        services.AddOptions();
+        services.AddSingleton(TimeProvider.System);
+
+        var origin = new FlakyOriginHandler(failuresBeforeSuccess: 2);
+        services.AddHttpClient(clientName).ConfigurePrimaryHttpMessageHandler(() => origin);
+
+        await using var provider = services.BuildServiceProvider();
+        using var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
+        using var httpClient = new HttpClient(handler, disposeHandler: false);
+
+        var response = await httpClient.GetAsync(
+            new Uri("https://origin.test/"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(3, origin.Requests);
+    }
+
+    private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)
+    {
+        for (var current = handler; current is not null;)
+        {
+            yield return current;
+            current = current is DelegatingHandler delegating ? delegating.InnerHandler : null;
+        }
+    }
+
+    /// <summary>Stands in for whatever a host chains onto the client - a resilience pipeline, a proxy.</summary>
+    private sealed class HostHandler : DelegatingHandler;
 }

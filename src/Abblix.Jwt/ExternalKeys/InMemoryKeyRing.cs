@@ -106,10 +106,10 @@ public sealed class InMemoryKeyRing : IKeyRing
 
         foreach (var (usage, algorithm) in Roles())
         {
-            var newest = _keys
-                .Where(minted => minted.Key.Usage == usage)
-                .Select(minted => (DateTimeOffset?)minted.CreatedAt)
-                .Max();
+            var newest = (
+                from minted in _keys
+                where minted.Key.Usage == usage
+                select (DateTimeOffset?)minted.CreatedAt).Max();
 
             if (newest is { } mintedAt && now - mintedAt < _policy.RotateEvery)
                 continue;

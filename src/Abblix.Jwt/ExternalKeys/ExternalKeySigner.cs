@@ -27,7 +27,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <summary>
 /// An external-custodian signing backend (<see cref="IDataSigner"/>) that owns public-only signing keys and
 /// routes their signing to the host <see cref="IKeyCustodian"/>, addressing it by the key's <c>kid</c>. It is
-/// registered by <c>AddKeyCustodian</c> alongside the decryption backend, so one custodian serves both seams.
+/// registered by <c>ComposeExternalKeyBackends</c>, which every placement call performs, alongside the decryption
+/// backend, so one custodian serves both seams.
 /// </summary>
 internal sealed class ExternalKeySigner(IKeyCustodian custodian) : IDataSigner
 {

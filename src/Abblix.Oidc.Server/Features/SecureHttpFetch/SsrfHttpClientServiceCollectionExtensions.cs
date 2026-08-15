@@ -21,6 +21,8 @@
 // info@abblix.com
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 
@@ -40,9 +42,14 @@ public static class SsrfHttpClientServiceCollectionExtensions
         Action<IServiceProvider, HttpClient> configureClient)
         where TClient : class
         where TImplementation : class, TClient
-        => services
+    {
+        var builder = services
             .AddHttpClient<TClient, TImplementation>(configureClient)
             .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
+
+        services.WatchTheGuardOn(builder.Name);
+        return builder;
+    }
 
     /// <summary>
     /// Registers a named HTTP client whose primary handler is the SSRF-validating handler.
@@ -51,7 +58,36 @@ public static class SsrfHttpClientServiceCollectionExtensions
         this IServiceCollection services,
         string name,
         Action<IServiceProvider, HttpClient> configureClient)
-        => services
+    {
+        var builder = services
             .AddHttpClient(name, configureClient)
             .ConfigurePrimaryHttpMessageHandler<SsrfValidatingHttpMessageHandler>();
+
+        services.WatchTheGuardOn(builder.Name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Records the client as guarded and installs the watch that reports the guard's absence at handler-build time.
+    /// </summary>
+    /// <remarks>
+    /// The registry is resolved out of the collection rather than through the provider, because the names have to
+    /// accumulate across every registration call while the collection is still being built.
+    /// </remarks>
+    private static void WatchTheGuardOn(this IServiceCollection services, string name)
+    {
+        var guarded = services.FirstOrDefault(
+            descriptor => descriptor.ServiceType == typeof(SsrfGuardedClients))?.ImplementationInstance
+            as SsrfGuardedClients;
+
+        if (guarded is null)
+        {
+            guarded = new SsrfGuardedClients();
+            services.AddSingleton(guarded);
+            services.TryAddEnumerable(
+                ServiceDescriptor.Singleton<IHttpMessageHandlerBuilderFilter, SsrfGuardWatch>());
+        }
+
+        guarded.Add(name);
+    }
 }

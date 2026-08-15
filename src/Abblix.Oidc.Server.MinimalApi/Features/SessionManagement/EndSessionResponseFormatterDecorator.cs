@@ -24,7 +24,6 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.SessionManagement;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;

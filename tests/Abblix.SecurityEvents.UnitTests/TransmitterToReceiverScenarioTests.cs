@@ -31,7 +31,6 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -101,6 +100,8 @@ public class TransmitterToReceiverScenarioTests
         services.AddDistributedMemoryCache();
         services.AddDistributedReplayCache();
 
+        services.AddSecurityEventValidationProfile("test", profile => profile.UseDefaultPipeline());
+
         return services.BuildServiceProvider();
     }
 
@@ -132,7 +133,7 @@ public class TransmitterToReceiverScenarioTests
         string compact,
         List<MembershipChangedPayload> processed)
     {
-        var result = await receiver.GetRequiredService<ISecurityEventTokenValidator>().ValidateAsync(
+        var result = await receiver.GetRequiredKeyedService<ISecurityEventTokenValidator>("test").ValidateAsync(
             compact,
             new SecurityEventTokenValidationOptions
             {

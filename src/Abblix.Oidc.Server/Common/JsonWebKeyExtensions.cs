@@ -31,14 +31,23 @@ namespace Abblix.Oidc.Server.Common;
 public static class JsonWebKeyExtensions
 {
     /// <summary>
-    /// Asynchronously retrieves the first <see cref="JsonWebKey"/> with the specified algorithm from the sequence.
-    /// Prioritizes keys with exact algorithm match, then falls back to algorithm-agnostic keys (Algorithm == null)
-    /// per RFC 7517, which allows keys without 'alg' parameter to be used with any compatible algorithm.
+    /// Asynchronously retrieves the first <see cref="JsonWebKey"/> able to perform the specified algorithm.
     /// </summary>
+    /// <remarks>
+    /// A key qualifies by declaring the algorithm, or - when it declares none, which RFC 7517 section 4.4 permits
+    /// and a certificate-imported key always does - by its material being able to perform it, per
+    /// <see cref="Abblix.Jwt.JsonWebKeyExtensions.SupportsAlgorithm"/>.
+    /// <para>
+    /// Order is left to the caller, deliberately. Ranking a declared <c>alg</c> above an undeclared one would
+    /// override the order the provider handed down, and that order is load-bearing: a key ring returns the active
+    /// key first, so reordering here would pick a key the ring deliberately kept behind - during a rollover, the
+    /// newcomer instead of the key clients still expect. Whether a key names its algorithm says nothing about
+    /// which key should produce.
+    /// </para>
+    /// </remarks>
     /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
     /// <param name="algorithm">The algorithm to match. Returns null if <see cref="SigningAlgorithms.None"/> is provided.</param>
-    /// <returns>The first <see cref="JsonWebKey"/> with the specified algorithm or null if not found.</returns>
-
+    /// <returns>The first <see cref="JsonWebKey"/> able to perform the algorithm.</returns>
     public static async Task<JsonWebKey?> FirstByAlgorithmAsync(
         this IAsyncEnumerable<JsonWebKey> credentials,
         string? algorithm)
@@ -48,10 +57,7 @@ public static class JsonWebKeyExtensions
 
         if (algorithm.HasValue())
         {
-            // Prioritize exact algorithm match, then fall back to algorithm-agnostic keys (Algorithm == null)
-            credentials = credentials
-                .Where(key => key.Algorithm == algorithm || key.Algorithm == null)
-                .OrderBy(key => key.Algorithm == algorithm ? 0 : 1); // Exact match first (0), then null (1)
+            credentials = credentials.Where(key => key.CanPerform(algorithm));
         }
 
         var key = await credentials.FirstOrDefaultAsync();
@@ -71,9 +77,9 @@ public static class JsonWebKeyExtensions
     /// (the key-management <c>alg</c> is derived from the chosen key afterwards) and only the pinned <c>kid</c>.
     /// </summary>
     /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
-    /// <param name="algorithm">The algorithm to match, or <c>null</c> to not filter by algorithm. Prioritizes
-    /// keys declaring an exact match, then algorithm-agnostic keys (Algorithm == null) per RFC 7517
-    /// Section 4.4. Returns <c>null</c> for <see cref="SigningAlgorithms.None"/>.</param>
+    /// <param name="algorithm">The algorithm to match, or <c>null</c> to not filter by algorithm. A key qualifies
+    /// by declaring it or, declaring none, by being able to perform it. Returns <c>null</c> for
+    /// <see cref="SigningAlgorithms.None"/>.</param>
     /// <param name="keyId">The <c>kid</c> to match, or <c>null</c> to not filter by key id.</param>
     /// <returns>The first matching key, or <c>null</c> when the sequence yields none and neither filter was
     /// applied. Throws when a filter was applied but nothing matched, so a pinned key id or a required
@@ -91,10 +97,7 @@ public static class JsonWebKeyExtensions
 
         if (algorithm.HasValue())
         {
-            // Prioritize exact algorithm match, then fall back to algorithm-agnostic keys (Algorithm == null)
-            credentials = credentials
-                .Where(key => key.Algorithm == algorithm || key.Algorithm == null)
-                .OrderBy(key => key.Algorithm == algorithm ? 0 : 1); // Exact match first (0), then null (1)
+            credentials = credentials.Where(key => key.CanPerform(algorithm));
         }
 
         var key = await credentials.FirstOrDefaultAsync();
@@ -106,4 +109,17 @@ public static class JsonWebKeyExtensions
         }
         return key;
     }
+
+    /// <summary>
+    /// Whether a key may be used for an algorithm: it either declares that algorithm, or declares none and its
+    /// material can perform it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from a certificate never carries one.
+    /// Treating an undeclared algorithm as a disqualification would drop exactly those keys; treating it as
+    /// "anything goes" would hand an RSA key to an ECDSA algorithm and fail at the signature instead of at the
+    /// selection. Asking the material settles it, and RFC 7518 sections 3.1 and 3.4 make the answer exact.
+    /// </remarks>
+    private static bool CanPerform(this JsonWebKey key, string algorithm)
+        => key.Algorithm is not null ? key.Algorithm == algorithm : key.SupportsAlgorithm(algorithm);
 }

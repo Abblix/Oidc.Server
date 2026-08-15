@@ -26,87 +26,6 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.DependencyInjection;
 
 /// <summary>
-/// A live editing cursor over a composed family's members.
-/// Returned by <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/>,
-/// it is an <see cref="IList{T}"/> of the member descriptors backed directly by the service collection:
-/// inserting, removing or reordering through it mutates the family's keyed registrations in place.
-/// The composite reads its members via <c>GetKeyedServices</c> at resolve time,
-/// so edits made through the cursor take effect with no separate recompose step -
-/// the members simply differ when the composite is finally resolved.
-/// </summary>
-/// <remarks>
-/// The position-aware editing methods live here rather than as extension methods so that
-/// <typeparamref name="TInterface"/> is bound by the cursor and never repeated at the call site -
-/// only the anchor type is named (<c>composition.AddAfter&lt;ScopeValidator&gt;(step)</c>).
-/// Each returns the cursor, so edits chain, and each anchor is matched by implementation type,
-/// throwing when the anchor is not a member.
-/// </remarks>
-/// <typeparam name="TInterface">The composed interface type.</typeparam>
-public interface IComposition<in TInterface> : IList<ServiceDescriptor>
-    where TInterface : class
-{
-    /// <summary>Inserts <paramref name="member"/> as the first step of the family.</summary>
-    IComposition<TInterface> AddFirst(ServiceDescriptor member)
-    {
-        Insert(0, member);
-        return this;
-    }
-
-    /// <summary>Appends <paramref name="member"/> as the last step of the family.</summary>
-    IComposition<TInterface> AddLast(ServiceDescriptor member)
-    {
-        Add(member);
-        return this;
-    }
-
-    /// <summary>Inserts <paramref name="member"/> immediately before the existing <typeparamref name="TExisting"/> step.</summary>
-    IComposition<TInterface> AddBefore<TExisting>(ServiceDescriptor member)
-        where TExisting : TInterface
-    {
-        Insert(IndexOf(typeof(TExisting), nameof(AddBefore)), member);
-        return this;
-    }
-
-    /// <summary>Inserts <paramref name="member"/> immediately after the existing <typeparamref name="TExisting"/> step.</summary>
-    IComposition<TInterface> AddAfter<TExisting>(ServiceDescriptor member)
-        where TExisting : TInterface
-    {
-        Insert(IndexOf(typeof(TExisting), nameof(AddAfter)) + 1, member);
-        return this;
-    }
-
-    /// <summary>Removes the existing <typeparamref name="TExisting"/> step from the family.</summary>
-    IComposition<TInterface> Remove<TExisting>()
-        where TExisting : TInterface
-    {
-        RemoveAt(IndexOf(typeof(TExisting), nameof(Remove)));
-        return this;
-    }
-
-    /// <summary>Replaces the existing <typeparamref name="TExisting"/> step with <paramref name="member"/>, keeping its position.</summary>
-    IComposition<TInterface> Replace<TExisting>(ServiceDescriptor member)
-        where TExisting : TInterface
-    {
-        this[IndexOf(typeof(TExisting), nameof(Replace))] = member;
-        return this;
-    }
-
-    /// <summary>The position of the member whose implementation type is <paramref name="anchor"/>, or a loud throw.</summary>
-    private int IndexOf(Type anchor, string operation)
-    {
-        for (var index = 0; index < Count; index++)
-        {
-            if (this[index].ResolveImplementationType() == anchor)
-                return index;
-        }
-
-        throw new InvalidOperationException(
-            $"{operation}<{anchor.Name}> failed: {anchor.Name} is not a member of the composed " +
-            $"{typeof(TInterface).Name} family.");
-    }
-}
-
-/// <summary>
 /// The live-cursor implementation of <see cref="IComposition{TInterface}"/>. Every operation reads or rewrites
 /// the family's keyed member descriptors in the underlying <see cref="IServiceCollection"/>; the cursor holds no
 /// copy of the member list, so it never drifts from what the composite will resolve. New members are re-keyed
@@ -115,13 +34,35 @@ public interface IComposition<in TInterface> : IList<ServiceDescriptor>
 /// </summary>
 internal sealed class Composition<TInterface>(
     IServiceCollection services,
-    object memberKey,
-    ServiceLifetime lifetime) : IComposition<TInterface> where TInterface : class
+    CompositionKey familyKey,
+    object? looseMemberKey,
+    ServiceLifetime? lifetime) : IComposition<TInterface> where TInterface : class
 {
+    /// <summary>
+    /// Where the family keeps its members right now. Composed, they are keyed by the family key; loose, they
+    /// are the plain descriptors of the interface, or the ones under the family's own service key.
+    /// </summary>
+    /// <remarks>
+    /// Asked on every operation rather than fixed when the cursor is made, because a cursor can outlive the
+    /// answer: taken before the family is composed and used after, one that still looked for plain descriptors
+    /// would take the composite's own registration for a member and add beside it, which is the silent unseating
+    /// this whole mechanism exists to prevent.
+    /// </remarks>
+    private object? MemberKey
+        => services.Any(descriptor => descriptor is { IsKeyedService: true } &&
+                                      descriptor.ServiceType == typeof(ComposedFamily) &&
+                                      Equals(descriptor.ServiceKey, familyKey))
+            ? familyKey
+            : looseMemberKey;
+
     private bool IsMember(ServiceDescriptor descriptor)
-        => descriptor is { IsKeyedService: true } &&
-           descriptor.ServiceType == typeof(TInterface) &&
-           Equals(descriptor.ServiceKey, memberKey);
+    {
+        var memberKey = MemberKey;
+        return descriptor.ServiceType == typeof(TInterface) &&
+               (memberKey is null
+                   ? !descriptor.IsKeyedService
+                   : descriptor.IsKeyedService && Equals(descriptor.ServiceKey, memberKey));
+    }
 
     /// <summary>The collection indices of the family's members, in registration (execution) order.</summary>
     private List<int> MemberIndices()
@@ -142,6 +83,13 @@ internal sealed class Composition<TInterface>(
     /// </summary>
     private ServiceDescriptor AsFamilyMember(ServiceDescriptor member)
     {
+        var memberKey = MemberKey;
+
+        // Nothing captures a member until the family is composed, so a loose family imposes no lifetime rule.
+        // Compose applies it to the whole member set when it runs.
+        if (memberKey is null)
+            return member.ToPlainFamilyMember(member.Lifetime);
+
         // ServiceLifetime orders Singleton < Scoped < Transient by increasing ephemerality, so a greater value
         // means shorter-lived. A member shorter-lived than the composite would be captured by it.
         if (member.Lifetime > lifetime)
@@ -211,6 +159,22 @@ internal sealed class Composition<TInterface>(
     public int IndexOf(ServiceDescriptor item)
     {
         var target = item.ResolveImplementationType();
+
+        // Two descriptor shapes carry no implementation type to be identified by: an untyped factory, which
+        // resolves to nothing, and the single-generic factory overload, whose delegate returns the family
+        // interface and so resolves to that. Both would compare equal to each other and to nothing else, which
+        // silently makes distinct members one - so the question is refused rather than answered wrongly.
+        if (target is null || target == typeof(TInterface))
+        {
+            throw new InvalidOperationException(
+                $"A member of the {typeof(TInterface).Name} family cannot be identified from this descriptor: " +
+                "its implementation type is " + (target is null ? "unknown" : "the family interface itself") +
+                ". Members are told apart by implementation type, which is also what the AddAfter, AddBefore, " +
+                "Remove and Replace anchors resolve. Register it through an overload that names the " +
+                $"implementation, such as {nameof(ServiceDescriptor)}.{nameof(ServiceDescriptor.Singleton)}" +
+                "<TService, TImplementation>(factory).");
+        }
+
         var indices = MemberIndices();
         for (var position = 0; position < indices.Count; position++)
         {

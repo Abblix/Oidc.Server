@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json.Serialization;
+
 namespace Abblix.SharedSignals.Transmitter;
 
 /// <summary>
@@ -35,4 +37,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// one item delivery must carry even over a stream that is paused or disabled, because
 /// SSF 1.0 Section 8.1.5 wants it sent "before stopping the stream" - and the stop has, by the
 /// time delivery runs, already happened.</param>
-public sealed record OutboxItem(string JwtId, string CompactToken, bool IsStatusAnnouncement = false);
+/// <remarks>
+/// The JSON member names are pinned rather than left to the property names, because a durable
+/// <see cref="IEventOutbox"/> persists this type and the two ends of that store are two code versions
+/// across a rolling deploy. Without them a rename - or a serializer configured with a naming policy -
+/// reads every stored item back with null members instead of failing, and a null identifier is the one
+/// shape that can be served and never acknowledged.
+/// </remarks>
+public sealed record OutboxItem(
+    [property: JsonPropertyName("jti")] string JwtId,
+    [property: JsonPropertyName("token")] string CompactToken,
+    [property: JsonPropertyName("is_status_announcement")] bool IsStatusAnnouncement = false);
