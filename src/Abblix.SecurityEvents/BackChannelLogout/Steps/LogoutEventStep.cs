@@ -22,7 +22,7 @@
 
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SecurityEvents.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout.Steps;
 
 /// <summary>
 /// Requires the <c>events</c> claim to name the back-channel logout event - step 6 of OpenID
@@ -41,20 +41,21 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 public sealed class LogoutEventStep : ISecurityEventTokenValidator
 {
     /// <inheritdoc />
-    public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
+    public async ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
         context.Require(
-            SecurityEventTokenValidationStates.SignatureVerified
-            | SecurityEventTokenValidationStates.EventsPresent);
+            SecurityEventTokenValidationStates.SignatureVerified |
+            SecurityEventTokenValidationStates.EventsPresent);
 
-        var error = context.Token!.Events!.Contains(LogoutTokenClaims.BackChannelLogoutEvent)
-            ? null
-            : new SecurityEventTokenValidationError(
+        if (context is not { Token.Events: { } events } || !events.Contains(LogoutTokenClaims.BackChannelLogoutEvent))
+        {
+            return new SecurityEventTokenValidationError(
                 SecurityEventTokenErrorCode.Custom,
                 "The events claim carries no back-channel logout statement.");
+        }
 
-        return ValueTask.FromResult(error);
+        return null;
     }
 }

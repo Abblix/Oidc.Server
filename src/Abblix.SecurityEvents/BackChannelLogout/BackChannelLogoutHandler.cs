@@ -46,7 +46,7 @@ public sealed class BackChannelLogoutHandler(
     /// <summary>
     /// The single parameter the request must carry (Section 2.5).
     /// </summary>
-    public const string LogoutTokenParameter = "logout_token";
+    private const string LogoutTokenParameter = "logout_token";
 
     /// <summary>
     /// Handles one logout request.
@@ -61,8 +61,8 @@ public sealed class BackChannelLogoutHandler(
     {
         // "The POST body uses the application/x-www-form-urlencoded encoding" (Section 2.5) -
         // parsed as a media type, so a parameter like charset does not fail a conformant provider.
-        if (!MediaTypeHeaderValue.TryParse(contentType, out var mediaType)
-            || !string.Equals(
+        if (!MediaTypeHeaderValue.TryParse(contentType, out var mediaType) ||
+            !string.Equals(
                 mediaType.MediaType,
                 MediaTypeNames.Application.FormUrlEncoded,
                 StringComparison.OrdinalIgnoreCase))

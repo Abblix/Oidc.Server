@@ -79,9 +79,9 @@ public sealed record LogoutNotification(
     {
         var payload = identityToken.Payload;
 
-        return Equal(Issuer, payload.Issuer)
-               && (Subject is null || Equal(Subject, payload.Subject))
-               && (SessionId is null || Equal(SessionId, payload.SessionId));
+        return Equal(Issuer, payload.Issuer) &&
+               (Subject is null || Equal(Subject, payload.Subject)) &&
+               (SessionId is null || Equal(SessionId, payload.SessionId));
     }
 
     /// <summary>

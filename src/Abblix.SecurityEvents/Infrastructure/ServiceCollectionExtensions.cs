@@ -25,6 +25,7 @@ using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.BackChannelLogout;
+using Abblix.SecurityEvents.BackChannelLogout.Steps;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;

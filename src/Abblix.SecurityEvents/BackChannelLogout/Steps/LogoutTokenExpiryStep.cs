@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SecurityEvents.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout.Steps;
 
 /// <summary>
 /// Requires <c>exp</c> to be present and still in the future, inverting the rule of the step it
@@ -74,10 +74,8 @@ public sealed class LogoutTokenExpiryStep(TimeProvider clock) : ISecurityCritica
             _ => null,
         };
 
-        return ValueTask.FromResult(
-            description is null
-                ? null
-                : new SecurityEventTokenValidationError(
-                    SecurityEventTokenErrorCode.Custom, description));
+        return ValueTask.FromResult(description is not null
+            ? new SecurityEventTokenValidationError(SecurityEventTokenErrorCode.Custom, description)
+            : null);
     }
 }

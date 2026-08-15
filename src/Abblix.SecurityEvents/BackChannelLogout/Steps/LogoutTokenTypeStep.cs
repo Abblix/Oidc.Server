@@ -23,7 +23,7 @@
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Validation;
 
-namespace Abblix.SecurityEvents.BackChannelLogout;
+namespace Abblix.SecurityEvents.BackChannelLogout.Steps;
 
 /// <summary>
 /// Accepts a Logout Token that carries no <c>typ</c>, and refuses one typed as something else.

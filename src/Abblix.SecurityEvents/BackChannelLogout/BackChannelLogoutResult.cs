@@ -55,15 +55,4 @@ public sealed record BackChannelLogoutResult(HttpStatusCode StatusCode, BackChan
         => new(
             HttpStatusCode.BadRequest,
             new BackChannelLogoutError(BackChannelLogoutError.InvalidRequest, description));
-
-    /// <summary>
-    /// The header Section 2.8 asks the response to carry: "The RP's response SHOULD include the
-    /// Cache-Control HTTP response header field with a no-store value, keeping the response from
-    /// being cached to prevent cached responses from interfering with future logout requests."
-    /// </summary>
-    /// <remarks>
-    /// Stated here rather than left to each adapter, because it applies to both answers and an
-    /// adapter that sets it on one of them is the likelier mistake.
-    /// </remarks>
-    public const string CacheControl = "no-store";
 }
