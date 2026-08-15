@@ -77,6 +77,7 @@ Stream state and the outbox are deliberately separate tiers, and both default to
 
 - Streams can live in configuration: `AddSsfConfiguredStreams` accepts streams the host declares - typically bound from `appsettings.json` into `ConfiguredStream[]` - which suits a closed deployment where the receivers are known: nothing to back up or migrate.
 - The outbox holds events between minting and delivery. `AddSsfDistributedOutbox()` moves it onto the host's `IDistributedCache` - correct for a single transmitter instance; a transmitter running replicas takes [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis), whose server-side transactions survive concurrency. Losing the outbox loses pending events, and the protocol tolerates that: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held for a paused stream, and neither delivery RFC requires durable queues - so the queue belongs beside caches, the tier that earns no backups.
+- Push delivery runs on a timer in every instance, so a stream is claimed before it is swept and only the holder delivers it. The default claim, `ProcessLocalDeliveryLease`, reaches inside one process: right for a single instance, and believed by every replica once there are several. A transmitter running replicas takes `AddSsfRedisDeliveryLease()` from the same Redis package. The transmitter names the claim's implementation in its startup log, so which one a deployment wired is readable rather than assumed.
 
 ## Event dictionaries
 

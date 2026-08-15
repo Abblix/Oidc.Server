@@ -46,5 +46,14 @@ public static class LogEvents
 
         /// <summary>An event could not be queued for one stream; the fan-out reached the others.</summary>
         public const int StreamNotReached = Base + 3;
+
+        /// <summary>This instance began sweeping push streams, and by what it claims them.</summary>
+        public const int PushSweepingStarted = Base + 4;
+
+        /// <summary>Another instance holds this stream's delivery claim, so this one passed it by.</summary>
+        public const int PushStreamClaimedElsewhere = Base + 5;
+
+        /// <summary>A delivery pass outlived its claim and was cut off at the deadline.</summary>
+        public const int PushPassCutOff = Base + 6;
     }
 }

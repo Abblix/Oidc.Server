@@ -66,6 +66,12 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
         services.TryAddSingleton<IEventOutbox, InMemoryEventOutbox>();
 
+        // Every instance of the application runs the sweep below, so something must decide which
+        // one delivers a given stream. The default reaches only inside this process, which is
+        // right for one instance and named so a deployment reading its own startup log can see
+        // that it is what got wired; AddSsfRedisDeliveryLease is the one that spans instances.
+        services.TryAddSingleton<IDeliveryLease, ProcessLocalDeliveryLease>();
+
         // The issuer is a value, not a service, so the dispatcher is built through the factory
         // that overrides exactly that one parameter and resolves the rest - including the
         // sharing policy, which stays optional: a host that registered none runs without one.
@@ -226,6 +232,12 @@ public static class ServiceCollectionExtensions
     /// TryAdd for the same reason as <see cref="AddSsfConfiguredStreams"/>: an explicit choice
     /// wins in any order.
     /// </summary>
+    /// <remarks>
+    /// Surviving a restart and surviving a second instance are different properties, and this call
+    /// buys the first only. <c>IDistributedCache</c> writes whole values with no compare-and-set,
+    /// so two instances editing one stream's queue overwrite each other; a transmitter running
+    /// more than one instance takes <c>AddSsfRedisOutbox</c> instead.
+    /// </remarks>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddSsfDistributedOutbox(this IServiceCollection services)
     {
