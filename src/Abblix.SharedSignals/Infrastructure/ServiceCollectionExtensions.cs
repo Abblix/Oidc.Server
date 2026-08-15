@@ -85,6 +85,11 @@ public static class ServiceCollectionExtensions
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();
 
+        // Something has to drain the queues, and until this existed nothing did: a host wired the
+        // transmitter, mapped its endpoints, and watched events pile up with no error anywhere. A
+        // deployment that drives passes itself sets the interval to null.
+        services.AddHostedService<PushDeliveryScheduler>();
+
         return services;
     }
 

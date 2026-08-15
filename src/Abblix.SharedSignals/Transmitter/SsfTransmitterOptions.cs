@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -109,6 +109,19 @@ public sealed record SsfTransmitterOptions
     /// deliberately an origin rather than a switch, so permitting one receiver does not permit the rest.
     /// </remarks>
     public IReadOnlyList<Uri> AllowedReceiverAddresses { get; init; } = [];
+
+    /// <summary>
+    /// How often the transmitter sweeps its push streams and delivers what is queued; null leaves
+    /// the sweeping to the host.
+    /// </summary>
+    /// <remarks>
+    /// Push delivery is the transmitter reaching out, so something has to decide when. A default
+    /// rather than an opt-in because the alternative fails silently: every part works, none of
+    /// them is called, and a host sees streams created and events queued with nothing delivered
+    /// and nothing logged. Null is for a host that drives passes itself - from its own scheduler,
+    /// or one pass per business event.
+    /// </remarks>
+    public TimeSpan? PushDeliveryInterval { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// The "default_subjects" value the mode advertises, kept beside the enum so the wire word
