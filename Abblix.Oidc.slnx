@@ -27,6 +27,7 @@
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.MinimalApi/Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" />
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
+    <Project Path="src/Abblix.Jwt.Redis/Abblix.Jwt.Redis.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
     <Project Path="src/Abblix.SecurityEvents.CAEP/Abblix.SecurityEvents.CAEP.csproj" />
     <Project Path="src/Abblix.SecurityEvents.MinimalApi/Abblix.SecurityEvents.MinimalApi.csproj" />
@@ -56,5 +57,6 @@
     <Project Path="tests/Abblix.SecurityEvents.E2E.Tests/Abblix.SecurityEvents.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.E2E.Tests/Abblix.SharedSignals.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.Redis.UnitTests/Abblix.SharedSignals.Redis.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Jwt.Redis.UnitTests/Abblix.Jwt.Redis.UnitTests.csproj" />
   </Folder>
 </Solution>

@@ -69,7 +69,7 @@ builder.Services.AddSingleton<ISecurityEventSink, MySink>();
 
 The sink is where the host reacts - terminate the local session, force a credential reset - and the push pipeline hands it only events that passed the full validation profile, the REQUIRED `jti` included, so every accepted event is trackable.
 
-Duplicate suppression is a separate opt-in tier: register `AddDistributedReplayCache()` backed by a cache shared by every receiver instance, and the pipeline skips a redelivery whose `jti` it has already seen. The underlying add-if-absent is probabilistic rather than strict, and RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier responses - so write the sink to be idempotent and treat duplicate suppression as the second line, not the first.
+Duplicate suppression is a separate opt-in tier: register `AddDistributedReplayCache()` backed by a cache shared by every receiver instance, and the pipeline skips a redelivery whose `jti` it has already seen. The underlying add-if-absent is probabilistic rather than strict, and RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier responses - so write the sink to be idempotent and treat duplicate suppression as the second line, not the first. Where strictness is wanted anyway, [Abblix.JWT.Redis](https://www.nuget.org/packages/Abblix.JWT.Redis) supplies the same contract on a server-side conditional write.
 
 ## Storage
 

@@ -20,19 +20,25 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System;
 using System.Net;
 using System.Net.Sockets;
 using Garnet;
 using Garnet.server;
 using StackExchange.Redis;
 
-namespace Abblix.SharedSignals.Redis.UnitTests;
+namespace Abblix.Tests.Shared;
 
 /// <summary>
 /// A real Redis-protocol server inside the test process: embedded Garnet on a loopback port
 /// picked at startup. No container, no external service - and still an actual server, which is
-/// what lets these tests witness the server-side atomicity the outbox exists for.
+/// what lets a test witness the server-side atomicity these implementations exist for.
 /// </summary>
+/// <remarks>
+/// Shared rather than owned by one suite, because every Redis-backed implementation needs the
+/// same thing and a second copy of an embedded server is a second set of startup options to keep
+/// in step - the kind of divergence that surfaces as one suite proving something the other cannot.
+/// </remarks>
 public sealed class GarnetFixture : IDisposable
 {
     private readonly GarnetServer _server;

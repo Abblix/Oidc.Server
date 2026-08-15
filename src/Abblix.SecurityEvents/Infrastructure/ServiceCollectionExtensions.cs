@@ -330,7 +330,8 @@ public static class ServiceCollectionExtensions
     /// Step 8, the replay check, is optional in the specification and taken up here, because the
     /// request carrying the token is unauthenticated and the token is a bearer credential in the
     /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>; a deployment
-    /// wanting a strictly atomic reservation registers its own <see cref="IReplayCache"/> first.
+    /// wanting a strictly atomic reservation takes <c>Abblix.JWT.Redis</c>, whose
+    /// <c>AddRedisReplayCache</c> wins over that default in either registration order.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>

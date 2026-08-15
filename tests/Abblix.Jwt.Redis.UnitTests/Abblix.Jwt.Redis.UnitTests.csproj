@@ -22,7 +22,12 @@
              server restores without moving the product's Azure dependencies. -->
         <PackageReference Include="Azure.Identity" VersionOverride="1.17.0" />
         <PackageReference Include="Azure.Storage.Blobs" VersionOverride="12.27.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+        <!-- The in-memory distributed cache stands in for the default implementation this package
+             replaces, so the wiring test measures a real competitor rather than a stub. -->
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
         <PackageReference Include="xunit.v3.mtp-v2" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
@@ -33,7 +38,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Jwt.Redis\Abblix.Jwt.Redis.csproj" />
     </ItemGroup>
 
     <ItemGroup>
