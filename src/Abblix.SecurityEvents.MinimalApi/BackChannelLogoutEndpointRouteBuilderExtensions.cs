@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -70,16 +70,36 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
 
         var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
 
+        var httpResult = result switch
+        {
+            { Error: {} error, StatusCode: var statusCode } => Results.Json(error, statusCode: (int)statusCode),
+            { StatusCode: var statusCode } => Results.StatusCode((int)statusCode),
+        };
+
         // "The RP's response SHOULD include the Cache-Control HTTP response header field with a
         // no-store value" (Section 2.8). Set on the refusal as well as the success: a cached 400
         // would keep answering for a token that was only invalid the first time, which is exactly
         // the interference the header exists to prevent.
-        request.HttpContext.Response.Headers.CacheControl = CacheControlHeaderValue.NoStoreString;
+        return new NoStore(httpResult);
+    }
 
-        return result.Error switch
+    /// <summary>
+    /// Writes the one header Section 2.8 asks for, then renders what the handler decided.
+    /// </summary>
+    /// <remarks>
+    /// A wrapper rather than a line touching the response before the result is returned, so the
+    /// header cannot be attached to one answer and forgotten on the other: both answers travel
+    /// through here by construction.
+    /// </remarks>
+    /// <param name="inner">The answer being rendered.</param>
+    private sealed class NoStore(IResult inner) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
         {
-            { } error => Results.Json(error, statusCode: (int)result.StatusCode),
-            _ => Results.StatusCode((int)result.StatusCode)
-        };
+            ArgumentNullException.ThrowIfNull(httpContext);
+
+            httpContext.Response.Headers.CacheControl = CacheControlHeaderValue.NoStoreString;
+            return inner.ExecuteAsync(httpContext);
+        }
     }
 }

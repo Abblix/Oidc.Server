@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -57,8 +57,11 @@ public class TransmitterStoreTests
         Assert.True(await store.TryCreateAsync(stream, TestContext.Current.CancellationToken));
         Assert.False(await store.TryCreateAsync(stream, TestContext.Current.CancellationToken));
 
+        // Read back by value, not by reference: the store stamps a version on what it keeps, so
+        // the copy on record is a new instance and the version is the store's to mint.
         var found = await store.FindAsync("receiver-a", "s-1", TestContext.Current.CancellationToken);
-        Assert.Same(stream, found);
+        Assert.Equal(stream.StreamId, found!.StreamId);
+        Assert.NotNull(found.Version);
         Assert.Null(await store.FindAsync("receiver-b", "s-1", TestContext.Current.CancellationToken));
     }
 
@@ -76,14 +79,24 @@ public class TransmitterStoreTests
     }
 
     [Fact]
-    public async Task Update_ReplacesTheSnapshot_AndRefusesTheAbsent()
+    public async Task Update_ReplacesTheSnapshotItWasReadFrom_AndRefusesEveryOther()
     {
         var store = new InMemoryStreamStore();
-        var stream = CreateStream("receiver-a", "s-1");
-        await store.TryCreateAsync(stream, TestContext.Current.CancellationToken);
+        await store.TryCreateAsync(CreateStream("receiver-a", "s-1"), TestContext.Current.CancellationToken);
 
-        var paused = stream with { Status = StreamStatuses.Paused };
+        var read = await store.FindAsync("receiver-a", "s-1", TestContext.Current.CancellationToken);
+        var paused = read! with { Status = StreamStatuses.Paused };
         Assert.True(await store.UpdateAsync(paused, TestContext.Current.CancellationToken));
+
+        var afterwards = await store.FindAsync("receiver-a", "s-1", TestContext.Current.CancellationToken);
+        Assert.Equal(StreamStatuses.Paused, afterwards!.Status);
+
+        // The write that made the change is now stale, and a second one built from it is refused
+        // rather than silently overwriting what landed in between. This is the whole point: two
+        // callers reading the same stream and both writing used to end with one change lost, both
+        // answered success.
+        Assert.False(await store.UpdateAsync(
+            read with { Status = StreamStatuses.Disabled }, TestContext.Current.CancellationToken));
         Assert.Equal(
             StreamStatuses.Paused,
             (await store.FindAsync("receiver-a", "s-1", TestContext.Current.CancellationToken))!.Status);

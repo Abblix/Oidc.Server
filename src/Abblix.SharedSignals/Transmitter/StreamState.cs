@@ -103,6 +103,25 @@ public sealed record StreamState
     public DateTimeOffset? LastVerificationRequestAt { get; init; }
 
     /// <summary>
+    /// What the store's copy looked like when this one was read, so a write can tell whether
+    /// anything happened in between.
+    /// </summary>
+    /// <remarks>
+    /// Every mutation of a stream is a read, a change in memory and a write back, and without this
+    /// the write is unconditional: two calls adding a subject at once both read the same list, both
+    /// write, both are answered 200, and one addition is gone. SSF 1.0 Section 9.1 tells a receiver
+    /// that a success says nothing about what the transmitter did, so it never retries and never
+    /// learns.
+    /// <para>
+    /// Opaque, and the store's to mint: a caller passes back what it was given, and
+    /// <see cref="IStreamStore.UpdateAsync"/> refuses a write carrying anything else. Null belongs
+    /// to a state that was built rather than read, which is why creation has its own method.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("version")]
+    public string? Version { get; init; }
+
+    /// <summary>
     /// The stream's identifier, read off the configuration - one value, one owner.
     /// </summary>
     [JsonIgnore]
