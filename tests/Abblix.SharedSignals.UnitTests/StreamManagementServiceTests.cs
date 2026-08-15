@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -28,6 +28,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -75,7 +76,8 @@ public class StreamManagementServiceTests
         var outbox = new InMemoryEventOutbox();
         var signer = new StubSigner();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
-        var dispatcher = new EventDispatcher(store, outbox, signer, options.Issuer, clock: clock);
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer, clock: clock);
 
         return new Harness(
             new StreamManagementService(store, outbox, dispatcher, options, clock),

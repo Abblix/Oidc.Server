@@ -73,8 +73,11 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
         }
 
         // Zero asks for nothing: the acknowledge-only poll (RFC 8936 Section 2.2). The "sets"
-        // object still travels, empty - it is never absent (Section 2.3).
-        if (request.MaxEvents is 0)
+        // object still travels, empty - it is never absent (Section 2.3). A negative value asks
+        // for nothing either, and is answered the same way rather than falling through: Take with
+        // a negative count yields nothing while the "moreAvailable" below still reports a queue,
+        // and a receiver reading that answer polls again forever with no way to see why.
+        if (request.MaxEvents is <= 0)
         {
             return new PollResponse();
         }

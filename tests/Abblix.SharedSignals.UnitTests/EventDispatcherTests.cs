@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -26,6 +26,7 @@ using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -104,7 +105,7 @@ public class EventDispatcherTests
 
         var outbox = new InMemoryEventOutbox();
         var signer = new CapturingSigner();
-        return (new EventDispatcher(store, outbox, signer, Issuer, policy), outbox, signer);
+        return (new EventDispatcher(NullLogger<EventDispatcher>.Instance, store, outbox, signer, Issuer, policy), outbox, signer);
     }
 
     [Fact]
