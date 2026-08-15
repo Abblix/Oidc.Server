@@ -35,6 +35,13 @@ public sealed record ConfiguredStream
     /// The receiver identity the stream belongs to, matching what the host's authentication
     /// yields for that receiver's management and poll calls.
     /// </summary>
+    /// <remarks>
+    /// <c>required</c> binds the host that writes these in code and nothing else: the
+    /// configuration binder does not honour it, so a settings file omitting this member produces
+    /// null here without complaint. The guarantee is restored where the declarations are read -
+    /// <see cref="ConfigurationStreamStore"/> refuses a stream missing either identifier - and the
+    /// marker is kept because it still catches the code-first half at compile time.
+    /// </remarks>
     public required string ReceiverId { get; init; }
 
     /// <summary>

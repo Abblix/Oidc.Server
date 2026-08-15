@@ -217,6 +217,31 @@ public class ConfigurationHostStoresTests
         Assert.Null(await after.FindAsync("departed", "departed-main", cancellationToken));
     }
 
+    /// <summary>
+    /// A declaration missing an identifier is refused, and the case is not hypothetical: these
+    /// normally arrive from a settings file, and the configuration binder does not honour
+    /// <c>required</c> - an omitted member simply lands as null.
+    /// </summary>
+    /// <remarks>
+    /// Accepting it is worse than it looks. Every management operation is scoped by the receiver
+    /// identity, so no receiver could ever reach such a stream, while the delivery sweep would go
+    /// on minting and queueing events for it - a stream that only produces work.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationMissingAnIdentifier_IsRefused_BecauseBindingCannotEnforceRequired()
+    {
+        // Built the way the binder builds it: `required` is a compile-time rule, and this is what
+        // reaches the store when the settings section leaves the member out.
+        var missingReceiver = (ConfiguredStream)System.Runtime.CompilerServices
+            .RuntimeHelpers.GetUninitializedObject(typeof(ConfiguredStream));
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
+            TransmitterOptions, [missingReceiver], new InMemoryStreamStore()));
+
+        Assert.Contains(nameof(ConfiguredStream.ReceiverId), refusal.Message);
+        Assert.Contains("position 0", refusal.Message);
+    }
+
     [Fact]
     public void ConfigurationBugs_RefuseLoudlyAtStartup()
     {

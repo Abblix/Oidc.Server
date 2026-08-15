@@ -112,8 +112,19 @@ public sealed class ConfigurationStreamStore : IStreamStore
         // constructor failure at startup rather than a fault on the first request to arrive.
         var declared = new List<StreamState>(streams.Count);
         var seen = new HashSet<(string, string)>();
-        foreach (var stream in streams)
+        for (var index = 0; index < streams.Count; index++)
         {
+            var stream = streams[index];
+
+            // Checked rather than trusted to the `required` markers, because the usual source of
+            // these is a settings file and the configuration binder does not honour `required` at
+            // all: a member the operator left out arrives as null, and nothing before this says so.
+            // A stream with no receiver is not merely incomplete - every management operation is
+            // scoped by that identity, so no receiver could ever reach it, while the delivery sweep
+            // would carry on minting and queueing events for it.
+            RequireDeclared(stream.ReceiverId, nameof(ConfiguredStream.ReceiverId), index);
+            RequireDeclared(stream.StreamId, nameof(ConfiguredStream.StreamId), index);
+
             if (!seen.Add((stream.ReceiverId, stream.StreamId)))
             {
                 throw new InvalidOperationException(
@@ -127,8 +138,25 @@ public sealed class ConfigurationStreamStore : IStreamStore
         _declared = declared;
     }
 
+    /// <summary>
+    /// Refuses a declaration missing a member that identifies it, naming the position rather than
+    /// the stream - the value that would name it is the missing one.
+    /// </summary>
+    private static void RequireDeclared(string value, string member, int index)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            throw new InvalidOperationException(
+                $"The declared stream at position {index} has no '{member}'. Configuration binding "
+                + $"leaves an omitted member null whatever {nameof(ConfiguredStream)} requires of "
+                + "code, so check the settings section this stream set was bound from.");
+        }
+    }
+
     /// <inheritdoc />
-    public async Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+    public async Task<bool> TryCreateAsync(
+        StreamState stream,
+        CancellationToken cancellationToken = default)
     {
         await EnsureReconciledAsync(cancellationToken);
         return await _streams.TryCreateAsync(stream, cancellationToken);
