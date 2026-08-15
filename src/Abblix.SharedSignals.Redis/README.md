@@ -44,6 +44,23 @@ builder.Services
 
 The key carries the transmitter's own issuer, so two deployments sharing one Redis keep separate registries; without that they would read each other's streams and deliver their own signed events to each other's receivers.
 
+## Streams declared in configuration
+
+`AddSsfRedisConfiguredStreams(streams)` is the configuration-declared stream set with its runtime half in Redis, for a closed deployment that also runs replicas.
+
+```csharp
+builder.Services
+    .AddSecurityEvents(...)
+    .AddSsfTransmitter(...)
+    .AddSsfRedisConfiguredStreams(builder.Configuration.GetSection("Ssf:Streams").Get<ConfiguredStream[]>()!);
+```
+
+At startup each declaration is written over what Redis holds and the receiver's own half is carried across: the status it set, the subjects it added and removed, and when it last asked for verification. So editing the file reaches every instance at its next start, while a pause a receiver asked for reaches them all at once - where the in-package version honours it only in the instance that took the request.
+
+The subjects are the part worth naming. Under `SubjectsMode.None` the subjects a receiver added ARE the stream's coverage, so rebuilding the state from the file - the obvious reading of "configuration is truth" - would unsubscribe that receiver from everything it subscribed to, and SSF 1.0 Section 9.1 tells it a success says nothing about the transmitter's state, so it never asks and never finds out.
+
+A stream Redis holds that the file no longer declares is dropped: here the file is the stream set, and keeping it would go on delivering security events to a receiver the operator removed.
+
 ## Single delivery across replicas
 
 `AddSsfRedisDeliveryLease()` is what makes several replicas a division of the streams rather than N copies of the work. Before sweeping a stream a replica claims it with a write conditional on the key not existing - the one Redis primitive that can decide between askers sharing nothing else - and a replica told no passes that stream by and takes one the others have not reached.

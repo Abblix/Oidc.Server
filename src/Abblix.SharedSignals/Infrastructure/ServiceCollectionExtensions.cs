@@ -208,20 +208,50 @@ public static class ServiceCollectionExtensions
     /// lifecycle in the operator's file, API mutations ephemeral until restart.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Replace rather than TryAdd, deliberately: this call IS the host's explicit choice of
     /// store, so it wins whether it runs before or after
     /// <see cref="AddSsfTransmitter"/>'s in-memory default.
+    /// </para>
+    /// <para>
+    /// The declarations are reconciled into a backing store, and this overload's is in memory -
+    /// right for one instance, and the reason a receiver's pause reaches no further than the
+    /// instance that took the request. A transmitter running several passes a shared one, which
+    /// <c>AddSsfRedisConfiguredStreams</c> does.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="streams">The declared streams.</param>
     public static IServiceCollection AddSsfConfiguredStreams(
         this IServiceCollection services,
         IReadOnlyList<ConfiguredStream> streams)
+        => services.AddSsfConfiguredStreams(streams, _ => new InMemoryStreamStore());
+
+    /// <summary>
+    /// Declares the transmitter's stream set as configuration, reconciled into a backing store the
+    /// caller chooses - the form a deployment running more than one instance takes, so that the
+    /// half of a stream its receiver owns is shared rather than per-instance.
+    /// </summary>
+    /// <remarks>
+    /// The backing store is built by a factory rather than resolved from the container, because
+    /// the container's <see cref="IStreamStore"/> is what this call registers: resolving it would
+    /// hand the store itself.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="streams">The declared streams.</param>
+    /// <param name="backingStore">Builds the store the declarations are reconciled into.</param>
+    public static IServiceCollection AddSsfConfiguredStreams(
+        this IServiceCollection services,
+        IReadOnlyList<ConfiguredStream> streams,
+        Func<IServiceProvider, IStreamStore> backingStore)
     {
         ArgumentNullException.ThrowIfNull(streams);
+        ArgumentNullException.ThrowIfNull(backingStore);
 
         services.Replace(ServiceDescriptor.Singleton<IStreamStore>(provider =>
-            provider.CreateService<ConfigurationStreamStore>(Dependency.Override(streams))));
+            provider.CreateService<ConfigurationStreamStore>(
+                Dependency.Override(streams),
+                Dependency.Override(backingStore(provider)))));
 
         return services;
     }
@@ -229,8 +259,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Puts the transmitter's outbox on the host's <c>IDistributedCache</c>, so pending events
     /// survive a process restart when the store behind the cache does. Replace rather than
-    /// TryAdd for the same reason as <see cref="AddSsfConfiguredStreams"/>: an explicit choice
-    /// wins in any order.
+    /// TryAdd for the same reason as
+    /// <see cref="AddSsfConfiguredStreams(IServiceCollection, IReadOnlyList{ConfiguredStream})"/>:
+    /// an explicit choice wins in any order.
     /// </summary>
     /// <remarks>
     /// Surviving a restart and surviving a second instance are different properties, and this call

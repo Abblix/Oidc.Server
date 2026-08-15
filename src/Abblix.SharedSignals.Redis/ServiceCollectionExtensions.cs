@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
+using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -81,4 +83,24 @@ public static class ServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IDeliveryLease, RedisDeliveryLease>());
         return services;
     }
+
+    /// <summary>
+    /// Declares the transmitter's stream set as configuration and reconciles it into Redis, so the
+    /// half of a stream its RECEIVER owns - the status it set, the subjects it added and removed,
+    /// when it last asked for verification - is shared by every instance instead of living in the
+    /// memory of whichever one took the request.
+    /// </summary>
+    /// <remarks>
+    /// The file stays the truth about what a stream IS: on startup each declaration is written
+    /// over what Redis holds, keeping the receiver's half, and a stream Redis holds that the file
+    /// no longer declares is dropped. So editing configuration reaches every instance at its next
+    /// start, and a pause reaches them all at once.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="streams">The declared streams.</param>
+    public static IServiceCollection AddSsfRedisConfiguredStreams(
+        this IServiceCollection services,
+        IReadOnlyList<ConfiguredStream> streams)
+        => services.AddSsfConfiguredStreams(
+            streams, provider => provider.CreateService<RedisStreamStore>());
 }
