@@ -76,21 +76,25 @@ internal sealed partial class InsecureValidationGuard : ISecurityEventTokenValid
             return;
         }
 
-        var missingNames = string.Join(", ", missing.Select(type => type.Name));
-        var allowances = profile.Allowances;
+        // Each missing step needs an allowance naming IT. A count would let one reasoned departure
+        // excuse every other, including a critical default added to the core long after this
+        // profile was written and read by nobody since.
+        var excused = profile.Allowances.ToDictionary(allowance => allowance.Step, allowance => allowance.Reason);
 
-        if (allowances.Count == 0)
+        var unexcused = missing.Where(critical => !excused.ContainsKey(critical)).ToArray();
+        if (unexcused.Length > 0)
         {
+            var unexcusedNames = string.Join(", ", unexcused.Select(type => type.Name));
             throw new InvalidOperationException(
-                $"The validation profile '{profile.Key}' lacks security-critical steps ({missingNames}) "
-                + $"and no allowance is on record; call {nameof(ValidationProfile)}."
-                + $"{nameof(ValidationProfile.AllowInsecureValidation)}(reason) on the profile so the "
-                + "weakening is a visible decision instead of an accident.");
+                $"The validation profile '{profile.Key}' lacks security-critical steps ({unexcusedNames}) "
+                + $"with no allowance naming them; call {nameof(ValidationProfile)}."
+                + $"{nameof(ValidationProfile.AllowInsecureValidation)}<TStep>(reason) on the profile for "
+                + "each one, so the weakening is a visible decision instead of an accident.");
         }
 
-        foreach (var allowance in allowances)
+        foreach (var critical in missing)
         {
-            LogInsecureValidationAllowance(logger, missingNames, allowance);
+            LogInsecureValidationAllowance(logger, critical.Name, excused[critical]);
         }
     }
 

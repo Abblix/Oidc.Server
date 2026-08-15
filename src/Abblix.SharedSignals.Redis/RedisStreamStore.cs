@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -79,6 +79,18 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SsfTrans
     /// anything, and a composite key that trusts its inputs' alphabet is ambiguous the day one input
     /// widens - <c>("a|b", "c")</c> and <c>("a", "b|c")</c> address one field unescaped.
     /// </summary>
+    /// <summary>
+    /// The exact text a stored stream carries when its version is <paramref name="version"/>.
+    /// </summary>
+    /// <remarks>
+    /// Compared as a substring of the stored document rather than by parsing it, so the script
+    /// needs no JSON library and works on every server that speaks Lua. The property name and the
+    /// quoting are what make the match exact: a version is a 32-character hex string, so the
+    /// needle cannot occur anywhere else in the document.
+    /// </remarks>
+    /// <param name="version">The version a caller believes is on record.</param>
+    private static string VersionMarkerOf(string? version) => $"\"version\":\"{version}\"";
+
     private static RedisValue FieldOf(string receiverId, string streamId)
         => $"{Uri.EscapeDataString(receiverId)}|{Uri.EscapeDataString(streamId)}";
 
@@ -93,7 +105,8 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SsfTrans
         return await _database.HashSetAsync(
             _hashKey,
             FieldOf(stream.ReceiverId, stream.StreamId),
-            JsonSerializer.SerializeToUtf8Bytes(stream, SerializerOptions),
+            JsonSerializer.SerializeToUtf8Bytes(
+                stream with { Version = Guid.NewGuid().ToString("N") }, SerializerOptions),
             When.NotExists);
     }
 
@@ -154,17 +167,26 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SsfTrans
         // the update is silently lost, and it happens exactly under the load this package exists for,
         // a transmitter running more than one replica. Measured: unnoticeable from a single
         // multiplexer, the majority of updates from two.
+        // The version is compared server-side, in the same script that writes: a caller may only
+        // replace the copy it read. Reading it here and comparing in C# would be the very
+        // read-modify-write this is meant to close.
         var replaced = await _database.ScriptEvaluateAsync(
             """
-            if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 1 then
-                redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
-                return 1
+            local stored = redis.call('HGET', KEYS[1], ARGV[1])
+            if not stored then
+                return 0
             end
-            return 0
+            if string.find(stored, ARGV[3], 1, true) == nil then
+                return 0
+            end
+            redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+            return 1
             """,
             [_hashKey],
             [FieldOf(stream.ReceiverId, stream.StreamId),
-             (RedisValue)JsonSerializer.SerializeToUtf8Bytes(stream, SerializerOptions)]);
+             (RedisValue)JsonSerializer.SerializeToUtf8Bytes(
+                 stream with { Version = Guid.NewGuid().ToString("N") }, SerializerOptions),
+             (RedisValue)VersionMarkerOf(stream.Version)]);
 
         return (long)replaced == 1;
     }

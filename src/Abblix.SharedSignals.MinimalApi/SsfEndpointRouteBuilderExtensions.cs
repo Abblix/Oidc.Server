@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -36,9 +36,14 @@ namespace Abblix.SharedSignals.MinimalApi;
 
 /// <summary>
 /// Maps the Shared Signals endpoints as Minimal API route handlers: the whole transmitter
-/// management surface in one call, and the receiver's push intake in another. The handlers
-/// translate transport to the host-agnostic services and nothing else - authentication is the
-/// host's middleware, and the receiver identity is read per <see cref="SsfEndpointOptions"/>.
+/// management surface in one call, its configuration document in another. The handlers translate
+/// transport to the host-agnostic services and nothing else - authentication is the host's
+/// middleware, and the receiver identity is read per <see cref="SsfEndpointOptions"/>.
+/// <para>
+/// Push delivery is not here. RFC 8935 carries any Security Event Token, not this framework's in
+/// particular, so its intake belongs to the package that owns the token - a receiver maps it with
+/// <c>MapPushDeliveryEndpoint</c> from <c>Abblix.SecurityEvents.MinimalApi</c>.
+/// </para>
 /// </summary>
 public static class SsfEndpointRouteBuilderExtensions
 {
@@ -145,21 +150,6 @@ public static class SsfEndpointRouteBuilderExtensions
 
     private static SsfEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
         => endpoints.ServiceProvider.GetService<SsfEndpointOptions>() ?? DefaultEndpointOptions;
-
-    /// <summary>
-    /// Maps the receiver's push intake (RFC 8935): the endpoint a transmitter POSTs SETs to,
-    /// answering the empty 202 or the 400 whose body speaks the registry vocabulary.
-    /// </summary>
-    /// <param name="endpoints">The route builder.</param>
-    /// <param name="pattern">The route the receiver advertised as its push endpoint URL.</param>
-    public static IEndpointConventionBuilder MapSsfPushEndpoint(
-        this IEndpointRouteBuilder endpoints,
-        string pattern)
-    {
-        ArgumentNullException.ThrowIfNull(endpoints);
-
-        return endpoints.MapPost(pattern, HandlePushAsync);
-    }
 
     private static async Task<IResult> CreateStreamAsync(
         HttpContext http,
@@ -297,20 +287,6 @@ public static class SsfEndpointRouteBuilderExtensions
         return await store.FindAsync(receiverId, streamId, cancellationToken) is { } stream
             ? Results.Json(await handler.HandleAsync(stream, request, cancellationToken))
             : Results.NotFound();
-    }
-
-    private static async Task<IResult> HandlePushAsync(
-        HttpRequest request,
-        PushDeliveryHandler handler,
-        CancellationToken cancellationToken)
-    {
-        using var reader = new StreamReader(request.Body);
-        var body = await reader.ReadToEndAsync(cancellationToken);
-
-        var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
-        return result.Error is { } error
-            ? Results.Json(error, statusCode: (int)result.StatusCode)
-            : Results.StatusCode((int)result.StatusCode);
     }
 
     /// <summary>

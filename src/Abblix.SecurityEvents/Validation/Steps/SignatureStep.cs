@@ -43,7 +43,12 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationStates.Parsed);
+        // The issuer decides which key set is fetched, so it must have been accepted before that
+        // fetch is made. Ordering this by the state rather than by where the step sits in a list is
+        // what makes a profile that lists them the wrong way round fail loudly instead of resolving
+        // keys for an issuer nobody vouched for.
+        context.Require(
+            SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.IssuerAccepted);
 
         var result = await verifier.VerifyAsync(
             context.CompactToken,

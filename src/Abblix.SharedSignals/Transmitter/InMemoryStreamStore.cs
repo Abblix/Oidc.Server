@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -39,7 +39,7 @@ public sealed class InMemoryStreamStore : IStreamStore
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        return Task.FromResult(_streams.TryAdd(KeyOf(stream), stream));
+        return Task.FromResult(_streams.TryAdd(KeyOf(stream), Stamped(stream)));
     }
 
     /// <inheritdoc />
@@ -65,17 +65,15 @@ public sealed class InMemoryStreamStore : IStreamStore
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        // A compare-and-swap loop rather than a bare indexer write: the indexer would CREATE a
-        // stream that a concurrent delete just removed, resurrecting it silently.
-        while (_streams.TryGetValue(KeyOf(stream), out var existing))
+        // Refused unless the copy on record is still the one the caller read. A bare write would
+        // create a stream a concurrent delete just removed, and an unconditional one would drop
+        // whatever another caller wrote in between - both silently, both answered as success.
+        if (!_streams.TryGetValue(KeyOf(stream), out var existing) || existing.Version != stream.Version)
         {
-            if (_streams.TryUpdate(KeyOf(stream), stream, existing))
-            {
-                return Task.FromResult(true);
-            }
+            return Task.FromResult(false);
         }
 
-        return Task.FromResult(false);
+        return Task.FromResult(_streams.TryUpdate(KeyOf(stream), Stamped(stream), existing));
     }
 
     /// <inheritdoc />
@@ -86,4 +84,14 @@ public sealed class InMemoryStreamStore : IStreamStore
         => Task.FromResult(_streams.TryRemove((receiverId, streamId), out _));
 
     private static (string, string) KeyOf(StreamState stream) => (stream.ReceiverId, stream.StreamId);
+
+    /// <summary>
+    /// Gives the state a fresh version, which is what a later write is checked against.
+    /// </summary>
+    /// <remarks>
+    /// Minted by the store rather than the caller, so nothing outside can forge agreement with a
+    /// copy it never read.
+    /// </remarks>
+    private static StreamState Stamped(StreamState stream)
+        => stream with { Version = Guid.NewGuid().ToString("N") };
 }

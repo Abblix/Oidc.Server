@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -19,6 +19,9 @@
 //
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
+
+using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 
 namespace Abblix.SharedSignals.Events;
 
@@ -42,4 +45,41 @@ public static class SsfEventTypes
     /// </summary>
     public const string StreamUpdated = "https://schemas.openid.net/secevent/ssf/event-type/stream-updated";
 #pragma warning restore S1075
+
+    /// <summary>
+    /// Registers the two event types Shared Signals defines for itself, with their payload models.
+    /// </summary>
+    /// <remarks>
+    /// Both roles call this, because both need it: the transmitter mints a verification and a
+    /// stream-updated event, and the receiver is expected to act on them. Left unregistered they
+    /// still validate and still reach a sink - as an untyped payload, so the branch a host wrote
+    /// for them never matches and nothing anywhere says why. A receiver would simply wait on a
+    /// stream it had been told was paused.
+    /// <para>
+    /// Registering the same type twice is an error the registry reports, and one host running both
+    /// roles would do exactly that, so a mapping already in place is left alone. A DIFFERENT
+    /// mapping under one of these names is not smoothed over: that is a host overriding a
+    /// framework event, and it keeps the registry's own refusal.
+    /// </para>
+    /// </remarks>
+    /// <param name="registry">The registry events deserialize through.</param>
+    public static EventTypeRegistry RegisterSsfEvents(this EventTypeRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+
+        Register<VerificationEventPayload>(registry, Verification);
+        Register<StreamUpdatedEventPayload>(registry, StreamUpdated);
+
+        return registry;
+
+        static void Register<TPayload>(EventTypeRegistry registry, string eventType)
+            where TPayload : IEventPayload
+        {
+            // The same mapping already in place is this call running twice - one host wiring both
+            // roles. Anything else under one of these names is a host's own override, and the
+            // registry's refusal is the right answer to that rather than a silent skip.
+            if (!registry.TryGetPayloadType(eventType, out var registered) || registered != typeof(TPayload))
+                registry.Register<TPayload>(eventType);
+        }
+    }
 }

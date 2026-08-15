@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -102,13 +102,21 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var store = NewStore();
         var streamId = Guid.NewGuid().ToString("N");
 
-        Assert.False(await store.UpdateAsync(NewState(streamId), TestContext.Current.CancellationToken));
+        var ct = TestContext.Current.CancellationToken;
 
-        Assert.True(await store.TryCreateAsync(NewState(streamId), TestContext.Current.CancellationToken));
-        Assert.True(await store.UpdateAsync(NewState(streamId, StreamStatuses.Paused), TestContext.Current.CancellationToken));
+        Assert.False(await store.UpdateAsync(NewState(streamId), ct));
 
-        var found = await store.FindAsync(_receiver, streamId, TestContext.Current.CancellationToken);
-        Assert.Equal(StreamStatuses.Paused, found!.Status);
+        Assert.True(await store.TryCreateAsync(NewState(streamId), ct));
+
+        // The write carries the version it was read with, which is what the script compares.
+        var read = await store.FindAsync(_receiver, streamId, ct);
+        Assert.True(await store.UpdateAsync(read! with { Status = StreamStatuses.Paused }, ct));
+        Assert.Equal(StreamStatuses.Paused, (await store.FindAsync(_receiver, streamId, ct))!.Status);
+
+        // And the same write a second time is refused: it is now built from a stale copy, which is
+        // exactly the shape that used to overwrite whatever landed in between.
+        Assert.False(await store.UpdateAsync(read with { Status = StreamStatuses.Disabled }, ct));
+        Assert.Equal(StreamStatuses.Paused, (await store.FindAsync(_receiver, streamId, ct))!.Status);
     }
 
     /// <summary>
@@ -216,10 +224,14 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
 
         try
         {
+            // Each write reads first, so it carries the version it is replacing. The neighbour's
+            // traffic must not make any of these fail: the point is that a write is judged against
+            // ITS OWN stream, never against whatever else the connection is doing.
             var refusals = 0;
             for (var attempt = 0; attempt < 200; attempt++)
             {
-                if (!await store.UpdateAsync(NewState(streamId, StreamStatuses.Paused), ct))
+                var current = await store.FindAsync(_receiver, streamId, ct);
+                if (!await store.UpdateAsync(current! with { Status = StreamStatuses.Paused }, ct))
                     refusals++;
             }
 

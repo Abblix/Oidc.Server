@@ -209,11 +209,14 @@ public class PushDeliveryHandlerTests
         Assert.Empty(sink.Consumed);
     }
 
+    /// <summary>
+    /// A redelivery earns the same 202 and reaches the sink again: RFC 8935 Section 2 lets a
+    /// transmitter redeliver regardless of earlier responses, and the sink's own contract requires
+    /// it to be idempotent.
+    /// </summary>
     [Fact]
-    public async Task Redelivery_IsAcknowledged_WithoutReprocessing()
+    public async Task Redelivery_IsAcknowledged()
     {
-        // RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier responses: the
-        // repeat is the protocol working, so it earns the same 202 - but the sink runs once.
         var sink = new RecordingSink();
         var handler = new PushDeliveryHandler(
             new StubValidator(error: null, token: BuildToken()),
@@ -228,6 +231,36 @@ public class PushDeliveryHandlerTests
 
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, second.StatusCode);
-        Assert.Single(sink.Consumed);
+        Assert.Equal(2, sink.Consumed.Count);
+    }
+
+    /// <summary>
+    /// The case the ordering exists for: a delivery the sink refused must reach the sink again
+    /// when the transmitter retries it.
+    /// </summary>
+    /// <remarks>
+    /// Reserving before the sink made this the one path that loses a security event outright while
+    /// reporting success - the refusal left a reservation standing, and the retry was answered 202
+    /// without the sink ever seeing the event. Both halves are asserted: the retry is consumed,
+    /// and it is answered by what the sink says rather than by what the cache remembers.
+    /// </remarks>
+    [Fact]
+    public async Task ADeliveryTheSinkRefused_IsConsumedAgain_WhenTheTransmitterRetries()
+    {
+        var sink = new RecordingSink(new DeliveryError(DeliveryErrorCodes.InvalidState, "not yet"));
+        var handler = new PushDeliveryHandler(
+            new StubValidator(error: null, token: BuildToken()),
+            new SecurityEventTokenValidationOptions(),
+            sink,
+            new FakeReplayCache());
+
+        var first = await handler.HandleAsync(
+            SetMediaType, "a.b.c", TestContext.Current.CancellationToken);
+        var retry = await handler.HandleAsync(
+            SetMediaType, "a.b.c", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, first.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, retry.StatusCode);
+        Assert.Equal(2, sink.Consumed.Count);
     }
 }

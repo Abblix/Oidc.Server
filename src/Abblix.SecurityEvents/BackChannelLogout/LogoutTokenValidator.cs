@@ -105,14 +105,18 @@ public sealed class LogoutTokenValidator(
                 "The Logout Token carries no jti, so it cannot be told apart from a replay of itself.");
         }
 
-        // The expiry the profile already accepted. Nothing needs remembering past it: an expired
-        // token is refused before this guard is reached.
         var expiresAt = token.Token.Payload.ExpiresAt
                         ?? throw new LogoutTokenValidationException(
                             "The Logout Token carries no expiry, so there is no window to remember it for.");
 
+        // Remembered for as long as the token can still be ACCEPTED, which is past its own expiry:
+        // the profile allows the same clock tolerance here that it allows an issue time, because
+        // the receiver's clock is not the provider's. Reserving until "exp" alone would forget the
+        // token while it is still being let in, and every replay inside that window would succeed.
+        var rememberUntil = expiresAt + options.IssuedAtTolerance;
+
         if (!await replayCache.TryReserveAsync(
-                ReplayIdentifier.ForToken(issuer, tokenId), expiresAt, cancellationToken))
+                ReplayIdentifier.ForToken(issuer, tokenId), rememberUntil, cancellationToken))
         {
             throw new LogoutTokenValidationException(
                 "This Logout Token has already been acted on, so it is a replay.");

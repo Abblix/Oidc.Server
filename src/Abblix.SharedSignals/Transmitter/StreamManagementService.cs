@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -291,20 +291,21 @@ public sealed class StreamManagementService(
                 $"'{request.Status}' is not a stream status (SSF 1.0 Section 8.1.2.1).");
         }
 
-        if (await store.FindAsync(receiverId, request.StreamId, cancellationToken) is not { } stream)
-        {
-            return NoSuchStream<StreamStatus>(request.StreamId);
-        }
+        var (updated, missing) = await MutateAsync(
+            receiverId,
+            request.StreamId,
+            stream => stream with { Status = request.Status, StatusReason = request.Reason },
+            cancellationToken);
 
-        var updated = stream with { Status = request.Status, StatusReason = request.Reason };
-        if (!await store.UpdateAsync(updated, cancellationToken))
-        {
+        if (missing)
             return NoSuchStream<StreamStatus>(request.StreamId);
-        }
+
+        if (updated is null)
+            return Contended<StreamStatus>(request.StreamId);
 
         if (request.Status == StreamStatuses.Disabled)
         {
-            await outbox.ClearAsync(stream.StreamId, cancellationToken);
+            await outbox.ClearAsync(updated.StreamId, cancellationToken);
         }
 
         return ManagementResult<StreamStatus>.Ok(StatusOf(updated));
@@ -326,33 +327,49 @@ public sealed class StreamManagementService(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (await store.FindAsync(receiverId, request.StreamId, cancellationToken) is not { } stream)
+        // A Complex Subject "MUST contain at least one Simple Subject Member" (SSF 1.0 Section 3.3),
+        // and here that rule is not a formality: matching asks whether every member the stream
+        // named agrees with the event's, so a subject that named none agrees with every event.
+        // Added to a stream whose mode is None - the conservative default, chosen so that a
+        // misconfigured stream leaks nothing - one such request turns it into a subscription to
+        // everything. The shape is refused where it arrives, since nothing downstream can tell it
+        // from a deliberate partial match.
+        if (request.Subject is ComplexSubject { HasMembers: false })
         {
-            return NoSuchStream<object>(request.StreamId);
+            return ManagementResult<object>.BadRequest(
+                "A complex subject carries at least one member (SSF 1.0 Section 3.3); one with none "
+                + "would match every event on the stream.");
         }
 
         var subject = new StreamSubject(request.Subject, request.Verified ?? true);
 
-        var updated = stream with
-        {
-            AddedSubjects =
-            [
-                .. stream.AddedSubjects.Where(
-                    added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
-                subject,
-            ],
-            // Under ALL, an addition undoes an earlier removal; under NONE the removal list is
-            // inert, and dropping a stale entry there costs nothing.
-            RemovedSubjects =
-            [
-                .. stream.RemovedSubjects.Where(
-                    removed => !SubjectMatcher.Identical(removed, request.Subject)),
-            ],
-        };
+        var (written, missing) = await MutateAsync(
+            receiverId,
+            request.StreamId,
+            stream => stream with
+            {
+                AddedSubjects =
+                [
+                    .. stream.AddedSubjects.Where(
+                        added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
+                    subject,
+                ],
+                // Under ALL, an addition undoes an earlier removal; under NONE the removal list is
+                // inert, and dropping a stale entry there costs nothing.
+                RemovedSubjects =
+                [
+                    .. stream.RemovedSubjects.Where(
+                        removed => !SubjectMatcher.Identical(removed, request.Subject)),
+                ],
+            },
+            cancellationToken);
 
-        return await store.UpdateAsync(updated, cancellationToken)
-            ? ManagementResult<object>.Ok()
-            : NoSuchStream<object>(request.StreamId);
+        if (missing)
+            return NoSuchStream<object>(request.StreamId);
+
+        return written is null
+            ? Contended<object>(request.StreamId)
+            : ManagementResult<object>.Ok();
     }
 
     /// <summary>
@@ -370,31 +387,33 @@ public sealed class StreamManagementService(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (await store.FindAsync(receiverId, request.StreamId, cancellationToken) is not { } stream)
-        {
-            return NoSuchStream<object>(request.StreamId);
-        }
-
-        var updated = stream with
-        {
-            AddedSubjects =
-            [
-                .. stream.AddedSubjects.Where(
-                    added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
-            ],
-            RemovedSubjects = stream.SubjectsMode switch
+        var (written, missing) = await MutateAsync(
+            receiverId,
+            request.StreamId,
+            stream => stream with
             {
-                // Under ALL a removal carves the subject out of the default coverage.
-                StreamSubjectsMode.All when !stream.RemovedSubjects.Any(
-                        removed => SubjectMatcher.Identical(removed, request.Subject)) =>
-                    [.. stream.RemovedSubjects, request.Subject],
-                _ => stream.RemovedSubjects,
+                AddedSubjects =
+                [
+                    .. stream.AddedSubjects.Where(
+                        added => !SubjectMatcher.Identical(added.Subject, request.Subject)),
+                ],
+                RemovedSubjects = stream.SubjectsMode switch
+                {
+                    // Under ALL a removal carves the subject out of the default coverage.
+                    StreamSubjectsMode.All when !stream.RemovedSubjects.Any(
+                            removed => SubjectMatcher.Identical(removed, request.Subject)) =>
+                        [.. stream.RemovedSubjects, request.Subject],
+                    _ => stream.RemovedSubjects,
+                },
             },
-        };
+            cancellationToken);
 
-        return await store.UpdateAsync(updated, cancellationToken)
-            ? ManagementResult<object>.NoContent()
-            : NoSuchStream<object>(request.StreamId);
+        if (missing)
+            return NoSuchStream<object>(request.StreamId);
+
+        return written is null
+            ? Contended<object>(request.StreamId)
+            : ManagementResult<object>.NoContent();
     }
 
     /// <summary>
@@ -427,6 +446,22 @@ public sealed class StreamManagementService(
                 + $"'{StreamMemberNames.MinVerificationInterval}' permits (SSF 1.0 Section 8.1.4.2).");
         }
 
+        // The throttle is written BEFORE the event is minted, and the answer follows what the write
+        // reported. Dispatching first spends the irreversible half - an event queued cannot be
+        // unqueued - on a stream whose record may already be gone, and leaves the throttle unwritten
+        // for as long as the dispatch takes, which is the window two concurrent requests both pass.
+        var (throttled, missing) = await MutateAsync(
+            receiverId,
+            request.StreamId,
+            current => current with { LastVerificationRequestAt = now },
+            cancellationToken);
+
+        if (missing)
+            return NoSuchStream<object>(request.StreamId);
+
+        if (throttled is null)
+            return Contended<object>(request.StreamId);
+
         await dispatcher.DispatchToStreamAsync(
             stream,
             new SecurityEventDescriptor
@@ -438,7 +473,6 @@ public sealed class StreamManagementService(
             },
             cancellationToken: cancellationToken);
 
-        await store.UpdateAsync(stream with { LastVerificationRequestAt = now }, cancellationToken);
         return ManagementResult<object>.NoContent();
     }
 
@@ -481,6 +515,19 @@ public sealed class StreamManagementService(
             return false;
         }
 
+        // The status is written FIRST, and nothing irreversible happens until it succeeds. The
+        // queue is dropped and the announcement minted afterwards, because neither can be undone:
+        // a concurrent delete used to leave this method reporting that nothing happened, having
+        // already destroyed the queue and enqueued an announcement onto a stream that was gone.
+        var (updated, _) = await MutateAsync(
+            receiverId,
+            streamId,
+            current => current with { Status = status, StatusReason = reason },
+            cancellationToken);
+
+        if (updated is null)
+            return false;
+
         if (status == StreamStatuses.Disabled)
         {
             // "will not hold any events" (Section 8.1.2.1) - and dropped before the
@@ -499,9 +546,7 @@ public sealed class StreamManagementService(
             asStatusAnnouncement: true,
             cancellationToken);
 
-        return await store.UpdateAsync(
-            stream with { Status = status, StatusReason = reason },
-            cancellationToken);
+        return true;
     }
 
     /// <summary>
@@ -532,9 +577,20 @@ public sealed class StreamManagementService(
         StreamState stream,
         StreamConfiguration configuration,
         CancellationToken cancellationToken)
-        => await store.UpdateAsync(stream with { Configuration = configuration }, cancellationToken)
-            ? ManagementResult<StreamConfiguration>.Ok(configuration)
-            : NoSuchStream<StreamConfiguration>(stream.StreamId);
+    {
+        var (written, missing) = await MutateAsync(
+            stream.ReceiverId,
+            stream.StreamId,
+            current => current with { Configuration = configuration },
+            cancellationToken);
+
+        if (missing)
+            return NoSuchStream<StreamConfiguration>(stream.StreamId);
+
+        return written is null
+            ? Contended<StreamConfiguration>(stream.StreamId)
+            : ManagementResult<StreamConfiguration>.Ok(configuration);
+    }
 
     private static StreamStatus StatusOf(StreamState stream) => new()
     {
@@ -542,6 +598,56 @@ public sealed class StreamManagementService(
         Status = stream.Status,
         Reason = stream.StatusReason,
     };
+
+    /// <summary>
+    /// How many times a mutation re-reads and re-applies before giving up on a contended stream.
+    /// </summary>
+    /// <remarks>
+    /// Small on purpose. Each attempt is a fresh read, so the loop converges as soon as writers
+    /// stop arriving; a stream contended past this is not slow, it is being written by something
+    /// that will not stop, and answering 409 tells the receiver that rather than blocking on it.
+    /// </remarks>
+    private const int MutationAttempts = 4;
+
+    /// <summary>
+    /// Reads a stream, applies <paramref name="change"/> and writes it back, re-reading when
+    /// another writer got in first.
+    /// </summary>
+    /// <remarks>
+    /// Every mutation in this service is a read-modify-write, and the store refuses a write whose
+    /// version is not the one on record - so without this loop two concurrent additions would end
+    /// with one of them refused rather than one of them lost. Re-reading is what turns the refusal
+    /// into the second addition landing on top of the first.
+    /// </remarks>
+    /// <returns>
+    /// The written state; or null with <c>Missing</c> when there is no such stream, and null
+    /// without it when the stream was contended throughout.</returns>
+    private async Task<(StreamState? Written, bool Missing)> MutateAsync(
+        string receiverId,
+        string streamId,
+        Func<StreamState, StreamState> change,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < MutationAttempts; attempt++)
+        {
+            if (await store.FindAsync(receiverId, streamId, cancellationToken) is not { } stream)
+                return (null, true);
+
+            var changed = change(stream);
+            if (await store.UpdateAsync(changed, cancellationToken))
+                return (changed, false);
+        }
+
+        return (null, false);
+    }
+
+    /// <summary>
+    /// The answer to a stream that stayed contended: the receiver may repeat the call.
+    /// </summary>
+    private static ManagementResult<TBody> Contended<TBody>(string streamId)
+        => ManagementResult<TBody>.Conflict(
+            $"The stream '{streamId}' is being changed by someone else; read it again and repeat "
+            + "the call.");
 
     private static ManagementResult<TBody> NoSuchStream<TBody>(string streamId)
         => ManagementResult<TBody>.NotFound(

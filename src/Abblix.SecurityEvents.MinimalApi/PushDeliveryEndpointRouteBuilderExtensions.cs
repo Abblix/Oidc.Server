@@ -20,30 +20,31 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Abblix.SecurityEvents.BackChannelLogout;
+using Abblix.SecurityEvents.Delivery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Net.Http.Headers;
 
 namespace Abblix.SecurityEvents.MinimalApi;
 
 /// <summary>
-/// Maps the back-channel logout intake onto a route.
+/// Maps the push delivery intake onto a route.
 /// </summary>
-public static class BackChannelLogoutEndpointRouteBuilderExtensions
+public static class PushDeliveryEndpointRouteBuilderExtensions
 {
     /// <summary>
-    /// Maps the endpoint a provider POSTs Logout Tokens to
-    /// (OpenID Connect Back-Channel Logout 1.0 Section 2.5).
+    /// Maps the endpoint a transmitter POSTs Security Event Tokens to (RFC 8935), answering the
+    /// empty 202 or the 400 whose body speaks the registry vocabulary.
     /// </summary>
     /// <remarks>
-    /// The route is the one the client registered as its <c>backchannel_logout_uri</c>, so the
-    /// pattern is the host's to choose and this makes no assumption about it.
+    /// The route is the one the receiver advertised as its delivery endpoint, so the pattern is
+    /// the host's to choose and this makes no assumption about it. Nothing here knows which
+    /// profile of SET arrives: the handler is built by whichever consumer registered it, and
+    /// carries that consumer's validation profile and sink.
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
-    /// <param name="pattern">The route registered as this client's back-channel logout URI.</param>
-    public static IEndpointConventionBuilder MapBackChannelLogoutEndpoint(
+    /// <param name="pattern">The route the receiver advertised as its push endpoint URL.</param>
+    public static IEndpointConventionBuilder MapPushDeliveryEndpoint(
         this IEndpointRouteBuilder endpoints,
         string pattern)
     {
@@ -53,34 +54,23 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Reads the request and renders what the handler decided.
+    /// Reads the transmission and renders what the handler decided.
     /// </summary>
-    /// <remarks>
-    /// Everything the specification says about the request and the answer lives in the handler, so
-    /// this is transport and nothing else: the body as text, the status back, and the one header
-    /// Section 2.8 asks for.
-    /// </remarks>
     private static async Task<IResult> HandleAsync(
         HttpRequest request,
-        BackChannelLogoutHandler handler,
+        PushDeliveryHandler handler,
         CancellationToken cancellationToken)
     {
         using var reader = new StreamReader(request.Body);
         var body = await reader.ReadToEndAsync(cancellationToken);
 
         var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
+        if (result.Error is not { } error)
+            return Results.StatusCode((int)result.StatusCode);
 
-        var httpResult = result switch
-        {
-            { Error: {} error, StatusCode: var statusCode } => Results.Json(error, statusCode: (int)statusCode),
-            { StatusCode: var statusCode } => Results.StatusCode((int)statusCode),
-        };
-
-        // "The RP's response SHOULD include the Cache-Control HTTP response header field with a
-        // no-store value" (Section 2.8). Set on the refusal as well as the success: a cached 400
-        // would keep answering for a token that was only invalid the first time, which is exactly
-        // the interference the header exists to prevent.
-        return httpResult.WithHeaders(
-            headers => headers.CacheControl = CacheControlHeaderValue.NoStoreString);
+        // "The response MUST include a 'Content-Language' header field whose value indicates the
+        // language of the error descriptions included in the response body" (RFC 8935 Section 2.3).
+        return Results.Json(error, statusCode: (int)result.StatusCode)
+            .WithHeaders(headers => headers.ContentLanguage = PushDeliveryResult.ErrorLanguage);
     }
 }

@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -27,6 +27,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SecurityEvents.Validation.Steps;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.SharedSignals.Events;
 using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
@@ -61,6 +62,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
+        services.AddSsfEventTypes();
         services.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
         services.TryAddSingleton<IEventOutbox, InMemoryEventOutbox>();
 
@@ -82,6 +84,11 @@ public static class ServiceCollectionExtensions
         services
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();
+
+        // Something has to drain the queues, and until this existed nothing did: a host wired the
+        // transmitter, mapped its endpoints, and watched events pile up with no error anywhere. A
+        // deployment that drives passes itself sets the interval to null.
+        services.AddHostedService<PushDeliveryScheduler>();
 
         return services;
     }
@@ -126,6 +133,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
+        services.AddSsfEventTypes();
 
         // Every call this receiver makes outward goes through the factory, so one line of a host's
         // - ConfigureHttpClientDefaults, or a call naming one of the published transport names -
@@ -148,7 +156,12 @@ public static class ServiceCollectionExtensions
             Dependency.Override<ISecurityEventTokenValidator>(
                 serviceProvider => serviceProvider.GetRequiredKeyedService<ISecurityEventTokenValidator>(
                     ValidationProfileKeys.SecurityEvent)),
-            Dependency.Override<SecurityEventTokenValidationOptions>(options)));
+            // Resolved, not captured. TryAddSingleton above lets a host's own instance win, so
+            // closing over the argument would judge tokens by the placeholder while every other
+            // reader of the container saw the host's - one value with two sources, disagreeing
+            // silently.
+            Dependency.Override<SecurityEventTokenValidationOptions>(
+                serviceProvider => serviceProvider.GetRequiredService<SharedSignalsValidationOptions>())));
 
         services.AddSecurityEventValidationProfileOnce(ValidationProfileKeys.SecurityEvent, profile =>
         {
@@ -219,6 +232,16 @@ public static class ServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, DistributedCacheEventOutbox>());
         return services;
     }
+
+    /// <summary>
+    /// Teaches the event registry the two event types this framework defines for itself.
+    /// </summary>
+    /// <remarks>
+    /// Through the options door, which is the registry's only one: a second registry instance
+    /// would silently orphan whatever was registered through the first.
+    /// </remarks>
+    private static void AddSsfEventTypes(this IServiceCollection services)
+        => services.Configure<SecurityEventsOptions>(options => options.Events.RegisterSsfEvents());
 
     /// <summary>
     /// Both roles build on the Security Events core, and the marker of that call is the one

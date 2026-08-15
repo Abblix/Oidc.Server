@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -47,4 +47,17 @@ public sealed record PushDeliveryResult(HttpStatusCode StatusCode, DeliveryError
     /// </summary>
     /// <param name="error">What was wrong with the SET, in registry vocabulary.</param>
     public static PushDeliveryResult BadRequest(DeliveryError error) => new(HttpStatusCode.BadRequest, error);
+
+    /// <summary>
+    /// The language of the error descriptions this package writes, for the header RFC 8935
+    /// Section 2.3 requires beside them: "The response MUST include a 'Content-Language' header
+    /// field whose value indicates the language of the error descriptions included in the response
+    /// body."
+    /// </summary>
+    /// <remarks>
+    /// Stated here rather than in each host adapter, because the language is a property of the
+    /// descriptions and those are written here. A deployment translating them replaces the value
+    /// where it replaces the text, and the two cannot then part.
+    /// </remarks>
+    public const string ErrorLanguage = "en";
 }

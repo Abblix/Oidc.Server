@@ -7,7 +7,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Abblix.SecurityEvents.MinimalApi</PackageId>
+    <PackageId>Abblix.SecurityEvents.MinimalAPI</PackageId>
     <Title>Abblix Security Events Minimal API</Title>
     <Description>ASP.NET Core Minimal API integration for Abblix Security Events: maps the OpenID Connect Back-Channel Logout intake as a route handler, with no MVC dependency.</Description>
     <Authors>Abblix LLP</Authors>
