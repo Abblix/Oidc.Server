@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -38,9 +38,12 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
     /// Handles one poll request for one stream.
     /// </summary>
     /// <remarks>
-    /// Acknowledged and error-reported SETs alike are released from retention: the
-    /// acknowledgement says delivery succeeded, the error report is the receiver's terminal
-    /// judgment, and redelivering either would be noise (RFC 8936 Section 2.2). A stream that
+    /// An acknowledgement releases retention, and only an acknowledgement does: RFC 8936
+    /// Section 2.2 says of "ack" that "the SET Transmitter is released from any obligation to
+    /// retain the SET", and says no such thing of "setErrs". An error report is released only when
+    /// the code says redelivery cannot change the answer - the same reading the push sender
+    /// applies, so one registry does not decide two ways in one package. A receiver whose
+    /// credentials lapsed reports "access_denied" and keeps its events. A stream that
     /// is not enabled serves nothing except status announcements - the pause holds events
     /// (SSF 1.0 Section 8.1.2.1), and the announcement is what Section 8.1.5 still owes the
     /// receiver after the stop.
@@ -59,7 +62,9 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
         var released = new List<string>(request.Acknowledged ?? []);
         if (request.Errors is { Count: > 0 } errors)
         {
-            released.AddRange(errors.Keys);
+            released.AddRange(
+                errors.Where(reported => DeliveryErrorCodes.IsFinal(reported.Value?.Error))
+                    .Select(reported => reported.Key));
         }
 
         if (released.Count > 0)

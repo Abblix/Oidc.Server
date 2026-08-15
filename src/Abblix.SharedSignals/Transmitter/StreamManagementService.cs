@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -441,6 +441,15 @@ public sealed class StreamManagementService(
                 + $"'{StreamMemberNames.MinVerificationInterval}' permits (SSF 1.0 Section 8.1.4.2).");
         }
 
+        // The throttle is written BEFORE the event is minted, and the answer follows what the write
+        // reported. Dispatching first spends the irreversible half - an event queued cannot be
+        // unqueued - on a stream whose record may already be gone, and leaves the throttle unwritten
+        // for as long as the dispatch takes, which is the window two concurrent requests both pass.
+        if (!await store.UpdateAsync(stream with { LastVerificationRequestAt = now }, cancellationToken))
+        {
+            return NoSuchStream<object>(request.StreamId);
+        }
+
         await dispatcher.DispatchToStreamAsync(
             stream,
             new SecurityEventDescriptor
@@ -452,7 +461,6 @@ public sealed class StreamManagementService(
             },
             cancellationToken: cancellationToken);
 
-        await store.UpdateAsync(stream with { LastVerificationRequestAt = now }, cancellationToken);
         return ManagementResult<object>.NoContent();
     }
 
@@ -495,6 +503,17 @@ public sealed class StreamManagementService(
             return false;
         }
 
+        // The status is written FIRST, and nothing irreversible happens until it succeeds. The
+        // queue is dropped and the announcement minted afterwards, because neither can be undone:
+        // a concurrent delete used to leave this method reporting that nothing happened, having
+        // already destroyed the queue and enqueued an announcement onto a stream that was gone.
+        if (!await store.UpdateAsync(
+                stream with { Status = status, StatusReason = reason },
+                cancellationToken))
+        {
+            return false;
+        }
+
         if (status == StreamStatuses.Disabled)
         {
             // "will not hold any events" (Section 8.1.2.1) - and dropped before the
@@ -513,9 +532,7 @@ public sealed class StreamManagementService(
             asStatusAnnouncement: true,
             cancellationToken);
 
-        return await store.UpdateAsync(
-            stream with { Status = status, StatusReason = reason },
-            cancellationToken);
+        return true;
     }
 
     /// <summary>

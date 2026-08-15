@@ -8,6 +8,7 @@
         <IsPackable>false</IsPackable>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageId>Abblix.Oidc.Server.SourceGenerators.MVC</PackageId>
     </PropertyGroup>
 
     <ItemGroup>

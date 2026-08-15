@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -54,7 +54,20 @@ public sealed class PollClient(HttpClient httpClient)
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(request);
 
-        using var response = await httpClient.PostAsJsonAsync(endpoint, request, cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = JsonContent.Create(request),
+        };
+
+        // "When the SET Recipient includes one or more error responses in a request to the SET
+        // Transmitter, it must also include in the request a 'Content-Language' header field whose
+        // value indicates the language of the error descriptions included in the request"
+        // (RFC 8936 Section 2.6). Only then: a poll that reports nothing carries no descriptions
+        // for the header to describe.
+        if (request.Errors is { Count: > 0 })
+            message.Content.Headers.ContentLanguage.Add(PushDeliveryResult.ErrorLanguage);
+
+        using var response = await httpClient.SendAsync(message, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var pollResponse = await response.Content.ReadFromJsonAsync<PollResponse>(cancellationToken);

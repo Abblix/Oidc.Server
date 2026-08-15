@@ -76,8 +76,10 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
         // the interference the header exists to prevent.
         request.HttpContext.Response.Headers.CacheControl = CacheControlHeaderValue.NoStoreString;
 
-        return result.Error is { } error
-            ? Results.Json(error, statusCode: (int)result.StatusCode)
-            : Results.StatusCode((int)result.StatusCode);
+        return result.Error switch
+        {
+            { } error => Results.Json(error, statusCode: (int)result.StatusCode),
+            _ => Results.StatusCode((int)result.StatusCode)
+        };
     }
 }

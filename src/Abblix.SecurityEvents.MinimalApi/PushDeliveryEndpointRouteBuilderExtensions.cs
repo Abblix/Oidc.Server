@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -65,8 +65,12 @@ public static class PushDeliveryEndpointRouteBuilderExtensions
         var body = await reader.ReadToEndAsync(cancellationToken);
 
         var result = await handler.HandleAsync(request.ContentType, body, cancellationToken);
-        return result.Error is { } error
-            ? Results.Json(error, statusCode: (int)result.StatusCode)
-            : Results.StatusCode((int)result.StatusCode);
+        if (result.Error is not { } error)
+            return Results.StatusCode((int)result.StatusCode);
+
+        // "The response MUST include a 'Content-Language' header field whose value indicates the
+        // language of the error descriptions included in the response body" (RFC 8935 Section 2.3).
+        request.HttpContext.Response.Headers.ContentLanguage = PushDeliveryResult.ErrorLanguage;
+        return Results.Json(error, statusCode: (int)result.StatusCode);
     }
 }
