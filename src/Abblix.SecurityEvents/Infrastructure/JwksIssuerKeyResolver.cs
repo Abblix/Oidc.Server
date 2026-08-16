@@ -129,5 +129,5 @@ public sealed class JwksIssuerKeyResolver(
     }
 
     private static Uri DeriveWellKnownUri(string issuer)
-        => new($"{issuer.TrimEnd('/')}/.well-known/jwks.json");
+        => new($"{JwksKeyResolutionOptions.NormaliseIssuer(issuer)}/.well-known/jwks.json");
 }

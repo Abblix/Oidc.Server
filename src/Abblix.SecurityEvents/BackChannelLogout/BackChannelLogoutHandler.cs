@@ -38,13 +38,13 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// specification's request and response rules in one place rather than in each host framework's
 /// endpoint.
 /// </remarks>
+/// <param name="logger">Records every refusal, which no other party keeps.</param>
 /// <param name="validator">The Logout Token's validation, which is Section 2.6.</param>
 /// <param name="sink">Where the notification lands, which is Section 2.7.</param>
-/// <param name="logger">Records refusals; see <see cref="LogRefused"/> for why here.</param>
-public sealed class BackChannelLogoutHandler(
+public sealed partial class BackChannelLogoutHandler(
+    ILogger<BackChannelLogoutHandler> logger,
     ILogoutTokenValidator validator,
-    ILogoutNotificationSink sink,
-    ILogger<BackChannelLogoutHandler> logger)
+    ILogoutNotificationSink sink)
 {
     /// <summary>
     /// The single parameter the request must carry (Section 2.5).
@@ -105,10 +105,12 @@ public sealed class BackChannelLogoutHandler(
     /// <remarks>
     /// Recorded here because here is where the description exists. It travels to the provider in
     /// the response, which Section 2.8 asks for so a deployment can be debugged - but the provider
-    /// is the other party, and the receiver that refused keeps nothing. A run of refusals means
-    /// either a provider signing with keys this receiver does not trust or a receiver pointed at
-    /// the wrong key document, and the two are told apart only by the description; without it an
-    /// operator sees an even stream of 400s and no way in.
+    /// is the other party, and the receiver that refused keeps nothing. A run of refusals is a
+    /// provider signing with keys this receiver does not trust, a receiver reading a JWK Set that
+    /// is reachable but wrong, or a malformed request, and the three are told apart only by the
+    /// description; without it an operator sees an even stream of 400s and no way in. A key
+    /// document that cannot be fetched at all is a different signal - that throws, and answers 500
+    /// rather than arriving here.
     /// <para>
     /// One place, so every refusal path is recorded by construction rather than by each of them
     /// remembering - and a path added later is recorded on the day it is written.
@@ -117,17 +119,28 @@ public sealed class BackChannelLogoutHandler(
     /// <param name="description">What was wrong, in the words that go back to the provider.</param>
     private BackChannelLogoutResult Refuse(string description)
     {
-        var result = BackChannelLogoutResult.BadRequest(description);
+        // The code is the constant every refusal carries, taken from the constant rather than read
+        // back off the result: the result's error is nullable, and dereferencing it here would
+        // assert a fact the compiler cannot check in order to learn something already known.
+        LogRefused(BackChannelLogoutError.InvalidRequest, Abbreviate(description));
 
-        LogRefused(logger, result.Error!.Error, description, null);
-        return result;
+        return BackChannelLogoutResult.BadRequest(description);
     }
 
-    private static readonly Action<ILogger, string, string, Exception?> LogRefused =
-        LoggerMessage.Define<string, string>(
-            LogLevel.Warning,
-            new EventId(LogEvents.BackChannelLogout.RequestRefused, nameof(LogEvents.BackChannelLogout.RequestRefused)),
-            "Back-channel logout refused: {Error} {Description}");
+    /// <summary>How much of a description is worth keeping in a log line.</summary>
+    /// <remarks>
+    /// This endpoint is unauthenticated by design, and one refusal path echoes the request's own
+    /// Content-Type into the description - so an anonymous caller chooses both the rate and, up to
+    /// the server's header limit, the size of what is written. The response still carries the whole
+    /// text to the provider, which is what Section 2.8 asks for; the log keeps the part that names
+    /// the problem.
+    /// </remarks>
+    private const int LoggedDescriptionLimit = 512;
+
+    private static string Abbreviate(string description)
+        => description.Length <= LoggedDescriptionLimit
+            ? description
+            : description[..LoggedDescriptionLimit] + "...";
 
     /// <summary>
     /// Reads the one parameter this endpoint understands out of a form-encoded body.

@@ -72,12 +72,12 @@ public class BackChannelLogoutHandlerTests
 
     private static BackChannelLogoutHandler Handler(
         StubValidator validator, ILogoutNotificationSink sink)
-        => new(validator, sink, NullLogger<BackChannelLogoutHandler>.Instance);
+        => new(NullLogger<BackChannelLogoutHandler>.Instance, validator, sink);
 
-    /// <summary>Keeps every warning this handler wrote, with the message it rendered.</summary>
+    /// <summary>Keeps every warning this handler wrote: its identifier and its rendered message.</summary>
     private sealed class RecordingLogger : ILogger<BackChannelLogoutHandler>
     {
-        public List<string> Warnings { get; } = [];
+        public List<(EventId EventId, string Message)> Warnings { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -91,7 +91,7 @@ public class BackChannelLogoutHandlerTests
             Func<TState, Exception?, string> formatter)
         {
             if (logLevel == LogLevel.Warning)
-                Warnings.Add(formatter(state, exception));
+                Warnings.Add((eventId, formatter(state, exception)));
         }
     }
 
@@ -231,8 +231,10 @@ public class BackChannelLogoutHandlerTests
     ///     even stream of 400s with no way in. A provider signing with untrusted keys and a
     ///     receiver pointed at the wrong key document look identical without it.
     ///
-    ///     A theory over all four paths rather than one case: a path added later that forgets to
-    ///     record is exactly the omission this guards, and it is invisible in the response.
+    ///     A theory over all four paths rather than one case, because each reaches the recording
+    ///     through a different branch. It cannot see a FIFTH path - what makes a later one recorded
+    ///     is that the shaping and the recording are one method, so a refusal that skipped it would
+    ///     have to be built by hand.
     /// </remarks>
     [Theory]
     [InlineData("application/json", "logout_token=x", "Section 2.5 requires")]
@@ -248,14 +250,18 @@ public class BackChannelLogoutHandlerTests
         var sink = new RecordingSink(
             expected.Contains("sink", StringComparison.Ordinal) ? "refused by the sink" : null);
 
-        var handler = new BackChannelLogoutHandler(validator, sink, logger);
+        var handler = new BackChannelLogoutHandler(logger, validator, sink);
         var result = await handler.HandleAsync(contentType, body, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
 
-        var warning = Assert.Single(logger.Warnings);
+        var (eventId, warning) = Assert.Single(logger.Warnings);
         Assert.Contains(expected, warning, StringComparison.Ordinal);
         Assert.Contains(result.Error!.Error, warning, StringComparison.Ordinal);
+
+        // The number is the contract a runbook keys off, so it is asserted rather than the message:
+        // the text may be reworded, the identifier may not move.
+        Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, eventId.Id);
     }
 
     /// <summary>Success is silent, so the refusals stay findable among ordinary traffic.</summary>
@@ -263,7 +269,7 @@ public class BackChannelLogoutHandlerTests
     public async Task AnAcceptedRequest_RecordsNoWarning()
     {
         var logger = new RecordingLogger();
-        var handler = new BackChannelLogoutHandler(new StubValidator(), new RecordingSink(), logger);
+        var handler = new BackChannelLogoutHandler(logger, new StubValidator(), new RecordingSink());
 
         var result = await handler.HandleAsync(
             MediaTypeNames.Application.FormUrlEncoded,

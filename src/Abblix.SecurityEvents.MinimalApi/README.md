@@ -38,7 +38,8 @@ Signals public surface in front of every such host, none of which will ever call
 
 ```csharp
 builder.Services.AddSecurityEvents();
-builder.Services.AddJwksKeyResolution(options => { /* where the provider's keys live */ });
+builder.Services.AddJwksKeyResolution(options =>
+    options.JwksUris["https://op.example.com"] = new Uri("https://op.example.com/.well-known/jwks"));
 builder.Services.AddBackChannelLogoutReceiver(new BackChannelLogoutValidationOptions
 {
     ExpectedIssuers = ["https://op.example.com"],

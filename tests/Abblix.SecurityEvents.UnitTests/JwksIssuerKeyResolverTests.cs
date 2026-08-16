@@ -245,12 +245,14 @@ public class JwksIssuerKeyResolverTests
     }
 
     /// <summary>
-    ///     A selector that does not recognise an issuer falls through rather than deciding.
+    ///     A selector answering null reaches the convention, which is what makes null the right
+    ///     way to say "not mine".
     /// </summary>
     /// <remarks>
-    ///     Returning null is what keeps the sources composable. A delegate that threw for an issuer
-    ///     it did not know would also take out the well-known fallback for every other issuer, since
-    ///     nothing runs after it - and the host would look configured while resolving nothing.
+    ///     The fallback itself is not new - the resolver has always treated a null RESULT the same
+    ///     as a null delegate. What this pins is that the annotation now permits the answer, so a
+    ///     selector no longer has to throw for an issuer it does not know; a throw would take the
+    ///     fallback out for every other issuer, since nothing runs past it.
     /// </remarks>
     [Fact]
     public async Task ASelectorAnsweringNull_FallsThroughToTheConvention()
@@ -264,6 +266,38 @@ public class JwksIssuerKeyResolverTests
         }));
 
         Assert.Equal(new Uri($"{Issuer}/.well-known/jwks.json"), Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    ///     A trailing slash on either side does not decide which document the keys come from.
+    /// </summary>
+    /// <remarks>
+    ///     One method decides twice - it looks an issuer up in the map and, failing that, composes
+    ///     the well-known address - so the two halves must agree about what an issuer IS. Matching
+    ///     the raw string on one side while trimming on the other makes a map keyed with the slash
+    ///     miss a token whose "iss" carries none, and the miss does not fail: it falls through to
+    ///     the convention, which may well serve a document that verifies nothing this issuer signed.
+    /// </remarks>
+    [Theory]
+    [InlineData("https://issuer.example.com/", "https://issuer.example.com")]
+    [InlineData("https://issuer.example.com", "https://issuer.example.com/")]
+    public async Task ATrailingSlash_DoesNotDecideWhichDocumentIsRead(string mapKey, string tokenIssuer)
+    {
+        var mapped = new Uri("https://issuer.example.com/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[mapKey] = mapped;
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           tokenIssuer, null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
     }
 
     /// <summary>A named entry is consulted before the selector: the more specific statement wins.</summary>

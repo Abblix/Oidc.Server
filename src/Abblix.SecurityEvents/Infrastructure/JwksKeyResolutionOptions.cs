@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Collections.Concurrent;
+
 namespace Abblix.SecurityEvents.Infrastructure;
 
 /// <summary>
@@ -38,8 +40,22 @@ public sealed class JwksKeyResolutionOptions
     /// that forgets to call the previous delegate silently removes another issuer's keys - a token
     /// that used to verify starts failing its signature, which reads as an attack rather than as
     /// wiring.
+    /// <para>
+    /// <b>Filled in code, never from a configuration file.</b> An issuer identifier is a URL, and
+    /// the ':' in it is the configuration hierarchy delimiter - so an entry written in appsettings
+    /// binds as nested sections and this map stays empty, with no exception and no log. Every
+    /// issuer then falls through to the well-known convention, which is the same silent
+    /// wrong-document outcome this map exists to prevent. Environment variables are worse, the
+    /// '__' delimiter notwithstanding.
+    /// </para>
+    /// <para>
+    /// Concurrent by construction, because the resolver reads it on the validation path while a
+    /// host may still be adding to it - a receiver that learns an issuer at run time is exactly
+    /// the case the selector below describes, and a plain dictionary written during a read is a
+    /// torn read or a hang rather than an error.
+    /// </para>
     /// </remarks>
-    public IDictionary<string, Uri> JwksUris { get; } = new Dictionary<string, Uri>(StringComparer.Ordinal);
+    public IDictionary<string, Uri> JwksUris { get; } = new ConcurrentDictionary<string, Uri>(IssuerComparer.Instance);
 
     /// <summary>
     /// Answers where an issuer's JWK Set document is, for issuers whose location is learned at run
@@ -50,9 +66,11 @@ public sealed class JwksKeyResolutionOptions
     /// when the host is composed - a Shared Signals transmitter advertises its "jwks_uri" in the
     /// ssf-configuration document, and that value, not a convention, is authoritative for it.
     /// <para>
-    /// Returning null rather than throwing is what keeps the sources composable: a delegate that
-    /// threw for an issuer it did not recognise would also take out the well-known fallback for
-    /// every other issuer, since nothing runs after it.
+    /// Returning null rather than throwing is what lets the map and the convention run after it: a
+    /// delegate that threw for an issuer it did not recognise would take out the fallback for every
+    /// other issuer, since nothing runs past a throw. It does NOT make two selectors composable -
+    /// this is one property, so a second consumer setting it discards the first, which is the whole
+    /// reason the map above exists.
     /// </para>
     /// </remarks>
     public Func<string, Uri?>? JwksUriSelector { get; set; }
@@ -61,9 +79,44 @@ public sealed class JwksKeyResolutionOptions
     /// Where this issuer's keys are fetched from: a named entry, then the selector, then the
     /// "{issuer}/.well-known/jwks.json" convention.
     /// </summary>
+    /// <remarks>
+    /// The map answers first because it is the host's own statement about a specific issuer, and a
+    /// statement written down beats one computed - a host wanting run-time metadata to win leaves
+    /// that issuer out of the map rather than putting it in both.
+    /// <para>
+    /// The issuer is normalised the same way for the map as for the convention. Matching the raw
+    /// string here while the convention trims a trailing slash would make one method disagree with
+    /// itself: a map keyed with the slash would miss a token whose "iss" carries none, and the miss
+    /// falls through to the convention rather than failing - the wrong document, quietly.
+    /// </para>
+    /// </remarks>
     /// <param name="issuer">The issuer whose JWK Set is wanted.</param>
     internal Uri? ResolveJwksUri(string issuer)
         => JwksUris.TryGetValue(issuer, out var mapped) ? mapped : JwksUriSelector?.Invoke(issuer);
+
+    /// <summary>The form an issuer is compared and composed in: without a trailing slash.</summary>
+    /// <remarks>
+    /// One definition, used by the map's comparer and by the well-known composition in the resolver.
+    /// Two of them would be a guard and a branch disagreeing about the same fact.
+    /// </remarks>
+    internal static string NormaliseIssuer(string issuer) => issuer.TrimEnd('/');
+
+    /// <summary>Compares issuers the way this whole type does: a trailing slash decides nothing.</summary>
+    /// <remarks>
+    /// A comparer rather than normalisation at the lookup, because the map is written by the host
+    /// and read here: normalising one side only moves the mismatch rather than removing it, and the
+    /// mismatch does not fail - it falls through to the well-known convention, which may serve a
+    /// document that verifies nothing this issuer signed.
+    /// </remarks>
+    private sealed class IssuerComparer : IEqualityComparer<string>
+    {
+        public static readonly IssuerComparer Instance = new();
+
+        public bool Equals(string? x, string? y)
+            => string.Equals(x?.TrimEnd('/'), y?.TrimEnd('/'), StringComparison.Ordinal);
+
+        public int GetHashCode(string obj) => NormaliseIssuer(obj).GetHashCode(StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// How long a fetched key set answers from cache before the next resolution refetches it.

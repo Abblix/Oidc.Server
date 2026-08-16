@@ -56,7 +56,7 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 ```csharp
 builder.Services.AddSecurityEvents(options => options.Events.RegisterCaepEvents());
 builder.Services.AddJwksKeyResolution(options =>
-    options.JwksUriSelector = issuer => transmitterMetadata.JwksUri);
+    options.JwksUris[transmitterMetadata.Issuer] = transmitterMetadata.JwksUri!);
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddDistributedReplayCache();
 builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
