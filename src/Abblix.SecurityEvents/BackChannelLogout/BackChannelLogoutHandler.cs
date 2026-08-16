@@ -22,6 +22,7 @@
 
 using System.Net.Http.Headers;
 using System.Net.Mime;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.SecurityEvents.BackChannelLogout;
 
@@ -39,9 +40,11 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// </remarks>
 /// <param name="validator">The Logout Token's validation, which is Section 2.6.</param>
 /// <param name="sink">Where the notification lands, which is Section 2.7.</param>
+/// <param name="logger">Records refusals; see <see cref="LogRefused"/> for why here.</param>
 public sealed class BackChannelLogoutHandler(
     ILogoutTokenValidator validator,
-    ILogoutNotificationSink sink)
+    ILogoutNotificationSink sink,
+    ILogger<BackChannelLogoutHandler> logger)
 {
     /// <summary>
     /// The single parameter the request must carry (Section 2.5).
@@ -67,7 +70,7 @@ public sealed class BackChannelLogoutHandler(
                 MediaTypeNames.Application.FormUrlEncoded,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return BackChannelLogoutResult.BadRequest(
+            return Refuse(
                 $"The request arrived as '{contentType ?? "(no content type)"}', where OpenID Connect "
                 + $"Back-Channel Logout 1.0 Section 2.5 requires "
                 + $"'{MediaTypeNames.Application.FormUrlEncoded}'.");
@@ -75,7 +78,7 @@ public sealed class BackChannelLogoutHandler(
 
         if (ReadLogoutToken(body) is not { Length: > 0 } logoutToken)
         {
-            return BackChannelLogoutResult.BadRequest(
+            return Refuse(
                 $"The request carries no '{LogoutTokenParameter}' parameter, which Section 2.5 requires.");
         }
 
@@ -89,14 +92,42 @@ public sealed class BackChannelLogoutHandler(
             // "If any of the validation steps fails, reject the Logout Token and return an HTTP
             // 400 Bad Request error" (Section 2.6). The reason travels in the description, which
             // Section 2.8 exists to help debug deployments with.
-            return BackChannelLogoutResult.BadRequest(exception.Message);
+            return Refuse(exception.Message);
         }
 
         var refusal = await sink.ConsumeAsync(notification, cancellationToken);
-        return refusal is null
-            ? BackChannelLogoutResult.Ok
-            : BackChannelLogoutResult.BadRequest(refusal);
+        return refusal is null ? BackChannelLogoutResult.Ok : Refuse(refusal);
     }
+
+    /// <summary>
+    /// Shapes a refusal and records it.
+    /// </summary>
+    /// <remarks>
+    /// Recorded here because here is where the description exists. It travels to the provider in
+    /// the response, which Section 2.8 asks for so a deployment can be debugged - but the provider
+    /// is the other party, and the receiver that refused keeps nothing. A run of refusals means
+    /// either a provider signing with keys this receiver does not trust or a receiver pointed at
+    /// the wrong key document, and the two are told apart only by the description; without it an
+    /// operator sees an even stream of 400s and no way in.
+    /// <para>
+    /// One place, so every refusal path is recorded by construction rather than by each of them
+    /// remembering - and a path added later is recorded on the day it is written.
+    /// </para>
+    /// </remarks>
+    /// <param name="description">What was wrong, in the words that go back to the provider.</param>
+    private BackChannelLogoutResult Refuse(string description)
+    {
+        var result = BackChannelLogoutResult.BadRequest(description);
+
+        LogRefused(logger, result.Error!.Error, description, null);
+        return result;
+    }
+
+    private static readonly Action<ILogger, string, string, Exception?> LogRefused =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Warning,
+            new EventId(LogEvents.BackChannelLogout.RequestRefused, nameof(LogEvents.BackChannelLogout.RequestRefused)),
+            "Back-channel logout refused: {Error} {Description}");
 
     /// <summary>
     /// Reads the one parameter this endpoint understands out of a form-encoded body.

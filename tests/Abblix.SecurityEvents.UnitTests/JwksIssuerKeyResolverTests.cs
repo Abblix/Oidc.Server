@@ -196,6 +196,95 @@ public class JwksIssuerKeyResolverTests
         Assert.Equal(advertised, Assert.Single(handler.Requests));
     }
 
+    /// <summary>A named entry answers for its issuer, ahead of the convention.</summary>
+    [Fact]
+    public async Task ANamedEntry_Overrides_TheWellKnownConvention()
+    {
+        var mapped = new Uri("https://issuer.example.com/.well-known/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    ///     Two consumers naming two issuers do not take each other's keys away.
+    /// </summary>
+    /// <remarks>
+    ///     The failure this replaces: with one selector for the whole host, every consumer past the
+    ///     first composed a chain by hand, and one that forgot to call the previous delegate removed
+    ///     another issuer's keys silently - a token that used to verify starts failing its
+    ///     signature, which reads as an attack rather than as wiring.
+    /// </remarks>
+    [Fact]
+    public async Task TwoNamedIssuers_DoNotDisplaceEachOther()
+    {
+        var ours = new Uri("https://issuer.example.com/keys");
+        var theirs = new Uri("https://transmitter.example.com/ssf/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = ours;
+        options.JwksUris["https://transmitter.example.com"] = theirs;
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await Resolve(resolver);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           "https://transmitter.example.com", null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal([ours, theirs], handler.Requests);
+    }
+
+    /// <summary>
+    ///     A selector that does not recognise an issuer falls through rather than deciding.
+    /// </summary>
+    /// <remarks>
+    ///     Returning null is what keeps the sources composable. A delegate that threw for an issuer
+    ///     it did not know would also take out the well-known fallback for every other issuer, since
+    ///     nothing runs after it - and the host would look configured while resolving nothing.
+    /// </remarks>
+    [Fact]
+    public async Task ASelectorAnsweringNull_FallsThroughToTheConvention()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), new JwksKeyResolutionOptions
+        {
+            JwksUriSelector = _ => null,
+        }));
+
+        Assert.Equal(new Uri($"{Issuer}/.well-known/jwks.json"), Assert.Single(handler.Requests));
+    }
+
+    /// <summary>A named entry is consulted before the selector: the more specific statement wins.</summary>
+    [Fact]
+    public async Task ANamedEntry_IsConsultedBeforeTheSelector()
+    {
+        var mapped = new Uri("https://issuer.example.com/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions
+        {
+            JwksUriSelector = _ => new Uri("https://issuer.example.com/from-selector"),
+        };
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
     [Fact]
     public async Task EncryptionKeys_DoNotAnswerASigningQuestion()
     {

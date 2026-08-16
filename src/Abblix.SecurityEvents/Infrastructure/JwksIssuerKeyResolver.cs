@@ -102,7 +102,7 @@ public sealed class JwksIssuerKeyResolver(
 
     private async Task<IReadOnlyList<JsonWebKey>> FetchKeysAsync(string issuer, CancellationToken cancellationToken)
     {
-        var jwksUri = options.Value.JwksUriSelector?.Invoke(issuer) ?? DeriveWellKnownUri(issuer);
+        var jwksUri = options.Value.ResolveJwksUri(issuer) ?? DeriveWellKnownUri(issuer);
 
         // The document behind this URI decides which signatures verify, so its transport is part
         // of the trust: over cleartext HTTP, whoever sits on the path substitutes a key and every
