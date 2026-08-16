@@ -8,6 +8,12 @@ Redis-native replay prevention for [Abblix.JWT](https://www.nuget.org/packages/A
 dotnet add package Abblix.JWT.Redis
 ```
 
+## Why a package rather than a class
+
+`StackExchange.Redis` cannot go into `Abblix.JWT` without landing on every consumer of it, so a separate assembly is forced whatever else one thinks. The name says which boundary it is: the **Redis adapter for the JWT layer**, not "the replay cache package" - anything else in that layer that comes to need a Redis backing belongs here too.
+
+It sits beside `Abblix.SharedSignals.Redis` rather than inside it, and the direction is not a matter of taste. Nothing here consumes Shared Signals, while the contract's callers are the OIDC server's DPoP proofs and client authenticators and the Security Events receiver. Folding it in would make a host that wants strict replay protection for DPoP take the whole Shared Signals stack to get it.
+
 ## Why a second implementation
 
 `IReplayCache` asks for a reservation and an answer in one call, and it always has - the contract does not change here, because only an implementation can promise that the two are indivisible.
