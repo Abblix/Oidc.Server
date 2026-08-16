@@ -35,11 +35,10 @@ public sealed class JwksKeyResolutionOptions
     /// <remarks>
     /// Consulted first, and additive: two consumers in one host - a back-channel logout receiver
     /// and a Shared Signals receiver, say - each add their own issuer without knowing about the
-    /// other. That is what a host cannot get right through <see cref="JwksUriSelector"/> alone: a
-    /// single-valued delegate makes every consumer past the first compose a chain by hand, and one
-    /// that forgets to call the previous delegate silently removes another issuer's keys - a token
-    /// that used to verify starts failing its signature, which reads as an attack rather than as
-    /// wiring.
+    /// other. Nothing here is a slot one consumer can occupy: a single-valued setting makes every
+    /// consumer past the first compose a chain by hand, and one that forgets to call the previous
+    /// link silently removes another issuer's keys - a token that used to verify starts failing its
+    /// signature, which reads as an attack rather than as wiring.
     /// <para>
     /// <b>Filled in code, never from a configuration file.</b> An issuer identifier is a URL, and
     /// the ':' in it is the configuration hierarchy delimiter - so an entry written in appsettings
@@ -58,26 +57,49 @@ public sealed class JwksKeyResolutionOptions
     public IDictionary<string, Uri> JwksUris { get; } = new ConcurrentDictionary<string, Uri>(IssuerComparer.Instance);
 
     /// <summary>
-    /// Answers where an issuer's JWK Set document is, for issuers whose location is learned at run
-    /// time. Returning null means "not mine", and resolution carries on.
+    /// The selectors added so far, asked in order until one answers.
+    /// </summary>
+    /// <remarks>
+    /// Read-only here because adding is what a consumer does: see
+    /// <see cref="AddJwksUriSelector"/>, which is the only way in, so no consumer can occupy the
+    /// place of another.
+    /// </remarks>
+    internal IReadOnlyCollection<Func<string, Uri?>> JwksUriSelectors => _jwksUriSelectors;
+
+    private readonly ConcurrentQueue<Func<string, Uri?>> _jwksUriSelectors = new();
+
+    /// <summary>
+    /// Adds a way to answer where an issuer's JWK Set document is, for issuers whose location is
+    /// learned at run time. Returning null means "not mine", and resolution carries on.
     /// </summary>
     /// <remarks>
     /// The escape hatch beside <see cref="JwksUris"/>, for a location that cannot be written down
     /// when the host is composed - a Shared Signals transmitter advertises its "jwks_uri" in the
     /// ssf-configuration document, and that value, not a convention, is authoritative for it.
     /// <para>
-    /// Returning null rather than throwing is what lets the map and the convention run after it: a
-    /// delegate that threw for an issuer it did not recognise would take out the fallback for every
-    /// other issuer, since nothing runs past a throw. It does NOT make two selectors composable -
-    /// this is one property, so a second consumer setting it discards the first, which is the whole
-    /// reason the map above exists.
+    /// Additive for the same reason the map is, and by the same reasoning: two receivers, each
+    /// learning its own transmitter's metadata, are the ordinary case rather than an exotic one. A
+    /// settable delegate would make the second one discard the first, and the loss shows up as a
+    /// signature that stopped verifying.
+    /// </para>
+    /// <para>
+    /// Answering null rather than throwing is what lets the selectors after it, and then the
+    /// convention, still run: a delegate that threw for an issuer it did not recognise would take
+    /// the fallback out for every other issuer, since nothing runs past a throw.
     /// </para>
     /// </remarks>
-    public Func<string, Uri?>? JwksUriSelector { get; set; }
+    /// <param name="selector">Answers for the issuers it knows, null for the rest.</param>
+    public JwksKeyResolutionOptions AddJwksUriSelector(Func<string, Uri?> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+
+        _jwksUriSelectors.Enqueue(selector);
+        return this;
+    }
 
     /// <summary>
-    /// Where this issuer's keys are fetched from: a named entry, then the selector, then the
-    /// "{issuer}/.well-known/jwks.json" convention.
+    /// Where this issuer's keys are fetched from: a named entry, then each selector in the order it
+    /// was added, then the "{issuer}/.well-known/jwks.json" convention.
     /// </summary>
     /// <remarks>
     /// The map answers first because it is the host's own statement about a specific issuer, and a
@@ -92,7 +114,18 @@ public sealed class JwksKeyResolutionOptions
     /// </remarks>
     /// <param name="issuer">The issuer whose JWK Set is wanted.</param>
     internal Uri? ResolveJwksUri(string issuer)
-        => JwksUris.TryGetValue(issuer, out var mapped) ? mapped : JwksUriSelector?.Invoke(issuer);
+    {
+        if (JwksUris.TryGetValue(issuer, out var mapped))
+            return mapped;
+
+        foreach (var selector in _jwksUriSelectors)
+        {
+            if (selector(issuer) is { } answered)
+                return answered;
+        }
+
+        return null;
+    }
 
     /// <summary>The form an issuer is compared and composed in: without a trailing slash.</summary>
     /// <remarks>

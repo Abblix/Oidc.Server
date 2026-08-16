@@ -188,10 +188,10 @@ public class JwksIssuerKeyResolverTests
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
 
-        await Resolve(Resolver(handler, new FakeTimeProvider(Now), new JwksKeyResolutionOptions
-        {
-            JwksUriSelector = _ => advertised,
-        }));
+        await Resolve(Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions().AddJwksUriSelector(_ => advertised)));
 
         Assert.Equal(advertised, Assert.Single(handler.Requests));
     }
@@ -260,10 +260,10 @@ public class JwksIssuerKeyResolverTests
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
 
-        await Resolve(Resolver(handler, new FakeTimeProvider(Now), new JwksKeyResolutionOptions
-        {
-            JwksUriSelector = _ => null,
-        }));
+        await Resolve(Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions().AddJwksUriSelector(_ => null)));
 
         Assert.Equal(new Uri($"{Issuer}/.well-known/jwks.json"), Assert.Single(handler.Requests));
     }
@@ -300,6 +300,81 @@ public class JwksIssuerKeyResolverTests
         Assert.Equal(mapped, Assert.Single(handler.Requests));
     }
 
+    /// <summary>
+    ///     Two selectors both answer, in the order they were added, and neither displaces the other.
+    /// </summary>
+    /// <remarks>
+    ///     Two receivers each learning their own transmitter's metadata is the ordinary case, not an
+    ///     exotic one. A settable delegate would let the second discard the first, and the loss
+    ///     shows up as a signature that stopped verifying - which reads as an attack rather than as
+    ///     wiring.
+    /// </remarks>
+    [Fact]
+    public async Task TwoSelectors_BothAnswer_InTheOrderTheyWereAdded()
+    {
+        var ours = new Uri("https://issuer.example.com/keys");
+        var theirs = new Uri("https://transmitter.example.com/ssf/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions()
+            .AddJwksUriSelector(issuer => issuer == Issuer ? ours : null)
+            .AddJwksUriSelector(issuer => issuer == "https://transmitter.example.com" ? theirs : null);
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await Resolve(resolver);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           "https://transmitter.example.com", null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal([ours, theirs], handler.Requests);
+    }
+
+    /// <summary>
+    ///     A mapped address over cleartext is refused, exactly as a derived one is.
+    /// </summary>
+    /// <remarks>
+    ///     The document behind this address decides which signatures verify, so its transport is
+    ///     part of the trust whatever named it. A map that quietly escaped the check would be a way
+    ///     to lower it by writing one line of wiring - and the check is the reason nobody can.
+    /// </remarks>
+    [Fact]
+    public async Task AMappedCleartextAddress_IsRefused()
+    {
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([]));
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = new Uri("http://issuer.example.com/keys");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Resolve(Resolver(handler, new FakeTimeProvider(Now), options)));
+
+        Assert.Contains("cleartext", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>Loopback stays reachable over cleartext, so local development is not collateral.</summary>
+    /// <remarks>
+    ///     The control for the case above: without it, the refusal test would also pass against a
+    ///     resolver that refused every mapped address, and the map would be unusable while the suite
+    ///     read as green.
+    /// </remarks>
+    [Fact]
+    public async Task AMappedLoopbackAddress_IsAllowed()
+    {
+        var mapped = new Uri("http://localhost:5001/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
     /// <summary>A named entry is consulted before the selector: the more specific statement wins.</summary>
     [Fact]
     public async Task ANamedEntry_IsConsultedBeforeTheSelector()
@@ -308,10 +383,8 @@ public class JwksIssuerKeyResolverTests
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
 
-        var options = new JwksKeyResolutionOptions
-        {
-            JwksUriSelector = _ => new Uri("https://issuer.example.com/from-selector"),
-        };
+        var options = new JwksKeyResolutionOptions()
+            .AddJwksUriSelector(_ => new Uri("https://issuer.example.com/from-selector"));
         options.JwksUris[Issuer] = mapped;
 
         await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
