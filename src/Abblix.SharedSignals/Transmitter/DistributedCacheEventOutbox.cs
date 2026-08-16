@@ -36,11 +36,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// the cache tier rather than beside data that earns backups.
 /// </summary>
 /// <remarks>
-/// <see cref="IDistributedCache"/> reads and writes whole values with no compare-and-set, so
-/// queue mutations are serialized through an in-process gate per stream. That makes this
-/// implementation correct for a SINGLE transmitter instance; replicas mutating one stream's
-/// queue would overwrite each other's writes. A scaled-out transmitter needs a backend-aware
-/// outbox - native list operations - behind the same interface.
+/// <see cref="IDistributedCache"/> reads and writes whole values with no compare-and-set, so queue
+/// mutations are serialized through an in-process gate per stream. That gate excludes this
+/// instance's threads from each other and reaches no further, which makes this implementation
+/// correct for a SINGLE transmitter instance and only that: two instances mutating one stream's
+/// queue read the same value, each writes its own edit over the whole entry, and the later write
+/// silently discards the earlier one's. No compare-and-set means the interface cannot express the
+/// fix either - it is not a gap in this class. A transmitter running more than one instance takes
+/// the outbox built on native list operations, <c>AddSsfRedisOutbox</c>.
 /// </remarks>
 /// <param name="cache">The distributed cache the queues live in; the store is the host's
 /// choice.</param>

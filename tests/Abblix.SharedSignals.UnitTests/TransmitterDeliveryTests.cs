@@ -26,6 +26,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.SecurityEvents.Delivery;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -264,7 +265,8 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(new OutboxItem("jti-held", "h.h.h"));
         var signer = new FakeSigner();
         var options = new SsfTransmitterOptions { Issuer = "https://tr.example.com" };
-        var dispatcher = new EventDispatcher(store, outbox, signer, options.Issuer);
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer);
         var service = new StreamManagementService(store, outbox, dispatcher, options);
 
         Assert.True(await service.ChangeStreamStatusAsync(

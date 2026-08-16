@@ -49,7 +49,6 @@ public static class PushDeliveryEndpointRouteBuilderExtensions
         string pattern)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-
         return endpoints.MapPost(pattern, HandleAsync);
     }
 

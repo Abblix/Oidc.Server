@@ -124,6 +124,21 @@ public sealed record SsfTransmitterOptions
     public TimeSpan? PushDeliveryInterval { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// How long one instance's claim on a stream's delivery holds, and therefore the longest a
+    /// single pass over that stream may run.
+    /// </summary>
+    /// <remarks>
+    /// The claim keeps concurrent instances off one another's streams, and it expires because
+    /// expiry is the only release an instance that died mid-pass can perform. That makes this one
+    /// value two limits at once, erring in opposite directions and both of them safe: too short
+    /// cuts a legitimate pass off at the deadline and its remainder goes out on the next one, too
+    /// long parks a stream for the rest of the claim after the instance holding it dies. The
+    /// default is comfortably longer than a pass over a responsive receiver and well short of an
+    /// outage anybody would sit through.
+    /// </remarks>
+    public TimeSpan PushDeliveryLeaseDuration { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// The "default_subjects" value the mode advertises, kept beside the enum so the wire word
     /// and the behavior cannot drift apart.
     /// </summary>

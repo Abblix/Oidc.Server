@@ -64,4 +64,21 @@ public static class ServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
         return services;
     }
+
+    /// <summary>
+    /// Puts the push delivery claim on Redis, which is what stops several transmitter instances
+    /// from delivering one stream's queue to its receiver several times over. A deployment running
+    /// more than one instance needs this call: the default claim reaches only inside a process, so
+    /// without it every instance believes it holds every stream.
+    /// </summary>
+    /// <remarks>
+    /// Replace for the same reason as its siblings above - it IS the host's explicit choice and
+    /// wins in any order relative to the role registration.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection AddSsfRedisDeliveryLease(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<IDeliveryLease, RedisDeliveryLease>());
+        return services;
+    }
 }

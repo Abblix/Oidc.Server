@@ -38,6 +38,15 @@ namespace Abblix.SharedSignals.Transmitter;
 /// verification throttle, tolerates loss by construction (one extra verification is allowed),
 /// and everything durable is the operator's file. A deployment that needs receiver-driven
 /// lifecycle registers a durable <see cref="IStreamStore"/> instead.
+/// <para>
+/// Across INSTANCES the same trade reads differently, and it is the sharper limit of the two.
+/// The declared set is identical everywhere, since it comes from one file, so delivery is
+/// consistent - but a mutation lands in one instance's memory and nowhere else. A receiver
+/// pausing its stream is honoured by whichever instance took the request while the rest keep
+/// delivering, and because the delivery claim moves between instances from pass to pass, the
+/// pause appears to be respected intermittently rather than not at all, which is the harder
+/// shape to diagnose. A transmitter running more than one instance takes a shared store.
+/// </para>
 /// </remarks>
 public sealed class ConfigurationStreamStore : IStreamStore
 {

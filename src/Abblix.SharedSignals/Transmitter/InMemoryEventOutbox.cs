@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -42,10 +42,23 @@ public sealed class InMemoryEventOutbox : IEventOutbox
         ArgumentException.ThrowIfNullOrEmpty(streamId);
         ArgumentNullException.ThrowIfNull(item);
 
-        var queue = _queues.GetOrAdd(streamId, _ => []);
-        lock (queue)
+        // Re-checked under the lock, because a clear between the lookup and here removes the list
+        // from the dictionary: adding to it then puts the event where nothing can read it, and this
+        // method has no way to say so - it would report success into a queue that no longer exists.
+        // The retry lands the event in whatever list is current, which is the right place for one
+        // enqueued after a clear. It spins only while clears keep interleaving, and a clear is an
+        // administrative act rather than traffic.
+        while (true)
         {
-            queue.Add(item);
+            var queue = _queues.GetOrAdd(streamId, _ => []);
+            lock (queue)
+            {
+                if (_queues.TryGetValue(streamId, out var current) && ReferenceEquals(current, queue))
+                {
+                    queue.Add(item);
+                    break;
+                }
+            }
         }
 
         return Task.CompletedTask;

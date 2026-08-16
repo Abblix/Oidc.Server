@@ -12,7 +12,7 @@ dotnet add package Abblix.SharedSignals.Redis
 
 The in-package distributed-cache outbox stores each queue as one value, so its mutations are read-modify-write - correct for a single transmitter instance serializing them in-process, and silently lossy the day the transmitter scales to replicas: one replica's enqueue overwrites another's. This outbox appends, removes by value and deletes fields on the server, inside a transaction, so concurrent replicas compose instead of overwriting each other.
 
-What that buys is that no enqueue or acknowledgement is lost; what it does not buy is single delivery, because a delivery pass reads and then acknowledges rather than leasing. Both replicas read the whole queue and both walk all of it, so with N replicas draining one stream each SET is transmitted N times - measured, not occasional. RFC 8935 Section 2 permits redelivery ("The SET Transmitter MAY transmit the same SET to the SET Recipient multiple times, regardless of the response"), and the receiver's replay cache absorbs it; but the same section adds that a transmitter "SHOULD NOT retransmit a SET" outside a suspected recoverable failure, and should delay retransmission "to avoid overwhelming the SET Recipient". A same-instant race between replicas is neither. Take this outbox for the concurrency safety of its mutations; if the duplication matters at your replica count, lease the items instead of reading them - `LMOVE` into a per-replica in-flight list turns N transmissions into one in the common case.
+Composing mutations is one half. The other is single delivery, and it is a separate call: `AddSsfRedisDeliveryLease()`. A delivery pass reads a stream's queue and acknowledges what the receiver takes, so without a claim every replica reads the same pending SETs and every one of them POSTs them - N transmissions of each event, by construction rather than occasionally. RFC 8935 Section 2 permits redelivery ("The SET Transmitter MAY transmit the same SET to the SET Recipient multiple times, regardless of the response"), but the same section binds the transmitter the other way: it "SHOULD NOT retransmit a SET" outside a suspected recoverable failure, and should delay retransmission "to avoid overwhelming the SET Recipient". Replicas duplicating each other's work suspect nothing, so that is the SHOULD NOT rather than a matter of traffic.
 
 ## Usage
 
@@ -43,6 +43,25 @@ builder.Services
 ```
 
 The key carries the transmitter's own issuer, so two deployments sharing one Redis keep separate registries; without that they would read each other's streams and deliver their own signed events to each other's receivers.
+
+## Single delivery across replicas
+
+`AddSsfRedisDeliveryLease()` is what makes several replicas a division of the streams rather than N copies of the work. Before sweeping a stream a replica claims it with a write conditional on the key not existing - the one Redis primitive that can decide between askers sharing nothing else - and a replica told no passes that stream by and takes one the others have not reached.
+
+```csharp
+builder.Services
+    .AddSecurityEvents(...)
+    .AddSsfTransmitter(...)
+    .AddSsfRedisOutbox()
+    .AddSsfRedisStreamStore()
+    .AddSsfRedisDeliveryLease();
+```
+
+Without this call the claim is `ProcessLocalDeliveryLease`, which reaches inside one process and no further, so every replica believes it holds every stream. The transmitter names the implementation in its startup log for exactly that reason - a deployment can read which one it wired rather than infer it.
+
+The claim expires, because expiry is the only release a replica that died mid-pass can perform, and that makes `SsfTransmitterOptions.PushDeliveryLeaseDuration` two limits at once: the claim's life and the longest one pass may run. A pass reaching the deadline is cut off there, since past it the stream belongs to whoever takes it next; what it did not deliver goes out on a later pass. Both directions are safe - too short redoes work, too long parks a stream after a replica dies - so set it by which one the deployment minds less. The default is one minute.
+
+This is also why the lease is not offered over `IDistributedCache`. That interface writes whole values unconditionally and has no set-if-absent, so a claim built on it would be granted to every replica that asked - a lock everyone holds, behaving exactly like no lock while reading as coordination.
 
 Two properties of the shape are worth knowing before adopting it. The whole registry travels on every dispatched event and lives on one cluster slot, which suits the tens of receivers a transmitter serves and does not suit thousands. And registrations carry the receivers' delivery credentials, so this Redis holds secrets and deserves the protection of one.
 

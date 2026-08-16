@@ -108,10 +108,34 @@ public sealed class StreamManagementService(
             SubjectsMode = options.DefaultSubjectsMode,
         };
 
-        return await store.TryCreateAsync(created, cancellationToken)
-            ? ManagementResult<StreamConfiguration>.Created(configuration)
-            : ManagementResult<StreamConfiguration>.Conflict(
+        if (!await store.TryCreateAsync(created, cancellationToken))
+        {
+            return ManagementResult<StreamConfiguration>.Conflict(
                 "A stream with the generated identifier already exists.");
+        }
+
+        // The count above was read before this stream existed, and the identifier is freshly
+        // generated, so nothing collides and two creates arriving together both pass. Re-read now
+        // that ours is on record: without this the one-per-receiver policy never refuses anything,
+        // and an option that cannot fire is a promise the deployment cannot keep.
+        if (!options.AllowMultipleStreamsPerReceiver)
+        {
+            var streams = await store.ListAsync(receiverId, cancellationToken);
+
+            // The lowest identifier stays, whoever asked first. A rule both racers can evaluate
+            // the same way is what keeps them from both withdrawing and leaving the receiver with
+            // no stream at all.
+            if (streams.Count > 1
+                && streams.Select(existing => existing.StreamId).Order(StringComparer.Ordinal).First() != streamId)
+            {
+                await store.DeleteAsync(receiverId, streamId, cancellationToken);
+                return ManagementResult<StreamConfiguration>.Conflict(
+                    "The receiver already has a stream, and this transmitter allows one per receiver "
+                    + "(SSF 1.0 Section 8.1.1.1); read it and update or replace what differs.");
+            }
+        }
+
+        return ManagementResult<StreamConfiguration>.Created(configuration);
     }
 
     /// <summary>

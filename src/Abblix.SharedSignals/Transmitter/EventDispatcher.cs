@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -25,6 +25,8 @@ using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 
+using Microsoft.Extensions.Logging;
+
 namespace Abblix.SharedSignals.Transmitter;
 
 /// <summary>
@@ -45,7 +47,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// honest default only for a transmitter whose events carry nothing the receiver may not see.
 /// </param>
 /// <param name="clock">Supplies "iat"; null takes the system clock.</param>
-public sealed class EventDispatcher(
+/// <param name="logger">Records the streams a fan-out could not reach.</param>
+public sealed partial class EventDispatcher(
+    ILogger<EventDispatcher> logger,
     IStreamStore streams,
     IEventOutbox outbox,
     ISecurityEventTokenSigner signer,
@@ -99,8 +103,18 @@ public sealed class EventDispatcher(
                 continue;
             }
 
-            await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
-            reached++;
+            // One stream's failure is one stream's. Letting it out of the loop would drop the
+            // fan-out to every stream after it AND lose the count with the exception, so a caller
+            // would learn neither who received the event nor that anybody had.
+            try
+            {
+                await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
+                reached++;
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogStreamNotReached(exception, stream.StreamId, descriptor.EventType);
+            }
         }
 
         return reached;

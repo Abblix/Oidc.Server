@@ -52,12 +52,12 @@ public static class ResultHeaderExtensions
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(configure);
 
-        return new HeadersAttached(result, configure);
+        return new HeadersAttachedDecorator(result, configure);
     }
 
     /// <param name="inner">The answer being rendered.</param>
     /// <param name="configure">Sets the headers on the response.</param>
-    private sealed class HeadersAttached(IResult inner, Action<IHeaderDictionary> configure) : IResult
+    private sealed class HeadersAttachedDecorator(IResult inner, Action<IHeaderDictionary> configure) : IResult
     {
         public Task ExecuteAsync(HttpContext httpContext)
         {

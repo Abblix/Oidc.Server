@@ -83,6 +83,33 @@ public class SsfServiceCollectionTests
         Assert.Same(hostStore, provider.GetRequiredService<IStreamStore>());
     }
 
+    /// <summary>
+    /// The claim deciding which instance delivers a stream is a default like the stores, and it is
+    /// the one a scaled-out deployment MUST replace - so a host's own must win here for the same
+    /// reason and by the same rule.
+    /// </summary>
+    [Fact]
+    public void Transmitter_ClaimsStreams_AndAHostLeaseWins()
+    {
+        var services = SecurityEventsBase();
+
+        using var defaults = services
+            .AddSsfTransmitter(TransmitterOptions)
+            .BuildServiceProvider();
+
+        Assert.IsType<ProcessLocalDeliveryLease>(defaults.GetRequiredService<IDeliveryLease>());
+
+        var withHostLease = SecurityEventsBase();
+        var hostLease = new ProcessLocalDeliveryLease(TimeProvider.System);
+        withHostLease.AddSingleton<IDeliveryLease>(hostLease);
+
+        using var provider = withHostLease
+            .AddSsfTransmitter(TransmitterOptions)
+            .BuildServiceProvider();
+
+        Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
+    }
+
     [Fact]
     public void WithoutTheSecurityEventsCore_TheRoleRefuses_NamingThePrerequisite()
     {
