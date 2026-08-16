@@ -55,7 +55,7 @@ public static class DistributedCacheExtensions
 	/// before either writes and both hear "new". The race window is bounded by the cache round-trip,
 	/// which makes the duplicate-detection guarantee probabilistic rather than strict. Callers whose
 	/// domain needs strict exactly-once use a backend-aware primitive instead - for replay prevention
-	/// that is <c>ConditionalWriteReplayCache</c> over the store's own conditional write (Redis
+	/// that is a <c>ReplayCacheBase</c> over the store's own conditional write (Redis
 	/// <c>SET ... NX PX</c>, SQL <c>INSERT ... ON CONFLICT DO NOTHING</c>).
 	/// </para>
 	/// <para>

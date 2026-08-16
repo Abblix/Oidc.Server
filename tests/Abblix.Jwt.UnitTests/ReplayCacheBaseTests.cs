@@ -31,12 +31,16 @@ namespace Abblix.Jwt.UnitTests;
 /// and the verdict it passes back. Whether the backend's write is indivisible is the backend's
 /// promise - asserting it here would be testing somebody else's client library.
 /// </summary>
-public class ConditionalWriteReplayCacheTests
+public class ReplayCacheBaseTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1754040000);
 
-    /// <summary>Records what the cache asked for, and answers what the test tells it to.</summary>
-    private sealed class RecordingBackend(bool answer)
+    /// <summary>
+    /// Stands where a real store's subclass stands: records what the base asked of it, and answers
+    /// what the test tells it to.
+    /// </summary>
+    private sealed class RecordingCache(bool answer, TimeProvider clock, string prefix)
+        : ReplayCacheBase(clock, prefix)
     {
         public string? Key { get; private set; }
 
@@ -46,7 +50,8 @@ public class ConditionalWriteReplayCacheTests
 
         public CancellationToken Token { get; private set; }
 
-        public Task<bool> ReserveIfAbsentAsync(string key, TimeSpan timeToLive, CancellationToken cancellationToken)
+        protected override Task<bool> ReserveIfAbsentAsync(
+            string key, TimeSpan timeToLive, CancellationToken cancellationToken)
         {
             Key = key;
             TimeToLive = timeToLive;
@@ -56,21 +61,21 @@ public class ConditionalWriteReplayCacheTests
         }
     }
 
-    private static ConditionalWriteReplayCache NewCache(RecordingBackend backend, string prefix = "replay:")
-        => new(backend.ReserveIfAbsentAsync, new FakeTimeProvider(Now), prefix);
+    private static RecordingCache NewCache(bool answer = true, string prefix = "replay:")
+        => new(answer, new FakeTimeProvider(Now), prefix);
 
     [Fact]
     public async Task TheBackendsAnswer_IsTheVerdict_InBothDirections()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        var accepted = new RecordingBackend(answer: true);
-        Assert.True(await NewCache(accepted).TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken));
+        var accepted = NewCache(answer: true);
+        Assert.True(await accepted.TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken));
 
         // A backend that says the key was already there is reporting a replay, and the cache must
         // not soften that into anything else - it is the only observation of the fact there is.
-        var refused = new RecordingBackend(answer: false);
-        Assert.False(await NewCache(refused).TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken));
+        var refused = NewCache(answer: false);
+        Assert.False(await refused.TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken));
 
         Assert.Equal(1, accepted.Calls);
         Assert.Equal(1, refused.Calls);
@@ -80,26 +85,26 @@ public class ConditionalWriteReplayCacheTests
     public async Task TheKey_CarriesThePrefix_SoTwoNamespacesCannotSeeEachOther()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var backend = new RecordingBackend(answer: true);
+        var cache = NewCache(prefix: "rollout-after:");
 
-        await NewCache(backend, "rollout-after:").TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken);
+        await cache.TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken);
 
-        Assert.Equal("rollout-after:jti-1", backend.Key);
+        Assert.Equal("rollout-after:jti-1", cache.Key);
     }
 
     [Fact]
     public async Task TheLifetime_IsTheFreshnessWindow_WhileItLasts()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var backend = new RecordingBackend(answer: true);
+        var cache = NewCache();
 
-        await NewCache(backend).TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken);
+        await cache.TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken);
 
-        Assert.Equal(TimeSpan.FromMinutes(5), backend.TimeToLive);
+        Assert.Equal(TimeSpan.FromMinutes(5), cache.TimeToLive);
 
         // The backend is the only thing here that performs I/O, so a token that stopped at this
         // class would leave the one cancellable operation uncancellable.
-        Assert.Equal(cancellationToken, backend.Token);
+        Assert.Equal(cancellationToken, cache.Token);
     }
 
     /// <summary>
@@ -112,26 +117,24 @@ public class ConditionalWriteReplayCacheTests
     public async Task AnExpiryAlreadyElapsed_StillAsksForAPositiveLifetime()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var backend = new RecordingBackend(answer: true);
+        var cache = NewCache();
 
-        Assert.True(await NewCache(backend)
-            .TryReserveAsync("jti-1", Now.AddSeconds(-30), cancellationToken));
+        Assert.True(await cache.TryReserveAsync("jti-1", Now.AddSeconds(-30), cancellationToken));
 
-        Assert.True(backend.TimeToLive > TimeSpan.Zero);
+        Assert.True(cache.TimeToLive > TimeSpan.Zero);
     }
 
     [Fact]
     public async Task AnEmptyIdentifier_IsRefused_RatherThanReservingThePrefixItself()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var backend = new RecordingBackend(answer: true);
-        var cache = NewCache(backend);
+        var cache = NewCache();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => cache.TryReserveAsync("", Now.AddMinutes(5), cancellationToken));
 
         // Nothing reached the backend: reserving the bare prefix would make the FIRST real token
         // under it read as a replay.
-        Assert.Equal(0, backend.Calls);
+        Assert.Equal(0, cache.Calls);
     }
 }

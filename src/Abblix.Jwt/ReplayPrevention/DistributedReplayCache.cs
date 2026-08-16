@@ -38,8 +38,8 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// defence for DPoP proofs, and RFC 8935 Section 2 lets a transmitter redeliver a SET regardless,
 /// so a lost race costs one duplicate idempotent pass. A client assertion is the one that does not
 /// read that way, since RFC 7523 Section 3 lets an authorization server reject a reused one. A
-/// deployment relying on that rejection takes <see cref="ConditionalWriteReplayCache"/>, whose
-/// reservation the store decides inside the operation that writes it.
+/// deployment relying on that rejection takes a <see cref="ReplayCacheBase"/> over a store
+/// that decides and writes in one operation.
 /// </remarks>
 /// <param name="cache">The distributed cache the host registered; the store is the host's choice.
 /// </param>
@@ -52,24 +52,19 @@ namespace Abblix.Jwt.ReplayPrevention;
 public sealed class DistributedReplayCache(
     IDistributedCache cache,
     TimeProvider clock,
-    string keyPrefix) : IReplayCache
+    string keyPrefix) : ReplayCacheBase(clock, keyPrefix)
 {
-    private readonly string _keyPrefix = keyPrefix ?? throw new ArgumentNullException(nameof(keyPrefix));
-
     /// <inheritdoc />
-    public async Task<bool> TryReserveAsync(
-        string identifier,
-        DateTimeOffset expiresAt,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(identifier);
-
-        // A time-to-live rather than an absolute moment, because that is what the cache takes.
-        // The shared primitive floors a value already in the past, so an expiry that has just
-        // elapsed still records the sighting instead of silently reserving nothing.
-        return await cache.TryAddAsync(
-            _keyPrefix + identifier,
-            expiresAt - clock.GetUtcNow(),
-            cancellationToken);
-    }
+    /// <remarks>
+    /// This is the implementation that cannot keep the base class's one demand, and it is here
+    /// rather than in a strict sibling precisely because <see cref="IDistributedCache"/> offers Get
+    /// and Set and nothing that decides. The helper below is add-if-absent by intent and
+    /// read-then-write by construction, which is what makes this cache probabilistic - see the
+    /// class remarks for which profiles accept that and which do not.
+    /// </remarks>
+    protected override async Task<bool> ReserveIfAbsentAsync(
+        string key,
+        TimeSpan timeToLive,
+        CancellationToken cancellationToken)
+        => await cache.TryAddAsync(key, timeToLive, cancellationToken);
 }

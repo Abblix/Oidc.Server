@@ -330,8 +330,8 @@ public static class ServiceCollectionExtensions
     /// Step 8, the replay check, is optional in the specification and taken up here, because the
     /// request carrying the token is unauthenticated and the token is a bearer credential in the
     /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>; a deployment
-    /// wanting a strictly atomic reservation registers <c>ConditionalWriteReplayCache</c> over its
-    /// own store's conditional write, which TryAdd here then leaves alone.
+    /// wanting a strictly atomic reservation derives a <c>ReplayCacheBase</c> over its own
+    /// store's conditional write and registers that, which TryAdd here then leaves alone.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>

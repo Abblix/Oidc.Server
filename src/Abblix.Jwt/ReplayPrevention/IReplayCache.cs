@@ -36,8 +36,8 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// <see cref="DistributedReplayCache"/> rides <c>IDistributedCache</c>, which exposes only Get
 /// and Set, so its answer is probabilistic within one cache round trip. A deployment that needs
 /// strict single-use takes a backend-native primitive behind this same interface, which is what
-/// <see cref="ConditionalWriteReplayCache"/> is for: it holds everything around the primitive and
-/// takes the primitive itself from the deployment - Redis <c>SET NX PX</c>, SQL
+/// <see cref="ReplayCacheBase"/> is for: it holds everything around the primitive and leaves the
+/// primitive itself to a subclass - Redis <c>SET NX PX</c>, SQL
 /// <c>INSERT ... ON CONFLICT DO NOTHING</c>, and their equivalents.
 /// </remarks>
 public interface IReplayCache
