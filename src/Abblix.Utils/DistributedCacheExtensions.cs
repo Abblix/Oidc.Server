@@ -54,8 +54,8 @@ public static class DistributedCacheExtensions
 	/// compare-and-set primitive, so two concurrent callers of the same key can both observe a miss
 	/// before either writes and both hear "new". The race window is bounded by the cache round-trip,
 	/// which makes the duplicate-detection guarantee probabilistic rather than strict. Callers whose
-	/// domain needs strict exactly-once use a backend-aware implementation instead - for replay
-	/// prevention that is <c>Abblix.JWT.Redis</c>, and the shape generalizes (Redis
+	/// domain needs strict exactly-once use a backend-aware primitive instead - for replay prevention
+	/// that is <c>ConditionalWriteReplayCache</c> over the store's own conditional write (Redis
 	/// <c>SET ... NX PX</c>, SQL <c>INSERT ... ON CONFLICT DO NOTHING</c>).
 	/// </para>
 	/// <para>

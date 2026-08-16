@@ -38,8 +38,8 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// defence for DPoP proofs, and RFC 8935 Section 2 lets a transmitter redeliver a SET regardless,
 /// so a lost race costs one duplicate idempotent pass. A client assertion is the one that does not
 /// read that way, since RFC 7523 Section 3 lets an authorization server reject a reused one. A
-/// deployment relying on that rejection takes <c>Abblix.JWT.Redis</c>, whose reservation the server
-/// decides inside the command that writes it.
+/// deployment relying on that rejection takes <see cref="ConditionalWriteReplayCache"/>, whose
+/// reservation the store decides inside the operation that writes it.
 /// </remarks>
 /// <param name="cache">The distributed cache the host registered; the store is the host's choice.
 /// </param>
