@@ -48,6 +48,55 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// what distinguishes a strict cache from <see cref="DistributedReplayCache"/>; a subclass that
 /// read first would hand back the very race the shape exists to close.
 /// </para>
+/// <para>
+/// <b>Redis.</b> One command, and the condition is evaluated by the server inside the write that
+/// performs it, so no caller can be between the two. Redis expires the key itself, which is the
+/// whole of the retention question here:
+/// </para>
+/// <code><![CDATA[
+/// public sealed class RedisReplayCache(IConnectionMultiplexer connection, TimeProvider clock, string prefix)
+///     : ReplayCacheBase(clock, prefix)
+/// {
+///     private readonly IDatabase _database = connection.GetDatabase()
+///
+///     protected override Task<bool> ReserveIfAbsentAsync(
+///         string key, TimeSpan timeToLive, CancellationToken cancellationToken)
+///         => _database.StringSetAsync(key, 1, timeToLive, When.NotExists)
+/// }
+/// ]]></code>
+/// <para>
+/// The stored value is a presence marker and nothing reads it: presence of the key is the whole
+/// fact. <c>When.NotExists</c> is what makes the answer meaningful - with <c>When.Always</c> the
+/// call still compiles, still returns a bool, and returns true every time, so every replay reads
+/// as fresh.
+/// </para>
+/// <para>
+/// <b>PostgreSQL.</b> The primary key does the deciding, and the statement affects one row when it
+/// inserted and none when it conflicted:
+/// </para>
+/// <code><![CDATA[
+/// INSERT INTO replay_reservations (reservation_key, expires_at)
+/// VALUES (@key, @expiresAt)
+/// ON CONFLICT (reservation_key) DO NOTHING
+/// ]]></code>
+/// <para>
+/// A row count of one is a first sighting, zero is a replay - the same answer Redis gives, from the
+/// uniqueness constraint rather than from a flag. What differs is retention: a table does not
+/// expire anything, so the subclass computes <c>expires_at</c> from the lifetime it was handed and
+/// something must remove rows past it. Until they are removed the identifier stays reserved, and
+/// the direction of that error is the reassuring one - a replay cache that remembers too long
+/// refuses a request it could have allowed, while one that forgets too early accepts a replay. So
+/// a cleanup that lags is a size problem, never a security one, and it may be a scheduled delete
+/// or a partition drop rather than anything the reservation path waits for.
+/// </para>
+/// <para>
+/// <b>How to know an implementation is right.</b> Not by reading it: a read-then-write version
+/// satisfies the signature, passes every sequential test and fails only under load. Drive it with
+/// many callers reserving ONE identifier at once, over separate connections - a single pooled
+/// connection can serialize them and hide the defect - and require the count of true answers to be
+/// exactly one. That assertion holds under every interleaving when the store decides, and fails as
+/// soon as any two callers overlap when it does not.
+/// </para>
 /// </remarks>
 /// <param name="clock">The clock the retention window is measured against.</param>
 /// <param name="keyPrefix">
