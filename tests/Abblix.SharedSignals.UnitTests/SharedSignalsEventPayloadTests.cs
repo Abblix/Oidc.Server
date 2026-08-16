@@ -32,7 +32,7 @@ namespace Abblix.SharedSignals.UnitTests;
 /// Pins the payloads of the framework's own events - verification (SSF 1.0 Section 8.1.4.1) and
 /// stream-updated (Section 8.1.5) - against the specification's figures.
 /// </summary>
-public class SsfEventPayloadTests
+public class SharedSignalsEventPayloadTests
 {
     [Fact]
     public void VerificationPayload_RoundTripsTheFigureState()

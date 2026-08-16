@@ -60,7 +60,7 @@ public sealed partial class PushDeliveryScheduler(
     IStreamStore store,
     PushDeliverySender sender,
     IDeliveryLease lease,
-    SsfTransmitterOptions options,
+    SharedSignalsTransmitterOptions options,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />

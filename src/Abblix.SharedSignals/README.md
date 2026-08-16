@@ -32,7 +32,7 @@ dotnet add package Abblix.SecurityEvents.CAEP   # the samples below use the CAEP
 builder.Services.AddSecurityEvents(options =>
     options.SigningKeySource = _ => Task.FromResult(signingKey));
 
-builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
+builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
 {
     Issuer = "https://issuer.example.com",
     EventsSupported = [CaepEventTypes.SessionRevoked],
@@ -59,7 +59,7 @@ builder.Services.AddJwksKeyResolution(options =>
     options.JwksUriSelector = issuer => transmitterMetadata.JwksUri);
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddDistributedReplayCache();
-builder.Services.AddSsfReceiver(new SsfValidationOptions
+builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
 {
     ExpectedAudience = "https://receiver.example.com",
     ExpectedIssuers = ["https://issuer.example.com"],
@@ -75,9 +75,9 @@ Duplicate suppression is a separate opt-in tier: register `AddDistributedReplayC
 
 Stream state and the outbox are deliberately separate tiers, and both default to in-memory stores (`InMemoryStreamStore`, `InMemoryEventOutbox`):
 
-- Streams can live in configuration: `AddSsfConfiguredStreams` accepts streams the host declares - `Configuration.GetSection("...").Get<IReadOnlyList<ConfiguredStream>>()` binds them straight from `appsettings.json` - which suits a closed deployment where the receivers are known: nothing to back up or migrate. The binding is the host's on purpose, so the section name stays its choice and the same declarations can come from environment variables, a database or code instead. Two things own such a stream and the store keeps them apart. The **file** owns what the stream is - receiver, identifier, audiences, events, delivery endpoint, subjects mode - and is written over the store at every start, so editing configuration reaches the deployment. The **receiver** owns what it has since done through the management API - the status it set, the subjects it added and removed, when it last asked for verification - and that is carried over rather than rebuilt. A stream the file no longer declares is dropped, because here the file is the stream set. How far the receiver's half reaches is the backing store's doing: in memory by default, and `AddSsfRedisConfiguredStreams` for a transmitter running replicas, without which a pause is honoured only by the instance that took the request.
-- The outbox holds events between minting and delivery. `AddSsfDistributedOutbox()` moves it onto the host's `IDistributedCache` - correct for a single transmitter instance; a transmitter running replicas takes [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis), whose server-side transactions survive concurrency. Losing the outbox loses pending events, and the protocol tolerates that: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held for a paused stream, and neither delivery RFC requires durable queues - so the queue belongs beside caches, the tier that earns no backups.
-- Push delivery runs on a timer in every instance, so a stream is claimed before it is swept and only the holder delivers it. The default claim, `ProcessLocalDeliveryLease`, reaches inside one process: right for a single instance, and believed by every replica once there are several. A transmitter running replicas takes `AddSsfRedisDeliveryLease()` from the same Redis package. The transmitter names the claim's implementation in its startup log, so which one a deployment wired is readable rather than assumed.
+- Streams can live in configuration: `AddSharedSignalsConfiguredStreams` accepts streams the host declares - `Configuration.GetSection("...").Get<IReadOnlyList<ConfiguredStream>>()` binds them straight from `appsettings.json` - which suits a closed deployment where the receivers are known: nothing to back up or migrate. The binding is the host's on purpose, so the section name stays its choice and the same declarations can come from environment variables, a database or code instead. Two things own such a stream and the store keeps them apart. The **file** owns what the stream is - receiver, identifier, audiences, events, delivery endpoint, subjects mode - and is written over the store at every start, so editing configuration reaches the deployment. The **receiver** owns what it has since done through the management API - the status it set, the subjects it added and removed, when it last asked for verification - and that is carried over rather than rebuilt. A stream the file no longer declares is dropped, because here the file is the stream set. How far the receiver's half reaches is the backing store's doing: in memory by default, and `AddSharedSignalsRedisConfiguredStreams` for a transmitter running replicas, without which a pause is honoured only by the instance that took the request.
+- The outbox holds events between minting and delivery. `AddSharedSignalsDistributedOutbox()` moves it onto the host's `IDistributedCache` - correct for a single transmitter instance; a transmitter running replicas takes [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis), whose server-side transactions survive concurrency. Losing the outbox loses pending events, and the protocol tolerates that: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held for a paused stream, and neither delivery RFC requires durable queues - so the queue belongs beside caches, the tier that earns no backups.
+- Push delivery runs on a timer in every instance, so a stream is claimed before it is swept and only the holder delivers it. The default claim, `ProcessLocalDeliveryLease`, reaches inside one process: right for a single instance, and believed by every replica once there are several. A transmitter running replicas takes `AddSharedSignalsRedisDeliveryLease()` from the same Redis package. The transmitter names the claim's implementation in its startup log, so which one a deployment wired is readable rather than assumed.
 
 ## Event dictionaries
 

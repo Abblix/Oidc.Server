@@ -88,7 +88,7 @@ public class PushDeliverySchedulerTests
         services.AddLogging();
         services.AddSingleton(clock);
         services.AddSecurityEvents();
-        services.AddSsfTransmitter(new SsfTransmitterOptions
+        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = Issuer,
             PushDeliveryInterval = interval,
@@ -236,7 +236,7 @@ public class PushDeliverySchedulerTests
         services.AddLogging();
         services.AddSingleton<TimeProvider>(clock);
         services.AddSecurityEvents();
-        services.AddSsfTransmitter(new SsfTransmitterOptions
+        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = Issuer,
             PushDeliveryInterval = interval,

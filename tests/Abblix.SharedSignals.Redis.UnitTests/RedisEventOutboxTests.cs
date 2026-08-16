@@ -132,7 +132,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     }
 
     [Fact]
-    public async Task AddSsfRedisOutbox_WinsOverTheRoleRegistration_AndWiresAWorkingOutbox()
+    public async Task AddSharedSignalsRedisOutbox_WinsOverTheRoleRegistration_AndWiresAWorkingOutbox()
     {
         // The explicit host choice must win in ANY order relative to the role registration - that is
         // why the extension uses Replace rather than TryAdd - and the registration must construct a
@@ -144,11 +144,11 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var services = new ServiceCollection();
         services.AddSingleton<IConnectionMultiplexer>(garnet.Connection);
         services.TryAddSingleton<IEventOutbox, NeverCalledOutbox>();
-        services.AddSsfRedisOutbox();
+        services.AddSharedSignalsRedisOutbox();
 
         var reversed = new ServiceCollection();
         reversed.AddSingleton<IConnectionMultiplexer>(garnet.Connection);
-        reversed.AddSsfRedisOutbox();
+        reversed.AddSharedSignalsRedisOutbox();
         reversed.TryAddSingleton<IEventOutbox, NeverCalledOutbox>();
         await using (var reversedProvider = reversed.BuildServiceProvider())
         {

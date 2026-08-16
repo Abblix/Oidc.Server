@@ -36,14 +36,14 @@ namespace Abblix.SharedSignals.UnitTests;
 /// </summary>
 public class ReceiverAddressPolicyTests
 {
-    private static ReceiverAddressPolicy Policy(params Uri[] allowed) => new(new SsfTransmitterOptions
+    private static ReceiverAddressPolicy Policy(params Uri[] allowed) => new(new SharedSignalsTransmitterOptions
     {
         Issuer = "https://tr.example.com",
         AllowedReceiverAddresses = allowed,
     });
 
     private static ReceiverAddressPolicy PolicyResolving(params IPAddress[] answers) => new(
-        new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
+        new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
         (_, _) => Task.FromResult(answers));
 
     [Theory]
@@ -136,7 +136,7 @@ public class ReceiverAddressPolicyTests
     public async Task ANameThatDoesNotResolveIsRefused()
     {
         var policy = new ReceiverAddressPolicy(
-            new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
+            new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
             (host, _) => throw new SocketException());
 
         var rejection = await policy.RejectionOf(

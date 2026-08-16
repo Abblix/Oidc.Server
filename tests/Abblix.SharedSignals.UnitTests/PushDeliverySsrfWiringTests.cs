@@ -43,7 +43,7 @@ public class PushDeliverySsrfWiringTests
         services.AddLogging();
         services.AddOptions();
         services.AddSecurityEvents();
-        services.AddSsfTransmitter(new SsfTransmitterOptions { Issuer = "https://transmitter.test" });
+        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" });
         return services.BuildServiceProvider().GetRequiredService<IHttpMessageHandlerFactory>();
     }
 
@@ -80,7 +80,7 @@ public class PushDeliverySsrfWiringTests
     {
         var probe = new ConnectionProbe();
         var guard = new ReceiverAddressValidatingHandler(
-            new ReceiverAddressPolicy(new SsfTransmitterOptions { Issuer = "https://transmitter.test" }))
+            new ReceiverAddressPolicy(new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" }))
         {
             InnerHandler = probe,
         };

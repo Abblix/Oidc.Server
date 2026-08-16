@@ -50,7 +50,7 @@ public sealed class StreamManagementService(
     IStreamStore store,
     IEventOutbox outbox,
     EventDispatcher dispatcher,
-    SsfTransmitterOptions options,
+    SharedSignalsTransmitterOptions options,
     TimeProvider? clock = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -490,7 +490,7 @@ public sealed class StreamManagementService(
             stream,
             new SecurityEventDescriptor
             {
-                EventType = SsfEventTypes.Verification,
+                EventType = SharedSignalsEventTypes.Verification,
                 // The stream's own subject: opaque, its id the stream's (Section 8.1.4.1).
                 Subject = new OpaqueSubject(stream.StreamId),
                 Payload = new VerificationEventPayload { State = request.State },
@@ -563,7 +563,7 @@ public sealed class StreamManagementService(
             stream,
             new SecurityEventDescriptor
             {
-                EventType = SsfEventTypes.StreamUpdated,
+                EventType = SharedSignalsEventTypes.StreamUpdated,
                 Subject = new OpaqueSubject(stream.StreamId),
                 Payload = new StreamUpdatedEventPayload { Status = status, Reason = reason },
             },

@@ -52,24 +52,24 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="options">
     /// The deployment's one-time decisions; registered as the shared instance, so a host
-    /// pre-registering its own <see cref="SsfTransmitterOptions"/> wins.</param>
-    public static IServiceCollection AddSsfTransmitter(
+    /// pre-registering its own <see cref="SharedSignalsTransmitterOptions"/> wins.</param>
+    public static IServiceCollection AddSharedSignalsTransmitter(
         this IServiceCollection services,
-        SsfTransmitterOptions options)
+        SharedSignalsTransmitterOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        RequireSecurityEvents(services, nameof(AddSsfTransmitter));
+        RequireSecurityEvents(services, nameof(AddSharedSignalsTransmitter));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
-        services.AddSsfEventTypes();
+        services.AddSharedSignalsEventTypes();
         services.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
         services.TryAddSingleton<IEventOutbox, InMemoryEventOutbox>();
 
         // Every instance of the application runs the sweep below, so something must decide which
         // one delivers a given stream. The default reaches only inside this process, which is
         // right for one instance and named so a deployment reading its own startup log can see
-        // that it is what got wired; AddSsfRedisDeliveryLease is the one that spans instances.
+        // that it is what got wired; the Redis delivery lease is the one that spans instances.
         services.TryAddSingleton<IDeliveryLease, ProcessLocalDeliveryLease>();
 
         // The issuer is a value, not a service, so the dispatcher is built through the factory
@@ -130,16 +130,16 @@ public static class ServiceCollectionExtensions
     /// <param name="options">
     /// What this receiver expects of every token; registered as the shared instance, so a host
     /// pre-registering its own <see cref="SharedSignalsValidationOptions"/> wins.</param>
-    public static IServiceCollection AddSecurityEventReceiver(
+    public static IServiceCollection AddSharedSignalsReceiver(
         this IServiceCollection services,
         SharedSignalsValidationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        RequireSecurityEvents(services, nameof(AddSecurityEventReceiver));
+        RequireSecurityEvents(services, nameof(AddSharedSignalsReceiver));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
-        services.AddSsfEventTypes();
+        services.AddSharedSignalsEventTypes();
 
         // Every call this receiver makes outward goes through the factory, so one line of a host's
         // - ConfigureHttpClientDefaults, or a call naming one of the published transport names -
@@ -211,21 +211,21 @@ public static class ServiceCollectionExtensions
     /// <para>
     /// Replace rather than TryAdd, deliberately: this call IS the host's explicit choice of
     /// store, so it wins whether it runs before or after
-    /// <see cref="AddSsfTransmitter"/>'s in-memory default.
+    /// <see cref="AddSharedSignalsTransmitter"/>'s in-memory default.
     /// </para>
     /// <para>
     /// The declarations are reconciled into a backing store, and this overload's is in memory -
     /// right for one instance, and the reason a receiver's pause reaches no further than the
     /// instance that took the request. A transmitter running several passes a shared one, which
-    /// <c>AddSsfRedisConfiguredStreams</c> does.
+    /// <c>AddSharedSignalsRedisConfiguredStreams</c> does.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="streams">The declared streams.</param>
-    public static IServiceCollection AddSsfConfiguredStreams(
+    public static IServiceCollection AddSharedSignalsConfiguredStreams(
         this IServiceCollection services,
         IReadOnlyList<ConfiguredStream> streams)
-        => services.AddSsfConfiguredStreams(streams, _ => new InMemoryStreamStore());
+        => services.AddSharedSignalsConfiguredStreams(streams, _ => new InMemoryStreamStore());
 
     /// <summary>
     /// Declares the transmitter's stream set as configuration, reconciled into a backing store the
@@ -240,7 +240,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="streams">The declared streams.</param>
     /// <param name="backingStore">Builds the store the declarations are reconciled into.</param>
-    public static IServiceCollection AddSsfConfiguredStreams(
+    public static IServiceCollection AddSharedSignalsConfiguredStreams(
         this IServiceCollection services,
         IReadOnlyList<ConfiguredStream> streams,
         Func<IServiceProvider, IStreamStore> backingStore)
@@ -260,17 +260,17 @@ public static class ServiceCollectionExtensions
     /// Puts the transmitter's outbox on the host's <c>IDistributedCache</c>, so pending events
     /// survive a process restart when the store behind the cache does. Replace rather than
     /// TryAdd for the same reason as
-    /// <see cref="AddSsfConfiguredStreams(IServiceCollection, IReadOnlyList{ConfiguredStream})"/>:
+    /// <see cref="AddSharedSignalsConfiguredStreams(IServiceCollection, IReadOnlyList{ConfiguredStream})"/>:
     /// an explicit choice wins in any order.
     /// </summary>
     /// <remarks>
     /// Surviving a restart and surviving a second instance are different properties, and this call
     /// buys the first only. <c>IDistributedCache</c> writes whole values with no compare-and-set,
     /// so two instances editing one stream's queue overwrite each other; a transmitter running
-    /// more than one instance takes <c>AddSsfRedisOutbox</c> instead.
+    /// more than one instance takes <c>AddSharedSignalsRedisOutbox</c> instead.
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfDistributedOutbox(this IServiceCollection services)
+    public static IServiceCollection AddSharedSignalsDistributedOutbox(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IEventOutbox, DistributedCacheEventOutbox>());
         return services;
@@ -283,8 +283,8 @@ public static class ServiceCollectionExtensions
     /// Through the options door, which is the registry's only one: a second registry instance
     /// would silently orphan whatever was registered through the first.
     /// </remarks>
-    private static void AddSsfEventTypes(this IServiceCollection services)
-        => services.Configure<SecurityEventsOptions>(options => options.Events.RegisterSsfEvents());
+    private static void AddSharedSignalsEventTypes(this IServiceCollection services)
+        => services.Configure<SecurityEventsOptions>(options => options.Events.RegisterSharedSignalsEvents());
 
     /// <summary>
     /// Both roles build on the Security Events core, and the marker of that call is the one

@@ -46,7 +46,7 @@ public static class ServiceCollectionExtensions
     /// What the queue may keep, and for how long; the defaults apply when it is omitted. Registered
     /// with TryAdd, so a host pre-registering its own wins.
     /// </param>
-    public static IServiceCollection AddSsfRedisOutbox(
+    public static IServiceCollection AddSharedSignalsRedisOutbox(
         this IServiceCollection services, RedisOutboxOptions? options = null)
     {
         services.TryAddSingleton(options ?? new RedisOutboxOptions());
@@ -61,7 +61,7 @@ public static class ServiceCollectionExtensions
     /// outbox above: it IS the host's explicit choice of store and wins in any registration order.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisStreamStore(this IServiceCollection services)
+    public static IServiceCollection AddSharedSignalsRedisStreamStore(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
         return services;
@@ -78,7 +78,7 @@ public static class ServiceCollectionExtensions
     /// wins in any order relative to the role registration.
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisDeliveryLease(this IServiceCollection services)
+    public static IServiceCollection AddSharedSignalsRedisDeliveryLease(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IDeliveryLease, RedisDeliveryLease>());
         return services;
@@ -98,9 +98,9 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="streams">The declared streams.</param>
-    public static IServiceCollection AddSsfRedisConfiguredStreams(
+    public static IServiceCollection AddSharedSignalsRedisConfiguredStreams(
         this IServiceCollection services,
         IReadOnlyList<ConfiguredStream> streams)
-        => services.AddSsfConfiguredStreams(
+        => services.AddSharedSignalsConfiguredStreams(
             streams, provider => provider.CreateService<RedisStreamStore>());
 }

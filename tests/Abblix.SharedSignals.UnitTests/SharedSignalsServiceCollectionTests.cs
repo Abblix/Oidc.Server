@@ -44,9 +44,9 @@ namespace Abblix.SharedSignals.UnitTests;
 /// naming it, and the SSF profile steps actually RUN inside the composed pipeline - proven by
 /// a verdict only they produce, not by their registrations existing.
 /// </summary>
-public class SsfServiceCollectionTests
+public class SharedSignalsServiceCollectionTests
 {
-    private static SsfTransmitterOptions TransmitterOptions => new()
+    private static SharedSignalsTransmitterOptions TransmitterOptions => new()
     {
         Issuer = "https://tr.example.com",
         PollEndpointFactory = streamId => new Uri($"https://tr.example.com/ssf/poll/{streamId}"),
@@ -73,7 +73,7 @@ public class SsfServiceCollectionTests
         services.AddSingleton<IStreamStore>(hostStore);
 
         using var provider = services
-            .AddSsfTransmitter(TransmitterOptions)
+            .AddSharedSignalsTransmitter(TransmitterOptions)
             .BuildServiceProvider();
 
         Assert.NotNull(provider.GetRequiredService<StreamManagementService>());
@@ -94,7 +94,7 @@ public class SsfServiceCollectionTests
         var services = SecurityEventsBase();
 
         using var defaults = services
-            .AddSsfTransmitter(TransmitterOptions)
+            .AddSharedSignalsTransmitter(TransmitterOptions)
             .BuildServiceProvider();
 
         Assert.IsType<ProcessLocalDeliveryLease>(defaults.GetRequiredService<IDeliveryLease>());
@@ -104,7 +104,7 @@ public class SsfServiceCollectionTests
         withHostLease.AddSingleton<IDeliveryLease>(hostLease);
 
         using var provider = withHostLease
-            .AddSsfTransmitter(TransmitterOptions)
+            .AddSharedSignalsTransmitter(TransmitterOptions)
             .BuildServiceProvider();
 
         Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
@@ -114,19 +114,19 @@ public class SsfServiceCollectionTests
     public void WithoutTheSecurityEventsCore_TheRoleRefuses_NamingThePrerequisite()
     {
         var exception = Assert.Throws<InvalidOperationException>(
-            () => new ServiceCollection().AddSsfTransmitter(TransmitterOptions));
+            () => new ServiceCollection().AddSharedSignalsTransmitter(TransmitterOptions));
 
         Assert.Contains("AddSecurityEvents", exception.Message);
     }
 
     [Fact]
-    public async Task Receiver_RunsTheSsfSteps_InsideTheComposedPipeline()
+    public async Task Receiver_RunsTheSharedSignalsSteps_InsideTheComposedPipeline()
     {
         // The proof is behavioral: a token carrying "sub" earns the Section 4.1.2 verdict only
         // ForbidSubStep produces, and it earns it BEFORE any signature work - the token below
         // has no valid signature, so reaching a signature error instead would mean the step is
         // ordered wrong, and reaching success would mean it is not wired at all.
-        var services = SecurityEventsBase().AddSecurityEventReceiver(new SharedSignalsValidationOptions
+        var services = SecurityEventsBase().AddSharedSignalsReceiver(new SharedSignalsValidationOptions
         {
             StreamIssuer = "https://tr.example.com",
         });
@@ -155,7 +155,7 @@ public class SsfServiceCollectionTests
         var services = SecurityEventsBase();
         var options = new SharedSignalsValidationOptions();
 
-        services.AddSecurityEventReceiver(options).AddSecurityEventReceiver(options);
+        services.AddSharedSignalsReceiver(options).AddSharedSignalsReceiver(options);
 
         // The composed members are keyed descriptors, so the implementation type sits behind
         // the keyed property.

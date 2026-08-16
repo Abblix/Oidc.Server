@@ -45,7 +45,7 @@ public class ConfigurationHostStoresTests
 {
     private const string TypeA = "https://example.com/events/type-a";
 
-    private static SsfTransmitterOptions TransmitterOptions => new()
+    private static SharedSignalsTransmitterOptions TransmitterOptions => new()
     {
         Issuer = "https://tr.example.com",
         EventsSupported = [TypeA],
@@ -256,7 +256,7 @@ public class ConfigurationHostStoresTests
         Assert.Contains("more than once", duplicate.Message);
 
         var undeliverable = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
-            new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
+            new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
             [new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }],
             new InMemoryStreamStore()));
         Assert.Contains(nameof(ConfiguredStream.PushEndpointUrl), undeliverable.Message);
@@ -297,7 +297,7 @@ public class ConfigurationHostStoresTests
     public void ExplicitStoreChoices_Win_WhicheverSideOfTheRoleRegistrationTheyLand()
     {
         // The conveniences are the host's explicit choice, so unlike the TryAdd defaults they
-        // must win even AFTER AddSsfTransmitter has registered the in-memory pair.
+        // must win even AFTER AddSharedSignalsTransmitter has registered the in-memory pair.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<ISecurityEventTokenSigner, FakeSigner>();
@@ -305,9 +305,9 @@ public class ConfigurationHostStoresTests
         services.AddDistributedMemoryCache();
 
         services
-            .AddSsfTransmitter(TransmitterOptions)
-            .AddSsfConfiguredStreams([new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }])
-            .AddSsfDistributedOutbox();
+            .AddSharedSignalsTransmitter(TransmitterOptions)
+            .AddSharedSignalsConfiguredStreams([new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }])
+            .AddSharedSignalsDistributedOutbox();
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<ConfigurationStreamStore>(provider.GetRequiredService<IStreamStore>());

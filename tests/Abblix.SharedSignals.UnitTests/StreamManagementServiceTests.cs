@@ -62,7 +62,7 @@ public class StreamManagementServiceTests
         StubSigner Signer,
         FakeTimeProvider Clock);
 
-    private static Harness CreateHarness() => CreateHarness(new SsfTransmitterOptions
+    private static Harness CreateHarness() => CreateHarness(new SharedSignalsTransmitterOptions
     {
         Issuer = "https://tr.example.com",
         EventsSupported = [TypeA, TypeB],
@@ -70,7 +70,7 @@ public class StreamManagementServiceTests
         MinVerificationInterval = TimeSpan.FromMinutes(5),
     });
 
-    private static Harness CreateHarness(SsfTransmitterOptions options)
+    private static Harness CreateHarness(SharedSignalsTransmitterOptions options)
     {
         var store = new InMemoryStreamStore();
         var outbox = new InMemoryEventOutbox();
@@ -138,7 +138,7 @@ public class StreamManagementServiceTests
     [Fact]
     public async Task Create_PollAskedOfAPushOnlyTransmitter_IsRefused()
     {
-        var harness = CreateHarness(new SsfTransmitterOptions
+        var harness = CreateHarness(new SharedSignalsTransmitterOptions
         {
             Issuer = "https://tr.example.com",
             EventsSupported = [TypeA],
@@ -311,7 +311,7 @@ public class StreamManagementServiceTests
     [Fact]
     public async Task AllMode_RemovalCarvesOut_AndReAdditionRestores()
     {
-        var harness = CreateHarness(new SsfTransmitterOptions
+        var harness = CreateHarness(new SharedSignalsTransmitterOptions
         {
             Issuer = "https://tr.example.com",
             EventsSupported = [TypeA],

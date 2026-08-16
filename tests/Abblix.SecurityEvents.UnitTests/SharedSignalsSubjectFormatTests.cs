@@ -32,7 +32,7 @@ namespace Abblix.SecurityEvents.UnitTests;
 /// and the three formats of Section 3.5 - against the specification's own figures, read through
 /// the same default dispatch as the RFC 9493 formats they live beside.
 /// </summary>
-public class SsfSubjectFormatTests
+public class SharedSignalsSubjectFormatTests
 {
     [Fact]
     public void ComplexSubject_ReadsTheSpecificationFixture()
@@ -182,7 +182,7 @@ public class SsfSubjectFormatTests
     }
 
     [Fact]
-    public void BuiltInSsfFormat_CannotBeRedefined_AsACustomFormat()
+    public void BuiltInSharedSignalsFormat_CannotBeRedefined_AsACustomFormat()
     {
         // The SSF names joined the built-in vocabulary, so they earn the same protection the
         // RFC 9493 names have: a custom registration cannot quietly rebind one.
@@ -191,7 +191,7 @@ public class SsfSubjectFormatTests
     }
 
     [Fact]
-    public void SecurityEventToken_CarriesAnSsfSubjectId_EndToEnd()
+    public void SecurityEventToken_CarriesAnSharedSignalsSubjectId_EndToEnd()
     {
         // The transmitter writes "sub_id" under the subtype's runtime shape, and the default
         // dispatch reads it back typed - no extra options anywhere.

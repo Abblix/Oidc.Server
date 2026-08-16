@@ -99,7 +99,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
     /// a transmitter with no poll endpoint factory - configuration bugs, refused loudly at
     /// startup rather than surfacing as a broken stream later.</exception>
     public ConfigurationStreamStore(
-        SsfTransmitterOptions options,
+        SharedSignalsTransmitterOptions options,
         IReadOnlyList<ConfiguredStream> streams,
         IStreamStore backingStore)
     {
@@ -304,7 +304,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
         }
     }
 
-    private static StreamState Materialize(SsfTransmitterOptions options, ConfiguredStream declared)
+    private static StreamState Materialize(SharedSignalsTransmitterOptions options, ConfiguredStream declared)
     {
         StreamDeliveryMethod delivery;
         if (declared.PushEndpointUrl is { } pushEndpoint)
@@ -323,7 +323,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
             throw new InvalidOperationException(
                 $"The stream '{declared.StreamId}' declares no push endpoint and the transmitter "
                 + $"offers no poll delivery: set {nameof(ConfiguredStream.PushEndpointUrl)} or "
-                + $"{nameof(SsfTransmitterOptions)}.{nameof(SsfTransmitterOptions.PollEndpointFactory)}.");
+                + $"{nameof(SharedSignalsTransmitterOptions)}.{nameof(SharedSignalsTransmitterOptions.PollEndpointFactory)}.");
         }
 
         return new StreamState

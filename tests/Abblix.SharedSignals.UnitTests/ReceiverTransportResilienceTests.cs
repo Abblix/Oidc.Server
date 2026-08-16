@@ -63,7 +63,7 @@ public class ReceiverTransportResilienceTests
 
         services.AddSingleton(Mock.Of<IIssuerKeyResolver>());
         services.AddSecurityEvents();
-        services.AddSecurityEventReceiver(new SharedSignalsValidationOptions());
+        services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions());
         services.AddSingleton(Mock.Of<ISecurityEventSink>());
 
         services.AddHttpClient(transportName).ConfigurePrimaryHttpMessageHandler(() => origin);

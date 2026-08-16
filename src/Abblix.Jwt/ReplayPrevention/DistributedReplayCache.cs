@@ -62,9 +62,9 @@ public sealed class DistributedReplayCache(
     /// read-then-write by construction, which is what makes this cache probabilistic - see the
     /// class remarks for which profiles accept that and which do not.
     /// </remarks>
-    protected override async Task<bool> ReserveIfAbsentAsync(
+    protected override Task<bool> ReserveIfAbsentAsync(
         string key,
         TimeSpan timeToLive,
         CancellationToken cancellationToken)
-        => await cache.TryAddAsync(key, timeToLive, cancellationToken);
+        => cache.TryAddAsync(key, timeToLive, cancellationToken);
 }

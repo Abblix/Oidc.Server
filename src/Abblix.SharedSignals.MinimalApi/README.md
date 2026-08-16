@@ -2,6 +2,18 @@
 
 ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): the OpenID Shared Signals Framework 1.0 endpoints as route handlers, with no MVC dependency.
 
+## Which adapter maps which endpoint
+
+There are two Minimal API packages in this family, and the line between them is not the one that first suggests itself. It is **not** transmitter here and receiver there: this package holds receiver-role code of its own - the stream management client, the transmitter discovery client. The question that decides placement is whether the endpoint stops making sense **without a stream**:
+
+- **Stream management, status, subjects, verification, the `ssf-configuration` document, and the transmitter's poll endpoint** - every one is meaningless without a stream, and the poll address is addressed *by stream identifier*. Here.
+- **Push delivery intake** - "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalApi](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalApi), which this package's dependencies already bring along.
+- **Back-Channel Logout** - one token, delivered once, from a provider the relying party already knows. Also there.
+
+Push and poll are the pair worth understanding, because both are core delivery specifications (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which document defines the protocol but whether a stream is part of the addressing: the push intake just accepts a token, while the poll endpoint below serves one stream's queue and its URL is built per stream from your `PollEndpointFactory`. The specification says how to carry an event; the stream says to whom - and that second half is what this package is.
+
+The split is kept for what it buys the other side: a relying party that wants only Back-Channel Logout takes the core adapter alone, and never sees this package's surface.
+
 ## Install
 
 ```bash
@@ -13,7 +25,7 @@ dotnet add package Abblix.SharedSignals.MinimalApi
 ```csharp
 builder.Services
     .AddSecurityEvents(options => options.SigningKeySource = ...)
-    .AddSsfTransmitter(new SsfTransmitterOptions
+    .AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
     {
         Issuer = "https://tr.example.com",
         EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
@@ -22,16 +34,16 @@ builder.Services
     });
 
 var app = builder.Build();
-app.MapSsfTransmitterEndpoints().RequireAuthorization("ssf-receivers");
+app.MapSharedSignalsTransmitterEndpoints().RequireAuthorization("ssf-receivers");
 ```
 
-One call maps the whole management surface under `SsfEndpointOptions.ManagementPrefix` (`/ssf` by default) - streams, status, subjects, verification, poll delivery - plus the configuration document at the well-known address the issuer resolves to. Every route comes from the options, so one object states the whole topology.
+One call maps the whole management surface under `SharedSignalsEndpointOptions.ManagementPrefix` (`/ssf` by default) - streams, status, subjects, verification, poll delivery - plus the configuration document at the well-known address the issuer resolves to. Every route comes from the options, so one object states the whole topology.
 
 The well-known endpoint stays outside the returned group on purpose: discovery must answer before any receiver has credentials, so the authorization you attach to the group does not cover it. What it serves is public metadata - issuer, JWKS location, endpoint addresses, supported delivery methods and authorization schemes - and nothing stream- or receiver-specific; poll delivery sits inside the group, which is where SSF 1.0 Section 7.1.1 wants it.
 
-A gateway-fronted deployment adjusts this in the same options object, without moving the protocol address: `MapWellKnownConfiguration = false` leaves the canonical route to the gateway or CDN in front, `ConfigurationDocumentRoute` names the internal route a rewriting proxy maps the canonical address onto (served by `MapSsfConfigurationDocument()`), and `AdvertisedPrefix` is what the document advertises - the external prefix, whatever `ManagementPrefix` mapped internally. The external address never moves, because receivers derive it from the issuer.
+A gateway-fronted deployment adjusts this in the same options object, without moving the protocol address: `MapWellKnownConfiguration = false` leaves the canonical route to the gateway or CDN in front, `ConfigurationDocumentRoute` names the internal route a rewriting proxy maps the canonical address onto (served by `MapSharedSignalsConfigurationDocument()`), and `AdvertisedPrefix` is what the document advertises - the external prefix, whatever `ManagementPrefix` mapped internally. The external address never moves, because receivers derive it from the issuer.
 
-Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SsfEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
+Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
 What one call maps, relative to the prefix:
 
@@ -53,7 +65,7 @@ builder.Services
     .AddJwksKeyResolution()
     .AddDistributedMemoryCache()   // or Redis - the replay cache rides the host's IDistributedCache
     .AddDistributedReplayCache()
-    .AddSsfReceiver(new SsfValidationOptions
+    .AddSharedSignalsReceiver(new SharedSignalsValidationOptions
     {
         ExpectedAudience = "https://receiver.example.com",
         ExpectedIssuers = ["https://tr.example.com"],
@@ -62,11 +74,11 @@ builder.Services
     .AddSingleton<ISecurityEventSink, MyEventSink>();
 
 var app = builder.Build();
-app.MapSsfPushEndpoint("/events")
+app.MapPushDeliveryEndpoint("/events")
     .RequireAuthorization("ssf-transmitters");
 ```
 
-The push endpoint answers the empty 202 or the 400 whose body speaks the RFC 8935 registry vocabulary; where accepted events land is the host's `ISecurityEventSink`.
+The intake endpoint itself comes from `Abblix.SecurityEvents.MinimalApi`, which this package already depends on - see the section above for why RFC 8935's intake belongs to the core while the poll endpoint above belongs here. It answers the empty 202 or the 400 whose body speaks the RFC 8935 registry vocabulary; where accepted events land is the host's `ISecurityEventSink`.
 
 Signature validation decides whether an event is genuine, but it is not what keeps the endpoint standing: an unauthenticated route spends a cryptographic verification on every body posted to it, which RFC 8935 Section 5.4 names as the recipient's denial-of-service exposure and answers with transmitter authentication and rate limiting. Attach both - the returned builder takes the host's conventions like any other route.
 

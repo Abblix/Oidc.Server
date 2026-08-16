@@ -65,7 +65,7 @@ public class TransmitterDeliveryTests
     /// "receiver.example.com" over the network, which is neither this suite's subject nor its business.
     /// The policy's own rules are covered in <see cref="ReceiverAddressPolicyTests"/>.
     /// </remarks>
-    private static ReceiverAddressPolicy ReachingTheTestReceiver => new(new SsfTransmitterOptions
+    private static ReceiverAddressPolicy ReachingTheTestReceiver => new(new SharedSignalsTransmitterOptions
     {
         Issuer = "https://tr.example.com",
         AllowedReceiverAddresses = [new Uri("https://receiver.example.com")],
@@ -264,7 +264,7 @@ public class TransmitterDeliveryTests
 
         var outbox = await OutboxWithAsync(new OutboxItem("jti-held", "h.h.h"));
         var signer = new FakeSigner();
-        var options = new SsfTransmitterOptions { Issuer = "https://tr.example.com" };
+        var options = new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" };
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer);
         var service = new StreamManagementService(store, outbox, dispatcher, options);

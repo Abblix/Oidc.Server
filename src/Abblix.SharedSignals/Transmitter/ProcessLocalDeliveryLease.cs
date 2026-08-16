@@ -32,7 +32,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// The name says the boundary because that is the only thing a reader must not get wrong. It is
 /// the honest default for a single instance and for tests, and it is the wrong one the moment a
-/// deployment scales out - <c>AddSsfRedisDeliveryLease</c> is the implementation that spans
+/// deployment scales out - <c>AddSharedSignalsRedisDeliveryLease</c> is the implementation that spans
 /// instances, and a deployment already sharing its outbox needs it.
 /// </remarks>
 /// <param name="timeProvider">The clock the deadlines are read from; a test hands in a fake.</param>

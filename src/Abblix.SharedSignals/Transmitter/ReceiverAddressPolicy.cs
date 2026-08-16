@@ -45,7 +45,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// CancellationToken)"/>. A test supplies its own so the resolved-address branch, the only part of this policy
 /// that is not a string comparison, can be driven in both directions without a live DNS.</param>
 public sealed class ReceiverAddressPolicy(
-    SsfTransmitterOptions options,
+    SharedSignalsTransmitterOptions options,
     ReceiverAddressPolicy.HostResolver? resolveHost = null)
 {
     /// <summary>

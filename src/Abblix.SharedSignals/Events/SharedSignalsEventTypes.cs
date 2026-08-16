@@ -29,7 +29,7 @@ namespace Abblix.SharedSignals.Events;
 /// The event type URIs of the events SSF 1.0 itself defines - the framework's own signals about
 /// a stream, as opposed to the CAEP and RISC events that ride on it.
 /// </summary>
-public static class SsfEventTypes
+public static class SharedSignalsEventTypes
 {
 #pragma warning disable S1075 // URIs should not be hardcoded - these are the specification-fixed event type identifiers, not configuration
     /// <summary>
@@ -63,7 +63,7 @@ public static class SsfEventTypes
     /// </para>
     /// </remarks>
     /// <param name="registry">The registry events deserialize through.</param>
-    public static EventTypeRegistry RegisterSsfEvents(this EventTypeRegistry registry)
+    public static EventTypeRegistry RegisterSharedSignalsEvents(this EventTypeRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
 

@@ -53,7 +53,7 @@ namespace Abblix.SharedSignals.Redis;
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
 /// <param name="options">The transmitter's options, read for the issuer the key is scoped by.</param>
-public sealed class RedisStreamStore(IConnectionMultiplexer connection, SsfTransmitterOptions options)
+public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSignalsTransmitterOptions options)
     : IStreamStore
 {
     /// <summary>
