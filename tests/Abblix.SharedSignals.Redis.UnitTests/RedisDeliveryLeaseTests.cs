@@ -20,6 +20,7 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.Tests.Shared;
 using Xunit;
 
 namespace Abblix.SharedSignals.Redis.UnitTests;

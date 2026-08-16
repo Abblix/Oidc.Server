@@ -31,7 +31,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// (Section 8.1.1.1), what a new stream covers by default (Section 7.1), and how often
 /// verification may be asked for (Section 8.1.1).
 /// </summary>
-public sealed record SsfTransmitterOptions
+public sealed record SharedSignalsTransmitterOptions
 {
     /// <summary>
     /// The transmitter's issuer identifier: the "iss" of every SET and of every stream

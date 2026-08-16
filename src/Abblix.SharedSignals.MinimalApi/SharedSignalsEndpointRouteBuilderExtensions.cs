@@ -38,14 +38,14 @@ namespace Abblix.SharedSignals.MinimalApi;
 /// Maps the Shared Signals endpoints as Minimal API route handlers: the whole transmitter
 /// management surface in one call, its configuration document in another. The handlers translate
 /// transport to the host-agnostic services and nothing else - authentication is the host's
-/// middleware, and the receiver identity is read per <see cref="SsfEndpointOptions"/>.
+/// middleware, and the receiver identity is read per <see cref="SharedSignalsEndpointOptions"/>.
 /// <para>
 /// Push delivery is not here. RFC 8935 carries any Security Event Token, not this framework's in
 /// particular, so its intake belongs to the package that owns the token - a receiver maps it with
 /// <c>MapPushDeliveryEndpoint</c> from <c>Abblix.SecurityEvents.MinimalApi</c>.
 /// </para>
 /// </summary>
-public static class SsfEndpointRouteBuilderExtensions
+public static class SharedSignalsEndpointRouteBuilderExtensions
 {
     /// <summary>
     /// The route segments of the management surface, single-sourced because the configuration
@@ -61,13 +61,13 @@ public static class SsfEndpointRouteBuilderExtensions
         public const string Poll = "/poll";
     }
 
-    private static readonly SsfEndpointOptions DefaultEndpointOptions = new();
+    private static readonly SharedSignalsEndpointOptions DefaultEndpointOptions = new();
 
     /// <summary>
     /// Maps the transmitter's endpoints: the Event Stream Management API under
-    /// <see cref="SsfEndpointOptions.ManagementPrefix"/>, poll delivery beside it, and the
+    /// <see cref="SharedSignalsEndpointOptions.ManagementPrefix"/>, poll delivery beside it, and the
     /// configuration document at the well-known address the issuer resolves to
-    /// (SSF 1.0 Section 7.2). Every route comes from <see cref="SsfEndpointOptions"/>, so one
+    /// (SSF 1.0 Section 7.2). Every route comes from <see cref="SharedSignalsEndpointOptions"/>, so one
     /// options object states the whole topology.
     /// </summary>
     /// <remarks>
@@ -77,14 +77,14 @@ public static class SsfEndpointRouteBuilderExtensions
     /// does not cover it.
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
-    public static RouteGroupBuilder MapSsfTransmitterEndpoints(this IEndpointRouteBuilder endpoints)
+    public static RouteGroupBuilder MapSharedSignalsTransmitterEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var endpointOptions = EndpointOptionsOf(endpoints);
         if (endpointOptions.MapWellKnownConfiguration)
         {
-            endpoints.MapSsfConfigurationDocument();
+            endpoints.MapSharedSignalsConfigurationDocument();
         }
 
         var group = endpoints.MapGroup(endpointOptions.ManagementPrefix.Value ?? string.Empty);
@@ -114,28 +114,28 @@ public static class SsfEndpointRouteBuilderExtensions
 
     /// <summary>
     /// Maps the transmitter's configuration document (SSF 1.0 Section 7.2) on its own: at
-    /// <see cref="SsfEndpointOptions.ConfigurationDocumentRoute"/>, or at the well-known
+    /// <see cref="SharedSignalsEndpointOptions.ConfigurationDocumentRoute"/>, or at the well-known
     /// address the issuer resolves to when that option is null.
     /// </summary>
     /// <remarks>
-    /// <see cref="MapSsfTransmitterEndpoints"/> calls this by default, so a plain host never
+    /// <see cref="MapSharedSignalsTransmitterEndpoints"/> calls this by default, so a plain host never
     /// needs it. It exists for the deployment where the canonical address is answered by
     /// something in front of the application: a gateway or CDN serving a cached copy (set
-    /// <see cref="SsfEndpointOptions.MapWellKnownConfiguration"/> to false and do not call
+    /// <see cref="SharedSignalsEndpointOptions.MapWellKnownConfiguration"/> to false and do not call
     /// this), or a reverse proxy rewriting paths, where the document must exist on an internal
     /// route the proxy maps the canonical address onto. The document advertises
-    /// <see cref="SsfEndpointOptions.AdvertisedPrefix"/> - the prefix as the outside world
+    /// <see cref="SharedSignalsEndpointOptions.AdvertisedPrefix"/> - the prefix as the outside world
     /// reaches it. The EXTERNAL address never moves: receivers derive it from the issuer, not
     /// from configuration, so the route option is deployment plumbing, not a protocol choice.
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
-    public static IEndpointConventionBuilder MapSsfConfigurationDocument(
+    public static IEndpointConventionBuilder MapSharedSignalsConfigurationDocument(
         this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var endpointOptions = EndpointOptionsOf(endpoints);
-        var options = endpoints.ServiceProvider.GetRequiredService<SsfTransmitterOptions>();
+        var options = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
         var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
             ? endpointOptions.AdvertisedPrefix
@@ -145,11 +145,11 @@ public static class SsfEndpointRouteBuilderExtensions
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
-            (SsfTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
+            (SharedSignalsTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
 
-    private static SsfEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
-        => endpoints.ServiceProvider.GetService<SsfEndpointOptions>() ?? DefaultEndpointOptions;
+    private static SharedSignalsEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
+        => endpoints.ServiceProvider.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
 
     private static async Task<IResult> CreateStreamAsync(
         HttpContext http,
@@ -295,7 +295,7 @@ public static class SsfEndpointRouteBuilderExtensions
     /// from the mapping. Endpoint URLs live on the issuer's authority under the prefix.
     /// </summary>
     private static TransmitterConfiguration ConfigurationDocumentOf(
-        SsfTransmitterOptions options,
+        SharedSignalsTransmitterOptions options,
         PathString prefix)
     {
         var authority = new Uri(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
@@ -324,7 +324,7 @@ public static class SsfEndpointRouteBuilderExtensions
     }
 
     private static string? ReceiverIdOf(HttpContext context)
-        => (context.RequestServices.GetService<SsfEndpointOptions>() ?? DefaultEndpointOptions)
+        => (context.RequestServices.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions)
             .ReceiverIdSelector(context);
 
     private static IResult Render<TBody>(ManagementResult<TBody> result)

@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using Abblix.DependencyInjection;
+using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -44,7 +46,7 @@ public static class ServiceCollectionExtensions
     /// What the queue may keep, and for how long; the defaults apply when it is omitted. Registered
     /// with TryAdd, so a host pre-registering its own wins.
     /// </param>
-    public static IServiceCollection AddSsfRedisOutbox(
+    public static IServiceCollection AddSharedSignalsRedisOutbox(
         this IServiceCollection services, RedisOutboxOptions? options = null)
     {
         services.TryAddSingleton(options ?? new RedisOutboxOptions());
@@ -59,7 +61,7 @@ public static class ServiceCollectionExtensions
     /// outbox above: it IS the host's explicit choice of store and wins in any registration order.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisStreamStore(this IServiceCollection services)
+    public static IServiceCollection AddSharedSignalsRedisStreamStore(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
         return services;
@@ -76,9 +78,29 @@ public static class ServiceCollectionExtensions
     /// wins in any order relative to the role registration.
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    public static IServiceCollection AddSsfRedisDeliveryLease(this IServiceCollection services)
+    public static IServiceCollection AddSharedSignalsRedisDeliveryLease(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IDeliveryLease, RedisDeliveryLease>());
         return services;
     }
+
+    /// <summary>
+    /// Declares the transmitter's stream set as configuration and reconciles it into Redis, so the
+    /// half of a stream its RECEIVER owns - the status it set, the subjects it added and removed,
+    /// when it last asked for verification - is shared by every instance instead of living in the
+    /// memory of whichever one took the request.
+    /// </summary>
+    /// <remarks>
+    /// The file stays the truth about what a stream IS: on startup each declaration is written
+    /// over what Redis holds, keeping the receiver's half, and a stream Redis holds that the file
+    /// no longer declares is dropped. So editing configuration reaches every instance at its next
+    /// start, and a pause reaches them all at once.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="streams">The declared streams.</param>
+    public static IServiceCollection AddSharedSignalsRedisConfiguredStreams(
+        this IServiceCollection services,
+        IReadOnlyList<ConfiguredStream> streams)
+        => services.AddSharedSignalsConfiguredStreams(
+            streams, provider => provider.CreateService<RedisStreamStore>());
 }

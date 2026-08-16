@@ -24,6 +24,7 @@ using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using StackExchange.Redis;
@@ -38,7 +39,7 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// </summary>
 public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<GarnetFixture>
 {
-    private static readonly SsfTransmitterOptions Options = new() { Issuer = "https://transmitter.example.com" };
+    private static readonly SharedSignalsTransmitterOptions Options = new() { Issuer = "https://transmitter.example.com" };
 
     /// <summary>
     /// The key the store writes under, spelled out here rather than asked of the store: the tests that
@@ -360,7 +361,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var store = NewStore();
         var other = new RedisStreamStore(
             garnet.Connection,
-            new SsfTransmitterOptions { Issuer = "https://other-transmitter.example.com" });
+            new SharedSignalsTransmitterOptions { Issuer = "https://other-transmitter.example.com" });
 
         var mine = Guid.NewGuid().ToString("N");
         var theirs = Guid.NewGuid().ToString("N");
@@ -389,7 +390,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var before = new ServiceCollection();
         before.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(garnet.Connection);
         before.AddSingleton(Options);
-        before.AddSsfRedisStreamStore();
+        before.AddSharedSignalsRedisStreamStore();
         before.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
         Assert.IsType<RedisStreamStore>(
             before.BuildServiceProvider().GetRequiredService<IStreamStore>());
@@ -398,7 +399,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         after.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(garnet.Connection);
         after.AddSingleton(Options);
         after.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
-        after.AddSsfRedisStreamStore();
+        after.AddSharedSignalsRedisStreamStore();
         Assert.IsType<RedisStreamStore>(
             after.BuildServiceProvider().GetRequiredService<IStreamStore>());
     }

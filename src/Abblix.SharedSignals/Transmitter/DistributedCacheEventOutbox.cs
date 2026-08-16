@@ -43,7 +43,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// queue read the same value, each writes its own edit over the whole entry, and the later write
 /// silently discards the earlier one's. No compare-and-set means the interface cannot express the
 /// fix either - it is not a gap in this class. A transmitter running more than one instance takes
-/// the outbox built on native list operations, <c>AddSsfRedisOutbox</c>.
+/// the outbox built on native list operations, <c>AddSharedSignalsRedisOutbox</c>.
 /// </remarks>
 /// <param name="cache">The distributed cache the queues live in; the store is the host's
 /// choice.</param>

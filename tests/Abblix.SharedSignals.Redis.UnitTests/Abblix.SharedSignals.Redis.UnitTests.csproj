@@ -36,4 +36,8 @@
         <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Compile Include="../Shared/GarnetFixture.cs" Link="Shared/GarnetFixture.cs" />
+    </ItemGroup>
+
 </Project>

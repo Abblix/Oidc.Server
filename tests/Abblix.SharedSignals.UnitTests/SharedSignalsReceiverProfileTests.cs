@@ -38,7 +38,7 @@ namespace Abblix.SharedSignals.UnitTests;
 /// carries an uninterpretable critical member (Section 3.6). Each step is driven through the
 /// same context contract the composed pipeline drives it through.
 /// </summary>
-public class SsfReceiverProfileTests
+public class SharedSignalsReceiverProfileTests
 {
     private const string StreamIssuer = "https://tr.example.com";
 

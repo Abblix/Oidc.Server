@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Subjects;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
@@ -44,7 +45,7 @@ public class ConfigurationHostStoresTests
 {
     private const string TypeA = "https://example.com/events/type-a";
 
-    private static SsfTransmitterOptions TransmitterOptions => new()
+    private static SharedSignalsTransmitterOptions TransmitterOptions => new()
     {
         Issuer = "https://tr.example.com",
         EventsSupported = [TypeA],
@@ -65,7 +66,7 @@ public class ConfigurationHostStoresTests
                 PushAuthorizationHeader = "Bearer from-secret",
             },
             new ConfiguredStream { ReceiverId = "admin", StreamId = "admin-main" },
-        ]);
+        ], new InMemoryStreamStore());
 
         var kezio = await store.FindAsync("kezio", "kezio-main", TestContext.Current.CancellationToken);
         Assert.NotNull(kezio);
@@ -87,7 +88,8 @@ public class ConfigurationHostStoresTests
     public async Task ConfiguredStreams_AcceptEphemeralMutation_TheVerificationThrottleNeedsIt()
     {
         var store = new ConfigurationStreamStore(TransmitterOptions,
-            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" }]);
+            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" }],
+            new InMemoryStreamStore());
 
         var stream = await store.FindAsync("kezio", "kezio-main", TestContext.Current.CancellationToken);
         Assert.True(await store.UpdateAsync(
@@ -97,6 +99,147 @@ public class ConfigurationHostStoresTests
         Assert.Equal(
             StreamStatuses.Paused,
             (await store.FindAsync("kezio", "kezio-main", TestContext.Current.CancellationToken))!.Status);
+    }
+
+    /// <summary>
+    /// The reconcile's whole point: what a RECEIVER did through the management API survives a
+    /// restart, and is therefore visible to a second instance over the same backing store rather
+    /// than living in the memory of whichever one took the request.
+    /// </summary>
+    /// <remarks>
+    /// The subject half matters more than the status half and is easier to lose. Under
+    /// SubjectsMode.None the added subjects ARE the stream's coverage, so rebuilding the state
+    /// from the file would unsubscribe the receiver from everything it subscribed to - and SSF 1.0
+    /// Section 9.1 tells that receiver a success says nothing about the transmitter's state, so it
+    /// never asks and never learns.
+    /// </remarks>
+    [Fact]
+    public async Task WhatTheReceiverOwns_SurvivesAReconcile()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var shared = new InMemoryStreamStore();
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main", SubjectsMode = StreamSubjectsMode.None }];
+
+        var first = new ConfigurationStreamStore(TransmitterOptions, declared, shared);
+        var stream = await first.FindAsync("kezio", "kezio-main", cancellationToken);
+        Assert.True(await first.UpdateAsync(
+            stream! with
+            {
+                Status = StreamStatuses.Paused,
+                StatusReason = "under investigation",
+                AddedSubjects = [new StreamSubject(new OpaqueSubject("user-1"), true)],
+            },
+            cancellationToken));
+
+        // A second instance over the same backing store: a restart, or the replica beside it.
+        var second = new ConfigurationStreamStore(TransmitterOptions, declared, shared);
+        var reconciled = await second.FindAsync("kezio", "kezio-main", cancellationToken);
+
+        Assert.NotNull(reconciled);
+        Assert.Equal(StreamStatuses.Paused, reconciled.Status);
+        Assert.Equal("under investigation", reconciled.StatusReason);
+        var subject = Assert.Single(reconciled.AddedSubjects);
+        Assert.Equal("user-1", Assert.IsType<OpaqueSubject>(subject.Subject).Id);
+    }
+
+    /// <summary>
+    /// The other half of the same split: what the FILE owns is written over whatever the backing
+    /// store holds, so editing configuration reaches a deployment at its next start instead of
+    /// being refused because the stream already exists.
+    /// </summary>
+    [Fact]
+    public async Task WhatTheFileOwns_IsRewrittenByAReconcile()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var shared = new InMemoryStreamStore();
+
+        var before = new ConfigurationStreamStore(
+            TransmitterOptions,
+            [new ConfiguredStream
+            {
+                ReceiverId = "kezio",
+                StreamId = "kezio-main",
+                PushEndpointUrl = new Uri("https://kezio.example.com/old"),
+            }],
+            shared);
+
+        var stream = await before.FindAsync("kezio", "kezio-main", cancellationToken);
+        Assert.True(await before.UpdateAsync(
+            stream! with { Status = StreamStatuses.Paused }, cancellationToken));
+
+        // The operator edits the file and the deployment restarts.
+        var after = new ConfigurationStreamStore(
+            TransmitterOptions,
+            [new ConfiguredStream
+            {
+                ReceiverId = "kezio",
+                StreamId = "kezio-main",
+                PushEndpointUrl = new Uri("https://kezio.example.com/new"),
+            }],
+            shared);
+
+        var reconciled = await after.FindAsync("kezio", "kezio-main", cancellationToken);
+        var push = Assert.IsType<PushDeliveryMethod>(reconciled!.Configuration.Delivery);
+        Assert.Equal(new Uri("https://kezio.example.com/new"), push.EndpointUrl);
+
+        // And the edit did not cost the receiver its half.
+        Assert.Equal(StreamStatuses.Paused, reconciled.Status);
+    }
+
+    /// <summary>
+    /// A stream the file no longer declares is dropped, because in this store the file IS the
+    /// stream set. Keeping it would go on delivering security events to a receiver the operator
+    /// removed, which is the failure that matters of the two directions.
+    /// </summary>
+    [Fact]
+    public async Task AStreamTheFileNoLongerDeclares_IsDropped()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var shared = new InMemoryStreamStore();
+
+        var before = new ConfigurationStreamStore(
+            TransmitterOptions,
+            [
+                new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" },
+                new ConfiguredStream { ReceiverId = "departed", StreamId = "departed-main" },
+            ],
+            shared);
+        Assert.Equal(2, (await before.ListAllAsync(cancellationToken)).Count);
+
+        var after = new ConfigurationStreamStore(
+            TransmitterOptions,
+            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" }],
+            shared);
+
+        var remaining = Assert.Single(await after.ListAllAsync(cancellationToken));
+        Assert.Equal("kezio", remaining.ReceiverId);
+        Assert.Null(await after.FindAsync("departed", "departed-main", cancellationToken));
+    }
+
+    /// <summary>
+    /// A declaration missing an identifier is refused, and the case is not hypothetical: these
+    /// normally arrive from a settings file, and the configuration binder does not honour
+    /// <c>required</c> - an omitted member simply lands as null.
+    /// </summary>
+    /// <remarks>
+    /// Accepting it is worse than it looks. Every management operation is scoped by the receiver
+    /// identity, so no receiver could ever reach such a stream, while the delivery sweep would go
+    /// on minting and queueing events for it - a stream that only produces work.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationMissingAnIdentifier_IsRefused_BecauseBindingCannotEnforceRequired()
+    {
+        // Built the way the binder builds it: `required` is a compile-time rule, and this is what
+        // reaches the store when the settings section leaves the member out.
+        var missingReceiver = (ConfiguredStream)System.Runtime.CompilerServices
+            .RuntimeHelpers.GetUninitializedObject(typeof(ConfiguredStream));
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
+            TransmitterOptions, [missingReceiver], new InMemoryStreamStore()));
+
+        Assert.Contains(nameof(ConfiguredStream.ReceiverId), refusal.Message);
+        Assert.Contains("position 0", refusal.Message);
     }
 
     [Fact]
@@ -109,12 +252,13 @@ public class ConfigurationHostStoresTests
             [
                 new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" },
                 new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" },
-            ]));
+            ], new InMemoryStreamStore()));
         Assert.Contains("more than once", duplicate.Message);
 
         var undeliverable = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
-            new SsfTransmitterOptions { Issuer = "https://tr.example.com" },
-            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }]));
+            new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
+            [new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }],
+            new InMemoryStreamStore()));
         Assert.Contains(nameof(ConfiguredStream.PushEndpointUrl), undeliverable.Message);
     }
 
@@ -153,7 +297,7 @@ public class ConfigurationHostStoresTests
     public void ExplicitStoreChoices_Win_WhicheverSideOfTheRoleRegistrationTheyLand()
     {
         // The conveniences are the host's explicit choice, so unlike the TryAdd defaults they
-        // must win even AFTER AddSsfTransmitter has registered the in-memory pair.
+        // must win even AFTER AddSharedSignalsTransmitter has registered the in-memory pair.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<ISecurityEventTokenSigner, FakeSigner>();
@@ -161,9 +305,9 @@ public class ConfigurationHostStoresTests
         services.AddDistributedMemoryCache();
 
         services
-            .AddSsfTransmitter(TransmitterOptions)
-            .AddSsfConfiguredStreams([new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }])
-            .AddSsfDistributedOutbox();
+            .AddSharedSignalsTransmitter(TransmitterOptions)
+            .AddSharedSignalsConfiguredStreams([new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }])
+            .AddSharedSignalsDistributedOutbox();
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<ConfigurationStreamStore>(provider.GetRequiredService<IStreamStore>());

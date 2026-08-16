@@ -199,7 +199,7 @@ public class EventDispatcherTests
             stream,
             new SecurityEventDescriptor
             {
-                EventType = Events.SsfEventTypes.StreamUpdated,
+                EventType = Events.SharedSignalsEventTypes.StreamUpdated,
                 Subject = new OpaqueSubject("s-1"),
                 Payload = new Events.StreamUpdatedEventPayload { Status = StreamStatuses.Disabled },
             },

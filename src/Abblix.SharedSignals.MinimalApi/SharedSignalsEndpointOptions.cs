@@ -30,7 +30,7 @@ namespace Abblix.SharedSignals.MinimalApi;
 /// receiver identity every management operation is scoped by. Authentication itself stays with
 /// the host's middleware - SSF 1.0 Section 7.1.1 deliberately leaves the scheme open.
 /// </summary>
-public sealed record SsfEndpointOptions
+public sealed record SharedSignalsEndpointOptions
 {
     /// <summary>
     /// Extracts the receiver identity from the authenticated request; null answers the request
@@ -55,13 +55,13 @@ public sealed record SsfEndpointOptions
     public PathString AdvertisedPrefix { get; init; }
 
     /// <summary>
-    /// Whether <see cref="SsfEndpointRouteBuilderExtensions.MapSsfTransmitterEndpoints"/> maps
+    /// Whether <see cref="SharedSignalsEndpointRouteBuilderExtensions.MapSharedSignalsTransmitterEndpoints"/> maps
     /// the configuration document at the canonical well-known address. True by default; false
     /// is for a host whose gateway or CDN answers that address itself. The address is fixed by
     /// SSF 1.0 Section 7.2 and receivers derive it from the issuer, so this flag only
     /// suppresses the route, never moves it - a host that must serve the document on another
     /// internal path pairs it with <see cref="ConfigurationDocumentRoute"/> and
-    /// <see cref="SsfEndpointRouteBuilderExtensions.MapSsfConfigurationDocument"/>.
+    /// <see cref="SharedSignalsEndpointRouteBuilderExtensions.MapSharedSignalsConfigurationDocument"/>.
     /// </summary>
     public bool MapWellKnownConfiguration { get; init; } = true;
 

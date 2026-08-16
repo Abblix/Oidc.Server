@@ -51,7 +51,7 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// the shipped code path - the receiver's clients, the transmitter's endpoints, the delivery
 /// senders - so a green run means the packages carry both roles end to end.
 /// </summary>
-public sealed class SsfEndToEndTests : IAsyncLifetime
+public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 {
     private const string TransmitterIssuer = "https://tr.example.com";
     private const string ReceiverId = "receiver-e2e";
@@ -103,7 +103,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         Assert.Equal(
             "e2e-state",
             Assert.IsType<VerificationEventPayload>(
-                verification.EventPayloads![SsfEventTypes.Verification]).State);
+                verification.EventPayloads![SharedSignalsEventTypes.Verification]).State);
 
         // A business event reaches the stream through the matching fan-out.
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
@@ -236,14 +236,14 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddSecurityEvents(options =>
             options.SigningKeySource = _ => Task.FromResult(_key));
-        builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
+        builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = TransmitterIssuer,
             EventsSupported = [MembershipChanged],
         });
         // The whole topology in one options object: internal routes, the external prefix the
         // proxy exposes, and the suppressed canonical address the gateway owns.
-        builder.Services.AddSingleton(new SsfEndpointOptions
+        builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {
             ReceiverIdSelector = _ => ReceiverId,
             MapWellKnownConfiguration = false,
@@ -253,8 +253,8 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         });
 
         await using var app = builder.Build();
-        app.MapSsfTransmitterEndpoints();
-        app.MapSsfConfigurationDocument();
+        app.MapSharedSignalsTransmitterEndpoints();
+        app.MapSharedSignalsConfigurationDocument();
         await app.StartAsync(cancellationToken);
 
         var http = app.GetTestClient();
@@ -333,7 +333,7 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddSecurityEvents(options =>
             options.SigningKeySource = _ => Task.FromResult(_key));
-        builder.Services.AddSsfTransmitter(new SsfTransmitterOptions
+        builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = TransmitterIssuer,
             EventsSupported = [MembershipChanged],
@@ -346,13 +346,13 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
 
         // The test host's stand-in for authentication: every request is the one receiver. A
         // real deployment authenticates and attaches authorization to the returned group.
-        builder.Services.AddSingleton(new SsfEndpointOptions
+        builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {
             ReceiverIdSelector = _ => ReceiverId,
         });
 
         var app = builder.Build();
-        app.MapSsfTransmitterEndpoints();
+        app.MapSharedSignalsTransmitterEndpoints();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }
@@ -363,10 +363,10 @@ public sealed class SsfEndToEndTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_key));
         builder.Services.AddSecurityEvents(options =>
-            options.Events.Register<VerificationEventPayload>(SsfEventTypes.Verification));
+            options.Events.Register<VerificationEventPayload>(SharedSignalsEventTypes.Verification));
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddDistributedReplayCache();
-        builder.Services.AddSecurityEventReceiver(new SharedSignalsValidationOptions
+        builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
         {
             ExpectedAudience = ReceiverId,
             ExpectedIssuers = [TransmitterIssuer],

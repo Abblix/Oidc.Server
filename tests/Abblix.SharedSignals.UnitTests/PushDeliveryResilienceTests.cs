@@ -57,7 +57,7 @@ public class PushDeliveryResilienceTests
         services.ConfigureHttpClientDefaults(builder => builder.AddResilienceOfATypicalHost());
 
         services.AddSecurityEvents();
-        services.AddSsfTransmitter(new SsfTransmitterOptions
+        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = "https://transmitter.test",
 
