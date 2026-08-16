@@ -112,8 +112,14 @@ public sealed class JwksKeyResolutionOptions
     {
         public static readonly IssuerComparer Instance = new();
 
+        // Both halves normalise through the same method, because a comparer whose Equals and
+        // GetHashCode disagree does not fail - it files an entry in one bucket and looks for it in
+        // another, so the map reads as empty for a key that is in it.
         public bool Equals(string? x, string? y)
-            => string.Equals(x?.TrimEnd('/'), y?.TrimEnd('/'), StringComparison.Ordinal);
+            => string.Equals(
+                x is null ? null : NormaliseIssuer(x),
+                y is null ? null : NormaliseIssuer(y),
+                StringComparison.Ordinal);
 
         public int GetHashCode(string obj) => NormaliseIssuer(obj).GetHashCode(StringComparison.Ordinal);
     }
