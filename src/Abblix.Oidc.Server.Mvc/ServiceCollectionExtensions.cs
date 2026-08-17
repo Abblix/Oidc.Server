@@ -56,6 +56,15 @@ public static class ServiceCollectionExtensions
 	/// Adds OIDC server services to the specified <see cref="IServiceCollection"/> with provided configuration options.
 	/// This method allows for configuring OIDC options to tailor the authentication server to your specific needs.
 	/// </summary>
+	/// <remarks>
+	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
+	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
+	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
+	/// endpoint whose CORS metadata no middleware honours, so without that call every protocol endpoint
+	/// answers 500. The policy itself is registered here; only the middleware call belongs to the host,
+	/// since the framework accepts the middleware only when it runs after routing has selected an
+	/// endpoint - a place no library can insert it from.
+	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
@@ -67,6 +76,11 @@ public static class ServiceCollectionExtensions
 	/// <summary>
 	/// Adds OIDC server services to the specified <see cref="IServiceCollection"/> with provided configuration options and service provider.
 	/// </summary>
+	/// <remarks>
+	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>; see the
+	/// remarks on <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for why the
+	/// protocol endpoints refuse to answer without it.
+	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/> with the service provider.</param>
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
