@@ -158,28 +158,51 @@ public class ScopeManagerTests
     }
 
     /// <summary>
-    /// Verifies custom scope with same name as standard scope doesn't override.
-    /// Standard scopes are added first, custom scopes use TryAdd (no override).
+    /// Verifies a host definition under a standard scope name extends that scope: the standard
+    /// claims survive and the host's additions join them. Redefinition can therefore neither
+    /// narrow what OIDC Core assigns to the scope nor be silently discarded.
     /// </summary>
     [Fact]
-    public void Constructor_CustomScopeSameAsStandard_ShouldNotOverride()
+    public void Constructor_CustomScopeSameAsStandard_ShouldExtendStandardClaims()
     {
         // Arrange
-        var customOpenId = new ScopeDefinition(Scopes.OpenId, "custom_claim");
+        var customProfile = new ScopeDefinition(Scopes.Profile, "custom_claim");
 
         var options = Options.Create(new OidcOptions
         {
-            Scopes = [customOpenId]
+            Scopes = [customProfile]
         });
 
         // Act
         var manager = new ScopeManager(options);
 
         // Assert
-        Assert.True(manager.TryGet(Scopes.OpenId, out var retrieved));
-        // Should be the standard scope, not the custom one
-        Assert.Equal(StandardScopes.OpenId.ClaimTypes, retrieved.ClaimTypes);
-        Assert.NotEqual(["custom_claim"], retrieved.ClaimTypes);
+        Assert.True(manager.TryGet(Scopes.Profile, out var retrieved));
+        foreach (var standardClaim in StandardScopes.Profile.ClaimTypes)
+            Assert.Contains(standardClaim, retrieved.ClaimTypes);
+        Assert.Contains("custom_claim", retrieved.ClaimTypes);
+    }
+
+    /// <summary>
+    /// Verifies extension never duplicates a claim the standard scope already carries: the merge
+    /// is a set union, so a host restating a standard claim adds nothing.
+    /// </summary>
+    [Fact]
+    public void Constructor_CustomScopeRestatingStandardClaim_ShouldNotDuplicateIt()
+    {
+        // Arrange
+        var restated = StandardScopes.Email.ClaimTypes[0];
+        var options = Options.Create(new OidcOptions
+        {
+            Scopes = [new ScopeDefinition(Scopes.Email, restated)]
+        });
+
+        // Act
+        var manager = new ScopeManager(options);
+
+        // Assert
+        Assert.True(manager.TryGet(Scopes.Email, out var retrieved));
+        Assert.Single(retrieved.ClaimTypes, claim => claim == restated);
     }
 
     /// <summary>
@@ -301,10 +324,11 @@ public class ScopeManagerTests
 
     /// <summary>
     /// Verifies duplicate custom scopes are handled (first wins).
-    /// TryAdd behavior ensures first scope is kept.
+    /// Duplicate definitions merge into one scope carrying the union of their claims, matching
+    /// how a redefined standard scope is treated.
     /// </summary>
     [Fact]
-    public void Constructor_WithDuplicateCustomScopes_ShouldKeepFirst()
+    public void Constructor_WithDuplicateCustomScopes_ShouldMergeClaims()
     {
         // Arrange
         var scopes = new[]
@@ -320,8 +344,7 @@ public class ScopeManagerTests
 
         // Assert
         Assert.True(manager.TryGet("duplicate", out var definition));
-        Assert.Single(definition.ClaimTypes);
-        Assert.Equal("claim1", definition.ClaimTypes[0]);
+        Assert.Equal(["claim1", "claim2"], definition.ClaimTypes);
     }
 
     /// <summary>
