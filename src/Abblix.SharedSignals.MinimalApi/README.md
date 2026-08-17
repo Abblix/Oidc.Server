@@ -7,7 +7,7 @@ ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuge
 There are two Minimal API packages in this family, and the line between them is not the one that first suggests itself. It is **not** transmitter here and receiver there: this package holds receiver-role code of its own - the stream management client, the transmitter discovery client. The question that decides placement is whether the endpoint stops making sense **without a stream**:
 
 - **Stream management, status, subjects, verification, the `ssf-configuration` document, and the transmitter's poll endpoint** - every one is meaningless without a stream, and the poll address is addressed *by stream identifier*. Here.
-- **Push delivery intake** - "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalApi](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalApi), which this package's dependencies already bring along.
+- **Push delivery intake** - "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalApi](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalApi), which a push-based receiver installs alongside this one: the dependency chain here reaches the core library but not the core's adapter.
 - **Back-Channel Logout** - one token, delivered once, from a provider the relying party already knows. Also there.
 
 Push and poll are the pair worth understanding, because both are core delivery specifications (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which document defines the protocol but whether a stream is part of the addressing: the push intake just accepts a token, while the poll endpoint below serves one stream's queue and its URL is built per stream from your `PollEndpointFactory`. The specification says how to carry an event; the stream says to whom - and that second half is what this package is.
@@ -18,6 +18,7 @@ The split is kept for what it buys the other side: a relying party that wants on
 
 ```bash
 dotnet add package Abblix.SharedSignals.MinimalApi
+dotnet add package Abblix.SecurityEvents.MinimalApi   # a push-based receiver also needs the intake endpoint
 ```
 
 ## Transmitter
