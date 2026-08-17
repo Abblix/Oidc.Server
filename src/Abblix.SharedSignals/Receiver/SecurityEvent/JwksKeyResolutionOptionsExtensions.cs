@@ -26,10 +26,15 @@ using Abblix.SharedSignals.Model;
 namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 
 /// <summary>
-/// Teaches key resolution where one transmitter's signing keys are, from the transmitter's own
-/// configuration document.
+/// What Shared Signals adds to key resolution: the "jwks_uri" a transmitter advertises about itself.
 /// </summary>
-public static class TransmitterKeyResolution
+/// <remarks>
+/// The family word is in the method name rather than only in the namespace because the type extended
+/// here belongs to another package, and several packages hang their own vocabulary off it - the same
+/// reason <c>RegisterSharedSignalsEvents</c>, <c>RegisterCaepEvents</c> and <c>RegisterRiscEvents</c>
+/// each carry theirs.
+/// </remarks>
+public static class JwksKeyResolutionOptionsExtensions
 {
     /// <summary>
     /// Records the transmitter's issuer and the JWK Set it advertises, so events it signs verify.
@@ -56,7 +61,7 @@ public static class TransmitterKeyResolution
     /// resolution fall through to a guessed address answers that with a wrong document instead of a
     /// failure anybody can act on.
     /// </exception>
-    public static JwksKeyResolutionOptions AddTransmitterKeys(
+    public static JwksKeyResolutionOptions AddSharedSignalsJwksUri(
         this JwksKeyResolutionOptions options,
         TransmitterConfiguration transmitter)
     {

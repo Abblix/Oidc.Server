@@ -36,7 +36,7 @@ namespace Abblix.SharedSignals.UnitTests;
 /// for a transmitter is very likely not its key set, so a signature stops verifying and reads as
 /// forgery rather than as wiring.
 /// </remarks>
-public class TransmitterKeyResolutionTests
+public class JwksKeyResolutionOptionsExtensionsTests
 {
     private const string Issuer = "https://transmitter.example.com";
 
@@ -50,7 +50,7 @@ public class TransmitterKeyResolutionTests
         var advertised = new Uri("https://transmitter.example.com/ssf/jwks");
         var options = new JwksKeyResolutionOptions();
 
-        options.AddTransmitterKeys(Document(advertised));
+        options.AddSharedSignalsJwksUri(Document(advertised));
 
         Assert.Equal(advertised, options.JwksUris[Issuer]);
     }
@@ -70,7 +70,7 @@ public class TransmitterKeyResolutionTests
         var options = new JwksKeyResolutionOptions();
 
         var failure = Assert.Throws<InvalidOperationException>(
-            () => options.AddTransmitterKeys(Document(jwksUri: null)));
+            () => options.AddSharedSignalsJwksUri(Document(jwksUri: null)));
 
         Assert.Contains(Issuer, failure.Message, StringComparison.Ordinal);
         Assert.Contains(TransmitterConfiguration.ParameterNames.JwksUri, failure.Message, StringComparison.Ordinal);
@@ -93,8 +93,8 @@ public class TransmitterKeyResolutionTests
         var theirs = new Uri("https://second.example.com/keys");
 
         var options = new JwksKeyResolutionOptions()
-            .AddTransmitterKeys(Document(ours))
-            .AddTransmitterKeys(Document(theirs, other));
+            .AddSharedSignalsJwksUri(Document(ours))
+            .AddSharedSignalsJwksUri(Document(theirs, other));
 
         Assert.Equal(ours, options.JwksUris[Issuer]);
         Assert.Equal(theirs, options.JwksUris[other]);
@@ -115,7 +115,7 @@ public class TransmitterKeyResolutionTests
         var advertised = new Uri("https://transmitter.example.com/ssf/jwks");
         var options = new JwksKeyResolutionOptions();
 
-        options.AddTransmitterKeys(Document(advertised, Issuer + "/"));
+        options.AddSharedSignalsJwksUri(Document(advertised, Issuer + "/"));
 
         Assert.Equal(advertised, options.JwksUris[Issuer]);
     }
