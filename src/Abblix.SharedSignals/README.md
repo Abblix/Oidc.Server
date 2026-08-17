@@ -55,8 +55,7 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 
 ```csharp
 builder.Services.AddSecurityEvents(options => options.Events.RegisterCaepEvents());
-builder.Services.AddJwksKeyResolution(options =>
-    options.JwksUris[transmitterMetadata.Issuer] = transmitterMetadata.JwksUri!);
+builder.Services.AddJwksKeyResolution();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddDistributedReplayCache();
 builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
@@ -66,6 +65,15 @@ builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
 });
 builder.Services.AddSingleton<ISecurityEventSink, MySink>();
 ```
+
+A receiver learns where the transmitter's keys are from the transmitter, so that pair is recorded once the configuration document has been read rather than while the host is composed:
+
+```csharp
+var transmitter = await transmitterConfigurationClient.GetAsync(issuer, cancellationToken);
+jwksOptions.CurrentValue.AddTransmitterKeys(transmitter);
+```
+
+`AddTransmitterKeys` refuses a document advertising no `jwks_uri` and names the transmitter, because every SET is signed: falling through to the guessed `{issuer}/.well-known/jwks.json` would answer an unverifiable transmitter with a wrong document rather than with a failure anybody can act on. Several transmitters are several calls, and none displaces another.
 
 The sink is where the host reacts - terminate the local session, force a credential reset - and the push pipeline hands it only events that passed the full validation profile, the REQUIRED `jti` included, so every accepted event is trackable.
 
