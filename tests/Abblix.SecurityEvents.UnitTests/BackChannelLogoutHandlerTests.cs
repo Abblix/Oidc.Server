@@ -23,6 +23,8 @@
 using System.Net;
 using System.Net.Mime;
 using Abblix.SecurityEvents.BackChannelLogout;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SecurityEvents.UnitTests;
@@ -69,7 +71,36 @@ public class BackChannelLogoutHandlerTests
     }
 
     private static BackChannelLogoutHandler Handler(
-        StubValidator validator, ILogoutNotificationSink sink) => new(validator, sink);
+        StubValidator validator, ILogoutNotificationSink sink)
+        => new(NullLogger<BackChannelLogoutHandler>.Instance, validator, sink);
+
+    /// <summary>Keeps EVERY line this handler wrote: its level, its identifier and its message.</summary>
+    /// <remarks>
+    /// Every line, not only the warnings: a test asserting "no warning" on the success path is
+    /// satisfied by a handler that chatters at Information, so it cannot tell silence from
+    /// something quieter than the thing it names.
+    /// </remarks>
+    private sealed class RecordingLogger : ILogger<BackChannelLogoutHandler>
+    {
+        public List<(LogLevel Level, EventId EventId, string Message)> Lines { get; } = [];
+
+        public IReadOnlyList<(EventId EventId, string Message)> Warnings =>
+            [.. Lines.Where(line => line.Level == LogLevel.Warning).Select(line => (line.EventId, line.Message))];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Lines.Add((logLevel, eventId, formatter(state, exception)));
+        }
+    }
 
     [Fact]
     public async Task AWellFormedRequest_IsAccepted_AndReachesTheSink()
@@ -196,5 +227,68 @@ public class BackChannelLogoutHandlerTests
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Contains("unreachable", result.Error!.Description);
+    }
+
+    /// <summary>
+    ///     Every way of refusing is recorded here, not only reported to the provider.
+    /// </summary>
+    /// <remarks>
+    ///     The description travels back in the response, which Section 2.8 asks for - but the
+    ///     provider is the other party, and a receiver that kept nothing leaves its operator an
+    ///     even stream of 400s with no way in. A provider signing with untrusted keys and a
+    ///     receiver pointed at the wrong key document look identical without it.
+    ///
+    ///     A theory over all four paths rather than one case, because each reaches the recording
+    ///     through a different branch. It cannot see a FIFTH path - what makes a later one recorded
+    ///     is that the shaping and the recording are one method, so a refusal that skipped it would
+    ///     have to be built by hand.
+    /// </remarks>
+    [Theory]
+    [InlineData("application/json", "logout_token=x", "Section 2.5 requires")]
+    [InlineData(MediaTypeNames.Application.FormUrlEncoded, "other=x", "carries no 'logout_token'")]
+    [InlineData(MediaTypeNames.Application.FormUrlEncoded, "logout_token=" + Token, "refused by the validator")]
+    [InlineData(MediaTypeNames.Application.FormUrlEncoded, "logout_token=" + Token, "refused by the sink")]
+    public async Task EveryRefusal_IsRecorded(string contentType, string body, string expected)
+    {
+        var logger = new RecordingLogger();
+        var validator = expected.Contains("validator", StringComparison.Ordinal)
+            ? new StubValidator("refused by the validator")
+            : new StubValidator();
+        var sink = new RecordingSink(
+            expected.Contains("sink", StringComparison.Ordinal) ? "refused by the sink" : null);
+
+        var handler = new BackChannelLogoutHandler(logger, validator, sink);
+        var result = await handler.HandleAsync(contentType, body, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+
+        var (eventId, warning) = Assert.Single(logger.Warnings);
+        Assert.Contains(expected, warning, StringComparison.Ordinal);
+        Assert.Contains(result.Error!.Error, warning, StringComparison.Ordinal);
+
+        // The number is the contract a runbook keys off, so it is asserted rather than the message:
+        // the text may be reworded, the identifier may not move.
+        Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, eventId.Id);
+    }
+
+    /// <summary>Success is silent at EVERY level, so the refusals stay findable among ordinary traffic.</summary>
+    /// <remarks>
+    /// Asserting the absence of a warning would leave the handler free to write a line per accepted
+    /// logout at Information - which is the volume this endpoint would produce most of, and the
+    /// noise a refusal has to be found in.
+    /// </remarks>
+    [Fact]
+    public async Task AnAcceptedRequest_RecordsNoWarning()
+    {
+        var logger = new RecordingLogger();
+        var handler = new BackChannelLogoutHandler(logger, new StubValidator(), new RecordingSink());
+
+        var result = await handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        Assert.Empty(logger.Lines);
     }
 }

@@ -22,6 +22,7 @@
 
 using System.Net.Http.Headers;
 using System.Net.Mime;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.SecurityEvents.BackChannelLogout;
 
@@ -37,9 +38,11 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// specification's request and response rules in one place rather than in each host framework's
 /// endpoint.
 /// </remarks>
+/// <param name="logger">Records every refusal, which no other party keeps.</param>
 /// <param name="validator">The Logout Token's validation, which is Section 2.6.</param>
 /// <param name="sink">Where the notification lands, which is Section 2.7.</param>
-public sealed class BackChannelLogoutHandler(
+public sealed partial class BackChannelLogoutHandler(
+    ILogger<BackChannelLogoutHandler> logger,
     ILogoutTokenValidator validator,
     ILogoutNotificationSink sink)
 {
@@ -67,7 +70,7 @@ public sealed class BackChannelLogoutHandler(
                 MediaTypeNames.Application.FormUrlEncoded,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return BackChannelLogoutResult.BadRequest(
+            return Refuse(
                 $"The request arrived as '{contentType ?? "(no content type)"}', where OpenID Connect "
                 + $"Back-Channel Logout 1.0 Section 2.5 requires "
                 + $"'{MediaTypeNames.Application.FormUrlEncoded}'.");
@@ -75,7 +78,7 @@ public sealed class BackChannelLogoutHandler(
 
         if (ReadLogoutToken(body) is not { Length: > 0 } logoutToken)
         {
-            return BackChannelLogoutResult.BadRequest(
+            return Refuse(
                 $"The request carries no '{LogoutTokenParameter}' parameter, which Section 2.5 requires.");
         }
 
@@ -89,14 +92,55 @@ public sealed class BackChannelLogoutHandler(
             // "If any of the validation steps fails, reject the Logout Token and return an HTTP
             // 400 Bad Request error" (Section 2.6). The reason travels in the description, which
             // Section 2.8 exists to help debug deployments with.
-            return BackChannelLogoutResult.BadRequest(exception.Message);
+            return Refuse(exception.Message);
         }
 
         var refusal = await sink.ConsumeAsync(notification, cancellationToken);
-        return refusal is null
-            ? BackChannelLogoutResult.Ok
-            : BackChannelLogoutResult.BadRequest(refusal);
+        return refusal is null ? BackChannelLogoutResult.Ok : Refuse(refusal);
     }
+
+    /// <summary>
+    /// Shapes a refusal and records it.
+    /// </summary>
+    /// <remarks>
+    /// Recorded here because here is where the description exists. It travels to the provider in
+    /// the response, which Section 2.8 asks for so a deployment can be debugged - but the provider
+    /// is the other party, and the receiver that refused keeps nothing. A run of refusals is a
+    /// provider signing with keys this receiver does not trust, a receiver reading a JWK Set that
+    /// is reachable but wrong, or a malformed request, and the three are told apart only by the
+    /// description; without it an operator sees an even stream of 400s and no way in. A key
+    /// document that cannot be fetched at all is a different signal - that throws, and answers 500
+    /// rather than arriving here.
+    /// <para>
+    /// One place, so every refusal path is recorded by construction rather than by each of them
+    /// remembering - and a path added later is recorded on the day it is written.
+    /// </para>
+    /// </remarks>
+    /// <param name="description">What was wrong, in the words that go back to the provider.</param>
+    private BackChannelLogoutResult Refuse(string description)
+    {
+        // The code is the constant every refusal carries, taken from the constant rather than read
+        // back off the result: the result's error is nullable, and dereferencing it here would
+        // assert a fact the compiler cannot check in order to learn something already known.
+        LogRefused(BackChannelLogoutError.InvalidRequest, Abbreviate(description));
+
+        return BackChannelLogoutResult.BadRequest(description);
+    }
+
+    /// <summary>How much of a description is worth keeping in a log line.</summary>
+    /// <remarks>
+    /// This endpoint is unauthenticated by design, and one refusal path echoes the request's own
+    /// Content-Type into the description - so an anonymous caller chooses both the rate and, up to
+    /// the server's header limit, the size of what is written. The response still carries the whole
+    /// text to the provider, which is what Section 2.8 asks for; the log keeps the part that names
+    /// the problem.
+    /// </remarks>
+    private const int LoggedDescriptionLimit = 512;
+
+    private static string Abbreviate(string description)
+        => description.Length <= LoggedDescriptionLimit
+            ? description
+            : description[..LoggedDescriptionLimit] + "...";
 
     /// <summary>
     /// Reads the one parameter this endpoint understands out of a form-encoded body.

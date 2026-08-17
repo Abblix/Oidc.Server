@@ -188,12 +188,208 @@ public class JwksIssuerKeyResolverTests
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
 
-        await Resolve(Resolver(handler, new FakeTimeProvider(Now), new JwksKeyResolutionOptions
-        {
-            JwksUriSelector = _ => advertised,
-        }));
+        await Resolve(Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions().AddJwksUriSelector(_ => advertised)));
 
         Assert.Equal(advertised, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>A named entry answers for its issuer, ahead of the convention.</summary>
+    [Fact]
+    public async Task ANamedEntry_Overrides_TheWellKnownConvention()
+    {
+        var mapped = new Uri("https://issuer.example.com/.well-known/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    ///     Two consumers naming two issuers do not take each other's keys away.
+    /// </summary>
+    /// <remarks>
+    ///     The failure this replaces: with one selector for the whole host, every consumer past the
+    ///     first composed a chain by hand, and one that forgot to call the previous delegate removed
+    ///     another issuer's keys silently - a token that used to verify starts failing its
+    ///     signature, which reads as an attack rather than as wiring.
+    /// </remarks>
+    [Fact]
+    public async Task TwoNamedIssuers_DoNotDisplaceEachOther()
+    {
+        var ours = new Uri("https://issuer.example.com/keys");
+        var theirs = new Uri("https://transmitter.example.com/ssf/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = ours;
+        options.JwksUris["https://transmitter.example.com"] = theirs;
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await Resolve(resolver);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           "https://transmitter.example.com", null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal([ours, theirs], handler.Requests);
+    }
+
+    /// <summary>
+    ///     A selector answering null reaches the convention, which is what makes null the right
+    ///     way to say "not mine".
+    /// </summary>
+    /// <remarks>
+    ///     The fallback itself is not new - the resolver has always treated a null RESULT the same
+    ///     as a null delegate. What this pins is that the annotation now permits the answer, so a
+    ///     selector no longer has to throw for an issuer it does not know; a throw would take the
+    ///     fallback out for every other issuer, since nothing runs past it.
+    /// </remarks>
+    [Fact]
+    public async Task ASelectorAnsweringNull_FallsThroughToTheConvention()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        await Resolve(Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions().AddJwksUriSelector(_ => null)));
+
+        Assert.Equal(new Uri($"{Issuer}/.well-known/jwks.json"), Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    ///     A trailing slash on either side does not decide which document the keys come from.
+    /// </summary>
+    /// <remarks>
+    ///     One method decides twice - it looks an issuer up in the map and, failing that, composes
+    ///     the well-known address - so the two halves must agree about what an issuer IS. Matching
+    ///     the raw string on one side while trimming on the other makes a map keyed with the slash
+    ///     miss a token whose "iss" carries none, and the miss does not fail: it falls through to
+    ///     the convention, which may well serve a document that verifies nothing this issuer signed.
+    /// </remarks>
+    [Theory]
+    [InlineData("https://issuer.example.com/", "https://issuer.example.com")]
+    [InlineData("https://issuer.example.com", "https://issuer.example.com/")]
+    public async Task ATrailingSlash_DoesNotDecideWhichDocumentIsRead(string mapKey, string tokenIssuer)
+    {
+        var mapped = new Uri("https://issuer.example.com/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[mapKey] = mapped;
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           tokenIssuer, null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    ///     Two selectors both answer, in the order they were added, and neither displaces the other.
+    /// </summary>
+    /// <remarks>
+    ///     Two receivers each learning their own transmitter's metadata is the ordinary case, not an
+    ///     exotic one. A settable delegate would let the second discard the first, and the loss
+    ///     shows up as a signature that stopped verifying - which reads as an attack rather than as
+    ///     wiring.
+    /// </remarks>
+    [Fact]
+    public async Task TwoSelectors_BothAnswer_InTheOrderTheyWereAdded()
+    {
+        var ours = new Uri("https://issuer.example.com/keys");
+        var theirs = new Uri("https://transmitter.example.com/ssf/jwks");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions()
+            .AddJwksUriSelector(issuer => issuer == Issuer ? ours : null)
+            .AddJwksUriSelector(issuer => issuer == "https://transmitter.example.com" ? theirs : null);
+
+        var resolver = Resolver(handler, new FakeTimeProvider(Now), options);
+        await Resolve(resolver);
+        await foreach (var _ in resolver.ResolveSigningKeysAsync(
+                           "https://transmitter.example.com", null, TestContext.Current.CancellationToken))
+        {
+            // Draining the sequence is what performs the fetch; the keys themselves are not the point.
+        }
+
+        Assert.Equal([ours, theirs], handler.Requests);
+    }
+
+    /// <summary>
+    ///     A mapped address over cleartext is refused, exactly as a derived one is.
+    /// </summary>
+    /// <remarks>
+    ///     The document behind this address decides which signatures verify, so its transport is
+    ///     part of the trust whatever named it. A map that quietly escaped the check would be a way
+    ///     to lower it by writing one line of wiring - and the check is the reason nobody can.
+    /// </remarks>
+    [Fact]
+    public async Task AMappedCleartextAddress_IsRefused()
+    {
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([]));
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = new Uri("http://issuer.example.com/keys");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Resolve(Resolver(handler, new FakeTimeProvider(Now), options)));
+
+        Assert.Contains("cleartext", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>Loopback stays reachable over cleartext, so local development is not collateral.</summary>
+    /// <remarks>
+    ///     The control for the case above: without it, the refusal test would also pass against a
+    ///     resolver that refused every mapped address, and the map would be unusable while the suite
+    ///     read as green.
+    /// </remarks>
+    [Fact]
+    public async Task AMappedLoopbackAddress_IsAllowed()
+    {
+        var mapped = new Uri("http://localhost:5001/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions();
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>A named entry is consulted before the selector: the more specific statement wins.</summary>
+    [Fact]
+    public async Task ANamedEntry_IsConsultedBeforeTheSelector()
+    {
+        var mapped = new Uri("https://issuer.example.com/keys");
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions()
+            .AddJwksUriSelector(_ => new Uri("https://issuer.example.com/from-selector"));
+        options.JwksUris[Issuer] = mapped;
+
+        await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(mapped, Assert.Single(handler.Requests));
     }
 
     [Fact]

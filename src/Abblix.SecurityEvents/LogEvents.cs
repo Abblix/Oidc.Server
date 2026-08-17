@@ -42,4 +42,18 @@ public static class LogEvents
         /// </summary>
         public const int InsecureProfileAllowance = Base + 1;
     }
+
+    /// <summary>
+    /// Back-channel logout intake: range 1100-1199.
+    /// </summary>
+    public static class BackChannelLogout
+    {
+        private const int Base = 1100;
+
+        /// <summary>
+        /// A logout request was refused; the message carries the error code and the description
+        /// that travelled back to the provider.
+        /// </summary>
+        public const int RequestRefused = Base + 1;
+    }
 }
