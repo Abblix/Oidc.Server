@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Mvc;
@@ -70,6 +71,9 @@ public class EnabledEndpointsRegistrationValidatorTests
             .AddOidcServices(o =>
             {
                 o.Issuer = TestConstants.DefaultIssuer.OriginalString;
+                // A signing key, because a host with none is refused at startup by
+                // SigningKeysPresenceValidator and this test is about endpoint registration.
+                o.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
                 o.DeviceAuthorization = new DeviceAuthorizationOptions
                 {
                     VerificationUri = new Uri("https://provider.example/device"),
