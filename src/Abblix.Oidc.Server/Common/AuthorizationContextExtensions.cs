@@ -50,9 +50,9 @@ public static class AuthorizationContextExtensions
     /// <remarks>
     /// RFC 9068 Section 3: "If the request does not include a `resource` parameter, the authorization server
     /// MUST use a default resource indicator in the `aud` claim." With no default supplied the context is
-    /// returned untouched and the audience falls back to the client identifier, which is what prior versions
-    /// did - the behaviour changes only where a host states the default, because that value is read by every
-    /// resource server in the deployment.
+    /// returned untouched and the audience later falls back to the issuer (see <see cref="ApplyTo"/>) - the
+    /// behaviour changes only where a host states the default, because that value is read by every resource
+    /// server in the deployment.
     /// A context that already names a resource or an audience is returned unchanged: it says who the token is
     /// for, and this only fills a gap.
     /// </remarks>
