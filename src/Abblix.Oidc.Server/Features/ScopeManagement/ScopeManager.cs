@@ -33,7 +33,9 @@ namespace Abblix.Oidc.Server.Features.ScopeManagement;
 /// standard scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>address</c>, <c>phone</c>,
 /// <c>offline_access</c>) and merges any host-defined scopes from
 /// <see cref="OidcOptions.Scopes"/>. Lookups are case-sensitive (RFC 6749 §3.3 treats scope
-/// values as case-sensitive strings) and host-defined scopes do not override the standard ones.
+/// values as case-sensitive strings). A host-defined scope under a standard name extends that
+/// scope: the claims it lists are added to the standard ones, so the standard claim set cannot be
+/// narrowed by redefinition and the host's additions cannot be lost to it.
 /// </summary>
 /// <param name="options">The options containing OIDC configuration, including additional custom scopes.</param>
 public class ScopeManager(IOptions<OidcOptions> options) : IScopeManager
@@ -44,7 +46,15 @@ public class ScopeManager(IOptions<OidcOptions> options) : IScopeManager
     {
         var scopes = new Dictionary<string, ScopeDefinition>(StringComparer.Ordinal);
 
-        void Add(ScopeDefinition scope) => scopes.TryAdd(scope.Scope, scope);
+        void Add(ScopeDefinition scope)
+        {
+            // Merging rather than replacing keeps both parties whole: the host cannot strip a claim
+            // OIDC Core assigns to a standard scope, and the library cannot silently discard the
+            // claims the host attached to it - which is what a plain TryAdd used to do.
+            scopes[scope.Scope] = scopes.TryGetValue(scope.Scope, out var existing)
+                ? existing with { ClaimTypes = [.. existing.ClaimTypes.Union(scope.ClaimTypes, StringComparer.Ordinal)] }
+                : scope;
+        }
 
         Add(StandardScopes.OpenId);
         Add(StandardScopes.Profile);

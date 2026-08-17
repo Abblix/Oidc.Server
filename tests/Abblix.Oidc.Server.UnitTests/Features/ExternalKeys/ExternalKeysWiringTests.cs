@@ -151,9 +151,11 @@ public class ExternalKeysWiringTests
     [Fact]
     public async Task ConfiguredKeysAreServed_WhenNoCustodianIsRegisteredAtAll()
     {
+        var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddOptions<OidcOptions>();
+        services.AddOptions<OidcOptions>().Configure(options => options.SigningKeys = [signingKey]);
         services.AddSingleton(TimeProvider.System);
         services.AddJsonWebTokens();
         services.AddAuthServiceJwt();
@@ -161,7 +163,9 @@ public class ExternalKeysWiringTests
         await using var provider = services.BuildServiceProvider();
         var keysProvider = provider.GetRequiredService<IAuthServiceKeysProvider>();
 
-        // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected by it.
-        Assert.Empty(await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken));
+        // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected
+        // by it and simply served the keys it configured.
+        var served = await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(signingKey.KeyId, Assert.Single(served).KeyId);
     }
 }

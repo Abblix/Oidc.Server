@@ -395,6 +395,13 @@ public static class ServiceCollectionExtensions
         // reader (ISP), so read-only consumers never depend on persistence.
         services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
 
+        // Fail loud at startup when the resolved provider is the static one above and OidcOptions carries no
+        // signing key: that host can never sign a token, and without this check the first symptom is an empty
+        // JWKS cached by every relying party. A host-supplied provider is trusted, not probed - its store may
+        // be legitimately unreachable while the host boots.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SigningKeysPresenceValidator>());
+
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
         return services;
