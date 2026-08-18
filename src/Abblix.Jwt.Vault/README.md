@@ -109,9 +109,31 @@ builder.Services
 
 ### Authentication
 
-The `Token` is presented as the `X-Vault-Token` header. Source it from the environment or a secret store, never hardcode it; this package reads it at startup and neither logs nor persists it.
+Two ways to hold a token, and configuring the first replaces the second:
 
-Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else. In production, authenticate through AppRole or Kubernetes auth, mint a short-lived token, and scope it with the policy for the placement you chose above.
+**Let the package log in and stay logged in.** Configure the `Authentication` section with exactly one auth method, and the package obtains its own token, renews the lease before it ends, and logs in again - while the old token is still valid - once the lease cannot be extended further. This is the production posture: the token stays short-lived and nobody has to deliver one to the process.
+
+```csharp
+// Binding the whole section is what keeps the feature optional: the binder leaves
+// Authentication null when the file does not mention it, and null is the off switch.
+builder.Services.AddVaultCustodian(vault => builder.Configuration.GetSection("Vault").Bind(vault));
+```
+
+```jsonc
+// Kubernetes: the pod authenticates with its projected service-account token,
+// which is re-read on every login because the kubelet rotates the file.
+"Vault": { "Authentication": { "Kubernetes": { "Role": "oidc-signer" } } }
+
+// AppRole: the identifier pair, for a host outside Kubernetes. The secret comes
+// from a secret store or a mounted secret, never from a committed file.
+"Vault": { "Authentication": { "AppRole": { "RoleId": "...", "SecretId": "..." } } }
+```
+
+The auth role must issue service tokens without a use limit (`token_num_uses=0`): every Transit call spends a use invisibly. For AppRole, remember that every login consumes a `secret_id` use - including logins retried after a lost response - so a bounded `secret_id_num_uses` runs out on schedule rather than on error.
+
+**Or hand a token over.** A host that already owns a token sets `Token`, presents it as the `X-Vault-Token` header on every request, and keeps owning its lifetime - including rotating it through configuration reload, which the package picks up per request. Source it from the environment or a secret store, never hardcode it; the package neither logs nor persists it.
+
+Reach Vault over TLS in every environment that is not a local dev container: the header is a bearer credential, and anyone who reads it off the wire can sign tokens as your provider until it expires. Vault's own `vault server -dev` mode issues a well-known root token and listens on plaintext `http://127.0.0.1:8200`; that combination suits a throwaway dev server and nothing else - and it is the one place the `Token` posture is the natural choice. Whichever way the token arrives, scope it with the policy for the placement you chose above.
 
 ### The HTTP pipeline
 

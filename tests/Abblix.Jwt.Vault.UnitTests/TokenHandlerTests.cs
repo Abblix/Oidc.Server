@@ -46,10 +46,78 @@ public sealed class TokenHandlerTests : IDisposable
 
     private HttpClient ClientOver(MutableMonitor monitor, StubHttpMessageHandler transport)
     {
-        var handler = new TokenHandler(monitor) { InnerHandler = transport };
+        var handler = new TokenHandler(new TokenSource(monitor)) { InnerHandler = transport };
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
         _httpClients.Add(httpClient);
         return httpClient;
+    }
+
+    /// <summary>
+    /// When the package logs in itself and no token exists yet, a request waits for the first login
+    /// instead of leaving without a token - and proceeds with the minted token the moment it lands.
+    /// </summary>
+    [Fact]
+    public async Task WaitsForTheFirstLogin_WhenAuthenticationIsConfigured()
+    {
+        var monitor = new MutableMonitor(new VaultTransitOptions
+        {
+            Authentication = new VaultAuthenticationOptions
+            {
+                Kubernetes = new KubernetesAuthenticationOptions { Role = "signer" },
+            },
+        });
+        var tokens = new TokenSource(monitor);
+        string? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request.Headers.TryGetValues(TokenHandler.TokenHeaderName, out var values)
+                ? values.Single()
+                : null;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+        var handler = new TokenHandler(tokens) { InnerHandler = transport };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
+        _httpClients.Add(httpClient);
+
+        var pending = httpClient.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+        Assert.False(pending.IsCompleted);
+
+        tokens.Publish("s.minted");
+        await pending;
+
+        Assert.Equal("s.minted", seen);
+    }
+
+    /// <summary>
+    /// The login request itself is marked anonymous: it must neither wait for the token it is about
+    /// to produce nor carry a stale one onto an endpoint that ignores it.
+    /// </summary>
+    [Fact]
+    public async Task AnonymousRequest_NeitherWaitsNorCarriesAToken()
+    {
+        var monitor = new MutableMonitor(new VaultTransitOptions
+        {
+            Token = "s.host",
+            Authentication = new VaultAuthenticationOptions
+            {
+                AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+            },
+        });
+        HttpRequestMessage? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+        var handler = new TokenHandler(new TokenSource(monitor)) { InnerHandler = transport };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
+        _httpClients.Add(httpClient);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "auth/approle/login");
+        request.Options.Set(TokenHandler.AnonymousRequest, true);
+        await httpClient.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
     }
 
     public void Dispose()

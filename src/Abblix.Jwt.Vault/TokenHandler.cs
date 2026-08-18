@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.Options;
-
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
@@ -30,21 +28,41 @@ namespace Abblix.Jwt.Vault;
 /// <remarks>
 /// Stamping the header once, when the client is built, would pin the token for the process lifetime: the typed
 /// client is held by singletons and its handler chain never rotates, so the configure delegate runs exactly once.
-/// That is only workable with a long-lived token, which is the posture the README tells operators not to use.
-/// Reading through <see cref="IOptionsMonitor{TOptions}"/> per request lets a token minted by AppRole or
-/// Kubernetes auth be renewed and picked up, without restarting the process.
+/// Reading through <see cref="TokenSource"/> per request lets a token minted by the package's own login, or one
+/// the host rotates through configuration, take effect without restarting the process. When the package logs in
+/// itself and no token exists yet, the request waits for the first login instead of failing without one - except
+/// a request marked <see cref="AnonymousRequest"/>, which is how the login request itself passes through without
+/// deadlocking on the token it is about to mint.
 /// </remarks>
-internal sealed class TokenHandler(IOptionsMonitor<VaultTransitOptions> options) : DelegatingHandler
+internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
 {
     /// <summary>Vault's authentication header, and the name to keep out of logs.</summary>
     internal const string TokenHeaderName = "X-Vault-Token";
 
+    /// <summary>
+    /// Marks a request to an unauthenticated Vault path. No token is attached - Vault ignores one there, so
+    /// sending it would only spread the credential - and, decisively, the request does not wait for the first
+    /// login: the login request itself travels through this same handler.
+    /// </summary>
+    internal static readonly HttpRequestOptionsKey<bool> AnonymousRequest = new("Abblix.Jwt.Vault.Anonymous");
+
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        var token = options.CurrentValue.Token;
+        if (request.Options.TryGetValue(AnonymousRequest, out var anonymous) && anonymous)
+            return await base.SendAsync(request, cancellationToken);
+
+        var token = tokens.Current;
+        if (token is null && tokens.AuthenticationConfigured)
+        {
+            // The caller's cancellation bounds this caller's WAIT only; the login it waits for runs under the
+            // lifecycle service and survives any one caller giving up.
+            await tokens.FirstLoginCompleted.WaitAsync(cancellationToken);
+            token = tokens.Current;
+        }
+
         if (!string.IsNullOrWhiteSpace(token))
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
@@ -53,6 +71,6 @@ internal sealed class TokenHandler(IOptionsMonitor<VaultTransitOptions> options)
             request.Headers.Add(TokenHeaderName, token);
         }
 
-        return base.SendAsync(request, cancellationToken);
+        return await base.SendAsync(request, cancellationToken);
     }
 }

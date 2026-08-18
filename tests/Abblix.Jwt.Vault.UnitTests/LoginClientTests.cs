@@ -1,0 +1,197 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using System.Net;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+
+namespace Abblix.Jwt.Vault.UnitTests;
+
+/// <summary>
+/// The login client's contract with the lifecycle loop: every call answers with a verdict, and the
+/// request it sends is the one the auth method's mount expects.
+/// </summary>
+public sealed class LoginClientTests : IDisposable
+{
+    private readonly List<IDisposable> _disposables = [];
+
+    private (LoginClient Client, StubHttpMessageHandler Transport) ClientOver(
+        VaultTransitOptions options,
+        Func<HttpRequestMessage, string, HttpResponseMessage> responder)
+    {
+        var transport = new StubHttpMessageHandler(responder);
+        var httpClient = new HttpClient(transport) { BaseAddress = new Uri("https://vault.test/v1/") };
+        _disposables.Add(httpClient);
+        var client = new LoginClient(
+            NullLogger<LoginClient>.Instance,
+            new StubHttpClientFactory(httpClient),
+            new OptionsMonitorStub(options));
+        return (client, transport);
+    }
+
+    private static HttpResponseMessage AuthResponse(string token, long leaseSeconds, bool renewable)
+        => StubHttpMessageHandler.Json(HttpStatusCode.OK, new
+        {
+            auth = new { client_token = token, lease_duration = leaseSeconds, renewable },
+        });
+
+    public void Dispose()
+    {
+        foreach (var disposable in _disposables)
+            disposable.Dispose();
+    }
+
+    [Fact]
+    public async Task Login_Kubernetes_SendsTheRoleAndTheTokenFile_ToTheConfiguredMount()
+    {
+        var tokenFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        // The trailing newline is what the projected file actually carries; it must not travel.
+        await File.WriteAllTextAsync(
+            tokenFile, "header.payload.signature\n", TestContext.Current.CancellationToken);
+        try
+        {
+            var (client, transport) = ClientOver(
+                new VaultTransitOptions
+                {
+                    Authentication = new VaultAuthenticationOptions
+                    {
+                        Kubernetes = new KubernetesAuthenticationOptions
+                        {
+                            Role = "signer",
+                            ServiceAccountTokenPath = tokenFile,
+                        },
+                    },
+                },
+                (_, _) => AuthResponse("s.k8s", 3600, renewable: true));
+
+            var lease = await client.LoginAsync(TestContext.Current.CancellationToken);
+
+            Assert.NotNull(lease);
+            Assert.Equal("s.k8s", lease.Token);
+            Assert.Equal(TimeSpan.FromHours(1), lease.LeaseDuration);
+            Assert.True(lease.Renewable);
+
+            Assert.Equal("/v1/auth/kubernetes/login", transport.LastRequest!.RequestUri!.AbsolutePath);
+            var body = JsonDocument.Parse(transport.LastRequestBody!).RootElement;
+            Assert.Equal("signer", body.GetProperty("role").GetString());
+            Assert.Equal("header.payload.signature", body.GetProperty("jwt").GetString());
+        }
+        finally
+        {
+            File.Delete(tokenFile);
+        }
+    }
+
+    [Fact]
+    public async Task Login_AppRole_SendsBothIdentifiers_AndIsMarkedAnonymous()
+    {
+        var (client, transport) = ClientOver(
+            new VaultTransitOptions
+            {
+                Authentication = new VaultAuthenticationOptions
+                {
+                    AppRole = new AppRoleAuthenticationOptions { RoleId = "role-id", SecretId = "secret-id" },
+                },
+            },
+            (_, _) => AuthResponse("s.approle", 1800, renewable: true));
+
+        var lease = await client.LoginAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(lease);
+        Assert.Equal("s.approle", lease.Token);
+        Assert.Equal("/v1/auth/approle/login", transport.LastRequest!.RequestUri!.AbsolutePath);
+        var body = JsonDocument.Parse(transport.LastRequestBody!).RootElement;
+        Assert.Equal("role-id", body.GetProperty("role_id").GetString());
+        Assert.Equal("secret-id", body.GetProperty("secret_id").GetString());
+
+        // The mark is what keeps the login from waiting on the token it is about to produce.
+        Assert.True(
+            transport.LastRequest.Options.TryGetValue(TokenHandler.AnonymousRequest, out var anonymous) && anonymous);
+    }
+
+    [Fact]
+    public async Task Login_RefusedByVault_AnswersNull()
+    {
+        var (client, _) = ClientOver(
+            new VaultTransitOptions
+            {
+                Authentication = new VaultAuthenticationOptions
+                {
+                    AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "wrong" },
+                },
+            },
+            (_, _) => StubHttpMessageHandler.Json(HttpStatusCode.BadRequest, new { errors = new[] { "invalid secret id" } }));
+
+        Assert.Null(await client.LoginAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RenewSelf_MapsTheThreeOutcomes()
+    {
+        var status = HttpStatusCode.OK;
+        var (client, transport) = ClientOver(
+            new VaultTransitOptions
+            {
+                Authentication = new VaultAuthenticationOptions
+                {
+                    AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+                },
+            },
+            (_, _) => status switch
+            {
+                HttpStatusCode.OK => AuthResponse("s.same", 600, renewable: true),
+                _ => StubHttpMessageHandler.Json(status, new { errors = new[] { "some error" } }),
+            });
+
+        var renewed = await client.RenewSelfAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(RenewStatus.Renewed, renewed.Status);
+        Assert.Equal(TimeSpan.FromMinutes(10), renewed.Lease!.LeaseDuration);
+        Assert.Equal("/v1/auth/token/renew-self", transport.LastRequest!.RequestUri!.AbsolutePath);
+
+        status = HttpStatusCode.Forbidden;
+        Assert.Equal(
+            RenewStatus.PermissionDenied,
+            (await client.RenewSelfAsync(TestContext.Current.CancellationToken)).Status);
+
+        status = HttpStatusCode.ServiceUnavailable;
+        Assert.Equal(
+            RenewStatus.Failed,
+            (await client.RenewSelfAsync(TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
+    public async Task Login_WhenVaultIsUnreachable_AnswersNullRatherThanThrowing()
+    {
+        var (client, _) = ClientOver(
+            new VaultTransitOptions
+            {
+                Authentication = new VaultAuthenticationOptions
+                {
+                    AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+                },
+            },
+            (_, _) => throw new HttpRequestException("connection refused"));
+
+        Assert.Null(await client.LoginAsync(TestContext.Current.CancellationToken));
+    }
+}
