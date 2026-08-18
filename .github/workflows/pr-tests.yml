@@ -18,19 +18,81 @@ jobs:
     # by hand, so a new test project cannot be left out.
     uses: ./.github/workflows/test-shards.yml
 
+  build:
+    # Every framework the packages ship, which the suite structurally cannot see: each test project
+    # targets net10.0 alone, so anything that compiles there and refuses on net8.0 or net9.0 - a
+    # language feature of a newer version, a BCL type that arrived later - passes every shard. Such a
+    # refusal used to surface only after the merge, in the job that packs the dev build, where it
+    # stops publishing without failing anything a pull request can see: consumers floating the
+    # prerelease range then keep restoring the last good build and notice nothing.
+    name: Build all target frameworks
+    runs-on: ubuntu-latest
+    # Measured at 1m35s for the build over a cold NuGet cache, plus checkout and setup; the ceiling
+    # leaves room for a slower runner without letting a hung build sit for the default six hours.
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      # harden-runner in audit mode: this may restore and build untrusted fork-PR code, so capture
+      # baseline egress for later review.
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer (referenced in Directory.Build.props) reads the latest tag plus commit height
+          # from git to derive the version, so the shallow clone has to be disabled.
+          fetch-depth: 0
+          # No git push here, and this may run untrusted fork-PR code, so strip the GITHUB_TOKEN
+          # from the runner git config after checkout.
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          # Every target framework the projects declare, because the point of this job is to compile
+          # all of them: the 10.x SDK builds net8.0 and net9.0 only with their runtime packs present.
+          dotnet-version: |
+            8.x
+            9.x
+            10.x
+        timeout-minutes: 3
+      - name: Cache NuGet packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+        timeout-minutes: 3
+      - name: Restore
+        run: dotnet restore Abblix.Oidc.slnx
+        timeout-minutes: 3
+      - name: Build
+        # Release, matching what the dev-build publish compiles: a configuration-conditional
+        # analyser or a Release-only warning-as-error must fail here rather than after the merge.
+        run: dotnet build Abblix.Oidc.slnx --no-restore -c Release
+        timeout-minutes: 4
+
   test:
-    # Single required status check aggregating the shards: it succeeds only when every shard did.
-    # It stays a job of THIS workflow on purpose - a job inside a called workflow is reported as
-    # "<caller job> / <job name>", which would rename the check that branch protection requires and
-    # leave every pull request waiting for a check that no longer appears.
+    # Single required status check aggregating the shards and the multi-framework build: it succeeds
+    # only when both did. It stays a job of THIS workflow on purpose - a job inside a called workflow
+    # is reported as "<caller job> / <job name>", which would rename the check that branch protection
+    # requires and leave every pull request waiting for a check that no longer appears. The name is
+    # narrower than what it now covers, and stays that way for the same reason: renaming it silently
+    # detaches branch protection from the only gate a pull request has.
     name: Unit tests
-    needs: shards
+    needs: [shards, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    # The gate only inspects the shards' result; it never touches the repo or the GITHUB_TOKEN.
+    # The gate only inspects the other jobs' results; it never touches the repo or the GITHUB_TOKEN.
     permissions: {}
     steps:
       - name: Fail if any shard failed
         if: needs.shards.result != 'success'
+        run: exit 1
+      - name: Fail if the multi-framework build failed
+        if: needs.build.result != 'success'
         run: exit 1
