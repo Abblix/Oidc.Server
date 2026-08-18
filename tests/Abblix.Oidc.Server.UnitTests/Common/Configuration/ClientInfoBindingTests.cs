@@ -132,6 +132,46 @@ public class ClientInfoBindingTests
     }
 
     /// <summary>
+    /// An empty list is a statement, not an omission: it allows nothing, and it is how a client is
+    /// switched off without being removed from the registry. Reading it as "nothing stated, use the
+    /// default" would hand that client the authorization code grant it was denied, which is the same
+    /// silent widening this whole change exists to remove.
+    /// </summary>
+    [Fact]
+    public void Bind_ExplicitlyEmptyGrantTypes_AllowNothing()
+    {
+        var configuration = Configuration(new Dictionary<string, string?>
+        {
+            ["Clients:0:ClientId"] = "retired",
+            ["Clients:0:AllowedGrantTypes"] = "",
+            ["Clients:0:AllowedResponseTypes"] = "",
+        });
+
+        var clients = configuration.GetSection("Clients").Get<ClientInfo[]>();
+
+        Assert.NotNull(clients);
+        var client = Assert.Single(clients);
+        Assert.NotNull(client.AllowedGrantTypes);
+        Assert.Empty(client.AllowedGrantTypes);
+        Assert.Empty(client.EffectiveGrantTypes);
+        Assert.NotNull(client.AllowedResponseTypes);
+        Assert.Empty(client.AllowedResponseTypes);
+        Assert.Empty(client.EffectiveResponseTypes);
+    }
+
+    /// <summary>
+    /// The same statement made in code rather than in a file, because a host that builds its clients
+    /// in C# needs the identical guarantee.
+    /// </summary>
+    [Fact]
+    public void EmptyGrantTypes_SetInCode_AllowNothing()
+    {
+        var client = new ClientInfo("retired") { AllowedGrantTypes = [] };
+
+        Assert.Empty(client.EffectiveGrantTypes);
+    }
+
+    /// <summary>
     /// The hexadecimal notation binds the same way, because that is what a command-line digest tool
     /// prints and therefore what most registries hold. Lower case is accepted as well as upper.
     /// </summary>
