@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -41,9 +42,7 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
 
         foreach (var client in options.Clients)
         {
-            var effectiveProfile = SecurityProfileRequirements.Effective(
-                client.SecurityProfile,
-                options.DefaultSecurityProfile);
+            var effectiveProfile = client.SecurityProfile ?? options.DefaultSecurityProfile;
 
             foreach (var violation in
                      SecurityProfileConsistency.FindViolations(client.EffectiveResponseTypes, effectiveProfile))

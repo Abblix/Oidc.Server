@@ -67,12 +67,16 @@ public class SecurityProfileTests
     [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset inherits the default
     [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.None)] // explicit None opts out
     [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // client wins
-    public void Effective_UnsetInheritsDefault_ExplicitWins(
+    public void For_UnsetInheritsDefault_ExplicitWins(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile defaultProfile,
         ClientSecurityProfile expected)
     {
-        Assert.Equal(expected, SecurityProfileRequirements.Effective(clientProfile, defaultProfile));
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
+
+        Assert.Equal(
+            SecurityProfileRequirements.Resolve(expected),
+            SecurityProfileRequirements.For(client, defaultProfile));
     }
 
     [Fact]
