@@ -166,4 +166,81 @@ public class ClientSecretsOptionsValidatorTests
         Assert.False(result.Succeeded);
         Assert.Contains(result.Failures!, failure => failure.Contains("Base64 or hexadecimal"));
     }
+
+    /// <summary>
+    /// client_secret_jwt signs with the raw secret as the HMAC key, and a hash cannot recover it, so
+    /// a client whose secrets are all hashes can never authenticate. Hashing the secret is exactly
+    /// what a careful operator does for the other secret methods, which is what makes this mistake
+    /// likely, and the authenticator skips such a secret with a debug log nobody reads.
+    /// </summary>
+    [Fact]
+    public void Validate_ClientSecretJwtWithHashOnlySecrets_Fails()
+    {
+        var options = new OidcOptions
+        {
+            Clients =
+            [
+                new ClientInfo("storefront")
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+                    ClientSecrets = [new ClientSecret { Sha256Hash = Sha256Sized() }],
+                },
+            ],
+        };
+
+        var result = _validator.Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains("HMAC"));
+    }
+
+    /// <summary>
+    /// The same client with the raw value present is fine, which keeps the check above about the
+    /// form of the secret rather than its presence.
+    /// </summary>
+    [Fact]
+    public void Validate_ClientSecretJwtWithRawValue_Succeeds()
+    {
+        var options = new OidcOptions
+        {
+            Clients =
+            [
+                new ClientInfo("storefront")
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+                    ClientSecrets = [new ClientSecret { Value = new string('s', 32) }],
+                },
+            ],
+        };
+
+        var result = _validator.Validate(null, options);
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Failures ?? []));
+    }
+
+    /// <summary>
+    /// The mirror image: client_secret_basic and client_secret_post compare the presented secret
+    /// against a stored hash and never read the raw value, so a client whose only secret is a raw
+    /// value can never authenticate either.
+    /// </summary>
+    [Fact]
+    public void Validate_HashComparedMethodWithRawValueOnlySecret_Fails()
+    {
+        var options = new OidcOptions
+        {
+            Clients =
+            [
+                new ClientInfo("storefront")
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+                    ClientSecrets = [new ClientSecret { Value = new string('s', 32) }],
+                },
+            ],
+        };
+
+        var result = _validator.Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains(nameof(ClientSecret.Sha256HashBase64)));
+    }
 }

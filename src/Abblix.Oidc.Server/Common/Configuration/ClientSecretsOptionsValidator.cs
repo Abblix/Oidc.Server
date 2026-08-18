@@ -72,23 +72,57 @@ public class ClientSecretsOptionsValidator : IValidateOptions<OidcOptions>
     }
 
     /// <summary>
-    /// A client authenticating by shared secret needs one. The check exists for the client that was
-    /// given a secret the binder could not read, so the message names that cause first.
+    /// A client authenticating by shared secret needs one in the form its method actually reads.
+    /// The check exists for the client that was given a secret the binder could not read, so the
+    /// no-secrets message names that cause first.
     /// </summary>
+    /// <remarks>
+    /// Presence alone proves nothing, because each method reads one form of the secret and silently
+    /// skips the other: client_secret_basic and client_secret_post compare the presented secret
+    /// against a stored hash and never read <see cref="ClientSecret.Value"/>, while
+    /// client_secret_jwt signs with the raw value as the HMAC key and cannot use a hash, which is
+    /// one-way. A secret in the wrong form passes a presence check and is then skipped on every
+    /// request, with nothing said above debug level - the same quiet refusal this validator exists
+    /// to catch.
+    /// </remarks>
     private static void CheckSecretsArePresent(List<string> failures, ClientInfo client)
     {
-        var authenticatesBySecret =
-            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretBasic ||
-            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretPost ||
-            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
+        var authenticatesBySecret = client.TokenEndpointAuthMethod is
+            ClientAuthenticationMethods.ClientSecretBasic or
+            ClientAuthenticationMethods.ClientSecretPost or
+            ClientAuthenticationMethods.ClientSecretJwt;
 
-        if (!authenticatesBySecret || client.ClientSecrets is { Length: > 0 })
+        if (!authenticatesBySecret)
             return;
 
-        failures.Add(
-            $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}' and has no usable " +
-            $"secret. When the registry comes from configuration, this is what a hash the binder could not read " +
-            $"looks like: check that every hash is a valid Base64 or hexadecimal string.");
+        if (client.ClientSecrets is not { Length: > 0 })
+        {
+            failures.Add(
+                $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}' and has no " +
+                $"usable secret. When the registry comes from configuration, this is what a hash the binder could " +
+                $"not read looks like: check that every hash is a valid Base64 or hexadecimal string.");
+            return;
+        }
+
+        if (client.TokenEndpointAuthMethod is ClientAuthenticationMethods.ClientSecretJwt)
+        {
+            if (!Array.Exists(client.ClientSecrets, secret => !string.IsNullOrEmpty(secret.Value)))
+            {
+                failures.Add(
+                    $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}', which uses " +
+                    $"the raw secret value as the HMAC key, and no secret carries " +
+                    $"{nameof(ClientSecret.Value)}. A hash cannot serve this method: it is one-way, and the key " +
+                    $"the client signs with cannot be recovered from it.");
+            }
+        }
+        else if (!Array.Exists(client.ClientSecrets, secret => secret.Sha256Hash != null || secret.Sha512Hash != null))
+        {
+            failures.Add(
+                $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}', which compares " +
+                $"the presented secret against a stored hash, and no secret carries one. A secret holding only the " +
+                $"raw value never matches: store the hash, for example via {nameof(ClientSecret.Sha256HashBase64)} " +
+                $"or {nameof(ClientSecret.Sha256HashHex)}.");
+        }
     }
 
     private static void CheckHashLength(
