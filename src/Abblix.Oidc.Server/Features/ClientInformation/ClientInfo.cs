@@ -279,8 +279,9 @@ public record ClientInfo(string ClientId)
     /// <c>subject_token</c> was originally issued to a different client than the one presenting
     /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
     /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
-    /// to <c>true</c> to opt out of the default check. Has no effect when no subject_token
-    /// origin can be determined.
+    /// to <c>true</c> to opt out of the default check. The opt-out also covers a subject_token whose
+    /// origin cannot be determined at all, which is otherwise refused: a client trusted to present
+    /// tokens issued to others is equally trusted to present one whose issuer cannot be read.
     /// </summary>
     public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
 
