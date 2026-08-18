@@ -140,13 +140,13 @@ public static class ServiceCollectionExtensions
                 $"{nameof(AppRoleAuthenticationOptions.SecretId)} set.")
             .ValidateOnStart();
 
-        // The token's owners: the source everything reads through, the login that mints it, and the lifecycle
-        // that keeps it alive. The lifecycle also needs a clock, which the package supplies for itself - a
-        // host that registered its own TimeProvider keeps it.
+        // The token's owners: the source everything reads through - refreshing on use, so no background
+        // service and no dependency on a running host - and the login that mints tokens for it. The
+        // source also needs a clock, which the package supplies for itself; a host that registered its
+        // own TimeProvider keeps it.
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<TokenSource>();
         services.TryAddSingleton<LoginClient>();
-        services.AddHostedService<TokenLifecycleService>();
 
         services.AddHttpClient(VaultTransport.HttpClientName, (provider, http) =>
         {

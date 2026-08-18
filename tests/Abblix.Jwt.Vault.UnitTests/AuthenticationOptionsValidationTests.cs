@@ -134,12 +134,12 @@ public sealed class AuthenticationOptionsValidationTests
     }
 
     /// <summary>
-    /// The lifecycle service is registered once however many of the package's registrations run: the
-    /// transport guard covers it, and a second hosted-service instance would race the first for the
-    /// same token.
+    /// The token source is registered once however many of the package's registrations run - the
+    /// transport guard covers it - and no hosted service is registered at all: refresh-on-use needs
+    /// no background actor, so the package works under a bare ServiceProvider as well as a host.
     /// </summary>
     [Fact]
-    public void BothRegistrations_WireTheLifecycleServiceOnce()
+    public void BothRegistrations_WireOneTokenSource_AndNoHostedService()
     {
         var services = new ServiceCollection();
         services.AddJsonWebTokens();
@@ -148,6 +148,13 @@ public sealed class AuthenticationOptionsValidationTests
             .UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" })
             .PersistRingToVaultKeyValue();
 
-        Assert.Single(services, descriptor => descriptor.ImplementationType == typeof(TokenLifecycleService));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(TokenSource));
+
+        // Scoped to this package's assembly: the ring placement legitimately registers its own
+        // refresh service, which belongs to Abblix.Jwt and is not this package's concern.
+        Assert.DoesNotContain(
+            services,
+            descriptor => descriptor.ServiceType.Name == nameof(Microsoft.Extensions.Hosting.IHostedService) &&
+                          descriptor.ImplementationType?.Assembly == typeof(TokenSource).Assembly);
     }
 }

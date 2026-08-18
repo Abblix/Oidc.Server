@@ -111,7 +111,7 @@ builder.Services
 
 Two ways to hold a token, and configuring the first replaces the second:
 
-**Let the package log in and stay logged in.** Configure the `Authentication` section with exactly one auth method, and the package obtains its own token, renews the lease before it ends, and logs in again - while the old token is still valid - once the lease cannot be extended further. This is the production posture: the token stays short-lived and nobody has to deliver one to the process.
+**Let the package log in and stay logged in.** Configure the `Authentication` section with exactly one auth method, and the package obtains its own token, renews the lease before it ends, and logs in again - while the old token is still valid - once the lease cannot be extended further. This is the production posture: the token stays short-lived and nobody has to deliver one to the process. The refresh happens on use, not on a background schedule: each request through the package checks the token's freshness on its way to Vault, so an idle service makes no Vault calls at all - do not read a quiet audit log as a broken renewal - and the first request after a long pause simply pays one login round-trip.
 
 ```csharp
 // Binding the whole section is what keeps the feature optional: the binder leaves

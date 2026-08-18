@@ -92,7 +92,8 @@ internal sealed partial class LoginClient(
 
             // A retried login that succeeded but lost its response mints an orphan token; it idles out at its
             // TTL and costs nothing, so nothing here tries to prevent or clean it up.
-            using var response = await HttpClient().SendAnonymousAsync(HttpMethod.Post, path, body, cancellationToken);
+            using var response = await HttpClient()
+                .SendSelfAuthenticatedAsync(HttpMethod.Post, path, body, token: null, cancellationToken);
             if (!response.IsSuccess)
             {
                 LogLoginRefused(path, (int)response.Status, response.Errors);
@@ -112,15 +113,17 @@ internal sealed partial class LoginClient(
     }
 
     /// <summary>
-    /// Renews the current token's lease. The token itself travels on the request like on any other call, so
-    /// what is renewed is always the token currently presented.
+    /// Renews the lease of exactly the token handed in. Carried explicitly rather than picked up by the
+    /// token handler, because this call is made from inside <see cref="TokenSource"/>'s refresh - asking
+    /// the source for a token there would wait on the very refresh sending this request.
     /// </summary>
-    public async Task<RenewResult> RenewSelfAsync(CancellationToken cancellationToken)
+    public async Task<RenewResult> RenewSelfAsync(string token, CancellationToken cancellationToken)
     {
         const string path = "auth/token/renew-self";
         try
         {
-            using var response = await HttpClient().SendAsync(HttpMethod.Post, path, null, cancellationToken);
+            using var response = await HttpClient()
+                .SendSelfAuthenticatedAsync(HttpMethod.Post, path, body: null, token, cancellationToken);
             switch (response)
             {
                 // Vault answers permission denied both for a token that cannot renew itself and for one already

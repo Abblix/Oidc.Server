@@ -24,22 +24,20 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Vault;
 
-internal sealed partial class TokenLifecycleService
+internal sealed partial class TokenSource
 {
-    [LoggerMessage(LogEvents.TokenLifecycle.LifecycleDisabled, LogLevel.Debug,
-        "Vault authentication is not configured; the token lifecycle service stays idle")]
-    private partial void LogLifecycleDisabled();
-
-    [LoggerMessage(LogEvents.TokenLifecycle.ReLogin, LogLevel.Information,
-        "The Vault token lease cannot be extended further; logging in afresh while the old token is still valid")]
-    private partial void LogReLogin();
+    [LoggerMessage(LogEvents.TokenLifecycle.LeaseStoppedExtending, LogLevel.Information,
+        "The renewed lease ({RenewedLease}) no longer reaches the full length a login grants " +
+        "({FullLease}) - the maximum TTL is close; logging in afresh while the token is still valid")]
+    private partial void LogLeaseStoppedExtending(TimeSpan renewedLease, TimeSpan fullLease);
 
     [LoggerMessage(LogEvents.TokenLifecycle.NonExpiringToken, LogLevel.Warning,
-        "The login produced a token without an expiry; nothing to renew. Production roles should issue " +
+        "The login produced a token without an expiry; nothing to refresh. Production roles should issue " +
         "expiring tokens")]
     private partial void LogNonExpiringToken();
 
     [LoggerMessage(LogEvents.TokenLifecycle.UnexpectedFailure, LogLevel.Error,
-        "The token lifecycle hit a failure it did not foresee; backing off and retrying")]
+        "The token refresh hit a failure it did not foresee; a backoff window is open and the next " +
+        "request past it will retry")]
     private partial void LogUnexpectedFailure(Exception exception);
 }

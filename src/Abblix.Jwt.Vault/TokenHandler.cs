@@ -28,11 +28,11 @@ namespace Abblix.Jwt.Vault;
 /// <remarks>
 /// Stamping the header once, when the client is built, would pin the token for the process lifetime: the typed
 /// client is held by singletons and its handler chain never rotates, so the configure delegate runs exactly once.
-/// Reading through <see cref="TokenSource"/> per request lets a token minted by the package's own login, or one
-/// the host rotates through configuration, take effect without restarting the process. When the package logs in
-/// itself and no token exists yet, the request waits for the first login instead of failing without one - except
-/// a request marked <see cref="AnonymousRequest"/>, which is how the login request itself passes through without
-/// deadlocking on the token it is about to mint.
+/// Asking <see cref="TokenSource"/> per request is what lets the token be renewed, replaced, or rotated by the
+/// host without restarting the process - and the ask itself is what drives the refresh, because the source
+/// refreshes on use. A request marked <see cref="SelfAuthenticated"/> passes through untouched: the source's own
+/// login and renewal calls travel through this same handler, and asking the source from inside its refresh
+/// would wait on the very work in flight.
 /// </remarks>
 internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
 {
@@ -40,30 +40,22 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
     internal const string TokenHeaderName = "X-Vault-Token";
 
     /// <summary>
-    /// Marks a request to an unauthenticated Vault path. No token is attached - Vault ignores one there, so
-    /// sending it would only spread the credential - and, decisively, the request does not wait for the first
-    /// login: the login request itself travels through this same handler.
+    /// Marks a request that manages its own authentication: a login, which is unauthenticated by design,
+    /// or a renewal, which carries the exact token being renewed. The handler neither attaches a token
+    /// nor asks the source for one - the ask would recurse into the refresh that sent the request.
     /// </summary>
-    internal static readonly HttpRequestOptionsKey<bool> AnonymousRequest = new("Abblix.Jwt.Vault.Anonymous");
+    internal static readonly HttpRequestOptionsKey<bool> SelfAuthenticated = new("Abblix.Jwt.Vault.SelfAuthenticated");
 
     /// <inheritdoc />
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        if (request.Options.TryGetValue(AnonymousRequest, out var anonymous) && anonymous)
+        if (request.Options.TryGetValue(SelfAuthenticated, out var selfAuthenticated) && selfAuthenticated)
             return await base.SendAsync(request, cancellationToken);
 
-        var token = tokens.Current;
-        if (token is null && tokens.AuthenticationConfigured)
-        {
-            // The caller's cancellation bounds this caller's WAIT only; the login it waits for runs under the
-            // lifecycle service and survives any one caller giving up.
-            await tokens.FirstLoginCompleted.WaitAsync(cancellationToken);
-            token = tokens.Current;
-        }
-
-        if (!string.IsNullOrWhiteSpace(token))
+        var token = await tokens.GetTokenAsync(cancellationToken);
+        if (token is not null)
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
             // would make Vault reject it.

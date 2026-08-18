@@ -70,40 +70,47 @@ public static class VaultTransport
         string path,
         object? body,
         CancellationToken cancellationToken)
-        => httpClient.SendCoreAsync(method, path, body, anonymous: false, cancellationToken);
+        => httpClient.SendCoreAsync(method, path, body, token: null, selfAuthenticated: false, cancellationToken);
 
     /// <summary>
-    /// Sends a request to an unauthenticated Vault path - a login endpoint. No token is attached, and,
-    /// decisively, the request does not wait for one: the login request itself is what produces the token
-    /// everything else waits for, so sending it through the authenticated path would deadlock on its own result.
+    /// Sends a request that manages its own authentication: a login, which is unauthenticated by design
+    /// and carries no token, or a renewal, which carries exactly the token being renewed. The request is
+    /// marked so <see cref="TokenHandler"/> does not ask <see cref="TokenSource"/> for a token - these
+    /// requests are sent from inside the source's refresh, and the ask would wait on the very work in
+    /// flight.
     /// </summary>
     /// <param name="httpClient">The client aimed at the server's <c>/v1/</c> root.</param>
     /// <param name="method">The HTTP method.</param>
     /// <param name="path">The path under the <c>/v1/</c> root, mount included.</param>
-    /// <param name="body">The request body, serialized as JSON.</param>
+    /// <param name="body">The request body, serialized as JSON, or null for a request without one.</param>
+    /// <param name="token">The token to present, or null for an unauthenticated path.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>What Vault answered. The caller owns it and disposes it.</returns>
-    internal static Task<ApiResponse> SendAnonymousAsync(
+    internal static Task<ApiResponse> SendSelfAuthenticatedAsync(
         this HttpClient httpClient,
         HttpMethod method,
         string path,
         object? body,
+        string? token,
         CancellationToken cancellationToken)
-        => httpClient.SendCoreAsync(method, path, body, anonymous: true, cancellationToken);
+        => httpClient.SendCoreAsync(method, path, body, token, selfAuthenticated: true, cancellationToken);
 
     private static async Task<ApiResponse> SendCoreAsync(
         this HttpClient httpClient,
         HttpMethod method,
         string path,
         object? body,
-        bool anonymous,
+        string? token,
+        bool selfAuthenticated,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
         if (body is not null)
             request.Content = JsonContent.Create(body);
-        if (anonymous)
-            request.Options.Set(TokenHandler.AnonymousRequest, true);
+        if (selfAuthenticated)
+            request.Options.Set(TokenHandler.SelfAuthenticated, true);
+        if (token is not null)
+            request.Headers.Add(TokenHandler.TokenHeaderName, token);
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var payload = await response.Content.ReadAsStringAsync(cancellationToken);

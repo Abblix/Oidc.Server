@@ -78,16 +78,13 @@ internal static class LogEvents
         /// <summary>Vault answered success without a usable auth block.</summary>
         public const int MalformedAuthResponse = Base + 8;
 
-        /// <summary>Authentication is not configured; the lifecycle service stays idle.</summary>
-        public const int LifecycleDisabled = Base + 9;
+        /// <summary>The lease stopped extending to full length; a fresh login replaces the token.</summary>
+        public const int LeaseStoppedExtending = Base + 9;
 
-        /// <summary>The renewal loop hands over to a fresh login while the old token is still valid.</summary>
-        public const int ReLogin = Base + 10;
+        /// <summary>The login produced a token without an expiry; there is nothing to refresh.</summary>
+        public const int NonExpiringToken = Base + 10;
 
-        /// <summary>The login produced a token without an expiry; there is nothing to renew.</summary>
-        public const int NonExpiringToken = Base + 11;
-
-        /// <summary>A failure the login client did not foresee; the loop backs off and goes around.</summary>
-        public const int UnexpectedFailure = Base + 12;
+        /// <summary>A failure the login client did not foresee; a backoff window opens.</summary>
+        public const int UnexpectedFailure = Base + 11;
     }
 }

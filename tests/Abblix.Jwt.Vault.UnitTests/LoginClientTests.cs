@@ -103,7 +103,7 @@ public sealed class LoginClientTests : IDisposable
     }
 
     [Fact]
-    public async Task Login_AppRole_SendsBothIdentifiers_AndIsMarkedAnonymous()
+    public async Task Login_AppRole_SendsBothIdentifiers_AndIsMarkedSelfAuthenticated()
     {
         var (client, transport) = ClientOver(
             new VaultTransitOptions
@@ -124,9 +124,9 @@ public sealed class LoginClientTests : IDisposable
         Assert.Equal("role-id", body.GetProperty("role_id").GetString());
         Assert.Equal("secret-id", body.GetProperty("secret_id").GetString());
 
-        // The mark is what keeps the login from waiting on the token it is about to produce.
+        // The mark is what keeps the login from asking the source for the token it is about to produce.
         Assert.True(
-            transport.LastRequest.Options.TryGetValue(TokenHandler.AnonymousRequest, out var anonymous) && anonymous);
+            transport.LastRequest.Options.TryGetValue(TokenHandler.SelfAuthenticated, out var marked) && marked);
     }
 
     [Fact]
@@ -163,20 +163,26 @@ public sealed class LoginClientTests : IDisposable
                 _ => StubHttpMessageHandler.Json(status, new { errors = new[] { "some error" } }),
             });
 
-        var renewed = await client.RenewSelfAsync(TestContext.Current.CancellationToken);
+        var renewed = await client.RenewSelfAsync("s.current", TestContext.Current.CancellationToken);
         Assert.Equal(RenewStatus.Renewed, renewed.Status);
         Assert.Equal(TimeSpan.FromMinutes(10), renewed.Lease!.LeaseDuration);
         Assert.Equal("/v1/auth/token/renew-self", transport.LastRequest!.RequestUri!.AbsolutePath);
 
+        // The renewal carries exactly the token handed in, and is marked so the handler leaves it alone:
+        // it is sent from inside the source's refresh, and an ask back would wait on that very refresh.
+        Assert.Equal("s.current", transport.LastRequest.Headers.GetValues(TokenHandler.TokenHeaderName).Single());
+        Assert.True(
+            transport.LastRequest.Options.TryGetValue(TokenHandler.SelfAuthenticated, out var marked) && marked);
+
         status = HttpStatusCode.Forbidden;
         Assert.Equal(
             RenewStatus.PermissionDenied,
-            (await client.RenewSelfAsync(TestContext.Current.CancellationToken)).Status);
+            (await client.RenewSelfAsync("s.current", TestContext.Current.CancellationToken)).Status);
 
         status = HttpStatusCode.ServiceUnavailable;
         Assert.Equal(
             RenewStatus.Failed,
-            (await client.RenewSelfAsync(TestContext.Current.CancellationToken)).Status);
+            (await client.RenewSelfAsync("s.current", TestContext.Current.CancellationToken)).Status);
     }
 
     [Fact]
