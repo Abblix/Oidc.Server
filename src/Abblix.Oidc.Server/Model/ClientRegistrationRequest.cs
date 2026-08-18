@@ -459,10 +459,17 @@ public record ClientRegistrationRequest
 
     /// <summary>
     /// When <c>true</c>, this client must present a PKCE <c>code_challenge</c> on every authorization request
-    /// per RFC 7636. Server extension to RFC 7591 metadata; defaults to <c>false</c>.
+    /// per RFC 7636. Server extension to RFC 7591 metadata.
     /// </summary>
+    /// <remarks>
+    /// Null when the registration request does not state it, so that the default lives in one place -
+    /// <see cref="Features.ClientInformation.ClientInfo.PkceRequired"/>, which requires PKCE. A non-null default here
+    /// would be copied onto the registered client and win over that one, leaving a dynamically registered
+    /// client without the protection a statically configured client gets, which is the opposite of what
+    /// RFC 9700 section 2.1.1 asks of an authorization server.
+    /// </remarks>
     [JsonPropertyName(Parameters.PkceRequired)]
-    public bool? PkceRequired { get; init; } = false;
+    public bool? PkceRequired { get; init; }
 
     /// <summary>
     /// When <c>true</c>, the client is permitted to request the <c>offline_access</c> scope and receive
