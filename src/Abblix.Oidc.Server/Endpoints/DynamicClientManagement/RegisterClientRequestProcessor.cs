@@ -93,8 +93,8 @@ public class RegisterClientRequestProcessor(
             // RFC 7591 §3.2.1: grant_types/response_types/scope are read back from the stored
             // ClientInfo, not from the request - this is what makes server-assigned defaults
             // (authorization_code / code when omitted) visible to the client.
-            GrantTypes = clientInfo.AllowedGrantTypes,
-            ResponseTypes = clientInfo.AllowedResponseTypes,
+            GrantTypes = clientInfo.EffectiveGrantTypes,
+            ResponseTypes = clientInfo.EffectiveResponseTypes,
             Scope = clientInfo.AllowedScopes,
             ClientName = clientInfo.ClientName,
             LogoUri = clientInfo.LogoUri,

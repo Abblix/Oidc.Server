@@ -120,15 +120,44 @@ public record ClientInfo(string ClientId)
     public BackChannelLogoutOptions? BackChannelLogout { get; set; }
 
     /// <summary>
-    /// Defines the response types that the client is permitted to use.
+    /// Defines the response types that the client is permitted to use, or null when the client does not
+    /// state them and the default in <see cref="EffectiveResponseTypes"/> applies.
     /// This controls how tokens are issued in response to an authorization request.
     /// </summary>
-    public string[][] AllowedResponseTypes { get; set; } = [[ResponseTypes.Code]];
+    /// <remarks>
+    /// Null and empty mean different things. Null is "not stated", and the default applies. An empty
+    /// list is stated: it allows nothing, and it is how a client is switched off without being removed
+    /// from the registry.
+    ///
+    /// Null rather than a defaulted value on purpose, so that a registry kept in configuration says what
+    /// the client may do and nothing else. The .NET configuration binder adds to a collection a property
+    /// already holds instead of replacing it, so a default stored here would arrive on every bound client
+    /// on top of what the file lists, silently and in the direction of more permission.
+    /// Read <see cref="EffectiveResponseTypes"/> to decide anything.
+    /// </remarks>
+    public string[][]? AllowedResponseTypes { get; set; }
 
     /// <summary>
-    /// Specifies the grant types the client is authorized to use when obtaining tokens from the token endpoint.
+    /// The response types this client may actually use: what it states, or the authorization code
+    /// response when it states nothing. A client that states an empty list gets an empty list, which
+    /// permits no authorization request at all.
     /// </summary>
-    public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode];
+    public string[][] EffectiveResponseTypes => AllowedResponseTypes ?? [[ResponseTypes.Code]];
+
+    /// <summary>
+    /// Specifies the grant types the client is authorized to use when obtaining tokens from the token
+    /// endpoint, or null when the client does not state them and the default in
+    /// <see cref="EffectiveGrantTypes"/> applies.
+    /// </summary>
+    /// <inheritdoc cref="AllowedResponseTypes" path="/remarks"/>
+    public string[]? AllowedGrantTypes { get; set; }
+
+    /// <summary>
+    /// The grant types this client may actually use: what it states, or the authorization code grant
+    /// when it states nothing. A client that states an empty list gets an empty list, which permits no
+    /// grant at all.
+    /// </summary>
+    public string[] EffectiveGrantTypes => AllowedGrantTypes ?? [GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
@@ -213,9 +242,9 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
-    /// to the Token Exchange grant. Independent of <see cref="AllowedGrantTypes"/> -- a client must
+    /// to the Token Exchange grant. Independent of <see cref="EffectiveGrantTypes"/> -- a client must
     /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
-    /// <see cref="AllowedGrantTypes"/> to invoke the grant, and the requested
+    /// <see cref="EffectiveGrantTypes"/> to invoke the grant, and the requested
     /// <c>subject_token_type</c> must additionally satisfy this allowlist.
     /// <list type="bullet">
     /// <item><description><c>null</c>: no constraint (any of <see cref="TokenExchangeTokenTypes"/> the

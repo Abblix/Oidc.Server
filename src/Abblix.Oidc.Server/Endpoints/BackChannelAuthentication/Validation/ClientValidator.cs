@@ -54,7 +54,7 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
                 ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
-        if (!clientInfo.AllowedGrantTypes.Contains(GrantTypes.Ciba))
+        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");

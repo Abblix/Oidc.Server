@@ -159,7 +159,7 @@ public partial class FlowTypeValidator(
 
         // Check if any of the allowed response types matches the requested response type
         return Array.Exists(
-            context.ClientInfo.AllowedResponseTypes,
+            context.ClientInfo.EffectiveResponseTypes,
             allowedResponseType => responseTypeSet.Count == allowedResponseType.Length &&
                                    Array.TrueForAll(allowedResponseType, responseTypeSet.Contains));
     }
