@@ -96,9 +96,13 @@ public class SecureHttpFetchOptions
     /// <summary>
     /// The schemes a fetched URI may use: what the host states, or HTTPS alone when it states
     /// nothing. A host that states an empty list gets an empty list, which the validator reads as
-    /// no scheme restriction.
+    /// no scheme restriction. Computed from <see cref="AllowedSchemes"/> and not bindable: a
+    /// configuration key of this name is silently ignored, so the file always writes
+    /// <see cref="AllowedSchemes"/>.
     /// </summary>
-    public string[] EffectiveAllowedSchemes => AllowedSchemes ?? [Uri.UriSchemeHttps];
+    public string[] EffectiveAllowedSchemes => AllowedSchemes ?? HttpsOnly;
+
+    private static readonly string[] HttpsOnly = [Uri.UriSchemeHttps];
 
     /// <summary>
     /// Whether to block requests to private networks.
@@ -121,7 +125,8 @@ public class SecureHttpFetchOptions
     /// This is how a deployment reaches one known service inside its own network without standing the
     /// protection down. The rules above are a blanket refusal that cannot be narrowed, only switched off, so
     /// an authorization server that must call a sibling in its own cluster would otherwise set
-    /// <see cref="BlockPrivateNetworks"/> to <c>false</c> and widen <see cref="AllowedSchemes"/> - and both
+    /// <see cref="BlockPrivateNetworks"/> to <c>false</c> and restate <see cref="AllowedSchemes"/> in full,
+    /// HTTPS included - and both
     /// relaxations apply equally to every address a *client* supplies: a key set, a sector identifier, a
     /// back-channel logout endpoint. Naming the one destination leaves the refusal total everywhere else.
     /// <para>

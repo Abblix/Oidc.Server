@@ -310,8 +310,8 @@ public class SsrfValidatingHttpMessageHandlerTests
             BlockPrivateNetworks = false
         });
 
-        // Act & Assert
-        await AssertSsrfValidationPasses(client,"https://example.com/api");
+        // Act & Assert: plain HTTP, the member the default list would refuse.
+        await AssertSsrfValidationPasses(client, "http://example.com/api");
     }
 
     /// <summary>
@@ -349,8 +349,8 @@ public class SsrfValidatingHttpMessageHandlerTests
             BlockPrivateNetworks = false
         });
 
-        // Act & Assert
-        await AssertSsrfValidationPasses(client,"https://example.com/api");
+        // Act & Assert: plain HTTP, because HTTPS passes under the default too and would prove nothing.
+        await AssertSsrfValidationPasses(client, "http://example.com/api");
     }
 
     #endregion

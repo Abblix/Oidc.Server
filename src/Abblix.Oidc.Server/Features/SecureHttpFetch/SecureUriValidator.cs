@@ -22,6 +22,7 @@
 
 using System.Net;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -30,8 +31,31 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// Default <see cref="ISecureUriValidator"/> implementation: applies the scheme allow-list and the
 /// internal-hostname / private-or-reserved IP-literal rules from <see cref="SecureHttpFetchOptions"/>.
 /// </summary>
-public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISecureUriValidator
+/// <remarks>
+/// A configuration that lifts the scheme restriction is reported once, when this singleton is
+/// created, under this type's own log category. A report rather than a refusal, because an empty
+/// list is a statement a deployment may mean; the category makes the message separately silenceable
+/// the same way <see cref="SsrfGuardWatch"/>'s is.
+/// </remarks>
+public partial class SecureUriValidator : ISecureUriValidator
 {
+    private readonly IOptions<SecureHttpFetchOptions> options;
+
+    /// <summary>
+    /// Creates the validator and reports a lifted scheme restriction, once, when the configuration
+    /// states one.
+    /// </summary>
+    /// <param name="options">The fetch policy this validator enforces.</param>
+    /// <param name="logger">Carries the one-time report; absent in hosts that build the validator
+    /// by hand, where there is nowhere to report to.</param>
+    public SecureUriValidator(IOptions<SecureHttpFetchOptions> options, ILogger<SecureUriValidator>? logger = null)
+    {
+        this.options = options;
+
+        if (options.Value.AllowedSchemes is { Length: 0 } && logger != null)
+            LogSchemeRestrictionLifted(logger);
+    }
+
     /// <summary>
     /// Reports whether a URI is one of the destinations named in
     /// <see cref="SecureHttpFetchOptions.AllowedDestinations"/>.
