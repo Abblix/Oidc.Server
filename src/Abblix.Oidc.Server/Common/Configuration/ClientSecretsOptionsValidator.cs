@@ -1,0 +1,109 @@
+// Abblix OIDC Server Library
+// Copyright (c) Abblix LLP. All rights reserved.
+//
+// DISCLAIMER: This software is provided 'as-is', without any express or implied
+// warranty. Use at your own risk. Abblix LLP is not liable for any damages
+// arising from the use of this software.
+//
+// LICENSE RESTRICTIONS: This code may not be modified, copied, or redistributed
+// in any form outside of the official GitHub repository at:
+// https://github.com/Abblix/OIDC.Server. All development and modifications
+// must occur within the official repository and are managed solely by Abblix LLP.
+//
+// Unauthorized use, modification, or distribution of this software is strictly
+// prohibited and may be subject to legal action.
+//
+// For full licensing terms, please visit:
+//
+// https://oidc.abblix.com/license
+//
+// CONTACT: For license inquiries or permissions, contact Abblix LLP at
+// info@abblix.com
+
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Microsoft.Extensions.Options;
+
+namespace Abblix.Oidc.Server.Common.Configuration;
+
+/// <summary>
+/// Fails loudly at startup when a configured client cannot authenticate with the secret it appears
+/// to carry, instead of answering <c>invalid_client</c> to every request it ever makes.
+/// </summary>
+/// <remarks>
+/// A registry kept in configuration makes a mistyped hash easy and its consequences invisible. The
+/// .NET configuration binder discards an element whose binding threw, so a hash the file spells
+/// wrongly leaves the client with no secret at all rather than with a bad one, and nothing downstream
+/// distinguishes that from a client deliberately registered without secrets: the token endpoint
+/// simply refuses it, logging at debug level. A hash of the wrong length is the same mistake caught
+/// one step later - a digest pasted into the wrong notation decodes without error and compares
+/// against nothing.
+/// </remarks>
+public class ClientSecretsOptionsValidator : IValidateOptions<OidcOptions>
+{
+    /// <summary>Length in bytes of a SHA-256 digest.</summary>
+    private const int Sha256HashLength = 256 / 8;
+
+    /// <summary>Length in bytes of a SHA-512 digest.</summary>
+    private const int Sha512HashLength = 512 / 8;
+
+    /// <inheritdoc />
+    public ValidateOptionsResult Validate(string? name, OidcOptions options)
+    {
+        if (options.Clients == null)
+            return ValidateOptionsResult.Success;
+
+        var failures = new List<string>();
+
+        foreach (var client in options.Clients)
+        {
+            CheckSecretsArePresent(failures, client);
+
+            foreach (var secret in client.ClientSecrets ?? [])
+            {
+                CheckHashLength(failures, client, secret.Sha256Hash, Sha256HashLength, nameof(secret.Sha256Hash));
+                CheckHashLength(failures, client, secret.Sha512Hash, Sha512HashLength, nameof(secret.Sha512Hash));
+            }
+        }
+
+        return failures.Count == 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(failures);
+    }
+
+    /// <summary>
+    /// A client authenticating by shared secret needs one. The check exists for the client that was
+    /// given a secret the binder could not read, so the message names that cause first.
+    /// </summary>
+    private static void CheckSecretsArePresent(List<string> failures, ClientInfo client)
+    {
+        var authenticatesBySecret =
+            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretBasic ||
+            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretPost ||
+            client.TokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
+
+        if (!authenticatesBySecret || client.ClientSecrets is { Length: > 0 })
+            return;
+
+        failures.Add(
+            $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}' and has no usable " +
+            $"secret. When the registry comes from configuration, this is what a hash the binder could not read " +
+            $"looks like: check that every hash is a valid Base64 or hexadecimal string.");
+    }
+
+    private static void CheckHashLength(
+        List<string> failures,
+        ClientInfo client,
+        byte[]? hash,
+        int expectedLength,
+        string propertyName)
+    {
+        if (hash is null || hash.Length == expectedLength)
+            return;
+
+        failures.Add(
+            $"Client '{client.ClientId}' has a {propertyName} of {hash.Length} bytes, where {expectedLength} are " +
+            $"expected. A digest written in the other notation decodes to the wrong length rather than failing, " +
+            $"so this usually means Base64 and hexadecimal were swapped.");
+    }
+}

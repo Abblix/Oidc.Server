@@ -20,6 +20,8 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text;
+
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
@@ -127,4 +129,19 @@ public record ClientSecret
 	/// to maintain the security integrity of client applications.
 	/// </remarks>
 	public DateTimeOffset? ExpiresAt { get; init; }
+
+	/// <summary>
+	/// Keeps secret material out of the generated <see cref="object.ToString"/>, which structured
+	/// logging and debugger displays reach for. A record prints every property it declares, so adding
+	/// the string aliases above would otherwise have put a hash into logs in a form an attacker can
+	/// take offline. Only whether a hash is present is printed, never its value.
+	/// </summary>
+	protected virtual bool PrintMembers(StringBuilder builder)
+	{
+		builder.Append("Sha256Hash = ").Append(Sha256Hash is null ? "none" : "set");
+		builder.Append(", Sha512Hash = ").Append(Sha512Hash is null ? "none" : "set");
+		builder.Append(", Value = ").Append(Value is null ? "none" : "set");
+		builder.Append(", ExpiresAt = ").Append(ExpiresAt);
+		return true;
+	}
 }

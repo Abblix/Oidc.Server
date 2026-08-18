@@ -137,7 +137,7 @@ public record ClientInfo(string ClientId)
     /// The response types this client may actually use: what it states, or the authorization code
     /// response when it states nothing.
     /// </summary>
-    public string[][] EffectiveResponseTypes => AllowedResponseTypes ?? DefaultResponseTypes;
+    public string[][] EffectiveResponseTypes => AllowedResponseTypes ?? [[ResponseTypes.Code]];
 
     /// <summary>
     /// Specifies the grant types the client is authorized to use when obtaining tokens from the token
@@ -151,11 +151,7 @@ public record ClientInfo(string ClientId)
     /// The grant types this client may actually use: what it states, or the authorization code grant
     /// when it states nothing.
     /// </summary>
-    public string[] EffectiveGrantTypes => AllowedGrantTypes ?? DefaultGrantTypes;
-
-    private static readonly string[][] DefaultResponseTypes = [[ResponseTypes.Code]];
-
-    private static readonly string[] DefaultGrantTypes = [GrantTypes.AuthorizationCode];
+    public string[] EffectiveGrantTypes => AllowedGrantTypes ?? [GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
@@ -240,9 +236,9 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
-    /// to the Token Exchange grant. Independent of <see cref="AllowedGrantTypes"/> -- a client must
+    /// to the Token Exchange grant. Independent of <see cref="EffectiveGrantTypes"/> -- a client must
     /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
-    /// <see cref="AllowedGrantTypes"/> to invoke the grant, and the requested
+    /// <see cref="EffectiveGrantTypes"/> to invoke the grant, and the requested
     /// <c>subject_token_type</c> must additionally satisfy this allowlist.
     /// <list type="bullet">
     /// <item><description><c>null</c>: no constraint (any of <see cref="TokenExchangeTokenTypes"/> the

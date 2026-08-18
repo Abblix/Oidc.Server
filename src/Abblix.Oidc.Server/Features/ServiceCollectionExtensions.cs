@@ -141,6 +141,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SecretLengthOptionsValidator>());
 
+        // Fail loud at startup when a client that authenticates by shared secret has none, or carries a
+        // hash of the wrong length, instead of refusing that client on every request it ever makes.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientSecretsOptionsValidator>());
+
         // Fail loud at startup when EnabledEndpoints advertises an opt-in endpoint whose feature services were
         // never registered by the matching AddX() call, instead of 500-ing on every request to it.
         services.TryAddEnumerable(
