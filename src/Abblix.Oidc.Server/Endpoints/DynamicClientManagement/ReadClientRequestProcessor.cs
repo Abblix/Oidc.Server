@@ -67,8 +67,8 @@ public class ReadClientRequestProcessor(
             RedirectUris = client.RedirectUris,
             // RFC 7592 §3: the read response carries the full registered metadata, including the
             // grant/response types the server assigned by default when registration omitted them.
-            GrantTypes = client.AllowedGrantTypes,
-            ResponseTypes = client.AllowedResponseTypes,
+            GrantTypes = client.EffectiveGrantTypes,
+            ResponseTypes = client.EffectiveResponseTypes,
             Scope = client.AllowedScopes,
             RequirePushedAuthorizationRequests = client.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = client.RequireSignedRequestObject,

@@ -120,15 +120,42 @@ public record ClientInfo(string ClientId)
     public BackChannelLogoutOptions? BackChannelLogout { get; set; }
 
     /// <summary>
-    /// Defines the response types that the client is permitted to use.
+    /// Defines the response types that the client is permitted to use, or null when the client does not
+    /// state them and the default in <see cref="EffectiveResponseTypes"/> applies.
     /// This controls how tokens are issued in response to an authorization request.
     /// </summary>
-    public string[][] AllowedResponseTypes { get; set; } = [[ResponseTypes.Code]];
+    /// <remarks>
+    /// Null rather than a defaulted value on purpose, so that a registry kept in configuration says what
+    /// the client may do and nothing else. The .NET configuration binder adds to a collection a property
+    /// already holds instead of replacing it, so a default stored here would arrive on every bound client
+    /// on top of what the file lists, silently and in the direction of more permission.
+    /// Read <see cref="EffectiveResponseTypes"/> to decide anything.
+    /// </remarks>
+    public string[][]? AllowedResponseTypes { get; set; }
 
     /// <summary>
-    /// Specifies the grant types the client is authorized to use when obtaining tokens from the token endpoint.
+    /// The response types this client may actually use: what it states, or the authorization code
+    /// response when it states nothing.
     /// </summary>
-    public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode];
+    public string[][] EffectiveResponseTypes => AllowedResponseTypes ?? DefaultResponseTypes;
+
+    /// <summary>
+    /// Specifies the grant types the client is authorized to use when obtaining tokens from the token
+    /// endpoint, or null when the client does not state them and the default in
+    /// <see cref="EffectiveGrantTypes"/> applies.
+    /// </summary>
+    /// <inheritdoc cref="AllowedResponseTypes" path="/remarks"/>
+    public string[]? AllowedGrantTypes { get; set; }
+
+    /// <summary>
+    /// The grant types this client may actually use: what it states, or the authorization code grant
+    /// when it states nothing.
+    /// </summary>
+    public string[] EffectiveGrantTypes => AllowedGrantTypes ?? DefaultGrantTypes;
+
+    private static readonly string[][] DefaultResponseTypes = [[ResponseTypes.Code]];
+
+    private static readonly string[] DefaultGrantTypes = [GrantTypes.AuthorizationCode];
 
     /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through

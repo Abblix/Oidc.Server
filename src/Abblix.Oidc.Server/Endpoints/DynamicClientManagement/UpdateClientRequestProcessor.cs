@@ -207,8 +207,8 @@ public class UpdateClientRequestProcessor(
             RedirectUris = updatedClient.RedirectUris,
             // RFC 7592 §3: echo the post-update registered state so the client can verify the
             // full replacement took effect (grant/response types and scope included).
-            GrantTypes = updatedClient.AllowedGrantTypes,
-            ResponseTypes = updatedClient.AllowedResponseTypes,
+            GrantTypes = updatedClient.EffectiveGrantTypes,
+            ResponseTypes = updatedClient.EffectiveResponseTypes,
             Scope = updatedClient.AllowedScopes,
             RequirePushedAuthorizationRequests = updatedClient.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = updatedClient.RequireSignedRequestObject,

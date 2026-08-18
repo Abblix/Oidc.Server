@@ -55,6 +55,58 @@ public record ClientSecret
 	public byte[]? Sha512Hash { get; init; }
 
 	/// <summary>
+	/// <see cref="Sha256Hash"/> written as a single Base64 string, for a registry that lives in
+	/// configuration.
+	/// </summary>
+	/// <remarks>
+	/// The .NET configuration binder treats a byte array as a collection to fill element by element,
+	/// so a hash has no scalar form to bind to without this alias: a settings file would have to spell
+	/// the value out one byte per key. Setting either member sets the hash; reading returns whatever
+	/// <see cref="Sha256Hash"/> holds, so the two can never disagree.
+	/// </remarks>
+	public string? Sha256HashBase64
+	{
+		get => Sha256Hash is { } hash ? Convert.ToBase64String(hash) : null;
+		init => Sha256Hash = value is null ? null : Convert.FromBase64String(value);
+	}
+
+	/// <summary>
+	/// <see cref="Sha512Hash"/> written as a single Base64 string, for a registry that lives in
+	/// configuration.
+	/// </summary>
+	/// <inheritdoc cref="Sha256HashBase64" path="/remarks"/>
+	public string? Sha512HashBase64
+	{
+		get => Sha512Hash is { } hash ? Convert.ToBase64String(hash) : null;
+		init => Sha512Hash = value is null ? null : Convert.FromBase64String(value);
+	}
+
+	/// <summary>
+	/// <see cref="Sha256Hash"/> written as a single hexadecimal string, which is the form command-line
+	/// digest tools print and the form most people paste.
+	/// </summary>
+	/// <remarks>
+	/// The same alias as <see cref="Sha256HashBase64"/> in the other common notation. Reading returns
+	/// upper case; either case is accepted when writing.
+	/// </remarks>
+	public string? Sha256HashHex
+	{
+		get => Sha256Hash is { } hash ? Convert.ToHexString(hash) : null;
+		init => Sha256Hash = value is null ? null : Convert.FromHexString(value);
+	}
+
+	/// <summary>
+	/// <see cref="Sha512Hash"/> written as a single hexadecimal string, which is the form command-line
+	/// digest tools print and the form most people paste.
+	/// </summary>
+	/// <inheritdoc cref="Sha256HashHex" path="/remarks"/>
+	public string? Sha512HashHex
+	{
+		get => Sha512Hash is { } hash ? Convert.ToHexString(hash) : null;
+		init => Sha512Hash = value is null ? null : Convert.FromHexString(value);
+	}
+
+	/// <summary>
 	/// The plain-text value of the client secret. This property is required for authentication methods
 	/// that need the raw secret value, such as client_secret_jwt (which uses HMAC signatures).
 	/// </summary>
