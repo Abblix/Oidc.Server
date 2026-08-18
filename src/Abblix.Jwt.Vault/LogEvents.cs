@@ -48,4 +48,43 @@ internal static class LogEvents
         /// <summary>Another pod won the period; the key generated here was dropped.</summary>
         public const int MintRaceLost = Base + 2;
     }
+
+    /// <summary>Token login and renewal events. Range 1200-1299.</summary>
+    internal static class TokenLifecycle
+    {
+        private const int Base = 1200;
+
+        /// <summary>A login produced a token and its lease.</summary>
+        public const int LoggedIn = Base + 1;
+
+        /// <summary>Vault answered the login with a failure status.</summary>
+        public const int LoginRefused = Base + 2;
+
+        /// <summary>The login request did not reach Vault.</summary>
+        public const int LoginUnreachable = Base + 3;
+
+        /// <summary>The token lease was renewed.</summary>
+        public const int Renewed = Base + 4;
+
+        /// <summary>Vault denied renewal outright; the token cannot be renewed.</summary>
+        public const int RenewDenied = Base + 5;
+
+        /// <summary>Renewal failed for a reason that may pass.</summary>
+        public const int RenewFailed = Base + 6;
+
+        /// <summary>The renewal request did not reach Vault.</summary>
+        public const int RenewUnreachable = Base + 7;
+
+        /// <summary>Vault answered success without a usable auth block.</summary>
+        public const int MalformedAuthResponse = Base + 8;
+
+        /// <summary>The lease stopped extending to full length; a fresh login replaces the token.</summary>
+        public const int LeaseStoppedExtending = Base + 9;
+
+        /// <summary>The login produced a token without an expiry; there is nothing to refresh.</summary>
+        public const int NonExpiringToken = Base + 10;
+
+        /// <summary>A failure the login client did not foresee; a backoff window opens.</summary>
+        public const int UnexpectedFailure = Base + 11;
+    }
 }

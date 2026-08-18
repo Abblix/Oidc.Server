@@ -20,8 +20,6 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
-using Microsoft.Extensions.Options;
-
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
@@ -30,22 +28,34 @@ namespace Abblix.Jwt.Vault;
 /// <remarks>
 /// Stamping the header once, when the client is built, would pin the token for the process lifetime: the typed
 /// client is held by singletons and its handler chain never rotates, so the configure delegate runs exactly once.
-/// That is only workable with a long-lived token, which is the posture the README tells operators not to use.
-/// Reading through <see cref="IOptionsMonitor{TOptions}"/> per request lets a token minted by AppRole or
-/// Kubernetes auth be renewed and picked up, without restarting the process.
+/// Asking <see cref="TokenSource"/> per request is what lets the token be renewed, replaced, or rotated by the
+/// host without restarting the process - and the ask itself is what drives the refresh, because the source
+/// refreshes on use. A request marked <see cref="SelfAuthenticated"/> passes through untouched: the source's own
+/// login and renewal calls travel through this same handler, and asking the source from inside its refresh
+/// would wait on the very work in flight.
 /// </remarks>
-internal sealed class TokenHandler(IOptionsMonitor<VaultTransitOptions> options) : DelegatingHandler
+internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
 {
     /// <summary>Vault's authentication header, and the name to keep out of logs.</summary>
     internal const string TokenHeaderName = "X-Vault-Token";
 
+    /// <summary>
+    /// Marks a request that manages its own authentication: a login, which is unauthenticated by design,
+    /// or a renewal, which carries the exact token being renewed. The handler neither attaches a token
+    /// nor asks the source for one - the ask would recurse into the refresh that sent the request.
+    /// </summary>
+    internal static readonly HttpRequestOptionsKey<bool> SelfAuthenticated = new("Abblix.Jwt.Vault.SelfAuthenticated");
+
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        var token = options.CurrentValue.Token;
-        if (!string.IsNullOrWhiteSpace(token))
+        if (request.Options.TryGetValue(SelfAuthenticated, out var selfAuthenticated) && selfAuthenticated)
+            return await base.SendAsync(request, cancellationToken);
+
+        var token = await tokens.GetTokenAsync(cancellationToken);
+        if (token is not null)
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
             // would make Vault reject it.
@@ -53,6 +63,6 @@ internal sealed class TokenHandler(IOptionsMonitor<VaultTransitOptions> options)
             request.Headers.Add(TokenHeaderName, token);
         }
 
-        return base.SendAsync(request, cancellationToken);
+        return await base.SendAsync(request, cancellationToken);
     }
 }

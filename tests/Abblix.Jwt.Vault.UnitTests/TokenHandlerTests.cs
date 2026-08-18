@@ -21,32 +21,34 @@
 // info@abblix.com
 
 using System.Net;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.Jwt.Vault.UnitTests;
 
 /// <summary>
-/// Covers the one thing that makes a short-lived Vault token usable: the header is read per request, so a token
-/// renewed by AppRole or Kubernetes auth takes effect without restarting the process.
+/// The handler's own contract: the token is read fresh per request - which is what lets a token
+/// renewed, replaced or rotated by the host take effect without a restart - and a self-authenticated
+/// request passes through untouched.
 /// </summary>
 public sealed class TokenHandlerTests : IDisposable
 {
+    private readonly FakeTimeProvider _clock = new();
     private readonly List<HttpClient> _httpClients = [];
 
-    /// <summary>A monitor whose value the test can change, standing in for a renewed token.</summary>
-    private sealed class MutableMonitor(VaultTransitOptions options) : IOptionsMonitor<VaultTransitOptions>
+    private HttpClient ClientOver(OptionsMonitorStub monitor, StubHttpMessageHandler transport)
     {
-        public VaultTransitOptions CurrentValue { get; set; } = options;
+        // The login client rides the same transport the assertions watch, exactly as in production.
+        var factoryClient = new HttpClient(transport) { BaseAddress = new Uri("https://vault.test/v1/") };
+        _httpClients.Add(factoryClient);
+        var tokens = new TokenSource(
+            NullLogger<TokenSource>.Instance,
+            monitor,
+            new LoginClient(NullLogger<LoginClient>.Instance, new StubHttpClientFactory(factoryClient), monitor),
+            _clock);
 
-        public VaultTransitOptions Get(string? name) => CurrentValue;
-
-        public IDisposable? OnChange(Action<VaultTransitOptions, string?> listener) => null;
-    }
-
-    private HttpClient ClientOver(MutableMonitor monitor, StubHttpMessageHandler transport)
-    {
-        var handler = new TokenHandler(monitor) { InnerHandler = transport };
+        var handler = new TokenHandler(tokens) { InnerHandler = transport };
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
         _httpClients.Add(httpClient);
         return httpClient;
@@ -61,7 +63,7 @@ public sealed class TokenHandlerTests : IDisposable
     [Fact]
     public async Task PresentsTheCurrentToken_NotTheOneConfiguredAtStartup()
     {
-        var monitor = new MutableMonitor(new VaultTransitOptions { Token = "s.first" });
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions { Token = "s.first" });
         var seen = new List<string?>();
         var transport = new StubHttpMessageHandler((request, _) =>
         {
@@ -74,19 +76,19 @@ public sealed class TokenHandlerTests : IDisposable
         var httpClient = ClientOver(monitor, transport);
         await httpClient.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
 
-        // A renewal: the old token expires and AppRole mints a new one into configuration.
+        // A rotation: the host delivers a new token through configuration reload.
         monitor.CurrentValue = new VaultTransitOptions { Token = "s.renewed" };
         await httpClient.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
 
-        // The second call carries the new token. Stamped on the client instead, it would still send s.first, and
-        // every Transit call would 403 once that token expired, until the process restarted.
+        // The second call carries the new token. Stamped on the client instead, it would still send s.first,
+        // and every Transit call would 403 once that token expired, until the process restarted.
         Assert.Equal(["s.first", "s.renewed"], seen);
     }
 
     [Fact]
     public async Task SendsNoHeader_WhenNoTokenIsConfigured()
     {
-        var monitor = new MutableMonitor(new VaultTransitOptions { Token = null });
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions { Token = null });
         HttpRequestMessage? seen = null;
         var transport = new StubHttpMessageHandler((request, _) =>
         {
@@ -95,6 +97,92 @@ public sealed class TokenHandlerTests : IDisposable
         });
 
         await ClientOver(monitor, transport).GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+
+        Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
+    }
+
+    /// <summary>
+    /// An environment variable defined but empty is "no token", not a token of length zero: without
+    /// authentication configured the header is simply absent, exactly as with no Token at all.
+    /// </summary>
+    [Fact]
+    public async Task WhitespaceToken_ReadsAsNoToken()
+    {
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions { Token = "  " });
+        HttpRequestMessage? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+
+        await ClientOver(monitor, transport).GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+
+        Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
+    }
+
+    /// <summary>
+    /// With authentication configured, the first request drives the login itself - refresh-on-use has
+    /// no background actor - and proceeds with the minted token, never with whatever stale Token the
+    /// configuration still carries: configuring authentication replaces it.
+    /// </summary>
+    [Fact]
+    public async Task ConfiguredAuthentication_LogsInOnFirstUse_AndReplacesTheHostToken()
+    {
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions
+        {
+            Token = "s.stale",
+            Authentication = new VaultAuthenticationOptions
+            {
+                AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+            },
+        });
+        var seen = new List<string?>();
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal))
+                return StubHttpMessageHandler.Json(HttpStatusCode.OK, new
+                {
+                    auth = new { client_token = "s.minted", lease_duration = 3600, renewable = true },
+                });
+
+            seen.Add(request.Headers.TryGetValues(TokenHandler.TokenHeaderName, out var values)
+                ? values.Single()
+                : null);
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+
+        await ClientOver(monitor, transport).GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+
+        Assert.Equal(["s.minted"], seen);
+    }
+
+    /// <summary>
+    /// A self-authenticated request - the source's own login or renewal - passes through untouched:
+    /// no token attached, and no ask back into the source, which would recurse into the refresh that
+    /// sent it.
+    /// </summary>
+    [Fact]
+    public async Task SelfAuthenticatedRequest_PassesThroughUntouched()
+    {
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions
+        {
+            Token = "s.host",
+            Authentication = new VaultAuthenticationOptions
+            {
+                AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+            },
+        });
+        HttpRequestMessage? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "auth/approle/login");
+        request.Options.Set(TokenHandler.SelfAuthenticated, true);
+        await ClientOver(monitor, transport).SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
     }

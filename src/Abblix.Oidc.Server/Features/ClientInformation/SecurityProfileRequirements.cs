@@ -112,25 +112,11 @@ public sealed record SecurityProfileRequirements
     };
 
     /// <summary>
-    /// Resolves the profile that actually governs a client: the client's own
-    /// <see cref="ClientInfo.SecurityProfile"/> when it states one (including an explicit
-    /// <see cref="ClientSecurityProfile.None"/> opt-out), otherwise the server-wide default. A client
-    /// therefore opts in or out individually, while a single-profile deployment sets the default once
-    /// and every unprofiled client inherits it.
-    /// </summary>
-    /// <param name="clientProfile">The profile stated on the client, or <c>null</c> when unset.</param>
-    /// <param name="defaultProfile">The server-wide default profile to fall back to.</param>
-    public static ClientSecurityProfile Effective(
-        ClientSecurityProfile? clientProfile,
-        ClientSecurityProfile defaultProfile)
-        => clientProfile ?? defaultProfile;
-
-    /// <summary>
     /// Convenience entry point for the validators: resolves the effective profile for a client and
     /// returns its control bundle in one call.
     /// </summary>
     /// <param name="client">The client whose effective profile is being resolved.</param>
     /// <param name="defaultProfile">The server-wide default profile to fall back to.</param>
     public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
-        => Resolve(Effective(client.SecurityProfile, defaultProfile));
+        => Resolve(client.SecurityProfile ?? defaultProfile);
 }

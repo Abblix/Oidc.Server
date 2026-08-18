@@ -33,11 +33,19 @@ public sealed class VaultTransitOptions
     public string Address { get; set; } = "http://127.0.0.1:8200";
 
     /// <summary>
-    /// Auth token presented as the <c>X-Vault-Token</c> header. Source it from the environment or a secret
-    /// store, never hardcode it: dev mode uses a well-known root token, while production authenticates through
-    /// AppRole or Kubernetes and mints a short-lived token instead.
+    /// Auth token presented as the <c>X-Vault-Token</c> header, for a host that already has one and owns its
+    /// lifetime. Source it from the environment or a secret store, never hardcode it. A production host
+    /// normally configures <see cref="Authentication"/> instead, which REPLACES this value outright: a stale
+    /// token left in configuration is then never presented, not even before the first login completes.
     /// </summary>
     public string? Token { get; set; }
+
+    /// <summary>
+    /// Makes the package log in to Vault itself - with the pod's Kubernetes service account or an AppRole -
+    /// and keep the resulting token renewed for the process lifetime. Absent by default: a host that hands
+    /// over <see cref="Token"/> keeps owning it.
+    /// </summary>
+    public VaultAuthenticationOptions? Authentication { get; set; }
 
     /// <summary>Mount path of the Transit engine (the default mount is <c>transit</c>).</summary>
     public string TransitMount { get; set; } = "transit";

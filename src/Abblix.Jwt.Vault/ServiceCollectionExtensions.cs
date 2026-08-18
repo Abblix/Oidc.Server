@@ -116,6 +116,38 @@ public static class ServiceCollectionExtensions
 
         services.TryAddTransient<TokenHandler>();
 
+        // Startup validation of the authentication section: the section is optional, but a present one must
+        // name exactly one auth method, complete enough to log in with. Refusing at startup names the option;
+        // refusing at the first login names nothing and retries forever.
+        services.AddOptions<VaultTransitOptions>()
+            .Validate(
+                options => options.Authentication is not { Kubernetes: null, AppRole: null },
+                $"{nameof(VaultTransitOptions.Authentication)} is configured without an auth method: set either " +
+                $"{nameof(VaultAuthenticationOptions.Kubernetes)} or {nameof(VaultAuthenticationOptions.AppRole)}.")
+            .Validate(
+                options => options.Authentication is not { Kubernetes: not null, AppRole: not null },
+                $"{nameof(VaultTransitOptions.Authentication)} names both auth methods; exactly one of " +
+                $"{nameof(VaultAuthenticationOptions.Kubernetes)} and {nameof(VaultAuthenticationOptions.AppRole)} " +
+                $"must be set.")
+            .Validate(
+                options => options.Authentication?.Kubernetes is not { Role: null or "" },
+                $"Kubernetes authentication needs {nameof(KubernetesAuthenticationOptions.Role)} set to the Vault " +
+                $"role bound to the pod's service account.")
+            .Validate(
+                options => options.Authentication?.AppRole is not { RoleId: null or "" } and
+                           not { SecretId: null or "" },
+                $"AppRole authentication needs both {nameof(AppRoleAuthenticationOptions.RoleId)} and " +
+                $"{nameof(AppRoleAuthenticationOptions.SecretId)} set.")
+            .ValidateOnStart();
+
+        // The token's owners: the source everything reads through - refreshing on use, so no background
+        // service and no dependency on a running host - and the login that mints tokens for it. The
+        // source also needs a clock, which the package supplies for itself; a host that registered its
+        // own TimeProvider keeps it.
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<TokenSource>();
+        services.TryAddSingleton<LoginClient>();
+
         services.AddHttpClient(VaultTransport.HttpClientName, (provider, http) =>
         {
             // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
