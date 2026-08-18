@@ -69,7 +69,7 @@ public class SecureUriValidator(IOptions<SecureHttpFetchOptions> options) : ISec
         if (IsAllowedDestination(uri, options.Value.AllowedDestinations))
             return null;
 
-        if (options.Value.AllowedSchemes is { Length: > 0 } allowedSchemes &&
+        if (options.Value.EffectiveAllowedSchemes is { Length: > 0 } allowedSchemes &&
             !allowedSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
         {
             return $"URI scheme '{uri.Scheme}' is not allowed. " +

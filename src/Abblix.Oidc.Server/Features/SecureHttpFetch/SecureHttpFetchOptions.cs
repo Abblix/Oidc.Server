@@ -77,15 +77,28 @@ public class SecureHttpFetchOptions
     public TimeSpan SoftwareStatementKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// List of allowed URI schemes.
-    /// Default: null (all schemes allowed).
+    /// List of allowed URI schemes, or null when the host does not state them and the HTTPS-only
+    /// default in <see cref="EffectiveAllowedSchemes"/> applies.
     /// </summary>
     /// <remarks>
-    /// When set, only URIs with schemes in this list will be allowed.
-    /// Common secure configuration: new[] { "https" } to enforce HTTPS-only fetching.
-    /// Setting this to null or empty array allows all schemes.
+    /// Null and empty mean different things. Null is "not stated", and the default applies. An empty
+    /// list is stated: it lifts the scheme restriction entirely, and it is the one way a
+    /// configuration file can say so, since null has no spelling there.
+    ///
+    /// Null rather than a defaulted value on purpose. The .NET configuration binder adds to a
+    /// collection a property already holds instead of replacing it, so a default stored here would
+    /// arrive on top of what the file lists - a host that configures plain HTTP would silently keep
+    /// HTTPS allowed beside it, on the allowlist SSRF validation consumes.
+    /// Read <see cref="EffectiveAllowedSchemes"/> to decide anything.
     /// </remarks>
-    public string[]? AllowedSchemes { get; set; } = [Uri.UriSchemeHttps];
+    public string[]? AllowedSchemes { get; set; }
+
+    /// <summary>
+    /// The schemes a fetched URI may use: what the host states, or HTTPS alone when it states
+    /// nothing. A host that states an empty list gets an empty list, which the validator reads as
+    /// no scheme restriction.
+    /// </summary>
+    public string[] EffectiveAllowedSchemes => AllowedSchemes ?? [Uri.UriSchemeHttps];
 
     /// <summary>
     /// Whether to block requests to private networks.

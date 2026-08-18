@@ -315,11 +315,11 @@ public class SsrfValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
-    /// Verifies that all schemes are allowed when AllowedSchemes is null.
-    /// Per configuration design, null means no scheme restriction.
+    /// Null is "not stated", so the HTTPS-only default applies: a plain-HTTP request is refused.
+    /// A host that means "no scheme restriction" states an empty list, which the next test covers.
     /// </summary>
     [Fact]
-    public async Task SendAsync_WithHttpScheme_WhenAllowedSchemesIsNull_ShouldSucceed()
+    public async Task SendAsync_WithHttpScheme_WhenAllowedSchemesIsNull_ShouldBeBlocked()
     {
         // Arrange
         var client = CreateClient(new SecureHttpFetchOptions
@@ -329,12 +329,15 @@ public class SsrfValidatingHttpMessageHandlerTests
         });
 
         // Act & Assert
-        await AssertSsrfValidationPasses(client,"https://example.com/api");
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.GetAsync("http://example.com/api", TestContext.Current.CancellationToken));
+
+        Assert.Contains("URI scheme 'http' is not allowed", exception.Message);
     }
 
     /// <summary>
-    /// Verifies that all schemes are allowed when AllowedSchemes is empty array.
-    /// Per configuration design, empty array means no scheme restriction.
+    /// An empty list is stated and lifts the scheme restriction entirely, which is also the one
+    /// way a configuration file can say so - null has no spelling there.
     /// </summary>
     [Fact]
     public async Task SendAsync_WithHttpScheme_WhenAllowedSchemesIsEmpty_ShouldSucceed()
