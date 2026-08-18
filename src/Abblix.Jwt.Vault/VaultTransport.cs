@@ -107,6 +107,27 @@ public static class VaultTransport
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-        return new ApiResponse(response.StatusCode, !string.IsNullOrEmpty(payload) ? JsonDocument.Parse(payload) : null);
+        return new ApiResponse(response.StatusCode, ParseBody(payload));
+    }
+
+    /// <summary>
+    /// A body that is not JSON becomes an answer without a body, keeping the status. Vault always
+    /// answers JSON, so a non-JSON body means an intermediary spoke instead - a proxy's HTML error
+    /// page during an outage is the common shape - and that is a failed call to report, never an
+    /// exception to escape into whatever loop made the call.
+    /// </summary>
+    private static JsonDocument? ParseBody(string payload)
+    {
+        if (string.IsNullOrEmpty(payload))
+            return null;
+
+        try
+        {
+            return JsonDocument.Parse(payload);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

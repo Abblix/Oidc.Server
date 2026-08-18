@@ -54,39 +54,42 @@ internal sealed partial class LoginClient(
     {
         var authentication = options.CurrentValue.Authentication;
 
-        string path;
-        object body;
-        switch (authentication)
-        {
-            case { Kubernetes: { } kubernetes }:
-                path = $"auth/{kubernetes.Mount.Trim('/')}/login";
-                body = new KubernetesLoginRequest
-                {
-                    Role = kubernetes.Role ?? throw MisconfiguredAuthentication(nameof(kubernetes.Role)),
-
-                    // Trimmed because the file routinely ends with a newline, which would travel into the JSON
-                    // string and make Vault reject a perfectly valid token.
-                    Jwt = (await File.ReadAllTextAsync(kubernetes.ServiceAccountTokenPath, cancellationToken)).Trim(),
-                };
-                break;
-
-            case { AppRole: { } appRole }:
-                path = $"auth/{appRole.Mount.Trim('/')}/login";
-                body = new AppRoleLoginRequest
-                {
-                    RoleId = appRole.RoleId ?? throw MisconfiguredAuthentication(nameof(appRole.RoleId)),
-                    SecretId = appRole.SecretId ?? throw MisconfiguredAuthentication(nameof(appRole.SecretId)),
-                };
-                break;
-
-            default:
-                // The lifecycle service only runs when the section is present, and startup validation requires
-                // exactly one populated method, so this is unreachable short of a torn configuration reload.
-                throw MisconfiguredAuthentication(nameof(VaultTransitOptions.Authentication));
-        }
-
+        var path = "auth/login";
         try
         {
+            object body;
+            switch (authentication)
+            {
+                case { Kubernetes: { } kubernetes }:
+                    path = $"auth/{kubernetes.Mount.Trim('/')}/login";
+                    body = new KubernetesLoginRequest
+                    {
+                        Role = kubernetes.Role ?? throw MisconfiguredAuthentication(nameof(kubernetes.Role)),
+
+                        // Read inside the try: a missing or unreadable projected file is a failure to retry,
+                        // not an exception to escape. Trimmed because the file routinely ends with a newline,
+                        // which would travel into the JSON string and make Vault reject a valid token.
+                        Jwt = (await File.ReadAllTextAsync(kubernetes.ServiceAccountTokenPath, cancellationToken))
+                            .Trim(),
+                    };
+                    break;
+
+                case { AppRole: { } appRole }:
+                    path = $"auth/{appRole.Mount.Trim('/')}/login";
+                    body = new AppRoleLoginRequest
+                    {
+                        RoleId = appRole.RoleId ?? throw MisconfiguredAuthentication(nameof(appRole.RoleId)),
+                        SecretId = appRole.SecretId ?? throw MisconfiguredAuthentication(nameof(appRole.SecretId)),
+                    };
+                    break;
+
+                default:
+                    // The lifecycle service only runs when the section is present, and startup validation
+                    // requires exactly one populated method, so this is unreachable short of a torn
+                    // configuration reload - and the service's own backstop turns even that into a retry.
+                    throw MisconfiguredAuthentication(nameof(VaultTransitOptions.Authentication));
+            }
+
             // A retried login that succeeded but lost its response mints an orphan token; it idles out at its
             // TTL and costs nothing, so nothing here tries to prevent or clean it up.
             using var response = await HttpClient().SendAnonymousAsync(HttpMethod.Post, path, body, cancellationToken);
@@ -101,7 +104,7 @@ internal sealed partial class LoginClient(
                 LogLoggedIn(path, lease.LeaseDuration, lease.Renewable);
             return lease;
         }
-        catch (Exception exception) when (IsTransportFailure(exception, cancellationToken))
+        catch (Exception exception) when (IsRecoverableFailure(exception, cancellationToken))
         {
             LogLoginUnreachable(path, exception);
             return null;
@@ -121,7 +124,10 @@ internal sealed partial class LoginClient(
             switch (response)
             {
                 // Vault answers permission denied both for a token that cannot renew itself and for one already
-                // gone; either way asking again is pointless and the caller switches to clock-watching.
+                // gone; either way asking again is pointless and the caller switches to clock-watching. The
+                // status stands in for the "permission denied" message match Vault's own watcher performs: a 403
+                // minted by an intermediary lands here too, and the consequence is benign - the clock-watching
+                // branch still logs in again before the lease ends.
                 case { Status: HttpStatusCode.Forbidden }:
                     LogRenewDenied(response.Errors);
                     return new RenewResult(RenewStatus.PermissionDenied, null);
@@ -139,7 +145,7 @@ internal sealed partial class LoginClient(
                     return new RenewResult(RenewStatus.Renewed, lease);
             }
         }
-        catch (Exception exception) when (IsTransportFailure(exception, cancellationToken))
+        catch (Exception exception) when (IsRecoverableFailure(exception, cancellationToken))
         {
             LogRenewUnreachable(exception);
             return new RenewResult(RenewStatus.Failed, null);
@@ -149,30 +155,41 @@ internal sealed partial class LoginClient(
     private HttpClient HttpClient() => httpClientFactory.CreateClient(VaultTransport.HttpClientName);
 
     /// <summary>
-    /// A failure of the transport rather than an answer from Vault: a connection error, or the client's own
-    /// timeout, which surfaces as cancellation without the caller's token being cancelled.
+    /// A failure that retrying can cure, as opposed to an answer from Vault: a connection error, the
+    /// client's own timeout - which surfaces as cancellation without the caller's token being cancelled -
+    /// or a credential file that cannot be read right now.
     /// </summary>
-    private static bool IsTransportFailure(Exception exception, CancellationToken cancellationToken)
+    private static bool IsRecoverableFailure(Exception exception, CancellationToken cancellationToken)
         => exception switch
         {
             HttpRequestException => true,
+            IOException => true,
             OperationCanceledException => !cancellationToken.IsCancellationRequested,
             _ => false,
         };
 
     private TokenLease? ParseLease(ApiResponse response, string path)
     {
+        // Shape-checked rather than read with throwing accessors: an answer of the wrong shape is a
+        // verdict for the retry loop, never an exception escaping it.
         if (response.Document is not { } document ||
             !document.RootElement.TryGetProperty("auth", out var auth) ||
+            auth.ValueKind is not JsonValueKind.Object ||
             !auth.TryGetProperty("client_token", out var token) ||
+            token.ValueKind is not JsonValueKind.String ||
             token.GetString() is not { Length: > 0 } clientToken)
         {
             LogMalformedAuthResponse(path);
             return null;
         }
 
-        var leaseSeconds = auth.TryGetProperty("lease_duration", out var lease) ? lease.GetInt64() : 0;
-        var renewable = auth.TryGetProperty("renewable", out var flag) && flag.GetBoolean();
+        var leaseSeconds =
+            auth.TryGetProperty("lease_duration", out var lease) &&
+            lease.ValueKind is JsonValueKind.Number &&
+            lease.TryGetInt64(out var seconds)
+                ? seconds
+                : 0;
+        var renewable = auth.TryGetProperty("renewable", out var flag) && flag.ValueKind is JsonValueKind.True;
         return new TokenLease(clientToken, TimeSpan.FromSeconds(leaseSeconds), renewable);
     }
 

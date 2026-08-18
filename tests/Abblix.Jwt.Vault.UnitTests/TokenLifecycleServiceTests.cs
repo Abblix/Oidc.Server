@@ -126,17 +126,28 @@ public sealed class TokenLifecycleServiceTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The schedule itself: one renewal immediately on login (the watcher's own first move), none
+    /// before two thirds of the lease, the next by 0.74 of it - the sleep is 2/3 lease + grace/3
+    /// with grace in [10%, 20%), so it lands in [0.700, 0.734] of the lease. The lower bound is what
+    /// catches a regression to renewing in a hot loop; the upper is what catches renewing too late.
+    /// </summary>
     [Fact]
-    public async Task RenewsAtTwoThirdsOfTheLease_AndKeepsTheTokenCurrent()
+    public async Task RenewsOnLogin_ThenNotBeforeTwoThirds_ThenByThreeQuarters()
     {
         var (service, tokens) = ServiceOver(WithAppRole());
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         try
         {
-            // The sleep is 2/3 lease + grace/3 with grace in [10%, 20%): at most 0.734 of the lease.
-            _clock.Advance(TimeSpan.FromSeconds(3600 * 0.74));
-            await Eventually(() => Volatile.Read(ref _renewals) >= 1);
+            await Eventually(() => Volatile.Read(ref _renewals) == 1);
+
+            _clock.Advance(TimeSpan.FromSeconds(3600 * 0.65));
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+            Assert.Equal(1, Volatile.Read(ref _renewals));
+
+            _clock.Advance(TimeSpan.FromSeconds(3600 * 0.09));
+            await Eventually(() => Volatile.Read(ref _renewals) == 2);
 
             Assert.Equal(1, _logins);
             Assert.Equal("s.minted", tokens.Current);
@@ -149,29 +160,48 @@ public sealed class TokenLifecycleServiceTests : IDisposable
 
     /// <summary>
     /// The max-TTL boundary: renewal succeeds but the returned lease shrinks. The loop must log in
-    /// again before that shrunken lease runs out - a refusal never comes while the token is alive.
+    /// again strictly inside the shrunken lease - a refusal never comes while the token is alive.
+    /// The responder shrinks only the first login's token; the fresh token renews to full length,
+    /// the way a real re-login resets the max-TTL clock.
     /// </summary>
     [Fact]
     public async Task WhenTheLeaseStopsExtending_LogsInAgainBeforeItExpires()
     {
-        _onRenew = _ => Auth("s.minted", 600, renewable: true);
+        var shrunkenLeaseStart = DateTimeOffset.MinValue;
+        var secondLoginAt = DateTimeOffset.MinValue;
+        _onLogin = attempt =>
+        {
+            if (attempt == 2)
+                secondLoginAt = _clock.GetUtcNow();
+            return Auth($"s.minted-{attempt}", 3600, renewable: true);
+        };
+        _onRenew = _ =>
+        {
+            if (Volatile.Read(ref _logins) != 1)
+                return Auth("s.minted-2", 3600, renewable: true);
+
+            shrunkenLeaseStart = _clock.GetUtcNow();
+            return Auth("s.minted-1", 600, renewable: true);
+        };
         var (service, _) = ServiceOver(WithAppRole());
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         try
         {
-            _clock.Advance(TimeSpan.FromSeconds(3600 * 0.74));
             await Eventually(() => Volatile.Read(ref _renewals) >= 1);
 
-            // The shrunken lease runs 600 virtual seconds. Walk the clock through it in grace-sized
-            // steps: the re-login must arrive strictly inside the old token's remaining lifetime.
-            for (var step = 0; step < 10 && Volatile.Read(ref _logins) < 2; step++)
+            // Walk the clock in steps that together stay under the 600-second shrunken lease: a
+            // loop that re-logs in only after expiry cannot pass, because the budget never gets there.
+            for (var step = 0; step < 9 && Volatile.Read(ref _logins) < 2; step++)
             {
                 _clock.Advance(TimeSpan.FromSeconds(59));
                 await Task.Delay(20, TestContext.Current.CancellationToken);
             }
 
             await Eventually(() => Volatile.Read(ref _logins) >= 2);
+            Assert.True(
+                secondLoginAt - shrunkenLeaseStart < TimeSpan.FromSeconds(600),
+                $"the re-login came {secondLoginAt - shrunkenLeaseStart} after the lease shrank to 600s");
         }
         finally
         {
@@ -202,7 +232,9 @@ public sealed class TokenLifecycleServiceTests : IDisposable
         await service.StartAsync(TestContext.Current.CancellationToken);
         try
         {
-            for (var step = 0; step < 80 && Volatile.Read(ref _logins) < 2; step++)
+            // 70 x 50 = 3500 virtual seconds, strictly inside the 3600-second lease: a loop that
+            // waits for the token to die before logging in again cannot pass on this budget.
+            for (var step = 0; step < 70 && Volatile.Read(ref _logins) < 2; step++)
             {
                 _clock.Advance(TimeSpan.FromSeconds(50));
                 await Task.Delay(20, TestContext.Current.CancellationToken);
@@ -230,7 +262,9 @@ public sealed class TokenLifecycleServiceTests : IDisposable
         await service.StartAsync(TestContext.Current.CancellationToken);
         try
         {
-            for (var step = 0; step < 40 && Volatile.Read(ref _logins) < 2; step++)
+            // 29 x 10 = 290 virtual seconds, strictly inside the 300-second lease: the replacement
+            // login must arrive while the batch token still lives.
+            for (var step = 0; step < 29 && Volatile.Read(ref _logins) < 2; step++)
             {
                 _clock.Advance(TimeSpan.FromSeconds(10));
                 await Task.Delay(20, TestContext.Current.CancellationToken);
@@ -243,6 +277,30 @@ public sealed class TokenLifecycleServiceTests : IDisposable
         {
             await service.StopAsync(TestContext.Current.CancellationToken);
         }
+    }
+
+    /// <summary>
+    /// When the lifecycle stops before ever logging in - host shutdown during a Vault outage - a
+    /// request waiting for the first login fails now, with the cause named, instead of burning its
+    /// whole client timeout against a login nobody is performing.
+    /// </summary>
+    [Fact]
+    public async Task StoppingBeforeTheFirstLogin_FailsTheWaitersRatherThanHangingThem()
+    {
+        _onLogin = _ => StubHttpMessageHandler.Json(
+            HttpStatusCode.ServiceUnavailable, new { errors = new[] { "sealed" } });
+        var (service, tokens) = ServiceOver(WithAppRole());
+
+        var starting = service.StartAsync(TestContext.Current.CancellationToken);
+        await Eventually(() => Volatile.Read(ref _logins) >= 1);
+        _clock.Advance(TimeSpan.FromSeconds(6));
+        await starting;
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        await Eventually(() => tokens.FirstLoginCompleted.IsFaulted);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => tokens.FirstLoginCompleted);
+        Assert.Contains(nameof(TokenLifecycleService), exception.Message);
     }
 
     [Fact]

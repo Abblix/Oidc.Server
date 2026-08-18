@@ -86,5 +86,8 @@ internal static class LogEvents
 
         /// <summary>The login produced a token without an expiry; there is nothing to renew.</summary>
         public const int NonExpiringToken = Base + 11;
+
+        /// <summary>A failure the login client did not foresee; the loop backs off and goes around.</summary>
+        public const int UnexpectedFailure = Base + 12;
     }
 }

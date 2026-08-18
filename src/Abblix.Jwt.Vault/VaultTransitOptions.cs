@@ -35,8 +35,8 @@ public sealed class VaultTransitOptions
     /// <summary>
     /// Auth token presented as the <c>X-Vault-Token</c> header, for a host that already has one and owns its
     /// lifetime. Source it from the environment or a secret store, never hardcode it. A production host
-    /// normally configures <see cref="Authentication"/> instead and lets the package mint and renew the token
-    /// itself; a minted token takes precedence over this value.
+    /// normally configures <see cref="Authentication"/> instead, which REPLACES this value outright: a stale
+    /// token left in configuration is then never presented, not even before the first login completes.
     /// </summary>
     public string? Token { get; set; }
 

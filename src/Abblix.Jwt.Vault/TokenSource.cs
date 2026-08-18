@@ -42,20 +42,35 @@ internal sealed class TokenSource(IOptionsMonitor<VaultTransitOptions> options)
     private volatile string? _minted;
 
     /// <summary>
-    /// The token to present right now: the minted one once a login succeeded, the host-supplied one before
-    /// that, null when there is neither.
+    /// The token to present right now. With authentication configured it is the minted one and nothing
+    /// else - configuring authentication REPLACES a host-supplied token, so a stale value left in
+    /// configuration (the dead agent-rendered token this feature exists to retire) is never presented while
+    /// the first login is still in flight. Without authentication it is the host-supplied token, read
+    /// through the monitor so a rotation delivered by configuration reload takes effect per request.
+    /// Whitespace normalizes to null, so an env var defined but empty reads as "no token" everywhere.
     /// </summary>
-    public string? Current => _minted ?? options.CurrentValue.Token;
+    public string? Current
+    {
+        get
+        {
+            if (AuthenticationConfigured)
+                return _minted;
+
+            var hostToken = options.CurrentValue.Token;
+            return string.IsNullOrWhiteSpace(hostToken) ? null : hostToken;
+        }
+    }
 
     /// <summary>Whether the package logs in itself, which is what makes the first login worth waiting for.</summary>
     public bool AuthenticationConfigured => options.CurrentValue.Authentication is not null;
 
     /// <summary>
-    /// Completes when the first login has published a token. Callers that need a token before the lifecycle
-    /// service has produced one await this instead of racing it - whichever consumer reaches Vault first
-    /// waits for the login rather than failing without a token. The login itself runs under the lifecycle
-    /// service's own lifetime, never under an awaiting caller's cancellation, so one caller giving up cannot
-    /// kill the login every other caller is waiting for.
+    /// Completes when the first login has published a token, and fails once the lifecycle service stops
+    /// without ever publishing one. Callers that need a token before the lifecycle service has produced one
+    /// await this instead of racing it - whichever consumer reaches Vault first waits for the login rather
+    /// than failing without a token. The login itself runs under the lifecycle service's own lifetime, never
+    /// under an awaiting caller's cancellation, so one caller giving up cannot kill the login every other
+    /// caller is waiting for.
     /// </summary>
     public Task FirstLoginCompleted => _firstLogin.Task;
 
@@ -65,4 +80,14 @@ internal sealed class TokenSource(IOptionsMonitor<VaultTransitOptions> options)
         _minted = token;
         _firstLogin.TrySetResult();
     }
+
+    /// <summary>
+    /// Fails the first-login promise when the lifecycle stops without having published a token, so a request
+    /// waiting on it fails now with a message naming the cause, instead of burning its whole client timeout
+    /// against a login nobody is performing. A no-op after the first publish.
+    /// </summary>
+    public void AbandonFirstLogin()
+        => _firstLogin.TrySetException(new InvalidOperationException(
+            $"The Vault token lifecycle stopped before the first login completed, so no token will arrive; " +
+            $"see the {nameof(TokenLifecycleService)} log for why it stopped."));
 }

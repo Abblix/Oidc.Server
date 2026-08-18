@@ -22,6 +22,7 @@
 
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -107,6 +108,29 @@ public sealed class AuthenticationOptionsValidationTests
             });
 
         Assert.NotNull(options.Authentication?.Kubernetes);
+    }
+
+    /// <summary>
+    /// The feature's off switch is the binder leaving the section null when the file does not
+    /// mention it. This is a fact about Microsoft.Extensions.Configuration, not about our code, so
+    /// it is pinned here: if a binder change ever materializes absent sections, every token-only
+    /// host would start failing validation, and this test names the culprit.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null, false)]                                     // absent
+    [InlineData("Vault:Authentication", "", false)]                     // named but empty
+    [InlineData("Vault:Authentication:Kubernetes:Role", "signer", true)] // a real child creates it
+    public void Binder_CreatesTheSection_OnlyWhenItHasContent(string? key, string? value, bool expectCreated)
+    {
+        var values = new Dictionary<string, string?>();
+        if (key is not null)
+            values[key] = value;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        var options = new VaultTransitOptions();
+        configuration.GetSection("Vault").Bind(options);
+
+        Assert.Equal(expectCreated, options.Authentication is not null);
     }
 
     /// <summary>

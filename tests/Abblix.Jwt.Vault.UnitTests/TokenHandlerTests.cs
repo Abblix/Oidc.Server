@@ -89,6 +89,64 @@ public sealed class TokenHandlerTests : IDisposable
     }
 
     /// <summary>
+    /// Configuring authentication REPLACES a host-supplied token: a stale value left in
+    /// configuration - the dead agent-rendered token this feature exists to retire - is never
+    /// presented. The request waits for the minted token instead of presenting the corpse.
+    /// </summary>
+    [Fact]
+    public async Task ConfiguredAuthentication_ReplacesTheHostToken_RatherThanPresentingIt()
+    {
+        var monitor = new MutableMonitor(new VaultTransitOptions
+        {
+            Token = "s.stale",
+            Authentication = new VaultAuthenticationOptions
+            {
+                Kubernetes = new KubernetesAuthenticationOptions { Role = "signer" },
+            },
+        });
+        var tokens = new TokenSource(monitor);
+        string? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request.Headers.TryGetValues(TokenHandler.TokenHeaderName, out var values)
+                ? values.Single()
+                : null;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+        var handler = new TokenHandler(tokens) { InnerHandler = transport };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://vault.test/v1/") };
+        _httpClients.Add(httpClient);
+
+        var pending = httpClient.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+        Assert.False(pending.IsCompleted);
+
+        tokens.Publish("s.minted");
+        await pending;
+
+        Assert.Equal("s.minted", seen);
+    }
+
+    /// <summary>
+    /// An environment variable defined but empty is "no token", not a token of length zero: without
+    /// authentication configured the header is simply absent, exactly as with no Token at all.
+    /// </summary>
+    [Fact]
+    public async Task WhitespaceToken_ReadsAsNoToken()
+    {
+        var monitor = new MutableMonitor(new VaultTransitOptions { Token = "  " });
+        HttpRequestMessage? seen = null;
+        var transport = new StubHttpMessageHandler((request, _) =>
+        {
+            seen = request;
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, new { ok = true });
+        });
+
+        await ClientOver(monitor, transport).GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+
+        Assert.False(seen!.Headers.Contains(TokenHandler.TokenHeaderName));
+    }
+
+    /// <summary>
     /// The login request itself is marked anonymous: it must neither wait for the token it is about
     /// to produce nor carry a stale one onto an endpoint that ignores it.
     /// </summary>

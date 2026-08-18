@@ -90,25 +90,42 @@ internal sealed partial class TokenLifecycleService(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var lease = await LoginUntilSuccessAsync(stoppingToken);
-                tokens.Publish(lease.Token);
-
-                if (lease.LeaseDuration <= TimeSpan.Zero)
+                try
                 {
-                    // A lease of zero means the token never expires - a root or periodic-orphan posture.
-                    // There is nothing to renew and re-logging in forever would only hammer Vault.
-                    LogNonExpiringToken();
-                    await Delay(Timeout.InfiniteTimeSpan, stoppingToken);
-                    return;
-                }
+                    var lease = await LoginUntilSuccessAsync(stoppingToken);
+                    tokens.Publish(lease.Token);
 
-                await KeepAliveAsync(lease, stoppingToken);
-                LogReLogin();
+                    if (lease.LeaseDuration <= TimeSpan.Zero)
+                    {
+                        // A lease of zero means the token never expires - a root or periodic-orphan posture.
+                        // There is nothing to renew and re-logging in forever would only hammer Vault.
+                        LogNonExpiringToken();
+                        await Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+                        return;
+                    }
+
+                    await KeepAliveAsync(lease, stoppingToken);
+                    LogReLogin();
+                }
+                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // The backstop that makes "the loop never throws" true by construction: the login client
+                    // translates the failures it can foresee into verdicts, and whatever it could not foresee
+                    // must not take the host down - a faulted background service silently stops it. Log, back
+                    // off, and go around; the token, if one is still valid, keeps working meanwhile.
+                    LogUnexpectedFailure(exception);
+                    await Delay(Jittered(RetryFloor), stoppingToken);
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Host shutdown: the loop ends with the process, and the token idles out at its TTL.
+        }
+        finally
+        {
+            // A request waiting for the first login must not wait for a login nobody will perform.
+            tokens.AbandonFirstLogin();
         }
     }
 

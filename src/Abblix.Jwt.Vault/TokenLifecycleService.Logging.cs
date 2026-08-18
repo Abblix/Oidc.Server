@@ -38,4 +38,8 @@ internal sealed partial class TokenLifecycleService
         "The login produced a token without an expiry; nothing to renew. Production roles should issue " +
         "expiring tokens")]
     private partial void LogNonExpiringToken();
+
+    [LoggerMessage(LogEvents.TokenLifecycle.UnexpectedFailure, LogLevel.Error,
+        "The token lifecycle hit a failure it did not foresee; backing off and retrying")]
+    private partial void LogUnexpectedFailure(Exception exception);
 }
