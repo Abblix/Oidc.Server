@@ -77,6 +77,8 @@ internal sealed partial class TokenSource(
         DateTimeOffset RefreshAt,
         TimeSpan FullLease);
 
+    // Entered through EnterScope rather than with a lock statement: the statement form on this type is a
+    // C# 13 feature, and net8.0 compiles as C# 12 against the polyfill in Abblix.Utils.
     private readonly Lock _gate = new();
     private LeaseState? _state;
     private Task? _refresh;
@@ -127,7 +129,7 @@ internal sealed partial class TokenSource(
     /// </summary>
     private Task StartRefresh()
     {
-        lock (_gate)
+        using (_gate.EnterScope())
         {
             if (_refresh is { IsCompleted: false } inFlight)
                 return inFlight;
@@ -214,7 +216,7 @@ internal sealed partial class TokenSource(
                 lease.Token, lease.Renewable, expiresAt, expiresAt - Grace(lease.LeaseDuration), lease.LeaseDuration);
         }
 
-        lock (_gate)
+        using (_gate.EnterScope())
         {
             _state = state;
             _retryDelay = TimeSpan.Zero;
@@ -224,7 +226,7 @@ internal sealed partial class TokenSource(
 
     private void RegisterFailure()
     {
-        lock (_gate)
+        using (_gate.EnterScope())
         {
             _retryDelay = _retryDelay == TimeSpan.Zero ? RetryFloor : Min(_retryDelay * 2, RetryCeiling);
             _nextAttemptAt = timeProvider.GetUtcNow() + Jittered(_retryDelay);
