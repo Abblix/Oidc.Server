@@ -27,9 +27,7 @@ jobs:
     # prerelease range then keep restoring the last good build and notice nothing.
     name: Build all target frameworks
     runs-on: ubuntu-latest
-    # Measured at 1m35s for the build over a cold NuGet cache, plus checkout and setup; the ceiling
-    # leaves room for a slower runner without letting a hung build sit for the default six hours.
-    timeout-minutes: 8
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -73,7 +71,7 @@ jobs:
         # Release, matching what the dev-build publish compiles: a configuration-conditional
         # analyser or a Release-only warning-as-error must fail here rather than after the merge.
         run: dotnet build Abblix.Oidc.slnx --no-restore -c Release
-        timeout-minutes: 4
+        timeout-minutes: 3
 
   test:
     # Single required status check aggregating the shards and the multi-framework build: it succeeds
