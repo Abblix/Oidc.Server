@@ -447,6 +447,17 @@ internal static class LogEvents
 
             public const int ValidationReplaced = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Features/SecureHttpFetch/SecureUriValidator.cs</c> - the URI checks every
+        /// SSRF-guarded fetch runs before connecting.
+        /// </summary>
+        public static class SecureUriValidator
+        {
+            private const int Base = 6050;
+
+            public const int SchemeRestrictionLifted = Base + 1;
+        }
     }
 
     /// <summary>

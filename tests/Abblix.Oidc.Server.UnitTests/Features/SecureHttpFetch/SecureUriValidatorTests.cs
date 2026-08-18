@@ -81,7 +81,7 @@ public class SecureUriValidatorTests
     [Fact]
     public void Validate_HttpScheme_WhenSchemesUnrestricted_ReturnsNull()
     {
-        var options = new SecureHttpFetchOptions { AllowedSchemes = null, BlockPrivateNetworks = false };
+        var options = new SecureHttpFetchOptions { AllowedSchemes = [], BlockPrivateNetworks = false };
         Assert.Null(CreateValidator(options).Validate(new Uri("http://localhost:15555/backchannel-logout")));
     }
 

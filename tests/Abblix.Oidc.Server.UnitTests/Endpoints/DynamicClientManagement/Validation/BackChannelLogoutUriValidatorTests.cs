@@ -96,7 +96,7 @@ public class BackChannelLogoutUriValidatorTests
     [Fact]
     public async Task ValidateAsync_WithHttpLocalhost_WhenPolicyRelaxed_ReturnsNull()
     {
-        var relaxed = new SecureHttpFetchOptions { AllowedSchemes = null, BlockPrivateNetworks = false };
+        var relaxed = new SecureHttpFetchOptions { AllowedSchemes = [], BlockPrivateNetworks = false };
         var result = await CreateValidator(relaxed)
             .ValidateAsync(CreateContext(new Uri("http://localhost:15555/backchannel-logout")));
         Assert.Null(result);
