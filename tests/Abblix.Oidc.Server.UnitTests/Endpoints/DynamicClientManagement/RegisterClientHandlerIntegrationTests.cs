@@ -270,6 +270,54 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
+    /// RFC 9700 §2.1.1 requires an authorization server to enforce PKCE for public clients, and this server
+    /// requires it of every client that can receive a code. A registration request that says nothing about
+    /// <c>pkce_required</c> must therefore leave the stored client on the server's own default rather than
+    /// carrying a weaker one in from the request model: the flag is nullable precisely so that "not stated"
+    /// stays distinguishable from "stated false", and a non-null default on the request would be copied onto
+    /// the client and silently win.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PkceRequiredOmitted_StoredClientStillRequiresPkce()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
+
+        var result = await handler.HandleAsync(CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var success));
+
+        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        Assert.NotNull(stored);
+        Assert.NotEqual(false, stored.PkceRequired);
+    }
+
+    /// <summary>
+    /// The counterpart of the case above: a registration request that explicitly opts out still opts out,
+    /// so the nullable default restores the server's own value without taking the choice away from a client
+    /// that states one.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PkceRequiredFalse_StoredClientOptsOut()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        var clientInfoProvider = provider.GetRequiredService<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>();
+
+        var request = CreateRequest();
+        request = request with { PkceRequired = false };
+
+        var result = await handler.HandleAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var success));
+
+        var stored = await clientInfoProvider.TryFindClientAsync(success.ClientId);
+        Assert.NotNull(stored);
+        Assert.Equal(false, stored.PkceRequired);
+    }
+
+    /// <summary>
     /// RFC 7591 §3.2.1: the registration response echoes registered client metadata so the
     /// client can confirm what was stored without a follow-up read. Locks that the
     /// extended echo (added alongside DPoP) actually surfaces a representative subset of
