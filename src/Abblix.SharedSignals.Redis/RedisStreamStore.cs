@@ -86,10 +86,24 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
     /// Compared as a substring of the stored document rather than by parsing it, so the script
     /// needs no JSON library and works on every server that speaks Lua. The property name and the
     /// quoting are what make the match exact: a version is a 32-character hex string, so the
-    /// needle cannot occur anywhere else in the document.
+    /// needle cannot occur anywhere else in the document. Nor can either needle be forged by
+    /// anything a receiver supplies - a quote inside a JSON string value is escaped, so the raw
+    /// sequence only ever appears where the serializer put it.
     /// </remarks>
     /// <param name="version">The version a caller believes is on record.</param>
-    private static string VersionMarkerOf(string? version) => $"\"version\":\"{version}\"";
+    private static string VersionMarkerOf(string version) => $"{AnyVersionMarker}{version}\"";
+
+    /// <summary>
+    /// The text a stored stream carries when it has any version at all.
+    /// </summary>
+    /// <remarks>
+    /// Its ABSENCE is what a caller holding no version is judged against. Versions arrived after this
+    /// store had been shipping, so registrations written by the earlier build carry no such member,
+    /// and a caller reading one is handed null - matching it against a version marker would refuse
+    /// every write to that stream for as long as it exists, while telling the receiver it lost a race
+    /// that never happened.
+    /// </remarks>
+    private const string AnyVersionMarker = "\"version\":\"";
 
     private static RedisValue FieldOf(string receiverId, string streamId)
         => $"{Uri.EscapeDataString(receiverId)}|{Uri.EscapeDataString(streamId)}";
@@ -170,13 +184,26 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
         // The version is compared server-side, in the same script that writes: a caller may only
         // replace the copy it read. Reading it here and comparing in C# would be the very
         // read-modify-write this is meant to close.
+        // A caller whose copy carried no version replaces one that still carries none, and gains a
+        // version by doing so - the migration for registrations written before versions existed, and
+        // one that happens per stream on its first change rather than as a pass over the store. The
+        // condition runs in the same place and the same direction for both: any version on record
+        // means somebody has written since that read, which is the lost update this exists to refuse.
+        // Which needle, and which way it has to come out: one decision, because the two are one
+        // fact. Derived separately they disagree the day either is edited, and disagreeing means
+        // looking for a version marker while requiring it to be missing, which refuses every write.
+        var (needle, mustBeFound) = stream.Version is { } version
+            ? (VersionMarkerOf(version), "1")
+            : (AnyVersionMarker, "0");
+
         var replaced = await _database.ScriptEvaluateAsync(
             """
             local stored = redis.call('HGET', KEYS[1], ARGV[1])
             if not stored then
                 return 0
             end
-            if string.find(stored, ARGV[3], 1, true) == nil then
+            local present = string.find(stored, ARGV[3], 1, true) ~= nil
+            if present ~= (ARGV[4] == '1') then
                 return 0
             end
             redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
@@ -186,7 +213,8 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
             [FieldOf(stream.ReceiverId, stream.StreamId),
              (RedisValue)JsonSerializer.SerializeToUtf8Bytes(
                  stream with { Version = Guid.NewGuid().ToString("N") }, SerializerOptions),
-             (RedisValue)VersionMarkerOf(stream.Version)]);
+             (RedisValue)needle,
+             (RedisValue)mustBeFound]);
 
         return (long)replaced == 1;
     }
