@@ -20,6 +20,9 @@
 // CONTACT: For license inquiries or permissions, contact Abblix LLP at
 // info@abblix.com
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
@@ -118,6 +121,70 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         // exactly the shape that used to overwrite whatever landed in between.
         Assert.False(await store.UpdateAsync(read with { Status = StreamStatuses.Disabled }, ct));
         Assert.Equal(StreamStatuses.Paused, (await store.FindAsync(_receiver, streamId, ct))!.Status);
+    }
+
+    /// <summary>
+    /// A registration written before versions existed can still be changed, once, after which it
+    /// carries a version like any other.
+    /// </summary>
+    /// <remarks>
+    /// The version arrived after this store had been shipping, so registrations the earlier build
+    /// wrote carry no version member at all. A caller reads one, is handed a null version, and its
+    /// write is then judged against a marker the stored document cannot contain - so every change to
+    /// that stream is refused for as long as the stream exists, and the refusal reaches the receiver
+    /// as a lost race that never happened. Nothing about it improves with the retry that refusal
+    /// advises.
+    /// </remarks>
+    [Fact]
+    public async Task AStreamStoredBeforeVersionsExisted_CanStillBeUpdated()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = NewStore();
+        var streamId = Guid.NewGuid().ToString("N");
+
+        await garnet.Connection.GetDatabase().HashSetAsync(
+            HashKey,
+            $"{Uri.EscapeDataString(_receiver)}|{Uri.EscapeDataString(streamId)}",
+            WithoutVersion(NewState(streamId)));
+
+        try
+        {
+            var read = await store.FindAsync(_receiver, streamId, ct);
+            Assert.NotNull(read);
+            Assert.Null(read.Version);
+
+            Assert.True(await store.UpdateAsync(read with { Status = StreamStatuses.Paused }, ct));
+
+            var updated = await store.FindAsync(_receiver, streamId, ct);
+            Assert.Equal(StreamStatuses.Paused, updated!.Status);
+            Assert.NotNull(updated.Version);
+
+            // Ordinary from here on: the versionless copy no longer replaces anything, or admitting
+            // it would leave the stream permanently unguarded instead of migrating it once.
+            Assert.False(await store.UpdateAsync(read with { Status = StreamStatuses.Disabled }, ct));
+            Assert.Equal(
+                StreamStatuses.Paused, (await store.FindAsync(_receiver, streamId, ct))!.Status);
+        }
+        finally
+        {
+            await store.DeleteAsync(_receiver, streamId, ct);
+        }
+    }
+
+    /// <summary>
+    /// The same state as the build before versions wrote it: the member absent, not present and
+    /// empty. Only absence is what those registrations carry, and the two are different shapes to
+    /// anything comparing text.
+    /// </summary>
+    private static string WithoutVersion(StreamState state)
+    {
+        var document = JsonSerializer.SerializeToNode(
+                state,
+                new JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } })!
+            .AsObject();
+
+        document.Remove("version");
+        return document.ToJsonString();
     }
 
     /// <summary>
