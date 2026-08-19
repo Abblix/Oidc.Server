@@ -89,16 +89,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // which the count is ever consulted: a licence that names its issuers refuses an unknown one on the
         // name, before anything is counted. Written this way after the first attempt, which reused the
         // assembly's licence, turned out to exercise the whitelist while claiming to test the count.
-        //
-        // The period is stated as fixed instants rather than read from the clock. The checker reads the clock
-        // itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = 1,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
+        ArrangeLicenceThatCountsIssuers();
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
 
@@ -129,7 +120,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // assembly licence, and so is refused on the whitelist before anything is counted, or supplies a
         // licence of its own carrying the limit. None of them asks the fallback what it allows, so the
         // constant could be deleted outright with the whole suite still green - measured, not assumed.
-        TestLicense.ClearChecker();
+        ArrangeInstallationWithNoLicence();
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
 
@@ -143,11 +134,15 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void The_refusal_past_the_issuer_limit_is_recorded()
     {
-        // The refusal is covered above; this covers the record of it, which an operator's alerting is built
-        // on. It went untested for a mechanical reason worth stating: the throttle window is process-wide and
-        // fifteen minutes long, so whichever test reached the limit first consumed the only record any test
-        // could observe, and every later one found the decision taken in silence.
-        TestLicense.ClearChecker();
+        // The refusal is covered by the test above; this covers the record of it, which an operator's
+        // alerting is built on. It went untested for a mechanical reason worth stating: the throttle window
+        // is process-wide and fifteen minutes long, so whichever test reached the limit first consumed the
+        // only record any test could observe, and every later one found the decision taken in silence.
+        //
+        // On a licence of its own rather than on the unlicensed fallback, so that this test and the fallback
+        // test fail for different reasons: removing the fallback's limit must not be able to take this one
+        // down with it, or the two stop measuring two things.
+        ArrangeLicenceThatCountsIssuers();
         TestLicense.ClearLogThrottle();
 
         var records = new RecordingLoggerFactory();
@@ -171,6 +166,41 @@ public sealed class LicenseEnforcementTests : IDisposable
         Assert.Contains(TestLicense.Issuer, record.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Puts the checker where an installation is before any licence has been supplied.
+    /// </summary>
+    /// <remarks>
+    /// The assembly installs its licence before the first test runs, so reaching the state a deployment
+    /// starts in means removing it. That state is the subject of the two tests below rather than a
+    /// convenience for them: it is the only state in which the fallback is ever consulted.
+    /// </remarks>
+    private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
+
+    /// <summary>
+    /// Puts the checker on a licence that caps the number of issuers and names none of them, which is the
+    /// only arrangement under which that count is ever consulted.
+    /// </summary>
+    /// <remarks>
+    /// A licence that names its issuers refuses an unknown one on the name, before anything is counted, and
+    /// licences accumulate rather than replace one another - so the assembly's licence and its whitelist have
+    /// to go before this one is added. That is the whole reason a test of the count reaches into the
+    /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
+    /// what they need rather than as how the statics are arranged.
+    ///
+    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
+    /// itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
+    /// </remarks>
+    private static void ArrangeLicenceThatCountsIssuers()
+    {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
     [Fact]
     public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
     {
@@ -178,7 +208,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // installation runs on before any licence is supplied must not count clients either. Written against
         // the fallback itself - no licence is added after the clear - because that is the only state in which
         // it is ever consulted, and a licence carrying no client limit would pass whatever the fallback said.
-        TestLicense.ClearChecker();
+        ArrangeInstallationWithNoLicence();
 
         for (var index = 0; index < 20; index++)
         {
