@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Generic;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -121,6 +122,56 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public void An_installation_running_before_a_licence_is_supplied_serves_one_issuer_and_refuses_the_second()
+    {
+        // The one limit the free tier has. Its sibling below pins the client half of the same fallback, and
+        // that asymmetry is how this went missing: every other test reaching CheckIssuer either runs under the
+        // assembly licence, and so is refused on the whitelist before anything is counted, or supplies a
+        // licence of its own carrying the limit. None of them asks the fallback what it allows, so the
+        // constant could be deleted outright with the whole suite still green - measured, not assumed.
+        TestLicense.ClearChecker();
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+
+        // Every time, not only the first: a limit that stops applying once reported is not a limit.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+    }
+
+    [Fact]
+    public void The_refusal_past_the_issuer_limit_is_recorded()
+    {
+        // The refusal is covered above; this covers the record of it, which an operator's alerting is built
+        // on. It went untested for a mechanical reason worth stating: the throttle window is process-wide and
+        // fifteen minutes long, so whichever test reached the limit first consumed the only record any test
+        // could observe, and every later one found the decision taken in silence.
+        TestLicense.ClearChecker();
+        TestLicense.ClearLogThrottle();
+
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseChecker.IssuerLimitExceeded, record.EventId.Id);
+        Assert.Equal(LogLevel.Error, record.Level);
+
+        // The message carries what an operator needs to act: which issuers were counted against the limit.
+        Assert.Contains(UnlicensedIssuer, record.Message, StringComparison.Ordinal);
+        Assert.Contains(TestLicense.Issuer, record.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
     {
         // The terms meter company size and production issuers, never client applications, so the fallback an
@@ -205,6 +256,40 @@ public sealed class LicenseEnforcementTests : IDisposable
         finally
         {
             LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+    }
+
+    /// <summary>What a single log write carried.</summary>
+    private sealed record LogRecord(LogLevel Level, EventId EventId, string Message);
+
+    /// <summary>A factory whose loggers keep what was written, so a test can assert on the record itself.</summary>
+    private sealed class RecordingLoggerFactory : ILoggerFactory
+    {
+        public List<LogRecord> Entries { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(Entries);
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class RecordingLogger(List<LogRecord> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception)));
         }
     }
 

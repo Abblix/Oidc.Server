@@ -21,8 +21,10 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Features.Licensing;
@@ -544,4 +546,35 @@ public class LicenseLoggerTests
     }
 
     #endregion
+
+    /// <summary>
+    /// The timer callback that keeps the throttle dictionary from growing without bound drops the entries whose
+    /// window has closed and keeps the rest.
+    /// </summary>
+    /// <remarks>
+    /// Nothing else in the suite reaches this method: it runs on a one-minute timer inside a singleton that
+    /// lives for the process, so no test waits for it and the whole body was unexecuted. It is the only thing
+    /// standing between a server that refuses a misconfigured issuer on every request and a dictionary that
+    /// grows for as long as the process runs.
+    ///
+    /// Driven with a dictionary of the test's own rather than the singleton's, because the callback takes the
+    /// dictionary as its state parameter: the product method runs on real input, and no shared state moves.
+    /// The windows are stated as fixed instants rather than read from a clock - the callback reads the clock
+    /// itself and cannot be driven from here, so one instant is placed far behind any run and one far ahead.
+    /// </remarks>
+    [Fact]
+    public void CleanupExpiredEntries_RemovesOnlyEntriesWhosePeriodHasClosed()
+    {
+        var entries = new ConcurrentDictionary<object, DateTimeOffset>();
+        entries["closed"] = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        entries["still-open"] = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var cleanup = typeof(LicenseLogger).GetMethod(
+            "CleanupExpiredEntries", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(cleanup);
+
+        cleanup.Invoke(null, [entries]);
+
+        Assert.Equal(["still-open"], entries.Keys.Cast<string>());
+    }
 }
