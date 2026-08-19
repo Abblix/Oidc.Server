@@ -121,6 +121,22 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     [Fact]
+    public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
+    {
+        // The terms meter company size and production issuers, never client applications, so the fallback an
+        // installation runs on before any licence is supplied must not count clients either. Written against
+        // the fallback itself - no licence is added after the clear - because that is the only state in which
+        // it is ever consulted, and a licence carrying no client limit would pass whatever the fallback said.
+        TestLicense.ClearChecker();
+
+        for (var index = 0; index < 20; index++)
+        {
+            var client = new ClientInfo($"unlicensed-client-{index}");
+            Assert.Same(client, client.CheckClientLicense());
+        }
+    }
+
+    [Fact]
     public void A_client_far_beyond_the_licensed_count_is_turned_away()
     {
         // The client limit is not refused at the limit but at a margin above it, so an operator who has grown

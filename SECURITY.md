@@ -12,7 +12,7 @@ Full platform and end-of-support dates are on the
 [version support lifecycle](https://docs.abblix.com/docs/version-support-lifecycle) page.
 
 A fix is made in the latest release and reaches you by upgrading the package. The fixed package is published
-on NuGet and available to everyone, including users of the free non-commercial licence: a security fix is
+on NuGet and available to everyone, including those using the library free of charge: a security fix is
 never gated behind a purchase.
 
 Know what upgrading can cost, though. Minor releases in this library do carry breaking changes. In 2.4, for

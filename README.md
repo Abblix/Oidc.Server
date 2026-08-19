@@ -225,7 +225,10 @@ We appreciate your support and look forward to making our product even better wi
 
 This product is distributed under a source-available proprietary license. See 📋[License Agreement](LICENSE.md) for details.
 
-For non-commercial use, this product is available for free.
+It is free of charge for companies under $1M in annual revenue and under $1M raised in outside funding, for
+non-profits, educational institutions, personal projects and non-commercial open source, and for development,
+test and staging environments at any size. Every protocol is included at every tier, with no limit on client
+applications or users. See the [pricing page](https://www.abblix.com/en/oidc-server/pricing).
 
 ## 🗨️ Contacts
 
