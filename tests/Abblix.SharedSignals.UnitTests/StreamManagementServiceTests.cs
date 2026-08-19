@@ -55,6 +55,36 @@ public class StreamManagementServiceTests
         }
     }
 
+    /// <summary>
+    /// A store that takes every call except the conditional write, so an update reaches the end of
+    /// the retry loop with nothing written.
+    /// </summary>
+    private sealed class RefusingUpdates(IStreamStore inner) : IStreamStore
+    {
+        public bool Refuse { get; set; }
+
+        public Task<bool> TryCreateAsync(StreamState stream, CancellationToken cancellationToken = default)
+            => inner.TryCreateAsync(stream, cancellationToken);
+
+        public Task<StreamState?> FindAsync(
+            string receiverId, string streamId, CancellationToken cancellationToken = default)
+            => inner.FindAsync(receiverId, streamId, cancellationToken);
+
+        public Task<IReadOnlyList<StreamState>> ListAsync(
+            string receiverId, CancellationToken cancellationToken = default)
+            => inner.ListAsync(receiverId, cancellationToken);
+
+        public Task<IReadOnlyList<StreamState>> ListAllAsync(CancellationToken cancellationToken = default)
+            => inner.ListAllAsync(cancellationToken);
+
+        public Task<bool> UpdateAsync(StreamState stream, CancellationToken cancellationToken = default)
+            => Refuse ? Task.FromResult(false) : inner.UpdateAsync(stream, cancellationToken);
+
+        public Task<bool> DeleteAsync(
+            string receiverId, string streamId, CancellationToken cancellationToken = default)
+            => inner.DeleteAsync(receiverId, streamId, cancellationToken);
+    }
+
     private sealed record Harness(
         StreamManagementService Service,
         InMemoryStreamStore Store,
@@ -62,13 +92,15 @@ public class StreamManagementServiceTests
         StubSigner Signer,
         FakeTimeProvider Clock);
 
-    private static Harness CreateHarness() => CreateHarness(new SharedSignalsTransmitterOptions
+    private static SharedSignalsTransmitterOptions DefaultOptions() => new()
     {
         Issuer = "https://tr.example.com",
         EventsSupported = [TypeA, TypeB],
         PollEndpointFactory = streamId => new Uri($"https://tr.example.com/ssf/poll/{streamId}"),
         MinVerificationInterval = TimeSpan.FromMinutes(5),
-    });
+    };
+
+    private static Harness CreateHarness() => CreateHarness(DefaultOptions());
 
     private static Harness CreateHarness(SharedSignalsTransmitterOptions options)
     {
@@ -148,6 +180,99 @@ public class StreamManagementServiceTests
             Receiver, new CreateStreamRequest(), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    /// <summary>
+    /// An update the store would not take answers "202 Accepted", and never "409 Conflict".
+    /// </summary>
+    /// <remarks>
+    /// SSF 1.0 lists 202 in both update tables - Sections 8.1.1.3 and 8.1.2.2 - for a request
+    /// accepted and not processed, and 8.1.2.2 makes it a MUST for a transmitter that cannot decide
+    /// whether to complete one. 409 belongs to the create endpoint of Section 8.1.1.1 and means "you
+    /// already have a stream", which is what a receiver branching on the code would be told here:
+    /// that everything is in order, while its change is gone. A discriminator in the body does not
+    /// repair that, because the code is what gets branched on.
+    /// </remarks>
+    [Fact]
+    public async Task AnUpdateTheStoreRefuses_Answers202_NeverConflict()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var options = DefaultOptions();
+        var store = new RefusingUpdates(new InMemoryStreamStore());
+        var outbox = new InMemoryEventOutbox();
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+        var service = new StreamManagementService(store, outbox, dispatcher, options, clock);
+
+        var created = await service.CreateStreamAsync(
+            Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        store.Refuse = true;
+
+        var updated = await service.UpdateStreamAsync(
+            Receiver,
+            new UpdateStreamRequest { StreamId = created.Body!.StreamId, EventsRequested = [TypeB] },
+            ct);
+
+        // The create endpoint's "you already have a stream" is what this used to say, and it is the
+        // whole reason the code changed.
+        Assert.Equal(HttpStatusCode.Accepted, updated.StatusCode);
+
+        // And nothing was written, whatever the code says: 202 promises the receiver that repeating
+        // the call is the way forward, which is only true while the change really is absent.
+        store.Refuse = false;
+        var read = await service.GetStreamAsync(Receiver, created.Body.StreamId, ct);
+        Assert.Equal([TypeA], read.Body!.EventsDelivered);
+    }
+
+    /// <summary>
+    /// A contended subject or verification request must NOT answer any 2xx, 202 included.
+    /// </summary>
+    /// <remarks>
+    /// The error tables for these endpoints - Sections 8.1.3.2, 8.1.3.3 and 8.1.4.2 - list no 202,
+    /// and the reason to care is one layer further on: <c>StreamManagementClient</c> answers all
+    /// three of these calls with a bool, false only on 429, so every other 2xx becomes "done". A
+    /// contended add-subject reported as done leaves the receiver believing it is subscribed to a
+    /// subject nothing was ever written for, and no event about that subject will ever arrive -
+    /// a security signal announced as delivered and silently dropped.
+    /// </remarks>
+    [Fact]
+    public async Task AContendedSubjectOrVerificationRequest_IsNeverAnswered2xx()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var options = DefaultOptions();
+        var store = new RefusingUpdates(new InMemoryStreamStore());
+        var outbox = new InMemoryEventOutbox();
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+        var service = new StreamManagementService(store, outbox, dispatcher, options, clock);
+
+        var created = await service.CreateStreamAsync(
+            Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
+        var streamId = created.Body!.StreamId;
+
+        store.Refuse = true;
+
+        var added = await service.AddSubjectAsync(
+            Receiver,
+            new AddSubjectRequest { StreamId = streamId, Subject = new OpaqueSubject("subject-1") },
+            ct);
+        var removed = await service.RemoveSubjectAsync(
+            Receiver,
+            new RemoveSubjectRequest { StreamId = streamId, Subject = new OpaqueSubject("subject-1") },
+            ct);
+        var verified = await service.RequestVerificationAsync(
+            Receiver, new VerificationRequest { StreamId = streamId }, ct);
+
+        foreach (var refused in new[] { added.StatusCode, removed.StatusCode, verified.StatusCode })
+        {
+            Assert.False(
+                (int)refused is >= 200 and <= 299,
+                $"A discarded write answered {(int)refused}, which the receiver reads as success.");
+        }
     }
 
     [Fact]

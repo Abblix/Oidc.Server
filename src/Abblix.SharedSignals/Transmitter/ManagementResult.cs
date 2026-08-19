@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 //
 // DISCLAIMER: This software is provided 'as-is', without any express or implied
@@ -56,10 +56,30 @@ public sealed record ManagementResult<TBody>(
     public static ManagementResult<TBody> NotFound(string description)
         => new(HttpStatusCode.NotFound, default, description);
 
-    /// <summary>The stream already exists and the transmitter allows one per receiver:
-    /// "409 Conflict" (SSF 1.0 Section 8.1.1.1).</summary>
+    /// <summary>
+    /// The stream already exists and the transmitter allows one per receiver: "409 Conflict".
+    /// </summary>
+    /// <remarks>
+    /// Creation only. SSF 1.0 gives this code exactly one meaning, in the Create Stream error table
+    /// of Section 8.1.1.1, and the update tables of Sections 8.1.1.3 and 8.1.2.2 do not list it at
+    /// all - so answering an update with it says "you already have a stream" to a receiver reading
+    /// the specification, which is the opposite of what a failed update means.
+    /// </remarks>
     public static ManagementResult<TBody> Conflict(string description)
         => new(HttpStatusCode.Conflict, default, description);
+
+    /// <summary>
+    /// The update was taken and not carried out: "202 Accepted".
+    /// </summary>
+    /// <remarks>
+    /// The code SSF 1.0 assigns to exactly this outcome in both update tables - "accepted, but not
+    /// processed. Receiver MAY try the same request later to get processing result" - and Section
+    /// 8.1.2.2 states it as a MUST for a transmitter that cannot decide whether to complete the
+    /// request. It tells the receiver the one thing that matters here and that no other code does:
+    /// nothing changed, and repeating the call is the way forward rather than a mistake.
+    /// </remarks>
+    public static ManagementResult<TBody> Accepted(string description)
+        => new(HttpStatusCode.Accepted, default, description);
 
     /// <summary>The request is invalid: "400 Bad Request".</summary>
     public static ManagementResult<TBody> BadRequest(string description)
