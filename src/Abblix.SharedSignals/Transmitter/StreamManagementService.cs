@@ -325,7 +325,7 @@ public sealed class StreamManagementService(
             return NoSuchStream<StreamStatus>(request.StreamId);
 
         if (updated is null)
-            return Contended<StreamStatus>(request.StreamId);
+            return AcceptedNotProcessed<StreamStatus>(request.StreamId);
 
         if (request.Status == StreamStatuses.Disabled)
         {
@@ -612,7 +612,7 @@ public sealed class StreamManagementService(
             return NoSuchStream<StreamConfiguration>(stream.StreamId);
 
         return written is null
-            ? Contended<StreamConfiguration>(stream.StreamId)
+            ? AcceptedNotProcessed<StreamConfiguration>(stream.StreamId)
             : ManagementResult<StreamConfiguration>.Ok(configuration);
     }
 
@@ -629,7 +629,7 @@ public sealed class StreamManagementService(
     /// <remarks>
     /// Small on purpose. Each attempt is a fresh read, so the loop converges as soon as writers
     /// stop arriving; a stream contended past this is not slow, it is being written by something
-    /// that will not stop, and answering 409 tells the receiver that rather than blocking on it.
+    /// that will not stop, and answering at all tells the receiver that rather than blocking on it.
     /// </remarks>
     private const int MutationAttempts = 4;
 
@@ -666,12 +666,37 @@ public sealed class StreamManagementService(
     }
 
     /// <summary>
-    /// The answer to a stream that stayed contended: the receiver may repeat the call.
+    /// The answer to a contended CONFIGURATION or STATUS update: the receiver may repeat the call.
     /// </summary>
+    /// <remarks>
+    /// "202 Accepted", the code SSF 1.0 lists for exactly this outcome in the update tables of
+    /// Sections 8.1.1.3, 8.1.1.4 and 8.1.2.2. Not "409 Conflict", however much a lost race sounds
+    /// like one: the specification spends that code on the neighbouring create endpoint for "you
+    /// already have a stream", so a receiver reading it here is told the opposite of what happened -
+    /// its change did not land, and it hears that everything is in order. That is not an ambiguity a
+    /// discriminator in the body would fix, because the code is what a receiver branches on.
+    /// </remarks>
+    private static ManagementResult<TBody> AcceptedNotProcessed<TBody>(string streamId)
+        => ManagementResult<TBody>.Accepted(
+            $"The stream '{streamId}' is being changed by someone else; nothing was written. Read "
+            + "it again and repeat the call.");
+
+    /// <summary>
+    /// The answer to a contended SUBJECT or VERIFICATION request, where 202 is not available.
+    /// </summary>
+    /// <remarks>
+    /// The error tables for these endpoints - Sections 8.1.3.2, 8.1.3.3 and 8.1.4.2 - list no 202,
+    /// and lending them one would be worse than imprecise. Every 2xx is a success to
+    /// <c>StreamManagementClient</c>, which answers these three calls with a plain bool: a 202 there
+    /// is reported to the receiver as a subject it is now subscribed to, or a verification event on
+    /// its way, when the write was in fact discarded. A signal nobody will ever deliver, announced
+    /// as delivered, is a worse failure than a refusal in a code the table does not name - so these
+    /// keep answering loudly, and the receiver keeps finding out.
+    /// </remarks>
     private static ManagementResult<TBody> Contended<TBody>(string streamId)
         => ManagementResult<TBody>.Conflict(
-            $"The stream '{streamId}' is being changed by someone else; read it again and repeat "
-            + "the call.");
+            $"The stream '{streamId}' is being changed by someone else; nothing was written. Read "
+            + "it again and repeat the call.");
 
     private static ManagementResult<TBody> NoSuchStream<TBody>(string streamId)
         => ManagementResult<TBody>.NotFound(
