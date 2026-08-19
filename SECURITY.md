@@ -82,7 +82,7 @@ Whichever route you take, tell us:
 These timings cover the handling of vulnerability reports, from anyone, licence or no licence: a defect in
 this library is our problem before it is yours. They are not technical support. Support and maintenance are
 governed by your licence and purchase agreement, and Section 3.7 of the [licence](LICENSE.md) is explicit that
-free non-commercial use carries no commitment to either.
+use free of charge under Section 2.3, commercial or not, carries no commitment to either.
 
 We do not run a paid bug bounty.
 
@@ -93,8 +93,8 @@ binds Abblix LLP. Within its scope we will not bring or support legal action aga
 treat your research as a breach of the licence.
 
 For good-faith security research under this policy, and notwithstanding Sections 2.2(a) and 2.2(b) of the
-[licence](LICENSE.md), you may modify, instrument, decompile and fuzz the Software on an installation you
-control. Nothing else in those sections is waived. What we ask in return:
+[licence](LICENSE.md), you may modify, instrument, decompile and analyse the Software, fuzzing included, on
+an installation you control. Nothing else in those sections is waived. What we ask in return:
 
 - **Test against an installation you control.** Providers built on this library are deployed and operated by
   their owners, and their end users' accounts, tokens and data are not yours to reach. Probing a live provider

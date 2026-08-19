@@ -1,4 +1,4 @@
-﻿# License Agreement
+# License Agreement
 
 **Effective Date:** November 18, 2025
 
@@ -80,7 +80,7 @@ Commercial production use is permitted free of charge under this Section: passin
    
    (c) **No limit on functionality**: every protocol, profile and feature of the Software is available, and none is withheld from use free of charge;
    
-   (d) **Enforcement**: The limit in Subsection (a) is enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either:
+   (d) **Enforcement**: The limit in Subsection (a) is enforced by technical means as described in Section 2.7. Violations must be remedied by either:
    
    (i) reducing the number of production issuers to a compliant level, or
    

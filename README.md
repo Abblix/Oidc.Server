@@ -15,7 +15,7 @@
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
-[![Free](https://img.shields.io/badge/free_for_non_commercial_use-brightgreen)](#-license)
+[![Free](https://img.shields.io/badge/free_under_%241M_revenue-brightgreen)](#-license)
 
 ⭐ Star us on GitHub: your support motivates us a lot! 🙏😊
 
@@ -46,7 +46,7 @@
 
 **Abblix OIDC Server** turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- **Certified to the letter:** every OpenID profile, 634 conformance tests passed, zero skipped and zero warnings.
+- **Certified:** all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
 - **A library you own, not a server you run:** the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
 - **Current with the modern security stack:** DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
 - **Engineering you can audit:** 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
@@ -228,7 +228,8 @@ This product is distributed under a source-available proprietary license. See �
 It is free of charge for companies under $1M in annual revenue and under $1M raised in outside funding, for
 non-profits, educational institutions, personal projects and non-commercial open source, and for development,
 test and staging environments at any size. Every protocol is included at every tier, with no limit on client
-applications or users. See the [pricing page](https://www.abblix.com/en/oidc-server/pricing).
+applications or users, and one production issuer per free deployment. See the
+[pricing page](https://www.abblix.com/en/oidc-server/pricing).
 
 ## 🗨️ Contacts
 
