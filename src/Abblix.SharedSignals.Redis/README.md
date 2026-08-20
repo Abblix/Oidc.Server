@@ -2,6 +2,8 @@
 
 The Redis-native transmitter storage for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): the event outbox and the stream registry: each stream's queue on Redis list and hash structures, every mutation a server-side transaction over keys that share one cluster hash tag. Take this package the day the transmitter scales past one replica.
 
+[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) covers what running a transmitter on more than one instance actually requires, and which of the shipped defaults are single-instance by design.
+
 ## Install
 
 ```bash

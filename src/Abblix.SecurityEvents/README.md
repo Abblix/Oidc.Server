@@ -3,6 +3,8 @@
 Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
 Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
 
+[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) is the map this package sits on: why the envelope came before the streams, and why nothing here has a stream concept even though it carries both delivery methods.
+
 ## Install
 
 ```bash
