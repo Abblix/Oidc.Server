@@ -39,7 +39,16 @@ public static partial class LicenseChecker
 {
     private const double ClientLimitOverExceedingFactor = 1.3;
 
-    private static readonly License FreeLicense = new() { ClientLimit = 2, IssuerLimit = 1 };
+    /// <summary>
+    /// What an installation gets with no license supplied: one issuer, and no ceiling on client applications.
+    /// </summary>
+    /// <remarks>
+    /// The published terms meter the size of the company and the number of production issuers, never the number
+    /// of client applications or users, so a client count here would refuse registrations the terms allow. The
+    /// issuer limit stays because a second independent issuer is exactly what the terms do meter.
+    /// The client-limit machinery below is kept for a license that carries the claim: absent it, nothing counts.
+    /// </remarks>
+    private static readonly License FreeLicense = new() { IssuerLimit = 1 };
     private static readonly LicenseManager LicenseManager = new();
 
     private static ConcurrentDictionary<string, object>? _knownClientIds;

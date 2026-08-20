@@ -21,6 +21,7 @@
 // info@abblix.com
 
 using System;
+using System.Collections.Generic;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -88,16 +89,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // which the count is ever consulted: a licence that names its issuers refuses an unknown one on the
         // name, before anything is counted. Written this way after the first attempt, which reused the
         // assembly's licence, turned out to exercise the whitelist while claiming to test the count.
-        //
-        // The period is stated as fixed instants rather than read from the clock. The checker reads the clock
-        // itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
-        TestLicense.ClearChecker();
-        LicenseChecker.AddLicense(new License
-        {
-            IssuerLimit = 1,
-            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
-        });
+        ArrangeLicenceThatCountsIssuers();
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
 
@@ -118,6 +110,111 @@ public sealed class LicenseEnforcementTests : IDisposable
         var client = new ClientInfo("some-client");
 
         Assert.Same(client, client.CheckClientLicense());
+    }
+
+    [Fact]
+    public void An_installation_running_before_a_licence_is_supplied_serves_one_issuer_and_refuses_the_second()
+    {
+        // The one limit the free tier has. Its sibling below pins the client half of the same fallback, and
+        // that asymmetry is how this went missing: every other test reaching CheckIssuer either runs under the
+        // assembly licence, and so is refused on the whitelist before anything is counted, or supplies a
+        // licence of its own carrying the limit. None of them asks the fallback what it allows, so the
+        // constant could be deleted outright with the whole suite still green - measured, not assumed.
+        ArrangeInstallationWithNoLicence();
+
+        Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+
+        // Every time, not only the first: a limit that stops applying once reported is not a limit.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+    }
+
+    [Fact]
+    public void The_refusal_past_the_issuer_limit_is_recorded()
+    {
+        // The refusal is covered by the test above; this covers the record of it, which an operator's
+        // alerting is built on. It went untested for a mechanical reason worth stating: the throttle window
+        // is process-wide and fifteen minutes long, so whichever test reached the limit first consumed the
+        // only record any test could observe, and every later one found the decision taken in silence.
+        //
+        // On a licence of its own rather than on the unlicensed fallback, so that this test and the fallback
+        // test fail for different reasons: removing the fallback's limit must not be able to take this one
+        // down with it, or the two stop measuring two things.
+        ArrangeLicenceThatCountsIssuers();
+        TestLicense.ClearLogThrottle();
+
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
+            Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseChecker.IssuerLimitExceeded, record.EventId.Id);
+        Assert.Equal(LogLevel.Error, record.Level);
+
+        // The message carries what an operator needs to act: which issuers were counted against the limit.
+        Assert.Contains(UnlicensedIssuer, record.Message, StringComparison.Ordinal);
+        Assert.Contains(TestLicense.Issuer, record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Puts the checker where an installation is before any licence has been supplied.
+    /// </summary>
+    /// <remarks>
+    /// The assembly installs its licence before the first test runs, so reaching the state a deployment
+    /// starts in means removing it. That state is the subject of the two tests below rather than a
+    /// convenience for them: it is the only state in which the fallback is ever consulted.
+    /// </remarks>
+    private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
+
+    /// <summary>
+    /// Puts the checker on a licence that caps the number of issuers and names none of them, which is the
+    /// only arrangement under which that count is ever consulted.
+    /// </summary>
+    /// <remarks>
+    /// A licence that names its issuers refuses an unknown one on the name, before anything is counted, and
+    /// licences accumulate rather than replace one another - so the assembly's licence and its whitelist have
+    /// to go before this one is added. That is the whole reason a test of the count reaches into the
+    /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
+    /// what they need rather than as how the statics are arranged.
+    ///
+    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
+    /// itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
+    /// </remarks>
+    private static void ArrangeLicenceThatCountsIssuers()
+    {
+        TestLicense.ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = 1,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
+    [Fact]
+    public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
+    {
+        // The terms meter company size and production issuers, never client applications, so the fallback an
+        // installation runs on before any licence is supplied must not count clients either. Written against
+        // the fallback itself - no licence is added after the clear - because that is the only state in which
+        // it is ever consulted, and a licence carrying no client limit would pass whatever the fallback said.
+        ArrangeInstallationWithNoLicence();
+
+        for (var index = 0; index < 20; index++)
+        {
+            var client = new ClientInfo($"unlicensed-client-{index}");
+            Assert.Same(client, client.CheckClientLicense());
+        }
     }
 
     [Fact]
@@ -189,6 +286,40 @@ public sealed class LicenseEnforcementTests : IDisposable
         finally
         {
             LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+    }
+
+    /// <summary>What a single log write carried.</summary>
+    private sealed record LogRecord(LogLevel Level, EventId EventId, string Message);
+
+    /// <summary>A factory whose loggers keep what was written, so a test can assert on the record itself.</summary>
+    private sealed class RecordingLoggerFactory : ILoggerFactory
+    {
+        public List<LogRecord> Entries { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(Entries);
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class RecordingLogger(List<LogRecord> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception)));
         }
     }
 
