@@ -48,8 +48,7 @@ def declared_in(path):
     return None
 
 
-def main(root):
-    problems = []
+def scan(root, problems):
     checked = 0
     for current, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in ('obj', 'bin')]
@@ -68,10 +67,23 @@ def main(root):
                 problems.append((path, 'no SPDX-License-Identifier in the first 30 lines'))
             elif got != want:
                 problems.append((path, 'declares %s, package expects %s' % (got, want)))
+    return checked
 
-    print('checked %d source files under %s' % (checked, root))
+
+def main(roots):
+    problems = []
+    checked = 0
+    missing = [r for r in roots if not os.path.isdir(r)]
+    if missing:
+        # A root that does not exist would scan nothing and report a clean tree.
+        print('no such directory: %s' % ', '.join(missing))
+        return 2
+    for root in roots:
+        checked += scan(root, problems)
+
+    print('checked %d source files under %s' % (checked, ', '.join(roots)))
     for path, why in problems:
-        print('  %s: %s' % (os.path.relpath(path, root).replace(os.sep, '/'), why))
+        print('  %s: %s' % (path.replace(os.sep, '/'), why))
     if problems:
         print('FAILED: %d file(s)' % len(problems))
         return 1
@@ -80,4 +92,6 @@ def main(root):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else 'src'))
+    # Tests carry the same header as the code they exercise, so a src-only scan
+    # reports a clean tree while several hundred files still hold the old notice.
+    sys.exit(main(sys.argv[1:] or ['src', 'tests']))
