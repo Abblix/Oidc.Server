@@ -16,10 +16,10 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix Security-Event-Token SET Back-Channel-Logout OpenID OIDC Logout Session Security Identity AspNetCore Minimal-API dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
     <PackageIcon>Abblix.png</PackageIcon>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
@@ -50,7 +50,7 @@
 
   <ItemGroup>
     <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
-    <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 

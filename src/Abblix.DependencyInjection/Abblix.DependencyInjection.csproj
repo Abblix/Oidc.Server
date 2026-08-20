@@ -16,11 +16,11 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix Dependency-Injection DI IoC Inversion-of-Control Service-Lifetime Scoped Singleton Transient Composite Decorator Keyed-Services Service-Alias Microsoft-Extensions-DependencyInjection dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
     <PackageReleaseNotes>Code quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.3</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
@@ -44,7 +44,7 @@
 
   <ItemGroup>
     <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
-    <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
