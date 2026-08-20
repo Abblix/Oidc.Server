@@ -64,13 +64,13 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter and receiver; the sibling dictionary for session and access lifecycle is [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP), and both compose on one registry.
 
 ## License
 
-Abblix.SecurityEvents.RISC is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
+Abblix.SecurityEvents.RISC is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

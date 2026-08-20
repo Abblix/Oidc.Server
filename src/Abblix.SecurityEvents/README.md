@@ -207,13 +207,13 @@ var options = new JsonSerializerOptions
 A name from the built-in vocabulary - RFC 9493 or Shared Signals - cannot be rebound, so a custom
 format can never change how a standard document is read.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 The event dictionaries [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) and [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) register their typed payloads over this package's event registry, and [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) carries the tokens built here over managed event streams; the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 
-Abblix.SecurityEvents is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
+Abblix.SecurityEvents is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

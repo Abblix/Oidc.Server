@@ -62,13 +62,13 @@ The route is whatever the client registered with its provider as `backchannel_lo
   than guessing.
 - **Resilience and timeouts** of anything fetched outward, through `IHttpClientFactory` as usual.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 Abblix.SecurityEvents.MinimalAPI is the ASP.NET Core adapter of [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Event streams and their management layer live in [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals), and the identity provider that emits these events is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 ## License
 
-Abblix.SecurityEvents.MinimalAPI is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
+Abblix.SecurityEvents.MinimalAPI is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

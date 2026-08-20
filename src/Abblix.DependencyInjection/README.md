@@ -66,13 +66,13 @@ Overloads accept a type mapping, an instance, or a factory, and the same overrid
 
 `Find`, `FindRequired`, `FindAll`, `RemoveAll` and `ChangeLifetime` operate on the registration list itself - the tools for the rare but real cases where a host must inspect or reshape what a library registered.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 The composition and decoration machinery here is what lets [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) ship assembled pipelines a host can still edit; the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 
-Abblix.DependencyInjection is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
+Abblix.DependencyInjection is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

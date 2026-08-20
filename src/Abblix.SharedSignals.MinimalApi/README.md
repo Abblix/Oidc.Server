@@ -83,13 +83,13 @@ The intake endpoint itself comes from `Abblix.SecurityEvents.MinimalApi`, which 
 
 Signature validation decides whether an event is genuine, but it is not what keeps the endpoint standing: an unauthenticated route spends a cryptographic verification on every body posted to it, which RFC 8935 Section 5.4 names as the recipient's denial-of-service exposure and answers with transmitter authentication and rate limiting. Attach both - the returned builder takes the host's conventions like any other route.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 Abblix.SharedSignals.MinimalApi maps the routes of [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals), which in turn sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 ## License
 
-Abblix.SharedSignals.MinimalApi is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
+Abblix.SharedSignals.MinimalApi is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

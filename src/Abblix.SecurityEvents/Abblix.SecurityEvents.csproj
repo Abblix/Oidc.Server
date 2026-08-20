@@ -11,7 +11,7 @@
     <Title>Abblix Security Events</Title>
     <Description>Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493) for .NET: a typed model of every registered identifier format with polymorphic JSON handling, plus a typed token model, builder and composable validation profile over the Abblix JWT core, delivery models for push (RFC 8935) and poll (RFC 8936), JWKS-based key resolution and replay protection. The event layer of the Shared Signals stack, usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix Security-Event-Token SET SecEvent RFC8417 RFC9493 Subject-Identifier Shared-Signals SSF CAEP RISC JWT Security Identity dotnet RFC8935 RFC8936 Back-Channel-Logout Replay-Protection Webhook OAuth2 OIDC</PackageTags>
