@@ -1,4 +1,4 @@
-# Abblix.SecurityEvents.MinimalApi
+# Abblix.SecurityEvents.MinimalAPI
 
 ASP.NET Core Minimal API integration for `Abblix.SecurityEvents`. It maps the two endpoints that
 receive a token and nothing more: `MapBackChannelLogoutEndpoint` for OpenID Connect Back-Channel
@@ -23,7 +23,7 @@ stream**:
 - **Stream management, status, subjects, verification, the `ssf-configuration` document and the
   transmitter's poll endpoint** - each is meaningless without a stream, and the poll address is
   addressed *by stream identifier*. Those live in
-  [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi).
+  [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI).
 
 Push and poll are the pair worth understanding, because both are core delivery specifications
 (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which

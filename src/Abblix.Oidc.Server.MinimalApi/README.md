@@ -1,6 +1,6 @@
 # Abblix OIDC Server Minimal API
 
-**Abblix.OIDC.Server.MinimalApi** integrates the Abblix OIDC Server with ASP.NET Core **Minimal APIs**, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
+**Abblix.OIDC.Server.MinimalAPI** integrates the Abblix OIDC Server with ASP.NET Core **Minimal APIs**, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
 
 ## What's New in Version 2.4
 
@@ -21,7 +21,7 @@
 ## Install
 
 ```bash
-dotnet add package Abblix.OIDC.Server.MinimalApi
+dotnet add package Abblix.OIDC.Server.MinimalAPI
 ```
 
 This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
@@ -96,7 +96,7 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 | **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
 | **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
 | **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
-| **Abblix.OIDC.Server.MinimalApi** | ASP.NET Core Minimal API integration *(this package)* |
+| **Abblix.OIDC.Server.MinimalAPI** | ASP.NET Core Minimal API integration *(this package)* |
 | **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
 | **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
@@ -106,7 +106,7 @@ To learn more about the Abblix OIDC Server product, visit our [Documentation](ht
 
 ## License
 
-Abblix.OIDC.Server.MinimalApi is licensed under the Abblix license agreement. See
+Abblix.OIDC.Server.MinimalAPI is licensed under the Abblix license agreement. See
 [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts

@@ -19,7 +19,7 @@ The receiver side:
 - `TransmitterConfigurationClient` discovers a transmitter at the address its issuer resolves to, with an explicit-address overload for transmitters that publish the document elsewhere - the issuer identity check binds either way. `StreamManagementClient` drives the management API, `PollClient` fetches and acknowledges events - transport only, so a poll-based receiver runs the validation profile and the sink itself.
 - A push intake that runs the full validation profile of Abblix.SecurityEvents - typ, `exp` absence, events, the REQUIRED `jti`, issuer, signature, audience, `iat` freshness - and hands each accepted event to the host's `ISecurityEventSink`. Duplicate suppression rides alongside the profile: the opt-in replay cache is consulted after the verdict, so a rejected token can never burn an identifier.
 
-The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi); this package is host-framework-neutral.
+The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI); this package is host-framework-neutral.
 
 ## Install
 
@@ -95,7 +95,7 @@ The framework carries events; their vocabularies ship as separate dictionary pac
 
 ## Part of the Abblix product family
 
-Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 ## License
 

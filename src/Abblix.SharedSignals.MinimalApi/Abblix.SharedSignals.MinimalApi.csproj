@@ -7,7 +7,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Abblix.SharedSignals.MinimalApi</PackageId>
+    <PackageId>Abblix.SharedSignals.MinimalAPI</PackageId>
     <Title>Abblix Shared Signals Minimal API</Title>
     <Description>ASP.NET Core Minimal API integration for Abblix Shared Signals: maps the SSF 1.0 transmitter endpoints - configuration discovery, stream management, subjects, verification and poll delivery - and the receiver's push intake as route handlers, with no MVC dependency.</Description>
     <Authors>Abblix LLP</Authors>
