@@ -2,6 +2,8 @@
 
 Extensions over `Microsoft.Extensions.DependencyInjection` for the patterns a modular library actually needs: aliasing one registration under several contracts, composing many implementations into one pipeline and editing that pipeline afterwards, decorating registered services, and constructing services with per-call overrides. This is the DI layer behind Abblix OIDC Server, usable on its own in any .NET application.
 
+[Advanced DI in .NET](https://www.abblix.com/en/docs/advanced-dependency-injection) is the long form: the same ladder from aliases to an editable pipeline, with the reasoning behind each rung and what it costs.
+
 ## Install
 
 ```bash
