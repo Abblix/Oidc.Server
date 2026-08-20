@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.CAEP</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix CAEP Continuous-Access-Evaluation OpenID Security-Event-Token SET Shared-Signals SSF Session-Revocation Credential-Change Risk-Level Zero-Trust Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix CAEP Continuous-Access-Evaluation OpenID Security-Event-Token SET Shared-Signals SSF Session-Revocation Credential-Change Risk-Level Zero-Trust Security Identity dotnet CAEP-1.0 Session-Revoked Token-Claims-Change Assurance-Level Device-Compliance OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

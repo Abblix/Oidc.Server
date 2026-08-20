@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SharedSignals.Redis</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET Redis Outbox Event-Stream Transmitter Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET Redis Outbox Event-Stream Transmitter Security Identity dotnet Continuous-Access-Evaluation Zero-Trust Scale-Out Distributed Replica-Safe RFC8935 RFC8936 OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

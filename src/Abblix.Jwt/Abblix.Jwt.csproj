@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet</PackageTags>
+    <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet RFC7515 RFC7516 RFC7517 RFC7518 RFC7519</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

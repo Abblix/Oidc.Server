@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SharedSignals</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Push Poll Webhook Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Push Poll Webhook Security Identity dotnet Continuous-Access-Evaluation Zero-Trust Session-Revocation Stream-Management OIDC OAuth2</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

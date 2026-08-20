@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Utils</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions Secure-Random Custom-JSON-Converters Base32-Encoding dotnet</PackageTags>
+    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions Secure-Random Custom-JSON-Converters Base32-Encoding dotnet OpenID OAuth2 Identity Helpers</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

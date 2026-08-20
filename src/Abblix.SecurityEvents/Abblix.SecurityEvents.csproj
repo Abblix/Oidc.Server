@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Security-Event-Token SET SecEvent RFC8417 RFC9493 Subject-Identifier Shared-Signals SSF CAEP RISC JWT Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix Security-Event-Token SET SecEvent RFC8417 RFC9493 Subject-Identifier Shared-Signals SSF CAEP RISC JWT Security Identity dotnet RFC8935 RFC8936 Back-Channel-Logout Replay-Protection Webhook OAuth2 OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

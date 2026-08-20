@@ -3,6 +3,8 @@
 Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
 Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
 
+[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) is the map this package sits on: why the envelope came before the streams, and why nothing here has a stream concept even though it carries both delivery methods.
+
 ## Install
 
 ```bash
@@ -207,14 +209,13 @@ var options = new JsonSerializerOptions
 A name from the built-in vocabulary - RFC 9493 or Shared Signals - cannot be rebound, so a custom
 format can never change how a standard document is read.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 The event dictionaries [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) and [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) register their typed payloads over this package's event registry, and [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) carries the tokens built here over managed event streams; the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 
-Abblix.SecurityEvents is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SecurityEvents is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

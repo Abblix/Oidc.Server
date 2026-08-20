@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.DependencyInjection</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Dependency-Injection DI IoC Inversion-of-Control Service-Lifetime Scoped Singleton Transient Composite Decorator Keyed-Services Service-Alias Microsoft-Extensions-DependencyInjection dotnet</PackageTags>
+    <PackageTags>Abblix Dependency-Injection DI IoC Inversion-of-Control Service-Lifetime Scoped Singleton Transient Composite Decorator Keyed-Services Service-Alias Microsoft-Extensions-DependencyInjection dotnet OpenID Identity TryAddEnumerable Composition-Root</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

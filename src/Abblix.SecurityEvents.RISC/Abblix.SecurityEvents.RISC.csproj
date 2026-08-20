@@ -14,7 +14,7 @@
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.RISC</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix RISC Risk-Incident-Sharing OpenID Security-Event-Token SET Shared-Signals SSF Credential-Compromise Account-Takeover Account-Disabled Identifier-Changed Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix RISC Risk-Incident-Sharing OpenID Security-Event-Token SET Shared-Signals SSF Credential-Compromise Account-Takeover Account-Disabled Identifier-Changed Security Identity dotnet RISC-1.0 Account-Recovery Opt-Out RFC8417 OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

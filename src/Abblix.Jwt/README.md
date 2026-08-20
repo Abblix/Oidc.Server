@@ -96,14 +96,13 @@ services
 - JSON Web Token (JWT): [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)
 - AES Key Wrap: [RFC 3394](https://datatracker.ietf.org/doc/html/rfc3394)
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 Abblix.JWT is the token layer under [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) and [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents); the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 
-Abblix.JWT is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.JWT is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

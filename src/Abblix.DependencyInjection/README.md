@@ -2,6 +2,8 @@
 
 Extensions over `Microsoft.Extensions.DependencyInjection` for the patterns a modular library actually needs: aliasing one registration under several contracts, composing many implementations into one pipeline and editing that pipeline afterwards, decorating registered services, and constructing services with per-call overrides. This is the DI layer behind Abblix OIDC Server, usable on its own in any .NET application.
 
+[Advanced DI in .NET](https://www.abblix.com/en/docs/advanced-dependency-injection) is the long form: the same ladder from aliases to an editable pipeline, with the reasoning behind each rung and what it costs.
+
 ## Install
 
 ```bash
@@ -66,14 +68,13 @@ Overloads accept a type mapping, an instance, or a factory, and the same overrid
 
 `Find`, `FindRequired`, `FindAll`, `RemoveAll` and `ChangeLifetime` operate on the registration list itself - the tools for the rare but real cases where a host must inspect or reshape what a library registered.
 
-## Part of the Abblix family
+## Part of the Abblix product family
 
 The composition and decoration machinery here is what lets [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) ship assembled pipelines a host can still edit; the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 
-Abblix.DependencyInjection is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.DependencyInjection is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

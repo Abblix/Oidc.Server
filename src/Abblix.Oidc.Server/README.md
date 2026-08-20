@@ -5,7 +5,7 @@
 ## What's New in Version 2.4
 
 🚀 **Features**
-- **Minimal API integration**: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi) package, with full protocol parity with the MVC integration
+- **Minimal API integration**: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
 - **External signing keys**: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
 - **Security events and Shared Signals**: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
 
@@ -70,7 +70,7 @@ Abblix OIDC Server implements the following standards for authorization and secu
 dotnet add package Abblix.OIDC.Server
 ```
 
-> **Note**: Most applications should use [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) or [Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi), which include this package plus the ASP.NET Core endpoint wiring.
+> **Note**: Most applications should use [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) or [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI), which include this package plus the ASP.NET Core endpoint wiring.
 
 ## Related Packages
 
@@ -83,12 +83,12 @@ dotnet add package Abblix.OIDC.Server
 | **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Signing and decryption keys held in Azure Key Vault |
 | **Abblix.OIDC.Server** | Core OpenID Connect server implementation *(this package)* |
 | **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
-| **[Abblix.OIDC.Server.MinimalApi](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalApi)** | ASP.NET Core Minimal API integration |
+| **[Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI)** | ASP.NET Core Minimal API integration |
 | **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
 | **[Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP)** | The CAEP 1.0 event dictionary: session and access lifecycle |
 | **[Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC)** | The RISC 1.0 event dictionary: account risk incidents |
 | **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
-| **[Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi)** | SSF endpoints as ASP.NET Core Minimal API route handlers |
+| **[Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI)** | SSF endpoints as ASP.NET Core Minimal API route handlers |
 | **[Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis)** | Redis-native event outbox for multi-replica transmitters |
 
 ## Getting Started

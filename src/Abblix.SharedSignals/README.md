@@ -2,6 +2,8 @@
 
 The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for .NET: transmitter and receiver in one package, built on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). A transmitter tells its receivers that something security-relevant happened to a shared subject - a session revoked, a credential compromised - and this package carries both ends of that conversation: the event streams, their management API, and delivery over push (RFC 8935) and poll (RFC 8936).
 
+[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
+
 ## What is inside
 
 The transmitter side:
@@ -17,7 +19,7 @@ The receiver side:
 - `TransmitterConfigurationClient` discovers a transmitter at the address its issuer resolves to, with an explicit-address overload for transmitters that publish the document elsewhere - the issuer identity check binds either way. `StreamManagementClient` drives the management API, `PollClient` fetches and acknowledges events - transport only, so a poll-based receiver runs the validation profile and the sink itself.
 - A push intake that runs the full validation profile of Abblix.SecurityEvents - typ, `exp` absence, events, the REQUIRED `jti`, issuer, signature, audience, `iat` freshness - and hands each accepted event to the host's `ISecurityEventSink`. Duplicate suppression rides alongside the profile: the opt-in replay cache is consulted after the verdict, so a rejected token can never burn an identifier.
 
-The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi); this package is host-framework-neutral.
+The endpoints themselves are mapped by the ASP.NET Core adapter package, [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI); this package is host-framework-neutral.
 
 ## Install
 
@@ -91,10 +93,13 @@ Stream state and the outbox are deliberately separate tiers, and both default to
 
 The framework carries events; their vocabularies ship as separate dictionary packages registered in the same event registry: [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) for session and access lifecycle, [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) for account risk incidents, and any host-defined events via `options.Events.Register`.
 
+## Part of the Abblix product family
+
+Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+
 ## License
 
-Abblix.SharedSignals is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SharedSignals is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
 
 ## Contacts
 

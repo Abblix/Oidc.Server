@@ -1,9 +1,11 @@
-# Abblix.SecurityEvents.MinimalApi
+# Abblix.SecurityEvents.MinimalAPI
 
 ASP.NET Core Minimal API integration for `Abblix.SecurityEvents`. It maps the two endpoints that
 receive a token and nothing more: `MapBackChannelLogoutEndpoint` for OpenID Connect Back-Channel
 Logout 1.0, and `MapPushDeliveryEndpoint` for RFC 8935 push delivery. The request and response rules
 live in the core, so this package is the transport and the route pattern.
+
+[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) walks the smallest path through the whole stack: a relying party that wants logout notifications, installs this adapter and its core, and never meets a stream.
 
 ## Which adapter maps which endpoint
 
@@ -21,7 +23,7 @@ stream**:
 - **Stream management, status, subjects, verification, the `ssf-configuration` document and the
   transmitter's poll endpoint** - each is meaningless without a stream, and the poll address is
   addressed *by stream identifier*. Those live in
-  [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi).
+  [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI).
 
 Push and poll are the pair worth understanding, because both are core delivery specifications
 (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which
@@ -62,6 +64,16 @@ The route is whatever the client registered with its provider as `backchannel_lo
   than guessing.
 - **Resilience and timeouts** of anything fetched outward, through `IHttpClientFactory` as usual.
 
-## Licence
+## Part of the Abblix product family
 
-See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SecurityEvents.MinimalAPI is the ASP.NET Core adapter of [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Event streams and their management layer live in [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals), and the identity provider that emits these events is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+
+## License
+
+Abblix.SecurityEvents.MinimalAPI is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
+
+## Contacts
+
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
