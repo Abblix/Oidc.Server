@@ -31,7 +31,7 @@ APACHE = """// Abblix OIDC Server Library
 // http://www.apache.org/licenses/LICENSE-2.0
 """
 
-SKIPPED, REWRITTEN, NO_HEADER = 'skipped', 'rewritten', 'no-header'
+SKIPPED, REWRITTEN, PREPENDED = 'skipped', 'rewritten', 'prepended'
 
 
 def header_span(lines):
@@ -57,17 +57,19 @@ def rewrite(path, new_header):
         return SKIPPED
     end = header_span(lines)
     if end is None or not any(MARKER in l for l in lines[:end]):
-        return NO_HEADER
-
-    body = lines[end:]
+        # Nothing to replace. A leading comment that is not a licence header belongs
+        # to the code, so the header goes above it with a blank line between.
+        body, outcome = [''] + lines, PREPENDED
+    else:
+        body, outcome = lines[end:], REWRITTEN
     out = eol.join(new_header.rstrip('\n').split('\n') + body)
     io.open(path, 'wb').write((b'\xef\xbb\xbf' if bom else b'') + out.encode('utf-8'))
-    return REWRITTEN
+    return outcome
 
 
 def main(list_file, flavour):
     header = APACHE if flavour == 'apache' else PROPRIETARY
-    tally = {SKIPPED: 0, REWRITTEN: 0, NO_HEADER: 0}
+    tally = {SKIPPED: 0, REWRITTEN: 0, PREPENDED: 0}
     missing = []
     for line in io.open(list_file, encoding='utf-8'):
         path = line.strip()
@@ -77,7 +79,7 @@ def main(list_file, flavour):
             missing.append(path)
             continue
         tally[rewrite(path, header)] += 1
-    for name in (REWRITTEN, SKIPPED, NO_HEADER):
+    for name in (REWRITTEN, PREPENDED, SKIPPED):
         print('  %-10s %d' % (name, tally[name]))
     if missing:
         print('  MISSING PATHS: %d' % len(missing))
