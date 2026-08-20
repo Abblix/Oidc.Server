@@ -70,8 +70,7 @@ The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.o
 
 ## License
 
-Abblix.SecurityEvents.RISC is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SecurityEvents.RISC is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
 
 ## Contacts
 

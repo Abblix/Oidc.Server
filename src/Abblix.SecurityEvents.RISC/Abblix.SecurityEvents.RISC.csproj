@@ -11,10 +11,10 @@
     <Title>Abblix Security Events RISC</Title>
     <Description>The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for Abblix Security Events: typed payload models and event type identifiers for credential compromise, account disabling and deletion, identifier change and recycling, opt-out and recovery events, registered over the Security Events core in one call.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.RISC</PackageProjectUrl>
+    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix RISC Risk-Incident-Sharing OpenID Security-Event-Token SET Shared-Signals SSF Credential-Compromise Account-Takeover Account-Disabled Identifier-Changed Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix RISC Risk-Incident-Sharing OpenID Security-Event-Token SET Shared-Signals SSF Credential-Compromise Account-Takeover Account-Disabled Identifier-Changed Security Identity dotnet RISC-1.0 Account-Recovery Opt-Out RFC8417 OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

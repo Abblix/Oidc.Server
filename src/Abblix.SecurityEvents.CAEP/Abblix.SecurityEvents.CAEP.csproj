@@ -11,10 +11,10 @@
     <Title>Abblix Security Events CAEP</Title>
     <Description>The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for Abblix Security Events: typed payload models and event type identifiers for session-revoked, token-claims-change, credential-change, assurance-level-change, device-compliance-change, session-established, session-presented and risk-level-change, registered over the Security Events core in one call.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.CAEP</PackageProjectUrl>
+    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix CAEP Continuous-Access-Evaluation OpenID Security-Event-Token SET Shared-Signals SSF Session-Revocation Credential-Change Risk-Level Zero-Trust Security Identity dotnet</PackageTags>
+    <PackageTags>Abblix CAEP Continuous-Access-Evaluation OpenID Security-Event-Token SET Shared-Signals SSF Session-Revocation Credential-Change Risk-Level Zero-Trust Security Identity dotnet CAEP-1.0 Session-Revoked Token-Claims-Change Assurance-Level Device-Compliance OIDC</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>

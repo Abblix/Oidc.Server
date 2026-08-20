@@ -91,10 +91,13 @@ Stream state and the outbox are deliberately separate tiers, and both default to
 
 The framework carries events; their vocabularies ship as separate dictionary packages registered in the same event registry: [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) for session and access lifecycle, [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) for account risk incidents, and any host-defined events via `options.Events.Register`.
 
+## Part of the Abblix family
+
+Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalApi](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalApi) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+
 ## License
 
-Abblix.SharedSignals is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SharedSignals is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
 
 ## Contacts
 

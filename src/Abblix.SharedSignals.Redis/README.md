@@ -91,10 +91,13 @@ Two properties of the shape are worth knowing before adopting it. The whole regi
 
 Losing Redis loses registrations - deliberately a tier below a database. Stated plainly: the transmitter stops delivering to everybody until each receiver creates its stream again (SSF 1.0 Section 8.1.1.1), and whether a receiver ever does is a property of that receiver rather than of the protocol. A deployment that cannot accept that keeps its registrations in its own database, which is what `IStreamStore` is for.
 
+## Part of the Abblix family
+
+Abblix.SharedSignals.Redis is the outbox implementation for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals), which in turn sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+
 ## License
 
-Abblix.SharedSignals.Redis is licensed under the Abblix license agreement. See
-[LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
+Abblix.SharedSignals.Redis is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt). [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) is a separate product under its own commercial agreement.
 
 ## Contacts
 

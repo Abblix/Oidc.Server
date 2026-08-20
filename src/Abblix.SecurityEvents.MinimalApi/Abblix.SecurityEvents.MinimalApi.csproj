@@ -11,10 +11,10 @@
     <Title>Abblix Security Events Minimal API</Title>
     <Description>ASP.NET Core Minimal API integration for Abblix Security Events: maps the OpenID Connect Back-Channel Logout intake as a route handler, with no MVC dependency.</Description>
     <Authors>Abblix LLP</Authors>
-    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.MinimalApi</PackageProjectUrl>
+    <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>Abblix Security-Event-Token SET Back-Channel-Logout OpenID OIDC Logout Session Security Identity AspNetCore Minimal-API dotnet</PackageTags>
+    <PackageTags>Abblix Security-Event-Token SET Back-Channel-Logout OpenID OIDC Logout Session Security Identity AspNetCore Minimal-API dotnet RFC8417 RFC8935 Back-Channel-Logout-Uri Relying-Party Webhook</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
