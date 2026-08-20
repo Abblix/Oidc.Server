@@ -93,6 +93,31 @@ internal static class TestLicense
         managerType.GetField("_currentLicense", Instances)!.SetValue(manager, null);
     }
 
+    /// <summary>
+    /// Empties the throttle window <see cref="LicenseLogger"/> keeps, so a test can observe a record that the
+    /// logger would otherwise suppress.
+    /// </summary>
+    /// <remarks>
+    /// The logger is a process-wide singleton and its window is fifteen minutes per key, so whichever test
+    /// reaches a limit first consumes the only record anybody can see, and every later test finds the decision
+    /// taken in silence. That silence looks exactly like a decision that was never reported at all, which is
+    /// why the record went untested while the refusal beside it did not.
+    ///
+    /// Like <see cref="ClearChecker"/> this reaches into the product rather than asking it for a reset: a
+    /// method existing only so a test can call it does not belong in a shipped assembly. It removes nothing
+    /// and relaxes nothing - the throttle behaves exactly as it does in a deployment, from an empty start.
+    /// </remarks>
+    internal static void ClearLogThrottle()
+    {
+        const BindingFlags Instances = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        var logger = LicenseLogger.Instance;
+        var times = logger.GetType().GetField("_nextAllowedTimes", Instances)!.GetValue(logger);
+
+        // A ConcurrentDictionary of an internal key type, so it is emptied through the non-generic interface.
+        ((IDictionary)times!).Clear();
+    }
+
     [ModuleInitializer]
     internal static void Install()
     {

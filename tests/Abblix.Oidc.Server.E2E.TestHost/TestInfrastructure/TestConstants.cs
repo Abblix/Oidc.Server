@@ -17,9 +17,8 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 /// Shared constants for the E2E test suite. Centralising client IDs and the issuer
 /// here keeps the static <c>LicenseChecker._knownIssuers</c> /
 /// <c>_knownClientIds</c> dictionaries small - the same ID across tests collapses
-/// to a single entry. <see cref="LicenseFixture"/> separately removes the
-/// FreeLicense numeric ceiling, but the constants reduce noise and keep tests
-/// readable when they need to refer to the same client repeatedly.
+/// to a single entry, which also keeps tests readable when they refer to the
+/// same client repeatedly.
 /// </summary>
 public static class TestConstants
 {

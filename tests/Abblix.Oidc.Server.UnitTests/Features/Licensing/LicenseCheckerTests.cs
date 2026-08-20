@@ -64,10 +64,10 @@ public class LicenseCheckerTests
     }
 
     /// <summary>
-    /// Verifies that CheckClientLicense allows clients within the free license limit (2 clients).
+    /// Verifies that CheckClientLicense serves distinct clients under a licence that sets no client limit.
     /// </summary>
     [Fact]
-    public void CheckClientLicense_WithinFreeLicense_AllowsClients()
+    public void CheckClientLicense_WithoutClientLimit_AllowsClients()
     {
         // Static state in LicenseChecker accumulates across tests; under default capacity
         // pressure, prior pollution can make new clients return null. Register a permissive
