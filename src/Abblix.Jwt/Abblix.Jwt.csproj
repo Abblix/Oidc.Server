@@ -16,11 +16,11 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
     <PackageReleaseNotes>JWE-encrypted token handling, JOSE critical-header processing (RFC 7515), JWS verification key pinned to its declared algorithm (RFC 7517), enforced HMAC key length (RFC 7518), typed accessors for JWS header parameters, and granular key-resolution diagnostics. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.3</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <!-- Deterministic builds for reproducible binaries -->
     <Deterministic>true</Deterministic>
@@ -56,7 +56,7 @@
 
   <ItemGroup>
     <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
-    <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
     <None Include="..\..\EXTERNAL_KEYS.md" Link="EXTERNAL_KEYS.md" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>

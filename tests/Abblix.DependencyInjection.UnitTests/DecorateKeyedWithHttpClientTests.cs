@@ -1,4 +1,11 @@
 // Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+// Abblix OIDC Server Library
 // Copyright (c) Abblix LLP. All rights reserved.
 
 using Microsoft.Extensions.DependencyInjection;

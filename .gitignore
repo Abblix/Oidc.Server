@@ -385,3 +385,10 @@ TEST_*.md
 LICENSE-*.md
 RELEASE_NOTES*
 *.DotSettings
+
+# ReSharper settings that belong to the repository rather than to a machine.
+# The file-header template lives here, so it must travel with a clone: kept in
+# one developer's IDE profile it applies to every solution they open and to no
+# solution anyone else opens.
+!*.sln.DotSettings
+!src/**/*.csproj.DotSettings
