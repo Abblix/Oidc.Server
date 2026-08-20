@@ -16,7 +16,7 @@ name: Publish dev build to GitHub Packages
 # To gate deterministically against a specific branch build, pin the exact version.
 #
 # Releases (canonical 2.3.0, 2.3.0-beta1, etc.) flow through the manual
-# enhanced-release.yml — this workflow does not produce them.
+# enhanced-release.yml - this workflow does not produce them.
 
 on:
   push:
@@ -32,12 +32,16 @@ on:
       - '**/*.sln'
       - 'NuGet.config'
       - '.github/workflows/publish-dev-builds.yml'
+  # Deleting a package entry to change its published casing leaves every floating
+  # reference with nothing to resolve until the next push. A manual run closes that
+  # window without inventing a commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # Publishing mutates the package feed — never cancel a run mid-push, or the
+  # Publishing mutates the package feed - never cancel a run mid-push, or the
   # feed is left with a partial package set; queue the newer commit's run
   # instead (--skip-duplicate keeps the re-push idempotent).
   group: publish-dev-builds-${{ github.ref }}
@@ -103,7 +107,7 @@ jobs:
         timeout-minutes: 5
       - name: Pack
         # `pack --no-build` on the multi-targeted family csprojs trips NETSDK1085 on the .NET 10.0.301 SDK
-        # ("NoBuild set but Build target invoked") — the outer no-build does not propagate to the inner
+        # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner
         # per-TFM pack. Drop --no-build; the earlier Build step left everything up to date, so pack's build
         # is an incremental no-op. GeneratePackageOnBuild=false stops the on-build pack double-running.
         run: dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false
@@ -126,7 +130,7 @@ jobs:
       - name: Summary
         run: |
           set -euo pipefail
-          # Pick any one package — they all share the same MinVer-derived version.
+          # Pick any one package - they all share the same MinVer-derived version.
           PKG=$(find nupkg -maxdepth 1 -name 'Abblix.Oidc.Server.*.nupkg' | head -1 || true)
           if [ -n "$PKG" ]; then
             VERSION=$(basename "$PKG" .nupkg | sed 's|^Abblix.Oidc.Server.||')
