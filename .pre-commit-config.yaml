@@ -28,3 +28,12 @@ repos:
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
         pass_filenames: false
+      - id: no-cr-in-blobs
+        name: "Block carriage returns in committed text"
+        entry: python .github/scripts/lint-no-cr-in-blobs.py
+        language: python
+        # `types: [text]` hands the binary question to pre-commit's identify library instead of
+        # re-deriving it in the hook. Two earlier attempts to decide it locally - a NUL-byte
+        # heuristic, then git's own diff output - both flagged committed PDFs that carry CR
+        # harmlessly, and a check that fires on files nobody can fix gets waved away.
+        types: [text]
