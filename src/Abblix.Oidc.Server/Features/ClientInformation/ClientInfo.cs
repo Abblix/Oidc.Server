@@ -34,10 +34,17 @@ public record ClientInfo(string ClientId)
     /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
     /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.
     /// </summary>
-    public ClientType ClientType
-        => ClientAuthenticationMethods.None.Equals(TokenEndpointAuthMethod, StringComparison.Ordinal)
-            ? ClientType.Public
-            : ClientType.Confidential;
+    /// <remarks>
+    /// The catch-all arm is the rule, not a fallback: the set of authentication methods is open, since a host
+    /// registers its own <see cref="ClientAuthentication.IClientAuthenticator"/> implementations, and a method
+    /// this library has never heard of still carries a credential. Enumerating the known methods here would
+    /// classify every host-added one as public.
+    /// </remarks>
+    public ClientType ClientType => TokenEndpointAuthMethod switch
+    {
+        ClientAuthenticationMethods.None => ClientType.Public,
+        _ => ClientType.Confidential,
+    };
 
     /// <summary>
     /// A collection of secrets associated with the client, used for authenticating the client to the authorization server.
