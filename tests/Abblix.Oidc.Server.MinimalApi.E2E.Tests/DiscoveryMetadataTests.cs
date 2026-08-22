@@ -36,6 +36,11 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 {
     private static readonly Uri MtlsBaseUri = new("https://mtls.example.com");
 
+    // Both derived from the one host above, so a deployment shape is described by its PATH here
+    // rather than by repeating an address the file already names.
+    private static readonly Uri MtlsGatewayBase = new(MtlsBaseUri, "/gateway");
+    private static readonly Uri DedicatedTokenAlias = new(MtlsBaseUri, "/dedicated/token");
+
     private HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -69,6 +74,138 @@ public sealed class DiscoveryMetadataTests(TestFactory factory) : IClassFixture<
 
         Assert.Equal(MtlsBaseUri.GetLeftPart(UriPartial.Authority), aliasedToken.GetLeftPart(UriPartial.Authority));
         Assert.Equal(token.AbsolutePath, aliasedToken.AbsolutePath);
+    }
+
+    /// <summary>
+    /// An explicitly named alias wins over the one the base URI would compute. A deployment that sets both is
+    /// saying the mutual-TLS endpoint is not simply the same path on another host, and rebasing over that would
+    /// publish an address the operator deliberately did not choose.
+    /// </summary>
+    [Fact]
+    public async Task An_explicit_alias_wins_over_the_one_the_base_uri_would_compute()
+    {
+        var chosen = DedicatedTokenAlias;
+        await using var host = HostWith(options =>
+        {
+            options.Discovery.MtlsBaseUri = MtlsBaseUri;
+            options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = chosen };
+        });
+        var client = CreateClientFor(host);
+
+        var discovery = await client.FetchDiscoveryAsync();
+
+        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
+        Assert.NotNull(aliases);
+        Assert.Equal(
+            chosen.AbsoluteUri,
+            aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
+
+        // The endpoints left unnamed still follow the base, so setting one alias does not silently drop the rest.
+        var revocation = new Uri(aliases[ConfigurationResponse.Parameters.RevocationEndpoint]!.GetValue<string>());
+        Assert.Equal(MtlsBaseUri.GetLeftPart(UriPartial.Authority), revocation.GetLeftPart(UriPartial.Authority));
+    }
+
+    /// <summary>
+    /// A base URI carrying a path prefix keeps that prefix and the endpoint path, joined by exactly one
+    /// separator. Deployments put the mutual-TLS listener behind a gateway path rather than on its own host, and
+    /// a doubled or dropped slash there is a 404 for every certificate-bound client - the kind of mistake a test
+    /// asserting only the host would not see.
+    /// </summary>
+    [Fact]
+    public async Task An_mtls_base_with_a_path_keeps_the_prefix_and_the_endpoint_path()
+    {
+        var gateway = MtlsGatewayBase;
+        await using var host = HostWith(options => options.Discovery.MtlsBaseUri = gateway);
+        var client = CreateClientFor(host);
+
+        var discovery = await client.FetchDiscoveryAsync();
+
+        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
+        Assert.NotNull(aliases);
+
+        var token = new Uri(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.TokenEndpoint));
+        var aliased = new Uri(aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
+
+        Assert.Equal($"/gateway{token.AbsolutePath}", aliased.AbsolutePath);
+        Assert.DoesNotContain("//", aliased.AbsolutePath, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Named aliases with no base at all: the endpoints nobody named keep their ordinary addresses rather than
+    /// vanishing or being invented. A deployment that exposes one endpoint over mutual TLS is not thereby
+    /// claiming the others moved, and dropping them from the block would tell a client the opposite.
+    /// </summary>
+    [Fact]
+    public async Task Named_aliases_without_a_base_leave_the_other_endpoints_where_they_are()
+    {
+        await using var host = HostWith(options =>
+            options.Discovery.MtlsEndpointAliases = new MtlsAliasesOptions { TokenEndpoint = DedicatedTokenAlias });
+        var client = CreateClientFor(host);
+
+        var discovery = await client.FetchDiscoveryAsync();
+
+        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
+        Assert.NotNull(aliases);
+        Assert.Equal(
+            DedicatedTokenAlias.AbsoluteUri,
+            aliases[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>());
+
+        // With nothing to rebase onto, an unnamed alias is the ordinary endpoint itself.
+        Assert.Equal(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint),
+            aliases[ConfigurationResponse.Parameters.UserInfoEndpoint]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An endpoint switched off is absent from the alias block as well as from the document. Advertising a
+    /// mutual-TLS address for an endpoint this deployment does not serve sends certificate-bound clients at a
+    /// path that answers 404, and they would have no way to tell that from a misconfigured certificate.
+    /// </summary>
+    [Fact]
+    public async Task A_disabled_endpoint_is_missing_from_the_alias_block_too()
+    {
+        await using var host = HostWith(options =>
+        {
+            options.Discovery.MtlsBaseUri = MtlsBaseUri;
+            options.EnabledEndpoints &= ~OidcEndpoints.Revocation;
+        });
+        var client = CreateClientFor(host);
+
+        var discovery = await client.FetchDiscoveryAsync();
+
+        Assert.Null(discovery[ConfigurationResponse.Parameters.RevocationEndpoint]);
+
+        var aliases = discovery[ConfigurationResponse.Parameters.MtlsEndpointAliases]?.AsObject();
+        Assert.NotNull(aliases);
+        Assert.Null(aliases[ConfigurationResponse.Parameters.RevocationEndpoint]);
+
+        // The endpoints still served keep their aliases, so switching one off does not empty the block.
+        Assert.NotNull(aliases[ConfigurationResponse.Parameters.TokenEndpoint]);
+    }
+
+    /// <summary>
+    /// With endpoint path discovery switched off the document names no endpoint addresses at all - not the
+    /// ordinary ones and not the mutual-TLS aliases. The option exists for deployments that hand their clients
+    /// addresses out of band, and publishing them anyway would defeat the only reason to set it.
+    /// </summary>
+    [Fact]
+    public async Task With_path_discovery_off_the_document_names_no_endpoint_addresses()
+    {
+        await using var host = HostWith(options =>
+        {
+            options.Discovery.AllowEndpointPathsDiscovery = false;
+            options.Discovery.MtlsBaseUri = MtlsBaseUri;
+        });
+        var client = CreateClientFor(host);
+
+        var discovery = await client.FetchDiscoveryAsync();
+
+        Assert.Null(discovery[ConfigurationResponse.Parameters.TokenEndpoint]);
+        Assert.Null(discovery[ConfigurationResponse.Parameters.UserInfoEndpoint]);
+
+        // The issuer stays: it identifies the provider rather than locating an endpoint, and a client that
+        // cannot read it cannot validate a token from this server at all.
+        Assert.NotNull(discovery[ConfigurationResponse.Parameters.Issuer]);
     }
 
     /// <summary>
