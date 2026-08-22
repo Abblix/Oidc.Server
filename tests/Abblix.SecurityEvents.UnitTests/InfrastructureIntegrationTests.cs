@@ -33,6 +33,34 @@ public class InfrastructureIntegrationTests
 
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1754040000);
 
+    /// <summary>
+    /// The discovery entry point turns the option on and still lets the caller configure the rest,
+    /// including turning it back off - the delegate runs last on purpose, so a host is never left
+    /// arguing with its own registration.
+    /// </summary>
+    [Fact]
+    public void AddDiscoveryKeyResolution_TurnsTheOptionOn_AndTheCallerStillHasTheLastWord()
+    {
+        var services = new ServiceCollection();
+        services.AddDiscoveryKeyResolution(options => options.CacheLifetime = TimeSpan.FromMinutes(3));
+
+        using (var provider = services.BuildServiceProvider())
+        {
+            var options = provider.GetRequiredService<IOptions<JwksKeyResolutionOptions>>().Value;
+            Assert.True(options.UseDiscoveryDocument);
+            Assert.Equal(TimeSpan.FromMinutes(3), options.CacheLifetime);
+            Assert.IsType<JwksIssuerKeyResolver>(provider.GetRequiredService<IIssuerKeyResolver>());
+        }
+
+        // Reading the four lines of the extension would not show which of the two writes wins.
+        var overriding = new ServiceCollection();
+        overriding.AddDiscoveryKeyResolution(options => options.UseDiscoveryDocument = false);
+
+        using var overridden = overriding.BuildServiceProvider();
+        Assert.False(overridden.GetRequiredService<IOptions<JwksKeyResolutionOptions>>()
+            .Value.UseDiscoveryDocument);
+    }
+
     [Fact]
     public void AddJwksKeyResolution_IsSelfSufficient_AndHonorsAHostPreRegistration()
     {

@@ -8,6 +8,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Microsoft.Extensions.Options;
@@ -87,19 +88,13 @@ public sealed class JwksIssuerKeyResolver(
 
     private async Task<IReadOnlyList<JsonWebKey>> FetchKeysAsync(string issuer, CancellationToken cancellationToken)
     {
-        var jwksUri = options.Value.ResolveJwksUri(issuer) ?? DeriveWellKnownUri(issuer);
+        var jwksUri = options.Value.ResolveJwksUri(issuer)
+            ?? await DiscoverJwksUriAsync(issuer, cancellationToken)
+            ?? DeriveWellKnownUri(issuer);
 
-        // The document behind this URI decides which signatures verify, so its transport is part
-        // of the trust: over cleartext HTTP, whoever sits on the path substitutes a key and every
-        // token they sign afterwards validates. Loopback stays permitted - a developer's local
-        // issuer offers no path for anyone to sit on.
-        if (jwksUri.Scheme != Uri.UriSchemeHttps && !jwksUri.IsLoopback)
-        {
-            throw new InvalidOperationException(
-                $"Refusing to fetch signature verification keys over '{jwksUri.Scheme}' from '{jwksUri}': "
-                + "a JWK Set fetched over cleartext can be substituted in transit. Serve it over HTTPS, "
-                + "or use a loopback address for local development.");
-        }
+        // Host-chosen when it came from the map, a selector or the convention; a discovered
+        // address was already checked against its own origin before it got here.
+        RequireSecureTransport(jwksUri, "signature verification keys", allowLoopback: true);
 
         using var client = httpClientFactory.CreateClient(JwksTransport.HttpClientName);
         var keySet = await client.GetFromJsonAsync<JsonWebKeySet>(jwksUri, cancellationToken)
@@ -111,6 +106,135 @@ public sealed class JwksIssuerKeyResolver(
         return keySet.Keys
             .Where(key => key.Usage is null or PublicKeyUsages.Signature)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Asks the issuer where its keys are, when the host opted into that. Returns null when it did
+    /// not, leaving the caller's fallback in charge.
+    /// </summary>
+    /// <remarks>
+    /// A document that names no "jwks_uri" fails rather than falling back to the convention: a host
+    /// that turned this on did so to stop guessing, and quietly guessing again would put back the
+    /// snapshot it was trying to remove - visible only later, as signatures that stop verifying.
+    /// </remarks>
+    private async Task<Uri?> DiscoverJwksUriAsync(string issuer, CancellationToken cancellationToken)
+    {
+        if (!options.Value.UseDiscoveryDocument)
+            return null;
+
+        // Composed through the same normalisation as the map comparer and the well-known
+        // convention. A second spelling here would let the three disagree about one issuer, and
+        // the disagreement fetches a different document rather than failing.
+        var normalised = JwksKeyResolutionOptions.NormaliseIssuer(issuer);
+        var origin = new Uri(normalised);
+
+        // Composed from the normalised STRING, not from the Uri: Uri.ToString() of a bare
+        // authority carries a trailing slash, which would make this address double-slashed.
+        var discoveryUri = new Uri($"{normalised}/.well-known/openid-configuration");
+        RequireSecureTransport(discoveryUri, "the discovery document", allowLoopback: true);
+
+        using var client = httpClientFactory.CreateClient(JwksTransport.HttpClientName);
+        var document = await ReadDocumentAsync(client, discoveryUri, cancellationToken);
+
+        RequireDeclaredIssuer(document, discoveryUri, origin);
+
+        var declared = document.TryGetProperty("jwks_uri", out var jwksUri)
+                       && jwksUri.ValueKind == JsonValueKind.String
+            ? jwksUri.GetString()
+            : null;
+
+        if (!Uri.TryCreate(declared, UriKind.Absolute, out var resolved))
+        {
+            throw new InvalidOperationException(
+                $"The discovery document at '{discoveryUri}' names no usable \"jwks_uri\", so the keys of "
+                + $"'{issuer}' cannot be located. Point this issuer at its key set explicitly, or turn "
+                + $"{nameof(JwksKeyResolutionOptions.UseDiscoveryDocument)} off.");
+        }
+
+        // This address came out of a document rather than from this host, so the loopback
+        // exemption applies only when the issuer being trusted is itself loopback. Without that
+        // condition a remote issuer aims the receiver at its own loopback, over cleartext, on
+        // every cache miss.
+        RequireSecureTransport(resolved, "signature verification keys", allowLoopback: origin.IsLoopback);
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// Reads the discovery document as a JSON object, so a response that is not one is named
+    /// here instead of surfacing as a type complaint from the reader with no address in it.
+    /// </summary>
+    private static async Task<JsonElement> ReadDocumentAsync(
+        HttpClient client,
+        Uri discoveryUri,
+        CancellationToken cancellationToken)
+    {
+        var document = await client.GetFromJsonAsync<JsonElement>(discoveryUri, cancellationToken);
+        if (document.ValueKind == JsonValueKind.Object)
+            return document;
+
+        throw new InvalidOperationException(
+            $"The discovery document at '{discoveryUri}' is {document.ValueKind}, not a JSON object. "
+            + "Point this issuer at its key set explicitly, or turn "
+            + $"{nameof(JwksKeyResolutionOptions.UseDiscoveryDocument)} off.");
+    }
+
+    /// <summary>
+    /// RFC 8414 Section 3.3: the "issuer" a document returns MUST be identical to the one whose
+    /// well-known URI was used to fetch it, and a document failing that MUST NOT be used.
+    /// </summary>
+    /// <remarks>
+    /// Compared as AbsoluteUri rather than with Uri.Equals, which ignores userinfo and fragment,
+    /// so "https://evil@op.example.com" would otherwise pass for "https://op.example.com".
+    /// Without this check a document served on one issuer path, or reached by a redirect, answers
+    /// for another issuer of the same host, and every token afterwards verifies against the wrong
+    /// key set.
+    /// </remarks>
+    private static void RequireDeclaredIssuer(JsonElement document, Uri discoveryUri, Uri origin)
+    {
+        var declared = document.TryGetProperty("issuer", out var issuerElement)
+                       && issuerElement.ValueKind == JsonValueKind.String
+            ? issuerElement.GetString()
+            : null;
+
+        if (Uri.TryCreate(declared, UriKind.Absolute, out var declaredIssuer)
+            && string.Equals(declaredIssuer.AbsoluteUri, origin.AbsoluteUri, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The document at '{discoveryUri}' asserts the issuer '{declared}', not the '{origin}' "
+            + "it was fetched for; accepting it would let one issuer of a host answer for another "
+            + "(RFC 8414 Section 3.3).");
+    }
+
+    /// <summary>
+    /// The document behind this URI decides which signatures verify, so its transport is part of
+    /// the trust: over cleartext HTTP, whoever sits on the path substitutes a key and every token
+    /// they sign afterwards validates.
+    /// </summary>
+    /// <param name="uri">The address about to be fetched.</param>
+    /// <param name="what">What is being fetched, so a refusal names it.</param>
+    /// <param name="allowLoopback">
+    /// Whether cleartext over loopback is acceptable here. True for an address this host chose - a
+    /// developer local issuer offers no path for anyone to sit on. False for one a remote document
+    /// chose, where the exemption lets that document aim the receiver at its own loopback.
+    /// </param>
+    private static void RequireSecureTransport(Uri uri, string what, bool allowLoopback)
+    {
+        if (uri.Scheme == Uri.UriSchemeHttps)
+            return;
+
+        // Scheme first, then loopback: Uri.IsLoopback is true of "file:///keys.json" too, so a
+        // check asking only about loopback lets a non-HTTP scheme past the transport rule.
+        if (allowLoopback && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)
+            return;
+
+        throw new InvalidOperationException(
+            $"Refusing to fetch {what} over '{uri.Scheme}' from '{uri}': a document fetched over "
+            + "cleartext can be substituted in transit. Serve it over HTTPS, or use a loopback "
+            + "address for local development.");
     }
 
     private static Uri DeriveWellKnownUri(string issuer)
