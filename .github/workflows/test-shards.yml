@@ -77,10 +77,15 @@ jobs:
         # The new dotnet test experience (Microsoft.Testing.Platform runner, opted in via global.json)
         # takes MTP options directly, without the VSTest separator. --results-directory resolves from
         # the working directory (repo root), so files land beside the projects that produced them.
+        #
+        # The settings file excludes generated sources from the MEASUREMENT: a LoggerMessage partial
+        # carries a branch no test can take both sides of, and counting them ranks the package that
+        # logs the most as the least tested one.
         run: |
           dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore \
             --report-trx --report-trx-filename test-results.trx \
             --coverage --coverage-output-format cobertura \
+            --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
         timeout-minutes: 5
       - name: Upload test results
