@@ -7,6 +7,7 @@
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Infrastructure;
 using Microsoft.Extensions.Options;
@@ -47,6 +48,68 @@ public class JwksIssuerKeyResolverTests
         }
     }
 
+    /// <summary>
+    /// Serves a discovery document and a key set from two different addresses, recording the order
+    /// they were asked for: the order is the assertion, because reading the document is what makes
+    /// the key location the issuer's statement rather than this resolver's guess.
+    /// </summary>
+    private sealed class DiscoveringHandler(
+        Uri discoveryUri,
+        Uri jwksUri,
+        JsonWebKeySet keySet,
+        string? declaredIssuer = null) : HttpMessageHandler
+    {
+        public List<Uri> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var uri = request.RequestUri!;
+            Requests.Add(uri);
+
+            if (uri == discoveryUri)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new JsonObject
+                    {
+                        ["issuer"] = declaredIssuer ?? Issuer,
+                        ["jwks_uri"] = jwksUri.AbsoluteUri,
+                    }),
+                });
+            }
+
+            if (uri == jwksUri)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(keySet),
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    /// <summary>Serves one JSON document to every address, recording what was asked for.</summary>
+    private sealed class StaticJsonHandler(JsonObject document) : HttpMessageHandler
+    {
+        public List<Uri> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri!);
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(document),
+            });
+        }
+    }
+
     private sealed class SingleClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
@@ -60,11 +123,12 @@ public class JwksIssuerKeyResolverTests
 
     private static async Task<List<JsonWebKey>> Resolve(
         JwksIssuerKeyResolver resolver,
-        string? keyId = null)
+        string? keyId = null,
+        string? issuer = null)
     {
         var keys = new List<JsonWebKey>();
         await foreach (var key in resolver.ResolveSigningKeysAsync(
-                           Issuer, keyId, TestContext.Current.CancellationToken))
+                           issuer ?? Issuer, keyId, TestContext.Current.CancellationToken))
         {
             keys.Add(key);
         }
@@ -83,6 +147,162 @@ public class JwksIssuerKeyResolverTests
         var request = Assert.Single(handler.Requests);
         Assert.Equal(new Uri("https://issuer.example.com/.well-known/jwks.json"), request);
         Assert.Equal(key.KeyId, Assert.Single(keys).KeyId);
+    }
+
+    /// <summary>
+    /// With the discovery document in use, the keys come from the "jwks_uri" the issuer publishes,
+    /// at whatever address that names - and the document is read first. A guessed location is a
+    /// snapshot of where the keys were: move them at the provider and every token starts failing
+    /// signature verification here, while the same application's sign-in keeps working because it
+    /// re-reads discovery.
+    /// </summary>
+    [Fact]
+    public async Task WithDiscoveryEnabled_TheKeysComeFromTheAddressTheIssuerPublishes()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var discoveryUri = new Uri($"{Issuer}/.well-known/openid-configuration");
+        var jwksUri = new Uri("https://keys.example.net/tenants/7/signing-keys");
+        var handler = new DiscoveringHandler(discoveryUri, jwksUri, new JsonWebKeySet([key]));
+
+        var keys = await Resolve(Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions { UseDiscoveryDocument = true }));
+
+        Assert.Equal([discoveryUri, jwksUri], handler.Requests);
+        Assert.Equal(key.KeyId, Assert.Single(keys).KeyId);
+    }
+
+    /// <summary>
+    /// A discovery document that names no usable "jwks_uri" fails loudly instead of quietly guessing
+    /// the convention. A host turns discovery on to stop guessing; guessing again behind its back
+    /// would restore the snapshot it was removing, and the damage would surface much later as
+    /// signatures that stop verifying.
+    /// </summary>
+    [Fact]
+    public async Task ADiscoveryDocumentWithoutAKeyAddress_FailsNamingTheOption()
+    {
+        var discoveryUri = new Uri($"{Issuer}/.well-known/openid-configuration");
+        var handler = new StaticJsonHandler(new JsonObject { ["issuer"] = Issuer });
+
+        var resolver = Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions { UseDiscoveryDocument = true });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Resolve(resolver));
+
+        Assert.Contains(discoveryUri.AbsoluteUri, error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(JwksKeyResolutionOptions.UseDiscoveryDocument), error.Message, StringComparison.Ordinal);
+
+        // Positive form on purpose: "no request whose path ends in jwks.json" also passes when
+        // nothing was requested at all, and when the convention is respelled. Exactly one
+        // request, to the document, says what happened in both directions.
+        Assert.Equal(discoveryUri, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    /// A named entry still wins over discovery, so a host that knows better about one issuer keeps
+    /// saying so. Discovery replaces the guess that used to follow the map and the selectors, not
+    /// the host's own statement.
+    /// </summary>
+    [Fact]
+    public async Task ANamedEntry_Wins_OverDiscovery()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var named = new Uri("https://keys.example.org/named");
+        var handler = new DiscoveringHandler(
+            new Uri($"{Issuer}/.well-known/openid-configuration"),
+            named,
+            new JsonWebKeySet([key]));
+
+        var options = new JwksKeyResolutionOptions { UseDiscoveryDocument = true };
+        options.JwksUris[Issuer] = named;
+
+        var keys = await Resolve(Resolver(handler, new FakeTimeProvider(Now), options));
+
+        Assert.Equal(named, Assert.Single(handler.Requests));
+        Assert.Equal(key.KeyId, Assert.Single(keys).KeyId);
+    }
+
+    /// <summary>
+    /// RFC 8414 Section 3.3: a document asserting a different issuer than the one it was fetched
+    /// for MUST NOT be used. Without the check, a document served on one issuer path - or reached
+    /// by a redirect - answers for another issuer of the same host, and every token afterwards
+    /// verifies against the wrong key set, silently and permanently.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentAssertingAnotherIssuer_IsRefused()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var discoveryUri = new Uri($"{Issuer}/.well-known/openid-configuration");
+        var handler = new DiscoveringHandler(
+            discoveryUri,
+            new Uri("https://keys.example.net/keys"),
+            new JsonWebKeySet([key]),
+            declaredIssuer: "https://other.example.com");
+
+        var resolver = Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions { UseDiscoveryDocument = true });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Resolve(resolver));
+
+        Assert.Contains("https://other.example.com", error.Message, StringComparison.Ordinal);
+        Assert.Contains(Issuer, error.Message, StringComparison.Ordinal);
+
+        // Refused before the key set was fetched: the document decides which keys are trusted, so
+        // a rejected document must not still have chosen them.
+        Assert.Equal(discoveryUri, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    /// A key address the document chose does not inherit the loopback exemption, which exists for
+    /// an address this host chose. Otherwise an issuer reached over HTTPS aims the receiver at its
+    /// own loopback, over cleartext, on every cache miss - and the receiver makes that request
+    /// blind, on behalf of whoever wrote the document.
+    /// </summary>
+    [Fact]
+    public async Task ADiscoveredLoopbackAddress_IsRefused_WhenTheIssuerIsNot()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var discoveryUri = new Uri($"{Issuer}/.well-known/openid-configuration");
+        var handler = new DiscoveringHandler(
+            discoveryUri,
+            new Uri("http://127.0.0.1:8200/v1/secret/keys"),
+            new JsonWebKeySet([key]));
+
+        var resolver = Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions { UseDiscoveryDocument = true });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Resolve(resolver));
+
+        Assert.Contains("cleartext", error.Message, StringComparison.Ordinal);
+        Assert.Equal(discoveryUri, Assert.Single(handler.Requests));
+    }
+
+    /// <summary>
+    /// The transport rule covers the discovery document itself, and refuses before any request
+    /// leaves: that document names the key set, so substituting it substitutes the keys.
+    /// </summary>
+    [Fact]
+    public async Task ACleartextIssuer_IsRefused_BeforeTheDocumentIsFetched()
+    {
+        var handler = new StaticJsonHandler(new JsonObject { ["issuer"] = "http://issuer.example.com" });
+
+        var resolver = Resolver(
+            handler,
+            new FakeTimeProvider(Now),
+            new JwksKeyResolutionOptions { UseDiscoveryDocument = true });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Resolve(resolver, issuer: "http://issuer.example.com"));
+
+        Assert.Contains("cleartext", error.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]

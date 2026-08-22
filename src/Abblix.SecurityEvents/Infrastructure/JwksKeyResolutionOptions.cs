@@ -156,4 +156,23 @@ public sealed class JwksKeyResolutionOptions
     /// within this window the miss answers from cache.
     /// </summary>
     public TimeSpan RolloverRefetchCooldown { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Asks the issuer where its keys are, instead of guessing. When no map entry and no selector
+    /// answers for an issuer, the resolver reads "jwks_uri" out of that issuer's discovery document
+    /// at "{issuer}/.well-known/openid-configuration" and fetches the keys from there.
+    /// </summary>
+    /// <remarks>
+    /// Off by default because it changes where an unconfigured issuer's keys come from, and a host
+    /// relying on the "{issuer}/.well-known/jwks.json" convention must not have that moved under it
+    /// by an upgrade.
+    /// <para>
+    /// What it buys is that the location follows the provider. A hand-written jwks_uri is a snapshot,
+    /// and the copies fail one-sidedly: move the key set at the provider and this receiver refuses
+    /// every token, while the same application's sign-in keeps working because it re-reads discovery.
+    /// The log then says the signature does not verify, which reads as a forged token rather than as
+    /// a configuration value that aged out, and the two places that disagree are never named.
+    /// </para>
+    /// </remarks>
+    public bool UseDiscoveryDocument { get; set; }
 }

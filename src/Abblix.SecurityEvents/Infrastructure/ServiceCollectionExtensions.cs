@@ -406,6 +406,29 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers key resolution that asks each issuer where its keys are, reading "jwks_uri" from
+    /// that issuer's discovery document instead of pinning an address at composition time.
+    /// </summary>
+    /// <remarks>
+    /// Why an address pinned at composition time is worth removing:
+    /// <see cref="JwksKeyResolutionOptions.UseDiscoveryDocument"/>.
+    /// <para>
+    /// A named entry and any selector answer first, so a host that knows better about one issuer
+    /// keeps saying so; discovery stands where the well-known guess otherwise stands.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">Cache lifetimes and any issuer-specific overrides, as usual.</param>
+    public static IServiceCollection AddDiscoveryKeyResolution(
+        this IServiceCollection services,
+        Action<JwksKeyResolutionOptions>? configure = null)
+        => services.AddJwksKeyResolution(options =>
+        {
+            options.UseDiscoveryDocument = true;
+            configure?.Invoke(options);
+        });
+
+    /// <summary>
     /// Registers the replay cache over the host's <c>IDistributedCache</c> as the
     /// <see cref="IReplayCache"/>.
     /// </summary>

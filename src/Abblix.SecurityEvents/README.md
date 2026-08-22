@@ -92,7 +92,9 @@ services.AddSecurityEvents(options =>
         "https://tenant.example.com/events/membership-changed");
     options.SigningKeySource = _ => Task.FromResult(signingKey); // transmitters only
 });
-services.AddJwksKeyResolution();      // receivers: issuers' keys from their published JWK Sets
+services.AddDiscoveryKeyResolution(); // receivers: each issuer names its own JWK Set in its
+                                      // discovery document, so the address follows a rotation
+                                      // (AddJwksKeyResolution pins one instead)
 services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache
 services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store,
                                      // held for SecurityEventTokenValidationOptions.ReplayRetention
