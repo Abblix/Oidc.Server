@@ -108,6 +108,14 @@ public class TokenStatusValidatorDecorator(
 
 				case JsonWebTokenStatus.Revoked:
 					return new JwtValidationError(JwtError.TokenRevoked, "Token was revoked");
+
+				case JsonWebTokenStatus.Unknown:
+					// Nothing is recorded about this token, which is what an ordinary one looks like: the
+					// registry holds an entry only once a token has been rotated or revoked. Spelled out
+					// rather than left to fall through, because acceptance is the outcome here and a status
+					// added later must not inherit it silently. TokenStatusCoverageTests walks the enum and
+					// fails when one does.
+					break;
 			}
 		}
 
