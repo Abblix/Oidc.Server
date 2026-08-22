@@ -241,7 +241,7 @@ public record ConfigurationResponse
         public const string SignedMetadata = "signed_metadata";
 
         /// <summary>The <c>authorization_details_types_supported</c> metadata field listing the
-        /// authorization-detail <c>type</c> values this server understands (RFC 9396 §13).
+        /// authorization-detail <c>type</c> values this server understands (RFC 9396 §10).
         /// Absent when no per-type validators are registered.</summary>
         public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
     }
@@ -604,7 +604,7 @@ public record ConfigurationResponse
     public string? SignedMetadata { get; init; }
 
     /// <summary>
-    /// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+    /// RFC 9396 §10: the authorization-detail <c>type</c> values this server's host has
     /// registered validators for. The list is projected from the keyed-DI registry of
     /// <see cref="IAuthorizationDetailValidator"/> so it always
     /// matches what request-time dispatch will accept. Omitted from the emitted discovery

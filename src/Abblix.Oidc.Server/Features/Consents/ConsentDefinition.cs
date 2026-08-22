@@ -31,12 +31,18 @@ public record ConsentDefinition(ScopeDefinition[] Scopes, ResourceDefinition[] R
     /// <remarks>
     /// The two sets are independent, so a decision is made per entry: an entry the user has approved goes to
     /// <see cref="UserConsents.Granted"/> while another from the same request is still waiting in
-    /// <see cref="UserConsents.Pending"/>.
+    /// <see cref="UserConsents.Pending"/>. Anything left pending sends the request back for consent, and the
+    /// screen is shown what is pending rather than what has already been granted.
     /// <para>
-    /// A granted entry is whatever the provider returns, which RFC 9396 section 7.1 permits to differ from what
-    /// was requested: dropping an entry keeps it out of the issued token, and editing one inside (an amount
-    /// narrowed by a slider, say) is carried through as edited. It may only ever narrow - a granted set wider
-    /// than the request is a host defect and is refused before it reaches a token.
+    /// A granted entry is whatever the provider returns, which RFC 9396 section 7.1 permits to differ from
+    /// what was requested, in either direction: dropping an entry keeps it out of the issued token, editing
+    /// one inside (an amount narrowed by a slider) is carried through as edited, and the section's own example
+    /// is the opposite case, the server filling in the accounts a user picked. What is refused is a granted
+    /// entry of a <c>type</c> the request did not carry; within an entry, the per-type validator decides.
+    /// </para>
+    /// <para>
+    /// Only the authorization endpoint consults this. A backchannel authentication request has no consent seam
+    /// at all, and the device flow surfaces the requested entries for the host to carry onto the grant itself.
     /// </para>
     /// <para>
     /// The storage is raw so that member order, type-specific payload and members this server does not model

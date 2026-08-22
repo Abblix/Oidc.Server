@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Single request-time entry point for the RFC 9396 authorization_details policy: per-client
-/// allowlist (§5.1) plus per-type composite dispatch (§5). Endpoint-side adapters delegate
+/// allowlist (§10) plus per-type composite dispatch (§5). Endpoint-side adapters delegate
 /// here so /authorize, /par, CIBA and device-flow share one policy source.
 /// </summary>
 /// <remarks>
@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 public interface IAuthorizationDetailsPolicy
 {
     /// <summary>
-    /// Full RFC 9396 §5 + §5.1 request-time validation entry point. Takes the raw
+    /// Full RFC 9396 §5 + §10 request-time validation entry point. Takes the raw
     /// authorization_details array as it landed on the wire, applies the per-client
     /// allowlist, dispatches each typed entry to its keyed
     /// <see cref="IAuthorizationDetailValidator"/>, and returns the validated raw array
@@ -37,7 +37,7 @@ public interface IAuthorizationDetailsPolicy
     /// <remarks>
     /// The returned <see cref="JsonArray"/> reflects the post-validation set: when per-type
     /// validators leave their inputs untouched it is byte-equivalent to the input, but when
-    /// a validator narrows / extends per RFC 9396 §5 (e.g. a consent-UI slider, an AS-policy
+    /// a validator narrows / extends per RFC 9396 §7.1 (e.g. a consent-UI slider, an AS-policy
     /// cap, or canonicalisation), the mutation surfaces here and the pipeline forwards the
     /// post-validation shape into <c>AuthorizationContext</c> - token emission reflects what
     /// was actually granted, not the original request.
