@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -47,8 +47,7 @@ public sealed class LogoutTokenValidator(
         if (verdict.TryGetFailure(out var error))
             throw new LogoutTokenValidationException($"The Logout Token was rejected: {error.Description}");
 
-        verdict.TryGetSuccess(out var validated);
-        var token = validated!.Token;
+        var token = verdict.GetSuccess().Token;
 
         // From here the claims are the issuer's statements rather than the sender's.
         var issuer = token.Issuer

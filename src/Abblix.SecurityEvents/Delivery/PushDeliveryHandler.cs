@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -91,13 +91,13 @@ public sealed class PushDeliveryHandler(
                 error.Description));
         }
 
-        verdict.TryGetSuccess(out var validated);
+        var validated = verdict.GetSuccess();
 
         // The default profile requires each of these envelope claims with its own step, so a miss
         // here means a weakened profile let an incomplete envelope through - and a token replay
         // accounting cannot track must not slip past it. The miss fails closed.
         if (replayCache is not null
-            && validated!.Token is not { Issuer: not null, JwtId: not null, IssuedAt: not null })
+            && validated.Token is not { Issuer: not null, JwtId: not null, IssuedAt: not null })
         {
             return PushDeliveryResult.BadRequest(new DeliveryError(
                 DeliveryErrorCodes.InvalidRequest,
