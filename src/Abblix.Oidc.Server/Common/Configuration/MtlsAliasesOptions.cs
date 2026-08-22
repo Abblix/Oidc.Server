@@ -6,9 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-// Abblix OIDC Server Library
-// Copyright (c) Abblix LLP.
-
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>

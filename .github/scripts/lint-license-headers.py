@@ -15,6 +15,14 @@ import sys
 
 SPDX = re.compile(r'^//\s*SPDX-License-Identifier:\s*(\S+)\s*$')
 OLD_NOTICE = 'LICENSE RESTRICTIONS'
+# One header per file. Checked by STRUCTURE rather than by the wording of any superseded notice,
+# because OLD_NOTICE only ever named the verbose form: 61 files carried a second, two-line header
+# ('Copyright (c) Abblix LLP. All rights reserved.') that the phrase never looked for, left behind
+# where the SPDX rewrite could not recognise what it was replacing and prepended instead.
+HEADER_MARKER = '// Abblix OIDC Server Library'
+# Every source file names the copyright holder. Required regardless of which licence the file is
+# under: the SPDX identifier says what you may do with it, the copyright line says whose it is.
+COPYRIGHT = 'Copyright (c) Abblix LLP'
 PROPRIETARY = 'LicenseRef-Abblix-EULA'
 APACHE = 'Apache-2.0'
 
@@ -74,6 +82,26 @@ def declared_in(path):
     return None
 
 
+def problem_with(path, relative):
+    """The one thing wrong with this file's header, or None. First failure wins: a file carrying a
+    superseded notice has nothing to say about which identifier it declares."""
+    text = io.open(path, encoding='utf-8-sig').read(4000)
+    if OLD_NOTICE in text:
+        return 'carries the superseded proprietary notice'
+    headers = text.count(HEADER_MARKER)
+    if headers > 1:
+        return 'the licence header appears %d times' % headers
+    if COPYRIGHT not in text:
+        return 'no copyright line naming Abblix LLP'
+    got = declared_in(path)
+    if got is None:
+        return 'no SPDX-License-Identifier in the first 30 lines'
+    want = expected_for(relative)
+    if got != want:
+        return 'declares %s, package expects %s' % (got, want)
+    return None
+
+
 def scan(root, problems):
     checked = 0
     for current, dirs, files in os.walk(root):
@@ -84,16 +112,9 @@ def scan(root, problems):
             path = os.path.join(current, name)
             relative = os.path.relpath(path).replace(os.sep, '/')
             checked += 1
-            text = io.open(path, encoding='utf-8-sig').read(4000)
-            if OLD_NOTICE in text:
-                problems.append((relative, 'carries the superseded proprietary notice'))
-                continue
-            want = expected_for(relative)
-            got = declared_in(path)
-            if got is None:
-                problems.append((relative, 'no SPDX-License-Identifier in the first 30 lines'))
-            elif got != want:
-                problems.append((relative, 'declares %s, package expects %s' % (got, want)))
+            why = problem_with(path, relative)
+            if why is not None:
+                problems.append((relative, why))
     return checked
 
 
