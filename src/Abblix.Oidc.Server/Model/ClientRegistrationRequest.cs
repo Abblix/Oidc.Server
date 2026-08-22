@@ -505,7 +505,7 @@ public record ClientRegistrationRequest
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §5.1: the per-client
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §10: the per-client
     /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
     /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
     /// <c>null</c> means no per-client constraint; empty array means this client cannot use RAR.
@@ -840,7 +840,7 @@ public record ClientRegistrationRequest
         /// authentication method.</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
 
-        /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §5.1):
+        /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §10):
         /// per-client allowlist of authorization-detail <c>type</c> values this client may use in
         /// Rich Authorization Requests.</summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
