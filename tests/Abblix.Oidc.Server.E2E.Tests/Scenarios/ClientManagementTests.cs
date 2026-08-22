@@ -42,6 +42,10 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </remarks>
 public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
+    // Named once: the same member is written into a request and looked for in a response and in an
+    // extension's view, and those three have to agree.
+    private const string VendorTier = "x_vendor_tier";
+
     private static JsonObject NewClientMetadata(string clientName) => new()
     {
         [RequestMembers.ClientName] = clientName,
@@ -123,7 +127,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var metadata = NewClientMetadata("keeps-its-own-metadata");
-        metadata["x_vendor_tier"] = "gold";
+        metadata[VendorTier] = "gold";
 
         var registered = await RegisterClientAsync(client, discovery, metadata);
 
@@ -131,7 +135,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         // The response is built from a separate type, so nothing the caller sent comes back by accident.
         // Asserted rather than assumed: the day someone builds the response from the request, this says so.
-        Assert.Null(registered["x_vendor_tier"]);
+        Assert.Null(registered[VendorTier]);
     }
 
     /// <summary>
@@ -178,17 +182,17 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var metadata = NewClientMetadata("seen-by-an-extension");
-        metadata["x_vendor_tier"] = "gold";
+        metadata[VendorTier] = "gold";
 
         await RegisterClientAsync(client, discovery, metadata);
 
         Assert.NotNull(capturing.Seen);
-        Assert.True(capturing.Seen.TryGetValue("x_vendor_tier", out var tier));
+        Assert.True(capturing.Seen.TryGetValue(VendorTier, out var tier));
         Assert.Equal("gold", tier.GetString());
 
         // Only the unmodelled member is here: everything the core models was parsed into its own property,
         // and finding one of those here would mean the mapping had stopped working.
-        Assert.Equal(["x_vendor_tier"], capturing.Seen.Keys);
+        Assert.Equal([VendorTier], capturing.Seen.Keys);
 
         // The pipeline this validator joined is still whole. Without this the test would stay green over a
         // host that validates nothing, and the added validator is exactly what could have caused that.
