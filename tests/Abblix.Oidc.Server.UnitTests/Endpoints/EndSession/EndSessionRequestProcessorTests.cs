@@ -6,6 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Common.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -36,6 +40,8 @@ public class EndSessionRequestProcessorTests
     private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<ILogoutNotifier> _logoutNotifier;
+    private readonly Mock<ITokenRevoker> _tokenRevoker;
+    private readonly OidcOptions _options;
     private readonly EndSessionRequestProcessor _processor;
 
     public EndSessionRequestProcessorTests()
@@ -45,12 +51,16 @@ public class EndSessionRequestProcessorTests
         _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logoutNotifier = new Mock<ILogoutNotifier>(MockBehavior.Strict);
+        _tokenRevoker = new Mock<ITokenRevoker>(MockBehavior.Strict);
+        _options = new OidcOptions();
         _processor = new EndSessionRequestProcessor(
             _logger.Object,
             _authSessionService.Object,
             _issuerProvider.Object,
             _clientInfoProvider.Object,
-            _logoutNotifier.Object);
+            _logoutNotifier.Object,
+            _tokenRevoker.Object,
+            Options.Create(_options));
     }
 
     private static EndSessionRequest CreateEndSessionRequest(
@@ -124,6 +134,79 @@ public class EndSessionRequestProcessorTests
         Assert.NotNull(response.PostLogoutRedirectUri);
         _authSessionService.Verify(s => s.AuthenticateAsync(), Times.Once);
         _authSessionService.Verify(s => s.SignOutAsync(), Times.Once);
+    }
+
+    /// <summary>
+    /// With the option on, ending a session revokes the tokens issued within it, so a refresh token from the
+    /// browser session the user just closed stops working.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenLogoutRevokesTokens_RecordsASessionCutoff()
+    {
+        // Arrange
+        _options.RevokeSessionTokensOnLogout = true;
+
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession(sessionId: "session_abc");
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _tokenRevoker
+            .Setup(r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out _));
+        _tokenRevoker.Verify(
+            r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Off by default, so an upgrade does not sign out the native applications of every user who logs out of
+    /// the browser. The specification leaves this open, so the default is a deployment's choice rather than a
+    /// requirement, and the safe default is the one that changes nothing.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ByDefault_DoesNotRevokeTheSessionTokens()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession();
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out _));
+        _tokenRevoker.Verify(
+            r => r.RevokeSessionAsync(
+                It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     /// <summary>

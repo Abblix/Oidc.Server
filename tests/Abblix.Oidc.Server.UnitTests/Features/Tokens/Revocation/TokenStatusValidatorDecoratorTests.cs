@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Storages;
@@ -27,15 +28,25 @@ public class TokenStatusValidatorDecoratorTests
 {
     private const string ActiveJwtId = "rt_jti_active";
     private const string GrantId = "grant_001";
+    private const string Subject = "user_42";
+    private const string SessionId = "session_7";
     private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset IssuedAt = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
     private readonly Mock<ITokenRegistry> _registry = new(MockBehavior.Strict);
+    private readonly Mock<IRevocationCutoffRegistry> _cutoffs = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenValidator> _inner = new(MockBehavior.Strict);
     private readonly TokenStatusValidatorDecorator _decorator;
 
     public TokenStatusValidatorDecoratorTests()
     {
-        _decorator = new TokenStatusValidatorDecorator(_registry.Object, _inner.Object);
+        _decorator = new TokenStatusValidatorDecorator(_registry.Object, _cutoffs.Object, _inner.Object);
+
+        // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
+        _cutoffs
+            .Setup(c => c.GetCutoffAsync(
+                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTimeOffset?)null);
     }
 
     /// <summary>
@@ -117,6 +128,112 @@ public class TokenStatusValidatorDecoratorTests
             Times.Never);
     }
 
+    /// <summary>
+    /// A cutoff recorded against the subject rejects a token issued before it. This is what an account
+    /// suspension or a "sign out everywhere" acts through: one write, and every token minted earlier - across
+    /// every session of that user - stops being accepted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenIssuedBeforeTheSubjectCutoff_IsRejected()
+    {
+        SetupInnerReturns(RefreshToken(GrantId));
+        SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
+
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.TokenRevoked, error.Error);
+    }
+
+    /// <summary>
+    /// A token issued after the cutoff passes, which is the property that makes a cutoff usable at all: the
+    /// user signs in again and their new tokens work, with nothing to clean up. A boolean flag could not do
+    /// this - it would keep refusing every later session too.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenIssuedAfterTheSubjectCutoff_IsAccepted()
+    {
+        SetupInnerReturns(RefreshToken(GrantId));
+        SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-1));
+        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A session cutoff reaches a token of that session, leaving the same user's other sessions alone. Signing
+    /// out of one device must not sign the user out of the rest.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenOfACutOffSession_IsRejected()
+    {
+        SetupInnerReturns(RefreshToken(GrantId));
+        SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
+
+        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.TokenRevoked, error.Error);
+    }
+
+    /// <summary>
+    /// A cutoff reaches a token carrying no identifier of its own. The per-token arms are all guarded by
+    /// <c>jti</c>, which RFC 7519 Section 4.1.7 makes OPTIONAL, so a cutoff checked alongside them would let
+    /// exactly the tokens with no <c>jti</c> through - and nothing about a suspended account says its tokens
+    /// happen to be identified.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenWithoutAnIdentifier_IsStillReachedByACutoff()
+    {
+        SetupInnerReturns(new JsonWebToken
+        {
+            Payload =
+            {
+                ExpiresAt = Expiry,
+                Subject = Subject,
+                IssuedAt = IssuedAt,
+            }
+        });
+        SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
+
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.TokenRevoked, error.Error);
+    }
+
+    /// <summary>
+    /// A token carrying no issue time is left alone: with nothing to measure against the cutoff, refusing it
+    /// would revoke tokens on the strength of a claim that was never there.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenWithoutAnIssueTime_IsNotReachedByACutoff()
+    {
+        SetupInnerReturns(new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = ActiveJwtId,
+                ExpiresAt = Expiry,
+                Subject = Subject,
+            }
+        });
+        SetupCutoff(RevocationScope.Subject, Subject, Expiry);
+        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
+        => _cutoffs
+            .Setup(c => c.GetCutoffAsync(scope, principal, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cutoff);
+
     private void SetupInnerReturns(JsonWebToken token)
     {
         Result<JsonWebToken, JwtValidationError> success = token;
@@ -132,6 +249,9 @@ public class TokenStatusValidatorDecoratorTests
             JwtId = ActiveJwtId,
             ExpiresAt = Expiry,
             GrantId = grantId,
+            Subject = Subject,
+            SessionId = SessionId,
+            IssuedAt = IssuedAt,
         }
     };
 }

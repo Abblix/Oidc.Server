@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -19,9 +19,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// for initial token validation.
 /// </summary>
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
+/// <param name="cutoffRegistry">The registry of subject- and session-level revocation cutoffs.</param>
 /// <param name="innerValidator">The inner validator for initial token validation.</param>
 public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
+	IRevocationCutoffRegistry cutoffRegistry,
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
 	/// <summary>
@@ -59,7 +61,16 @@ public class TokenStatusValidatorDecorator(
 	{
 		var result = await innerValidator.ValidateAsync(jwt, parameters);
 
-		if (result.TryGetSuccess(out var token) && token.Payload.JwtId is { } jwtId)
+		if (!result.TryGetSuccess(out var token))
+			return result;
+
+		// Checked before the per-token arms below, and outside them: a cutoff is a fact about the principal
+		// rather than about one token, so it must also refuse a token that carries no identifier of its own.
+		if (await IsRevokedByCutoffAsync(token.Payload))
+			return new JwtValidationError(
+				JwtError.TokenRevoked, "Tokens issued to this principal before the revocation cutoff are rejected");
+
+		if (token.Payload.JwtId is { } jwtId)
 		{
 			// Refresh tokens carry a grant id (Payload.GrantId); other token types leave it null, so the family
 			// logic below is inert for them. A revoked grant is a kill switch that outlives any single token:
@@ -86,5 +97,35 @@ public class TokenStatusValidatorDecorator(
 		}
 
 		return result;
+	}
+
+	/// <summary>
+	/// Whether a cutoff recorded against this token's subject or session predates the token.
+	/// </summary>
+	/// <remarks>
+	/// Measured against <c>iat</c> rather than <c>auth_time</c>. OpenID Connect Core 1.0 section 2 makes
+	/// <c>auth_time</c> REQUIRED only when <c>max_age</c> is requested or when it is asked for as an essential
+	/// claim, and OPTIONAL otherwise - so a check built on it would pass silently for most tokens, which is
+	/// worse than no check. Every token carries <c>iat</c>.
+	/// <para>
+	/// A token issued exactly at the cutoff survives, because the cutoff means "everything from before this
+	/// moment": the write and the tokens it is meant to kill are ordered by the store, not by this comparison.
+	/// </para>
+	/// </remarks>
+	private async Task<bool> IsRevokedByCutoffAsync(JsonWebTokenPayload payload)
+	{
+		if (payload.IssuedAt is not { } issuedAt)
+			return false;
+
+		return await IsBeforeCutoffAsync(RevocationScope.Subject, payload.Subject, issuedAt)
+			|| await IsBeforeCutoffAsync(RevocationScope.Session, payload.SessionId, issuedAt);
+	}
+
+	private async Task<bool> IsBeforeCutoffAsync(RevocationScope scope, string? principal, DateTimeOffset issuedAt)
+	{
+		if (principal is not { Length: > 0 })
+			return false;
+
+		return await cutoffRegistry.GetCutoffAsync(scope, principal) is { } cutoff && issuedAt < cutoff;
 	}
 }

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -20,6 +22,20 @@ public interface IEntityStorageKeyFactory
     /// <param name="jwtId">The JSON Web Token identifier.</param>
     /// <returns>A formatted storage key for the JWT status.</returns>
     string JsonWebTokenStatusKey(string jwtId);
+
+    /// <summary>
+    /// Names the revocation cutoff recorded against a subject or a session.
+    /// </summary>
+    /// <param name="scope">Whether the principal is an end user or a single session.</param>
+    /// <param name="principal">The subject identifier or the session identifier.</param>
+    /// <returns>A formatted storage key for the cutoff.</returns>
+    /// <remarks>
+    /// Carries its own implementation because this interface has shipped: a host that implements it to
+    /// namespace its own store keeps compiling, and overrides this member when it wants the cutoff named
+    /// its way too.
+    /// </remarks>
+    string RevocationCutoffKey(RevocationScope scope, string principal)
+        => $"Abblix.Oidc.Server:Revoked:{scope}:{principal}";
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.

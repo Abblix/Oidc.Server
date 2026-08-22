@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -435,6 +435,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddTokenRevocation(this IServiceCollection services)
     {
         services.TryAddSingleton<ITokenRegistry, TokenRegistry>();
+        services.TryAddSingleton<IRevocationCutoffRegistry, RevocationCutoffRegistry>();
+        services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
+        services.TryAddSingleton(TimeProvider.System);
         return services
             .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
     }

@@ -368,6 +368,41 @@ public record OidcOptions
 	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
 
 	/// <summary>
+	/// How long a subject- or session-level revocation cutoff is kept.
+	/// </summary>
+	/// <remarks>
+	/// A cutoff refuses tokens issued before it, so it stops mattering once the longest-lived token it could
+	/// refuse has expired on its own. Keeping it beyond that costs one small entry per revoked principal;
+	/// dropping it early un-revokes whatever is still alive, which is why this is measured against the longest
+	/// refresh-token lifetime any client is configured with rather than against a typical one.
+	/// <para>
+	/// The default covers a refresh token living a month, which is far past this server's own default of eight
+	/// hours. A deployment issuing longer-lived refresh tokens raises this to match, or a revoked user's oldest
+	/// session comes back.
+	/// </para>
+	/// </remarks>
+	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);
+
+	/// <summary>
+	/// Whether ending a session also revokes the tokens issued within it.
+	/// </summary>
+	/// <remarks>
+	/// Off, which keeps a refresh token working after the user has signed out of the browser. That is what a
+	/// native application relies on to stay signed in while the web session ends, and turning it on for an
+	/// existing deployment would log those users out with nothing in their own code having changed.
+	/// <para>
+	/// Turn it on where a sign-out is meant to mean the end of access rather than the end of a browser session.
+	/// Nothing in the specification decides this: OpenID Connect RP-Initiated Logout 1.0 describes ending the
+	/// session and says nothing about the tokens issued in it, so it is a deployment's choice.
+	/// </para>
+	/// <para>
+	/// What it reaches is what a revocation cutoff reaches: refresh tokens, and access tokens a resource server
+	/// introspects. An access token validated locally against its signature and expiry never comes back here.
+	/// </para>
+	/// </remarks>
+	public bool RevokeSessionTokensOnLogout { get; set; }
+
+	/// <summary>
 	/// Configuration options for JWT Bearer grant type (RFC 7523).
 	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
 	/// </summary>
