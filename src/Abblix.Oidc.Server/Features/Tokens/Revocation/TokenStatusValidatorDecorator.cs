@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 
@@ -20,10 +23,15 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </summary>
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
 /// <param name="cutoffRegistry">The registry of subject- and session-level revocation cutoffs.</param>
+/// <param name="clientInfoProvider">Resolves the client a token names, so a pairwise pseudonym can be
+/// opened back into the subject a host would revoke.</param>
+/// <param name="subjectTypeConverter">Opens that pseudonym.</param>
 /// <param name="innerValidator">The inner validator for initial token validation.</param>
 public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffRegistry cutoffRegistry,
+	IClientInfoProvider clientInfoProvider,
+	ISubjectTypeConverter subjectTypeConverter,
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
 	/// <summary>
@@ -66,7 +74,14 @@ public class TokenStatusValidatorDecorator(
 
 		// Checked before the per-token arms below, and outside them: a cutoff is a fact about the principal
 		// rather than about one token, so it must also refuse a token that carries no identifier of its own.
-		if (await IsRevokedByCutoffAsync(token.Payload))
+		//
+		// Only where the caller validates lifetime, which is the same discriminator and not a coincidence: a
+		// cutoff says a token is too old to act on, so a caller that has switched lifetime off is saying it
+		// reads this token as a reference to something past rather than as authority. The logout endpoint is
+		// exactly that - an id_token_hint names the session that just ended, and refusing it because that
+		// session was revoked would break the second logout of a session the first one revoked.
+		if (parameters.Options.HasFlag(ValidationOptions.ValidateLifetime)
+			&& await IsRevokedByCutoffAsync(token.Payload))
 			return new JwtValidationError(
 				JwtError.TokenRevoked, "Tokens issued to this principal before the revocation cutoff are rejected");
 
@@ -103,13 +118,24 @@ public class TokenStatusValidatorDecorator(
 	/// Whether a cutoff recorded against this token's subject or session predates the token.
 	/// </summary>
 	/// <remarks>
-	/// Measured against <c>iat</c> rather than <c>auth_time</c>. OpenID Connect Core 1.0 section 2 makes
-	/// <c>auth_time</c> REQUIRED only when <c>max_age</c> is requested or when it is asked for as an essential
-	/// claim, and OPTIONAL otherwise - so a check built on it would pass silently for most tokens, which is
-	/// worse than no check. Every token carries <c>iat</c>.
+	/// Measured against <c>iat</c> rather than <c>auth_time</c>. Both are OPTIONAL in general - RFC 7519
+	/// Section 4.1.6 and Section 4.1.7 say so of every registered claim - but this server issues <c>iat</c> on
+	/// every token it mints, while <c>auth_time</c> is REQUIRED only when <c>max_age</c> was requested or it
+	/// was asked for as an essential claim (OpenID Connect Core 1.0 Section 2). A check built on the second
+	/// would pass silently for most tokens, which is worse than no check. A token arriving without <c>iat</c>
+	/// is left alone: there is nothing to measure, and refusing it would revoke on the strength of a claim
+	/// that was never there.
 	/// <para>
-	/// A token issued exactly at the cutoff survives, because the cutoff means "everything from before this
-	/// moment": the write and the tokens it is meant to kill are ordered by the store, not by this comparison.
+	/// A pairwise client's token carries a per-sector pseudonym rather than the subject the host revoked, so
+	/// the pseudonym is opened first. Without that, a subject revocation reaches every public client and
+	/// silently misses every pairwise one - which is the worst shape a security control can have, because the
+	/// deployment that needs it most is the one it fails.
+	/// </para>
+	/// <para>
+	/// The comparison is against the whole second the token declares. A JWT's <c>iat</c> is a whole number of
+	/// seconds, so a token minted in the same second as a revocation reads as older than it and is refused.
+	/// That errs towards refusing a token the revocation did not mean to catch, which is the direction to err
+	/// in, and it bounds the effect at one second.
 	/// </para>
 	/// </remarks>
 	private async Task<bool> IsRevokedByCutoffAsync(JsonWebTokenPayload payload)
@@ -117,8 +143,30 @@ public class TokenStatusValidatorDecorator(
 		if (payload.IssuedAt is not { } issuedAt)
 			return false;
 
-		return await IsBeforeCutoffAsync(RevocationScope.Subject, payload.Subject, issuedAt)
-			|| await IsBeforeCutoffAsync(RevocationScope.Session, payload.SessionId, issuedAt);
+		return await IsBeforeCutoffAsync(RevocationScope.Session, payload.SessionId, issuedAt)
+			|| await IsBeforeCutoffAsync(RevocationScope.Subject, await RealSubjectOfAsync(payload), issuedAt);
+	}
+
+	/// <summary>
+	/// The subject a host would name when revoking, recovered from what the token carries.
+	/// </summary>
+	/// <remarks>
+	/// A public client's token already carries it. A pairwise client's carries a pseudonym sealed to that
+	/// client's sector, which only the client's own registration can open - hence the lookup, keyed by the
+	/// <c>client_id</c> the token names. When the client cannot be found or its pseudonym cannot be opened,
+	/// the raw value is used: a cutoff recorded against it still refuses the token, which is the safe
+	/// direction for a value this method could not interpret.
+	/// </remarks>
+	private async Task<string?> RealSubjectOfAsync(JsonWebTokenPayload payload)
+	{
+		if (payload.Subject is not { Length: > 0 } subject || payload.ClientId is not { Length: > 0 } clientId)
+			return payload.Subject;
+
+		var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+		if (clientInfo is null || clientInfo.SubjectType != SubjectTypes.Pairwise)
+			return subject;
+
+		return subjectTypeConverter.ConvertBack(subject, clientInfo) ?? subject;
 	}
 
 	private async Task<bool> IsBeforeCutoffAsync(RevocationScope scope, string? principal, DateTimeOffset issuedAt)

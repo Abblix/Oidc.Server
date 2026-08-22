@@ -6,20 +6,20 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
-using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;

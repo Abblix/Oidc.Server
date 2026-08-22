@@ -372,13 +372,18 @@ public record OidcOptions
 	/// </summary>
 	/// <remarks>
 	/// A cutoff refuses tokens issued before it, so it stops mattering once the longest-lived token it could
-	/// refuse has expired on its own. Keeping it beyond that costs one small entry per revoked principal;
-	/// dropping it early un-revokes whatever is still alive, which is why this is measured against the longest
-	/// refresh-token lifetime any client is configured with rather than against a typical one.
+	/// refuse has expired on its own, and keeping it past that costs one small record per revoked principal.
 	/// <para>
-	/// The default covers a refresh token living a month, which is far past this server's own default of eight
-	/// hours. A deployment issuing longer-lived refresh tokens raises this to match, or a revoked user's oldest
-	/// session comes back.
+	/// Dropping it early is the failure that matters, and it is silent: a refresh token issued before a
+	/// revocation and still alive when the record expires starts working again, rotates into a fresh one, and
+	/// nothing logs anything. Set this to the longest <see cref="Features.ClientInformation.ClientInfo.RefreshToken"/>
+	/// absolute lifetime any client is configured with. It cannot be derived here - lifetimes are per client
+	/// and the client store answers by identifier rather than by enumeration - so the value is yours to keep
+	/// in step, and only a non-positive one is refused at startup.
+	/// </para>
+	/// <para>
+	/// The default covers a month, which is the longest refresh token most deployments issue and far past this
+	/// server's own default of eight hours.
 	/// </para>
 	/// </remarks>
 	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);

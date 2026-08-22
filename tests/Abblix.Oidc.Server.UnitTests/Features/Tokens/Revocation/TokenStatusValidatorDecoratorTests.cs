@@ -6,10 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System;
-using System.Threading;
 using System.Threading.Tasks;
+using System.Threading;
+using System;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
@@ -19,8 +23,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
 /// <summary>
-/// Unit tests for <see cref="TokenStatusValidatorDecorator"/> covering refresh-token family revocation
-/// per the OAuth 2.0 Security BCP (RFC 9700 Section 4.14.2) rotation model. The decorator turns a replay of a
+/// Unit tests for <see cref="TokenStatusValidatorDecorator"/> covering the two revocations it enforces:
+/// the refresh-token family per the OAuth 2.0 Security BCP (RFC 9700 Section 4.14.2) rotation model, and
+/// the subject- and session-level cutoffs an administrator writes. The decorator turns a replay of a
 /// superseded refresh token into a whole-family revocation and enforces the family kill switch on every
 /// subsequent use, so a compromised grant is shut down rather than leaving the attacker's active token working.
 /// </summary>
@@ -30,23 +35,38 @@ public class TokenStatusValidatorDecoratorTests
     private const string GrantId = "grant_001";
     private const string Subject = "user_42";
     private const string SessionId = "session_7";
+    private const string ClientId = "client_1";
+    private const string SectorIdentifier = "https://sector.example.com/uris.json";
+
+    private static readonly ISubjectTypeConverter SubjectConverter =
+        new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
     private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset IssuedAt = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
     private readonly Mock<ITokenRegistry> _registry = new(MockBehavior.Strict);
     private readonly Mock<IRevocationCutoffRegistry> _cutoffs = new(MockBehavior.Strict);
+    private readonly Mock<IClientInfoProvider> _clients = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenValidator> _inner = new(MockBehavior.Strict);
     private readonly TokenStatusValidatorDecorator _decorator;
 
     public TokenStatusValidatorDecoratorTests()
     {
-        _decorator = new TokenStatusValidatorDecorator(_registry.Object, _cutoffs.Object, _inner.Object);
+        // The real converter, not a mock: what has to hold is that a pairwise pseudonym opens back into the
+        // subject a host revoked, and a stub told to return the right answer proves nothing about that.
+        _decorator = new TokenStatusValidatorDecorator(
+            _registry.Object, _cutoffs.Object, _clients.Object, SubjectConverter, _inner.Object);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
         _cutoffs
             .Setup(c => c.GetCutoffAsync(
                 It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
+
+        // A public client is what every test but the pairwise one carries, and for it the subject in the
+        // token is already the subject a host would revoke.
+        _clients
+            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .ReturnsAsync(new ClientInfo(ClientId) { SubjectType = SubjectTypes.Public });
     }
 
     /// <summary>
@@ -161,6 +181,8 @@ public class TokenStatusValidatorDecoratorTests
         var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters());
 
         Assert.True(result.TryGetSuccess(out _));
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -227,6 +249,79 @@ public class TokenStatusValidatorDecoratorTests
         var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
 
         Assert.True(result.TryGetSuccess(out _));
+
+        // Nothing was even asked: with no issue time there is nothing to measure, so the store is not
+        // consulted at all. Without this the test passes over a decorator that ignores cutoffs entirely.
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(
+                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A pairwise client's token carries a per-sector pseudonym rather than the subject a host revoked, and
+    /// the cutoff still reaches it. Without opening the pseudonym, a suspension refuses every public client's
+    /// tokens and silently misses every pairwise one - the deployment most likely to need it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PairwiseTokenOfARevokedSubject_IsRejected()
+    {
+        var pairwiseClient = new ClientInfo(ClientId)
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifier = SectorIdentifier,
+        };
+        _clients.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(pairwiseClient);
+
+        var pseudonym = SubjectConverter.Convert(Subject, pairwiseClient);
+        Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
+
+        SetupInnerReturns(new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = ActiveJwtId,
+                ExpiresAt = Expiry,
+                Subject = pseudonym,
+                ClientId = ClientId,
+                IssuedAt = IssuedAt,
+            }
+        });
+
+        // The host revokes the subject it knows, which is the real one.
+        SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
+
+        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.TokenRevoked, error.Error);
+    }
+
+    /// <summary>
+    /// A caller that has switched lifetime validation off is not refused by a cutoff. The logout endpoint is
+    /// the case: an <c>id_token_hint</c> names the session that just ended, so a session cutoff written by
+    /// that very logout would refuse the hint on any second attempt - a browser refresh, a retrying relying
+    /// party, or the second relying party of a multi-party logout.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenTheCallerDoesNotValidateLifetime_ACutoffDoesNotRefuse()
+    {
+        SetupInnerReturns(RefreshToken(GrantId));
+        SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
+        _registry.Setup(r => r.GetStatusAsync(GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+        _registry.Setup(r => r.GetStatusAsync(ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
+
+        var result = await _decorator.ValidateAsync(
+            "opaque.id.jwt",
+            new ValidationParameters { Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime });
+
+        Assert.True(result.TryGetSuccess(out _));
+
+        // The store is not consulted at all, so this cannot pass by the cutoff happening to be absent.
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(
+                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)

@@ -30,12 +30,30 @@ public interface IEntityStorageKeyFactory
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <returns>A formatted storage key for the cutoff.</returns>
     /// <remarks>
-    /// Carries its own implementation because this interface has shipped: a host that implements it to
-    /// namespace its own store keeps compiling, and overrides this member when it wants the cutoff named
-    /// its way too.
+    /// The only member here with a body, so that an implementation written against an earlier version keeps
+    /// compiling. That has a cost worth knowing: a host implementing this interface to namespace its own store
+    /// keeps its namespace for every other key and silently inherits this one, since a default member is
+    /// satisfied without a compile error. Two tenants sharing a store and a user identifier would then share
+    /// a cutoff. Override it alongside the others.
+    /// <para>
+    /// The scope is spelled out rather than taking the enum member's name, because a rename is a refactor the
+    /// compiler blesses everywhere and it would orphan every live cutoff - every suspended account and every
+    /// ended session quietly working again on deploy.
+    /// </para>
     /// </remarks>
     string RevocationCutoffKey(RevocationScope scope, string principal)
-        => $"Abblix.Oidc.Server:Revoked:{scope}:{principal}";
+        => $"Abblix.Oidc.Server:Revoked:{NameOf(scope)}:{principal}";
+
+    /// <summary>
+    /// The wire name of a revocation scope, fixed independently of the enum member's name.
+    /// </summary>
+    private static string NameOf(RevocationScope scope) => scope switch
+    {
+        RevocationScope.Subject => "subject",
+        RevocationScope.Session => "session",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(scope), scope, $"No storage key is defined for this {nameof(RevocationScope)}."),
+    };
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.
