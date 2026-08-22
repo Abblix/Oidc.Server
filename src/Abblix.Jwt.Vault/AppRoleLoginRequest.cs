@@ -11,21 +11,6 @@ using System.Text.Json.Serialization;
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
-/// Body of a login against the Kubernetes auth method: the projected service-account token proves the pod,
-/// the role names what the pod becomes.
-/// </summary>
-internal sealed record KubernetesLoginRequest
-{
-    /// <summary>Name of the Vault role to log in as.</summary>
-    [JsonPropertyName("role")]
-    public required string Role { get; init; }
-
-    /// <summary>The projected service-account token, read from its file at the moment of login.</summary>
-    [JsonPropertyName("jwt")]
-    public required string Jwt { get; init; }
-}
-
-/// <summary>
 /// Body of a login against the AppRole auth method: the role and secret identifier pair.
 /// </summary>
 internal sealed record AppRoleLoginRequest
@@ -38,4 +23,3 @@ internal sealed record AppRoleLoginRequest
     [JsonPropertyName("secret_id")]
     public required string SecretId { get; init; }
 }
-

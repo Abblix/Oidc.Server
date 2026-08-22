@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,10 +14,3 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// <param name="Key">The profile's service key.</param>
 /// <param name="Allowances">The profile's own allowances - the only ones that can excuse it.</param>
 internal sealed record ValidationProfileIdentity(object Key, IReadOnlyList<ValidationAllowance> Allowances);
-
-/// <summary>
-/// One acknowledged departure: the security-critical default a profile does not carry, and why.
-/// </summary>
-/// <param name="Step">The step this excuses, and only this step.</param>
-/// <param name="Reason">Why this profile is right not to carry it.</param>
-internal sealed record ValidationAllowance(Type Step, string Reason);
