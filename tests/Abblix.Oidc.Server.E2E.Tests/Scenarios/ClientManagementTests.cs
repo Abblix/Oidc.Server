@@ -9,9 +9,17 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using Xunit;
@@ -101,6 +109,136 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var error = body["error"];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The registration response carries only what this server knows. A member the core does not model is
+    /// kept for an extension to read, and keeping it must not turn the endpoint into a mirror for whatever
+    /// JSON a stranger posts at it.
+    /// </summary>
+    [Fact]
+    public async Task An_unmodelled_member_is_not_echoed_in_the_response()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("keeps-its-own-metadata");
+        metadata["x_vendor_tier"] = "gold";
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        Assert.NotNull(registered[ResponseMembers.ClientId]);
+
+        // The response is built from a separate type, so nothing the caller sent comes back by accident.
+        // Asserted rather than assumed: the day someone builds the response from the request, this says so.
+        Assert.Null(registered["x_vendor_tier"]);
+    }
+
+    /// <summary>
+    /// Records what an extension sees of a registration, which is the only vantage point from which "the
+    /// member survived" can be asserted: the response deliberately does not carry it, so a test reading the
+    /// response alone cannot tell a kept member from a discarded one.
+    /// </summary>
+    private sealed class CapturingValidator : IClientRegistrationContextValidator
+    {
+        public IDictionary<string, JsonElement>? Seen { get; private set; }
+
+        public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+        {
+            Seen = context.Request.AdditionalMembers;
+            return Task.FromResult<OidcError?>(null);
+        }
+    }
+
+    /// <summary>
+    /// A member the core does not model reaches an extension point intact, name and value. Remove the
+    /// extension data from the request model and the information is gone before anything a host registered
+    /// can run.
+    /// </summary>
+    /// <remarks>
+    /// The capturing validator joins the family through <c>Decompose().AddLast</c>, which is also half of
+    /// what this test proves. Registering the contract directly would replace the composed pipeline instead
+    /// of extending it, and the test would then pass over a host with no registration validation at all -
+    /// which is why it also asserts, in the same host, that an invalid registration is still refused.
+    /// </remarks>
+    [Fact]
+    public async Task An_unmodelled_member_reaches_an_extension_point()
+    {
+        var capturing = new CapturingValidator();
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.Decompose<IClientRegistrationContextValidator>()
+                    .AddLast(ServiceDescriptor.Singleton<IClientRegistrationContextValidator>(capturing))));
+
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("seen-by-an-extension");
+        metadata["x_vendor_tier"] = "gold";
+
+        await RegisterClientAsync(client, discovery, metadata);
+
+        Assert.NotNull(capturing.Seen);
+        Assert.True(capturing.Seen.TryGetValue("x_vendor_tier", out var tier));
+        Assert.Equal("gold", tier.GetString());
+
+        // Only the unmodelled member is here: everything the core models was parsed into its own property,
+        // and finding one of those here would mean the mapping had stopped working.
+        Assert.Equal(["x_vendor_tier"], capturing.Seen.Keys);
+
+        // The pipeline this validator joined is still whole. Without this the test would stay green over a
+        // host that validates nothing, and the added validator is exactly what could have caused that.
+        var invalid = NewClientMetadata("no-redirect-uri");
+        invalid.Remove(RequestMembers.RedirectUris);
+        var refusal = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint, invalid, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refusal.StatusCode);
+    }
+
+    /// <summary>
+    /// Members the core does not model never cause a refusal, however many of them arrive. RFC 7591
+    /// Section 2 and OpenID Connect Dynamic Client Registration 1.0 Section 2 both require the server to
+    /// ignore metadata it does not understand, and a count-based refusal would be a refusal for exactly
+    /// that reason.
+    /// </summary>
+    [Fact]
+    public async Task Many_unmodelled_members_are_ignored_rather_than_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("brings-a-lot");
+        for (var i = 0; i < 256; i++)
+            metadata[$"x_vendor_member_{i}"] = "value";
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        Assert.NotNull(registered[ResponseMembers.ClientId]);
+    }
+
+    /// <summary>
+    /// An oversized body is refused by the transport before it is parsed. This is the only bound that can
+    /// work: model binding materializes the unmodelled members ahead of every validator, so a bound
+    /// expressed as a validator would be paid for after the allocation it exists to prevent.
+    /// </summary>
+    [Fact]
+    public async Task An_oversized_registration_body_is_refused_before_it_is_parsed()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("brings-too-much");
+        metadata["x_vendor_blob"] = new string('a', 256 * 1024);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
 
     [Fact]

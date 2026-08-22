@@ -200,7 +200,8 @@ public static class EndpointRouteBuilderExtensions
         {
             oidcGroup
                 .MapPost(routes.Register, RegisterClientAsync)
-                .WithName(EndpointNames.Register);
+                .WithName(EndpointNames.Register)
+                .WithMetadata(new RegistrationRequestSizeLimit(options.MaxRegistrationRequestSize));
 
             oidcGroup
                 .MapGet(routes.RegisterClient, ReadClientAsync)

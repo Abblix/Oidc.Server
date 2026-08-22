@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -333,6 +333,30 @@ public record OidcOptions
 	/// names in return is interoperability, since client software cannot register itself unattended.
 	/// </remarks>
 	public bool RequireInitialAccessToken { get; set; } = true;
+
+	/// <summary>
+	/// The largest registration request body this server will read, in bytes. A body over the limit is
+	/// refused by the transport with 413 before any of it is parsed.
+	/// </summary>
+	/// <remarks>
+	/// The bound exists because the registration endpoint parses a foreign document and keeps the members
+	/// it does not model (<see cref="Model.ClientRegistrationRequest.AdditionalMembers"/>), which costs
+	/// several times the body's own size in memory. Model binding runs ahead of every validator, including
+	/// the initial access token check, so a bound expressed as a validator would be paid for after the
+	/// allocation it is meant to prevent; only a limit the transport enforces runs early enough.
+	/// <para>
+	/// The refusal is deliberately a transport one. RFC 7591 Section 2 requires the server to ignore
+	/// metadata it does not understand, so refusing a registration for carrying unknown members would
+	/// contradict it - whereas declining to read an oversized body is not a statement about metadata at all.
+	/// </para>
+	/// <para>
+	/// The default is generous next to a real registration: an inline JWKS with several keys, a software
+	/// statement and a long list of redirect URIs together stay well under a tenth of it. Raise it for a
+	/// deployment that genuinely needs more, and note that a host or reverse proxy may impose a lower
+	/// limit of its own, which wins.
+	/// </para>
+	/// </remarks>
+	public long MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
 	/// The set of revoked initial access token identifiers (JWT subject claims).
