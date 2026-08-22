@@ -252,7 +252,7 @@ public class TransmitterDeliveryTests
         var options = new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" };
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer);
-        var service = new StreamManagementService(store, outbox, dispatcher, options);
+        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options));
 
         Assert.True(await service.ChangeStreamStatusAsync(
             "receiver-a", "s-1", StreamStatuses.Disabled, "maintenance",
@@ -274,4 +274,13 @@ public class TransmitterDeliveryTests
             CancellationToken cancellationToken = default)
             => Task.FromResult($"signed.{token.JwtId}");
     }
+
+    /// <summary>
+    /// The address policy these tests hand to the service, with a resolver of their own: the one branch
+    /// of the policy that is not a string comparison would otherwise reach a live DNS for a name nobody
+    /// owns, and the test would measure the network.
+    /// </summary>
+    private static ReceiverAddressPolicy PolicyFor(SharedSignalsTransmitterOptions options)
+        => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
+            [System.Net.IPAddress.Parse("93.184.216.34")]));
 }

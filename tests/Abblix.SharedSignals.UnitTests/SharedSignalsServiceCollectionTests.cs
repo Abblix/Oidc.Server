@@ -19,6 +19,7 @@ using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -93,6 +94,41 @@ public class SharedSignalsServiceCollectionTests
             .BuildServiceProvider();
 
         Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
+    }
+
+    /// <summary>
+    /// A host that drives delivery passes itself gets no sweeper of the package's own.
+    /// </summary>
+    /// <remarks>
+    /// The scheduler used to be registered whatever the options said, and its <c>ExecuteAsync</c>
+    /// returned immediately when the interval was null - so a host driving its own passes still ran a
+    /// second hosted service, and the only way to tell was to read its log. Worse, the two disagreed
+    /// about pacing: this scheduler carries no backoff, so a host that had configured one watched its
+    /// ceiling honoured by one sweeper and ignored by the other.
+    ///
+    /// "No interval" and "no scheduler" are one statement, and it is made once here rather than twice.
+    /// </remarks>
+    [Fact]
+    public void WithNoInterval_ThePackageRegistersNoSweeper()
+    {
+        using var driven = SecurityEventsBase()
+            .AddSharedSignalsTransmitter(TransmitterOptions with { PushDeliveryInterval = null })
+            .BuildServiceProvider();
+
+        Assert.DoesNotContain(
+            driven.GetServices<IHostedService>(), service => service is PushDeliveryScheduler);
+    }
+
+    /// <summary>The control: left at its default the package does sweep, or the assertion above is empty.</summary>
+    [Fact]
+    public void WithAnInterval_ThePackageSweeps()
+    {
+        using var defaults = SecurityEventsBase()
+            .AddSharedSignalsTransmitter(TransmitterOptions)
+            .BuildServiceProvider();
+
+        Assert.Contains(
+            defaults.GetServices<IHostedService>(), service => service is PushDeliveryScheduler);
     }
 
     [Fact]

@@ -79,7 +79,17 @@ public static class ServiceCollectionExtensions
         // Something has to drain the queues, and until this existed nothing did: a host wired the
         // transmitter, mapped its endpoints, and watched events pile up with no error anywhere. A
         // deployment that drives passes itself sets the interval to null.
-        services.AddHostedService<PushDeliveryScheduler>();
+        //
+        // Registered only when there is an interval to sweep on, rather than always and idle. Always
+        // meant a host driving its own passes still ran this hosted service - harmless-looking, since
+        // it returns at once, and not harmless at all: register-by-default and opt-in are
+        // indistinguishable from the host's side, so nothing said a second sweeper existed except the
+        // log. That mattered because this sweeper carries no backoff, so a host that had configured a
+        // ceiling watched one sweeper honour it while this one retried at a flat interval beside it.
+        if (options.PushDeliveryInterval is not null)
+        {
+            services.AddHostedService<PushDeliveryScheduler>();
+        }
 
         return services;
     }

@@ -30,12 +30,18 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="outbox">The per-stream queues, dropped with their stream.</param>
 /// <param name="dispatcher">Mints and enqueues the framework's own signals.</param>
 /// <param name="options">The deployment's one-time decisions.</param>
+/// <param name="addressPolicy">
+/// Judges the delivery address a receiver proposes. The same policy the sender consults, deliberately:
+/// an address refused at delivery is refused for a reason that was already true when the receiver named
+/// it, and answering 201 to a stream that can never be delivered to tells the receiver nothing it can
+/// act on - the refusal then lives only in the transmitter's log.</param>
 /// <param name="clock">Measures the verification throttle; null takes the system clock.</param>
 public sealed class StreamManagementService(
     IStreamStore store,
     IEventOutbox outbox,
     EventDispatcher dispatcher,
     SharedSignalsTransmitterOptions options,
+    ReceiverAddressPolicy addressPolicy,
     TimeProvider? clock = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -71,6 +77,12 @@ public sealed class StreamManagementService(
             return ManagementResult<StreamConfiguration>.BadRequest(
                 "The requested delivery method is not supported by this transmitter "
                 + "(SSF 1.0 Section 8.1.1.1).");
+        }
+
+        if (await AddressRefusalOf(delivery, cancellationToken) is { } refusal)
+        {
+            return ManagementResult<StreamConfiguration>.BadRequest(
+                $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
         }
 
         var configuration = new StreamConfiguration
@@ -178,6 +190,15 @@ public sealed class StreamManagementService(
             {
                 return ManagementResult<StreamConfiguration>.BadRequest(
                     "The requested delivery method is not supported by this transmitter.");
+            }
+
+            // Checked on the way in as well as at creation: a receiver that created a stream with an
+            // address this transmitter accepts can otherwise walk it onto one it does not, and the
+            // stream would be as undeliverable as if it had been created that way.
+            if (await AddressRefusalOf(delivery, cancellationToken) is { } refusal)
+            {
+                return ManagementResult<StreamConfiguration>.BadRequest(
+                    $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
             }
 
             configuration = configuration with { Delivery = delivery };
@@ -571,6 +592,38 @@ public sealed class StreamManagementService(
             PollDeliveryMethod or null when options.PollEndpointFactory is { } pollEndpointOf =>
                 new PollDeliveryMethod(pollEndpointOf(streamId)),
             _ => null,
+        };
+
+    /// <summary>
+    /// Why this transmitter will never deliver to the proposed address, or null when it will.
+    /// </summary>
+    /// <remarks>
+    /// Asked here as well as at delivery, and by the same policy on purpose. The reasons an address is
+    /// refused - cleartext, or a host naming this deployment's own network - are true the moment the
+    /// receiver names it, so accepting the stream and refusing every push afterwards tells the receiver
+    /// nothing: its create succeeded, and the refusal lives only in a log it cannot read. Two checks
+    /// over one fact would drift; one policy consulted twice cannot.
+    ///
+    /// Poll delivery is not judged: the address in it is this transmitter's own, minted from
+    /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> rather than proposed from
+    /// outside, and nothing arrives from the receiver to judge.
+    ///
+    /// Every method is named, and an unnamed one throws rather than falling through to "nothing to
+    /// judge". A delivery method added later carries an address from somewhere, and the quiet answer
+    /// would exempt it from this check on the day it is written - the one shape this method exists to
+    /// prevent, arriving as a default that looks like agreement.
+    /// </remarks>
+    private async Task<string?> AddressRefusalOf(
+        StreamDeliveryMethod delivery, CancellationToken cancellationToken)
+        => delivery switch
+        {
+            PushDeliveryMethod push => await addressPolicy.RejectionOf(push.EndpointUrl, cancellationToken),
+            PollDeliveryMethod => null,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(delivery),
+                delivery.Method,
+                "This delivery method has no address rule, so nothing decided whether its endpoint may "
+                    + "be used. Name it here rather than letting it deliver unjudged."),
         };
 
     /// <summary>
