@@ -9,6 +9,7 @@
         <Title>Abblix OIDC Server</Title>
         <Description>A certified OpenID Connect and OAuth 2.0 provider you embed in your own ASP.NET Core app. Certified in every OpenID profile, with DPoP, PAR, JARM, and token exchange, on .NET 8, 9, and 10.</Description>
         <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Abblix LLP</Authors>
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
