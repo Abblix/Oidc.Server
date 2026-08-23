@@ -533,16 +533,26 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to register settings into.</param>
     /// <param name="settings">The pairwise subject settings containing the seal key (salt) and hash algorithm.</param>
+    /// <exception cref="ArgumentException">The salt is missing, not valid base64, or too short.</exception>
     /// <remarks>
-    /// The salt is judged by <see cref="PairwiseSubjectSettings.Salt"/> itself, so an unusable one throws where
-    /// it is written rather than here. That matters because the instance below is registered with
-    /// <c>TryAddSingleton</c>: a host that pre-registered its own wins, and a check placed here would judge the
-    /// copy nobody uses while reading as a guarantee about the one in use.
+    /// Judged here as well as by <see cref="PairwiseSubjectSettings.Salt"/>, and the two answer about different
+    /// instances rather than about one fact twice. The property covers every instance somebody WRITES - an
+    /// object initialiser, a <c>with</c> expression - and it is the only place that can, since the extension
+    /// registers with <c>TryAddSingleton</c> and a host's own instance wins.
+    ///
+    /// It cannot cover an instance the configuration binder BUILDS. <c>required</c> is a compiler rule: the
+    /// binder constructs the object and then sets only the properties whose keys are present, so an absent
+    /// <c>Pairwise:Salt</c> never enters the accessor and the seal key is null with nothing raised - measured,
+    /// not assumed. Left to reach the container that way, it surfaces as a 500 from the token endpoint the
+    /// first time a pairwise identifier is minted, which is the failure this check exists to move to startup.
     /// </remarks>
     public static IServiceCollection AddPairwiseSubjectIdentifiers(
         this IServiceCollection services,
         PairwiseSubjectSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        PairwiseSubjectSettings.ValidateSalt(settings.Salt);
+
         services.TryAddSingleton(settings);
         return services;
     }

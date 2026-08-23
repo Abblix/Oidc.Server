@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -21,7 +21,7 @@ public record PairwiseSubjectSettings
     /// The minimum decoded length of the salt. It is the sole key material of the pairwise seal, so it carries
     /// 256 bits of secret entropy - anything shorter weakens every pairwise identifier the server issues.
     /// </summary>
-    public const int MinSaltBytes = 32;
+    private const int MinSaltBytes = 32;
 
     private readonly string _salt = null!;
 
@@ -29,22 +29,25 @@ public record PairwiseSubjectSettings
     /// A base64-encoded cryptographic key that keys the deterministic authenticated-encryption seal producing
     /// pairwise identifiers. This value MUST be kept secret, generated once, and never changed
     /// (changing it would invalidate all existing pairwise identifiers - none could be opened back).
-    /// Minimum length: <see cref="MinSaltBytes"/> bytes before encoding.
+    /// Minimum length: 32 bytes (256 bits) before encoding.
     /// </summary>
     /// <exception cref="ArgumentException">The salt is missing, is not valid base64, or decodes to fewer than
-    /// <see cref="MinSaltBytes"/> bytes.</exception>
+    /// 32 bytes.</exception>
     /// <remarks>
-    /// Judged by the value itself rather than by whoever hands it over, because more than one hand does.
-    /// <c>AddPairwiseSubjectIdentifiers</c> takes an instance as an argument and registers it with
-    /// <c>TryAddSingleton</c>, so a host that registered its own wins - and a check placed at the extension
-    /// judges the copy nobody ends up using, which reads as a guarantee and is not one. Here there is no
-    /// unvalidated instance to hold: configuration binding, an object initialiser and a <c>with</c> expression
-    /// all run this, so a weak seal key fails where it is written.
+    /// Refused on assignment, so an instance somebody writes cannot carry a key that will not do - the seal
+    /// has no other key material, and a weak one weakens every pairwise identifier the server ever issues.
+    /// An instance the configuration binder builds is judged by
+    /// <c>AddPairwiseSubjectIdentifiers</c> instead: the binder sets only the properties whose keys are
+    /// present, so an absent one never reaches this accessor.
     /// </remarks>
     public required string Salt
     {
         get => _salt;
-        init => _salt = Validated(value);
+        init
+        {
+            ValidateSalt(value);
+            _salt = value;
+        }
     }
 
     /// <summary>
@@ -53,7 +56,16 @@ public record PairwiseSubjectSettings
     /// </summary>
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
 
-    private static string Validated(string salt)
+    /// <summary>Refuses a salt that cannot key the seal.</summary>
+    /// <param name="salt">The base64 value a deployment configured.</param>
+    /// <exception cref="ArgumentException">It is missing, is not valid base64, or decodes to fewer than 32 bytes.</exception>
+    /// <remarks>
+    /// Reachable because the property cannot be the only judge. The configuration binder constructs the
+    /// object and then sets only the properties whose keys are present, so an absent key never enters the
+    /// accessor - <c>required</c> is a compiler rule and the binder does not enforce it. A caller holding an
+    /// instance it did not write asks here instead.
+    /// </remarks>
+    public static void ValidateSalt(string? salt)
     {
         if (string.IsNullOrWhiteSpace(salt))
             throw new ArgumentException(
@@ -77,6 +89,5 @@ public record PairwiseSubjectSettings
                 $"pairwise subject seal securely, but it decoded to {decoded.Length} bytes.",
                 nameof(salt));
 
-        return salt;
     }
 }
