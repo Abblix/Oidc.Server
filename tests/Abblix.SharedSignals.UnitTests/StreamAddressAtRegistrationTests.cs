@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Net;
+using System.Net.Sockets;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SharedSignals.Model;
@@ -34,13 +35,15 @@ namespace Abblix.SharedSignals.UnitTests;
 /// which is the door a receiver reaches by accident: create with what works, then move the endpoint.
 /// </para>
 /// <para>
-/// The scheme is the part that makes this checkable up front. Unlike a resolved address, which may
-/// legitimately differ between registration and delivery, a scheme is fixed the moment the receiver
-/// names it - so refusing it later says nothing the transmitter did not already know.
+/// What a registration may judge is what the NAME settles: the scheme, a host spelling out this
+/// deployment's own network, an IP literal, an operator's permission. None of those can differ between
+/// registration and delivery, so refusing them later says nothing the transmitter did not already know.
+/// What the name RESOLVES to is not among them, and is left to delivery.
 /// </para>
 /// <para>
-/// The same policy answers both questions on purpose. Two checks over one fact drift apart, and this
-/// pair drifted the widest way possible: one of them did not exist.
+/// One policy answers both, and the registration question is a strict PREFIX of the delivery one rather
+/// than a second copy - so the two cannot come to disagree. A rule restated at a call site is a rule
+/// with two versions, and nothing tells you which one an address met.
 /// </para>
 /// </remarks>
 public class StreamAddressAtRegistrationTests
@@ -197,7 +200,57 @@ public class StreamAddressAtRegistrationTests
         Delivery = new PushDeliveryMethod(endpoint),
     };
 
-    private static StreamManagementService Service(IReadOnlyList<Uri>? allowed = null)
+    /// <summary>A registration does not resolve the name, so a resolver that is down does not refuse one.</summary>
+    /// <remarks>
+    /// <para>
+    /// Resolution is the one part of the address question that is NOT settled when the receiver writes
+    /// it: the name is looked up again for every pass. Delivery treats a resolver failure as a condition
+    /// an operator recovers from - it holds the queue rather than emptying it - and the same fact
+    /// answered at registration would be a terminal 400 instead, with no way for the receiver to tell it
+    /// from a permanent refusal. The ordinary case is not exotic: a receiver registers as it starts, and
+    /// its own DNS record may still be propagating.
+    /// </para>
+    /// <para>
+    /// The count is asserted as well as the outcome, because a 201 alone would also be true of a
+    /// resolver that was consulted and happened to answer.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARegistration_DoesNotResolveTheName()
+    {
+        var resolutions = 0;
+        var service = Service(resolve: (_, _) =>
+        {
+            Interlocked.Increment(ref resolutions);
+            return Task.FromException<IPAddress[]>(new SocketException((int)SocketError.HostNotFound));
+        });
+
+        var created = await service.CreateStreamAsync(
+            Receiver, Request(Secure), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(0, resolutions);
+    }
+
+    /// <summary>The control: delivery still asks the whole question, resolution included.</summary>
+    /// <remarks>
+    /// Without it the case above is satisfied by a policy that stopped resolving at all, which would
+    /// remove the check that keeps a public name resolving to a private address out of the network.
+    /// </remarks>
+    [Fact]
+    public async Task Delivery_StillJudgesWhatTheNameResolvesTo()
+    {
+        var policy = new ReceiverAddressPolicy(
+            new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
+            (_, _) => Task.FromResult<IPAddress[]>([IPAddress.Parse("169.254.169.254")]));
+
+        Assert.Null(policy.RejectionOfName(Secure));
+        Assert.NotNull(await policy.RejectionOf(Secure, TestContext.Current.CancellationToken));
+    }
+
+    private static StreamManagementService Service(
+        IReadOnlyList<Uri>? allowed = null,
+        ReceiverAddressPolicy.HostResolver? resolve = null)
     {
         var options = new SharedSignalsTransmitterOptions
         {
@@ -216,7 +269,8 @@ public class StreamAddressAtRegistrationTests
         // A resolver of the test's own, so the one branch of the policy that is not a string comparison
         // stays out of this file: a live DNS lookup would make these tests depend on a name nobody owns.
         var policy = new ReceiverAddressPolicy(
-            options, (_, _) => Task.FromResult<IPAddress[]>([IPAddress.Parse("93.184.216.34")]));
+            options,
+            resolve ?? ((_, _) => Task.FromResult<IPAddress[]>([IPAddress.Parse("93.184.216.34")])));
 
         return new StreamManagementService(store, outbox, dispatcher, options, policy, clock);
     }
