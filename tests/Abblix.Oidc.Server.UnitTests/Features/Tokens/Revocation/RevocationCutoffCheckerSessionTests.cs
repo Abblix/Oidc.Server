@@ -191,7 +191,7 @@ public class RevocationCutoffCheckerSessionTests
     }
 
     /// <summary>
-    /// The session scope is compared the same way as the subject scope, tolerance included.
+    /// The session scope takes no tolerance either, the same as the subject scope.
     /// </summary>
     /// <remarks>
     /// Stated separately because the two arms are separate code: an implementation applying the tolerance to
@@ -208,15 +208,16 @@ public class RevocationCutoffCheckerSessionTests
     }
 
     /// <summary>
-    /// A cutoff on both scopes still refuses, and names the subject - the scope that reaches every session
-    /// rather than the one that reaches this one.
+    /// A cutoff on both scopes refuses, and the session scope is what answers.
     /// </summary>
     /// <remarks>
-    /// The scope is the only handle the log line carries, so which arm answers first is observable and worth
-    /// pinning rather than leaving to the order the two ifs happen to be written in.
+    /// Which arm answers is observable, because the scope is the only handle the log line carries, and the
+    /// boolean is the same either way - so asserting the refusal alone would leave the order free to drift
+    /// back. Session first matches the order the token side asks in, and it is the narrower answer: it names
+    /// the sign-in that was revoked rather than the person across all of theirs.
     /// </remarks>
     [Fact]
-    public async Task WhenBothScopesCarryACutoff_TheSessionIsRefused()
+    public async Task WhenBothScopesCarryACutoff_TheSessionScopeAnswers()
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
@@ -224,6 +225,11 @@ public class RevocationCutoffCheckerSessionTests
         var refused = await Checker().IsSessionRefusedAsync(Session());
 
         Assert.True(refused);
+
+        // The subject scope is never reached, which is what says the session arm answered first.
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     /// <summary>
@@ -231,9 +237,7 @@ public class RevocationCutoffCheckerSessionTests
     /// </summary>
     /// <remarks>
     /// The record declares both non-nullable, but its protobuf form has plain scalars that deserialize an
-    /// absent field to an empty string, and a host-supplied session service can produce one directly. An
-    /// empty principal matches no cutoff, so the arm that would have refused simply does not fire - which is
-    /// the fail-open shape. Asserted so the behaviour is a decision on the record rather than an accident.
+    /// absent field to an empty string, and a host-supplied session service can produce one directly.
     /// </remarks>
     [Theory]
     [InlineData("", SessionId)]
@@ -246,6 +250,31 @@ public class RevocationCutoffCheckerSessionTests
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
         Assert.True(await Checker().IsSessionRefusedAsync(session));
+    }
+
+    /// <summary>
+    /// And a cutoff recorded only against the principal the session does not name lets it through.
+    /// </summary>
+    /// <remarks>
+    /// The fail-open shape, stated rather than left to be discovered: an empty principal matches no cutoff,
+    /// so the arm that would have refused does not fire, and with the other scope carrying nothing the
+    /// session survives. It is a decision on the record because the alternative reads worse - refusing every
+    /// session a host produces without one of the two identifiers, which is a configuration fault rather
+    /// than a revocation, and refusing it here would report it as a revocation.
+    /// </remarks>
+    [Theory]
+    [InlineData(RevocationScope.Subject, "", SessionId)]
+    [InlineData(RevocationScope.Session, Subject, "")]
+    public async Task WhenTheSessionNamesNoPrincipalAndOnlyThatScopeCarriesACutoff_ItIsUsable(
+        RevocationScope scope, string subject, string sessionId)
+    {
+        // The cutoff is recorded against the principal this session does not name, so the arm that would
+        // have refused has nothing to look up and the other arm has no cutoff to find.
+        SetupCutoff(scope, scope is RevocationScope.Subject ? Subject : SessionId, AuthenticatedAt.AddMinutes(1));
+
+        var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
+
+        Assert.False(await Checker().IsSessionRefusedAsync(session));
     }
 
     /// <summary>

@@ -278,11 +278,39 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
-        // Establish the session and learn the subject, then take a code and hold it.
+        // Establish the session and learn the subject.
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var subject = SubjectOf(tokens);
 
+        // Two codes from the same session. The first is redeemed before the revocation and must work: a
+        // code that was never redeemable answers invalid_grant for reasons that have nothing to do with
+        // revocation - a drifted redirect URI, a mismatched verifier, a code consumed elsewhere - and this
+        // test would report the control working while measuring one of those.
+        var (firstVerifier, firstCode) = await TakeCodeAsync(client, discovery);
+        var (secondVerifier, secondCode) = await TakeCodeAsync(client, discovery);
+
+        var beforeRevocation = await RedeemAsync(client, discovery, firstCode, firstVerifier);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the code should be redeemable before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSubjectAsync(
+            subject, cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await RedeemAsync(client, discovery, secondCode, secondVerifier);
+
+        await AssertInvalidGrantAsync(afterRevocation);
+    }
+
+    /// <summary>
+    /// Takes an authorization code from the session this client already holds, and the verifier that
+    /// redeems it.
+    /// </summary>
+    private static async Task<(string Verifier, string Code)> TakeCodeAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
         var (verifier, challenge) = GeneratePkcePair();
+
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
@@ -295,22 +323,20 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         });
 
-        await RevokerOf(host).RevokeSubjectAsync(
-            subject, cancellationToken: TestContext.Current.CancellationToken);
-
-        var response = await FormPostHelpers.PostFormAsync(
-            client, discovery.TokenEndpoint, new Dictionary<string, string>
-            {
-                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-                [TokenRequest.Parameters.Code] = code,
-                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-                [TokenRequest.Parameters.CodeVerifier] = verifier,
-                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            });
-
-        await AssertInvalidGrantAsync(response);
+        return (verifier, code);
     }
+
+    private static async Task<HttpResponseMessage> RedeemAsync(
+        HttpClient client, DiscoveryDocument discovery, string code, string verifier) =>
+        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
 
     /// <summary>
     /// How a client asks for a silent renewal: no user interface, reuse whatever session is there.

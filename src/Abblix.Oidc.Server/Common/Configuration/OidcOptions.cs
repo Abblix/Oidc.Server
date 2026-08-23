@@ -414,18 +414,30 @@ public record OidcOptions
 	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
 	/// reports it.
 	/// <para>
-	/// The value is added to the cutoff, so it widens what a revocation catches. Its cost is the mirror image:
-	/// a user signing in again within this window of a revocation of their own subject is refused once, since
-	/// the fresh token cannot be told apart from a drifted old one. Keep it above the worst clock difference
-	/// between instances and well below anything a person would notice as being locked out; the default is a
-	/// minute, which is far above a cluster running NTP.
+	/// The value is added to the cutoff, so it widens what a revocation catches, and the cost is that it
+	/// catches more than the revocation named. A token minted after a legitimate sign-in, but inside this
+	/// window of a cutoff, cannot be told apart from a drifted old one and is refused. That is not one
+	/// retry - it lasts the whole window, because every token minted inside it carries an issue time inside
+	/// it. A user reinstated a moment after being suspended waits this long before their tokens work.
+	/// </para>
+	/// <para>
+	/// So this is priced against clock drift and nothing else: it must exceed the worst difference between
+	/// the instance that stamps a token and the instance that records a revocation, and buy no more than
+	/// that. On hosts running NTP the difference is milliseconds, and the default of five seconds is three
+	/// orders of magnitude above it while staying short enough to read as a retry. Raise it only for a
+	/// deployment that knows its clocks are worse, and price the lockout when doing so.
+	/// </para>
+	/// <para>
+	/// It applies to tokens alone. An authentication session is judged with no tolerance at all, because
+	/// there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
+	/// retry lands in the same window - a loop rather than a wait.
 	/// </para>
 	/// <para>
 	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
 	/// single-instance deployment and of nothing else.
 	/// </para>
 	/// </remarks>
-	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromMinutes(1);
+	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromSeconds(5);
 
 	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.

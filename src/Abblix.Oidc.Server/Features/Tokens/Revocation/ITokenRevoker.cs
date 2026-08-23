@@ -37,7 +37,9 @@ public interface ITokenRevoker
     /// Two things stop. Every token issued to them earlier is refused on its next use, and every browser
     /// session authenticated earlier stops being reusable, so the authorization endpoint will not mint a
     /// replacement against one. Signing in again works immediately and leaves nothing to clean up: the new
-    /// session is later than the cutoff and passes.
+    /// session is later than the cutoff and passes. Its tokens follow once
+    /// <see cref="Common.Configuration.OidcOptions.RevocationCutoffSkew"/> has elapsed, since inside that
+    /// window a freshly minted token cannot be told from one whose clock ran ahead.
     /// </remarks>
     /// <param name="subject">The subject identifier the tokens carry.</param>
     /// <param name="before">The moment to cut off at; the current time when omitted. Tokens issued at or

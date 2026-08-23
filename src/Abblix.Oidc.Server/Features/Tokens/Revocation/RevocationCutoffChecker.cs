@@ -43,8 +43,9 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// A cutoff therefore has two sides, and the token side alone would be a control that can be walked
 /// around: <c>iat</c> is stamped afresh by every authorization, so a browser session the revocation never
 /// reached would mint a replacement past the cutoff on the first attempt and on every attempt after.
-/// <see cref="IsSessionRefusedAsync"/> is the other side, consulted by the authorization endpoint before it
-/// reuses a session.
+/// <see cref="IsSessionRefusedAsync"/> is the other side, consulted wherever a session is about to be used:
+/// by the authorization endpoint before it reuses one, and by the token endpoint before it redeems a grant
+/// authorized from one.
 /// </para>
 /// <para>
 /// The comparison is against the whole second the token declares. A JWT's <c>iat</c> is a whole number of
@@ -191,11 +192,16 @@ public partial class RevocationCutoffChecker(
     /// <paramref name="tolerance"/> for the clocks the two came from.
     /// </summary>
     /// <remarks>
-    /// The tolerance is the caller's because the two callers pay opposite prices for it. Widening the cutoff
-    /// refuses a little more than the revocation named, which on a token costs the client one retry and is
-    /// the safe direction. On a session it costs the user the only remedy they have: the fresh sign-in they
-    /// would answer the refusal with lands inside the same window and is refused again, so the tolerance
-    /// buys a loop rather than a retry. See <see cref="IsSessionRefusedAsync"/>.
+    /// The tolerance is the caller's because the two callers pay different prices for it, and neither price
+    /// is one retry. On a token it costs the whole window: every token minted inside it carries an issue
+    /// time inside it, so a user reinstated a moment after being suspended waits the window out. That is
+    /// worth paying for a value sized to clock drift, which is what
+    /// <see cref="OidcOptions.RevocationCutoffSkew"/> is.
+    /// <para>
+    /// On a session the same widening costs the user the only remedy they have: the fresh sign-in they would
+    /// answer the refusal with lands inside the window and is refused again, so it buys a loop rather than a
+    /// wait. <see cref="IsSessionRefusedAsync"/> therefore passes none.
+    /// </para>
     /// </remarks>
     private async Task<bool> IsBeforeCutoffAsync(
         RevocationScope scope, string? principal, DateTimeOffset instant, TimeSpan tolerance)

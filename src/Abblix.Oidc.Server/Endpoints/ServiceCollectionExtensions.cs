@@ -259,11 +259,16 @@ public static class ServiceCollectionExtensions
         //   ClientInfo.RequireDPoP to decide whether DPoP is mandatory or opportunistic.
         // - ClientValidator must also precede ScopeValidator: ScopeValidator enforces the client's
         //   registered scope set and therefore reads ClientInfo, which ClientValidator populates.
+        // - AuthorizationGrantValidator must precede RevokedSessionValidator, which reads the AuthSession
+        //   the former resolves. It also has to stay in validation rather than move into the processor:
+        //   the authorization code is spent by a decorator around the processor, so a refusal there would
+        //   burn a code the request never earned.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.RevokedSessionValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>()
         ]);
         // Combine all registered ITokenContextValidator into a single composite validator.

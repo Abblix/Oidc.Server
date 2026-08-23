@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 
 namespace Abblix.Oidc.Server.Endpoints.Token;
@@ -26,13 +25,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="accessTokenService">Issues access-token JWTs.</param>
 /// <param name="refreshTokenService">Issues refresh-token JWTs, rolling the previous one for refresh-token grants.</param>
 /// <param name="identityTokenService">Issues ID tokens.</param>
-/// <param name="cutoffChecker">Refuses a grant whose authentication session a revocation has caught.</param>
 /// <param name="tokenContextEvaluator">Narrows scopes/resources and computes mTLS confirmation binding.</param>
 public class TokenRequestProcessor(
 	IAccessTokenService accessTokenService,
 	IRefreshTokenService refreshTokenService,
 	IIdentityTokenService identityTokenService,
-	IRevocationCutoffChecker cutoffChecker,
 	ITokenAuthorizationContextEvaluator tokenContextEvaluator) : ITokenRequestProcessor
 {
 	/// <summary>
@@ -52,19 +49,6 @@ public class TokenRequestProcessor(
 	/// </remarks>
 	public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
 	{
-		// Before anything is computed from the grant. A grant carries the session it was authorized from,
-		// and neither of the other two checks reaches it: the token side compares issue times and every
-		// token minted here is new, while the authorization endpoint judged that session when the grant
-		// was created and does not see it again. A code, a device code or a CIBA request outstanding when
-		// a revocation lands would otherwise redeem into a refresh family permanently past the cutoff,
-		// because rotation carries the first issue time forward.
-		if (await cutoffChecker.IsSessionRefusedAsync(request.AuthorizedGrant.AuthSession))
-		{
-			return new OidcError(
-				ErrorCodes.InvalidGrant,
-				"The session this grant was authorized from has been revoked.");
-		}
-
 		var clientInfo = request.ClientInfo;
 		clientInfo.CheckClientLicense();
 

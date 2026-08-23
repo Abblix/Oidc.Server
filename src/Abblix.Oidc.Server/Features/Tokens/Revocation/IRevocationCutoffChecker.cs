@@ -31,8 +31,7 @@ public interface IRevocationCutoffChecker
     Task<JwtValidationError?> CheckAsync(JsonWebTokenPayload payload);
 
     /// <summary>
-    /// Whether a cutoff refuses this authentication session, so the authorization endpoint must not mint
-    /// against it.
+    /// Whether a cutoff refuses this authentication session, so nothing may mint against it.
     /// </summary>
     /// <remarks>
     /// Without this the token side alone is half a control. A cutoff refuses tokens already issued, and
@@ -46,7 +45,8 @@ public interface IRevocationCutoffChecker
     /// here for as long as the record is kept.
     /// </para>
     /// </remarks>
-    /// <param name="session">A session the authorization endpoint is considering reusing.</param>
+    /// <param name="session">A session about to be used: one the authorization endpoint is considering
+    /// reusing, or the one a grant presented at the token endpoint was authorized from.</param>
     /// <returns><c>true</c> when the session must not be used.</returns>
     Task<bool> IsSessionRefusedAsync(AuthSession session);
 }
