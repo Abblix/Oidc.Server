@@ -200,13 +200,19 @@ public static class EndpointRouteBuilderExtensions
         {
             oidcGroup
                 .MapPost(routes.Register, RegisterClientAsync)
-                .WithName(EndpointNames.Register);
+                .WithName(EndpointNames.Register)
+                .BoundBy(options.MaxRegistrationRequestSize);
 
             oidcGroup
                 .MapGet(routes.RegisterClient, ReadClientAsync)
                 .WithName(EndpointNames.RegisterClient);
 
-            oidcGroup.MapPut(routes.RegisterClient, UpdateClientAsync);
+            // The update endpoint (RFC 7592 Section 2.2) binds the same model as registration, ahead of the
+            // registration access token check, so it carries the same bound.
+            oidcGroup
+                .MapPut(routes.RegisterClient, UpdateClientAsync)
+                .BoundBy(options.MaxRegistrationRequestSize);
+
             oidcGroup.MapDelete(routes.RegisterClient, RemoveClientAsync);
         }
 

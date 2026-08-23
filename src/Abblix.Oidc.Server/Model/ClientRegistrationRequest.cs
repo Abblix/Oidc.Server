@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -638,6 +639,46 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.SoftwareStatement)]
     public string? SoftwareStatement { get; set; }
+
+    /// <summary>
+    /// The members of the registration this server does not model, kept as raw JSON rather than
+    /// discarded, so an extension can read metadata the core knows nothing about.
+    /// </summary>
+    /// <remarks>
+    /// This is a foreign document: a registering client sends its own metadata, and dropping the
+    /// unmapped half at parse time leaves no seam that could recover it - by the time any extension
+    /// point runs, the information is gone.
+    /// <para>
+    /// Keeping a member is not understanding it. RFC 7591 Section 2: "The authorization server MUST
+    /// ignore any client metadata sent by the client that it does not understand". OpenID Connect
+    /// Dynamic Client Registration 1.0 states the same rule in Section 3.2, about the response: "An
+    /// Authorization Server MAY ignore values provided by the client and MUST ignore any fields sent by
+    /// the Client that it does not understand". So nothing here may cause a registration to be refused
+    /// and nothing here reaches the stored client record. A host that wants to act on one of these
+    /// members supplies the understanding, by adding its own
+    /// <see cref="Endpoints.DynamicClientManagement.Validation.IClientRegistrationContextValidator"/>
+    /// through the family API rather than by registering the contract directly.
+    /// </para>
+    /// <para>
+    /// These are body members and nothing else. A claim carried in a trusted <c>software_statement</c>
+    /// never appears here, so a host reading one of these values is reading the client's own assertion
+    /// even when the software statement contradicts it - and RFC 7591 Section 2 gives the software
+    /// statement precedence: "If the same client metadata name is present in both locations and the
+    /// software statement is trusted by the authorization server, the value of a claim in the software
+    /// statement MUST take precedence". A host acting on a member that its software statements can also
+    /// carry has to resolve that itself.
+    /// </para>
+    /// <para>
+    /// What arrives here is attacker-controlled, unlike the provider metadata a client keeps the same
+    /// way, and it is bounded only by the size of the request body - see
+    /// <see cref="Common.Configuration.OidcOptions.MaxRegistrationRequestSize"/>, which refuses an
+    /// oversized body before it is bound. This type must not be serialized outward: the extension
+    /// data is written back verbatim, so anything that serializes a request emits client-supplied JSON.
+    /// The registration response is built from a separate type for that reason.
+    /// </para>
+    /// </remarks>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalMembers { get; init; }
 
     /// <summary>
     /// Wire-level parameter names for the dynamic client registration request (RFC 7591 and OpenID Connect

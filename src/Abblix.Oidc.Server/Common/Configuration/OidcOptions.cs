@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -333,6 +333,45 @@ public record OidcOptions
 	/// names in return is interoperability, since client software cannot register itself unattended.
 	/// </remarks>
 	public bool RequireInitialAccessToken { get; set; } = true;
+
+	/// <summary>
+	/// The largest body the registration and update endpoints will read, in bytes, or <c>null</c> to leave
+	/// the bound entirely to the host. A body over the limit is answered 413 before it is bound.
+	/// </summary>
+	/// <remarks>
+	/// The bound exists because these endpoints parse a foreign document and keep the members they do not
+	/// model (<see cref="Model.ClientRegistrationRequest.AdditionalMembers"/>), which costs several times
+	/// the body's own size in memory. Model binding runs ahead of every validator, including the initial
+	/// access token check and the registration access token check, so a bound expressed as a validator
+	/// would be paid for after the allocation it is meant to prevent.
+	/// <para>
+	/// The refusal is about length and never about content. RFC 7591 Section 2 requires the server to
+	/// ignore metadata it does not understand, so refusing a registration for carrying unknown members
+	/// would contradict it - whereas declining to read an oversized body is not a statement about metadata
+	/// at all, and a bound that counted unrecognised members would be.
+	/// </para>
+	/// <para>
+	/// How it is enforced differs by host, and the difference is worth knowing when sizing capacity.
+	/// A minimal API host publishes the value as endpoint metadata the server reads before the body, so
+	/// the refusal costs no managed memory - but a server that does not implement
+	/// <c>IHttpMaxRequestBodySizeFeature</c>, including the in-memory test server, ignores it. An MVC host
+	/// enforces it in a resource filter that buffers the body itself, which holds regardless of server and
+	/// costs up to this many bytes per concurrent request while the request is refused.
+	/// </para>
+	/// <para>
+	/// The default is generous next to a real registration: an inline JWKS with several keys, a software
+	/// statement and a long list of redirect URIs together stay well under a tenth of it. Raise it for a
+	/// deployment that genuinely needs more.
+	/// </para>
+	/// <para>
+	/// Clearing it adds no bound of ours and removes none of anybody else's: the server's own limit still
+	/// applies (Kestrel defaults to 30,000,000 bytes) and so does whatever a reverse proxy in front of it
+	/// enforces, which is the point of clearing it. That is why it is expressed as an absent value rather
+	/// than as a very large number - a number is still a bound, and a very large one asks an MVC host to
+	/// buffer a very large body.
+	/// </para>
+	/// </remarks>
+	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
 	/// The set of revoked initial access token identifiers (JWT subject claims).
