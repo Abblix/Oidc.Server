@@ -56,7 +56,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(request, model, request.ClientInfo);
+		var authSessions = await GetAvailableAuthSessionsAsync(request);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
@@ -235,13 +235,15 @@ public class AuthorizationRequestProcessor(
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
 	/// </summary>
-	/// <param name="request">The validated request, supplying the end user an <c>id_token_hint</c> named.</param>
-	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
-	/// <param name="clientInfo">The client, supplying default_max_age / default_acr_values fallbacks.</param>
+	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
+	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
+	/// <c>id_token_hint</c> named.</param>
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(
-		ValidAuthorizationRequest request, AuthorizationRequest model, ClientInfo clientInfo)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{
+		var model = request.Model;
+		var clientInfo = request.ClientInfo;
+
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
 		// Filter by maximum authentication age. When the request omits max_age, fall back to the
@@ -265,29 +267,53 @@ public class AuthorizationRequestProcessor(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
+		// OpenID Connect Core 1.0 Section 3.1.2.1: when a hint names an end user, a positive response is
+		// owed only if that end user is the one logged in, and otherwise the server MUST return an error.
+		// Comparing here rather than refusing outright is what serves the whole sentence: a request left
+		// with no session takes the arms above, so prompt=none answers login_required while anything else
+		// reaches the login page, which is where "is logged in as a result of the request" happens.
+		if (request.IdTokenHintSubject is not null)
+			authSessions = authSessions.Where(session => NamedByHint(session, request, clientInfo));
+
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no
 		// token-side cutoff can catch. This closes the repeatable door; the token endpoint closes the
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
-		// cheap filters above, so a session already ruled out by max_age or acr costs no store lookup.
-		// OpenID Connect Core 1.0 Section 3.1.2.1: when a hint names an end user, a positive response is
-		// owed only if that end user is the one logged in. Comparing here rather than refusing outright is
-		// what the section asks for - a request left with no session takes the arms above, so prompt=none
-		// answers login_required and anything else reaches the login page, where the hinted user can log in
-		// and satisfy it.
-		if (request.IdTokenHintSubject is { Length: > 0 } hintedSubject)
-		{
-			// Converted forward, not opened. A pairwise client's hint carries the pseudonym sealed to its
-			// sector, and sealing the session is total where opening the pseudonym is not - a conversion
-			// that could not be made must not come out as a match.
-			authSessions = authSessions.Where(
-				session => string.Equals(
-					subjectTypeConverter.Convert(session.Subject, clientInfo),
-					hintedSubject,
-					StringComparison.Ordinal));
-		}
-
+		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
+		// lookup.
 		return KeepUnrevokedAsync(authSessions);
+	}
+
+	/// <summary>
+	/// Whether this session belongs to the end user the request's <c>id_token_hint</c> named.
+	/// </summary>
+	/// <remarks>
+	/// The session is converted forward rather than the hint opened, because only the forward direction
+	/// answers for a client whose sector moved since the hint was minted: opening would fail, while sealing
+	/// produces the pseudonym that client would receive today and compares it against what it sent.
+	/// <para>
+	/// Neither direction is total. Sealing needs pairwise settings the deployment may not have configured,
+	/// and a client registered as pairwise without them makes the converter throw. That is a configuration
+	/// fault rather than an answer about this end user, so it is reported as no match: the request loses
+	/// this session and takes the login arms, instead of the endpoint faulting for every request that
+	/// merely carried a hint.
+	/// </para>
+	/// </remarks>
+	private bool NamedByHint(AuthSession session, ValidAuthorizationRequest request, ClientInfo clientInfo)
+	{
+		try
+		{
+			// Ordinal: a subject is an opaque identifier compared octet for octet, and two that differ only
+			// in case are two different end users.
+			return string.Equals(
+				subjectTypeConverter.Convert(session.Subject, clientInfo),
+				request.IdTokenHintSubject,
+				StringComparison.Ordinal);
+		}
+		catch (InvalidOperationException)
+		{
+			return false;
+		}
 	}
 
 	/// <summary>

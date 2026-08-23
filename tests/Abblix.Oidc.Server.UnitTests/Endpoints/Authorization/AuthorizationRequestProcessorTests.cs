@@ -289,6 +289,29 @@ public class AuthorizationRequestProcessorTests
         Assert.Equal(ErrorCodes.AccountSelectionRequired, error.Error);
     }
 
+    /// <summary>
+    /// A hint differing from a logged-in subject only in case names somebody else.
+    /// </summary>
+    /// <remarks>
+    /// A subject is an opaque identifier, compared octet for octet, and a host is free to mint two that
+    /// differ only in case. Nothing else in this suite visits the distinction, so relaxing the comparison to
+    /// ignore case would otherwise leave every test green.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WithAHintDifferingOnlyInCase_ShouldReturnLoginRequired()
+    {
+        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "USER_1");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { Session("user_1") }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.LoginRequired, error.Error);
+    }
+
     private static AuthSession Session(string subject)
         => new(subject, $"session-of-{subject}", DateTimeOffset.UtcNow, "local");
 

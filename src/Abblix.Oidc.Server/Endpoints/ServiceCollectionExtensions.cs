@@ -179,13 +179,18 @@ public static class ServiceCollectionExtensions
             // Right after ClientValidator: needs the resolved ClientInfo and must reject plain
             // parameters from a require_signed_request_object client before further processing.
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, SignedRequestObjectRequirementValidator>(),
-            // Also needs the resolved ClientInfo, to check the hint was addressed to this client.
-            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
             // Scoped: FlowTypeValidator consumes IEnumerable<IAuthorizationResponseBuilder>, which
             // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.
             ServiceDescriptor.Scoped<IAuthorizationContextValidator, FlowTypeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, ResponseModeValidator>(),
+            // After RedirectUriValidator and ResponseModeValidator, not merely after ClientValidator, even
+            // though ClientInfo is what it reads. Its refusals are the kind RFC 6749 Section 4.1.2.1 says the
+            // client must be told about, and the two validators above are what decide where a refusal goes and
+            // in which channel: before them ValidRedirectUri is null and the client gets a 400 in the end
+            // user's browser instead of a redirect carrying error and state. Placing it here also keeps
+            // signature verification behind the cheap parameter checks rather than in front of them.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
