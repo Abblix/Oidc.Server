@@ -179,6 +179,8 @@ public static class ServiceCollectionExtensions
             // Right after ClientValidator: needs the resolved ClientInfo and must reject plain
             // parameters from a require_signed_request_object client before further processing.
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, SignedRequestObjectRequirementValidator>(),
+            // Also needs the resolved ClientInfo, to check the hint was addressed to this client.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, RedirectUriValidator>(),
             // Scoped: FlowTypeValidator consumes IEnumerable<IAuthorizationResponseBuilder>, which
             // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.
@@ -660,7 +662,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddEndSessionContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IEndSessionContextValidator, IdTokenHintValidator>(),
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, ConfirmationValidator>()

@@ -36,6 +36,7 @@ public record ValidAuthorizationRequest
 		Scope = context.Scope;
 		Resources = context.Resources;
 		AuthorizationDetails = context.AuthorizationDetails;
+		IdTokenHintSubject = context.IdTokenHintSubject;
 	}
 
 	/// <summary>
@@ -54,6 +55,16 @@ public record ValidAuthorizationRequest
 	/// token has been issued, without reaching into <see cref="Model"/>.
 	/// </summary>
 	public Uri? RequestUri { get; init; }
+
+	/// <summary>
+	/// The end user the request's <c>id_token_hint</c> names, as that ID token spells it, or <c>null</c>
+	/// when the request carried no hint.
+	/// </summary>
+	/// <remarks>
+	/// For a pairwise client this is the pseudonym sealed to that client's sector rather than the subject a
+	/// session carries, so a comparison converts the session forward rather than opening this.
+	/// </remarks>
+	public string? IdTokenHintSubject { get; init; }
 
 	/// <summary>
 	/// Information about the client making the request, as determined during validation.

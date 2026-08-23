@@ -14,12 +14,12 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
-
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -33,6 +33,7 @@ public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
 	IRevocationCutoffChecker cutoffChecker,
+	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
@@ -55,7 +56,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(model, request.ClientInfo);
+		var authSessions = await GetAvailableAuthSessionsAsync(request, model, request.ClientInfo);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
@@ -234,10 +235,12 @@ public class AuthorizationRequestProcessor(
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
 	/// </summary>
+	/// <param name="request">The validated request, supplying the end user an <c>id_token_hint</c> named.</param>
 	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
 	/// <param name="clientInfo">The client, supplying default_max_age / default_acr_values fallbacks.</param>
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model, ClientInfo clientInfo)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(
+		ValidAuthorizationRequest request, AuthorizationRequest model, ClientInfo clientInfo)
 	{
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
@@ -267,6 +270,23 @@ public class AuthorizationRequestProcessor(
 		// token-side cutoff can catch. This closes the repeatable door; the token endpoint closes the
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
 		// cheap filters above, so a session already ruled out by max_age or acr costs no store lookup.
+		// OpenID Connect Core 1.0 Section 3.1.2.1: when a hint names an end user, a positive response is
+		// owed only if that end user is the one logged in. Comparing here rather than refusing outright is
+		// what the section asks for - a request left with no session takes the arms above, so prompt=none
+		// answers login_required and anything else reaches the login page, where the hinted user can log in
+		// and satisfy it.
+		if (request.IdTokenHintSubject is { Length: > 0 } hintedSubject)
+		{
+			// Converted forward, not opened. A pairwise client's hint carries the pseudonym sealed to its
+			// sector, and sealing the session is total where opening the pseudonym is not - a conversion
+			// that could not be made must not come out as a match.
+			authSessions = authSessions.Where(
+				session => string.Equals(
+					subjectTypeConverter.Convert(session.Subject, clientInfo),
+					hintedSubject,
+					StringComparison.Ordinal));
+		}
+
 		return KeepUnrevokedAsync(authSessions);
 	}
 

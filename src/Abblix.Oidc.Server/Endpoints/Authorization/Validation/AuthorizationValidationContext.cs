@@ -75,4 +75,16 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>
 	public JsonArray? AuthorizationDetails { get; set; }
+
+	/// <summary>
+	/// The end user the request's <c>id_token_hint</c> names, as that ID token spells it, or <c>null</c>
+	/// when the request carried no hint.
+	/// </summary>
+	/// <remarks>
+	/// Spelled as the ID token has it, which for a pairwise client is the pseudonym sealed to that client's
+	/// sector rather than the subject a session carries. Whoever compares the two converts the session
+	/// forward; opening the pseudonym would fail whenever it could not be opened, and a comparison that
+	/// could not be made must not read as a match.
+	/// </remarks>
+	public string? IdTokenHintSubject { get; set; }
 }
