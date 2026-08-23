@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -12,6 +12,7 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using Abblix.SecurityEvents.Delivery;
+using Microsoft.Extensions.Logging;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 
@@ -27,10 +28,12 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="httpClient">The client transmissions travel through.</param>
 /// <param name="outbox">The queues being drained.</param>
 /// <param name="addressPolicy">Judges the receiver's address before anything is sent to it.</param>
-public sealed class PushDeliverySender(
+/// <param name="logger">Carries the receiver's own reason for a refusal into this deployment's log.</param>
+public sealed partial class PushDeliverySender(
     HttpClient httpClient,
     IEventOutbox outbox,
-    ReceiverAddressPolicy addressPolicy)
+    ReceiverAddressPolicy addressPolicy,
+    ILogger<PushDeliverySender> logger)
 {
     /// <summary>
     /// Sends what one stream has pending.
@@ -104,8 +107,17 @@ public sealed class PushDeliverySender(
                     {
                         // The receiver objects to this transmitter, not to this event: leave it queued so a
                         // later pass can deliver it once the credentials or the grant are put right.
+                        LogReceiverObjected(
+                            stream.StreamId, verdict?.Error ?? NoVerdict, verdict?.Description ?? NoVerdict);
                         break;
                     }
+
+                    // The receiver owes a reason with a 400 (RFC 8935 Section 2.3) and it arrives here, where
+                    // it was previously read for the final-or-transient decision and then dropped. Nothing else
+                    // carries it: this side sees a status code and the receiver's own log is not ours to read,
+                    // so a stream refusing every SET looked from here exactly like one refusing none.
+                    LogSetRefused(
+                        stream.StreamId, item.JwtId, verdict?.Error ?? NoVerdict, verdict?.Description ?? NoVerdict);
 
                     await outbox.AcknowledgeAsync(stream.StreamId, [item.JwtId], cancellationToken);
                     rejected++;

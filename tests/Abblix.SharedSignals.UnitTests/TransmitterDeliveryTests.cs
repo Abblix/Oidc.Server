@@ -11,6 +11,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.SecurityEvents.Delivery;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -74,7 +75,7 @@ public class TransmitterDeliveryTests
             .Enqueue(HttpStatusCode.Accepted)
             .Enqueue(HttpStatusCode.Accepted);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -96,7 +97,7 @@ public class TransmitterDeliveryTests
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"),
             new OutboxItem("jti-3", "c.c.c"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -105,6 +106,81 @@ public class TransmitterDeliveryTests
             ["jti-2", "jti-3"],
             (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
+    }
+
+    /// <summary>The receiver's own reason for refusing a SET reaches this deployment's log.</summary>
+    /// <remarks>
+    /// <para>
+    /// RFC 8935 Section 2.3 makes the receiver owe an error body with a 400, and it arrives here - it was
+    /// already read to decide whether the refusal is final. Dropping it after that decision left this side
+    /// holding a status code, and the receiver's own log is not ours to read, so a stream refusing every SET
+    /// looked from here exactly like a stream refusing none.
+    /// </para>
+    /// <para>
+    /// Both halves are asserted, because a code without a description names a class of problem and a
+    /// description without a code cannot be grouped.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Push_BadRequest_CarriesTheReceiversReasonIntoTheLog()
+    {
+        var handler = new StubHttpHandler().Enqueue(
+            HttpStatusCode.BadRequest,
+            """{"err": "invalid_audience", "description": "aud names a receiver this stream is not"}""");
+        var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
+        var logger = new CapturingLogger();
+
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        var written = Assert.Single(logger.Written);
+        Assert.Contains("invalid_audience", written, StringComparison.Ordinal);
+        Assert.Contains("aud names a receiver this stream is not", written, StringComparison.Ordinal);
+
+        // The SET is named too: a deployment with several queued events needs to know WHICH one was refused.
+        Assert.Contains("jti-1", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>The control: a delivery the receiver accepts writes nothing.</summary>
+    /// <remarks>
+    /// Without it the assertion above is satisfied by a sender that logs on every pass, which would bury the
+    /// refusals it exists to surface - the shape this whole line of work started from.
+    /// </remarks>
+    [Fact]
+    public async Task Push_Accepted_WritesNothing()
+    {
+        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
+        var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
+        var logger = new CapturingLogger();
+
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Empty(logger.Written);
+    }
+
+    /// <summary>Keeps what was written, formatted the way a log sink would render it.</summary>
+    private sealed class CapturingLogger : ILogger<PushDeliverySender>
+    {
+        public List<string> Written { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Written.Add(formatter(state, exception));
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
     }
 
     /// <summary>
@@ -122,7 +198,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -147,7 +223,7 @@ public class TransmitterDeliveryTests
     {
         var handler = new StubHttpHandler().Enqueue(HttpStatusCode.BadRequest, body, mediaType);
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -164,7 +240,7 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", "a.a.a"),
             new OutboxItem("jti-2", "b.b.b", IsStatusAnnouncement: true));
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver);
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, NullLogger<PushDeliverySender>.Instance);
 
         var outcome = await sender.SendPendingAsync(
             PushStream(StreamStatuses.Paused), TestContext.Current.CancellationToken);
