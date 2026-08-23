@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -129,7 +129,9 @@ public class AuthorizationRequestProcessor(
 			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
 
-		// RFC 9396 §5: a consent provider may narrow or deny authorization_details entries.
+		// RFC 9396 §7.1: "The authorization details attached to the access token MAY differ from what
+		// the client requests", the user authorizing less than was asked being the named case. §7 is what
+		// obliges the server to tell the client what it actually got.
 		//   Granted.AuthorizationDetails == null    -> legacy provider, no AD opinion; pass through what the
 		//                                              validator pipeline produced (backward compat with PR #135).
 		//   Granted.AuthorizationDetails is { Count: 0 } AND the request carried AD entries
