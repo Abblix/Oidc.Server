@@ -116,6 +116,7 @@ public class ClientManagementController : ControllerBase
     [HttpPut(Path.RegisterClient)]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
+    [LimitsRegistrationRequestSize]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter formatter,

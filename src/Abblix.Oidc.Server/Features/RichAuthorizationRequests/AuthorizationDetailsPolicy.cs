@@ -73,7 +73,7 @@ internal sealed class AuthorizationDetailsPolicy(
 
         var result = await ValidateAsync(authorizationDetails, client, token);
 
-        // Rebuild the raw array from the validated typed list (RFC 9396 §5 narrow / extend).
+        // Rebuild the raw array from the validated typed list (RFC 9396 §7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
         // to the original - DeepClone in ToRawJsonArray preserves member order and any
         // type-specific payload. When a validator returned a modified AuthorizationDetail,

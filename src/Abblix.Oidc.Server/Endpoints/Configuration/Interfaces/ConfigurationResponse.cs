@@ -239,7 +239,7 @@ public record ConfigurationResponse
 	public bool? AuthorizationResponseIssParameterSupported { get; init; }
 
 	/// <summary>
-	/// RFC 9396 §13: the authorization-detail <c>type</c> values this server's host has
+	/// RFC 9396 §10: the authorization-detail <c>type</c> values this server's host has
 	/// registered validators for. Sourced from the same keyed-DI registry that request-time
 	/// dispatch uses; emitted as <c>authorization_details_types_supported</c> on the wire,
 	/// or omitted when null (no per-type validators registered).

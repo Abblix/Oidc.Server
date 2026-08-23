@@ -722,7 +722,7 @@ public class JsonWebTokenClaimsTests
     }
 
     /// <summary>
-    /// Verifies that the <c>authorization_details</c> claim (RFC 9396 §7) round-trips through the
+    /// Verifies that the <c>authorization_details</c> claim (RFC 9396 §9) round-trips through the
     /// full sign/encrypt/decrypt/validate pipeline via the typed
     /// <see cref="JsonWebTokenPayload.AuthorizationDetails"/> accessor. Both standardised
     /// RFC 9396 §2.2 members and type-specific payload in

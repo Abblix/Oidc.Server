@@ -219,7 +219,7 @@ public record ReadClientSuccessfulResponse
     /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
-    /// RFC 9396 §5.1). Echoes the registered value of
+    /// RFC 9396 §10). Echoes the registered value of
     /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
     /// </summary>
     [JsonPropertyOrder(25)]
@@ -377,7 +377,7 @@ public record ReadClientSuccessfulResponse
         /// </summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
 
-        /// <summary>The <c>authorization_details_types</c> registered metadata member (RFC 9396 §5.1).
+        /// <summary>The <c>authorization_details_types</c> registered metadata member (RFC 9396 §10).
         /// </summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
 

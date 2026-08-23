@@ -291,7 +291,7 @@ public class AuthorizationDetailsPolicyTests
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 §5 validator-side mutation pipeline. Per-type validators see
+    // RFC 9396 §7.1 validator-side mutation pipeline. Per-type validators see
     // one entry at a time and may narrow or normalise it; mutations propagate
     // through ApplyAsync's rebuild from the validated typed list. Cross-entry
     // policy (drop-entry, total-amount cap across the whole list) is the

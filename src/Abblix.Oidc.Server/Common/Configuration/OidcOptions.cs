@@ -335,28 +335,39 @@ public record OidcOptions
 	public bool RequireInitialAccessToken { get; set; } = true;
 
 	/// <summary>
-	/// The largest registration request body this server will read, in bytes. A body over the limit is
-	/// refused by the transport with 413 before any of it is parsed.
+	/// The largest body the registration and update endpoints will read, in bytes, or <c>null</c> to leave
+	/// the bound entirely to the host. A body over the limit is answered 413 before it is bound.
 	/// </summary>
 	/// <remarks>
-	/// The bound exists because the registration endpoint parses a foreign document and keeps the members
-	/// it does not model (<see cref="Model.ClientRegistrationRequest.AdditionalMembers"/>), which costs
-	/// several times the body's own size in memory. Model binding runs ahead of every validator, including
-	/// the initial access token check, so a bound expressed as a validator would be paid for after the
-	/// allocation it is meant to prevent; only a limit the transport enforces runs early enough.
+	/// The bound exists because these endpoints parse a foreign document and keep the members they do not
+	/// model (<see cref="Model.ClientRegistrationRequest.AdditionalMembers"/>), which costs several times
+	/// the body's own size in memory. Model binding runs ahead of every validator, including the initial
+	/// access token check and the registration access token check, so a bound expressed as a validator
+	/// would be paid for after the allocation it is meant to prevent.
 	/// <para>
-	/// The refusal is deliberately a transport one. RFC 7591 Section 2 requires the server to ignore
-	/// metadata it does not understand, so refusing a registration for carrying unknown members would
-	/// contradict it - whereas declining to read an oversized body is not a statement about metadata at all.
+	/// The refusal is about length and never about content. RFC 7591 Section 2 requires the server to
+	/// ignore metadata it does not understand, so refusing a registration for carrying unknown members
+	/// would contradict it - whereas declining to read an oversized body is not a statement about metadata
+	/// at all, and a bound that counted unrecognised members would be.
+	/// </para>
+	/// <para>
+	/// How it is enforced differs by host, and the difference is worth knowing when sizing capacity.
+	/// A minimal API host publishes the value as endpoint metadata the server reads before the body, so
+	/// the refusal costs no managed memory - but a server that does not implement
+	/// <c>IHttpMaxRequestBodySizeFeature</c>, including the in-memory test server, ignores it. An MVC host
+	/// enforces it in a resource filter that buffers the body itself, which holds regardless of server and
+	/// costs up to this many bytes per concurrent request while the request is refused.
 	/// </para>
 	/// <para>
 	/// The default is generous next to a real registration: an inline JWKS with several keys, a software
 	/// statement and a long list of redirect URIs together stay well under a tenth of it. Raise it for a
-	/// deployment that genuinely needs more, and note that a host or reverse proxy may impose a lower
-	/// limit of its own, which wins.
+	/// deployment that genuinely needs more. A host or reverse proxy may impose a lower limit of its own,
+	/// which wins - and a deployment that would rather bound the body there alone sets this to <c>null</c>,
+	/// which is the one way to express "no limit of ours": every numeric value is a limit, so a very large
+	/// number asks an MVC host to buffer a very large body rather than removing the bound.
 	/// </para>
 	/// </remarks>
-	public long MaxRegistrationRequestSize { get; set; } = 128 * 1024;
+	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
 	/// The set of revoked initial access token identifiers (JWT subject claims).

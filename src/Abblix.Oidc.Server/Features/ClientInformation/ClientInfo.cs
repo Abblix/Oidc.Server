@@ -206,7 +206,7 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// RFC 9396 §5.1: the client's per-client allowlist of authorization-detail <c>type</c>
+    /// RFC 9396 §10: the client's per-client allowlist of authorization-detail <c>type</c>
     /// values it may use in <c>authorization_details</c> requests. DCR-exposed
     /// (<c>authorization_details_types</c>). Semantics:
     /// <list type="bullet">

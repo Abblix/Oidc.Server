@@ -109,7 +109,7 @@ public static class AuthorizationContextExtensions
             };
         }
 
-        // RFC 9396 §7: the AS MAY include the authorized authorization_details in the access
+        // RFC 9396 §9: the AS MAY include the authorized authorization_details in the access
         // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
         // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
         // the payload's JsonNode tree independent of the source AuthorizationContext.
