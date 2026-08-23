@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -32,6 +33,7 @@ public class TokenRequestProcessorTests
     private readonly Mock<IRefreshTokenService> _refreshTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
     private readonly Mock<ITokenAuthorizationContextEvaluator> _contextEvaluator;
+    private readonly Mock<IRevocationCutoffChecker> _cutoffChecker;
     private readonly TokenRequestProcessor _processor;
 
     public TokenRequestProcessorTests()
@@ -40,10 +42,16 @@ public class TokenRequestProcessorTests
         _refreshTokenService = new Mock<IRefreshTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
         _contextEvaluator = new Mock<ITokenAuthorizationContextEvaluator>(MockBehavior.Strict);
+
+        // No cutoff reaches the grant is the ordinary case; RevokedSession_IsRefused overrides it.
+        _cutoffChecker = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
+        _cutoffChecker.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(false);
+
         _processor = new TokenRequestProcessor(
             _accessTokenService.Object,
             _refreshTokenService.Object,
             _identityTokenService.Object,
+            _cutoffChecker.Object,
             _contextEvaluator.Object);
     }
 
@@ -91,6 +99,36 @@ public class TokenRequestProcessorTests
     /// Verifies access token is always created.
     /// Per OAuth 2.0, access token is mandatory in token response.
     /// </summary>
+    /// <summary>
+    /// A grant whose authentication session a revocation has caught mints nothing.
+    /// </summary>
+    /// <remarks>
+    /// Neither of the other two places can catch this one. The token side compares issue times, and every
+    /// token minted here is new, so it is later than any cutoff. The authorization endpoint judged this
+    /// session when the grant was created and does not see it again. What is left is the window between
+    /// authorizing and redeeming - a minute for an authorization code by default, far longer for a device
+    /// code or a CIBA request - and a grant redeemed inside it produces a refresh family that is permanently
+    /// past the cutoff, because rotation carries the first issue time forward.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WhenTheGrantsSessionIsRevoked_RefusesAndMintsNothing()
+    {
+        var request = CreateValidTokenRequest([]);
+        _cutoffChecker.Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>())).ReturnsAsync(true);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+
+        // The strict mocks would throw on an unexpected call, but say it outright: the point is not that the
+        // response is an error, it is that no token was created before the refusal was decided.
+        _accessTokenService.Verify(
+            s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(), It.IsAny<ClientInfo>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task ProcessAsync_ShouldAlwaysCreateAccessToken()
     {

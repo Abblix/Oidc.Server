@@ -40,18 +40,20 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// would revoke on the strength of a claim that was never there.
 /// </para>
 /// <para>
-/// What this therefore does and does not do: it refuses tokens already issued, and it does not suspend an
-/// account. <c>iat</c> moves forward on every re-authorization, so a browser session this server still holds
-/// can mint a fresh token that passes the cutoff. A deployment suspending an account ends that session too -
-/// <see cref="ITokenRevoker.RevokeSessionAsync"/> alongside whatever ends its own sign-in state - rather than
-/// relying on this alone.
+/// A cutoff therefore has two sides, and the token side alone would be a control that can be walked
+/// around: <c>iat</c> is stamped afresh by every authorization, so a browser session the revocation never
+/// reached would mint a replacement past the cutoff on the first attempt and on every attempt after.
+/// <see cref="IsSessionRefusedAsync"/> is the other side, consulted by the authorization endpoint before it
+/// reuses a session.
 /// </para>
 /// <para>
 /// The comparison is against the whole second the token declares. A JWT's <c>iat</c> is a whole number of
 /// seconds, so a token minted in the same second as a revocation reads as older than it and is refused. That
 /// errs towards refusing a token the revocation did not mean to catch, which is the direction to err in.
 /// Clock differences between instances run the other way and are not bounded by the token, which is what
-/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers.
+/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side only. The session side takes no
+/// tolerance, because there the same widening would refuse the fresh sign-in a user answers the refusal
+/// with, and the retry lands in the same window.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a refusal, so a revoked token is distinguishable from an expired one.</param>
@@ -75,7 +77,8 @@ public partial class RevocationCutoffChecker(
         if (payload.IssuedAt is not { } issuedAt || !IsOurOwnToken(payload))
             return null;
 
-        if (await IsBeforeCutoffAsync(RevocationScope.Session, payload.SessionId, issuedAt))
+        if (await IsBeforeCutoffAsync(
+                RevocationScope.Session, payload.SessionId, issuedAt, Skew))
         {
             LogTokenRefusedByCutoff(RevocationScope.Session, issuedAt);
             return RevokedByCutoff;
@@ -94,7 +97,7 @@ public partial class RevocationCutoffChecker(
                 + "cannot be ruled out");
         }
 
-        if (!await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt))
+        if (!await IsBeforeCutoffAsync(RevocationScope.Subject, subject, issuedAt, Skew))
             return null;
 
         LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
@@ -107,18 +110,25 @@ public partial class RevocationCutoffChecker(
         // The subject here is the one a host would revoke, with no pseudonym to open: pairwise conversion
         // happens later, in the token services, against the client the token is being minted for. So this
         // side needs neither the client lookup nor ConvertBack, and has none of their failure modes.
-        if (await IsBeforeCutoffAsync(RevocationScope.Subject, session.Subject, session.AuthenticationTime))
+        // Session first, then subject, matching the order the token side asks in. The boolean is the same
+        // either way, but the scope is what the log line names, so a principal caught by both would
+        // otherwise be reported differently depending on which door it came through.
+        if (await IsBeforeCutoffAsync(
+                RevocationScope.Session, session.SessionId, session.AuthenticationTime, TimeSpan.Zero))
         {
-            LogSessionRefusedByCutoff(RevocationScope.Subject, session.AuthenticationTime);
+            LogSessionRefusedByCutoff(session.SessionId, session.AuthenticationTime, RevocationScope.Session);
             return true;
         }
 
-        if (!await IsBeforeCutoffAsync(RevocationScope.Session, session.SessionId, session.AuthenticationTime))
+        if (!await IsBeforeCutoffAsync(
+                RevocationScope.Subject, session.Subject, session.AuthenticationTime, TimeSpan.Zero))
             return false;
 
-        LogSessionRefusedByCutoff(RevocationScope.Session, session.AuthenticationTime);
+        LogSessionRefusedByCutoff(session.SessionId, session.AuthenticationTime, RevocationScope.Subject);
         return true;
     }
+
+    private TimeSpan Skew => options.Value.RevocationCutoffSkew;
 
     private static JwtValidationError RevokedByCutoff => new(
         JwtError.TokenRevoked, "Tokens issued to this principal before the revocation cutoff are rejected");
@@ -176,16 +186,24 @@ public partial class RevocationCutoffChecker(
         }
     }
 
-    private async Task<bool> IsBeforeCutoffAsync(RevocationScope scope, string? principal, DateTimeOffset issuedAt)
+    /// <summary>
+    /// Whether a cutoff recorded for this principal is later than <paramref name="instant"/>, allowing
+    /// <paramref name="tolerance"/> for the clocks the two came from.
+    /// </summary>
+    /// <remarks>
+    /// The tolerance is the caller's because the two callers pay opposite prices for it. Widening the cutoff
+    /// refuses a little more than the revocation named, which on a token costs the client one retry and is
+    /// the safe direction. On a session it costs the user the only remedy they have: the fresh sign-in they
+    /// would answer the refusal with lands inside the same window and is refused again, so the tolerance
+    /// buys a loop rather than a retry. See <see cref="IsSessionRefusedAsync"/>.
+    /// </remarks>
+    private async Task<bool> IsBeforeCutoffAsync(
+        RevocationScope scope, string? principal, DateTimeOffset instant, TimeSpan tolerance)
     {
         if (principal is not { Length: > 0 })
             return false;
 
-        if (await cutoffRegistry.GetCutoffAsync(scope, principal) is not { } cutoff)
-            return false;
-
-        // The tolerance widens what the cutoff catches, because the two instants come from different clocks
-        // and only one direction of that error is recoverable.
-        return issuedAt < cutoff + options.Value.RevocationCutoffSkew;
+        return await cutoffRegistry.GetCutoffAsync(scope, principal) is { } cutoff
+               && instant < cutoff + tolerance;
     }
 }

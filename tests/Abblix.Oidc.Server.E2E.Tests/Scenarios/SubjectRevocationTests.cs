@@ -263,6 +263,56 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// An authorization code outstanding when the revocation lands cannot be redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The third door, and the one neither of the others reaches: the code was authorized before the
+    /// revocation, so the endpoint that judges sessions has already run, and the tokens it would mint are
+    /// new, so the cutoff that compares issue times would pass them. Redeeming it would produce a refresh
+    /// family permanently past the cutoff, since rotation carries the first issue time forward.
+    /// </remarks>
+    [Fact]
+    public async Task A_code_authorized_before_the_revocation_cannot_be_redeemed()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // Establish the session and learn the subject, then take a code and hold it.
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var subject = SubjectOf(tokens);
+
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}",
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+
+        await RevokerOf(host).RevokeSubjectAsync(
+            subject, cancellationToken: TestContext.Current.CancellationToken);
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.TokenEndpoint, new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = code,
+                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [TokenRequest.Parameters.CodeVerifier] = verifier,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            });
+
+        await AssertInvalidGrantAsync(response);
+    }
+
+    /// <summary>
     /// How a client asks for a silent renewal: no user interface, reuse whatever session is there.
     /// </summary>
     /// <remarks>

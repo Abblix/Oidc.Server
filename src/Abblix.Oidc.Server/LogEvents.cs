@@ -695,7 +695,8 @@ internal static class LogEvents
 
     /// <summary>
     /// Range 10100-10199: <c>Features/Tokens/Revocation</c> - subject- and session-level
-    /// revocation cutoffs, written by a host and enforced on every validated token.
+    /// revocation cutoffs, written by a host and enforced on every validated token and on
+    /// every authentication session the authorization endpoint considers reusing.
     /// </summary>
     public static class Revocation
     {

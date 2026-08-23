@@ -37,9 +37,17 @@ partial class RevocationCutoffChecker
 
     // The authorization side of the same control. Without it a revoked user simply stops getting through
     // and nothing says why, which reads as the login being broken rather than as the suspension working.
+    //
+    // The session identifier is here and the subject is not, deliberately. An operator holding one user's
+    // complaint needs to tell that user's refusals from everybody else's, and a line carrying only a scope
+    // and an instant cannot do it. The identifier is the narrower of the two handles: it names one sign-in
+    // rather than the person across all of them, and it is already what the same user's other log lines
+    // carry.
     [LoggerMessage(
         EventId = LogEvents.Revocation.RevocationCutoffChecker.SessionRefusedByCutoff,
         Level = LogLevel.Information,
-        Message = "Refused a session authenticated at {AuthenticationTime} by a {Scope} revocation cutoff")]
-    private partial void LogSessionRefusedByCutoff(RevocationScope Scope, DateTimeOffset AuthenticationTime);
+        Message = "Refused session {SessionId}, authenticated at {AuthenticationTime}, "
+                  + "by a {Scope} revocation cutoff")]
+    private partial void LogSessionRefusedByCutoff(
+        Sanitized SessionId, DateTimeOffset AuthenticationTime, RevocationScope Scope);
 }

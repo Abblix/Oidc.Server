@@ -56,7 +56,11 @@ public class RevocationCutoffCheckerSessionTests
             .ReturnsAsync((DateTimeOffset?)null);
     }
 
-    private IRevocationCutoffChecker Checker(TimeSpan skew = default)
+    /// <summary>
+    /// Built with the tolerance a deployment actually gets, so a change to that default is visible here.
+    /// An earlier version defaulted the parameter to zero, which asserted the shipped value nowhere.
+    /// </summary>
+    private IRevocationCutoffChecker Checker(TimeSpan? skew = null)
     {
         var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
         issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
@@ -65,7 +69,9 @@ public class RevocationCutoffCheckerSessionTests
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
             issuers.Object,
-            Options.Create(new OidcOptions { RevocationCutoffSkew = skew }),
+            Options.Create(skew is { } configured
+                ? new OidcOptions { RevocationCutoffSkew = configured }
+                : new OidcOptions()),
             _clients.Object,
             new SubjectTypeConverter());
     }
@@ -132,18 +138,114 @@ public class RevocationCutoffCheckerSessionTests
     }
 
     /// <summary>
-    /// The tolerance widens what a cutoff catches here for the same reason it does on the token side: the
-    /// authentication time and the cutoff come from different machines, and only one direction of that error
-    /// is recoverable.
+    /// The tolerance that widens the token comparison does not widen this one, so a sign-in shortly after a
+    /// revocation is let through.
     /// </summary>
-    [Fact]
-    public async Task WhenTheSignInFallsWithinTheSkewAfterACutoff_TheSessionIsRefused()
+    /// <remarks>
+    /// The two sides pay opposite prices for the same widening. On a token it refuses slightly more than the
+    /// revocation named, which costs the client one retry - the safe direction. On a session it refuses the
+    /// fresh sign-in the user answers the refusal with, and that retry lands inside the same window, so the
+    /// tolerance buys a lockout loop rather than a retry. This was the other way round when written, pinned
+    /// by this test asserting the refusal.
+    /// <para>
+    /// What it costs: a session authenticated just before a revocation, on an instance whose clock runs
+    /// ahead, reads as later than the cutoff and survives. That window is seconds wide and closes on the
+    /// next revocation; a lockout loop does not close at all.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(30)]
+    public async Task WhenTheSignInFollowsACutoff_TheSessionIsUsableHoweverRecently(int secondsAfter)
     {
-        SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddSeconds(-30));
+        SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddSeconds(-secondsAfter));
 
         var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
 
+        Assert.False(refused);
+    }
+
+    /// <summary>
+    /// The boundary itself: a session authenticated in the same instant as the cutoff survives, and one tick
+    /// earlier does not.
+    /// </summary>
+    /// <remarks>
+    /// Written as one theory over a single tick because the two cases are the same state either side of the
+    /// comparison. Nothing else in this suite visits the boundary, so turning the comparison into its
+    /// non-strict form would otherwise leave every test green.
+    /// </remarks>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public async Task AtTheBoundary_OneTickDecidesIt(int ticksTheCutoffFollowsBy, bool expected)
+    {
+        // A cutoff means everything before this moment is revoked, so a sign-in at the moment itself is not
+        // caught: it is not before it. The strict comparison is what says that, and it matches the token
+        // side, where the same instant on both is the token surviving too.
+        var cutoff = AuthenticatedAt.AddTicks(ticksTheCutoffFollowsBy);
+        SetupCutoff(RevocationScope.Subject, Subject, cutoff);
+
+        var refused = await Checker().IsSessionRefusedAsync(Session());
+
+        Assert.Equal(expected, refused);
+    }
+
+    /// <summary>
+    /// The session scope is compared the same way as the subject scope, tolerance included.
+    /// </summary>
+    /// <remarks>
+    /// Stated separately because the two arms are separate code: an implementation applying the tolerance to
+    /// one and not the other passes every other test here.
+    /// </remarks>
+    [Fact]
+    public async Task WhenTheSignInFollowsASessionCutoff_TheSessionIsUsable()
+    {
+        SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddSeconds(-1));
+
+        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
+
+        Assert.False(refused);
+    }
+
+    /// <summary>
+    /// A cutoff on both scopes still refuses, and names the subject - the scope that reaches every session
+    /// rather than the one that reaches this one.
+    /// </summary>
+    /// <remarks>
+    /// The scope is the only handle the log line carries, so which arm answers first is observable and worth
+    /// pinning rather than leaving to the order the two ifs happen to be written in.
+    /// </remarks>
+    [Fact]
+    public async Task WhenBothScopesCarryACutoff_TheSessionIsRefused()
+    {
+        SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
+        SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
+
+        var refused = await Checker().IsSessionRefusedAsync(Session());
+
         Assert.True(refused);
+    }
+
+    /// <summary>
+    /// A session carrying no subject or no identifier is not silently let through on that account.
+    /// </summary>
+    /// <remarks>
+    /// The record declares both non-nullable, but its protobuf form has plain scalars that deserialize an
+    /// absent field to an empty string, and a host-supplied session service can produce one directly. An
+    /// empty principal matches no cutoff, so the arm that would have refused simply does not fire - which is
+    /// the fail-open shape. Asserted so the behaviour is a decision on the record rather than an accident.
+    /// </remarks>
+    [Theory]
+    [InlineData("", SessionId)]
+    [InlineData(Subject, "")]
+    public async Task WhenTheSessionNamesNoPrincipal_TheOtherScopeStillDecides(string subject, string sessionId)
+    {
+        SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
+        SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
+
+        var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
+
+        Assert.True(await Checker().IsSessionRefusedAsync(session));
     }
 
     /// <summary>
@@ -153,11 +255,22 @@ public class RevocationCutoffCheckerSessionTests
     [Fact]
     public async Task AnotherSubjectsRevocation_LeavesTheSessionAlone()
     {
-        SetupCutoff(RevocationScope.Subject, "somebody-else", AuthenticatedAt.AddMinutes(1));
+        const string somebodyElse = "somebody-else";
+        SetupCutoff(RevocationScope.Subject, somebodyElse, AuthenticatedAt.AddMinutes(1));
 
         var refused = await Checker().IsSessionRefusedAsync(Session());
 
         Assert.False(refused);
+
+        // Without this the test is the no-cutoff case wearing a different name: the mock matches setups by
+        // exact argument, so a cutoff planted under another principal is never consulted and the planting
+        // proves nothing. Assert that this session's own principal is what was asked about.
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            Times.Once);
+        _cutoffs.Verify(
+            c => c.GetCutoffAsync(RevocationScope.Subject, somebodyElse, It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     /// <summary>

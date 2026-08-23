@@ -9,7 +9,8 @@
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 /// <summary>
-/// Revokes every token issued to an end user, or within one session, up to a moment.
+/// Cuts off an end user, or one session, at a moment: the tokens issued before it stop working, and the
+/// browser session behind them stops being usable to mint more.
 /// </summary>
 /// <remarks>
 /// The library owns the enforcement and the host owns the occasion. An account suspension, a password change
@@ -30,10 +31,16 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 public interface ITokenRevoker
 {
     /// <summary>
-    /// Revokes every token issued to an end user before <paramref name="before"/>, across all their sessions.
+    /// Cuts this subject off at <paramref name="before"/>, across every session they hold.
     /// </summary>
+    /// <remarks>
+    /// Two things stop. Every token issued to them earlier is refused on its next use, and every browser
+    /// session authenticated earlier stops being reusable, so the authorization endpoint will not mint a
+    /// replacement against one. Signing in again works immediately and leaves nothing to clean up: the new
+    /// session is later than the cutoff and passes.
+    /// </remarks>
     /// <param name="subject">The subject identifier the tokens carry.</param>
-    /// <param name="before">The moment to revoke up to; the current time when omitted. Tokens issued at or
+    /// <param name="before">The moment to cut off at; the current time when omitted. Tokens issued at or
     /// after it are unaffected, so the user signing in again works with nothing to undo.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
@@ -41,9 +48,13 @@ public interface ITokenRevoker
         string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Revokes every token issued within one session before <paramref name="before"/>, leaving the same user's
-    /// other sessions alone.
+    /// Cuts one session off at <paramref name="before"/>, leaving the same user's other sessions alone.
     /// </summary>
+    /// <remarks>
+    /// The session stops being reusable as well as its tokens stopping, so this ends that sign-in for the
+    /// purposes of this server. It does not clear the cookie carrying it - that belongs to whoever holds the
+    /// browser, and this call is made by somebody else.
+    /// </remarks>
     /// <param name="sessionId">The session identifier the tokens carry.</param>
     /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
