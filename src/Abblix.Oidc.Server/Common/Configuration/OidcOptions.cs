@@ -361,10 +361,14 @@ public record OidcOptions
 	/// <para>
 	/// The default is generous next to a real registration: an inline JWKS with several keys, a software
 	/// statement and a long list of redirect URIs together stay well under a tenth of it. Raise it for a
-	/// deployment that genuinely needs more. A host or reverse proxy may impose a lower limit of its own,
-	/// which wins - and a deployment that would rather bound the body there alone sets this to <c>null</c>,
-	/// which is the one way to express "no limit of ours": every numeric value is a limit, so a very large
-	/// number asks an MVC host to buffer a very large body rather than removing the bound.
+	/// deployment that genuinely needs more.
+	/// </para>
+	/// <para>
+	/// Clearing it adds no bound of ours and removes none of anybody else's: the server's own limit still
+	/// applies (Kestrel defaults to 30,000,000 bytes) and so does whatever a reverse proxy in front of it
+	/// enforces, which is the point of clearing it. That is why it is expressed as an absent value rather
+	/// than as a very large number - a number is still a bound, and a very large one asks an MVC host to
+	/// buffer a very large body.
 	/// </para>
 	/// </remarks>
 	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;

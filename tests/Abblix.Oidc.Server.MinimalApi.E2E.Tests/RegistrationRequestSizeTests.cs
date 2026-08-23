@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,6 +74,40 @@ public sealed class RegistrationRequestSizeTests(TestFactory factory) : IClassFi
 
         Assert.NotNull(limit);
         Assert.Equal(configured, limit.MaxRequestBodySize);
+    }
+
+    /// <summary>
+    /// A cleared limit attaches no metadata at all, rather than metadata carrying a cleared value.
+    /// </summary>
+    /// <remarks>
+    /// The distinction is the whole of it, and it runs the opposite way to how it reads. The routing
+    /// middleware writes whatever the metadata says onto <c>IHttpMaxRequestBodySizeFeature</c>, where a
+    /// cleared value means unlimited - it is the value <c>DisableRequestSizeLimitAttribute</c> is built on.
+    /// So attaching it would remove the server's own default on the one endpoint that most needs a bound,
+    /// while reading in configuration as the most cautious setting available. Measured on Kestrel while
+    /// writing this: an endpoint with no metadata refuses a 40 MB body with 413, and the same endpoint
+    /// carrying null-valued metadata accepts it and reads every byte.
+    /// </remarks>
+    [Theory]
+    [InlineData("POST")]
+    [InlineData("PUT")]
+    public async Task A_cleared_limit_attaches_no_metadata(string method)
+    {
+        await using var host = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.Configure<OidcOptions>(options => options.MaxRegistrationRequestSize = null)));
+
+        var services = host.Services;
+        var routes = services.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
+        var route = method is "POST" ? routes.Register : routes.RegisterClient;
+
+        var endpoint = services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(candidate =>
+                candidate.RoutePattern.RawText == route
+                && candidate.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method));
+
+        Assert.Null(endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>());
     }
 
     /// <summary>
