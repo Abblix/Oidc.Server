@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -400,6 +400,30 @@ public record OidcOptions
 	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);
 
 	/// <summary>
+	/// How far a token may appear to have been issued after a revocation cutoff and still be refused by it.
+	/// </summary>
+	/// <remarks>
+	/// The cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
+	/// the two come from different clocks. The error is not symmetric in consequence. A token that reads as
+	/// older than it is gets refused once and the client asks again; a token that reads as newer escapes the
+	/// revocation entirely, and because a refresh rotation carries the original <c>iat</c> forward it keeps
+	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
+	/// reports it.
+	/// <para>
+	/// The value is added to the cutoff, so it widens what a revocation catches. Its cost is the mirror image:
+	/// a user signing in again within this window of a revocation of their own subject is refused once, since
+	/// the fresh token cannot be told apart from a drifted old one. Keep it above the worst clock difference
+	/// between instances and well below anything a person would notice as being locked out; the default is a
+	/// minute, which is far above a cluster running NTP.
+	/// </para>
+	/// <para>
+	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
+	/// single-instance deployment and of nothing else.
+	/// </para>
+	/// </remarks>
+	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromMinutes(1);
+
+	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.
 	/// </summary>
 	/// <remarks>
@@ -407,9 +431,18 @@ public record OidcOptions
 	/// native application relies on to stay signed in while the web session ends, and turning it on for an
 	/// existing deployment would log those users out with nothing in their own code having changed.
 	/// <para>
-	/// Turn it on where a sign-out is meant to mean the end of access rather than the end of a browser session.
-	/// Nothing in the specification decides this: OpenID Connect RP-Initiated Logout 1.0 describes ending the
-	/// session and says nothing about the tokens issued in it, so it is a deployment's choice.
+	/// Turn it on where a sign-out is meant to mean the end of access rather than the end of a browser session,
+	/// and read the specification's advice as advice. OpenID Connect RP-Initiated Logout 1.0 says nothing about
+	/// tokens at all, but Back-Channel Logout 1.0 Section 2.7 does: "Refresh tokens issued without the
+	/// offline_access property to a session being logged out SHOULD be revoked. Refresh tokens issued with the
+	/// offline_access property normally SHOULD NOT be revoked."
+	/// </para>
+	/// <para>
+	/// Every refresh token this server mints carries <c>offline_access</c>, because that scope is what makes it
+	/// issue one at all. So the first sentence applies to nothing here, and the second describes every token
+	/// this option would revoke - which is why it is off. Turning it on is a deliberate departure from a
+	/// SHOULD NOT, and the word "normally" is what leaves room for it: a deployment whose sign-out is meant to
+	/// end access has a reason the specification's default case does not cover.
 	/// </para>
 	/// <para>
 	/// What it reaches is what a revocation cutoff reaches: refresh tokens, and access tokens a resource server

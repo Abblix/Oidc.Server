@@ -30,30 +30,20 @@ public interface IEntityStorageKeyFactory
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <returns>A formatted storage key for the cutoff.</returns>
     /// <remarks>
-    /// The only member here with a body, so that an implementation written against an earlier version keeps
-    /// compiling. That has a cost worth knowing: a host implementing this interface to namespace its own store
-    /// keeps its namespace for every other key and silently inherits this one, since a default member is
-    /// satisfied without a compile error. Two tenants sharing a store and a user identifier would then share
-    /// a cutoff. Override it alongside the others.
+    /// Abstract like every other member here, deliberately, even though a body would have compiled and spared
+    /// an implementation written against an earlier version. A host implements this interface in order to put
+    /// its own namespace on the keys, one store shared between tenants being the usual reason, and a default
+    /// member is satisfied without a compile error - so the host would keep its namespace for every other key
+    /// and silently inherit ours for this one. Two tenants naming the same user would then share a cutoff, and
+    /// revoking one tenant's user would revoke another's. That is invisible in the store and in any test a
+    /// host would think to write, where a missing member is a compile error naming the type and the member.
     /// <para>
-    /// The scope is spelled out rather than taking the enum member's name, because a rename is a refactor the
-    /// compiler blesses everywhere and it would orphan every live cutoff - every suspended account and every
-    /// ended session quietly working again on deploy.
+    /// The scope must appear in the key and must not be spelled with the enum member's name, because a rename
+    /// is a refactor the compiler blesses everywhere and it would orphan every live cutoff - every suspended
+    /// account and every ended session quietly working again on deploy.
     /// </para>
     /// </remarks>
-    string RevocationCutoffKey(RevocationScope scope, string principal)
-        => $"Abblix.Oidc.Server:Revoked:{NameOf(scope)}:{principal}";
-
-    /// <summary>
-    /// The wire name of a revocation scope, fixed independently of the enum member's name.
-    /// </summary>
-    private static string NameOf(RevocationScope scope) => scope switch
-    {
-        RevocationScope.Subject => "subject",
-        RevocationScope.Session => "session",
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(scope), scope, $"No storage key is defined for this {nameof(RevocationScope)}."),
-    };
+    string RevocationCutoffKey(RevocationScope scope, string principal);
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.

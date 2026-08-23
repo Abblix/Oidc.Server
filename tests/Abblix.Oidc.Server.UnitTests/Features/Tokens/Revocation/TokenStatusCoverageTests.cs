@@ -15,10 +15,14 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -32,39 +36,66 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 /// The switch there has no <c>default</c> arm on purpose: acceptance is the right answer for a token nothing
 /// is recorded about, so a loud default would throw on every ordinary request. That leaves the usual trap -
 /// a status added later inherits acceptance in silence, and a silently accepted revoked token is the failure
-/// this whole component exists to prevent. This walks the enum, so the next addition fails here until
-/// somebody decides what it means.
+/// this whole component exists to prevent.
+/// <para>
+/// One table answers both questions below, which is the point. An earlier version kept the coverage list and
+/// the drive-through cases separately, so a status added to the list and forgotten in the switch passed both
+/// - the list agreed with itself and nothing drove the decorator. Here the theory enumerates the enum and
+/// looks each member up in the same table the coverage test checks, so a new status fails until somebody
+/// states its outcome, and stating it wrongly fails too.
+/// </para>
+/// <para>
+/// What this still cannot catch: a status entered in the table as accepted, whose case nobody added. That is
+/// a decision rather than an oversight - somebody had to write down that such a token is let through - and no
+/// test can tell a wrong decision from a right one.
+/// </para>
 /// </remarks>
 public class TokenStatusCoverageTests
 {
-    private static readonly HashSet<JsonWebTokenStatus> Decided =
-    [
-        JsonWebTokenStatus.Unknown,
-        JsonWebTokenStatus.Used,
-        JsonWebTokenStatus.Revoked,
-    ];
+    /// <summary>
+    /// What the decorator answers for each status: an error, or <c>null</c> for a token it lets through.
+    /// </summary>
+    private static readonly Dictionary<JsonWebTokenStatus, JwtError?> Outcomes = new()
+    {
+        [JsonWebTokenStatus.Unknown] = null,
+        [JsonWebTokenStatus.Used] = JwtError.TokenAlreadyUsed,
+        [JsonWebTokenStatus.Revoked] = JwtError.TokenRevoked,
+    };
+
+    public static TheoryData<JsonWebTokenStatus> AllStatuses()
+    {
+        var data = new TheoryData<JsonWebTokenStatus>();
+        foreach (var status in Enum.GetValues<JsonWebTokenStatus>())
+            data.Add(status);
+
+        return data;
+    }
 
     [Fact]
     public void EveryStatus_HasADecidedOutcome()
     {
-        var undecided = Enum.GetValues<JsonWebTokenStatus>().Where(status => !Decided.Contains(status)).ToArray();
+        var undecided = Enum.GetValues<JsonWebTokenStatus>()
+            .Where(status => !Outcomes.ContainsKey(status))
+            .ToArray();
 
         Assert.True(
             undecided.Length == 0,
             $"TokenStatusValidatorDecorator does not decide {string.Join(", ", undecided)}. Add the case to its "
-            + $"switch and to this list, saying whether such a token is accepted or refused.");
+            + $"switch and the outcome to {nameof(Outcomes)}, saying whether such a token is accepted or refused.");
     }
 
     /// <summary>
-    /// And the outcomes are what the list claims, driven through the decorator rather than asserted about it:
-    /// a list agreeing with itself would pass over a switch that had stopped refusing anything.
+    /// And the outcome is what the table claims, driven through the decorator rather than asserted about it:
+    /// a table agreeing with itself would pass over a switch that had stopped refusing anything.
     /// </summary>
     [Theory]
-    [InlineData(JsonWebTokenStatus.Unknown, null)]
-    [InlineData(JsonWebTokenStatus.Used, JwtError.TokenAlreadyUsed)]
-    [InlineData(JsonWebTokenStatus.Revoked, JwtError.TokenRevoked)]
-    public async Task AStatus_ProducesTheOutcomeItIsListedWith(JsonWebTokenStatus status, JwtError? expected)
+    [MemberData(nameof(AllStatuses))]
+    public async Task AStatus_ProducesTheOutcomeItIsListedWith(JsonWebTokenStatus status)
     {
+        Assert.True(
+            Outcomes.TryGetValue(status, out var expected),
+            $"No outcome is listed for {status}, so this theory cannot say what the decorator owes it.");
+
         const string jwtId = "jti_1";
 
         var registry = new Mock<ITokenRegistry>(MockBehavior.Strict);
@@ -75,6 +106,9 @@ public class TokenStatusCoverageTests
             .Setup(c => c.GetCutoffAsync(
                 It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
+
+        var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
+        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
@@ -87,6 +121,7 @@ public class TokenStatusCoverageTests
             Payload =
             {
                 JwtId = jwtId,
+                Issuer = TestConstants.DefaultIssuer.OriginalString,
                 Subject = "user_1",
                 IssuedAt = new DateTimeOffset(2024, 1, 15, 11, 0, 0, TimeSpan.Zero),
                 ExpiresAt = new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero),
@@ -97,8 +132,11 @@ public class TokenStatusCoverageTests
             .ReturnsAsync(success);
 
         var decorator = new TokenStatusValidatorDecorator(
+            NullLogger<TokenStatusValidatorDecorator>.Instance,
             registry.Object,
             cutoffs.Object,
+            issuers.Object,
+            Options.Create(new OidcOptions()),
             clients.Object,
             new SubjectTypeConverter(),
             inner.Object);

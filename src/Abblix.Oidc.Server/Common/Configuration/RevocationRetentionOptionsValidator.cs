@@ -11,8 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Fails at startup when the revocation cutoff would be kept for no time at all, instead of accepting every
-/// revocation and enforcing none of them.
+/// Fails at startup on a revocation setting that would let a revocation report success and do nothing.
 /// </summary>
 /// <remarks>
 /// A revocation is one record with an expiry. At zero or below, the record expires as it is written, so
@@ -29,10 +28,25 @@ public sealed class RevocationRetentionOptionsValidator : IValidateOptions<OidcO
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
-        => options.RevocationCutoffRetention > TimeSpan.Zero
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(
+    {
+        if (options.RevocationCutoffRetention <= TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
                 $"{nameof(options.RevocationCutoffRetention)} is {options.RevocationCutoffRetention}, so every " +
                 "revocation record would expire as it is written and no revocation would ever take effect. " +
                 "Set it to at least the longest refresh token lifetime any client is configured with.");
+        }
+
+        // A negative tolerance narrows the cutoff instead of widening it, so tokens issued before a
+        // revocation would survive it - the same silent nothing, reached from the other side.
+        if (options.RevocationCutoffSkew < TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(options.RevocationCutoffSkew)} is {options.RevocationCutoffSkew}. A negative " +
+                "tolerance moves the cutoff backwards, so tokens issued before a revocation would pass it. " +
+                "Use zero to allow none, or a positive value covering the clock difference between instances.");
+        }
+
+        return ValidateOptionsResult.Success;
+    }
 }

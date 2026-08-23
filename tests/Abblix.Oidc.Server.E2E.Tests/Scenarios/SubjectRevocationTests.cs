@@ -9,6 +9,7 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
@@ -116,8 +118,85 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             $"another subject's revocation should not refuse this token, got {(int)response.StatusCode}");
     }
 
+    /// <summary>
+    /// Ending a session revokes the tokens issued in it, once a deployment turns that on.
+    /// </summary>
+    /// <remarks>
+    /// The option is opt-in, so it runs on its own host. Both halves are asserted on that same host: the
+    /// refresh works before the logout and fails after it, because "the token stopped working" is
+    /// indistinguishable from "this host refuses everything" when only the second half is checked.
+    /// </remarks>
+    [Fact]
+    public async Task Ending_a_session_revokes_its_tokens_when_the_option_is_on()
+    {
+        await using var host = CreateIsolatedHost(options => options.RevokeSessionTokensOnLogout = true);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+
+        var beforeLogout = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            beforeLogout.IsSuccessStatusCode,
+            $"the refresh token should work before the logout, got {(int)beforeLogout.StatusCode}");
+        var rotated = (await ReadJsonAsync(beforeLogout))[TokenRequest.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        await EndSessionAsync(client, discovery, idToken);
+
+        var afterLogout = await RefreshAsync(client, discovery, rotated);
+        await AssertInvalidGrantAsync(afterLogout);
+    }
+
+    /// <summary>
+    /// And with the option left off, the same logout leaves the same token working.
+    /// </summary>
+    /// <remarks>
+    /// The control the test above needs. Without it, a logout that broke refresh for some unrelated reason -
+    /// ending the session the grant hangs on, say - would read as the option working.
+    /// </remarks>
+    [Fact]
+    public async Task Ending_a_session_leaves_its_tokens_alone_by_default()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+
+        await EndSessionAsync(client, discovery, idToken);
+
+        var afterLogout = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            afterLogout.IsSuccessStatusCode,
+            $"a logout should not revoke tokens by default, got {(int)afterLogout.StatusCode}");
+    }
+
     private WebApplicationFactory<Program> CreateIsolatedHost()
         => Factory.WithWebHostBuilder(_ => { });
+
+    private WebApplicationFactory<Program> CreateIsolatedHost(Action<OidcOptions> configure)
+        => Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Configure(configure)));
+
+    private static async Task EndSessionAsync(
+        HttpClient client, DiscoveryDocument discovery, string idToken)
+    {
+        var endpoint = discovery.EndSessionEndpoint;
+        Assert.NotNull(endpoint);
+
+        var response = await client.GetAsync(
+            $"{endpoint}?{EndSessionRequest.Parameters.IdTokenHint}={Uri.EscapeDataString(idToken)}",
+            TestContext.Current.CancellationToken);
+
+        Assert.True(
+            response.IsSuccessStatusCode || response.StatusCode is HttpStatusCode.Found,
+            $"the logout should be accepted, got {(int)response.StatusCode}");
+    }
 
     private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
@@ -134,7 +213,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
     private static string SubjectOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens["id_token"]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sub]!.GetValue<string>();
     }
 
