@@ -11,6 +11,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.SecurityEvents.Delivery;
+using Abblix.SharedSignals;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -108,25 +109,69 @@ public class TransmitterDeliveryTests
             .Select(item => item.JwtId));
     }
 
-    /// <summary>The receiver's own reason for refusing a SET reaches this deployment's log.</summary>
+    /// <summary>The receiver's own reason for refusing SETs reaches this deployment's log, once for the pass.</summary>
     /// <remarks>
     /// <para>
-    /// RFC 8935 Section 2.3 makes the receiver owe an error body with a 400, and it arrives here - it was
-    /// already read to decide whether the refusal is final. Dropping it after that decision left this side
-    /// holding a status code, and the receiver's own log is not ours to read, so a stream refusing every SET
-    /// looked from here exactly like a stream refusing none.
+    /// RFC 8935 Section 2.3 makes the receiver owe an error body with a 400, and it is read here to decide
+    /// whether a retransmission could ever succeed. Nothing else carries it onward: this side holds a status
+    /// code, the receiver's log is not ours to read, and a stream refusing everything is indistinguishable
+    /// from one refusing nothing.
     /// </para>
     /// <para>
-    /// Both halves are asserted, because a code without a description names a class of problem and a
-    /// description without a code cannot be grouped.
+    /// Three queued events and ONE line, because the queue is read whole: a line per SET would write
+    /// thousands in a pass for a receiver refusing a backlog, differing only in an identifier. The count
+    /// carries what the repetition would have.
+    /// </para>
+    /// <para>
+    /// The level and the event id are asserted because they are what a log pipeline filters on. A level
+    /// below the host's floor makes the line invisible and an id nobody publishes makes a runbook miss it,
+    /// and the rendered text is identical in both cases.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task Push_BadRequest_CarriesTheReceiversReasonIntoTheLog()
+    public async Task Push_BadRequest_CarriesTheReceiversReasonIntoTheLog_OncePerPass()
+    {
+        var handler = new StubHttpHandler();
+        for (var i = 0; i < 3; i++)
+        {
+            handler.Enqueue(
+                HttpStatusCode.BadRequest,
+                """{"err": "invalid_audience", "description": "aud names a receiver this stream is not"}""");
+        }
+
+        var outbox = await OutboxWithAsync(
+            new OutboxItem("jti-1", "a.a.a"), new OutboxItem("jti-2", "b.b.b"), new OutboxItem("jti-3", "c.c.c"));
+        var logger = new CapturingLogger();
+
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, outcome.Rejected);
+
+        var written = Assert.Single(logger.Written);
+        Assert.Equal(LogLevel.Warning, written.Level);
+        Assert.Equal(LogEvents.Transmitter.SetsRefusedByReceiver, written.Event.Id);
+        Assert.Contains("invalid_audience", written.Text, StringComparison.Ordinal);
+        Assert.Contains("aud names a receiver this stream is not", written.Text, StringComparison.Ordinal);
+
+        // The count and the stream are asserted where they belong in the sentence: a pair swapped at the
+        // call site renders a plausible line and compiles, because both sides are what the template expects.
+        Assert.Contains("refused 3 SET(s)", written.Text, StringComparison.Ordinal);
+        Assert.Contains("on stream s-1", written.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>An objection to the transmitter is its own event, and it holds the queue.</summary>
+    /// <remarks>
+    /// The queue disposition is what an operator acts on, and it is the opposite of the case above: nothing
+    /// is lost, and the events go out once the credential or the grant is put right. Told apart by event id
+    /// rather than by reading the sentence, because that is what a runbook keys on.
+    /// </remarks>
+    [Fact]
+    public async Task Push_BadRequestAboutTheTransmitter_SaysSoAndHoldsTheQueue()
     {
         var handler = new StubHttpHandler().Enqueue(
             HttpStatusCode.BadRequest,
-            """{"err": "invalid_audience", "description": "aud names a receiver this stream is not"}""");
+            $$"""{"err": "{{DeliveryErrorCodes.AccessDenied}}", "description": "no grant for this stream"}""");
         var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
         var logger = new CapturingLogger();
 
@@ -134,17 +179,48 @@ public class TransmitterDeliveryTests
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         var written = Assert.Single(logger.Written);
-        Assert.Contains("invalid_audience", written, StringComparison.Ordinal);
-        Assert.Contains("aud names a receiver this stream is not", written, StringComparison.Ordinal);
+        Assert.Equal(LogLevel.Warning, written.Level);
+        Assert.Equal(LogEvents.Transmitter.ReceiverObjected, written.Event.Id);
+        Assert.Contains("no grant for this stream", written.Text, StringComparison.Ordinal);
 
-        // The SET is named too: a deployment with several queued events needs to know WHICH one was refused.
-        Assert.Contains("jti-1", written, StringComparison.Ordinal);
+        // The event is still owed to the receiver, so it stays queued.
+        Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>The receiver's words are bounded and cannot forge a line of their own.</summary>
+    /// <remarks>
+    /// The field is the receiver's to fill and RFC 8935 Section 2.3 puts no bound on it, so it arrives as
+    /// text of any length from a party this deployment does not control. A plain-text sink writes a newline
+    /// as a newline, which is a whole fabricated entry in somebody else's gift.
+    /// </remarks>
+    [Fact]
+    public async Task Push_BadRequest_NeitherLetsTheReceiverWriteALineNorRunAway()
+    {
+        var forged = "bad\\n2026-08-23 warn: a line the receiver wrote itself" + new string('x', 5000);
+        var handler = new StubHttpHandler().Enqueue(
+            HttpStatusCode.BadRequest,
+            $$"""{"err": "invalid_request", "description": "{{forged}}"}""");
+        var outbox = await OutboxWithAsync(new OutboxItem("jti-1", "a.a.a"));
+        var logger = new CapturingLogger();
+
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, ReachingTheTestReceiver, logger);
+        await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        var written = Assert.Single(logger.Written).Text;
+
+        Assert.DoesNotContain('\n', written);
+        Assert.DoesNotContain('\r', written);
+        Assert.True(written.Length < 600, $"the line grew to {written.Length} characters");
+
+        // The control: the beginning of what the receiver said survives, so the bound above is not
+        // satisfied by dropping the description altogether.
+        Assert.Contains("bad", written, StringComparison.Ordinal);
     }
 
     /// <summary>The control: a delivery the receiver accepts writes nothing.</summary>
     /// <remarks>
-    /// Without it the assertion above is satisfied by a sender that logs on every pass, which would bury the
-    /// refusals it exists to surface - the shape this whole line of work started from.
+    /// Without it the assertions above are satisfied by a sender that logs on every pass, which would bury
+    /// the refusals it exists to surface.
     /// </remarks>
     [Fact]
     public async Task Push_Accepted_WritesNothing()
@@ -159,10 +235,14 @@ public class TransmitterDeliveryTests
         Assert.Empty(logger.Written);
     }
 
-    /// <summary>Keeps what was written, formatted the way a log sink would render it.</summary>
+    /// <summary>Keeps what was written, with the two properties a log pipeline filters on.</summary>
+    /// <remarks>
+    /// The level and the id are kept rather than discarded, because a level below the host's floor and an id
+    /// nobody publishes both render the identical sentence while the line reaches nobody.
+    /// </remarks>
     private sealed class CapturingLogger : ILogger<PushDeliverySender>
     {
-        public List<string> Written { get; } = [];
+        public List<(LogLevel Level, EventId Event, string Text)> Written { get; } = [];
 
         public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
 
@@ -174,7 +254,7 @@ public class TransmitterDeliveryTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => Written.Add(formatter(state, exception));
+            => Written.Add((logLevel, eventId, formatter(state, exception)));
 
         private sealed class NullScope : IDisposable
         {

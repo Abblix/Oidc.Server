@@ -41,8 +41,8 @@ public static class LogEvents
         /// <summary>A delivery pass outlived its claim and was cut off at the deadline.</summary>
         public const int PushPassCutOff = Base + 6;
 
-        /// <summary>The receiver refused one SET for good, and said why.</summary>
-        public const int SetRefusedByReceiver = Base + 7;
+        /// <summary>The receiver refused SETs on one pass, and said why.</summary>
+        public const int SetsRefusedByReceiver = Base + 7;
 
         /// <summary>The receiver objected to this transmitter rather than to the SET, so the queue is held.</summary>
         public const int ReceiverObjected = Base + 8;
