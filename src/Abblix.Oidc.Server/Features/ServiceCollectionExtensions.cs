@@ -557,6 +557,43 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+
+    /// <summary>
+    /// Wires pairwise subject identifiers over settings the host has already bound, and refuses an unusable
+    /// seal key before the host serves anything.
+    /// </summary>
+    /// <param name="services">The service collection the host bound its settings into.</param>
+    /// <remarks>
+    /// The way to configure this from a file: the host binds the section - <c>services.Configure</c>, or
+    /// <c>AddOptions().Bind()</c> - and this call judges the result. The library takes no dependency on the
+    /// configuration stack for it, which is why the binding stays the host's.
+    ///
+    /// Riding the options pipeline is what buys the timing: its validators run before the host starts the
+    /// service that opens the port, so a deployment whose seal key will not do never serves a request. An
+    /// unusable key reaching the container instead surfaces as a 500 from the token endpoint the first time
+    /// a pairwise identifier is minted, which names neither the setting nor the deployment that changed it.
+    ///
+    /// This is also the only shape that judges the instance actually IN USE. A check over an argument judges
+    /// what it was handed, and the overload above registers with <c>TryAddSingleton</c>, so a host that
+    /// brought its own settings keeps them.
+    /// </remarks>
+    public static IServiceCollection AddPairwiseSubjectIdentifiers(this IServiceCollection services)
+    {
+        services.AddOptions<PairwiseSubjectSettings>().ValidateOnStart();
+
+        // TryAddEnumerable because the options framework resolves every registered validator, and a second
+        // copy of this one would report the same refusal twice.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<
+            IValidateOptions<PairwiseSubjectSettings>, PairwiseSubjectSettingsValidator>());
+
+        // Resolved from the options rather than registered beside them, so there is one instance and the
+        // thing validated is the thing handed out.
+        services.TryAddSingleton(provider =>
+            provider.GetRequiredService<IOptions<PairwiseSubjectSettings>>().Value);
+
+        return services;
+    }
+
     /// <summary>
     /// Adds request object fetching capabilities to the dependency injection container.
     /// Registers services required for processing JWT request objects, including their validation

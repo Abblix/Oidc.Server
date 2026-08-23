@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -23,8 +23,6 @@ public record PairwiseSubjectSettings
     /// </summary>
     private const int MinSaltBytes = 32;
 
-    private readonly string _salt = null!;
-
     /// <summary>
     /// A base64-encoded cryptographic key that keys the deterministic authenticated-encryption seal producing
     /// pairwise identifiers. This value MUST be kept secret, generated once, and never changed
@@ -34,21 +32,14 @@ public record PairwiseSubjectSettings
     /// <exception cref="ArgumentException">The salt is missing, is not valid base64, or decodes to fewer than
     /// 32 bytes.</exception>
     /// <remarks>
-    /// Refused on assignment, so an instance somebody writes cannot carry a key that will not do - the seal
-    /// has no other key material, and a weak one weakens every pairwise identifier the server ever issues.
-    /// An instance the configuration binder builds is judged by
-    /// <c>AddPairwiseSubjectIdentifiers</c> instead: the binder sets only the properties whose keys are
-    /// present, so an absent one never reaches this accessor.
+    /// Judged by whoever wires it rather than on assignment: settings the host bound are judged when the host
+    /// starts, by <see cref="PairwiseSubjectSettingsValidator"/>, and an instance handed to
+    /// <c>AddPairwiseSubjectIdentifiers</c> is judged there. Refusing in the accessor would sound stricter and
+    /// be worse - the configuration binder assigns properties by reflection, so the refusal would reach the
+    /// host wrapped in a <c>TargetInvocationException</c> naming reflection instead of the setting, and it
+    /// would fire before any validator could say which rule failed.
     /// </remarks>
-    public required string Salt
-    {
-        get => _salt;
-        init
-        {
-            ValidateSalt(value);
-            _salt = value;
-        }
-    }
+    public required string Salt { get; init; }
 
     /// <summary>
     /// The hash algorithm used for the HKDF key derivation that keys the pairwise seal. Defaults to SHA-256.
@@ -67,27 +58,39 @@ public record PairwiseSubjectSettings
     /// </remarks>
     public static void ValidateSalt(string? salt)
     {
+        if (SaltRefusal(salt) is { } refusal)
+        {
+            throw new ArgumentException(refusal, nameof(salt));
+        }
+    }
+
+    /// <summary>Why this salt cannot key the seal, or null when it can.</summary>
+    /// <param name="salt">The base64 value a deployment configured.</param>
+    /// <remarks>
+    /// Returned rather than thrown, so one rule serves both callers: whoever HOLDS the value throws on it,
+    /// and whoever REPORTS on it - a startup options validator - hands the same sentence to the host. Two
+    /// shapes of one rule cannot disagree; two rules would.
+    /// </remarks>
+    public static string? SaltRefusal(string? salt)
+    {
         if (string.IsNullOrWhiteSpace(salt))
-            throw new ArgumentException(
-                "The pairwise salt is required: it is the key material of the pairwise subject seal.",
-                nameof(salt));
+        {
+            return "The pairwise salt is required: it is the key material of the pairwise subject seal.";
+        }
 
         byte[] decoded;
         try
         {
             decoded = Convert.FromBase64String(salt);
         }
-        catch (FormatException exception)
+        catch (FormatException)
         {
-            throw new ArgumentException(
-                "The pairwise salt must be a base64-encoded value.", nameof(salt), exception);
+            return "The pairwise salt must be a base64-encoded value.";
         }
 
-        if (decoded.Length < MinSaltBytes)
-            throw new ArgumentException(
-                $"The pairwise salt must decode to at least {MinSaltBytes} bytes (256 bits) to key the " +
-                $"pairwise subject seal securely, but it decoded to {decoded.Length} bytes.",
-                nameof(salt));
-
+        return decoded.Length < MinSaltBytes
+            ? $"The pairwise salt must decode to at least {MinSaltBytes} bytes (256 bits) to key the "
+                + $"pairwise subject seal securely, but it decoded to {decoded.Length} bytes."
+            : null;
     }
 }
