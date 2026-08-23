@@ -36,27 +36,40 @@ public sealed class RegistrationRequestSizeTests(TestFactory factory) : IClassFi
     });
 
     /// <summary>
-    /// The endpoint carries the configured limit as metadata, which is where the server reads it - before the
-    /// endpoint's own delegate runs, and therefore before the body is bound.
+    /// Both endpoints that bind a registration document carry the configured limit as metadata, which is
+    /// where the server reads it - before the endpoint's own delegate runs, and therefore before the body
+    /// is bound.
     /// </summary>
     /// <remarks>
-    /// Asserted as metadata rather than as a refused request because enforcement belongs to the server, and the
-    /// in-memory test server does not enforce it. What can go wrong here is the wiring: an endpoint mapped
-    /// without the metadata is unbounded, and looks exactly like a bounded one from the outside.
+    /// Asserted as metadata rather than as a refused request because enforcement belongs to the server, and
+    /// the in-memory test server does not implement <c>IHttpMaxRequestBodySizeFeature</c> at all - a request
+    /// over the limit sails through it, so a test asserting a 413 here would be a check that cannot fail.
+    /// What can go wrong is the wiring: an endpoint mapped without the metadata is unbounded and looks
+    /// exactly like a bounded one from the outside, which is how the update endpoint was left open while
+    /// registration beside it was closed.
+    /// <para>
+    /// The routes are read from <see cref="OidcRouteOptions"/> rather than written out, because a host may
+    /// move them and this suite would then look for an endpoint nobody mapped - which surfaces as an
+    /// unrelated-looking crash rather than as an unbounded endpoint.
+    /// </para>
     /// </remarks>
-    [Fact]
-    public void The_registration_endpoint_carries_the_configured_body_limit()
+    [Theory]
+    [InlineData("POST")]
+    [InlineData("PUT")]
+    public void Every_endpoint_binding_a_registration_carries_the_configured_body_limit(string method)
     {
         var services = factory.Services;
         var configured = services.GetRequiredService<IOptions<OidcOptions>>().Value.MaxRegistrationRequestSize;
+        var routes = services.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
+        var route = method is "POST" ? routes.Register : routes.RegisterClient;
 
-        var registration = services.GetRequiredService<EndpointDataSource>().Endpoints
+        var endpoint = services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Single(endpoint =>
-                endpoint.RoutePattern.RawText is "/connect/register"
-                && endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(HttpMethods.Post));
+            .Single(candidate =>
+                candidate.RoutePattern.RawText == route
+                && candidate.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method));
 
-        var limit = registration.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
+        var limit = endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
 
         Assert.NotNull(limit);
         Assert.Equal(configured, limit.MaxRequestBodySize);
