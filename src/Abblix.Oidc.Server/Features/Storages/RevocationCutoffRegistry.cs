@@ -8,6 +8,8 @@
 
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
+using Google.Protobuf.WellKnownTypes;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -21,9 +23,17 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
 {
     /// <inheritdoc />
     public async Task<DateTimeOffset?> GetCutoffAsync(
-        RevocationScope scope, string principal, CancellationToken cancellationToken = default)
-        => await storage.GetAsync<DateTimeOffset?>(
-            keyFactory.RevocationCutoffKey(scope, principal), false, cancellationToken);
+        RevocationScope scope,
+        string principal,
+        CancellationToken cancellationToken = default)
+    {
+        var record = await storage.GetAsync<Proto.RevocationCutoff>(
+            keyFactory.RevocationCutoffKey(scope, principal),
+            false,
+            cancellationToken);
+
+        return record?.Cutoff?.ToDateTimeOffset();
+    }
 
     /// <inheritdoc />
     public Task SetCutoffAsync(
@@ -34,7 +44,7 @@ public class RevocationCutoffRegistry(IEntityStorage storage, IEntityStorageKeyF
         CancellationToken cancellationToken = default)
         => storage.SetAsync(
             keyFactory.RevocationCutoffKey(scope, principal),
-            cutoff,
+            new Proto.RevocationCutoff { Cutoff = Timestamp.FromDateTimeOffset(cutoff) },
             new StorageOptions { AbsoluteExpiration = expiresAt },
             cancellationToken);
 }
