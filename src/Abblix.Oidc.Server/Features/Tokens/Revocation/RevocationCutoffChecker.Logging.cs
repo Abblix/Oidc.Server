@@ -11,14 +11,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
-partial class TokenStatusValidatorDecorator
+partial class RevocationCutoffChecker
 {
     // Information rather than Warning: a client presenting a token that a revocation caught is the control
     // working, not a fault. The issue time is what makes the line answer the question an operator actually
     // has - whether this token predates the revocation they wrote, or whether they are looking at a second,
     // later one.
     [LoggerMessage(
-        EventId = LogEvents.Revocation.TokenStatusValidatorDecorator.TokenRefusedByCutoff,
+        EventId = LogEvents.Revocation.RevocationCutoffChecker.TokenRefusedByCutoff,
         Level = LogLevel.Information,
         Message = "Refused a token issued at {IssuedAt} by a {Scope} revocation cutoff")]
     private partial void LogTokenRefusedByCutoff(RevocationScope Scope, DateTimeOffset IssuedAt);
@@ -28,7 +28,7 @@ partial class TokenStatusValidatorDecorator
     // Without this line the refusal is indistinguishable from a real revocation, and the deployment would
     // look for a suspension that was never recorded.
     [LoggerMessage(
-        EventId = LogEvents.Revocation.TokenStatusValidatorDecorator.SubjectCouldNotBeResolved,
+        EventId = LogEvents.Revocation.RevocationCutoffChecker.SubjectCouldNotBeResolved,
         Level = LogLevel.Warning,
         Message = "Refused a token of client {ClientId}: its subject could not be resolved, so no revocation "
                   + "cutoff could be ruled out. Check that the client still exists and that its pairwise "

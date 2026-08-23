@@ -711,12 +711,12 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/Tokens/Revocation/TokenStatusValidatorDecorator.cs</c> - the read side,
+        /// <c>Features/Tokens/Revocation/RevocationCutoffChecker.cs</c> - the read side,
         /// so a refusal is distinguishable from a token that simply expired, and a subject that
         /// could not be resolved is distinguishable from one that was revoked
         /// (sub-range 10120-10139).
         /// </summary>
-        public static class TokenStatusValidatorDecorator
+        public static class RevocationCutoffChecker
         {
             private const int Base = 10120;
 

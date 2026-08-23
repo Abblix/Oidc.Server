@@ -446,6 +446,7 @@ public static class ServiceCollectionExtensions
         // writes through.
         services.TryAddSingleton<ITokenRegistry, TokenRegistry>();
         services.TryAddSingleton<IRevocationCutoffRegistry, RevocationCutoffRegistry>();
+        services.TryAddSingleton<IRevocationCutoffChecker, RevocationCutoffChecker>();
         services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
         services.TryAddSingleton(TimeProvider.System);
         return services

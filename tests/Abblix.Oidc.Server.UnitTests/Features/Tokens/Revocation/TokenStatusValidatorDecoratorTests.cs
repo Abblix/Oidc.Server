@@ -65,13 +65,8 @@ public class TokenStatusValidatorDecoratorTests
         _issuers.Setup(p => p.GetIssuer()).Returns(Issuer);
 
         _decorator = new TokenStatusValidatorDecorator(
-            NullLogger<TokenStatusValidatorDecorator>.Instance,
             _registry.Object,
-            _cutoffs.Object,
-            _issuers.Object,
-            Options.Create(new OidcOptions { RevocationCutoffSkew = TimeSpan.Zero }),
-            _clients.Object,
-            SubjectConverter,
+            CutoffChecker(TimeSpan.Zero),
             _inner.Object);
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
@@ -358,6 +353,19 @@ public class TokenStatusValidatorDecoratorTests
             .ReturnsAsync(success);
     }
 
+
+    /// <summary>
+    /// The real cutoff checker over the mocked stores, not a stub of it: what these tests are about is the
+    /// decision it makes, so a stub told to return the right answer would measure nothing.
+    /// </summary>
+    private IRevocationCutoffChecker CutoffChecker(TimeSpan skew) => new RevocationCutoffChecker(
+        NullLogger<RevocationCutoffChecker>.Instance,
+        _cutoffs.Object,
+        _issuers.Object,
+        Options.Create(new OidcOptions { RevocationCutoffSkew = skew }),
+        _clients.Object,
+        SubjectConverter);
+
     private static JsonWebToken RefreshToken(string? grantId) => new()
     {
         Payload =
@@ -497,13 +505,8 @@ public class TokenStatusValidatorDecoratorTests
     public async Task ValidateAsync_TokenIssuedWithinTheSkewAfterACutoff_IsStillRefused()
     {
         var decorator = new TokenStatusValidatorDecorator(
-            NullLogger<TokenStatusValidatorDecorator>.Instance,
             _registry.Object,
-            _cutoffs.Object,
-            _issuers.Object,
-            Options.Create(new OidcOptions { RevocationCutoffSkew = TimeSpan.FromMinutes(1) }),
-            _clients.Object,
-            SubjectConverter,
+            CutoffChecker(TimeSpan.FromMinutes(1)),
             _inner.Object);
 
         SetupInnerReturns(new JsonWebToken

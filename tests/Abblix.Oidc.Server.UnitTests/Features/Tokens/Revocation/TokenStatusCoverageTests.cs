@@ -132,13 +132,14 @@ public class TokenStatusCoverageTests
             .ReturnsAsync(success);
 
         var decorator = new TokenStatusValidatorDecorator(
-            NullLogger<TokenStatusValidatorDecorator>.Instance,
             registry.Object,
-            cutoffs.Object,
-            issuers.Object,
-            Options.Create(new OidcOptions()),
-            clients.Object,
-            new SubjectTypeConverter(),
+            new RevocationCutoffChecker(
+                NullLogger<RevocationCutoffChecker>.Instance,
+                cutoffs.Object,
+                issuers.Object,
+                Options.Create(new OidcOptions()),
+                clients.Object,
+                new SubjectTypeConverter()),
             inner.Object);
 
         var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters());
