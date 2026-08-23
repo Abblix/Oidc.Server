@@ -23,10 +23,15 @@ namespace Abblix.SharedSignals.UnitTests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The address policy was consulted only by the sender, so a stream naming an address this transmitter
-/// refuses on principle - cleartext, or a host inside the transmitter's own network - was accepted with
-/// a 201 and then refused on every pass, forever. The receiver had no way to learn that: its create
-/// succeeded, and the refusal appeared only in the transmitter's log.
+/// Consulted only by the sender, the policy would accept a stream naming an address this transmitter
+/// refuses on principle - cleartext, or a host inside the transmitter's own network - and then refuse
+/// every pass over it, forever. The receiver cannot learn that from a 201, and the refusal reaches
+/// only a log it has no access to.
+/// </para>
+/// <para>
+/// Every verb that writes a delivery is covered here, and each refusal is paired with the same request
+/// over https. Three verbs write one field, so a check on one of them leaves the hole one call along -
+/// which is the door a receiver reaches by accident: create with what works, then move the endpoint.
 /// </para>
 /// <para>
 /// The scheme is the part that makes this checkable up front. Unlike a resolved address, which may
@@ -109,6 +114,81 @@ public class StreamAddressAtRegistrationTests
             ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, updated.StatusCode);
+    }
+
+    /// <summary>The control for the update: the same call over https goes through.</summary>
+    /// <remarks>
+    /// Without it the refusal above is satisfied by an update path that refuses every delivery it is
+    /// given, which is a check that cannot fail rather than a check.
+    /// </remarks>
+    [Fact]
+    public async Task AnUpdateOntoASecureAddress_IsAccepted()
+    {
+        var service = Service();
+        var ct = TestContext.Current.CancellationToken;
+
+        var created = await service.CreateStreamAsync(Receiver, Request(Secure), ct);
+
+        var updated = await service.UpdateStreamAsync(
+            Receiver,
+            new UpdateStreamRequest
+            {
+                StreamId = created.Body!.StreamId,
+                Delivery = new PushDeliveryMethod(new Uri("https://elsewhere.example.com/ssf/push")),
+            },
+            ct);
+
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+    }
+
+    /// <summary>A replacement may not walk a live stream onto an address a create would have refused.</summary>
+    /// <remarks>
+    /// PUT is the verb the specification points a receiver at for exactly this - "use PATCH or PUT to
+    /// update or replace the existing stream configuration" (SSF 1.0 Section 8.1.1.1) - so a check that
+    /// covers create and update and not replace covers two doors of three.
+    /// </remarks>
+    [Fact]
+    public async Task AReplacementOntoACleartextAddress_IsRefused()
+    {
+        var service = Service();
+        var ct = TestContext.Current.CancellationToken;
+
+        var created = await service.CreateStreamAsync(Receiver, Request(Secure), ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var replaced = await service.ReplaceStreamAsync(
+            Receiver,
+            new UpdateStreamRequest
+            {
+                StreamId = created.Body!.StreamId,
+                EventsRequested = [EventType],
+                Delivery = new PushDeliveryMethod(Cleartext),
+            },
+            ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, replaced.StatusCode);
+    }
+
+    /// <summary>The control for the replacement: the same call over https goes through.</summary>
+    [Fact]
+    public async Task AReplacementOntoASecureAddress_IsAccepted()
+    {
+        var service = Service();
+        var ct = TestContext.Current.CancellationToken;
+
+        var created = await service.CreateStreamAsync(Receiver, Request(Secure), ct);
+
+        var replaced = await service.ReplaceStreamAsync(
+            Receiver,
+            new UpdateStreamRequest
+            {
+                StreamId = created.Body!.StreamId,
+                EventsRequested = [EventType],
+                Delivery = new PushDeliveryMethod(new Uri("https://elsewhere.example.com/ssf/push")),
+            },
+            ct);
+
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
     }
 
     private static CreateStreamRequest Request(Uri endpoint) => new()

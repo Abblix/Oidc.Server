@@ -72,17 +72,10 @@ public sealed class StreamManagementService(
 
         var streamId = Guid.NewGuid().ToString("N");
 
-        if (ResolveDelivery(request.Delivery, streamId) is not { } delivery)
+        var accepted = await AcceptDeliveryAsync(request.Delivery, streamId, cancellationToken);
+        if (accepted.Body is not { } delivery)
         {
-            return ManagementResult<StreamConfiguration>.BadRequest(
-                "The requested delivery method is not supported by this transmitter "
-                + "(SSF 1.0 Section 8.1.1.1).");
-        }
-
-        if (await AddressRefusalOf(delivery, cancellationToken) is { } refusal)
-        {
-            return ManagementResult<StreamConfiguration>.BadRequest(
-                $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
+            return RefusalOf(accepted);
         }
 
         var configuration = new StreamConfiguration
@@ -186,19 +179,10 @@ public sealed class StreamManagementService(
 
         if (request.Delivery is { } proposedDelivery)
         {
-            if (ResolveDelivery(proposedDelivery, stream.StreamId) is not { } delivery)
+            var accepted = await AcceptDeliveryAsync(proposedDelivery, stream.StreamId, cancellationToken);
+            if (accepted.Body is not { } delivery)
             {
-                return ManagementResult<StreamConfiguration>.BadRequest(
-                    "The requested delivery method is not supported by this transmitter.");
-            }
-
-            // Checked on the way in as well as at creation: a receiver that created a stream with an
-            // address this transmitter accepts can otherwise walk it onto one it does not, and the
-            // stream would be as undeliverable as if it had been created that way.
-            if (await AddressRefusalOf(delivery, cancellationToken) is { } refusal)
-            {
-                return ManagementResult<StreamConfiguration>.BadRequest(
-                    $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
+                return RefusalOf(accepted);
             }
 
             configuration = configuration with { Delivery = delivery };
@@ -248,10 +232,10 @@ public sealed class StreamManagementService(
                 + "without a delivery method (SSF 1.0 Section 8.1.1.4).");
         }
 
-        if (ResolveDelivery(request.Delivery, stream.StreamId) is not { } delivery)
+        var accepted = await AcceptDeliveryAsync(request.Delivery, stream.StreamId, cancellationToken);
+        if (accepted.Body is not { } delivery)
         {
-            return ManagementResult<StreamConfiguration>.BadRequest(
-                "The requested delivery method is not supported by this transmitter.");
+            return RefusalOf(accepted);
         }
 
         var configuration = stream.Configuration with
@@ -580,6 +564,46 @@ public sealed class StreamManagementService(
     }
 
     /// <summary>
+    /// The delivery this transmitter will store for a proposal, or the refusal that stops it.
+    /// </summary>
+    /// <remarks>
+    /// Resolving a method and judging its address are one decision, so they are one call. Three verbs
+    /// write a stream's delivery - create, update and replace - and nothing in the type system makes
+    /// the second check happen beside the first, so a path that asks only whether the METHOD is served
+    /// stores an address every delivery pass then refuses. Any future write path has one method to
+    /// reach for and gets both halves by having no way to ask for one.
+    /// </remarks>
+    private async Task<ManagementResult<StreamDeliveryMethod>> AcceptDeliveryAsync(
+        StreamDeliveryMethod? proposed,
+        string streamId,
+        CancellationToken cancellationToken)
+    {
+        if (ResolveDelivery(proposed, streamId) is not { } delivery)
+        {
+            return ManagementResult<StreamDeliveryMethod>.BadRequest(
+                "The requested delivery method is not supported by this transmitter.");
+        }
+
+        if (await AddressRefusalOf(delivery, cancellationToken) is { } refusal)
+        {
+            return ManagementResult<StreamDeliveryMethod>.BadRequest(
+                $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
+        }
+
+        return ManagementResult<StreamDeliveryMethod>.Ok(delivery);
+    }
+
+    /// <summary>The same refusal, for an endpoint whose successful body is the configuration.</summary>
+    /// <remarks>
+    /// A refusal carries no body, so only the status and the operator-facing description travel. This
+    /// exists so the three write paths return the ONE decision above rather than each restating it -
+    /// restating is how two paths come to answer differently for the same cause.
+    /// </remarks>
+    private static ManagementResult<StreamConfiguration> RefusalOf(
+        ManagementResult<StreamDeliveryMethod> refused)
+        => new(refused.StatusCode, default, refused.Description);
+
+    /// <summary>
     /// The receiver-visible delivery for a proposal: push keeps the receiver's endpoint, poll
     /// gets this transmitter's own URL - the "endpoint_url value is supplied by the
     /// Transmitter" (SSF 1.0 Section 8.1.1.1) - and an absent proposal means poll. Null when
@@ -608,10 +632,12 @@ public sealed class StreamManagementService(
     /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> rather than proposed from
     /// outside, and nothing arrives from the receiver to judge.
     ///
-    /// Every method is named, and an unnamed one throws rather than falling through to "nothing to
-    /// judge". A delivery method added later carries an address from somewhere, and the quiet answer
-    /// would exempt it from this check on the day it is written - the one shape this method exists to
-    /// prevent, arriving as a default that looks like agreement.
+    /// Every method is named and an unnamed one throws, though nothing can reach that arm as the code
+    /// stands: <see cref="ResolveDelivery"/> answers null for a method this transmitter does not serve,
+    /// and the caller refuses before asking here. The arm is for the day somebody teaches that method a
+    /// third delivery and not this one. The build is green either way, so the choice is between a loud
+    /// throw and a quiet "nothing to judge" that exempts the new method from the check - and a delivery
+    /// method carries an address from somewhere, so the exemption is the shape this guards against.
     /// </remarks>
     private async Task<string?> AddressRefusalOf(
         StreamDeliveryMethod delivery, CancellationToken cancellationToken)
