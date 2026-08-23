@@ -126,6 +126,8 @@ public static class ServiceCollectionExtensions
         // for its kind, instead of generating a guessable secret or an unusable HMAC key at runtime.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SecretLengthOptionsValidator>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RevocationRetentionOptionsValidator>());
 
         // Fail loud at startup when a client that authenticates by shared secret has none, or carries a
         // hash of the wrong length, instead of refusing that client on every request it ever makes.
@@ -439,7 +441,14 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddTokenRevocation(this IServiceCollection services)
     {
+        // The whole revocation substrate, not only the decoration: a host calling this alone gets the
+        // status registry a replay trips, the cutoff registry a suspension writes, and the surface it
+        // writes through.
         services.TryAddSingleton<ITokenRegistry, TokenRegistry>();
+        services.TryAddSingleton<IRevocationCutoffRegistry, RevocationCutoffRegistry>();
+        services.TryAddSingleton<IRevocationCutoffChecker, RevocationCutoffChecker>();
+        services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
+        services.TryAddSingleton(TimeProvider.System);
         return services
             .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
     }

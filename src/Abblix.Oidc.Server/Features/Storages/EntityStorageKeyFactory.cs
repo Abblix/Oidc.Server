@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -21,6 +23,27 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <returns>A formatted storage key for the JWT status.</returns>
     public string JsonWebTokenStatusKey(string jwtId)
         => $"Abblix.Oidc.Server:JWT:{jwtId}";
+
+    /// <summary>
+    /// Generates a storage key for a revocation cutoff recorded against a subject or a session.
+    /// </summary>
+    /// <param name="scope">Whether the principal is an end user or a single session.</param>
+    /// <param name="principal">The subject identifier or the session identifier.</param>
+    /// <returns>A formatted storage key for the cutoff.</returns>
+    public string RevocationCutoffKey(RevocationScope scope, string principal)
+        => $"Abblix.Oidc.Server:Revoked:{NameOf(scope)}:{principal}";
+
+    /// <summary>
+    /// The wire name of a revocation scope, fixed independently of the enum member's name so that renaming
+    /// the member cannot orphan the cutoffs already in the store.
+    /// </summary>
+    private static string NameOf(RevocationScope scope) => scope switch
+    {
+        RevocationScope.Subject => "subject",
+        RevocationScope.Session => "session",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(scope), scope, $"No storage key is defined for this {nameof(RevocationScope)}."),
+    };
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.

@@ -6,17 +6,20 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
@@ -33,12 +36,16 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// <param name="issuerProvider">The issuer provider.</param>
 /// <param name="clientInfoProvider">The client info provider.</param>
 /// <param name="logoutNotifier">The logout notifier.</param>
+/// <param name="tokenRevoker">Revokes the tokens of the ended session, when the deployment asks for it.</param>
+/// <param name="options">Supplies whether ending a session revokes its tokens.</param>
 public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
 	IIssuerProvider issuerProvider,
 	IClientInfoProvider clientInfoProvider,
-	ILogoutNotifier logoutNotifier) : IEndSessionRequestProcessor
+	ILogoutNotifier logoutNotifier,
+	ITokenRevoker tokenRevoker,
+	IOptions<OidcOptions> options) : IEndSessionRequestProcessor
 {
 	/// <summary>
 	/// Processes the end-session request and returns the corresponding response.
@@ -76,6 +83,12 @@ public partial class EndSessionRequestProcessor(
 		}
 
 		await authSessionService.SignOutAsync();
+
+		// Recorded before any client is told, so a client acting on the notification cannot refresh its way
+		// back in against a cutoff that has not been written yet.
+		if (options.Value.RevokeSessionTokensOnLogout)
+			await tokenRevoker.RevokeSessionAsync(sessionId);
+
 		LogUserLoggedOut(subjectId, sessionId);
 
 		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -20,6 +22,28 @@ public interface IEntityStorageKeyFactory
     /// <param name="jwtId">The JSON Web Token identifier.</param>
     /// <returns>A formatted storage key for the JWT status.</returns>
     string JsonWebTokenStatusKey(string jwtId);
+
+    /// <summary>
+    /// Names the revocation cutoff recorded against a subject or a session.
+    /// </summary>
+    /// <param name="scope">Whether the principal is an end user or a single session.</param>
+    /// <param name="principal">The subject identifier or the session identifier.</param>
+    /// <returns>A formatted storage key for the cutoff.</returns>
+    /// <remarks>
+    /// Abstract like every other member here, deliberately, even though a body would have compiled and spared
+    /// an implementation written against an earlier version. A host implements this interface in order to put
+    /// its own namespace on the keys, one store shared between tenants being the usual reason, and a default
+    /// member is satisfied without a compile error - so the host would keep its namespace for every other key
+    /// and silently inherit ours for this one. Two tenants naming the same user would then share a cutoff, and
+    /// revoking one tenant's user would revoke another's. That is invisible in the store and in any test a
+    /// host would think to write, where a missing member is a compile error naming the type and the member.
+    /// <para>
+    /// The scope must appear in the key and must not be spelled with the enum member's name, because a rename
+    /// is a refactor the compiler blesses everywhere and it would orphan every live cutoff - every suspended
+    /// account and every ended session quietly working again on deploy.
+    /// </para>
+    /// </remarks>
+    string RevocationCutoffKey(RevocationScope scope, string principal);
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.

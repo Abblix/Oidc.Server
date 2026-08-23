@@ -56,6 +56,7 @@ public class ProtobufSerializer : IBinarySerializer
             BackChannelAuthenticationRequest bcRequest => bcRequest.ToProto(),
             DeviceAuthorizationRequest deviceRequest => deviceRequest.ToProto(),
             Proto.RateLimitState rateLimitState => rateLimitState,
+            Proto.RevocationCutoff revocationCutoff => revocationCutoff,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +
@@ -88,6 +89,9 @@ public class ProtobufSerializer : IBinarySerializer
             var proto = JsonWebTokenStatus.Parser.ParseFrom(bytes);
             return (T)(object)proto.FromProto();
         }
+
+        if (targetType == typeof(Proto.RevocationCutoff))
+            return (T)(object)Proto.RevocationCutoff.Parser.ParseFrom(bytes);
 
         if (targetType == typeof(Endpoints.Token.Interfaces.TokenInfo))
         {

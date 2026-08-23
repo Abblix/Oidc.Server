@@ -383,6 +383,91 @@ public record OidcOptions
 	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
 
 	/// <summary>
+	/// How long a subject- or session-level revocation cutoff is kept.
+	/// </summary>
+	/// <remarks>
+	/// A cutoff refuses tokens issued before it, so it stops mattering once the longest-lived token it could
+	/// refuse has expired on its own, and keeping it past that costs one small record per revoked principal.
+	/// <para>
+	/// Dropping it early is the failure that matters, and it is silent: a refresh token issued before a
+	/// revocation and still alive when the record expires starts working again, rotates into a fresh one, and
+	/// nothing logs anything. Set this to the longest <see cref="Features.ClientInformation.ClientInfo.RefreshToken"/>
+	/// absolute lifetime any client is configured with. It cannot be derived here - lifetimes are per client
+	/// and the client store answers by identifier rather than by enumeration - so the value is yours to keep
+	/// in step, and only a non-positive one is refused at startup.
+	/// </para>
+	/// <para>
+	/// The default covers a month, which is the longest refresh token most deployments issue and far past this
+	/// server's own default of eight hours.
+	/// </para>
+	/// </remarks>
+	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);
+
+	/// <summary>
+	/// How far a token may appear to have been issued after a revocation cutoff and still be refused by it.
+	/// </summary>
+	/// <remarks>
+	/// The cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
+	/// the two come from different clocks. The error is not symmetric in consequence. A token that reads as
+	/// older than it is gets refused once and the client asks again; a token that reads as newer escapes the
+	/// revocation entirely, and because a refresh rotation carries the original <c>iat</c> forward it keeps
+	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
+	/// reports it.
+	/// <para>
+	/// The value is added to the cutoff, so it widens what a revocation catches, and the cost is that it
+	/// catches more than the revocation named. A token minted after a legitimate sign-in, but inside this
+	/// window of a cutoff, cannot be told apart from a drifted old one and is refused. That is not one
+	/// retry - it lasts the whole window, because every token minted inside it carries an issue time inside
+	/// it. A user reinstated a moment after being suspended waits this long before their tokens work.
+	/// </para>
+	/// <para>
+	/// So this is priced against clock drift and nothing else: it must exceed the worst difference between
+	/// the instance that stamps a token and the instance that records a revocation, and buy no more than
+	/// that. On hosts running NTP the difference is milliseconds, and the default of five seconds is three
+	/// orders of magnitude above it while staying short enough to read as a retry. Raise it only for a
+	/// deployment that knows its clocks are worse, and price the lockout when doing so.
+	/// </para>
+	/// <para>
+	/// It applies to tokens alone. An authentication session is judged with no tolerance at all, because
+	/// there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
+	/// retry lands in the same window - a loop rather than a wait.
+	/// </para>
+	/// <para>
+	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
+	/// single-instance deployment and of nothing else.
+	/// </para>
+	/// </remarks>
+	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromSeconds(5);
+
+	/// <summary>
+	/// Whether ending a session also revokes the tokens issued within it.
+	/// </summary>
+	/// <remarks>
+	/// Off, which keeps a refresh token working after the user has signed out of the browser. That is what a
+	/// native application relies on to stay signed in while the web session ends, and turning it on for an
+	/// existing deployment would log those users out with nothing in their own code having changed.
+	/// <para>
+	/// Turn it on where a sign-out is meant to mean the end of access rather than the end of a browser session,
+	/// and read the specification's advice as advice. OpenID Connect RP-Initiated Logout 1.0 says nothing about
+	/// tokens at all, but Back-Channel Logout 1.0 Section 2.7 does: "Refresh tokens issued without the
+	/// offline_access property to a session being logged out SHOULD be revoked. Refresh tokens issued with the
+	/// offline_access property normally SHOULD NOT be revoked."
+	/// </para>
+	/// <para>
+	/// Every refresh token this server mints carries <c>offline_access</c>, because that scope is what makes it
+	/// issue one at all. So the first sentence applies to nothing here, and the second describes every token
+	/// this option would revoke - which is why it is off. Turning it on is a deliberate departure from a
+	/// SHOULD NOT, and the word "normally" is what leaves room for it: a deployment whose sign-out is meant to
+	/// end access has a reason the specification's default case does not cover.
+	/// </para>
+	/// <para>
+	/// What it reaches is what a revocation cutoff reaches: refresh tokens, and access tokens a resource server
+	/// introspects. An access token validated locally against its signature and expiry never comes back here.
+	/// </para>
+	/// </remarks>
+	public bool RevokeSessionTokensOnLogout { get; set; }
+
+	/// <summary>
 	/// Configuration options for JWT Bearer grant type (RFC 7523).
 	/// Defines trusted external identity providers whose JWT assertions can be exchanged for access tokens.
 	/// </summary>

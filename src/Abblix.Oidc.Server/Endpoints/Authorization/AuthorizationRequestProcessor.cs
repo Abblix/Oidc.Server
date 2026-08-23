@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -31,6 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
+	IRevocationCutoffChecker cutoffChecker,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
@@ -260,7 +262,45 @@ public class AuthorizationRequestProcessor(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
-		// Return the filtered list of sessions as an asynchronous task.
-		return authSessions.ToListAsync();
+		// A revocation reaches the session as well as the tokens, and it has to be read here because
+		// everything below mints against whichever session survives, stamping a fresh iat that no
+		// token-side cutoff can catch. This closes the repeatable door; the token endpoint closes the
+		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
+		// cheap filters above, so a session already ruled out by max_age or acr costs no store lookup.
+		return KeepUnrevokedAsync(authSessions);
+	}
+
+	/// <summary>
+	/// Drops the sessions a revocation cutoff refuses, keeping the order of the rest.
+	/// </summary>
+	/// <remarks>
+	/// A request left with no session takes the arms above, so <c>prompt=none</c> answers
+	/// <c>login_required</c>, which OpenID Connect Core 1.0 Section 3.1.2.6 defines as "The Authorization
+	/// Server requires End-User authentication. This error MAY be returned when the prompt parameter value
+	/// in the Authentication Request is none, but the Authentication Request cannot be completed without
+	/// displaying a user interface for End-User authentication." Any other request reaches the login page.
+	/// </remarks>
+	/// <remarks>
+	/// A dropped session is ignored rather than signed out. Signing out would be the tidier outcome for the
+	/// one adapter this library ships, where the session being judged is the requester's own cookie; it is
+	/// wrong for an adapter holding several, where the session dropped need not be the one whose cookie the
+	/// response would clear. Ignoring is correct for both, at the price of judging the same session again on
+	/// the next request - two store reads per candidate, since a cutoff can be recorded against either the
+	/// subject or the session and the common answer is that neither exists.
+	///
+	/// What that leaves behind is a browser-state cookie the provider no longer honours, so a relying party
+	/// polling check_session sees no change and does not learn the session ended. It corrects itself on the
+	/// next successful sign-in, which rewrites the cookie; until then the two views disagree.
+	/// </remarks>
+	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IAsyncEnumerable<AuthSession> sessions)
+	{
+		var kept = new List<AuthSession>();
+		await foreach (var session in sessions)
+		{
+			if (!await cutoffChecker.IsSessionRefusedAsync(session))
+				kept.Add(session);
+		}
+
+		return kept;
 	}
 }

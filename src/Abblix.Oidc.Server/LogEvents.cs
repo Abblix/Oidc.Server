@@ -692,4 +692,39 @@ internal static class LogEvents
             public const int ProofRejected = Base + 4;
         }
     }
+
+    /// <summary>
+    /// Range 10100-10199: <c>Features/Tokens/Revocation</c> - subject- and session-level
+    /// revocation cutoffs, written by a host and enforced on every validated token, on every
+    /// authentication session the authorization endpoint considers reusing, and on the session
+    /// behind every grant redeemed at the token endpoint.
+    /// </summary>
+    public static class Revocation
+    {
+        /// <summary>
+        /// <c>Features/Tokens/Revocation/TokenRevoker.cs</c> - the write side, so an operator
+        /// can answer whether a suspension was recorded at all (sub-range 10100-10119).
+        /// </summary>
+        public static class TokenRevoker
+        {
+            private const int Base = 10100;
+
+            public const int CutoffRecorded = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/Revocation/RevocationCutoffChecker.cs</c> - the read side,
+        /// so a refusal is distinguishable from a token that simply expired, and a subject that
+        /// could not be resolved is distinguishable from one that was revoked
+        /// (sub-range 10120-10139).
+        /// </summary>
+        public static class RevocationCutoffChecker
+        {
+            private const int Base = 10120;
+
+            public const int TokenRefusedByCutoff = Base + 1;
+            public const int SubjectCouldNotBeResolved = Base + 2;
+            public const int SessionRefusedByCutoff = Base + 3;
+        }
+    }
 }

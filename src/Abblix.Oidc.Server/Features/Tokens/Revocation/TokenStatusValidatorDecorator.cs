@@ -13,15 +13,21 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 /// <summary>
-/// Enhances the functionality of an existing <see cref="IJsonWebTokenValidator"/> by adding token revocation validation capabilities.
-/// This decorator checks whether the JSON Web Token (JWT) has been revoked or used before and, if so, invalidates the token.
-/// It utilizes an <see cref="ITokenRegistry"/> to check the token's status and an inner <see cref="IJsonWebTokenValidator"/>
-/// for initial token validation.
+/// Adds revocation checking to an existing <see cref="IJsonWebTokenValidator"/>: a token that has been
+/// rotated, whose grant family was killed, or that a subject- or session-level cutoff reaches is refused
+/// after the inner validator has accepted it.
 /// </summary>
+/// <remarks>
+/// The two halves come from different stores and answer different questions, which is why the cutoff lives
+/// behind <see cref="IRevocationCutoffChecker"/> rather than here: this type asks what is recorded about one
+/// token, and that one asks what is recorded about the principal behind it.
+/// </remarks>
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
+/// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
 /// <param name="innerValidator">The inner validator for initial token validation.</param>
 public class TokenStatusValidatorDecorator(
 	ITokenRegistry tokenRegistry,
+	IRevocationCutoffChecker cutoffChecker,
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
 	/// <summary>
@@ -59,7 +65,25 @@ public class TokenStatusValidatorDecorator(
 	{
 		var result = await innerValidator.ValidateAsync(jwt, parameters);
 
-		if (result.TryGetSuccess(out var token) && token.Payload.JwtId is { } jwtId)
+		if (!result.TryGetSuccess(out var token))
+			return result;
+
+		// Checked before the per-token arms below, and outside them: a cutoff is a fact about the principal
+		// rather than about one token, so it must also refuse a token that carries no identifier of its
+		// own. Those arms are all guarded by jti, which RFC 7519 Section 4.1.7 makes OPTIONAL. Access
+		// tokens do carry one - RFC 9068 Section 2.2 makes it REQUIRED for the at+jwt profile they use -
+		// so the tokens this placement actually protects are the rest of what this server mints.
+		//
+		// Only where the caller validates lifetime, which is the same discriminator and not a coincidence: a
+		// cutoff says a token is too old to act on, so a caller that has switched lifetime off is saying it
+		// reads this token as a reference to something past rather than as authority. The logout endpoint is
+		// exactly that - an id_token_hint names the session that just ended, and refusing it because that
+		// session was revoked would break the second logout of a session the first one revoked.
+		if (parameters.Options.HasFlag(ValidationOptions.ValidateLifetime)
+			&& await cutoffChecker.CheckAsync(token.Payload) is { } cutoffError)
+			return cutoffError;
+
+		if (token.Payload.JwtId is { } jwtId)
 		{
 			// Refresh tokens carry a grant id (Payload.GrantId); other token types leave it null, so the family
 			// logic below is inert for them. A revoked grant is a kill switch that outlives any single token:
@@ -82,6 +106,14 @@ public class TokenStatusValidatorDecorator(
 
 				case JsonWebTokenStatus.Revoked:
 					return new JwtValidationError(JwtError.TokenRevoked, "Token was revoked");
+
+				case JsonWebTokenStatus.Unknown:
+					// Nothing is recorded about this token, which is what an ordinary one looks like: the
+					// registry holds an entry only once a token has been rotated or revoked. Spelled out
+					// rather than left to fall through, because acceptance is the outcome here and a status
+					// added later must not inherit it silently. TokenStatusCoverageTests walks the enum and
+					// fails when one does.
+					break;
 			}
 		}
 

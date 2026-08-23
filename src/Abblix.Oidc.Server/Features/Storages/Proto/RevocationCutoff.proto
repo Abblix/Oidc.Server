@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// The moment before which every token issued to a principal is revoked, and before which
+// an authentication session may not be reused.
+//
+// A message rather than a bare timestamp because the serializer dispatches on the stored
+// type, and only types with a definition here avoid the JSON fallback and the warning it
+// logs. A security control that warns on every ordinary use teaches operators to ignore the
+// warning, which is the one thing a warning must not do.
+//
+// The encoding is part of the contract with whatever is already in the store. A record
+// written in another format is not silently ignored - the parser refuses it and the request
+// fails - so a store carrying cutoffs from a build that encoded them differently must be
+// cleared before deploying this one, or those principals see errors until the records
+// expire. Failing that way round is the right one: an unreadable revocation must not read
+// as no revocation.
+message RevocationCutoff {
+  // The instant recorded by whoever performed the revocation.
+  google.protobuf.Timestamp cutoff = 1;
+}

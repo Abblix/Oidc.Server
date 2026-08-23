@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -45,6 +46,7 @@ public class AuthorizationRequestProcessorTests
 {
     private readonly Mock<IAuthSessionService> _authSessionService;
     private readonly Mock<IUserConsentsProvider> _consentsProvider;
+    private readonly Mock<IRevocationCutoffChecker> _cutoffChecker = new();
     private readonly Mock<IAuthorizationCodeService> _authorizationCodeService;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
@@ -72,12 +74,18 @@ public class AuthorizationRequestProcessorTests
 
         _timeProvider = new FakeTimeProvider();
 
+        // No cutoff recorded is the ordinary case; the tests about revocation build their own.
+        _cutoffChecker
+            .Setup(c => c.IsSessionRefusedAsync(It.IsAny<AuthSession>()))
+            .ReturnsAsync(false);
+
         // A real ConsentConstraintEnforcer (not a mock) so the anti-escalation backstop is
         // exercised end-to-end through the processor - granted scopes/resources that exceed the
         // request must throw before the grant is built.
         _processor = new AuthorizationRequestProcessor(
             _authSessionService.Object,
             _consentsProvider.Object,
+            _cutoffChecker.Object,
             _timeProvider,
             [
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
