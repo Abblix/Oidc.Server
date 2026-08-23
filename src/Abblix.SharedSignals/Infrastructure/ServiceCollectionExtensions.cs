@@ -60,8 +60,17 @@ public static class ServiceCollectionExtensions
         // The issuer is a value, not a service, so the dispatcher is built through the factory
         // that overrides exactly that one parameter and resolves the rest - including the
         // sharing policy, which stays optional: a host that registered none runs without one.
-        services.TryAddSingleton(provider =>
-            provider.CreateService<EventDispatcher>(Dependency.Override(options.Issuer)));
+        //
+        // Resolved, not captured, for the reason the receiver half below states: TryAddSingleton lets
+        // a host's own options instance win, so closing over the argument would sign every SET with a
+        // value no other reader of the container sees. That one disagrees loudly at the far end and
+        // silently here - the stream configuration and the discovery document both advertise the
+        // container's issuer, so a receiver applying SSF 1.0 Section 7.2.2 refuses every token while
+        // this side records the POST as delivered.
+        services.TryAddSingleton(provider => provider.CreateService<EventDispatcher>(
+            Dependency.Override<string>(
+                serviceProvider => serviceProvider
+                    .GetRequiredService<SharedSignalsTransmitterOptions>().Issuer)));
 
         services.TryAddSingleton<StreamManagementService>();
         services.TryAddSingleton<PollEndpointHandler>();
