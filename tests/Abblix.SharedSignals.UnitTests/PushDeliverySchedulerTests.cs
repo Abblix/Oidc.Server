@@ -66,13 +66,23 @@ public class PushDeliverySchedulerTests
     private static ServiceProvider NewTransmitter(
         HttpMessageHandler origin,
         TimeProvider clock,
-        TimeSpan interval,
-        TimeSpan leaseDuration)
+        TimeSpan? interval,
+        TimeSpan leaseDuration,
+        SharedSignalsTransmitterOptions? hostOptions = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(clock);
         services.AddSecurityEvents();
+
+        // Registered BEFORE the package, so its TryAddSingleton keeps this instance - the shape the
+        // method's own parameter documentation advertises, and the only way to hand the argument and
+        // the container two different answers about one setting.
+        if (hostOptions is not null)
+        {
+            services.AddSingleton(hostOptions);
+        }
+
         services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = Issuer,
@@ -270,6 +280,119 @@ public class PushDeliverySchedulerTests
             }
 
             Assert.Equal(1, origin.Requests);
+        }
+        finally
+        {
+            await scheduler.StopAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A deployment that drives its own passes gets no sweep from the package, and the setting it is
+    /// read from is the one in the CONTAINER.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This sweeper carries no backoff, so running it beside a host's own scheduler puts two pacing
+    /// policies on one queue: the host's ceiling is honoured by one of them and ignored by the other,
+    /// and nothing but the log says a second sweeper exists.
+    /// </para>
+    /// <para>
+    /// The pre-registered case is the one that needs saying. The registration takes the options as an
+    /// argument and hands them to the container with TryAddSingleton, so a host that registered its
+    /// own instance first keeps it - which the parameter documentation promises. Deciding from the
+    /// argument would therefore judge by a value no other reader sees, and be wrong in both
+    /// directions: no sweeper where the host configured one, or a sweeper the host opted out of.
+    /// </para>
+    /// <para>
+    /// Both verdicts come from one setup, so neither reads as the other: nothing swept, then the same
+    /// wiring with the interval in place sweeps.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheOptInIsReadFromTheContainer(bool throughTheHostsOwnOptions)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754040000));
+        var interval = TimeSpan.FromSeconds(30);
+
+        var silent = new AcceptingOrigin();
+        await using (var driven = NewTransmitter(silent, clock, null, TimeSpan.FromHours(1)))
+        {
+            await SweepAndWaitAsync(driven, clock, interval, silent, cancellationToken);
+
+            // The queue is read as well as the origin: "nothing was POSTed" alone would also be true
+            // of a pass that ran and found nothing to send.
+            Assert.Equal(0, silent.Requests);
+            Assert.Single(await driven.GetRequiredService<IEventOutbox>()
+                .PendingAsync("s-1", null, cancellationToken));
+        }
+
+        // The control, wired identically save for where the interval is set.
+        var sweeping = new AcceptingOrigin();
+        var hostOptions = throughTheHostsOwnOptions
+            ? new SharedSignalsTransmitterOptions
+            {
+                Issuer = Issuer,
+                PushDeliveryInterval = interval,
+                PushDeliveryLeaseDuration = TimeSpan.FromHours(1),
+                AllowedReceiverAddresses = [new Uri(ReceiverEndpoint)],
+            }
+            : null;
+
+        await using var configured = NewTransmitter(
+            sweeping,
+            clock,
+            throughTheHostsOwnOptions ? null : interval,
+            TimeSpan.FromHours(1),
+            hostOptions);
+
+        await SweepAndWaitAsync(configured, clock, interval, sweeping, cancellationToken);
+
+        Assert.Equal(1, sweeping.Requests);
+    }
+
+    /// <summary>Starts the sweeper if there is one, advances until it has delivered, and stops it.</summary>
+    /// <remarks>
+    /// <para>
+    /// An absent scheduler is a way of not sweeping rather than a broken arrangement, so it returns
+    /// instead of throwing. The measurement is what the receiver got, which is the same question
+    /// whether the sweeper stood down, was never registered, or ran and found nothing - and only that
+    /// makes the caller's assertion about DELIVERY rather than about the shape of the container.
+    /// </para>
+    /// <para>
+    /// Advanced repeatedly rather than once: the timer is created inside the service's own task, so a
+    /// single advance can land before it exists and be lost. The loop stops on the first delivery, so
+    /// a case expecting none pays the full count exactly once.
+    /// </para>
+    /// </remarks>
+    private static async Task SweepAndWaitAsync(
+        ServiceProvider provider,
+        FakeTimeProvider clock,
+        TimeSpan interval,
+        AcceptingOrigin origin,
+        CancellationToken cancellationToken)
+    {
+        await provider.GetRequiredService<IStreamStore>().TryCreateAsync(NewPushStream(), cancellationToken);
+        await provider.GetRequiredService<IEventOutbox>()
+            .EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+
+        if (provider.GetServices<IHostedService>().OfType<PushDeliveryScheduler>().SingleOrDefault()
+            is not { } scheduler)
+        {
+            return;
+        }
+
+        await scheduler.StartAsync(cancellationToken);
+        try
+        {
+            for (var attempt = 0; attempt < 50 && origin.Requests == 0; attempt++)
+            {
+                clock.Advance(interval);
+                await Task.Delay(10, cancellationToken);
+            }
         }
         finally
         {

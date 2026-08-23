@@ -76,20 +76,19 @@ public static class ServiceCollectionExtensions
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();
 
-        // Something has to drain the queues, and until this existed nothing did: a host wired the
-        // transmitter, mapped its endpoints, and watched events pile up with no error anywhere. A
-        // deployment that drives passes itself sets the interval to null.
+        // Something has to drain the queues, and nothing else does: a host that wires the transmitter
+        // and maps its endpoints watches events pile up with no error anywhere. A deployment driving
+        // passes of its own opts out by setting PushDeliveryInterval to null, and this sweeper carries
+        // no backoff, so leaving both running puts two pacing policies on one queue and the host's
+        // configured ceiling means nothing while the flat one retries beside it.
         //
-        // Registered only when there is an interval to sweep on, rather than always and idle. Always
-        // meant a host driving its own passes still ran this hosted service - harmless-looking, since
-        // it returns at once, and not harmless at all: register-by-default and opt-in are
-        // indistinguishable from the host's side, so nothing said a second sweeper existed except the
-        // log. That mattered because this sweeper carries no backoff, so a host that had configured a
-        // ceiling watched one sweeper honour it while this one retried at a flat interval beside it.
-        if (options.PushDeliveryInterval is not null)
-        {
-            services.AddHostedService<PushDeliveryScheduler>();
-        }
+        // The opt-out is read INSIDE the scheduler rather than here, and that is the whole reason it is
+        // registered unconditionally. TryAddSingleton above lets a host's own options instance win -
+        // which the parameter documentation promises - so the argument and the container are two
+        // sources for one fact. Deciding here would judge by the argument while every other reader saw
+        // the host's, and the disagreement is silent in both directions: no sweeper where the host
+        // configured one, or a sweeper the host opted out of.
+        services.AddHostedService<PushDeliveryScheduler>();
 
         return services;
     }
