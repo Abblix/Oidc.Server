@@ -18,6 +18,10 @@ using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.SharedSignals.Events;
+using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Model.Delivery;
+using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -41,6 +45,89 @@ public class SharedSignalsServiceCollectionTests
     /// The Security Events core plus the two deployment-knowledge seams a real host wires with
     /// keys - faked here, because these tests measure wiring, not cryptography.
     /// </summary>
+    /// <summary>A signer that keeps what it was handed, so a test can read what was minted.</summary>
+    private sealed class RecordingSigner : ISecurityEventTokenSigner
+    {
+        public List<SecurityEventToken> Signed { get; } = [];
+
+        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
+        {
+            Signed.Add(token);
+            return Task.FromResult($"signed.{token.JwtId}");
+        }
+    }
+
+    /// <summary>Every SET is signed with the issuer the CONTAINER holds, not the one this call was handed.</summary>
+    /// <remarks>
+    /// <para>
+    /// The registration takes options as an argument and hands them over with TryAddSingleton, so a host
+    /// that registered its own instance first keeps it - which is the whole of what the parameter
+    /// documentation promises. Capturing the argument into the dispatcher would therefore sign every
+    /// token with a value no other reader of the container sees.
+    /// </para>
+    /// <para>
+    /// That disagreement is the loudest one this package can produce and the hardest to trace. The
+    /// stream configuration and the discovery document both carry the container's issuer, so a
+    /// conforming receiver checks "iss" against them (SSF 1.0 Section 7.2.2, and this library's own
+    /// StreamIssuerStep) and refuses every token - while this side records each POST as delivered.
+    /// Two logs, no shared identifier, and both of them describing a healthy system.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheIssuerIsResolved_NotCaptured()
+    {
+        const string hostIssuer = "https://tr.host.example.com";
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var signer = new RecordingSigner();
+        var services = SecurityEventsBase();
+        services.AddSingleton<ISecurityEventTokenSigner>(signer);
+
+        // Registered BEFORE the package call, which is what makes its TryAddSingleton a no-op and hands
+        // the argument and the container two different answers about one value.
+        services.AddSingleton(TransmitterOptions with { Issuer = hostIssuer });
+        services.AddSharedSignalsTransmitter(
+            TransmitterOptions with { Issuer = "https://placeholder.example.com" });
+
+        await using var provider = services.BuildServiceProvider();
+
+        var stream = new StreamState
+        {
+            ReceiverId = "receiver-a",
+            Status = StreamStatuses.Enabled,
+            SubjectsMode = StreamSubjectsMode.None,
+            Configuration = new StreamConfiguration
+            {
+                StreamId = "s-1",
+                Issuer = hostIssuer,
+                Audiences = ["https://receiver.example.com"],
+                EventsDelivered = [],
+                Delivery = new PollDeliveryMethod(new Uri("https://tr.example.com/ssf/poll/s-1")),
+            },
+        };
+
+        Assert.True(await provider.GetRequiredService<IStreamStore>()
+            .TryCreateAsync(stream, cancellationToken));
+
+        await provider.GetRequiredService<EventDispatcher>().DispatchToStreamAsync(
+            stream,
+            new SecurityEventDescriptor
+            {
+                EventType = SharedSignalsEventTypes.StreamUpdated,
+                Subject = new OpaqueSubject(stream.Configuration.StreamId),
+                Payload = new StreamUpdatedEventPayload { Status = StreamStatuses.Enabled },
+            },
+            asStatusAnnouncement: true,
+            cancellationToken);
+
+        var minted = Assert.Single(signer.Signed);
+
+        // Against the stream's own issuer as well as the literal: these two are the pair a receiver
+        // compares, and the defect is precisely that they can differ.
+        Assert.Equal(hostIssuer, minted.Issuer);
+        Assert.Equal(stream.Configuration.Issuer, minted.Issuer);
+    }
+
     private static IServiceCollection SecurityEventsBase()
     {
         var services = new ServiceCollection();

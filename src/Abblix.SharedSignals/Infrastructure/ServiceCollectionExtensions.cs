@@ -60,8 +60,17 @@ public static class ServiceCollectionExtensions
         // The issuer is a value, not a service, so the dispatcher is built through the factory
         // that overrides exactly that one parameter and resolves the rest - including the
         // sharing policy, which stays optional: a host that registered none runs without one.
-        services.TryAddSingleton(provider =>
-            provider.CreateService<EventDispatcher>(Dependency.Override(options.Issuer)));
+        //
+        // Resolved, not captured, for the reason the receiver half below states: TryAddSingleton lets
+        // a host's own options instance win, so closing over the argument would sign every SET with a
+        // value no other reader of the container sees. That one disagrees loudly at the far end and
+        // silently here - the stream configuration and the discovery document both advertise the
+        // container's issuer, so a receiver applying SSF 1.0 Section 7.2.2 refuses every token while
+        // this side records the POST as delivered.
+        services.TryAddSingleton(provider => provider.CreateService<EventDispatcher>(
+            Dependency.Override<string>(
+                serviceProvider => serviceProvider
+                    .GetRequiredService<SharedSignalsTransmitterOptions>().Issuer)));
 
         services.TryAddSingleton<StreamManagementService>();
         services.TryAddSingleton<PollEndpointHandler>();
@@ -76,9 +85,18 @@ public static class ServiceCollectionExtensions
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();
 
-        // Something has to drain the queues, and until this existed nothing did: a host wired the
-        // transmitter, mapped its endpoints, and watched events pile up with no error anywhere. A
-        // deployment that drives passes itself sets the interval to null.
+        // Something has to drain the queues, and nothing else does: a host that wires the transmitter
+        // and maps its endpoints watches events pile up with no error anywhere. A deployment driving
+        // passes of its own opts out by setting PushDeliveryInterval to null, and this sweeper carries
+        // no backoff, so leaving both running puts two pacing policies on one queue and the host's
+        // configured ceiling means nothing while the flat one retries beside it.
+        //
+        // The opt-out is read INSIDE the scheduler rather than here, and that is the whole reason it is
+        // registered unconditionally. TryAddSingleton above lets a host's own options instance win -
+        // which the parameter documentation promises - so the argument and the container are two
+        // sources for one fact. Deciding here would judge by the argument while every other reader saw
+        // the host's, and the disagreement is silent in both directions: no sweeper where the host
+        // configured one, or a sweeper the host opted out of.
         services.AddHostedService<PushDeliveryScheduler>();
 
         return services;

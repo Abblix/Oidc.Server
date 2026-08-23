@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Net;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Events;
 using Abblix.SharedSignals.Model;
@@ -30,12 +31,18 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="outbox">The per-stream queues, dropped with their stream.</param>
 /// <param name="dispatcher">Mints and enqueues the framework's own signals.</param>
 /// <param name="options">The deployment's one-time decisions.</param>
+/// <param name="addressPolicy">
+/// Judges the delivery address a receiver proposes. The same policy the sender consults, deliberately:
+/// an address refused at delivery is refused for a reason that was already true when the receiver named
+/// it, and answering 201 to a stream that can never be delivered to tells the receiver nothing it can
+/// act on - the refusal then lives only in the transmitter's log.</param>
 /// <param name="clock">Measures the verification throttle; null takes the system clock.</param>
 public sealed class StreamManagementService(
     IStreamStore store,
     IEventOutbox outbox,
     EventDispatcher dispatcher,
     SharedSignalsTransmitterOptions options,
+    ReceiverAddressPolicy addressPolicy,
     TimeProvider? clock = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -66,11 +73,10 @@ public sealed class StreamManagementService(
 
         var streamId = Guid.NewGuid().ToString("N");
 
-        if (ResolveDelivery(request.Delivery, streamId) is not { } delivery)
+        var accepted = AcceptDelivery(request.Delivery, streamId);
+        if (accepted.Body is not { } delivery)
         {
-            return ManagementResult<StreamConfiguration>.BadRequest(
-                "The requested delivery method is not supported by this transmitter "
-                + "(SSF 1.0 Section 8.1.1.1).");
+            return RefusalOf(accepted);
         }
 
         var configuration = new StreamConfiguration
@@ -174,10 +180,10 @@ public sealed class StreamManagementService(
 
         if (request.Delivery is { } proposedDelivery)
         {
-            if (ResolveDelivery(proposedDelivery, stream.StreamId) is not { } delivery)
+            var accepted = AcceptDelivery(proposedDelivery, stream.StreamId);
+            if (accepted.Body is not { } delivery)
             {
-                return ManagementResult<StreamConfiguration>.BadRequest(
-                    "The requested delivery method is not supported by this transmitter.");
+                return RefusalOf(accepted);
             }
 
             configuration = configuration with { Delivery = delivery };
@@ -227,10 +233,10 @@ public sealed class StreamManagementService(
                 + "without a delivery method (SSF 1.0 Section 8.1.1.4).");
         }
 
-        if (ResolveDelivery(request.Delivery, stream.StreamId) is not { } delivery)
+        var accepted = AcceptDelivery(request.Delivery, stream.StreamId);
+        if (accepted.Body is not { } delivery)
         {
-            return ManagementResult<StreamConfiguration>.BadRequest(
-                "The requested delivery method is not supported by this transmitter.");
+            return RefusalOf(accepted);
         }
 
         var configuration = stream.Configuration with
@@ -559,6 +565,67 @@ public sealed class StreamManagementService(
     }
 
     /// <summary>
+    /// The delivery this transmitter will store for a proposal, or the refusal that stops it.
+    /// </summary>
+    /// <remarks>
+    /// Resolving a method and judging its address are one decision, so they are one call. Three verbs
+    /// write a stream's delivery - create, update and replace - and nothing in the type system makes
+    /// the second check happen beside the first, so a path that asks only whether the METHOD is served
+    /// stores an address every delivery pass then refuses. Any future write path has one method to
+    /// reach for and gets both halves by having no way to ask for one.
+    ///
+    /// 400 on all three verbs, which is a decision rather than an oversight. SSF 1.0 Sections 8.1.1.3
+    /// and 8.1.1.4 list it for a request that is "otherwise invalid", which covers update and replace
+    /// outright. Section 8.1.1.1's table does not carry that phrase - its 400 is for a request that
+    /// cannot be parsed, and its prose adds only that a transmitter MAY answer 400 when it does not
+    /// support the delivery METHOD. An unusable ENDPOINT is unlisted there, and 403 ("the Event Receiver
+    /// is not allowed to create a stream") reads as a verdict about the receiver's permission rather
+    /// than about the address it wrote. Since the refusal reaches the receiver as a bare status code,
+    /// one answer across the three verbs is worth more than a per-verb code that would make a receiver
+    /// branch on the method it used to say the same wrong thing.
+    /// </remarks>
+    private ManagementResult<StreamDeliveryMethod> AcceptDelivery(
+        StreamDeliveryMethod? proposed,
+        string streamId)
+    {
+        if (ResolveDelivery(proposed, streamId) is not { } delivery)
+        {
+            return ManagementResult<StreamDeliveryMethod>.BadRequest(
+                "The requested delivery method is not supported by this transmitter.");
+        }
+
+        if (AddressRefusalOf(delivery) is { } refusal)
+        {
+            return ManagementResult<StreamDeliveryMethod>.BadRequest(
+                $"The delivery endpoint cannot be used by this transmitter: {refusal}.");
+        }
+
+        return ManagementResult<StreamDeliveryMethod>.Ok(delivery);
+    }
+
+    /// <summary>The same refusal, for an endpoint whose successful body is the configuration.</summary>
+    /// <remarks>
+    /// A refusal carries no body, so only the status and the operator-facing description travel. This
+    /// exists so the three write paths return the ONE decision above rather than each restating it -
+    /// restating is how two paths come to answer differently for the same cause.
+    ///
+    /// A success throws rather than being re-typed. The callers reach this on "no delivery to store",
+    /// which is not the same statement as "refused": <see cref="ManagementResult{TBody}"/> publishes a
+    /// body-less SUCCESS too, so an outcome added to <see cref="AcceptDelivery"/> through it would
+    /// otherwise be re-typed into a 2xx carrying nothing - a create answered to the receiver as having
+    /// succeeded while it stored no stream. Loud is the right failure for that: silent is a refusal
+    /// dressed as an acceptance, which is the one shape a caller cannot detect.
+    /// </remarks>
+    private static ManagementResult<StreamConfiguration> RefusalOf(
+        ManagementResult<StreamDeliveryMethod> refused)
+        => refused.StatusCode >= HttpStatusCode.BadRequest
+            ? new(refused.StatusCode, default, refused.Description)
+            : throw new ArgumentOutOfRangeException(
+                nameof(refused),
+                refused.StatusCode,
+                "Only a refusal is re-typed here, and this status is not one.");
+
+    /// <summary>
     /// The receiver-visible delivery for a proposal: push keeps the receiver's endpoint, poll
     /// gets this transmitter's own URL - the "endpoint_url value is supplied by the
     /// Transmitter" (SSF 1.0 Section 8.1.1.1) - and an absent proposal means poll. Null when
@@ -571,6 +638,47 @@ public sealed class StreamManagementService(
             PollDeliveryMethod or null when options.PollEndpointFactory is { } pollEndpointOf =>
                 new PollDeliveryMethod(pollEndpointOf(streamId)),
             _ => null,
+        };
+
+    /// <summary>
+    /// Why this transmitter will never deliver to the proposed address, or null when it will.
+    /// </summary>
+    /// <remarks>
+    /// Asked here as well as at delivery, and by the same policy on purpose. The reasons an address is
+    /// refused by its NAME - cleartext, or a host spelling out this deployment's own network - are true
+    /// the moment the receiver writes it, so accepting the stream and refusing every push afterwards
+    /// tells the receiver nothing: its create succeeded, and the refusal lives only in a log it cannot
+    /// read. Two checks over one fact would drift; one policy consulted twice cannot.
+    ///
+    /// <see cref="ReceiverAddressPolicy.RejectionOfName"/> rather than the whole question, because what
+    /// a name RESOLVES to is not settled at registration: it is looked up again for every pass, and a
+    /// resolver that is briefly down is a condition an operator recovers from - which delivery treats as
+    /// one by holding the queue. Answered here it would become a terminal 400, and a receiver
+    /// registering while its own record is still propagating could not tell that from a permanent
+    /// refusal. Asking only the fixed half also keeps this endpoint from driving the transmitter's
+    /// resolver at request rate against names a caller chooses.
+    ///
+    /// Poll delivery is not judged: the address in it is this transmitter's own, minted from
+    /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> rather than proposed from
+    /// outside, and nothing arrives from the receiver to judge.
+    ///
+    /// Every method is named and an unnamed one throws, though nothing can reach that arm as the code
+    /// stands: <see cref="ResolveDelivery"/> answers null for a method this transmitter does not serve,
+    /// and the caller refuses before asking here. The arm is for the day somebody teaches that method a
+    /// third delivery and not this one. The build is green either way, so the choice is between a loud
+    /// throw and a quiet "nothing to judge" that exempts the new method from the check - and a delivery
+    /// method carries an address from somewhere, so the exemption is the shape this guards against.
+    /// </remarks>
+    private string? AddressRefusalOf(StreamDeliveryMethod delivery)
+        => delivery switch
+        {
+            PushDeliveryMethod push => addressPolicy.RejectionOfName(push.EndpointUrl),
+            PollDeliveryMethod => null,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(delivery),
+                delivery.Method,
+                "This delivery method has no address rule, so nothing decided whether its endpoint may "
+                    + "be used. Name it here rather than letting it deliver unjudged."),
         };
 
     /// <summary>

@@ -97,7 +97,7 @@ public class StreamManagementServiceTests
             NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer, clock: clock);
 
         return new Harness(
-            new StreamManagementService(store, outbox, dispatcher, options, clock),
+            new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock),
             store, outbox, signer, clock);
     }
 
@@ -188,7 +188,7 @@ public class StreamManagementServiceTests
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
-        var service = new StreamManagementService(store, outbox, dispatcher, options, clock);
+        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock);
 
         var created = await service.CreateStreamAsync(
             Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
@@ -233,7 +233,7 @@ public class StreamManagementServiceTests
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
-        var service = new StreamManagementService(store, outbox, dispatcher, options, clock);
+        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock);
 
         var created = await service.CreateStreamAsync(
             Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
@@ -482,4 +482,13 @@ public class StreamManagementServiceTests
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, afterInterval.StatusCode);
     }
+
+    /// <summary>
+    /// The address policy these tests hand to the service, with a resolver of their own: the one branch
+    /// of the policy that is not a string comparison would otherwise reach a live DNS for a name nobody
+    /// owns, and the test would measure the network.
+    /// </summary>
+    private static ReceiverAddressPolicy PolicyFor(SharedSignalsTransmitterOptions options)
+        => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
+            [System.Net.IPAddress.Parse("93.184.216.34")]));
 }
