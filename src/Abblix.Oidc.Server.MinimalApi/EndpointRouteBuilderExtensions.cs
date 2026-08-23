@@ -201,7 +201,7 @@ public static class EndpointRouteBuilderExtensions
             oidcGroup
                 .MapPost(routes.Register, RegisterClientAsync)
                 .WithName(EndpointNames.Register)
-                .WithMetadata(new RegistrationRequestSizeLimit(options.MaxRegistrationRequestSize));
+                .BoundBy(options.MaxRegistrationRequestSize);
 
             oidcGroup
                 .MapGet(routes.RegisterClient, ReadClientAsync)
@@ -211,7 +211,7 @@ public static class EndpointRouteBuilderExtensions
             // registration access token check, so it carries the same bound.
             oidcGroup
                 .MapPut(routes.RegisterClient, UpdateClientAsync)
-                .WithMetadata(new RegistrationRequestSizeLimit(options.MaxRegistrationRequestSize));
+                .BoundBy(options.MaxRegistrationRequestSize);
 
             oidcGroup.MapDelete(routes.RegisterClient, RemoveClientAsync);
         }
