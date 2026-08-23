@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -28,4 +29,24 @@ public interface IRevocationCutoffChecker
     /// <param name="payload">The payload of a token that has already passed signature and lifetime checks.</param>
     /// <returns>A validation error when the token is refused, otherwise <c>null</c>.</returns>
     Task<JwtValidationError?> CheckAsync(JsonWebTokenPayload payload);
+
+    /// <summary>
+    /// Whether a cutoff refuses this authentication session, so the authorization endpoint must not mint
+    /// against it.
+    /// </summary>
+    /// <remarks>
+    /// Without this the token side alone is half a control. A cutoff refuses tokens already issued, and
+    /// <c>iat</c> is stamped afresh by every new authorization, so a browser session the revocation never
+    /// touched can mint a replacement that clears the cutoff on the first try - and keeps doing so.
+    /// <para>
+    /// Measured against <see cref="AuthSession.AuthenticationTime"/>, not against a flag. A sign-in after
+    /// the suspension is lifted produces a later authentication time and passes, which is the same property
+    /// that lets a revoked subject sign in again with nothing to clean up. A boolean would refuse the fresh
+    /// session too, and since the host's new session carries the same subject the request would loop back
+    /// here for as long as the record is kept.
+    /// </para>
+    /// </remarks>
+    /// <param name="session">A session the authorization endpoint is considering reusing.</param>
+    /// <returns><c>true</c> when the session must not be used.</returns>
+    Task<bool> IsSessionRefusedAsync(AuthSession session);
 }

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -98,6 +99,25 @@ public partial class RevocationCutoffChecker(
 
         LogTokenRefusedByCutoff(RevocationScope.Subject, issuedAt);
         return RevokedByCutoff;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsSessionRefusedAsync(AuthSession session)
+    {
+        // The subject here is the one a host would revoke, with no pseudonym to open: pairwise conversion
+        // happens later, in the token services, against the client the token is being minted for. So this
+        // side needs neither the client lookup nor ConvertBack, and has none of their failure modes.
+        if (await IsBeforeCutoffAsync(RevocationScope.Subject, session.Subject, session.AuthenticationTime))
+        {
+            LogSessionRefusedByCutoff(RevocationScope.Subject, session.AuthenticationTime);
+            return true;
+        }
+
+        if (!await IsBeforeCutoffAsync(RevocationScope.Session, session.SessionId, session.AuthenticationTime))
+            return false;
+
+        LogSessionRefusedByCutoff(RevocationScope.Session, session.AuthenticationTime);
+        return true;
     }
 
     private static JwtValidationError RevokedByCutoff => new(

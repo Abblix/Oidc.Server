@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -31,6 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
+	IRevocationCutoffChecker cutoffChecker,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
@@ -260,7 +262,31 @@ public class AuthorizationRequestProcessor(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
-		// Return the filtered list of sessions as an asynchronous task.
-		return authSessions.ToListAsync();
+		// A revocation reaches the session as well as the tokens, and this is the only place it can:
+		// everything below mints against whichever session survives, stamping a fresh iat that no
+		// token-side cutoff can catch. Read after the cheap filters above, so a session already
+		// ruled out by max_age or acr costs no store lookup.
+		return KeepUnrevokedAsync(authSessions);
+	}
+
+	/// <summary>
+	/// Drops the sessions a revocation cutoff refuses, keeping the order of the rest.
+	/// </summary>
+	/// <remarks>
+	/// A dropped session is not signed out, only ignored: this endpoint reads sign-in state and does
+	/// not write it, and the cookie it would clear belongs to whoever is making the request rather
+	/// than to the session being judged. The cost is that the same session is judged again on the
+	/// next request, which is one store read against a record that is usually absent.
+	/// </remarks>
+	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IAsyncEnumerable<AuthSession> sessions)
+	{
+		var kept = new List<AuthSession>();
+		await foreach (var session in sessions)
+		{
+			if (!await cutoffChecker.IsSessionRefusedAsync(session))
+				kept.Add(session);
+		}
+
+		return kept;
 	}
 }

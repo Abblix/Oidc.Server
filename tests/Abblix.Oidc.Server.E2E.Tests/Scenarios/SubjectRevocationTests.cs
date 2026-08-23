@@ -176,6 +176,125 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             $"a logout should not revoke tokens by default, got {(int)afterLogout.StatusCode}");
     }
 
+    /// <summary>
+    /// A revocation reaches the browser session, not only the tokens issued from it.
+    /// </summary>
+    /// <remarks>
+    /// The gap this closes: a cutoff refuses tokens by their issue time, and every new authorization stamps
+    /// a fresh one, so a surviving session could mint a replacement that cleared the cutoff on the first
+    /// attempt and on every attempt after that. Driven through the real endpoint with <c>prompt=none</c>,
+    /// which is how a silent renewal asks, and asserted from both sides on the same host - "the request
+    /// stopped working" is indistinguishable from "this host refuses everything" when only one side is
+    /// checked.
+    /// </remarks>
+    [Fact]
+    public async Task Revoking_a_subject_stops_its_session_from_minting_more()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var subject = SubjectOf(tokens);
+
+        // The silent renewal works before the revocation.
+        var codeBefore = await AuthorizeAndExtractCodeAsync(client, discovery, SilentRenewal());
+        Assert.False(string.IsNullOrEmpty(codeBefore));
+
+        await RevokerOf(host).RevokeSubjectAsync(
+            subject, cancellationToken: TestContext.Current.CancellationToken);
+
+        var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
+
+        // OpenID Connect Core 1.0 Section 3.1.2.6: the server requires End-User authentication and cannot
+        // complete the request without showing a user interface.
+        Assert.Equal(ErrorCodes.LoginRequired, error);
+    }
+
+    /// <summary>
+    /// And revoking one session stops that session, which is what the call named for it should mean.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_session_stops_that_session_from_minting_more()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var sessionId = SessionOf(tokens);
+
+        var codeBefore = await AuthorizeAndExtractCodeAsync(client, discovery, SilentRenewal());
+        Assert.False(string.IsNullOrEmpty(codeBefore));
+
+        await RevokerOf(host).RevokeSessionAsync(
+            sessionId, cancellationToken: TestContext.Current.CancellationToken);
+
+        var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
+
+        Assert.Equal(ErrorCodes.LoginRequired, error);
+    }
+
+    /// <summary>
+    /// A cutoff older than the sign-in leaves the session alone, which is what lets a suspended user work
+    /// again once the suspension is lifted.
+    /// </summary>
+    /// <remarks>
+    /// The control that keeps the two tests above honest. Written as a boolean rather than a comparison,
+    /// the change would refuse here too - and since a fresh sign-in carries the same subject, the refusal
+    /// would repeat for as long as the record is kept.
+    /// </remarks>
+    [Fact]
+    public async Task A_cutoff_older_than_the_sign_in_leaves_the_session_working()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var subject = SubjectOf(tokens);
+
+        var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
+        await RevokerOf(host).RevokeSubjectAsync(subject, anHourAgo, TestContext.Current.CancellationToken);
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, SilentRenewal());
+
+        Assert.False(string.IsNullOrEmpty(code));
+    }
+
+    /// <summary>
+    /// How a client asks for a silent renewal: no user interface, reuse whatever session is there.
+    /// </summary>
+    /// <remarks>
+    /// Carries a code challenge because this client is registered as requiring PKCE. Without it the endpoint
+    /// answers <c>invalid_request</c> before it looks at any session, which passes an assertion written for
+    /// <c>login_required</c> exactly as poorly as it sounds - the test would report the revocation working
+    /// while measuring a missing parameter.
+    /// </remarks>
+    private static Dictionary<string, string> SilentRenewal()
+    {
+        var (_, challenge) = GeneratePkcePair();
+
+        return new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.Prompt] = Prompts.None,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        };
+    }
+
+    private static string SessionOf(JsonObject tokens)
+    {
+        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        return payload[IanaClaimTypes.Sid]!.GetValue<string>();
+    }
+
     private WebApplicationFactory<Program> CreateIsolatedHost()
         => Factory.WithWebHostBuilder(_ => { });
 

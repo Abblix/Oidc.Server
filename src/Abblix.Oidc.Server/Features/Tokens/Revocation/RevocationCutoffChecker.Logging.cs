@@ -34,4 +34,12 @@ partial class RevocationCutoffChecker
                   + "cutoff could be ruled out. Check that the client still exists and that its pairwise "
                   + "settings have not changed since the token was issued")]
     private partial void LogSubjectCouldNotBeResolved(Sanitized ClientId);
+
+    // The authorization side of the same control. Without it a revoked user simply stops getting through
+    // and nothing says why, which reads as the login being broken rather than as the suspension working.
+    [LoggerMessage(
+        EventId = LogEvents.Revocation.RevocationCutoffChecker.SessionRefusedByCutoff,
+        Level = LogLevel.Information,
+        Message = "Refused a session authenticated at {AuthenticationTime} by a {Scope} revocation cutoff")]
+    private partial void LogSessionRefusedByCutoff(RevocationScope Scope, DateTimeOffset AuthenticationTime);
 }
