@@ -432,7 +432,9 @@ public class AuthorizationDetailsPolicyTests
 
     [Theory]
     [InlineData("allowlist")]
+    [InlineData("empty-allowlist")]
     [InlineData("unknown-type")]
+    [InlineData("missing-type")]
     [InlineData("not-an-object")]
     public async Task ApplyGrantedAsync_keeps_every_check_outside_the_per_type_question(string shape)
     {
@@ -450,10 +452,18 @@ public class AuthorizationDetailsPolicyTests
                 new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] },
                 new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
                 "payment_initiation"),
+            "empty-allowlist" => (
+                new ClientInfo("c") { AuthorizationDetailsTypes = [] },
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+                "not permitted"),
             "unknown-type" => (
                 new ClientInfo("c"),
                 new JsonArray(new JsonObject { ["type"] = "never_registered" }),
                 "unknown"),
+            "missing-type" => (
+                new ClientInfo("c"),
+                new JsonArray(new JsonObject { ["amount"] = "999999" }),
+                "type"),
             "not-an-object" => (
                 new ClientInfo("c"),
                 new JsonArray(JsonValue.Create("payment_initiation")),
@@ -476,13 +486,19 @@ public class AuthorizationDetailsPolicyTests
         // accepting everything. A host that implements the interface itself is the case it protects.
         IAuthorizationDetailsPolicy policy = new RefusingPolicy();
 
-        var result = await policy.ApplyGrantedAsync(
-            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
-            TestClient,
-            TestContext.Current.CancellationToken);
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await policy.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
+
+        // Forwarded, not merely reached: a default that called ApplyAsync with nothing would take the
+        // "no entries" exit and answer success for every granted set, and a policy that ignores its
+        // arguments cannot tell the two apart.
+        var refusing = (RefusingPolicy)policy;
+        Assert.Same(granted, refusing.LastRaw);
+        Assert.Same(TestClient, refusing.LastClient);
     }
 
     [Fact]
@@ -586,10 +602,19 @@ public class AuthorizationDetailsPolicyTests
     {
         public const string Reason = "refused by the host's own policy";
 
+        public JsonArray? LastRaw { get; private set; }
+
+        public ClientInfo? LastClient { get; private set; }
+
         public Task<Result<JsonArray?, OidcError>> ApplyAsync(
             JsonArray? raw, ClientInfo client, CancellationToken token)
-            => Task.FromResult<Result<JsonArray?, OidcError>>(
+        {
+            LastRaw = raw;
+            LastClient = client;
+
+            return Task.FromResult<Result<JsonArray?, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
+        }
     }
 
     private sealed class InvocationCounter

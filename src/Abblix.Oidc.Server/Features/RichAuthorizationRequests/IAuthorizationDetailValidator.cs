@@ -83,6 +83,13 @@ public interface IAuthorizationDetailValidator
     /// locations - is guaranteed by this method and by nothing else. An override that returns its
     /// input unconditionally hands a tampered consent decision straight to the issued token.
     /// </para>
+    /// <para>
+    /// Note what this method is NOT given: the entry the client originally sent, and the end user who
+    /// answered. So an enrichable field can be bounded here only by rules that hold on their own - a
+    /// ceiling, a format, a per-client limit - and not by comparing the value against the request it
+    /// came from. A type whose enrichment needs that comparison has to make it where both sides are in
+    /// hand, which today is the consent provider that produced the decision.
+    /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
     /// this validator's <see cref="Type"/>.</param>
