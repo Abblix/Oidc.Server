@@ -47,19 +47,69 @@ public class BackChannelAuthenticationGrantHandler(
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
     /// <summary>
-    /// Whether the session that authenticated belongs to the end user the request named, or the request
-    /// named nobody.
+    /// Redeems an authenticated request, refusing it when the end user who authenticated is not the one it
+    /// named.
     /// </summary>
     /// <remarks>
     /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
     /// for a different user, even if they have an active session with the Authorization Server". In a
     /// decoupled flow the end user authenticates out of band, so the name the request carried is compared
-    /// here, against whoever the host reported by the time a grant is asked for.
+    /// against whoever the host reported by the time a grant is asked for.
+    /// <para>
+    /// The grant that comes back is what is judged, rather than the request read a moment earlier. The
+    /// processor consumes the stored request itself - it removes the entry and returns the grant it found
+    /// there - so between the read above and that removal the host, which owns the same storage, can replace
+    /// what is stored. Judging the earlier copy would then approve one grant and hand over another, which is
+    /// the whole failure this comparison exists to prevent.
+    /// </para>
+    /// <para>
+    /// The name is taken from the request as read, since it is written once when the request is created and
+    /// a host has no reason to touch it. What a host does replace is the session, which is exactly what is
+    /// re-judged here.
+    /// </para>
     /// </remarks>
-    private bool NamesTheRequestedEndUser(
-        StoredRequest request, ClientInfo clientInfo)
-        => request.RequestedSubject is not { Length: > 0 } named ||
-           subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo);
+    /// <summary>
+    /// Whether this grant belongs to the end user the request named, or the request named nobody.
+    /// </summary>
+    /// <remarks>
+    /// The name is taken from the request as it was read, since it is written once when the request is
+    /// created and a host has no reason to touch it. What a host does replace is the session, which is what
+    /// each caller passes in.
+    /// </remarks>
+    private bool NamesTheRequestedEndUser(string? requestedSubject, AuthorizedGrant grant, ClientInfo clientInfo)
+        => requestedSubject is not { Length: > 0 } named ||
+           subjectTypeConverter.Names(grant.AuthSession, [named], clientInfo);
+
+    private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
+        string authenticationRequestId,
+        StoredRequest request,
+        ClientInfo clientInfo,
+        IBackChannelGrantProcessor processor)
+    {
+        // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
+        // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
+        // worth keeping just long enough to say so again if the client polls twice.
+        if (!NamesTheRequestedEndUser(request.RequestedSubject, request.AuthorizedGrant, clientInfo))
+            return NotTheRequestedEndUser();
+
+        var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
+        if (result.TryGetFailure(out var error))
+            return error;
+
+        var grant = result.GetSuccess();
+
+        // Judged again, on what was actually consumed. The processor removes the stored entry and returns
+        // the grant it found there, so between the check above and that removal the host - which owns the
+        // same storage - can replace what is stored, which is the ordinary shape of a retried or corrected
+        // completion rather than an attack. Approving one grant and handing over another is the whole
+        // failure this comparison exists to prevent.
+        return NamesTheRequestedEndUser(request.RequestedSubject, grant, clientInfo)
+            ? grant
+            : NotTheRequestedEndUser();
+    }
+
+    private static OidcError NotTheRequestedEndUser()
+        => new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
 
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
@@ -137,19 +187,9 @@ public class BackChannelAuthenticationGrantHandler(
             { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId
                 => new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client"),
 
-            // A request that named an end user is answered only for that end user, whoever the host
-            // eventually authenticated. Checked here as well as at completion because the two refuse
-            // different things and a host reaches each independently: the completion router stops ping and
-            // push delivering tokens on their own, while this stops a poll being answered - and a host that
-            // writes Authenticated straight into the storage it also owns never passes through the router
-            // at all. This is the last point before an authorized grant is handed over.
-            { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                when !NamesTheRequestedEndUser(authenticated, clientInfo)
-                => new OidcError(ErrorCodes.AccessDenied, "The authenticated end user is not the one requested"),
-
             // If the user has been authenticated, process mode-specific token retrieval
-            { Status: BackChannelAuthenticationStatus.Authenticated }
-                => await processor.ProcessAuthenticatedRequestAsync(request.AuthenticationRequestId, authenticationRequest),
+            { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
+                => await RedeemAsync(request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the request is still pending and not yet time to poll again
             { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
@@ -281,14 +321,8 @@ public class BackChannelAuthenticationGrantHandler(
 
         switch (updatedRequest)
         {
-            case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                when !NamesTheRequestedEndUser(authenticated, clientInfo):
-                return new OidcError(ErrorCodes.AccessDenied, "The authenticated end user is not the one requested");
-
-            case { Status: BackChannelAuthenticationStatus.Authenticated }:
-                return await grantProcessor.ProcessAuthenticatedRequestAsync(
-                    authenticationRequestId,
-                    updatedRequest);
+            case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
+                return await RedeemAsync(authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(

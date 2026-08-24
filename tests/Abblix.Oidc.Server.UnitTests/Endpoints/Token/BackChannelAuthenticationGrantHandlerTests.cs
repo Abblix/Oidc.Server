@@ -1091,4 +1091,55 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(UserId, grant.AuthSession.Subject);
     }
+
+    /// <summary>
+    /// The grant handed over is judged, not the request read a moment before it.
+    /// </summary>
+    /// <remarks>
+    /// The grant processor consumes the stored request itself: it removes the entry and returns the grant it
+    /// found there. Between the handler's read and that removal, the host - which owns the same storage -
+    /// can replace what is stored, which is the ordinary shape of a retried or corrected completion rather
+    /// than an attack. Judging the earlier copy would approve one grant and hand over another.
+    /// <para>
+    /// Driven by making the two reads disagree, which is what every other test here cannot do: they stub
+    /// both calls to return the same object, so no arrangement of them could observe this.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizeAsync_WhenTheStoredRequestChangesBeforeItIsConsumed_ReturnsAccessDenied()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var asRead = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedSubject = UserId,
+        };
+
+        var asConsumed = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession("somebody-else", "session_456", _currentTime, "backchannel"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedSubject = UserId,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(asConsumed);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
 }
