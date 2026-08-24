@@ -232,6 +232,40 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// One <c>claims</c> request whose own two qualifiers disagree accepts nobody.
+    /// </summary>
+    /// <remarks>
+    /// The unit tests assert that this records an empty constraint; only here is the empty constraint shown
+    /// to mean "accept nobody" at the point that decides. Both named users are signed in, so a filter that
+    /// read the empty array as "no constraint" would answer the request rather than refuse it, and would do
+    /// so for an end user the request explicitly ruled out - what
+    /// <see href="https://openid.net/specs/openid-connect-core-1_0.html">OpenID Connect Core 1.0</see>
+    /// Section 5.5.1 calls a mismatch that "MUST cause the authentication to fail".
+    /// <para>
+    /// This is the case the guard in the validator was written to survive: changing the filter's condition
+    /// from a null check to a length check would silently turn the refusal back into a positive response, and
+    /// every unit test would still pass.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task OneRequestWhoseQualifiersDisagree_AnswersLoginRequired()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAs(Alice, Bob);
+
+        var claims = JsonSerializer.Serialize(
+            new { id_token = new { sub = new { value = Alice, values = new[] { Bob } } } });
+
+        var error = await AuthorizeAndExtractErrorAsync(
+            client, discovery, With(SilentRenewal(), AuthorizationRequest.Parameters.Claims, claims));
+
+        Assert.Equal(ErrorCodes.LoginRequired, error);
+    }
+
+    /// <summary>
     /// A requested <c>sub</c> that is not a string is refused by redirect, like any other bad parameter.
     /// </summary>
     [Fact]

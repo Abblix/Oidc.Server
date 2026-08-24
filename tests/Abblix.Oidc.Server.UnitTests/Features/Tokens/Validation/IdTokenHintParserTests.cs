@@ -46,11 +46,12 @@ public class IdTokenHintParserTests
             .ReturnsAsync(success);
     }
 
-    private static JsonWebToken IdToken(string? type = null) => Build(type);
-
-    private static JsonWebToken Build(string? type)
+    private static JsonWebToken IdToken(string? type = null, bool withExpiry = true)
     {
-        var token = new JsonWebToken { Payload = { Subject = "user_42", ExpiresAt = Expiry } };
+        var token = new JsonWebToken { Payload = { Subject = "user_42" } };
+        if (withExpiry)
+            token.Payload.ExpiresAt = Expiry;
+
         if (type is not null)
             token.Header.Type = type;
 
@@ -131,22 +132,67 @@ public class IdTokenHintParserTests
     }
 
     /// <summary>
-    /// The options handed to the shared validator switch off the lifetime and the audience, and require an
-    /// expiration time to be present.
+    /// A token with no expiration time is refused, which is what stops a signed UserInfo response.
     /// </summary>
     /// <remarks>
-    /// Asserted rather than left to the behaviours they produce, because two of the three cannot be observed
-    /// from here: whether an expired hint is accepted and whether an audience naming somebody else is
-    /// tolerated are decided inside the validator this test mocks. What this pins is the instruction.
+    /// That one carries no type either, is signed with the same key and addressed to the same client, so the
+    /// header gate cannot reach it. What parts the two is a claim: OpenID Connect Core 1.0 Section 2 makes
+    /// <c>exp</c> REQUIRED in an ID Token, while Section 5.3.2 requires a signed UserInfo response to carry
+    /// <c>iss</c> and <c>aud</c> and nothing more. RFC 8725 Section 3.12 lists a claim as an equal way to
+    /// keep the rules of two kinds of JWT mutually exclusive.
+    /// </remarks>
+    [Fact]
+    public async Task ATokenWithNoExpirationTime_IsRefused()
+    {
+        SetupToken(IdToken(withExpiry: false));
+
+        var result = await _parser.ParseAsync(Hint);
+
+        Assert.True(result.TryGetFailure(out var reason));
+        Assert.Contains("not an ID Token", reason, StringComparison.Ordinal);
+        Assert.Contains("expiration time", reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A token that is both the wrong kind and missing an expiry is refused for being the wrong kind.
+    /// </summary>
+    /// <remarks>
+    /// The order is the point, and it is not cosmetic. This server mints one own-issued kind that carries no
+    /// <c>exp</c> by default - a registration access token, which RFC 7592 Section 5 says SHOULD NOT expire -
+    /// so asking for the expiry first answers its sender with "add an exp claim", which is advice the
+    /// specification forbids this server to take, about a token that could never be a hint anyway. Requiring
+    /// the expiry through <see cref="ValidationOptions.RequireExpirationTime"/> would put it first, inside
+    /// the validator call, which is why the parser asks for it itself.
+    /// </remarks>
+    [Fact]
+    public async Task ATokenBothOfTheWrongKindAndWithoutAnExpiry_IsRefusedForItsKind()
+    {
+        SetupToken(IdToken(JwtTypes.RegistrationAccessToken, withExpiry: false));
+
+        var result = await _parser.ParseAsync(Hint);
+
+        Assert.True(result.TryGetFailure(out var reason));
+        Assert.DoesNotContain("expiration time", reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The options handed to the shared validator switch off the lifetime and the audience, and leave the
+    /// expiry to this parser.
+    /// </summary>
+    /// <remarks>
+    /// Asserted rather than left to the behaviours they produce, because neither can be observed from here:
+    /// whether an expired hint is accepted and whether an audience naming somebody else is tolerated are
+    /// both decided inside the validator this test mocks. What this pins is the instruction.
     /// <para>
     /// The lifetime is off because a hint names an end user rather than a live credential. The audience is
     /// off because this server need not be in it - OpenID Connect Core 1.0 Section 3.1.2.1 says so outright -
-    /// and who must be is the caller's question. The expiry is required because Section 2 makes it REQUIRED
-    /// in an ID Token, and its presence is what parts one from a signed UserInfo response.
+    /// and who must be is the caller's question. <see cref="ValidationOptions.RequireExpirationTime"/> is
+    /// left out so the expiry is asked after the type rather than before it, which
+    /// <see cref="ATokenBothOfTheWrongKindAndWithoutAnExpiry_IsRefusedForItsKind"/> is what pins.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task TheHintIsValidatedWithoutItsLifetimeOrAudienceAndWithARequiredExpiry()
+    public async Task TheHintIsValidatedWithoutItsLifetimeOrAudienceOrARequiredExpiry()
     {
         ValidationOptions? asked = null;
         Result<JsonWebToken, JwtValidationError> success = IdToken();
@@ -161,7 +207,7 @@ public class IdTokenHintParserTests
         Assert.NotNull(asked);
         Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateLifetime));
         Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateAudience));
-        Assert.True(asked.Value.HasFlag(ValidationOptions.RequireExpirationTime));
+        Assert.False(asked.Value.HasFlag(ValidationOptions.RequireExpirationTime));
 
         // And the checks that do not depend on the lifetime are still asked for.
         Assert.True(asked.Value.HasFlag(ValidationOptions.RequireValidIssuer));

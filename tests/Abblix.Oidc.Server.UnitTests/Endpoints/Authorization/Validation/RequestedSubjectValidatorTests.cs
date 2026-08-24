@@ -164,14 +164,24 @@ public class RequestedSubjectValidatorTests
     /// Section 5.5.1 requires the qualifier to be "a valid value for the Claim being requested" and Section 2
     /// makes <c>sub</c> a string. Answering <c>login_required</c> instead would be indistinguishable, to the
     /// client, from having asked about somebody who is simply not logged in.
+    /// <para>
+    /// Driven on both paths, because a malformed qualifier does not survive the round trip as the same thing
+    /// it arrived as: a number comes back a boxed numeric, an object a <c>JsonObject</c>, an array element an
+    /// <c>object[]</c>. None is a string and all must be refused, but they reach the reader as different
+    /// types than the wire delivers, so one path proves nothing about the other.
+    /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("""{"id_token":{"sub":{"value":42}}}""")]
-    [InlineData("""{"id_token":{"sub":{"value":{"nested":"object"}}}}""")]
-    [InlineData("""{"id_token":{"sub":{"values":["alice",42]}}}""")]
-    public async Task AQualifierThatIsNotAString_IsAnInvalidRequest(string claimsJson)
+    [InlineData(false, """{"id_token":{"sub":{"value":42}}}""")]
+    [InlineData(false, """{"id_token":{"sub":{"value":{"nested":"object"}}}}""")]
+    [InlineData(false, """{"id_token":{"sub":{"values":["alice",42]}}}""")]
+    [InlineData(true, """{"id_token":{"sub":{"value":42}}}""")]
+    [InlineData(true, """{"id_token":{"sub":{"value":{"nested":"object"}}}}""")]
+    [InlineData(true, """{"id_token":{"sub":{"values":["alice",42]}}}""")]
+    public async Task AQualifierThatIsNotAString_IsAnInvalidRequest(
+        bool throughTheStore, string claimsJson)
     {
-        var context = Context(claimsJson);
+        var context = Context(claimsJson, throughTheStore);
 
         var error = await _validator.ValidateAsync(context);
 

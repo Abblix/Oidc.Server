@@ -38,17 +38,18 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
     /// token from a session that ended hours ago identifies them exactly as well as a fresh one, and holding
     /// on to it is the whole reason a client has one to send.
     /// <para>
-    /// The audience is not validated here either - see the class remarks - but an expiration time is
-    /// required to be present. OpenID Connect Core 1.0 Section 2 makes <c>exp</c> REQUIRED in an ID Token,
-    /// and requiring it while ignoring its value is what parts an ID token from a signed UserInfo response,
-    /// which Section 5.3.2 requires to carry <c>iss</c> and <c>aud</c> and nothing more. RFC 8725
-    /// Section 3.12 names a claim as an equal way to keep the validation rules of two kinds of JWT mutually
-    /// exclusive.
+    /// The audience is not validated here either - see the class remarks. The expiration time is required
+    /// too, but by <see cref="ParseAsync"/> rather than by <see cref="ValidationOptions.RequireExpirationTime"/>
+    /// here, so that it is asked AFTER the type. The library would refuse a token missing <c>exp</c> before
+    /// anything looked at what kind of token it is, and this server mints one own-issued kind that carries no
+    /// <c>exp</c> by default - a registration access token, which RFC 7592 Section 5 says SHOULD NOT expire.
+    /// Presented as a hint, that token would be refused for a missing expiry, telling its sender to add a
+    /// claim the specification tells this server to leave out, when the real answer is that it is the wrong
+    /// kind of token entirely.
     /// </para>
     /// </remarks>
     private const ValidationOptions HintOptions =
-        (ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience)
-        | ValidationOptions.RequireExpirationTime;
+        ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience;
 
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, string>> ParseAsync(string idTokenHint)
@@ -64,6 +65,18 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
         // catch.
         if (!JwtTypes.IsPermitted(idToken.Header.Type))
             return "The id token hint is not an ID Token";
+
+        // The one own-issued kind a type check cannot reach is a signed UserInfo response, which carries no
+        // type either and is signed with the same key for the same client. What parts the two is a claim
+        // rather than a header, which RFC 8725 Section 3.12 lists as an equal way to keep the validation
+        // rules of two kinds of JWT mutually exclusive: OpenID Connect Core 1.0 Section 2 makes exp REQUIRED
+        // in an ID Token, while Section 5.3.2 requires a signed UserInfo response to carry iss and aud and
+        // nothing more.
+        //
+        // Presence alone is the test - a hint is accepted after expiry on purpose, since it names a session
+        // that has ended - so the lifetime check stays switched off above.
+        if (idToken.Payload.ExpiresAt is null)
+            return "The id token hint is not an ID Token: it has no expiration time";
 
         return idToken;
     }
