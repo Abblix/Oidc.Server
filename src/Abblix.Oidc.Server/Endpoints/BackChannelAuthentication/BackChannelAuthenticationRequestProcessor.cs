@@ -141,10 +141,14 @@ public class BackChannelAuthenticationRequestProcessor(
 			// on the stored request before completing it, which is the shape the interface documents.
 			RequestedSubjects = namedSubjects,
 
-			// Kept as the client sent it, beside the copy on the grant. The grant's copy is what will be
+			// The post-validation array, beside the copy on the grant. The grant's copy is what will be
 			// issued and the host replaces it when the end user approves part of the request; this one is
 			// what that answer is judged against, and there is no other copy left by then.
-			RequestedAuthorizationDetails = request.AuthorizationDetails,
+			//
+			// An EMPTY array when the request carried none, never null: null is what a request written by
+			// a build without this field reads back as, and the two must not be confused. Denying such a
+			// request would refuse, mid-upgrade, every in-flight authentication the user had approved.
+			RequestedAuthorizationDetails = request.AuthorizationDetails ?? [],
 
 			// The client may poll from the moment it holds the request id, so the first allowed poll is
 			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section

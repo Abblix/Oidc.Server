@@ -110,16 +110,29 @@ public abstract partial class AuthenticationCompletionHandler(
         if (request.AuthorizedGrant.Context.AuthorizationDetails is not { Count: > 0 } granted)
             return [];
 
+        // Null means the request predates this field, not that it asked for nothing: a build that did
+        // not record it stored the requested entries on the grant alone. Judging those against an empty
+        // baseline would refuse, on the first completion after an upgrade, an authentication the end
+        // user has already approved. A request this build stored says "asked for nothing" with an empty
+        // array instead.
+        if (request.RequestedAuthorizationDetails is not { } requested)
+            return [];
+
         if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
             return ["an entry that is not a JSON object"];
 
-        var requestedTypes = (request.RequestedAuthorizationDetails?.ToTypedArray() ?? [])
+        // Absence is refused on its own rather than compared as a stand-in value, which a client could
+        // otherwise request as a real type and thereby admit every entry that has none.
+        if (Array.Exists(typed, detail => detail.Type is null))
+            return ["an entry carrying no type"];
+
+        var requestedTypes = requested.ToTypedArray()!
             .Select(detail => detail.Type)
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
 
         return typed
-            .Select(detail => detail.Type ?? "(no type)")
+            .Select(detail => detail.Type!)
             .Where(type => !requestedTypes.Contains(type))
             .Distinct(StringComparer.Ordinal)
             .ToArray();

@@ -725,14 +725,56 @@ public class AuthenticationCompletionHandlerTests
     }
 
     [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheGrantSwapsATypeForAnother_Denies()
+    {
+        // Same number of entries on both sides, one of them a type nobody asked for. A comparison that
+        // counted rather than compared would pass this, and counting is what every fixture with a
+        // different number of entries silently allows.
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation", "account_information"],
+            grantedTypes: ["account_information", "medical_record"]);
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheRequestPredatesTheRecordedBaseline_Completes()
+    {
+        // A request stored by a build that did not record what was asked for reads back with a null
+        // baseline and its entries on the grant. Judging that against an empty baseline would refuse,
+        // on the first completion after an upgrade, an authentication the end user has already approved.
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"]);
+        request.RequestedAuthorizationDetails = null;
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+    }
+
+    [Fact]
     public async Task CompleteAuthenticationAsync_WhenTheGrantCarriesDetailsAndTheRequestCarriedNone_Denies()
     {
         // Nothing was asked for, so nothing can have been granted: an entry appearing here came from the
         // host rather than from the client, and the client would receive authority it never requested.
+        // An EMPTY baseline, which is how a request this build stored says the client asked for nothing.
+        // Null would mean something else: a request written before the field existed.
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: [],
             grantedTypes: ["payment_initiation"]);
-        request.RequestedAuthorizationDetails = null;
 
         _storage
             .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
