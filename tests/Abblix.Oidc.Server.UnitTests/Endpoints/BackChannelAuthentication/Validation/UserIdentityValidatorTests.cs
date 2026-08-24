@@ -242,7 +242,7 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Payload = { Audiences = ["test-client"], ExpiresAt = Expiry },
+            Payload = { Subject = "user_42", Audiences = ["test-client"], ExpiresAt = Expiry },
         };
 
         _idTokenValidator
@@ -257,6 +257,39 @@ public class UserIdentityValidatorTests
         // Assert
         Assert.Null(result);
         Assert.Same(token, context.IdToken);
+    }
+
+    /// <summary>
+    /// A hint naming no subject is refused as an unidentifiable end user.
+    /// </summary>
+    /// <remarks>
+    /// The one untyped own-issued shape that clears the parser and the audience check alike is a JARM
+    /// response JWT, which carries this client's audience and an expiry and no <c>sub</c>. Here the hint is
+    /// the request's identity source, so accepting it would start an authentication bound to nobody - and
+    /// CIBA Core 1.0 Section 13 defines <c>unknown_user_id</c> for exactly this: the provider "is not able
+    /// to identify which end-user the Client wishes to be authenticated by means of the hint provided".
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ValidateAsync_IdTokenHintWithoutSubject_ShouldReturnUnknownUserId(string? subject)
+    {
+        var token = new JsonWebToken
+        {
+            Payload = { Subject = subject, Audiences = ["test-client"], ExpiresAt = Expiry },
+        };
+
+        _idTokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+
+        var context = CreateContext(idTokenHint: "id-token");
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.UnknownUserId, result.Error);
+        Assert.Null(context.IdToken);
     }
 
     /// <summary>

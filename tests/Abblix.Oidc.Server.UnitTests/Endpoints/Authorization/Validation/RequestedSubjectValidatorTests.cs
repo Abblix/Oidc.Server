@@ -136,6 +136,24 @@ public class RequestedSubjectValidatorTests
     }
 
     /// <summary>
+    /// An empty <c>values</c> array accepts nobody, rather than reading as no constraint.
+    /// </summary>
+    /// <remarks>
+    /// A client that wrote <c>"values": []</c> stated a constraint with nothing in it. Reading that as "no
+    /// constraint" would answer the request for whoever is logged in - the inversion this parameter exists
+    /// to prevent - so the fail-closed reading is the only safe one.
+    /// </remarks>
+    [Fact]
+    public async Task AnEmptyValuesArray_AcceptsNobody()
+    {
+        var context = Context("""{"id_token":{"sub":{"values":[]}}}""");
+
+        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.NotNull(context.RequestedSubjects);
+        Assert.Empty(context.RequestedSubjects);
+    }
+
+    /// <summary>
     /// A request that constrains nothing records no constraint.
     /// </summary>
     /// <remarks>

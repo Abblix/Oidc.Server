@@ -140,6 +140,17 @@ public class UserIdentityValidator(
                 "The id token hint contains token issued for the client other than specified");
         }
 
+        // The one untyped own-issued shape that clears everything above is a JARM response JWT, which
+        // carries exp and this client's audience and no sub - the same refusal the authorization endpoint
+        // makes. Here it matters more: the hint is this request's identity source, so a hint naming nobody
+        // would start an authentication bound to nothing, and whoever the host reached would be accepted.
+        // CIBA Core 1.0 Section 13 defines the code for exactly this: the provider "is not able to identify
+        // which end-user the Client wishes to be authenticated by means of the hint provided".
+        if (token.Payload.Subject is not { Length: > 0 })
+        {
+            return new OidcError(ErrorCodes.UnknownUserId, "The id token hint names no subject");
+        }
+
         return token;
     }
 }

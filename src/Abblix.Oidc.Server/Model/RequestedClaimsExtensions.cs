@@ -36,6 +36,12 @@ public static class RequestedClaimsExtensions
     /// <c>value</c> AND one of those listed in <c>values</c>. Incompatible constraints leave nothing
     /// acceptable, which is the guaranteed mismatch that same section already prescribes an outcome for.
     /// </para>
+    /// <para>
+    /// Only the <c>id_token</c> member is read, deliberately. Section 3.1.2.2 scopes the requirement to a
+    /// <c>sub</c> "requested with a specific value for the ID Token", and a <c>userinfo.sub</c> entry asks
+    /// what the UserInfo response should contain rather than who the request is about - Section 5.5.1's
+    /// mismatch rule then governs that response, not the authentication.
+    /// </para>
     /// </remarks>
     public static Result<string[]?, string> RequestedSubjects(this RequestedClaims? claims)
     {

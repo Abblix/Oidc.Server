@@ -226,12 +226,12 @@ public class IdTokenHintValidatorTests
     }
 
     // The signed-UserInfo case used to live here, driving a token with no exp through this validator. It
-    // moved, rather than being dropped: the check is now ValidationOptions.RequireExpirationTime, asked for
-    // by IdTokenHintParser and honoured by the JWT validator this suite mocks - so from here the refusal is
-    // invisible whatever the code does, which is a test that cannot fail. Both halves are pinned where they
-    // can be seen: IdTokenHintParserTests asserts the flag is asked for, and Abblix.Jwt's
-    // JsonWebTokenValidationTests asserts a token without exp is rejected when it is, with the positive
-    // control beside it.
+    // moved, rather than being dropped: the expiry is now IdTokenHintParser's own question, asked inside
+    // ParseAsync after the type gate - deliberately not through ValidationOptions.RequireExpirationTime,
+    // which would ask it first and misname the refusal for an own-issued token that legitimately carries no
+    // exp. This suite drives the real parser, so the refusal is reachable from here, but it belongs to the
+    // parser's contract and is pinned in its own suite: IdTokenHintParserTests has the no-exp refusal, the
+    // wrong-kind-and-no-exp ordering case, and the assertion that the flag is NOT asked for.
 
     /// <summary>
     /// Verifies error when client ID doesn't match ID token audience.

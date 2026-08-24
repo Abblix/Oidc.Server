@@ -47,28 +47,6 @@ public class BackChannelAuthenticationGrantHandler(
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
     /// <summary>
-    /// Redeems an authenticated request, refusing it when the end user who authenticated is not the one it
-    /// named.
-    /// </summary>
-    /// <remarks>
-    /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
-    /// for a different user, even if they have an active session with the Authorization Server". In a
-    /// decoupled flow the end user authenticates out of band, so the name the request carried is compared
-    /// against whoever the host reported by the time a grant is asked for.
-    /// <para>
-    /// The grant that comes back is what is judged, rather than the request read a moment earlier. The
-    /// processor consumes the stored request itself - it removes the entry and returns the grant it found
-    /// there - so between the read above and that removal the host, which owns the same storage, can replace
-    /// what is stored. Judging the earlier copy would then approve one grant and hand over another, which is
-    /// the whole failure this comparison exists to prevent.
-    /// </para>
-    /// <para>
-    /// The name is taken from the request as read, since it is written once when the request is created and
-    /// a host has no reason to touch it. What a host does replace is the session, which is exactly what is
-    /// re-judged here.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// Whether this grant belongs to the end user the request named, or the request named nobody.
     /// </summary>
     /// <remarks>
@@ -81,6 +59,23 @@ public class BackChannelAuthenticationGrantHandler(
         => requestedSubjects is not { } accepted ||
            subjectTypeConverter.Names(grant.AuthSession, accepted, clientInfo);
 
+    /// <summary>
+    /// Redeems an authenticated request, refusing it when the end user who authenticated is not one it
+    /// named.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
+    /// for a different user, even if they have an active session with the Authorization Server". In a
+    /// decoupled flow the end user authenticates out of band, so what the request named is compared against
+    /// whoever the host reported by the time a grant is asked for.
+    /// <para>
+    /// Judged twice, on two different objects, because one comparison cannot do both jobs. Before the
+    /// request is consumed, so an ordinary mismatch spends nothing - redeeming removes the stored entry.
+    /// And again on the grant the processor returned, because the processor consumes the stored request
+    /// itself, and between the earlier read and that removal the host - which owns the same storage - can
+    /// replace what is stored. Judging only the earlier copy would approve one grant and hand over another.
+    /// </para>
+    /// </remarks>
     private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
         string authenticationRequestId,
         StoredRequest request,
@@ -205,7 +200,7 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user denied the authentication request, return an error indicating access is denied
             { Status: BackChannelAuthenticationStatus.Denied }
-                => new OidcError(ErrorCodes.AccessDenied, "The authorization request is denied by the user."),
+                => new OidcError(ErrorCodes.AccessDenied, "The authorization request was denied."),
 
             _ => throw new InvalidOperationException(
                 $"The authentication request status is unexpected: {authenticationRequest.Status}.")
@@ -328,7 +323,7 @@ public class BackChannelAuthenticationGrantHandler(
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(
                     ErrorCodes.AccessDenied,
-                    "The authorization request is denied by the user.");
+                    "The authorization request was denied.");
 
             case null:
                 return new OidcError(
