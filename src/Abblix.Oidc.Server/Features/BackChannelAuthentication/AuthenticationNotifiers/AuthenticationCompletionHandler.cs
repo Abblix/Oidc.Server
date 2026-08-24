@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -71,10 +72,57 @@ public abstract partial class AuthenticationCompletionHandler(
             return;
         }
 
+        // The end user's answer arrives here and nowhere else, which makes this the seam a narrowed
+        // authorization_details set travels through: a host whose device interaction let them approve
+        // part of the request replaces the grant's context before completing, and RFC 9396 §7 then has
+        // the server return what was GRANTED rather than what was asked for.
+        //
+        // Narrowing is the host's to make; widening is not. The types are compared against what the
+        // client actually sent, kept on the stored request precisely because the grant's own copy is the
+        // one the host has just overwritten.
+        if (EscapedAuthorizationDetailTypes(request) is { Length: > 0 } escaped)
+        {
+            LogGrantedAuthorizationDetailsExceedTheRequest(
+                authenticationRequestId, clientInfo.ClientId, string.Join(", ", escaped));
+
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
+
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
         await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
+    }
+
+    /// <summary>
+    /// The <c>authorization_details</c> types the grant carries and the request never asked for, empty when
+    /// the grant stays inside what was requested.
+    /// </summary>
+    /// <remarks>
+    /// Types only. RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so
+    /// what can be judged without knowing a type's schema is whether an entry of that type was asked for at
+    /// all. An entry that cannot be read as a JSON object counts as escaped: the conversion drops it silently,
+    /// and "nothing escaped" would then be a statement about what could be read rather than about the grant.
+    /// </remarks>
+    private static string[] EscapedAuthorizationDetailTypes(BackChannelAuthenticationRequest request)
+    {
+        if (request.AuthorizedGrant.Context.AuthorizationDetails is not { Count: > 0 } granted)
+            return [];
+
+        if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
+            return ["an entry that is not a JSON object"];
+
+        var requestedTypes = (request.RequestedAuthorizationDetails?.ToTypedArray() ?? [])
+            .Select(detail => detail.Type)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        return typed
+            .Select(detail => detail.Type ?? "(no type)")
+            .Where(type => !requestedTypes.Contains(type))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>

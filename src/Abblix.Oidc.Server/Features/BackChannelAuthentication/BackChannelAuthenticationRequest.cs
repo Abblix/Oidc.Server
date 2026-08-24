@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -66,4 +67,22 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// </para>
     /// </remarks>
     public string[]? RequestedSubjects { get; set; }
+
+    /// <summary>
+    /// The RFC 9396 <c>authorization_details</c> the client asked for, as it sent them, or <c>null</c> when
+    /// the request carried none.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from the array on <see cref="BackChannelAuthenticationRequest.AuthorizedGrant"/>, which is
+    /// what will be issued. The two are the same until the end user answers: a host whose device UI let them
+    /// approve part of the request replaces the grant's context before completing, and this is what that
+    /// answer is judged against.
+    /// <para>
+    /// Recorded rather than derived, for the reason <see cref="RequestedSubjects"/> is: in a decoupled flow
+    /// the answer arrives long after the request, through
+    /// <see cref="Interfaces.IAuthenticationCompletionHandler.CompleteAsync"/>, and by then the only copy of
+    /// what was asked for would be the one the host has just overwritten.
+    /// </para>
+    /// </remarks>
+    public JsonArray? RequestedAuthorizationDetails { get; set; }
 }

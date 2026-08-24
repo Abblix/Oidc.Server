@@ -695,6 +695,32 @@ public class MappersTests
         Assert.Equal(subjects, result.RequestedSubjects);
     }
 
+    /// <summary>
+    /// What the client asked for has to survive the store, because the answer it is compared against arrives
+    /// after a round trip: the end user authenticates out of band, and by then the grant's own copy is the one
+    /// the host replaced with the narrowed set.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("""[]""")]
+    [InlineData("""[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"123.50"}}]""")]
+    public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequestedAuthorizationDetails(string? wire)
+    {
+        var moment = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var session = new AuthSession("user-123", "session-456", moment, "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var requested = wire is null ? null : (JsonArray)JsonNode.Parse(wire)!;
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), moment.AddMinutes(5))
+        {
+            RequestedAuthorizationDetails = requested,
+        };
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(wire, result.RequestedAuthorizationDetails?.ToJsonString());
+    }
+
     [Fact]
     public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNextPollAt()
     {

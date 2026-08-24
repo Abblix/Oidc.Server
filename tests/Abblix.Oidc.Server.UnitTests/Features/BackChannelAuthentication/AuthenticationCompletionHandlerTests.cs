@@ -9,6 +9,7 @@
 using System;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -653,4 +654,93 @@ public class AuthenticationCompletionHandlerTests
             RequestedSubjects = requested is null ? null : [requested],
             ClientNotificationToken = NotificationToken,
         };
+
+    /// <summary>
+    /// A request whose client asked for <paramref name="requestedTypes"/> and whose host completed it with
+    /// <paramref name="grantedTypes"/> on the grant, which is how a device interaction expresses what the
+    /// end user actually approved.
+    /// </summary>
+    private static BackChannelAuthenticationRequest CreateRequestWithAuthorizationDetails(
+        string[] requestedTypes,
+        string[] grantedTypes)
+        => new(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+                {
+                    AuthorizationDetails = Details(grantedTypes),
+                }),
+            DateTimeOffset.UnixEpoch.AddHours(1))
+        {
+            ClientNotificationToken = NotificationToken,
+            RequestedAuthorizationDetails = Details(requestedTypes),
+        };
+
+    private static JsonArray Details(string[] types)
+    {
+        var details = new JsonArray();
+        foreach (var type in types)
+            details.Add(new JsonObject { ["type"] = type });
+
+        return details;
+    }
+
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheGrantNarrowsTheRequest_Completes()
+    {
+        // The end user approved one of the two entries the client asked for. That is the whole point of the
+        // seam, and RFC 9396 §7 has the server return what was granted rather than what was asked for.
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation", "account_information"],
+            grantedTypes: ["account_information"]);
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+    }
+
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheGrantCarriesAnUnrequestedType_Denies()
+    {
+        // Narrowing is the host's to decide; widening is not. The comparison is against what the client
+        // actually sent, which is why the request keeps its own copy: the grant's copy is the one the host
+        // has just replaced.
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["account_information"],
+            grantedTypes: ["account_information", "payment_initiation"]);
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheGrantCarriesDetailsAndTheRequestCarriedNone_Denies()
+    {
+        // Nothing was asked for, so nothing can have been granted: an entry appearing here came from the
+        // host rather than from the client, and the client would receive authority it never requested.
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: [],
+            grantedTypes: ["payment_initiation"]);
+        request.RequestedAuthorizationDetails = null;
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
 }
