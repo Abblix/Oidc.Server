@@ -94,10 +94,10 @@ public class ConsentConstraintEnforcer(
         // {A, B} that requested only {A} must not have a {B} entry injected by the consent decision.
         var requestedTypes = (request.AuthorizationDetails?.ToTypedArray() ?? [])
             .Select(detail => detail.Type)
-            .Where(type => type is not null)
+            .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
 
-        RefuseUnrequestedTypes(grantedAuthorizationDetails);
+        var grantedTypes = RefuseTypesOutside(requestedTypes, grantedAuthorizationDetails);
 
         // Intra-entry narrowing: RFC 9396 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
@@ -116,32 +116,55 @@ public class ConsentConstraintEnforcer(
                 revalidation.GetFailure().ErrorDescription);
         }
 
-        // Nothing returned means nothing to change, which is the reading the request-time, CIBA and
-        // device validators all give the same result, so the granted array stands as it was.
-        if (revalidated is not { Count: > 0 })
+        // Nothing at all means nothing to change, which is how the request-time, CIBA and device
+        // validators read the same result, so the granted array stands as it was.
+        if (revalidated is null)
             return grantedAuthorizationDetails;
+
+        // An EMPTY array is a different statement, and this request has already decided what it means:
+        // a consent decision granting no entries against a request that carried some answers
+        // access_denied, one step before this call. Reaching here with one says the validators removed
+        // every entry, so returning the granted set would put back exactly what they removed.
+        if (revalidated.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The per-type re-validation of the granted authorization_details returned an empty set. " +
+                "A policy signals 'nothing to change' by returning null; an empty array says every entry " +
+                "was removed, and there is no set left to issue a grant for.");
+        }
 
         // What comes back is the decision, not a copy of what went in: a validator narrowing an entry
         // says so by returning the narrowed one. Returning the granted array here instead would
         // re-derive from raw input the fact this call just computed, and every entry the two disagree
         // on would travel in the form nobody approved.
         //
-        // Which is also why the type check has to run again on it. Nothing in the per-type validator's
-        // contract stops the entry it returns from carrying a different type than the one it was asked
-        // about, and the array leaving this method is the one the grant is built from.
-        RefuseUnrequestedTypes(revalidated);
+        // Which is also why the type check has to run again, and against what the consent decision
+        // GRANTED rather than against what was requested: nothing in the per-type validator's contract
+        // stops the entry it returns from carrying another type, and a type the request carried but the
+        // user did not grant is one this array must not bring back.
+        RefuseTypesOutside(grantedTypes, revalidated);
         return revalidated;
 
-        void RefuseUnrequestedTypes(JsonArray details)
+        HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details)
         {
-            var escapedTypes = (details.ToTypedArray() ?? [])
-                .Select(detail => detail.Type)
-                .Where(type => type is not null && !requestedTypes.Contains(type))
+            // ToTypedArray drops whatever is not a JSON object, so a shorter result means an entry this
+            // guard cannot read - and "no escaped types" would then describe what it managed to look at
+            // rather than the array it was handed.
+            if (details.ToTypedArray() is not { } typed || typed.Length != details.Count)
+                throw Violation("authorization_details entries", ["an entry that is not a JSON object"]);
+
+            // A missing type is refused rather than skipped. RFC 9396 §2 makes type REQUIRED on every
+            // entry, and an entry without one satisfies "not among the escaped" by being unreadable.
+            var escapedTypes = typed
+                .Select(detail => detail.Type ?? "(no type)")
+                .Where(type => !allowed.Contains(type))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
             if (escapedTypes.Length > 0)
-                throw Violation("authorization_details types", escapedTypes!);
+                throw Violation("authorization_details types", escapedTypes);
+
+            return typed.Select(detail => detail.Type!).ToHashSet(StringComparer.Ordinal);
         }
     }
 
