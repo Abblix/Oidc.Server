@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -20,9 +21,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking completion events and errors.</param>
 /// <param name="storage">Storage for persisting authentication request state.</param>
+/// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
+/// so the end user who authenticated can be compared against the one the request named.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
-    IBackChannelRequestStorage storage)
+    IBackChannelRequestStorage storage,
+    ISubjectTypeConverter subjectTypeConverter)
 {
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -47,11 +51,40 @@ public abstract partial class AuthenticationCompletionHandler(
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
+        // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
+        // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,
+        // even if they have an active session with the Authorization Server". The end user authenticated out
+        // of band, so this is the first moment there is anybody to judge - and the last before delivery.
+        //
+        // Judged here rather than in the router so that each mode refuses the way it already refuses its own
+        // failures: a mode that cannot leave a denied request behind removes it instead.
+        if (request.RequestedSubject is { Length: > 0 } named &&
+            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo))
+        {
+            LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
+
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
         await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
     }
+
+    /// <summary>
+    /// Refuses a request whose authenticated end user is not the one it named.
+    /// </summary>
+    /// <remarks>
+    /// Denying and leaving the request behind is right for a mode whose client polls, since the poll is what
+    /// carries the outcome back. A mode that delivers instead of being polled overrides this, because a
+    /// denied request its client can never read is an orphan rather than an answer.
+    /// </remarks>
+    protected virtual Task RefuseAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn)
+        => DenyRequestAsync(authenticationRequestId, request, expiresIn);
 
     /// <summary>
     /// Handles the token delivery according to the specific delivery mode (poll, ping, or push).

@@ -17,11 +17,4 @@ partial class AuthenticationCompletionRouter
         Level = LogLevel.Error,
         Message = "Client not found for auth_req_id: {AuthReqId}, ClientId: {ClientId}")]
     private partial void LogClientNotFound(string AuthReqId, string ClientId);
-
-    [LoggerMessage(
-        EventId = LogEvents.Device.AuthenticationCompletionRouter.AuthenticatedUserNotTheOneRequested,
-        Level = LogLevel.Warning,
-        Message = "The end user authenticated for auth_req_id {AuthReqId} is not the one the request named, " +
-                  "so it is refused. ClientId: {ClientId}")]
-    private partial void LogAuthenticatedUserNotTheOneRequested(string AuthReqId, string ClientId);
 }

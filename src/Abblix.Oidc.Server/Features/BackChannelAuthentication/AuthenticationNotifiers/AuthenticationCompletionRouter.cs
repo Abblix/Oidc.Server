@@ -9,7 +9,6 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,17 +23,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="logger">Logger for tracking completion events.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
-/// <param name="subjectTypeConverter">
-/// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
-/// against the end user the request named.
-/// </param>
-/// <param name="storage">Records the refusal, so a client polling afterwards is told rather than left waiting.</param>
 public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
     IClientInfoProvider clientInfoProvider,
-    IServiceProvider serviceProvider,
-    ISubjectTypeConverter subjectTypeConverter,
-    IBackChannelRequestStorage storage) : IAuthenticationCompletionHandler
+    IServiceProvider serviceProvider) : IAuthenticationCompletionHandler
 {
     private static readonly string[] AllDeliveryModes =
     [
@@ -68,29 +60,6 @@ public partial class AuthenticationCompletionRouter(
         if (clientInfo == null)
         {
             LogClientNotFound(authenticationRequestId, clientId);
-            return;
-        }
-
-        // The end user authenticated out of band, and whoever the host reports now has to be the one the
-        // request asked about. OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an
-        // ID Token or Access Token for a different user, even if they have an active session with the
-        // Authorization Server". This is the only place every delivery mode passes through, and it is the
-        // last point before tokens are minted or pushed, so a host that replaced the session on the stored
-        // request - which is the shape IUserDeviceAuthenticationHandler documents - is judged here.
-        //
-        // Refused as denied rather than by throwing, because the caller is the host's own completion code
-        // and has no protocol answer to give: recording the outcome is what reaches the client, which polls
-        // and is told access_denied. That is the closest the specification offers - CIBA Core 1.0 Section 11
-        // glosses it for the token endpoint as the end user having denied the request, which is not quite
-        // what happened, but the only alternative naming a general failure (transaction_failed) is defined
-        // for the push error payload alone and would be a code the polling client is not told to expect.
-        if (request.RequestedSubject is { Length: > 0 } named &&
-            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo))
-        {
-            LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientId);
-
-            request.Status = BackChannelAuthenticationStatus.Denied;
-            await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
             return;
         }
 

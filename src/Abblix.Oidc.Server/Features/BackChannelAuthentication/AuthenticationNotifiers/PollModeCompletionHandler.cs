@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
 
@@ -19,13 +20,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
+/// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
+/// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes.
 /// Null when long-polling is disabled.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
+    ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, storage)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
 {
     private readonly IBackChannelRequestStorage _storage = storage;
 

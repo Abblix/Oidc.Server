@@ -92,11 +92,11 @@ public class BackChannelAuthenticationRequestProcessor(
 		// pairwise settings. The same comparison serves the authorization endpoint.
 		var namedSubject = request.IdToken?.Payload.Subject;
 
-		// A handler that authenticates within this call is answered now. The decoupled shape, which the
-		// interface documents and most deployments use, has nobody to judge yet - the end user has not been
-		// reached - so the name is carried on the stored request and judged at completion instead.
+		// Answered now, because the session a handler returns here names the end user it is about to reach,
+		// not one who has already answered - the request is stored Pending either way. A handler intending
+		// to reach somebody else is refused before any notification goes out. The end user who eventually
+		// answers is judged separately, at completion, against the name carried on the stored request.
 		if (namedSubject is { Length: > 0 } named &&
-			authSession.Subject.HasValue() &&
 			!subjectTypeConverter.Names(authSession, [named], request.ClientInfo))
 		{
 			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
