@@ -210,29 +210,37 @@ public class IntrospectionRequestProcessor(
 			.Select(location => location.OriginalString)
 			.ToHashSet(StringComparer.Ordinal);
 
-		var addressed = new JsonArray();
-		foreach (var detail in details.ToTypedArray() ?? [])
-		{
-			if (detail.Locations is not { } locations)
-				continue;
+		var addressed = (details.ToTypedArray() ?? [])
+			.Select(detail => (Detail: detail, Matched: MatchedLocations(detail)))
+			.Where(pair => pair.Matched.Length > 0)
+			.Select(pair => Disclose(pair.Detail, pair.Matched))
+			.ToArray();
 
-			var matched = locations.Where(registered.Contains).ToArray();
-			if (matched.Length == 0)
-				continue;
+		if (addressed.Length == 0)
+			return;
 
-			// Written as an array rather than through the typed setter, which collapses a single value
-			// to a bare string: §9.2 has the member carry "the same structure defined in Section 2", and
-			// §2.2 defines locations as an array of strings.
-			var disclosed = (JsonObject)detail.Json.DeepClone();
-			disclosed[AuthorizationDetail.Parameters.Locations] = new JsonArray(
-				matched.Select(location => (JsonNode)JsonValue.Create(location)).ToArray());
+		narrowed[IanaClaimTypes.AuthorizationDetails] = new JsonArray(addressed);
 
-			addressed.Add(disclosed);
-		}
+		string[] MatchedLocations(AuthorizationDetail detail)
+			=> detail.Locations is { } locations
+				? locations.Where(registered.Contains).ToArray()
+				: [];
+	}
 
-		if (addressed.Count > 0)
-		{
-			narrowed[IanaClaimTypes.AuthorizationDetails] = addressed;
-		}
+	/// <summary>
+	/// The entry as this caller receives it: its own copy, carrying only the locations it matched.
+	/// </summary>
+	/// <remarks>
+	/// The locations are written as an array rather than through the typed setter, which collapses a
+	/// single value to a bare string: §9.2 has the member carry "the same structure defined in Section 2",
+	/// and §2.2 defines <c>locations</c> as an array of strings.
+	/// </remarks>
+	private static JsonNode Disclose(AuthorizationDetail detail, string[] matchedLocations)
+	{
+		var disclosed = (JsonObject)detail.Json.DeepClone();
+		disclosed[AuthorizationDetail.Parameters.Locations] = new JsonArray(
+			matchedLocations.Select(location => (JsonNode)JsonValue.Create(location)).ToArray());
+
+		return disclosed;
 	}
 }
