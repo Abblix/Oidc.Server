@@ -1,6 +1,6 @@
 name: CodeQL
 
-# Restricted-trigger custom workflow (Рычаг 2). Default Setup is
+# Restricted-trigger custom workflow. Default Setup is
 # intentionally left `not-configured` because it cannot disable the
 # weekly schedule or PR triggers via API; only a custom workflow gives
 # full control. See .github/codeql/README.md for the policy and the
