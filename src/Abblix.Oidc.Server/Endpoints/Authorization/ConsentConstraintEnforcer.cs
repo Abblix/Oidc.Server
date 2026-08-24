@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -97,14 +97,7 @@ public class ConsentConstraintEnforcer(
             .Where(type => type is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        var escapedTypes = (grantedAuthorizationDetails.ToTypedArray() ?? [])
-            .Select(detail => detail.Type)
-            .Where(type => type is not null && !requestedTypes.Contains(type))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        if (escapedTypes.Length > 0)
-            throw Violation("authorization_details types", escapedTypes!);
+        RefuseUnrequestedTypes(grantedAuthorizationDetails);
 
         // Intra-entry narrowing: RFC 9396 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
@@ -123,11 +116,33 @@ public class ConsentConstraintEnforcer(
                 revalidation.GetFailure().ErrorDescription);
         }
 
+        // Nothing returned means nothing to change, which is the reading the request-time, CIBA and
+        // device validators all give the same result, so the granted array stands as it was.
+        if (revalidated is not { Count: > 0 })
+            return grantedAuthorizationDetails;
+
         // What comes back is the decision, not a copy of what went in: a validator narrowing an entry
-        // says so by returning the narrowed one, exactly as the request-time path already treats it.
-        // Returning the granted array here instead would re-derive from raw input the fact this call
-        // just computed, and every entry the two disagree on would travel in the form nobody approved.
+        // says so by returning the narrowed one. Returning the granted array here instead would
+        // re-derive from raw input the fact this call just computed, and every entry the two disagree
+        // on would travel in the form nobody approved.
+        //
+        // Which is also why the type check has to run again on it. Nothing in the per-type validator's
+        // contract stops the entry it returns from carrying a different type than the one it was asked
+        // about, and the array leaving this method is the one the grant is built from.
+        RefuseUnrequestedTypes(revalidated);
         return revalidated;
+
+        void RefuseUnrequestedTypes(JsonArray details)
+        {
+            var escapedTypes = (details.ToTypedArray() ?? [])
+                .Select(detail => detail.Type)
+                .Where(type => type is not null && !requestedTypes.Contains(type))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            if (escapedTypes.Length > 0)
+                throw Violation("authorization_details types", escapedTypes!);
+        }
     }
 
     private static InvalidOperationException Violation(string category, string[] escaped) =>

@@ -1660,7 +1660,7 @@ public class AuthorizationRequestProcessorTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => CapAmount(ad, 1000m));
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => CapAmount(ad, 800m));
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
@@ -1668,7 +1668,7 @@ public class AuthorizationRequestProcessorTests
 
         Assert.NotNull(capture.Grant);
         var emitted = capture.Grant.Context.AuthorizationDetails!;
-        Assert.Equal("1000", emitted[0]!["amount"]!.GetValue<string>());
+        Assert.Equal("800", emitted[0]!["amount"]!.GetValue<string>());
     }
 
     /// <summary>

@@ -188,6 +188,52 @@ public class ConsentConstraintEnforcerTests
     }
 
     [Fact]
+    public async Task EnforceAsync_PolicyReturnsAnUnrequestedType_Throws()
+    {
+        // The array that leaves this method is the one the grant is built from, so the type check has
+        // to cover it. Nothing in the per-type validator's contract stops the entry it returns from
+        // carrying a different type than the one it was asked about, and an entry whose type nobody
+        // requested is the escalation this backstop exists to refuse.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(
+                new JsonArray(new JsonObject { ["type"] = "admin_access" })));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Contains("admin_access", ex.Message);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsNothing_KeepsTheGrantedSet()
+    {
+        // A null result means "nothing to change" everywhere else this policy is consumed - the
+        // request-time, CIBA and device validators all keep what they had - so reading it here as
+        // "the validators emptied the set" would drop authorization_details RFC 9396 section 7
+        // obliges the server to return, on a path where nobody can tell.
+        var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails: grantedAd);
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(null));
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Same(grantedAd, enforced);
+    }
+
+    [Fact]
     public async Task EnforceAsync_GrantedCarriesNoAuthorizationDetails_ReturnsNull()
     {
         // Null is how a consent provider says it has no authorization_details opinion at all, and the

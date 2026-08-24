@@ -41,7 +41,8 @@ public interface IConsentConstraintEnforcer
     /// <param name="granted">The consent decision produced by <see cref="IUserConsentsProvider"/>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The granted <c>authorization_details</c> as re-validated, or <c>null</c> when the
-    /// consent decision carried none.</returns>
+    /// consent decision carried none. A re-validation that returns nothing leaves the granted set
+    /// standing, so <c>null</c> never means "the validators emptied it".</returns>
     /// <remarks>
     /// RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so the
     /// per-type validator owns that decision - and a normalising validator expresses it by RETURNING
