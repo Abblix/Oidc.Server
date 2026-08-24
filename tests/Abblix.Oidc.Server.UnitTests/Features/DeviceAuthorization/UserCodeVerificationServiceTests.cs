@@ -7,12 +7,20 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -32,6 +40,9 @@ public class UserCodeVerificationServiceTests
     private const string DeviceCode = "device-code-123";
     private const string ClientId = "test-client";
 
+    private static readonly DateTimeOffset Now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+    private readonly CapturingLogger<UserCodeVerificationService> _logs = new();
     private readonly UserCodeVerificationService _service;
 
     public UserCodeVerificationServiceTests()
@@ -63,6 +74,7 @@ public class UserCodeVerificationServiceTests
         }));
 
         _service = new UserCodeVerificationService(
+            _logs,
             storage.Object,
             rateLimiter.Object,
             normalizer,
@@ -81,5 +93,102 @@ public class UserCodeVerificationServiceTests
 
         var valid = Assert.IsType<ValidUserCode>(result);
         Assert.Equal(ClientId, valid.ClientId);
+    }
+
+    [Fact]
+    public async Task Approve_WithoutTheRequestedAuthorizationDetails_SaysSo()
+    {
+        // Whether the entries reach the grant is the host's call, because only its verification page
+        // knows what it displayed. What must not happen is that the omission passes unremarked: the
+        // token that follows carries no authorization_details, and a resource server enforcing them
+        // has nothing to enforce (RFC 9396 section 7).
+        var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var service = BuildService(requestedDetails, out var logs);
+
+        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+
+        Assert.True(approved);
+        var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains(ClientId, warning.Message);
+    }
+
+    [Fact]
+    public async Task Approve_CarryingTheAuthorizationDetails_SaysNothing()
+    {
+        var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var service = BuildService(requestedDetails, out var logs);
+
+        var approved = await service.ApproveAsync(
+            CanonicalUserCode,
+            GrantWith((JsonArray)requestedDetails.DeepClone()));
+
+        Assert.True(approved);
+        Assert.DoesNotContain(logs.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    private static AuthorizedGrant GrantWith(JsonArray? authorizationDetails)
+        => new(
+            new AuthSession("subject", "session", Now, "pwd"),
+            new AuthorizationContext(ClientId, ["openid"], null)
+            {
+                AuthorizationDetails = authorizationDetails,
+            });
+
+    private static UserCodeVerificationService BuildService(
+        JsonArray? requestedDetails,
+        out CapturingLogger<UserCodeVerificationService> logs)
+    {
+        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            AuthorizationDetails = requestedDetails,
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+
+        logs = new CapturingLogger<UserCodeVerificationService>();
+        return new UserCodeVerificationService(
+            logs,
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+    }
+
+    private static OidcOptions DeviceOptions() => new()
+    {
+        DeviceAuthorization = new DeviceAuthorizationOptions
+        {
+            CodeLifetime = TimeSpan.FromMinutes(5),
+            PollingInterval = TimeSpan.FromSeconds(5),
+            DeviceCodeLength = 32,
+            UserCodeLength = 8,
+            VerificationUri = new Uri("https://auth.example.com/device"),
+            UserCodeAlphabet = "BCDFGHJKLMNPQRSTVWXZ",
+        },
+    };
+
+    /// <summary>Keeps what the service wrote, so a test can assert the absence as well as the presence.</summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        private readonly List<(LogLevel Level, string Message)> _entries = [];
+
+        public IReadOnlyList<(LogLevel Level, string Message)> Entries => _entries;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => _entries.Add((logLevel, formatter(state, exception)));
     }
 }

@@ -30,10 +30,25 @@ public interface IUserCodeVerificationService
     /// Approves the device authorization request, linking the user's authorization to the pending device.
     /// </summary>
     /// <param name="userCode">The user-entered verification code.</param>
-    /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and context.</param>
+    /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and
+    /// context. Whatever this carries is what the device is granted, verbatim: the library adds nothing to
+    /// it.</param>
     /// <returns>
     /// A task that returns true if the approval was successful; false if the code is invalid or expired.
     /// </returns>
+    /// <remarks>
+    /// <c>authorization_details</c> are the host's to carry. The requested entries arrive on
+    /// <see cref="ValidUserCode"/>, and the decision the user made about them belongs on this grant's
+    /// <c>AuthorizationContext</c> - narrowed, enriched or dropped, as the verification page decided. The
+    /// library does not copy them across, because only that page knows what it displayed, and granting a
+    /// payment nobody was shown is worse than granting none.
+    /// <para>
+    /// Approving with entries on the record and none on the grant is therefore allowed and logged at
+    /// warning level: RFC 9396 §7 has the server return what was granted, so the token that follows
+    /// carries nothing for a resource server to enforce, and that is worth seeing in a log rather than
+    /// discovering at the resource server.
+    /// </para>
+    /// </remarks>
     Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant);
 
     /// <summary>

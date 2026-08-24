@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
@@ -17,6 +18,7 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// This service handles the verification, approval, and denial of device authorization requests
 /// with built-in brute force protection.
 /// </summary>
+/// <param name="logger">Records what an approval left behind, since the library cannot supply it.</param>
 /// <param name="storage">The storage service for device authorization requests.</param>
 /// <param name="rateLimiter">The rate limiter for preventing brute force attacks.</param>
 /// <param name="normalizer">Canonicalizes user-entered codes before lookup (RFC 8628 Section 6.1).</param>
@@ -24,7 +26,8 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// through this abstraction rather than the HTTP context so it stays independent of the host, and so a test
 /// can drive the limiter without standing up a web host.</param>
 /// <param name="timeProvider">Provides the current time for deriving the request's remaining lifetime.</param>
-public class UserCodeVerificationService(
+public partial class UserCodeVerificationService(
+    ILogger<UserCodeVerificationService> logger,
     IDeviceAuthorizationStorage storage,
     IUserCodeRateLimiter rateLimiter,
     IUserCodeNormalizer normalizer,
@@ -89,6 +92,17 @@ public class UserCodeVerificationService(
         var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
             return false;
+
+        // The requested entries were handed to the host on ValidUserCode, and whether they reach the
+        // grant is its decision: only its verification page knows whether it displayed them, and a
+        // library putting them there would grant what nobody may have shown. The one thing that must
+        // not happen is the omission passing unremarked - it is either a refusal the host expressed by
+        // other means, or the threading it forgot, and the two look identical from here.
+        if (request.AuthorizationDetails is { Count: > 0 } requestedDetails
+            && authorizedGrant.Context.AuthorizationDetails is not { Count: > 0 })
+        {
+            LogGrantedAuthorizationDetailsNotCarried(request.ClientId, requestedDetails.Count);
+        }
 
         request.Status = DeviceAuthorizationStatus.Authorized;
         request.AuthorizedGrant = authorizedGrant;

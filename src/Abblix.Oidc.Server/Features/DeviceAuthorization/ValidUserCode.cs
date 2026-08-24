@@ -18,7 +18,11 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <param name="Resources">The requested resources (RFC 8707) for the authorization.</param>
 /// <param name="AuthorizationDetails">RFC 9396 §3 Rich Authorization Requests array from
 /// the original /device_authorization request. The host's user-verification UI renders these
-/// for consent and threads the user's decision onto the AuthorizedGrant's AuthorizationContext.</param>
+/// for consent and threads the user's decision onto the AuthorizedGrant's AuthorizationContext.
+/// Nothing else does: approving with a grant that carries none issues a token with no
+/// <c>authorization_details</c> at all, which RFC 9396 §7 leaves a resource server unable to
+/// enforce. The approval logs that at warning level rather than repairing it, since only this
+/// page knows what it showed the user.</param>
 public record ValidUserCode(
     string ClientId,
     string[] Scope,
