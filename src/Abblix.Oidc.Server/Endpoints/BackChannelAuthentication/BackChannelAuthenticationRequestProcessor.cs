@@ -99,6 +99,12 @@ public class BackChannelAuthenticationRequestProcessor(
 			authSession.Subject.HasValue() &&
 			!subjectTypeConverter.Names(authSession, [named], request.ClientInfo))
 		{
+			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
+			// denied the request", and it is this server denying it. The note attached there describes the
+			// case authors expected - a standing decision to refuse a kind of request, since the response
+			// normally precedes any user interaction - rather than bounding when the code may be used.
+			// unknown_user_id, the other candidate, says the provider cannot identify the end user from the
+			// hint, which is the opposite of what happened: it identified them and somebody else answered.
 			return new BackChannelAuthenticationForbidden(
 				ErrorCodes.AccessDenied,
 				"The authenticated end user is not the one the id token hint named");

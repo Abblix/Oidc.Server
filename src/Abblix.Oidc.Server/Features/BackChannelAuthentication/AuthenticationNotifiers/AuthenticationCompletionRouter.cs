@@ -80,7 +80,10 @@ public partial class AuthenticationCompletionRouter(
         //
         // Refused as denied rather than by throwing, because the caller is the host's own completion code
         // and has no protocol answer to give: recording the outcome is what reaches the client, which polls
-        // and is told access_denied.
+        // and is told access_denied. That is the closest the specification offers - CIBA Core 1.0 Section 11
+        // glosses it for the token endpoint as the end user having denied the request, which is not quite
+        // what happened, but the only alternative naming a general failure (transaction_failed) is defined
+        // for the push error payload alone and would be a code the polling client is not told to expect.
         if (request.RequestedSubject is { Length: > 0 } named &&
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo))
         {
