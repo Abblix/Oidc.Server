@@ -191,6 +191,9 @@ public static class ServiceCollectionExtensions
             // user's browser instead of a redirect carrying error and state. Placing it here also keeps
             // signature verification behind the cheap parameter checks rather than in front of them.
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
+            // Beside the hint validator because it answers the same question by the other parameter the
+            // specification names for it, and it inherits the placement reasoning above for the same reason.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, RequestedSubjectValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),

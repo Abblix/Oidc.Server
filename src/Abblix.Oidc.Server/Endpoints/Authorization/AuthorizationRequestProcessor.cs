@@ -267,19 +267,28 @@ public class AuthorizationRequestProcessor(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
-		// OpenID Connect Core 1.0 Section 3.1.2.1: when a hint names an end user, a positive response is
-		// owed only if that end user is the one logged in, and otherwise the server MUST return an error.
-		// Comparing here rather than refusing outright is what serves the whole sentence: a request left
-		// with no session takes the arms above, so prompt=none answers login_required while anything else
-		// reaches the login page, which is where "is logged in as a result of the request" happens.
+		// OpenID Connect Core 1.0 Sections 3.1.2.1 and 3.1.2.2: when a request names an end user, a
+		// positive response is owed only if that end user is the one logged in, and otherwise the server
+		// MUST return an error. Comparing here rather than refusing outright is what serves the whole
+		// sentence: a request left with no session takes the arms above, so prompt=none answers
+		// login_required while anything else reaches the login page, which is where "is logged in as a
+		// result of the request" happens.
 		//
 		// That last part is the host's to finish, and it is worth saying because the failure is a loop
 		// rather than an error: a login page that returns the session it already has, without prompting,
 		// arrives back here to be filtered out again. The same is true of max_age and acr_values, and a
-		// host handling those already has the shape. What it needs from the request is the hint, which
-		// the model carries verbatim.
-		if (request.IdTokenHintSubject is not null)
-			authSessions = authSessions.Where(session => NamedByHint(session, request, clientInfo));
+		// host handling those already has the shape. What it needs from the request is the named end user,
+		// which the model carries verbatim.
+		//
+		// Two parameters name one, independently, and Section 3.1.2.2 puts them under a single MUST, so a
+		// request stating both has both applied. They are separate filters rather than a merged set of
+		// acceptable subjects, because merging would have to decide what an id_token_hint disagreeing with
+		// a claims request means - and nothing has to decide that if each simply binds.
+		if (request.IdTokenHintSubject is { } hinted)
+			authSessions = authSessions.Where(session => Names(session, [hinted], clientInfo));
+
+		if (request.RequestedSubjects is { } requested)
+			authSessions = authSessions.Where(session => Names(session, requested, clientInfo));
 
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no
@@ -291,7 +300,7 @@ public class AuthorizationRequestProcessor(
 	}
 
 	/// <summary>
-	/// Whether this session belongs to the end user the request's <c>id_token_hint</c> named.
+	/// Whether this session belongs to one of the end users the request named.
 	/// </summary>
 	/// <remarks>
 	/// The session is converted forward rather than the hint opened, because only the forward direction
@@ -305,16 +314,15 @@ public class AuthorizationRequestProcessor(
 	/// merely carried a hint.
 	/// </para>
 	/// </remarks>
-	private bool NamedByHint(AuthSession session, ValidAuthorizationRequest request, ClientInfo clientInfo)
+	private bool Names(AuthSession session, string[] subjects, ClientInfo clientInfo)
 	{
 		try
 		{
 			// Ordinal: a subject is an opaque identifier compared octet for octet, and two that differ only
 			// in case are two different end users.
-			return string.Equals(
+			return subjects.Contains(
 				subjectTypeConverter.Convert(session.Subject, clientInfo),
-				request.IdTokenHintSubject,
-				StringComparison.Ordinal);
+				StringComparer.Ordinal);
 		}
 		catch (InvalidOperationException)
 		{

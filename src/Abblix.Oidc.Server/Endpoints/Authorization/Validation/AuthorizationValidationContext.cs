@@ -87,4 +87,21 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// could not be made must not read as a match.
 	/// </remarks>
 	public string? IdTokenHintSubject { get; set; }
+
+	/// <summary>
+	/// The end users the request's <c>claims</c> parameter will accept for <c>sub</c>, or <c>null</c> when it
+	/// asked for none in particular. An empty array accepts nobody.
+	/// </summary>
+	/// <remarks>
+	/// A second, independent constraint rather than an alternative spelling of
+	/// <see cref="IdTokenHintSubject"/>: a request may carry both, and OpenID Connect Core 1.0 Section 3.1.2.2
+	/// obliges the server to honour whichever are present. Spelled the way the client wrote them, so the same
+	/// conversion applies - a pairwise client names the pseudonym sealed to its own sector.
+	/// <para>
+	/// Empty is a state a request can genuinely reach, by naming a <c>value</c> absent from its own
+	/// <c>values</c>. That mismatch is what Section 5.5.1 says "MUST cause the authentication to fail", so it
+	/// is carried through as a constraint nobody satisfies rather than discarded as nonsense.
+	/// </para>
+	/// </remarks>
+	public string[]? RequestedSubjects { get; set; }
 }

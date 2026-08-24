@@ -37,6 +37,7 @@ public record ValidAuthorizationRequest
 		Resources = context.Resources;
 		AuthorizationDetails = context.AuthorizationDetails;
 		IdTokenHintSubject = context.IdTokenHintSubject;
+		RequestedSubjects = context.RequestedSubjects;
 	}
 
 	/// <summary>
@@ -65,6 +66,16 @@ public record ValidAuthorizationRequest
 	/// session carries, so a comparison converts the session forward rather than opening this.
 	/// </remarks>
 	public string? IdTokenHintSubject { get; init; }
+
+	/// <summary>
+	/// The end users the request's <c>claims</c> parameter will accept for <c>sub</c>, or <c>null</c> when it
+	/// asked for none in particular. An empty array accepts nobody.
+	/// </summary>
+	/// <remarks>
+	/// Independent of <see cref="IdTokenHintSubject"/> - a request may state both, and both bind. Spelled the
+	/// way the client wrote them, so a comparison converts the session forward rather than opening these.
+	/// </remarks>
+	public string[]? RequestedSubjects { get; init; }
 
 	/// <summary>
 	/// Information about the client making the request, as determined during validation.
