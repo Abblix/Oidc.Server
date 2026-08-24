@@ -545,6 +545,39 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// A ping-mode refusal denies and keeps the request, as poll does, rather than removing it.
+    /// </summary>
+    /// <remarks>
+    /// Ping inherits the base refusal by not overriding it, so nothing but this pins the choice. It is the
+    /// right one: the token endpoint lets a ping client reach it, so a request left denied answers a client
+    /// that polls anyway with <c>access_denied</c>, where removing it would answer <c>expired_token</c> and
+    /// send that client looking for a timeout it did not have. The notification itself is not sent either
+    /// way, because delivery never runs on the refusal path.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PingMode_WhenAuthenticatedUserIsNotTheOneRequested_Denies()
+    {
+        var request = CreateRequest("somebody-else", requested: UserId);
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        await CreatePingModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PingClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+        _notificationService.Verify(
+            n => n.SendAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<string>(),
+                It.IsAny<IBackChannelNotificationRequest>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// A request that named nobody is completed whoever authenticated.
     /// </summary>
     /// <remarks>
@@ -568,6 +601,40 @@ public class AuthenticationCompletionHandlerTests
     private static ClientInfo PollClient() => new(ClientId)
     {
         BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+    };
+
+    /// <summary>
+    /// A push-mode request that cannot be delivered is removed, not left denied.
+    /// </summary>
+    /// <remarks>
+    /// Reached when the notification endpoint or token is missing from the client's registration. It is the
+    /// same situation as a refused subject - nothing can be delivered and the client cannot poll - so it
+    /// leaves the same thing behind: nothing. Denying instead would strand a request its client can never
+    /// read until the entry expired.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenNotConfiguredForDelivery_RemovesTheRequest()
+    {
+        var request = CreateRequest(UserId, requested: null);
+        request.ClientNotificationToken = null;
+
+        _storage
+            .Setup(s => s.TryRemoveAsync(AuthReqId))
+            .ReturnsAsync(request);
+
+        await CreatePushModeHandler().CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+    }
+
+    private static ClientInfo PingClient() => new(ClientId)
+    {
+        BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
+        BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba/notify"),
     };
 
     private static ClientInfo PushClient() => new(ClientId)

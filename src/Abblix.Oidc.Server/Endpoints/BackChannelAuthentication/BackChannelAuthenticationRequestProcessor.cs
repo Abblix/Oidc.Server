@@ -110,7 +110,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			// hint, which is the opposite of what happened: it identified them and somebody else answered.
 			return new BackChannelAuthenticationForbidden(
 				ErrorCodes.AccessDenied,
-				"The authenticated end user is not the one the id token hint named");
+				"The authenticated end user is not the one the request named");
 		}
 
 		var authContext = new AuthorizationContext(

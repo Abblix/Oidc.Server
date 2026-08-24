@@ -1142,4 +1142,86 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
+
+    /// <summary>
+    /// A long-polling wake-up is judged like any other redemption.
+    /// </summary>
+    /// <remarks>
+    /// The second of the two arms that hand a grant to a processor, reached when a client waiting on a
+    /// status change is woken by one. It duplicates the ordinary arm's comparison, and until this case
+    /// existed nothing drove it: every long-polling test leaves the request naming nobody, so the comparison
+    /// was skipped in the only suite that reaches this code at all.
+    /// </remarks>
+    [Fact]
+    public async Task LongPolling_WhenAuthenticatedUserIsNotTheOneRequested_ReturnsAccessDenied()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>(MockBehavior.Strict);
+        var timeProvider = new FakeTimeProvider(_currentTime);
+        var statusNotifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
+
+        var options = Options.Create(new OidcOptions
+        {
+            BackChannelAuthentication = new BackChannelAuthenticationOptions
+            {
+                UseLongPolling = true,
+                LongPollingTimeout = TimeSpan.FromSeconds(30),
+            }
+        });
+
+        var handler = new BackChannelAuthenticationGrantHandler(
+            storage.Object,
+            timeProvider,
+            options,
+            CreateMockServiceProvider(storage.Object),
+            PublicSubjects(),
+            statusNotifier.Object);
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var pending = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+            RequestedSubjects = [UserId],
+        };
+
+        var authenticatedAsSomebodyElse = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession("somebody-else", "session_456", _currentTime, "backchannel"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedSubjects = [UserId],
+        };
+
+        storage.SetupSequence(s => s.TryGetAsync(AuthReqId))
+            .ReturnsAsync(pending)
+            .ReturnsAsync(authenticatedAsSomebodyElse);
+
+        storage
+            .Setup(s => s.UpdateAsync(
+                It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()))
+            .Returns(Task.CompletedTask);
+
+        statusNotifier
+            .Setup(n => n.WaitForStatusChangeAsync(
+                AuthReqId, TimeSpan.FromSeconds(30), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+
+        // Refused before the request is consumed, so a client that polls again is told the same thing.
+        storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+    }
 }

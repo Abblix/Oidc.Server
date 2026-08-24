@@ -75,7 +75,9 @@ public partial class PushModeCompletionHandler(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+            // Removed rather than denied, for the reason RefuseAsync above states: this client never
+            // polls, so a denied request it cannot read is an orphan waiting out its expiry.
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
 
