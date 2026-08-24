@@ -110,6 +110,46 @@ public class UserCodeVerificationServiceTests
         Assert.True(approved);
         var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
         Assert.Contains(ClientId, warning.Message);
+
+        // The count is part of the payload, and it is what tells the reader how much was lost.
+        Assert.Contains("1", warning.Message);
+        Assert.Equal(
+            LogEvents.Device.UserCodeVerificationService.GrantedAuthorizationDetailsNotCarried,
+            warning.EventId);
+    }
+
+    [Fact]
+    public async Task Approve_WhenTheRequestCarriedNoDetails_SaysNothing()
+    {
+        // The silent case is the common one, so a detector that fired here would be waved away on every
+        // approval and take the real finding with it.
+        var service = BuildService(requestedDetails: null, out var logs);
+
+        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+
+        Assert.True(approved);
+        Assert.DoesNotContain(logs.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task Approve_WithATypeTheRequestNeverAskedFor_RefusesAndLeavesTheRequestPending()
+    {
+        // Narrowing is the host's to decide; widening is not. An approval carrying a type nobody
+        // requested would give the device authority the client never asked for, so it is refused rather
+        // than noted - and the request stays pending, so the user can still be asked again.
+        var service = BuildService(
+            requestedDetails: new JsonArray(new JsonObject { ["type"] = "account_information" }),
+            out var logs);
+
+        var approved = await service.ApproveAsync(
+            CanonicalUserCode,
+            GrantWith(new JsonArray(
+                new JsonObject { ["type"] = "account_information" },
+                new JsonObject { ["type"] = "payment_initiation" })));
+
+        Assert.False(approved);
+        var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains("payment_initiation", warning.Message);
     }
 
     [Fact]
@@ -175,9 +215,11 @@ public class UserCodeVerificationServiceTests
     /// <summary>Keeps what the service wrote, so a test can assert the absence as well as the presence.</summary>
     private sealed class CapturingLogger<T> : ILogger<T>
     {
-        private readonly List<(LogLevel Level, string Message)> _entries = [];
+        private readonly List<(LogLevel Level, int EventId, string Message)> _entries = [];
 
-        public IReadOnlyList<(LogLevel Level, string Message)> Entries => _entries;
+        // The event id is kept because runbooks key off the number, so a test that ignored it would let
+        // the number change without noticing.
+        public IReadOnlyList<(LogLevel Level, int EventId, string Message)> Entries => _entries;
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -189,6 +231,6 @@ public class UserCodeVerificationServiceTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => _entries.Add((logLevel, formatter(state, exception)));
+            => _entries.Add((logLevel, eventId.Id, formatter(state, exception)));
     }
 }

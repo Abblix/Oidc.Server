@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
@@ -93,22 +94,72 @@ public partial class UserCodeVerificationService(
         if (remaining <= TimeSpan.Zero)
             return false;
 
-        // The requested entries were handed to the host on ValidUserCode, and whether they reach the
-        // grant is its decision: only its verification page knows whether it displayed them, and a
-        // library putting them there would grant what nobody may have shown. The one thing that must
-        // not happen is the omission passing unremarked - it is either a refusal the host expressed by
-        // other means, or the threading it forgot, and the two look identical from here.
-        if (request.AuthorizationDetails is { Count: > 0 } requestedDetails
-            && authorizedGrant.Context.AuthorizationDetails is not { Count: > 0 })
+        // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
+        // authorization request never asked for gives the device authority nobody requested, and this is
+        // the last place holding both sides: the requested entries live on the record, and the grant
+        // about to replace them is the one the token is built from.
+        if (EscapedAuthorizationDetailTypes(request, authorizedGrant) is { Length: > 0 } escaped)
         {
-            LogGrantedAuthorizationDetailsNotCarried(request.ClientId, requestedDetails.Count);
+            LogGrantedAuthorizationDetailsExceedTheRequest(
+                request.ClientId, string.Join(", ", escaped));
+
+            return false;
         }
 
         request.Status = DeviceAuthorizationStatus.Authorized;
         request.AuthorizedGrant = authorizedGrant;
 
         await storage.UpdateAsync(deviceCode, request, remaining);
+
+        // The requested entries were handed to the host on ValidUserCode, and whether they reach the
+        // grant is its decision: only its verification page knows whether it displayed them, and a
+        // library putting them there would grant what nobody may have shown. The one thing that must
+        // not happen is the omission passing unremarked - it is either a refusal the host expressed by
+        // other means, or the threading it forgot, and the two look identical from here.
+        //
+        // Said after the write, so the line never describes an approval that did not happen.
+        if (request.AuthorizationDetails is { Count: > 0 } requestedDetails
+            && authorizedGrant.Context.AuthorizationDetails is not { Count: > 0 })
+        {
+            LogGrantedAuthorizationDetailsNotCarried(request.ClientId, requestedDetails.Count);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// The <c>authorization_details</c> types the grant carries and the device authorization request never
+    /// asked for, empty when the grant stays inside what was requested.
+    /// </summary>
+    /// <remarks>
+    /// Types only: RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so
+    /// what can be judged here is whether an entry of that type was asked for at all. An entry that cannot
+    /// be read as a JSON object counts as escaped, because the conversion drops it silently and "nothing
+    /// escaped" would then describe what could be read rather than the grant.
+    /// </remarks>
+    private static string[] EscapedAuthorizationDetailTypes(
+        DeviceAuthorizationRequest request,
+        AuthorizedGrant authorizedGrant)
+    {
+        if (authorizedGrant.Context.AuthorizationDetails is not { Count: > 0 } granted)
+            return [];
+
+        if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
+            return ["an entry that is not a JSON object"];
+
+        if (Array.Exists(typed, detail => detail.Type is null))
+            return ["an entry carrying no type"];
+
+        var requestedTypes = (request.AuthorizationDetails?.ToTypedArray() ?? [])
+            .Select(detail => detail.Type)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        return typed
+            .Select(detail => detail.Type!)
+            .Where(type => !requestedTypes.Contains(type))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <inheritdoc />

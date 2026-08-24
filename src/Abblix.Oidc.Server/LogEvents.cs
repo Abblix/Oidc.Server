@@ -570,13 +570,14 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Features/DeviceAuthorization/UserCodeVerificationService.cs</c> - RFC 8628 user-code
-        /// approval, and what the approval left behind (sub-range 7090-7099).
+        /// approval, and what the approval left behind (sub-range 7080-7084).
         /// </summary>
         public static class UserCodeVerificationService
         {
-            private const int Base = 7090;
+            private const int Base = 7080;
 
             public const int GrantedAuthorizationDetailsNotCarried = Base + 1;
+            public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 2;
         }
     }
 

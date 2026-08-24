@@ -22,6 +22,17 @@ partial class UserCodeVerificationService
         Message = "Client {ClientId} requested {RequestedCount} authorization_details entries at the device " +
                   "endpoint, and the approved grant carries none. The user-verification page decides what it " +
                   "shows and what it grants, so the library leaves the entries to it (see ValidUserCode); a " +
-                  "grant without them issues a token no resource server can enforce against (RFC 9396 §7).")]
+                  "grant without them issues a token no resource server can enforce against (RFC 9396 §9).")]
     private partial void LogGrantedAuthorizationDetailsNotCarried(string ClientId, int RequestedCount);
+
+    /// <summary>
+    /// The escaped TYPES only, for the same reason: what a type carries is its own business, and here it
+    /// is payment and account data.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeVerificationService.GrantedAuthorizationDetailsExceedTheRequest,
+        Level = LogLevel.Warning,
+        Message = "Client {ClientId} was approved with authorization_details the device authorization " +
+                  "request never asked for, so the approval is refused: {EscapedTypes}")]
+    private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
 }

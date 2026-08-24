@@ -31,8 +31,10 @@ public interface IUserCodeVerificationService
     /// </summary>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and
-    /// context. Whatever this carries is what the device is granted, verbatim: the library adds nothing to
-    /// it.</param>
+    /// context. Its <c>authorization_details</c> are what the device is granted: the library adds none, and
+    /// refuses an approval carrying a type the request never asked for. Its scopes and resources are a
+    /// starting point rather than the final word - the token endpoint narrows them against the token
+    /// request (RFC 6749 §6, RFC 8707 §2.2) and adds the certificate and proof-key confirmations.</param>
     /// <returns>
     /// A task that returns true if the approval was successful; false if the code is invalid or expired.
     /// </returns>
@@ -44,9 +46,16 @@ public interface IUserCodeVerificationService
     /// payment nobody was shown is worse than granting none.
     /// <para>
     /// Approving with entries on the record and none on the grant is therefore allowed and logged at
-    /// warning level: RFC 9396 §7 has the server return what was granted, so the token that follows
-    /// carries nothing for a resource server to enforce, and that is worth seeing in a log rather than
-    /// discovering at the resource server.
+    /// warning level. §7 is satisfied either way, since its MUST is to return what the resource owner
+    /// GRANTED and nothing granted is nothing to return. §9 is the one that matters here: it makes the
+    /// details reaching the resource server the point of having them, and a token carrying none leaves
+    /// it nothing to enforce, which is worth seeing in a log rather than discovering at the resource
+    /// server.
+    /// </para>
+    /// <para>
+    /// The opposite direction is refused rather than logged. A grant carrying a type the device
+    /// authorization request never asked for gives the device authority nobody requested, so the
+    /// approval answers <c>false</c> and the request stays pending.
     /// </para>
     /// </remarks>
     Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant);
