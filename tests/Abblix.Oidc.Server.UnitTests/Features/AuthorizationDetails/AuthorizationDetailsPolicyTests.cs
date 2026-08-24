@@ -430,6 +430,77 @@ public class AuthorizationDetailsPolicyTests
         Assert.NotNull(validated);
     }
 
+    [Theory]
+    [InlineData("allowlist")]
+    [InlineData("unknown-type")]
+    [InlineData("not-an-object")]
+    public async Task ApplyGrantedAsync_keeps_every_check_outside_the_per_type_question(string shape)
+    {
+        // The granted phase changes ONE question. The claim that everything around it still binds is
+        // otherwise carried by prose alone, and prose does not fail when an implementation stops
+        // honouring it: a granted path that skipped these would take a type the client may not use,
+        // a type nobody implements, or an entry that is not an object at all.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+
+        var (client, granted, expected) = shape switch
+        {
+            "allowlist" => (
+                new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] },
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+                "payment_initiation"),
+            "unknown-type" => (
+                new ClientInfo("c"),
+                new JsonArray(new JsonObject { ["type"] = "never_registered" }),
+                "unknown"),
+            "not-an-object" => (
+                new ClientInfo("c"),
+                new JsonArray(JsonValue.Create("payment_initiation")),
+                "JSON object"),
+            _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unhandled shape"),
+        };
+
+        var result = await composite.ApplyGrantedAsync(granted, client, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains(expected, error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_falls_back_to_ApplyAsync_when_a_policy_does_not_override_it()
+    {
+        // The default member is what makes this addition non-breaking, and the shipped composite
+        // overrides it - so nothing would notice if the default stopped deferring and started
+        // accepting everything. A host that implements the interface itself is the case it protects.
+        IAuthorizationDetailsPolicy policy = new RefusingPolicy();
+
+        var result = await policy.ApplyGrantedAsync(
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            TestClient,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_still_applies_the_rules_the_type_did_not_exempt()
+    {
+        // An enrichable type exempts the field the server fills in, and nothing else. Its other rules
+        // hold against a consent decision exactly as they hold against a client.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var granted = new JsonArray(new JsonObject { ["type"] = "account_information" });
+
+        var result = await composite.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("access is required", error.ErrorDescription);
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
     {
         var services = new ServiceCollection();
@@ -487,16 +558,38 @@ public class AuthorizationDetailsPolicyTests
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+            => Task.FromResult(
                 detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
-                    ? new OidcError(
-                        ErrorCodes.InvalidAuthorizationDetails,
-                        "access.accounts is chosen by the end-user, so a request must leave it empty")
-                    : detail);
+                    ? Refuse("access.accounts is chosen by the end-user, so a request must leave it empty")
+                    : SharedRules(detail));
 
+        // Only the enrichable field is exempt here. Everything else the type refuses, it refuses in
+        // both phases: a consent decision that crossed the browser is not more trusted than a client.
         public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+            => Task.FromResult(SharedRules(detail));
+
+        private static Result<AuthorizationDetail, OidcError> SharedRules(AuthorizationDetail detail)
+            => detail.Json["access"] is JsonObject
+                ? detail
+                : Refuse("access is required for account_information");
+
+        private static Result<AuthorizationDetail, OidcError> Refuse(string description)
+            => new OidcError(ErrorCodes.InvalidAuthorizationDetails, description);
+    }
+
+    /// <summary>
+    /// A host's own policy: it implements the interface and knows nothing of the granted phase, which
+    /// is the shape the default member exists for.
+    /// </summary>
+    private sealed class RefusingPolicy : IAuthorizationDetailsPolicy
+    {
+        public const string Reason = "refused by the host's own policy";
+
+        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+            JsonArray? raw, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<JsonArray?, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
     }
 
     private sealed class InvocationCounter

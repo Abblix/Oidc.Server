@@ -71,6 +71,13 @@ public interface IAuthorizationDetailsPolicy
     /// must be JSON objects, their types must be known, and the per-client allowlist still binds.
     /// Only the question put to the per-type validator differs, because RFC 9396 §7.1 lets the server
     /// add values during consent that §5 obliges it to refuse from a client.
+    /// <para>
+    /// A decorator around this interface MUST forward this member too. The default sends it to
+    /// <see cref="ApplyAsync"/>, so a decorator that implements only that one turns the granted phase
+    /// back into the request phase for everything it wraps - silently, since the call still succeeds
+    /// and the pipeline still runs. The same holds for a mock: a strict one refuses the call, and a
+    /// loose one answers with a null task result the caller then dereferences.
+    /// </para>
     /// </remarks>
     /// <param name="granted">The <c>authorization_details</c> the consent decision granted.</param>
     /// <param name="client">The client the grant is being issued to.</param>

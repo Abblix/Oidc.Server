@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -236,15 +236,23 @@ public class ConsentConstraintEnforcerTests
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+            => Task.FromResult(
                 detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
-                    ? new OidcError(
-                        ErrorCodes.InvalidAuthorizationDetails,
-                        "access.accounts is chosen by the end-user, so a request must leave it empty")
-                    : detail);
+                    ? Refuse("access.accounts is chosen by the end-user, so a request must leave it empty")
+                    : SharedRules(detail));
 
+        // Only the enrichable field is exempt. Everything else this type refuses, it refuses in both
+        // phases, because a consent decision that crossed the browser is not more trusted than a client.
         public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
-            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+            => Task.FromResult(SharedRules(detail));
+
+        private static Result<AuthorizationDetail, OidcError> SharedRules(AuthorizationDetail detail)
+            => detail.Json["access"] is JsonObject
+                ? detail
+                : Refuse("access is required for account_information");
+
+        private static Result<AuthorizationDetail, OidcError> Refuse(string description)
+            => new OidcError(ErrorCodes.InvalidAuthorizationDetails, description);
     }
 }

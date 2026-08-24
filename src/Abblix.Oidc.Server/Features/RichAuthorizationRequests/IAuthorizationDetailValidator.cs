@@ -68,11 +68,20 @@ public interface IAuthorizationDetailValidator
     /// an <c>account_information</c> entry whose empty arrays are placeholders the server fills with
     /// the identifiers the user picked.
     /// <para>
-    /// That shape is one a conforming request-time validator has to REFUSE: RFC 9396 §5 makes the
-    /// server reject an entry "containing fields with invalid values for the authorization details
-    /// type", and a client choosing the accounts is exactly that. So a validator for an enrichable
-    /// type overrides this member to accept what the consent decision produced, while
-    /// <see cref="ValidateAsync"/> keeps refusing the same shape when a client sends it.
+    /// That shape is one the request-time question may legitimately refuse: RFC 9396 §5 has the server
+    /// reject an entry that "contains fields with invalid values for the authorization details type",
+    /// and a type whose definition says the client must not choose the accounts makes a populated
+    /// placeholder exactly that. Such a type overrides this member so the consent decision's own
+    /// output is accepted, while <see cref="ValidateAsync"/> keeps refusing it from a client.
+    /// </para>
+    /// <para>
+    /// An override MUST still refuse everything <see cref="ValidateAsync"/> refuses, apart from the
+    /// fields its type declares enrichable. This is the anti-escalation re-check, and the consent
+    /// decision reaching it has often crossed the browser: what the library still guarantees for an
+    /// overriding type is only that entries are JSON objects, that their types are known, requested
+    /// and on the client's allowlist. Everything inside an entry - an amount, an account, a list of
+    /// locations - is guaranteed by this method and by nothing else. An override that returns its
+    /// input unconditionally hands a tampered consent decision straight to the issued token.
     /// </para>
     /// </remarks>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
