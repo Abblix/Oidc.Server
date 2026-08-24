@@ -34,7 +34,9 @@ public interface IRevocationCutoffRegistry
     /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <returns>The moment before which tokens for this principal are revoked.</returns>
     Task<DateTimeOffset?> GetCutoffAsync(
-        RevocationScope scope, string principal, CancellationToken cancellationToken = default);
+        RevocationScope scope,
+        string principal,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Records a cutoff for a principal.
