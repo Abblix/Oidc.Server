@@ -20,12 +20,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// Derived classes implement specific token delivery modes (poll, ping, push) per CIBA specification.
 /// </summary>
 /// <remarks>
-/// <paramref name="subjectTypeConverter"/> was added to a constructor this package had already shipped, which
-/// breaks a host that derives from this class. Deliberately, and not to be softened into an overload later:
-/// a derived class calling a converter-less overload would compile and silently lose the comparison in
-/// <see cref="CompleteAuthenticationAsync"/>, which is the one that keeps a request from being answered for
-/// an end user it did not name. A build error naming the type and the missing argument is the loud version
-/// of the same fact, and it is the only version a host can act on.
+/// Do not add a converter-less constructor overload for the convenience of a derived class: it would
+/// compile and silently lose the comparison in <see cref="CompleteAuthenticationAsync"/>, which is what
+/// keeps a request from being answered for an end user it did not name.
 /// </remarks>
 /// <param name="logger">Logger for tracking completion events and errors.</param>
 /// <param name="storage">Storage for persisting authentication request state.</param>
