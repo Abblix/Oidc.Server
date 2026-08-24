@@ -97,13 +97,24 @@ public record AuthorizationDetail(JsonObject Json)
     /// <see cref="Json"/> and are accessed by per-type validators directly through the
     /// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
     /// </summary>
-    private static class Parameters
+    public static class Parameters
     {
+        /// <summary>The authorization detail type identifier, REQUIRED on every entry.</summary>
         public const string Type = "type";
+
+        /// <summary>The locations of the resource servers the entry is addressed to.</summary>
         public const string Locations = "locations";
+
+        /// <summary>The actions the entry authorises at those locations.</summary>
         public const string Actions = "actions";
+
+        /// <summary>The kinds of data the entry authorises access to.</summary>
         public const string Datatypes = "datatypes";
+
+        /// <summary>The identifier of the specific resource the entry is about.</summary>
         public const string Identifier = "identifier";
+
+        /// <summary>The privileges the entry asks for at those locations.</summary>
         public const string Privileges = "privileges";
     }
 }

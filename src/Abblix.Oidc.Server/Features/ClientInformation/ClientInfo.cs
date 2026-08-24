@@ -280,10 +280,20 @@ public record ClientInfo(string ClientId)
     /// the disclosure, since the details ride in the token. One encrypting them to its own keys has
     /// only introspection left, and this is how a resource server names itself for it.
     /// <para>
-    /// Absent by default, so no existing deployment starts disclosing anything. Matching is the
-    /// exact-match comparison this server uses for every other registered address, so a location that
-    /// is not an absolute URI never matches - §2.2 calls its strings "typically URIs", and a host
-    /// whose locations are something else keeps the details in the access token instead.
+    /// Absent by default, so no existing deployment starts disclosing anything.
+    /// </para>
+    /// <para>
+    /// Matching is TEXTUAL and exact. RFC 9396 §12 requires it: "No additional transformation or
+    /// normalization is to be done in evaluating equivalence of string values". A location is
+    /// therefore compared to what is written here character for character, so a trailing slash, a
+    /// spelled-out default port or a different case is a different location. Write the value exactly
+    /// as the clients spell it in <c>locations</c>.
+    /// </para>
+    /// <para>
+    /// The type is <see cref="Uri"/> so a value that is not one is refused where it was written, not
+    /// silently never matched. That catches most of what a typo produces and not all of it: a missing
+    /// scheme with a port (<c>payments.example.com:8443</c>) parses, with the whole name read as the
+    /// scheme and an empty host, and then matches nothing.
     /// </para>
     /// </remarks>
     public Uri[]? ResourceLocations { get; set; }

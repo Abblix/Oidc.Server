@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
@@ -181,8 +180,21 @@ public class IntrospectionRequestProcessor(
 	/// its absence says the client did not name a resource server, not that every one may read it.
 	/// </para>
 	/// <para>
-	/// Addresses are compared the way every other registered address on this server is, through
-	/// <see cref="UriValidatorFactory"/>, so a location that is not an absolute URI matches nothing.
+	/// Addresses are compared as TEXT, byte for byte. RFC 9396 §12: "All string comparisons in an
+	/// authorization_details parameter are to be done as defined by [RFC8259]. No additional
+	/// transformation or normalization is to be done in evaluating equivalence of string values."
+	/// Parsing both sides into <see cref="Uri"/> and comparing those would be that transformation, and
+	/// it decides in the disclosing direction: it folds case, elides a default port, collapses dot
+	/// segments, decodes percent-escapes and ignores a fragment, so <c>https://api.example.com/accounts/../payments</c>
+	/// written by the CLIENT would open the payments resource server's entry to the accounts one.
+	/// The registered side stays <see cref="Uri"/> because a host writing a location that is not one
+	/// should hear about it where it was written; only the comparison is textual.
+	/// </para>
+	/// <para>
+	/// What is disclosed is filtered too. §9.2 allows the member to be "filtered and extended for the RS
+	/// making the introspection request", and §13 asks that this data be shared "on a 'need to know'
+	/// basis": the entry goes out with its <c>locations</c> reduced to the ones this caller matched, so
+	/// one resource server does not learn the addresses of the others from an entry naming several.
 	/// </para>
 	/// </remarks>
 	private static void AddAuthorizationDetailsAddressedTo(
@@ -194,23 +206,33 @@ public class IntrospectionRequestProcessor(
 		    payload[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
 			return;
 
-		var callerAddresses = UriValidatorFactory.Create(callerLocations);
+		var registered = callerLocations
+			.Select(location => location.OriginalString)
+			.ToHashSet(StringComparer.Ordinal);
 
 		var addressed = new JsonArray();
 		foreach (var detail in details.ToTypedArray() ?? [])
 		{
-			if (detail.Locations is { } locations && locations.Any(AddressesTheCaller))
-			{
-				addressed.Add(detail.Json.DeepClone());
-			}
+			if (detail.Locations is not { } locations)
+				continue;
+
+			var matched = locations.Where(registered.Contains).ToArray();
+			if (matched.Length == 0)
+				continue;
+
+			// Written as an array rather than through the typed setter, which collapses a single value
+			// to a bare string: §9.2 has the member carry "the same structure defined in Section 2", and
+			// §2.2 defines locations as an array of strings.
+			var disclosed = (JsonObject)detail.Json.DeepClone();
+			disclosed[AuthorizationDetail.Parameters.Locations] = new JsonArray(
+				matched.Select(location => (JsonNode)JsonValue.Create(location)).ToArray());
+
+			addressed.Add(disclosed);
 		}
 
 		if (addressed.Count > 0)
 		{
 			narrowed[IanaClaimTypes.AuthorizationDetails] = addressed;
 		}
-
-		bool AddressesTheCaller(string location)
-			=> Uri.TryCreate(location, UriKind.Absolute, out var uri) && callerAddresses.IsValid(uri);
 	}
 }
