@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
@@ -25,14 +26,14 @@ public class ConsentConstraintEnforcer(
     IAuthorizationDetailsPolicy authorizationDetailsPolicy) : IConsentConstraintEnforcer
 {
     /// <inheritdoc />
-    public async Task EnforceAsync(
+    public async Task<JsonArray?> EnforceAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         EnforceScopes(request, granted);
         EnforceResources(request, granted);
-        await EnforceAuthorizationDetailsAsync(request, granted, cancellationToken);
+        return await EnforceAuthorizationDetailsAsync(request, granted, cancellationToken);
     }
 
     private static void EnforceScopes(ValidAuthorizationRequest request, ConsentDefinition granted)
@@ -80,13 +81,13 @@ public class ConsentConstraintEnforcer(
         }
     }
 
-    private async Task EnforceAuthorizationDetailsAsync(
+    private async Task<JsonArray?> EnforceAuthorizationDetailsAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         if (granted.AuthorizationDetails is not { Count: > 0 } grantedAuthorizationDetails)
-            return;
+            return null;
 
         // Type-level subset: every granted entry's type must appear among the requested types. The
         // per-client allowlist (re-checked below) is not enough on its own - a client allowed types
@@ -113,13 +114,20 @@ public class ConsentConstraintEnforcer(
         var revalidation = await authorizationDetailsPolicy.ApplyAsync(
             grantedAuthorizationDetails, request.ClientInfo, cancellationToken);
 
-        if (revalidation.TryGetFailure(out var error))
+        if (!revalidation.TryGetSuccess(out var revalidated))
         {
             throw new InvalidOperationException(
                 "The IUserConsentsProvider granted authorization_details that fail per-type re-validation, " +
                 "so the granted set is not a valid narrowing of the request " +
-                $"(the consent provider violated the granted ⊆ requested contract): {error.ErrorDescription}");
+                "(the consent provider violated the granted ⊆ requested contract): " +
+                revalidation.GetFailure().ErrorDescription);
         }
+
+        // What comes back is the decision, not a copy of what went in: a validator narrowing an entry
+        // says so by returning the narrowed one, exactly as the request-time path already treats it.
+        // Returning the granted array here instead would re-derive from raw input the fact this call
+        // just computed, and every entry the two disagree on would travel in the form nobody approved.
+        return revalidated;
     }
 
     private static InvalidOperationException Violation(string category, string[] escaped) =>

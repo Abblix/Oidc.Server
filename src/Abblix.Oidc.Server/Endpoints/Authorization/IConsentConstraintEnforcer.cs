@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 
@@ -32,17 +33,26 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 public interface IConsentConstraintEnforcer
 {
     /// <summary>
-    /// Asserts that the granted consent does not exceed the request. The granted set is left
-    /// unchanged on success.
+    /// Asserts that the granted consent does not exceed the request, and returns the
+    /// <c>authorization_details</c> as the per-type validators left them.
     /// </summary>
     /// <param name="request">The validated authorization request carrying the requested scopes,
     /// resources and <c>authorization_details</c>.</param>
     /// <param name="granted">The consent decision produced by <see cref="IUserConsentsProvider"/>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The granted <c>authorization_details</c> as re-validated, or <c>null</c> when the
+    /// consent decision carried none.</returns>
+    /// <remarks>
+    /// RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so the
+    /// per-type validator owns that decision - and a normalising validator expresses it by RETURNING
+    /// a modified entry rather than by failing. The value that comes back is therefore the decision
+    /// itself, and the caller emits it; emitting what went in instead would put content in the token
+    /// that no validator approved.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the granted set contains a scope,
     /// resource, resource scope or <c>authorization_details</c> entry absent from - or broader than -
     /// the request.</exception>
-    Task EnforceAsync(
+    Task<JsonArray?> EnforceAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken);

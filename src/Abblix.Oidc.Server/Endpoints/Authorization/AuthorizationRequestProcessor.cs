@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -157,7 +157,8 @@ public class AuthorizationRequestProcessor(
 		// browser tampering it failed to intersect against the request), so it surfaces as an
 		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
 		// TokenAuthorizationContextEvaluator at the token endpoint.
-		await consentConstraintEnforcer.EnforceAsync(request, userConsents.Granted, CancellationToken.None);
+		var enforcedAuthorizationDetails = await consentConstraintEnforcer.EnforceAsync(
+			request, userConsents.Granted, CancellationToken.None);
 
 		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
 		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
@@ -165,7 +166,14 @@ public class AuthorizationRequestProcessor(
 		// child of its own DTO, the second serialise will throw because the JsonNode is parented
 		// twice. DeepClone defensively on the boundary so the two consumers each see independent
 		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
-		var sourceAd = userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
+		// Which SOURCE speaks is decided by the provider's own opinion, never by what the enforcer
+		// happened to return: a provider that expressed one has its re-validated array emitted even
+		// when the per-type validators narrowed it to nothing, while only the legacy null falls back
+		// to the request. Reading the enforcer's null as "no opinion" would conflate the two and
+		// resurrect entries the validators dropped.
+		var sourceAd = userConsents.Granted.AuthorizationDetails is null
+			? request.AuthorizationDetails
+			: enforcedAuthorizationDetails;
 		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
 			? (JsonArray?)sourceAd.DeepClone()
 			: null;

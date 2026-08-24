@@ -166,6 +166,43 @@ public class ConsentConstraintEnforcerTests
     }
 
     [Fact]
+    public async Task EnforceAsync_PolicyNormalisesGrantedDetails_ReturnsWhatThePolicyReturned()
+    {
+        // A per-type validator that narrows by RETURNING a capped entry is making the decision in its
+        // return value, so the enforcer must hand that value on. Returning the granted array instead
+        // would leave the cap behind in a variable nobody reads.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "5000" }));
+        var capped = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" });
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(capped));
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Same(capped, enforced);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_GrantedCarriesNoAuthorizationDetails_ReturnsNull()
+    {
+        // Null is how a consent provider says it has no authorization_details opinion at all, and the
+        // caller keys its fall-back to the request on exactly that. The policy is never consulted,
+        // which the strict mock asserts by construction.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted();
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Null(enforced);
+    }
+
+    [Fact]
     public async Task EnforceAsync_GrantedAuthorizationDetailsValidNarrowing_DoesNotThrow()
     {
         var request = CreateRequest(authorizationDetails:
