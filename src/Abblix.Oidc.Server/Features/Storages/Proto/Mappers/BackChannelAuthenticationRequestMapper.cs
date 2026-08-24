@@ -38,6 +38,9 @@ internal static class BackChannelAuthenticationRequestMapper
         if (source.ClientNotificationToken is not null)
             proto.ClientNotificationToken = source.ClientNotificationToken;
 
+        if (source.RequestedSubject is not null)
+            proto.RequestedSubject = source.RequestedSubject;
+
         return proto;
     }
 
@@ -55,6 +58,7 @@ internal static class BackChannelAuthenticationRequestMapper
             ClientNotificationEndpoint = source.HasClientNotificationEndpoint
                 ? new Uri(source.ClientNotificationEndpoint)
                 : null,
+            RequestedSubject = source.HasRequestedSubject ? source.RequestedSubject : null,
             ClientNotificationToken = source.HasClientNotificationToken
                 ? source.ClientNotificationToken
                 : null,

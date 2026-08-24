@@ -87,10 +87,16 @@ public class BackChannelAuthenticationRequestProcessor(
 		// used to look somebody up - would otherwise have tokens minted for whoever answered and handed to a
 		// client that asked about someone else.
 		//
-		// Checked here rather than left to the host because a host cannot perform it: the hint carries the
-		// pseudonym this client sees, and sealing a session to compare against it needs the pairwise
-		// settings, which belong to the server. The same comparison serves the authorization endpoint.
-		if (request.IdToken?.Payload.Subject is { Length: > 0 } named &&
+		// The comparison belongs to the server rather than the host, because a host cannot perform it: the
+		// hint carries the pseudonym this client sees, and sealing a session to compare against it needs the
+		// pairwise settings. The same comparison serves the authorization endpoint.
+		var namedSubject = request.IdToken?.Payload.Subject;
+
+		// A handler that authenticates within this call is answered now. The decoupled shape, which the
+		// interface documents and most deployments use, has nobody to judge yet - the end user has not been
+		// reached - so the name is carried on the stored request and judged at completion instead.
+		if (namedSubject is { Length: > 0 } named &&
+			authSession.Subject.HasValue() &&
 			!subjectTypeConverter.Names(authSession, [named], request.ClientInfo))
 		{
 			return new BackChannelAuthenticationForbidden(
@@ -120,6 +126,11 @@ public class BackChannelAuthenticationRequestProcessor(
 		var backChannelRequest = new BackChannelAuthenticationRequest(authorizedGrant, expiresAt)
 		{
 			Status = BackChannelAuthenticationStatus.Pending,
+
+			// Carried so the completion path can judge whoever eventually answers against what the request
+			// asked for. Recorded even when the check above already passed: a host may replace the session
+			// on the stored request before completing it, which is the shape the interface documents.
+			RequestedSubject = namedSubject,
 
 			// The client may poll from the moment it holds the request id, so the first allowed poll is
 			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section

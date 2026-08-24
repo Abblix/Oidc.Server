@@ -38,4 +38,10 @@ message BackChannelAuthenticationRequest {
   // Client notification token (ping/push delivery): the bearer secret the callback
   // authenticates with. Absent for poll mode.
   optional string client_notification_token = 6;
+
+  // The end user the request named through id_token_hint, spelled as the requesting
+  // client sees them. Absent when the request named nobody. Carried across the store
+  // because the end user authenticates later, out of band, and the session reported
+  // then has to be the one the request asked about.
+  optional string requested_subject = 7;
 }

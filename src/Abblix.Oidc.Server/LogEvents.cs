@@ -487,6 +487,7 @@ internal static class LogEvents
             private const int Base = 7020;
 
             public const int ClientNotFound = Base + 1;
+            public const int AuthenticatedUserNotTheOneRequested = Base + 2;
         }
 
         /// <summary>
