@@ -63,8 +63,8 @@ public class AuthorizationRequestProcessor(
 		{
 			// Initiating User Registration via OpenID Connect 1.0: prompt=create takes the user to
 			// the account-creation experience regardless of whether a session exists. An OP that
-			// advertises create in prompt_values_supported must act on it - previously the value
-			// fell through to the generic branches and the registration intent was silently lost.
+			// advertises create in prompt_values_supported must act on it. Without its own arm the
+			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
 				return new RegistrationRequired(model);
 
@@ -272,6 +272,12 @@ public class AuthorizationRequestProcessor(
 		// Comparing here rather than refusing outright is what serves the whole sentence: a request left
 		// with no session takes the arms above, so prompt=none answers login_required while anything else
 		// reaches the login page, which is where "is logged in as a result of the request" happens.
+		//
+		// That last part is the host's to finish, and it is worth saying because the failure is a loop
+		// rather than an error: a login page that returns the session it already has, without prompting,
+		// arrives back here to be filtered out again. The same is true of max_age and acr_values, and a
+		// host handling those already has the shape. What it needs from the request is the hint, which
+		// the model carries verbatim.
 		if (request.IdTokenHintSubject is not null)
 			authSessions = authSessions.Where(session => NamedByHint(session, request, clientInfo));
 

@@ -41,7 +41,10 @@ public class IdTokenHintValidatorTests
             .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
             .ReturnsAsync((string id) => new ClientInfo(id));
 
-        _validator = new IdTokenHintValidator(_jwtValidator.Object, _clientInfoProvider.Object);
+        // The real parser over the same mocked validator, not a stub of it: what a hint has to survive
+        // before this validator sees it is shared code, and these cases were written to drive it.
+        _validator = new IdTokenHintValidator(
+            new IdTokenHintParser(_jwtValidator.Object), _clientInfoProvider.Object);
     }
 
     private static EndSessionValidationContext CreateContext(
@@ -222,44 +225,13 @@ public class IdTokenHintValidatorTests
         Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
     }
 
-    /// <summary>
-    /// RFC 8725 §3.12 again, for the one own-issued token the type check cannot see. A signed UserInfo
-    /// response (OpenID Connect Core 1.0 §5.3.2) carries no type either, names the same client in
-    /// <c>aud</c> and is signed by the same key, so it clears every check above. What refuses it is
-    /// <c>exp</c>: §2 makes it REQUIRED in an ID Token, §5.3.2 requires only <c>iss</c> and <c>aud</c>,
-    /// and neither UserInfo formatter writes one.
-    /// </summary>
-    /// <remarks>
-    /// The description is asserted rather than the code, for the reason the type case above gives: every
-    /// refusal here answers <c>invalid_request</c>, so asserting the code alone passes on whichever check
-    /// happened to fire - and a token with no audience match would fail further down regardless.
-    /// </remarks>
-    [Fact]
-    public async Task ValidateAsync_WithUserInfoResponseAsHint_ShouldReturnError()
-    {
-        // Arrange - the shape the UserInfo formatters emit: an issue time, the client as the audience,
-        // and neither a type nor a lifetime.
-        var context = CreateContext("userinfo_response_as_hint");
-        var userInfoResponse = new JsonWebToken();
-        userInfoResponse.Payload.Audiences = [TestConstants.DefaultClientId];
-        userInfoResponse.Payload.IssuedAt = Issued;
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(
-                "userinfo_response_as_hint",
-                It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
-            .ReturnsAsync(userInfoResponse);
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Equal(
-            "The id token hint is not an ID Token: it has no expiration time",
-            error.ErrorDescription);
-    }
+    // The signed-UserInfo case used to live here, driving a token with no exp through this validator. It
+    // moved, rather than being dropped: the check is now ValidationOptions.RequireExpirationTime, asked for
+    // by IdTokenHintParser and honoured by the JWT validator this suite mocks - so from here the refusal is
+    // invisible whatever the code does, which is a test that cannot fail. Both halves are pinned where they
+    // can be seen: IdTokenHintParserTests asserts the flag is asked for, and Abblix.Jwt's
+    // JsonWebTokenValidationTests asserts a token without exp is rejected when it is, with the positive
+    // control beside it.
 
     /// <summary>
     /// Verifies error when client ID doesn't match ID token audience.

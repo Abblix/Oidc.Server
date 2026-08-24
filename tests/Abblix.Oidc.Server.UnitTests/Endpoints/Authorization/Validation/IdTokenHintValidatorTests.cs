@@ -22,26 +22,25 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// The half of <c>id_token_hint</c> handling that decides whether a hint may be believed at all.
+/// What the authorization endpoint does with a hint once it is known to be an ID token this server issued.
 /// </summary>
 /// <remarks>
-/// The filter that consumes the result is covered in <c>AuthorizationRequestProcessorTests</c>, which sets
-/// the subject on the context directly. These are what say a hint on the wire ever becomes that subject, and
-/// what a hint has to survive first.
+/// Whether it is one at all is <see cref="IIdTokenHintParser"/>'s question, covered in
+/// <c>IdTokenHintParserTests</c> and mocked here. What is left is the part specific to this endpoint: the
+/// audience must name the requesting client, and the subject it records is what the session filter compares
+/// against.
 /// </remarks>
 public class IdTokenHintValidatorTests
 {
     private const string Hint = "hint.jwt";
     private const string Subject = "user_42";
 
-    private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
-
-    private readonly Mock<IAuthServiceJwtValidator> _jwtValidator = new(MockBehavior.Strict);
+    private readonly Mock<IIdTokenHintParser> _hintParser = new(MockBehavior.Strict);
     private readonly IdTokenHintValidator _validator;
 
     public IdTokenHintValidatorTests()
     {
-        _validator = new IdTokenHintValidator(_jwtValidator.Object);
+        _validator = new IdTokenHintValidator(_hintParser.Object);
     }
 
     private static AuthorizationValidationContext Context(string? hint = Hint) => new(
@@ -58,36 +57,14 @@ public class IdTokenHintValidatorTests
         ResponseMode = ResponseModes.Query,
     };
 
-    private void SetupHint(JsonWebToken token)
+    private void SetupParsed(string? subject = Subject, string? audience = TestConstants.DefaultClientId)
     {
-        Result<JsonWebToken, JwtValidationError> success = token;
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(success);
-    }
-
-    private static JsonWebToken IdToken(
-        string? subject = Subject,
-        string? audience = TestConstants.DefaultClientId,
-        DateTimeOffset? expiresAt = null,
-        string? type = null)
-    {
-        var token = new JsonWebToken
-        {
-            Payload =
-            {
-                Subject = subject,
-                ExpiresAt = expiresAt ?? Expiry,
-            }
-        };
-
+        var token = new JsonWebToken { Payload = { Subject = subject } };
         if (audience is not null)
             token.Payload.Audiences = [audience];
 
-        if (type is not null)
-            token.Header.Type = type;
-
-        return token;
+        Result<JsonWebToken, string> parsed = token;
+        _hintParser.Setup(p => p.ParseAsync(Hint)).ReturnsAsync(parsed);
     }
 
     /// <summary>
@@ -97,14 +74,14 @@ public class IdTokenHintValidatorTests
     public async Task AnIdTokenForThisClient_RecordsItsSubject()
     {
         var context = Context();
-        SetupHint(IdToken());
+        SetupParsed();
 
         Assert.Null(await _validator.ValidateAsync(context));
         Assert.Equal(Subject, context.IdTokenHintSubject);
     }
 
     /// <summary>
-    /// A request without a hint records nothing and asks the validator nothing.
+    /// A request without a hint records nothing and asks the parser nothing.
     /// </summary>
     /// <remarks>
     /// Verified on a strict mock with no setup, so a validator that consulted it anyway would throw rather
@@ -122,18 +99,39 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
-    /// A hint the shared validator refuses - a bad signature, an unknown issuer - is an invalid request.
+    /// A hint the parser refuses is an invalid request, and the reason it gave is what the client is told.
     /// </summary>
     [Fact]
-    public async Task AHintThatDoesNotValidate_IsRefused()
+    public async Task AHintTheParserRefuses_IsAnInvalidRequest()
     {
         var context = Context();
-        Result<JsonWebToken, JwtValidationError> failure =
-            new JwtValidationError(JwtError.InvalidToken, "bad signature");
+        Result<JsonWebToken, string> refused = "The id token hint is not an ID Token";
+        _hintParser.Setup(p => p.ParseAsync(Hint)).ReturnsAsync(refused);
 
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(failure);
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal("The id token hint is not an ID Token", error.ErrorDescription);
+        Assert.Null(context.IdTokenHintSubject);
+    }
+
+    /// <summary>
+    /// A hint addressed to another client is refused, whether or not it names a real end user.
+    /// </summary>
+    /// <remarks>
+    /// This is the check that stops one client naming another client's session, and it is why the parser
+    /// leaves the audience alone: OpenID Connect Core 1.0 Section 3.1.2.1 says this server "need not be
+    /// listed as an audience of the ID Token when it is used as an id_token_hint value", so the audience
+    /// that matters is the requesting client's, tested here.
+    /// </remarks>
+    [Theory]
+    [InlineData("another-client")]
+    [InlineData(null)]
+    public async Task AHintNotAddressedToThisClient_IsRefused(string? audience)
+    {
+        var context = Context();
+        SetupParsed(audience: audience);
 
         var error = await _validator.ValidateAsync(context);
 
@@ -143,98 +141,24 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
-    /// A hint addressed to another client is refused, whether or not it names a real end user.
-    /// </summary>
-    /// <remarks>
-    /// This is the check that stops one client naming another client's session, and it is why the audience
-    /// is not validated by the shared validator: OpenID Connect Core 1.0 Section 3.1.2.1 says this server
-    /// "need not be listed as an audience of the ID Token when it is used as an id_token_hint value", so
-    /// the audience that matters is the requesting client's, tested here.
-    /// </remarks>
-    [Fact]
-    public async Task AHintIssuedForAnotherClient_IsRefused()
-    {
-        var context = Context();
-        SetupHint(IdToken(audience: "another-client"));
-
-        var error = await _validator.ValidateAsync(context);
-
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-    }
-
-    /// <summary>
-    /// Another own-issued token of this server, addressed to this client, is refused by its type.
-    /// </summary>
-    /// <remarks>
-    /// RFC 8725 Section 3.12 on keeping the validation rules of different kinds of JWT mutually exclusive:
-    /// signature and audience both pass for these, so the type is what parts them from an ID token.
-    /// </remarks>
-    [Theory]
-    [InlineData(JsonWebTokenTypes.AccessToken)]
-    [InlineData(JsonWebTokenTypes.RequestObject)]
-    [InlineData(JsonWebTokenTypes.LogoutToken)]
-    public async Task AnotherKindOfOwnIssuedToken_IsRefused(string type)
-    {
-        var context = Context();
-        SetupHint(IdToken(type: type));
-
-        var error = await _validator.ValidateAsync(context);
-
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-    }
-
-    /// <summary>
     /// A token carrying no subject is refused, which is what stops a JARM response JWT.
     /// </summary>
     /// <remarks>
-    /// That one is untyped, carries this client's audience and an expiry, so it clears every check above.
-    /// The subject is the only thing it does not have.
+    /// That one is untyped, carries this client's audience and an expiry, so it clears the parser and the
+    /// audience check alike. The subject is the only thing it does not have.
     /// </remarks>
-    [Fact]
-    public async Task ATokenWithNoSubject_IsRefused()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ATokenWithNoSubject_IsRefused(string? subject)
     {
         var context = Context();
-        SetupHint(IdToken(subject: null));
+        SetupParsed(subject: subject);
 
         var error = await _validator.ValidateAsync(context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-    }
-
-    /// <summary>
-    /// The options handed to the shared validator switch off the lifetime and the audience, and require an
-    /// expiration time to be present.
-    /// </summary>
-    /// <remarks>
-    /// Asserted rather than left to the three behaviours it produces, because two of them cannot be
-    /// observed from here at all: whether an expired hint is accepted and whether an audience naming
-    /// somebody else is tolerated are decided inside the validator this test mocks. What this pins is the
-    /// instruction given to it.
-    /// </remarks>
-    [Fact]
-    public async Task TheHintIsValidatedWithoutItsLifetimeOrAudienceAndWithARequiredExpiry()
-    {
-        var context = Context();
-        ValidationOptions? asked = null;
-
-        Result<JsonWebToken, JwtValidationError> success = IdToken();
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(Hint, It.IsAny<ValidationOptions>()))
-            .Callback((string _, ValidationOptions options) => asked = options)
-            .ReturnsAsync(success);
-
-        await _validator.ValidateAsync(context);
-
-        Assert.NotNull(asked);
-        Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateLifetime));
-        Assert.False(asked.Value.HasFlag(ValidationOptions.ValidateAudience));
-        Assert.True(asked.Value.HasFlag(ValidationOptions.RequireExpirationTime));
-
-        // And the checks that do not depend on the lifetime are still asked for.
-        Assert.True(asked.Value.HasFlag(ValidationOptions.RequireValidIssuer));
-        Assert.True(asked.Value.HasFlag(ValidationOptions.RequireValidSignedTokens));
+        Assert.Null(context.IdTokenHintSubject);
     }
 }

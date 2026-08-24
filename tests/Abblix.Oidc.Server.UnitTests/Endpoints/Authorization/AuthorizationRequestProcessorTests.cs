@@ -208,9 +208,9 @@ public class AuthorizationRequestProcessorTests
     /// A hint naming one of several logged-in end users picks that one, instead of refusing the choice.
     /// </summary>
     /// <remarks>
-    /// This is the case the parameter exists for and the one that was answered wrongly: with the hint
-    /// ignored, two sessions meant the server could not choose, so it refused with
-    /// <c>account_selection_required</c> even though the request had said which end user it meant.
+    /// This is the case the parameter exists for. Ignore the hint and two sessions leave the server unable
+    /// to choose, so it refuses with <c>account_selection_required</c> even though the request said which
+    /// end user it meant.
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_WithPromptNoneAndAHintNamingOneOfTwoSessions_UsesThatOne()
@@ -250,10 +250,10 @@ public class AuthorizationRequestProcessorTests
     /// And a hint naming nobody who is logged in is refused rather than answered for somebody else.
     /// </summary>
     /// <remarks>
-    /// OpenID Connect Core 1.0 Section 3.1.2.1: if the end user the ID Token identifies is not logged in and
-    /// is not logged in by the request, the server "SHOULD return an error, such as login_required". With
-    /// the hint ignored this request used to be answered - and with one of the two sessions revoked, it
-    /// would have been answered silently for the account the client never asked about.
+    /// OpenID Connect Core 1.0 Section 3.1.2.1: if the end user the ID Token identifies is not already
+    /// logged in and is not logged in as a result of the request, the server "MUST return an error, such as
+    /// login_required". Ignore the hint and this request is answered instead - and with one of the two
+    /// sessions revoked, answered silently for the account the client never asked about.
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_WithPromptNoneAndAHintNamingNobodyLoggedIn_ShouldReturnLoginRequired()
@@ -316,9 +316,9 @@ public class AuthorizationRequestProcessorTests
         => new(subject, $"session-of-{subject}", DateTimeOffset.UtcNow, "local");
 
     /// <summary>
-    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration
-    /// signal even when no session exists - previously the value fell through to the generic
-    /// no-session branch and the host saw an ordinary login request.
+    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration signal
+    /// even when no session exists. Without its own arm the value falls through to the generic no-session
+    /// branch and the host sees an ordinary login request, losing the registration intent.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_WithPromptCreate_NoSessions_ShouldReturnRegistrationRequired()

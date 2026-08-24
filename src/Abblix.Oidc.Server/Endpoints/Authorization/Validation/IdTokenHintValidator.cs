@@ -36,51 +36,20 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// tell it. The <see cref="AuthorizationValidationContext.ClientInfo"/> it reads is resolved earlier still.
 /// </para>
 /// </remarks>
-/// <param name="jwtValidator">Validates the hint's signature and issuer.</param>
-public class IdTokenHintValidator(IAuthServiceJwtValidator jwtValidator) : IAuthorizationContextValidator
+/// <param name="hintParser">Decides whether the hint is an ID token this server issued.</param>
+public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizationContextValidator
 {
-    /// <summary>
-    /// What a hint has to satisfy beyond an ordinary own-issued token.
-    /// </summary>
-    /// <remarks>
-    /// The lifetime is not validated, because a hint names an end user rather than a live credential: an ID
-    /// token from a session that ended hours ago identifies them exactly as well as a fresh one, and holding
-    /// on to it is the whole reason a client has one to send.
-    /// <para>
-    /// The audience is not validated either, because this server is not in it. OpenID Connect Core 1.0
-    /// Section 3.1.2.1: "The Authorization Server need not be listed as an audience of the ID Token when it
-    /// is used as an <c>id_token_hint</c> value." Who the audience must contain is checked below, against
-    /// the requesting client rather than against this server.
-    /// </para>
-    /// <para>
-    /// An expiration time is required instead. Section 2 makes <c>exp</c> REQUIRED in an ID Token, and
-    /// requiring its presence while ignoring its value is what parts an ID token from the one other
-    /// own-issued JWT that carries no type either - a signed UserInfo response, which Section 5.3.2 requires
-    /// to carry <c>iss</c> and <c>aud</c> and nothing more. RFC 8725 Section 3.12 names a claim as an equal
-    /// way to keep the validation rules of two kinds of JWT mutually exclusive.
-    /// </para>
-    /// </remarks>
-    private const ValidationOptions HintOptions =
-        (ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience)
-        | ValidationOptions.RequireExpirationTime;
-
     /// <inheritdoc />
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
         if (!context.Request.IdTokenHint.HasValue())
             return null;
 
-        var result = await jwtValidator.ValidateAsync(context.Request.IdTokenHint, HintOptions);
-        if (result.TryGetFailure(out var validationError))
-            return context.InvalidRequest($"The id token hint contains an invalid token: {validationError}");
+        var result = await hintParser.ParseAsync(context.Request.IdTokenHint);
+        if (result.TryGetFailure(out var reason))
+            return context.InvalidRequest(reason);
 
         var idToken = result.GetSuccess();
-
-        // RFC 8725 Section 3.12 again, on the header this time: another own-issued token whose audience
-        // happens to match - an access or refresh token - must not be replayable here, which signature and
-        // audience alone would not catch.
-        if (!JwtTypes.IsPermitted(idToken.Header.Type))
-            return context.InvalidRequest("The id token hint is not an ID Token");
 
         // OpenID Connect Core 1.0 Section 2: an ID Token's aud "MUST contain the OAuth 2.0 client_id of the
         // Relying Party". A hint addressed to somebody else names a session this client has no business
