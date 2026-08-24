@@ -13,10 +13,12 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -32,13 +34,33 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
+/// <param name="subjectTypeConverter">
+/// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
+/// against the end user the original request named.
+/// </param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
+    ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
+    /// <summary>
+    /// Whether the session that authenticated belongs to the end user the request named, or the request
+    /// named nobody.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
+    /// for a different user, even if they have an active session with the Authorization Server". In a
+    /// decoupled flow the end user authenticates out of band, so the name the request carried is compared
+    /// here, against whoever the host reported by the time a grant is asked for.
+    /// </remarks>
+    private bool NamesTheRequestedEndUser(
+        StoredRequest request, ClientInfo clientInfo)
+        => request.RequestedSubject is not { Length: > 0 } named ||
+           subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo);
+
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
     /// Authentication) grant type.
@@ -114,6 +136,16 @@ public class BackChannelAuthenticationGrantHandler(
             // This validation MUST occur before any status-specific processing for security
             { AuthorizedGrant.Context.ClientId: var clientId } when clientId != clientInfo.ClientId
                 => new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client"),
+
+            // A request that named an end user is answered only for that end user, whoever the host
+            // eventually authenticated. Checked here as well as at completion because the two refuse
+            // different things and a host reaches each independently: the completion router stops ping and
+            // push delivering tokens on their own, while this stops a poll being answered - and a host that
+            // writes Authenticated straight into the storage it also owns never passes through the router
+            // at all. This is the last point before an authorized grant is handed over.
+            { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
+                when !NamesTheRequestedEndUser(authenticated, clientInfo)
+                => new OidcError(ErrorCodes.AccessDenied, "The authenticated end user is not the one requested"),
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated }
@@ -249,6 +281,10 @@ public class BackChannelAuthenticationGrantHandler(
 
         switch (updatedRequest)
         {
+            case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
+                when !NamesTheRequestedEndUser(authenticated, clientInfo):
+                return new OidcError(ErrorCodes.AccessDenied, "The authenticated end user is not the one requested");
+
             case { Status: BackChannelAuthenticationStatus.Authenticated }:
                 return await grantProcessor.ProcessAuthenticatedRequestAsync(
                     authenticationRequestId,
