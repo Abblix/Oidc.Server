@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
@@ -70,7 +71,7 @@ public class IntrospectionRequestProcessor(
 		var payload = request.Token.Payload.Json;
 		if (request.Token.Payload.ClientId != request.ClientInfo.ClientId)
 		{
-			payload = WithoutPrivateClaims(payload);
+			payload = WithoutPrivateClaims(payload, request.ClientInfo);
 
 			var pseudonym = await PseudonymForCallerAsync(request);
 			if (pseudonym != null)
@@ -150,7 +151,7 @@ public class IntrospectionRequestProcessor(
 	/// an introspection response is the simplest way of minimizing privacy issues". Section 2.2 grants the
 	/// latitude to answer such a caller differently.
 	/// </remarks>
-	private static JsonObject WithoutPrivateClaims(JsonObject payload)
+	private static JsonObject WithoutPrivateClaims(JsonObject payload, ClientInfo caller)
 	{
 		var narrowed = new JsonObject();
 		foreach (var name in ClaimsSafeForAnyCaller)
@@ -161,6 +162,55 @@ public class IntrospectionRequestProcessor(
 			}
 		}
 
+		AddAuthorizationDetailsAddressedTo(caller, payload, narrowed);
 		return narrowed;
+	}
+
+	/// <summary>
+	/// Adds the RFC 9396 <c>authorization_details</c> entries this caller is the resource server for.
+	/// </summary>
+	/// <remarks>
+	/// RFC 9396 §9: "In order to enable the RS to enforce the authorization details as approved in the
+	/// authorization process, the AS MUST make this data available to the RS", by the access token or by
+	/// introspection. §9.2 governs the shape when it comes this way: the member carries "the same
+	/// structure defined in Section 2, potentially filtered and extended for the RS making the
+	/// introspection request", which is the filter applied here.
+	/// <para>
+	/// An entry reaches a caller only by naming it in <c>locations</c>. An entry without them is
+	/// addressed to nobody in particular and stays withheld: §2.2 makes <c>locations</c> optional, so
+	/// its absence says the client did not name a resource server, not that every one may read it.
+	/// </para>
+	/// <para>
+	/// Addresses are compared the way every other registered address on this server is, through
+	/// <see cref="UriValidatorFactory"/>, so a location that is not an absolute URI matches nothing.
+	/// </para>
+	/// </remarks>
+	private static void AddAuthorizationDetailsAddressedTo(
+		ClientInfo caller,
+		JsonObject payload,
+		JsonObject narrowed)
+	{
+		if (caller.ResourceLocations is not { Length: > 0 } callerLocations ||
+		    payload[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
+			return;
+
+		var callerAddresses = UriValidatorFactory.Create(callerLocations);
+
+		var addressed = new JsonArray();
+		foreach (var detail in details.ToTypedArray() ?? [])
+		{
+			if (detail.Locations is { } locations && locations.Any(AddressesTheCaller))
+			{
+				addressed.Add(detail.Json.DeepClone());
+			}
+		}
+
+		if (addressed.Count > 0)
+		{
+			narrowed[IanaClaimTypes.AuthorizationDetails] = addressed;
+		}
+
+		bool AddressesTheCaller(string location)
+			=> Uri.TryCreate(location, UriKind.Absolute, out var uri) && callerAddresses.IsValid(uri);
 	}
 }
