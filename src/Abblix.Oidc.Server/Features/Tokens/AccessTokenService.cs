@@ -41,9 +41,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
-/// <param name="resourceManager">Resolves a requested resource URI to its registered definition, where a
-/// resource may publish the key its access tokens are encrypted to.</param>
-/// <param name="resourceKeysProvider">Supplies that key, inline or fetched from the resource's JWKS URI.</param>
+/// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
+/// token can be encrypted to the resource it is minted for.</param>
 internal class AccessTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
@@ -51,8 +50,7 @@ internal class AccessTokenService(
 	IAuthServiceJwtFormatter serviceJwtFormatter,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	IResourceManager resourceManager,
-	IResourceKeysProvider resourceKeysProvider) : IAccessTokenService
+	IAudienceKeyResolver audienceKeys) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
@@ -130,7 +128,7 @@ internal class AccessTokenService(
 		accessToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
 
 		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
-			.WithAudienceKeyAsync(audienceContext, resourceManager, resourceKeysProvider);
+			.WithAudienceKeyAsync(audienceContext, audienceKeys);
 
 		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
 

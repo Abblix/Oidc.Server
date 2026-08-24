@@ -70,8 +70,7 @@ public class AccessTokenServiceTests
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions()),
-            NoResources,
-            NoResourceKeys);
+            new AudienceKeyResolver(NoResources, NoResourceKeys));
     }
 
     /// <summary>
@@ -491,8 +490,7 @@ public class AccessTokenServiceTests
             Mock.Of<IAuthServiceJwtFormatter>(),
             converter,
             Options.Create(new OidcOptions()),
-            NoResources,
-            NoResourceKeys);
+            new AudienceKeyResolver(NoResources, NoResourceKeys));
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -604,8 +602,7 @@ public class AccessTokenServiceTests
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
             Options.Create(new OidcOptions()),
-            manager.Object,
-            keys.Object);
+            new AudienceKeyResolver(manager.Object, keys.Object));
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>

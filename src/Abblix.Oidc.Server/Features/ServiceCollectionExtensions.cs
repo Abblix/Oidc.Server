@@ -532,6 +532,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IScopeManager, ScopeManager>();
         services.TryAddSingleton<IResourceManager, ResourceManager>();
         services.TryAddSingleton<IResourceKeysProvider, ResourceKeysProvider>();
+        services.TryAddSingleton<IAudienceKeyResolver, AudienceKeyResolver>();
         return services;
     }
 

@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -23,49 +22,23 @@ public static class ServiceJwtEncryptionExtensions
     /// </summary>
     /// <param name="encryption">The policy projected from the server's own settings.</param>
     /// <param name="context">The authorization context naming the token's audience.</param>
-    /// <param name="resourceManager">Resolves a requested resource URI to its registered definition.</param>
-    /// <param name="resourceKeysProvider">Supplies that resource's published encryption keys.</param>
+    /// <param name="audienceKeys">Answers which key, if any, the named audience published.</param>
     /// <returns>The policy, pointed at the audience's key where one is published.</returns>
     /// <remarks>
-    /// A resource that publishes no key leaves the policy untouched, which is how it says a signed JWS is what
-    /// it expects. Several audiences each publishing a key have no correct answer: compact JWE serialization
-    /// carries one recipient, so encrypting to one of them would silently leave the token unreadable to the
-    /// rest - refuse instead of choosing. Unknown resources never reach here, having been rejected as
-    /// <c>invalid_target</c> during request validation (RFC 8707 Section 2).
+    /// An audience that publishes no key leaves the policy untouched, which is how it says a signed JWS is
+    /// what it expects. What makes a set of resources publish one key or none is
+    /// <see cref="IAudienceKeyResolver"/>'s question.
     /// </remarks>
     public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         this ServiceJwtEncryption encryption,
         AuthorizationContext context,
-        IResourceManager resourceManager,
-        IResourceKeysProvider resourceKeysProvider)
+        IAudienceKeyResolver audienceKeys)
     {
         if (context.Resources is not { Length: > 0 } resources)
             return encryption;
 
-        JsonWebKey? audienceKey = null;
-        Uri? keyOwner = null;
-
-        foreach (var resource in resources)
-        {
-            if (!resourceManager.TryGet(resource, out var definition))
-                continue;
-
-            var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();
-            if (key is null)
-                continue;
-
-            if (audienceKey is not null)
-            {
-                throw new InvalidOperationException(
-                    $"The access token names several resources that each publish an encryption key " +
-                    $"('{keyOwner}' and '{resource}'), and an encrypted JWT has a single recipient. " +
-                    $"Request one such resource per token, or remove the key from all but one of them.");
-            }
-
-            audienceKey = key;
-            keyOwner = resource;
-        }
-
-        return audienceKey is null ? encryption : encryption with { Key = audienceKey };
+        return await audienceKeys.FindEncryptionKeyAsync(resources) is { } audienceKey
+            ? encryption with { Key = audienceKey }
+            : encryption;
     }
 }
