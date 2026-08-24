@@ -1043,7 +1043,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
-            RequestedSubject = UserId,
+            RequestedSubjects = [UserId],
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
@@ -1080,7 +1080,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
-            RequestedSubject = UserId,
+            RequestedSubjects = [UserId],
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
@@ -1121,7 +1121,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
-            RequestedSubject = UserId,
+            RequestedSubjects = [UserId],
         };
 
         var asConsumed = new BackChannelAuthenticationRequest(
@@ -1131,7 +1131,7 @@ public class BackChannelAuthenticationGrantHandlerTests
             DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Authenticated,
-            RequestedSubject = UserId,
+            RequestedSubjects = [UserId],
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(asRead);

@@ -90,14 +90,17 @@ public class BackChannelAuthenticationRequestProcessor(
 		// The comparison belongs to the server rather than the host, because a host cannot perform it: the
 		// hint carries the pseudonym this client sees, and sealing a session to compare against it needs the
 		// pairwise settings. The same comparison serves the authorization endpoint.
-		var namedSubject = request.IdToken?.Payload.Subject;
+		// Two parameters can name an end user and OpenID Connect Core 1.0 Section 3.1.2.2 puts both under one
+		// requirement, so both bind. Their intersection is what survives, which is the same answer the
+		// authorization endpoint reaches by filtering candidate sessions through one and then the other.
+		var namedSubjects = NamedSubjects(request);
 
 		// Answered now, because the session a handler returns here names the end user it is about to reach,
 		// not one who has already answered - the request is stored Pending either way. A handler intending
 		// to reach somebody else is refused before any notification goes out. The end user who eventually
-		// answers is judged separately, at completion, against the name carried on the stored request.
-		if (namedSubject is { Length: > 0 } named &&
-			!subjectTypeConverter.Names(authSession, [named], request.ClientInfo))
+		// answers is judged separately, at completion, against what is carried on the stored request.
+		if (namedSubjects is { } accepted &&
+			!subjectTypeConverter.Names(authSession, accepted, request.ClientInfo))
 		{
 			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
 			// denied the request", and it is this server denying it. The note attached there describes the
@@ -136,7 +139,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			// Carried so the completion path can judge whoever eventually answers against what the request
 			// asked for. Recorded even when the check above already passed: a host may replace the session
 			// on the stored request before completing it, which is the shape the interface documents.
-			RequestedSubject = namedSubject,
+			RequestedSubjects = namedSubjects,
 
 			// The client may poll from the moment it holds the request id, so the first allowed poll is
 			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section
@@ -157,6 +160,37 @@ public class BackChannelAuthenticationRequestProcessor(
 			AuthenticationRequestId = authenticationRequestId,
 			ExpiresIn = request.ExpiresIn,
 			Interval = pollingInterval,
+		};
+	}
+
+	/// <summary>
+	/// The end users this request will accept, by either parameter that can name one, or <c>null</c> when it
+	/// named nobody in particular. An empty array accepts nobody.
+	/// </summary>
+	/// <remarks>
+	/// OpenID Connect Core 1.0 Section 3.1.2.2 makes <c>id_token_hint</c> and a <c>claims</c> request for a
+	/// specific <c>sub</c> two ways of stating one requirement, so a request carrying both states both, and
+	/// what survives is their intersection - possibly nothing, which is the guaranteed mismatch Section 5.5.1
+	/// already prescribes an outcome for.
+	/// <para>
+	/// A malformed <c>claims</c> qualifier cannot be reported from here, because this runs after the request
+	/// was validated; the validator pipeline refuses one before anything reaches this method, so a failure
+	/// arriving here would mean the pipeline had changed underneath it. Treated as naming nobody, which
+	/// refuses rather than admits.
+	/// </para>
+	/// </remarks>
+	private static string[]? NamedSubjects(ValidBackChannelAuthenticationRequest request)
+	{
+		var hinted = request.IdToken?.Payload.Subject is { Length: > 0 } named ? new[] { named } : null;
+
+		var requested = request.Model.Claims.RequestedSubjects();
+		var accepted = requested.TryGetSuccess(out var subjects) ? subjects : [];
+
+		return (hinted, accepted) switch
+		{
+			(null, var only) => only,
+			({ } one, null) => one,
+			({ } one, { } many) => one.Intersect(many, StringComparer.Ordinal).ToArray(),
 		};
 	}
 }

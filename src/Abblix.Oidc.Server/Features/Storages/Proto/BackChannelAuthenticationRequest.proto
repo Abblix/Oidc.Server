@@ -17,6 +17,12 @@ enum BackChannelAuthenticationStatus {
   AUTHENTICATED = 2;
 }
 
+// The end users a request will accept, as a message so that "none in particular" and
+// "nobody" stay distinguishable across the store.
+message AcceptedSubjects {
+  repeated string values = 1;
+}
+
 // Represents a backchannel authentication request (CIBA protocol)
 message BackChannelAuthenticationRequest {
   // The authorized grant associated with this authentication request
@@ -39,9 +45,13 @@ message BackChannelAuthenticationRequest {
   // authenticates with. Absent for poll mode.
   optional string client_notification_token = 6;
 
-  // The end user the request named through id_token_hint, spelled as the requesting
-  // client sees them. Absent when the request named nobody. Carried across the store
-  // because the end user authenticates later, out of band, and the session reported
-  // then has to be the one the request asked about.
-  optional string requested_subject = 7;
+  // The end users the request will accept, spelled as the requesting client sees them.
+  // Carried across the store because the end user authenticates later, out of band, and
+  // the session reported then has to be one the request asked about.
+  //
+  // Wrapped in a message rather than a bare repeated field because absence and emptiness
+  // mean opposite things here: absent is "no constraint", while empty is "accepts nobody",
+  // which a request reaches by naming a value outside its own list of values. A repeated
+  // field cannot tell the two apart, so the constraint would vanish on the way back.
+  AcceptedSubjects requested_subjects = 7;
 }

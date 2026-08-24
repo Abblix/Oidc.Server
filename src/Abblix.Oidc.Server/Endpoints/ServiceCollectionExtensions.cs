@@ -193,7 +193,8 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
             // Beside the hint validator because it answers the same question by the other parameter the
             // specification names for it, and it inherits the placement reasoning above for the same reason.
-            ServiceDescriptor.Singleton<IAuthorizationContextValidator, RequestedSubjectValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator,
+                Authorization.Validation.RequestedSubjectValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
@@ -712,6 +713,10 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>(),
+            // Beside the identity hints, because it answers the same question by the other parameter the
+            // specification names for it.
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator,
+                BackChannelAuthentication.Validation.RequestedSubjectValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),

@@ -583,7 +583,7 @@ public class AuthenticationCompletionHandlerTests
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
             DateTimeOffset.UnixEpoch.AddHours(1))
         {
-            RequestedSubject = requested,
+            RequestedSubjects = requested is null ? null : [requested],
             ClientNotificationToken = NotificationToken,
         };
 }

@@ -63,8 +63,8 @@ public abstract partial class AuthenticationCompletionHandler(
         //
         // Judged here rather than in the router so that each mode refuses the way it already refuses its own
         // failures: a mode that cannot leave a denied request behind removes it instead.
-        if (request.RequestedSubject is { Length: > 0 } named &&
-            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, [named], clientInfo))
+        if (request.RequestedSubjects is { } accepted &&
+            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
             await RefuseAsync(authenticationRequestId, request, expiresIn);

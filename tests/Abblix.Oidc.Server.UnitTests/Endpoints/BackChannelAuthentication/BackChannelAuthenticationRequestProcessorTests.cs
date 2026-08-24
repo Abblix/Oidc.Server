@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -76,7 +77,8 @@ public class BackChannelAuthenticationRequestProcessorTests
             _subjectTypeConverter.Object);
     }
 
-    private ValidBackChannelAuthenticationRequest Request(string? hintedSubject)
+    private ValidBackChannelAuthenticationRequest Request(
+        string? hintedSubject, string? claimsJson = null)
     {
         var hint = hintedSubject is null
             ? null
@@ -87,7 +89,13 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         return new ValidBackChannelAuthenticationRequest(
             new BackChannelAuthenticationValidationContext(
-                new WireRequest { Scope = [Scopes.OpenId] },
+                new WireRequest
+                {
+                    Scope = [Scopes.OpenId],
+                    Claims = claimsJson is null
+                        ? null
+                        : JsonSerializer.Deserialize<RequestedClaims>(claimsJson),
+                },
                 new ClientRequest { ClientId = ClientId })
             {
                 ClientInfo = new ClientInfo(ClientId),
@@ -165,4 +173,67 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         Assert.True(result.TryGetSuccess(out _));
     }
+
+    /// <summary>
+    /// A <c>claims</c> request naming an end user binds exactly as an <c>id_token_hint</c> does.
+    /// </summary>
+    /// <remarks>
+    /// The second of the two parameters OpenID Connect Core 1.0 Section 3.1.2.2 puts under one requirement,
+    /// and the one that needs no token: a client can name an end user it holds no ID token for. This
+    /// endpoint accepts <c>claims</c> and already carries it onto the issued token, so leaving the subject
+    /// in it unread would answer for whoever the host reached instead.
+    /// </remarks>
+    [Fact]
+    public async Task AClaimsRequestNamingSomebodyElse_IsRefused()
+    {
+        HostAuthenticates(Approved);
+
+        var result = await _processor.ProcessAsync(
+            Request(null, RequestingSubject("somebody-else")));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A <c>claims</c> request naming the end user the host reaches is accepted.
+    /// </summary>
+    /// <remarks>
+    /// The control: without it the case above would hold over a processor that refused every request
+    /// carrying a claims parameter at all.
+    /// </remarks>
+    [Fact]
+    public async Task AClaimsRequestNamingTheEndUserReached_IsAccepted()
+    {
+        HostAuthenticates(Approved);
+
+        var result = await _processor.ProcessAsync(Request(null, RequestingSubject(Approved)));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Both parameters naming different end users leave nobody acceptable.
+    /// </summary>
+    /// <remarks>
+    /// What says the two constraints are independent rather than one overwriting the other. Whichever were
+    /// being ignored, the request would be answered for an end user the other explicitly ruled out.
+    /// </remarks>
+    [Fact]
+    public async Task TheTwoParametersNamingDifferentEndUsers_AreRefused()
+    {
+        HostAuthenticates(Approved);
+
+        var result = await _processor.ProcessAsync(
+            Request(Approved, RequestingSubject("somebody-else")));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A <c>claims</c> parameter naming one acceptable <c>sub</c>, in the shape the wire carries.
+    /// </summary>
+    private static string RequestingSubject(string subject) =>
+        JsonSerializer.Serialize(new { id_token = new { sub = new { value = subject } } });
 }

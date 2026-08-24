@@ -76,9 +76,10 @@ public class BackChannelAuthenticationGrantHandler(
     /// created and a host has no reason to touch it. What a host does replace is the session, which is what
     /// each caller passes in.
     /// </remarks>
-    private bool NamesTheRequestedEndUser(string? requestedSubject, AuthorizedGrant grant, ClientInfo clientInfo)
-        => requestedSubject is not { Length: > 0 } named ||
-           subjectTypeConverter.Names(grant.AuthSession, [named], clientInfo);
+    private bool NamesTheRequestedEndUser(
+        string[]? requestedSubjects, AuthorizedGrant grant, ClientInfo clientInfo)
+        => requestedSubjects is not { } accepted ||
+           subjectTypeConverter.Names(grant.AuthSession, accepted, clientInfo);
 
     private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
         string authenticationRequestId,
@@ -89,7 +90,7 @@ public class BackChannelAuthenticationGrantHandler(
         // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
         // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
         // worth keeping just long enough to say so again if the client polls twice.
-        if (!NamesTheRequestedEndUser(request.RequestedSubject, request.AuthorizedGrant, clientInfo))
+        if (!NamesTheRequestedEndUser(request.RequestedSubjects, request.AuthorizedGrant, clientInfo))
             return NotTheRequestedEndUser();
 
         var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
@@ -103,7 +104,7 @@ public class BackChannelAuthenticationGrantHandler(
         // same storage - can replace what is stored, which is the ordinary shape of a retried or corrected
         // completion rather than an attack. Approving one grant and handing over another is the whole
         // failure this comparison exists to prevent.
-        return NamesTheRequestedEndUser(request.RequestedSubject, grant, clientInfo)
+        return NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo)
             ? grant
             : NotTheRequestedEndUser();
     }
