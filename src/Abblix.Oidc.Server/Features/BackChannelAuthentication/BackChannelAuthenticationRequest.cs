@@ -69,8 +69,9 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     public string[]? RequestedSubjects { get; set; }
 
     /// <summary>
-    /// The RFC 9396 <c>authorization_details</c> the client asked for, as it sent them, or <c>null</c> when
-    /// the request carried none.
+    /// The RFC 9396 <c>authorization_details</c> the client asked for, as the request-time validators
+    /// left them. EMPTY when the request carried none; <c>null</c> only on a request stored before this
+    /// field existed, which is why the two are not the same answer.
     /// </summary>
     /// <remarks>
     /// Kept apart from the array on <see cref="BackChannelAuthenticationRequest.AuthorizedGrant"/>, which is
