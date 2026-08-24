@@ -52,7 +52,10 @@ public interface IConsentConstraintEnforcer
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the granted set contains a scope,
     /// resource, resource scope or <c>authorization_details</c> entry absent from - or broader than -
-    /// the request.</exception>
+    /// the request; and equally when the array leaving the per-type re-validation does, since that is
+    /// the one the grant is built from. Also thrown when an entry cannot be read as a JSON object,
+    /// when one carries no <c>type</c>, and when the re-validation answers with an empty set, which
+    /// says every entry was removed and leaves nothing to issue a grant for.</exception>
     Task<JsonArray?> EnforceAsync(
         ValidAuthorizationRequest request,
         ConsentDefinition granted,

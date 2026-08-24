@@ -46,7 +46,7 @@ public class ConsentConstraintEnforcer(
             .ToArray();
 
         if (escaped.Length > 0)
-            throw Violation("scopes", escaped);
+            throw Violation(nameof(IUserConsentsProvider), "scopes", escaped);
     }
 
     private static void EnforceResources(ValidAuthorizationRequest request, ConsentDefinition granted)
@@ -67,7 +67,7 @@ public class ConsentConstraintEnforcer(
         foreach (var grantedResource in granted.Resources)
         {
             if (!requested.TryGetValue(grantedResource.Resource, out var requestedScopes))
-                throw Violation("resources", [grantedResource.Resource.OriginalString]);
+                throw Violation(nameof(IUserConsentsProvider), "resources", [grantedResource.Resource.OriginalString]);
 
             // RFC 8707: a resource indicator scopes down. The granted resource's nested scopes must
             // not exceed what was requested for that same resource.
@@ -77,7 +77,7 @@ public class ConsentConstraintEnforcer(
                 .ToArray();
 
             if (escapedScopes.Length > 0)
-                throw Violation($"scopes for resource '{grantedResource.Resource}'", escapedScopes);
+                throw Violation(nameof(IUserConsentsProvider), $"scopes for resource '{grantedResource.Resource}'", escapedScopes);
         }
     }
 
@@ -97,7 +97,8 @@ public class ConsentConstraintEnforcer(
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
 
-        var grantedTypes = RefuseTypesOutside(requestedTypes, grantedAuthorizationDetails);
+        var grantedTypes = RefuseTypesOutside(
+            requestedTypes, grantedAuthorizationDetails, nameof(IUserConsentsProvider));
 
         // Intra-entry narrowing: RFC 9396 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
@@ -117,9 +118,15 @@ public class ConsentConstraintEnforcer(
         }
 
         // Nothing at all means nothing to change, which is how the request-time, CIBA and device
-        // validators read the same result, so the granted array stands as it was.
+        // validators read the same result, so the granted array stands as it was - but it is re-checked
+        // all the same. A validator that narrows by editing the entry IN PLACE, which is what every
+        // narrowing fixture in this repository does, has already written into this array by the time it
+        // answers, and the types read before the call are the only untouched copy of what was granted.
         if (revalidated is null)
+        {
+            RefuseTypesOutside(grantedTypes, grantedAuthorizationDetails, nameof(IAuthorizationDetailsPolicy));
             return grantedAuthorizationDetails;
+        }
 
         // An EMPTY array is a different statement, and this request has already decided what it means:
         // a consent decision granting no entries against a request that carried some answers
@@ -142,35 +149,48 @@ public class ConsentConstraintEnforcer(
         // GRANTED rather than against what was requested: nothing in the per-type validator's contract
         // stops the entry it returns from carrying another type, and a type the request carried but the
         // user did not grant is one this array must not bring back.
-        RefuseTypesOutside(grantedTypes, revalidated);
+        RefuseTypesOutside(grantedTypes, revalidated, nameof(IAuthorizationDetailsPolicy));
         return revalidated;
 
-        HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details)
+        HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details, string culprit)
         {
             // ToTypedArray drops whatever is not a JSON object, so a shorter result means an entry this
             // guard cannot read - and "no escaped types" would then describe what it managed to look at
             // rather than the array it was handed.
             if (details.ToTypedArray() is not { } typed || typed.Length != details.Count)
-                throw Violation("authorization_details entries", ["an entry that is not a JSON object"]);
+                throw Violation(culprit, "authorization_details entries", ["an entry that is not a JSON object"]);
 
-            // A missing type is refused rather than skipped. RFC 9396 §2 makes type REQUIRED on every
-            // entry, and an entry without one satisfies "not among the escaped" by being unreadable.
+            // A missing type is refused on its own, never folded into a stand-in string. RFC 9396 §2 makes
+            // type REQUIRED, and a stand-in would be a value a client can request: naming it as its own
+            // type would then admit every entry that has none.
+            if (Array.Exists(typed, detail => detail.Type is null))
+                throw Violation(culprit, "authorization_details entries", ["an entry carrying no type"]);
+
             var escapedTypes = typed
-                .Select(detail => detail.Type ?? "(no type)")
+                .Select(detail => detail.Type!)
                 .Where(type => !allowed.Contains(type))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
             if (escapedTypes.Length > 0)
-                throw Violation("authorization_details types", escapedTypes);
+                throw Violation(culprit, "authorization_details types", escapedTypes);
 
             return typed.Select(detail => detail.Type!).ToHashSet(StringComparer.Ordinal);
         }
     }
 
-    private static InvalidOperationException Violation(string category, string[] escaped) =>
-        new($"The IUserConsentsProvider granted {category} absent from the authorization request: " +
-            $"{string.Join(", ", escaped)}. The granted set must be a subset of what the request carried " +
-            "(granted ⊆ requested); returning a broader set violates the IUserConsentsProvider " +
-            "contract documented on ConsentDefinition and would let the end-user escalate their own grant.");
+    /// <summary>
+    /// The refusal, naming the component whose output failed it.
+    /// </summary>
+    /// <remarks>
+    /// The culprit is a parameter because this exception is the entire diagnostic an operator receives:
+    /// it surfaces as a server error with no other trace, and the consent decision and the per-type
+    /// validators are different components owned by different code. Blaming one for the other's output
+    /// sends whoever reads it to audit the wrong file.
+    /// </remarks>
+    private static InvalidOperationException Violation(string culprit, string category, string[] escaped) =>
+        new($"The {culprit} produced {category} the request did not authorize: " +
+            $"{string.Join(", ", escaped)}. What reaches the grant must stay inside what the request " +
+            "carried and the end-user granted (granted ⊆ requested); a broader set would let the " +
+            "end-user, or whoever tampered with the decision on the way here, escalate the grant.");
 }
