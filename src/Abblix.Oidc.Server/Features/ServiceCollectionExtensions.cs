@@ -402,6 +402,7 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
+        services.TryAddSingleton<IIdTokenHintParser, IdTokenHintParser>();
         return services;
     }
 

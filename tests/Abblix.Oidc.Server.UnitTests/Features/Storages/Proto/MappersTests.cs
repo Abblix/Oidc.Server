@@ -661,6 +661,40 @@ public class MappersTests
         Assert.Equal(status, result.Status);
     }
 
+    /// <summary>
+    /// The end users a request will accept survive the store with absence and emptiness kept apart.
+    /// </summary>
+    /// <remarks>
+    /// The two mean opposite things - null is "no constraint", empty is "accepts nobody", which a request
+    /// reaches by naming a value outside its own list of values - and a bare repeated protobuf field cannot
+    /// tell them apart, which is why the field is a message. Collapsing it back to a repeated field keeps
+    /// every consumer-side test green while the guaranteed mismatch of OpenID Connect Core 1.0 Section 5.5.1
+    /// comes back as "no constraint" on exactly the distributed-store path; this is what would catch it.
+    /// </remarks>
+    public static TheoryData<string[]?> RequestedSubjectShapes => new()
+    {
+        (string[]?)null,
+        new string[0],
+        new[] { "alice", "bob" },
+    };
+
+    [Theory]
+    [MemberData(nameof(RequestedSubjectShapes))]
+    public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequestedSubjects(string[]? subjects)
+    {
+        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            RequestedSubjects = subjects,
+        };
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(subjects, result.RequestedSubjects);
+    }
+
     [Fact]
     public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNextPollAt()
     {

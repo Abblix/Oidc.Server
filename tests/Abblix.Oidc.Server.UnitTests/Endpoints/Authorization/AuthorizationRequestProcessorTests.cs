@@ -27,6 +27,7 @@ using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -86,6 +87,7 @@ public class AuthorizationRequestProcessorTests
             _authSessionService.Object,
             _consentsProvider.Object,
             _cutoffChecker.Object,
+            new SubjectTypeConverter(),
             _timeProvider,
             [
                 new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
@@ -103,7 +105,8 @@ public class AuthorizationRequestProcessorTests
         string[]? scope = null,
         JsonArray? authorizationDetails = null,
         TimeSpan? defaultMaxAge = null,
-        string[]? defaultAcrValues = null)
+        string[]? defaultAcrValues = null,
+        string? idTokenHintSubject = null)
     {
         var authRequest = new AuthorizationRequest
         {
@@ -131,6 +134,7 @@ public class AuthorizationRequestProcessorTests
             Scope = scope?.Select(s => new ScopeDefinition(s)).ToArray() ?? [new ScopeDefinition(Scopes.OpenId)],
             Resources = [],
             AuthorizationDetails = authorizationDetails,
+            IdTokenHintSubject = idTokenHintSubject,
         };
 
         return new ValidAuthorizationRequest(context);
@@ -201,9 +205,120 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
-    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration
-    /// signal even when no session exists - previously the value fell through to the generic
-    /// no-session branch and the host saw an ordinary login request.
+    /// A hint naming one of several logged-in end users picks that one, instead of refusing the choice.
+    /// </summary>
+    /// <remarks>
+    /// This is the case the parameter exists for. Ignore the hint and two sessions leave the server unable
+    /// to choose, so it refuses with <c>account_selection_required</c> even though the request said which
+    /// end user it meant.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WithPromptNoneAndAHintNamingOneOfTwoSessions_UsesThatOne()
+    {
+        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "user_2");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { Session("user_1"), Session("user_2") }.ToAsyncEnumerable());
+
+        // Captured rather than asserted on the outcome. "Not an error" would hold equally if the server had
+        // picked the other session, which is the failure this test exists for - so what it asserts is which
+        // end user the request went on to be answered for.
+        AuthSession? chosen = null;
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, It.IsAny<AuthSession>()))
+            .Callback((ValidAuthorizationRequest _, AuthSession session) => chosen = session)
+            .ReturnsAsync(new UserConsents
+            {
+                // Pending consent stops the flow right after the session was chosen, which is all this
+                // test is about. Carrying on to a code would mean stubbing the rest of the pipeline to
+                // measure something none of it decides.
+                Pending = new ConsentDefinition([new ScopeDefinition(Scopes.OpenId)], []),
+            });
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.NotNull(chosen);
+        Assert.Equal("user_2", chosen.Subject);
+
+        // And the request got that far rather than being refused for want of a choice.
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.ConsentRequired, error.Error);
+    }
+
+    /// <summary>
+    /// And a hint naming nobody who is logged in is refused rather than answered for somebody else.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 3.1.2.1: if the end user the ID Token identifies is not already
+    /// logged in and is not logged in as a result of the request, the server "MUST return an error, such as
+    /// login_required". Ignore the hint and this request is answered instead - and with one of the two
+    /// sessions revoked, answered silently for the account the client never asked about.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WithPromptNoneAndAHintNamingNobodyLoggedIn_ShouldReturnLoginRequired()
+    {
+        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "somebody-else");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { Session("user_1"), Session("user_2") }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.LoginRequired, error.Error);
+    }
+
+    /// <summary>
+    /// Without a hint the same two sessions still refuse, which is what says the tests above measure the
+    /// hint and not some other change to how sessions are counted.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithPromptNoneAndNoHint_StillRefusesToChoose()
+    {
+        var request = CreateRequest(prompt: Prompts.None);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { Session("user_1"), Session("user_2") }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.AccountSelectionRequired, error.Error);
+    }
+
+    /// <summary>
+    /// A hint differing from a logged-in subject only in case names somebody else.
+    /// </summary>
+    /// <remarks>
+    /// A subject is an opaque identifier, compared octet for octet, and a host is free to mint two that
+    /// differ only in case. Nothing else in this suite visits the distinction, so relaxing the comparison to
+    /// ignore case would otherwise leave every test green.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WithAHintDifferingOnlyInCase_ShouldReturnLoginRequired()
+    {
+        var request = CreateRequest(prompt: Prompts.None, idTokenHintSubject: "USER_1");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { Session("user_1") }.ToAsyncEnumerable());
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.LoginRequired, error.Error);
+    }
+
+    private static AuthSession Session(string subject)
+        => new(subject, $"session-of-{subject}", DateTimeOffset.UtcNow, "local");
+
+    /// <summary>
+    /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration signal
+    /// even when no session exists. Without its own arm the value falls through to the generic no-session
+    /// branch and the host sees an ordinary login request, losing the registration intent.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_WithPromptCreate_NoSessions_ShouldReturnRegistrationRequired()

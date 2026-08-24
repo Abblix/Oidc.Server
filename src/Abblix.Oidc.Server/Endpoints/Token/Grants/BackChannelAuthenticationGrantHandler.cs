@@ -13,10 +13,12 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -32,13 +34,79 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
+/// <param name="subjectTypeConverter">
+/// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
+/// against the end user the original request named.
+/// </param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
+    ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
+    /// <summary>
+    /// Whether this grant belongs to the end user the request named, or the request named nobody.
+    /// </summary>
+    /// <remarks>
+    /// The name is taken from the request as it was read, since it is written once when the request is
+    /// created and a host has no reason to touch it. What a host does replace is the session, which is what
+    /// each caller passes in.
+    /// </remarks>
+    private bool NamesTheRequestedEndUser(
+        string[]? requestedSubjects, AuthorizedGrant grant, ClientInfo clientInfo)
+        => requestedSubjects is not { } accepted ||
+           subjectTypeConverter.Names(grant.AuthSession, accepted, clientInfo);
+
+    /// <summary>
+    /// Redeems an authenticated request, refusing it when the end user who authenticated is not one it
+    /// named.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token
+    /// for a different user, even if they have an active session with the Authorization Server". In a
+    /// decoupled flow the end user authenticates out of band, so what the request named is compared against
+    /// whoever the host reported by the time a grant is asked for.
+    /// <para>
+    /// Judged twice, on two different objects, because one comparison cannot do both jobs. Before the
+    /// request is consumed, so an ordinary mismatch spends nothing - redeeming removes the stored entry.
+    /// And again on the grant the processor returned, because the processor consumes the stored request
+    /// itself, and between the earlier read and that removal the host - which owns the same storage - can
+    /// replace what is stored. Judging only the earlier copy would approve one grant and hand over another.
+    /// </para>
+    /// </remarks>
+    private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
+        string authenticationRequestId,
+        StoredRequest request,
+        ClientInfo clientInfo,
+        IBackChannelGrantProcessor processor)
+    {
+        // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
+        // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
+        // worth keeping just long enough to say so again if the client polls twice.
+        if (!NamesTheRequestedEndUser(request.RequestedSubjects, request.AuthorizedGrant, clientInfo))
+            return NotTheRequestedEndUser();
+
+        var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
+        if (result.TryGetFailure(out var error))
+            return error;
+
+        var grant = result.GetSuccess();
+
+        // Judged again, on what was actually consumed. The processor removes the stored entry and returns
+        // the grant it found there, so between the check above and that removal the host - which owns the
+        // same storage - can replace what is stored, which is the ordinary shape of a retried or corrected
+        // completion rather than an attack. Approving one grant and handing over another is the whole
+        // failure this comparison exists to prevent.
+        return NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo)
+            ? grant
+            : NotTheRequestedEndUser();
+    }
+
+    private static OidcError NotTheRequestedEndUser()
+        => new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel
     /// Authentication) grant type.
@@ -116,8 +184,8 @@ public class BackChannelAuthenticationGrantHandler(
                 => new OidcError(ErrorCodes.InvalidGrant, "The authentication request was issued to another client"),
 
             // If the user has been authenticated, process mode-specific token retrieval
-            { Status: BackChannelAuthenticationStatus.Authenticated }
-                => await processor.ProcessAuthenticatedRequestAsync(request.AuthenticationRequestId, authenticationRequest),
+            { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
+                => await RedeemAsync(request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the request is still pending and not yet time to poll again
             { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
@@ -132,7 +200,7 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user denied the authentication request, return an error indicating access is denied
             { Status: BackChannelAuthenticationStatus.Denied }
-                => new OidcError(ErrorCodes.AccessDenied, "The authorization request is denied by the user."),
+                => new OidcError(ErrorCodes.AccessDenied, "The authorization request was denied."),
 
             _ => throw new InvalidOperationException(
                 $"The authentication request status is unexpected: {authenticationRequest.Status}.")
@@ -249,15 +317,13 @@ public class BackChannelAuthenticationGrantHandler(
 
         switch (updatedRequest)
         {
-            case { Status: BackChannelAuthenticationStatus.Authenticated }:
-                return await grantProcessor.ProcessAuthenticatedRequestAsync(
-                    authenticationRequestId,
-                    updatedRequest);
+            case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
+                return await RedeemAsync(authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(
                     ErrorCodes.AccessDenied,
-                    "The authorization request is denied by the user.");
+                    "The authorization request was denied.");
 
             case null:
                 return new OidcError(

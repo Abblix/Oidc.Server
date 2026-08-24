@@ -75,4 +75,33 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// <c>null</c> when the request did not include <c>authorization_details</c>.
 	/// </summary>
 	public JsonArray? AuthorizationDetails { get; set; }
+
+	/// <summary>
+	/// The end user the request's <c>id_token_hint</c> names, as that ID token spells it, or <c>null</c>
+	/// when the request carried no hint.
+	/// </summary>
+	/// <remarks>
+	/// Spelled as the ID token has it, which for a pairwise client is the pseudonym sealed to that client's
+	/// sector rather than the subject a session carries. Whoever compares the two converts the session
+	/// forward; opening the pseudonym would fail whenever it could not be opened, and a comparison that
+	/// could not be made must not read as a match.
+	/// </remarks>
+	public string? IdTokenHintSubject { get; set; }
+
+	/// <summary>
+	/// The end users the request's <c>claims</c> parameter will accept for <c>sub</c>, or <c>null</c> when it
+	/// asked for none in particular. An empty array accepts nobody.
+	/// </summary>
+	/// <remarks>
+	/// A second, independent constraint rather than an alternative spelling of
+	/// <see cref="IdTokenHintSubject"/>: a request may carry both, and OpenID Connect Core 1.0 Section 3.1.2.2
+	/// obliges the server to honour whichever are present. Spelled the way the client wrote them, so the same
+	/// conversion applies - a pairwise client names the pseudonym sealed to its own sector.
+	/// <para>
+	/// Empty is a state a request can genuinely reach, by naming a <c>value</c> absent from its own
+	/// <c>values</c>. That mismatch is what Section 5.5.1 says "MUST cause the authentication to fail", so it
+	/// is carried through as a constraint nobody satisfies rather than discarded as nonsense.
+	/// </para>
+	/// </remarks>
+	public string[]? RequestedSubjects { get; set; }
 }

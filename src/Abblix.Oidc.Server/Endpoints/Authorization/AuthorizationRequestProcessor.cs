@@ -14,12 +14,12 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
-
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -33,6 +33,7 @@ public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	IUserConsentsProvider consentsProvider,
 	IRevocationCutoffChecker cutoffChecker,
+	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
 	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
@@ -55,15 +56,15 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(model, request.ClientInfo);
+		var authSessions = await GetAvailableAuthSessionsAsync(request);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
 		{
 			// Initiating User Registration via OpenID Connect 1.0: prompt=create takes the user to
 			// the account-creation experience regardless of whether a session exists. An OP that
-			// advertises create in prompt_values_supported must act on it - previously the value
-			// fell through to the generic branches and the registration intent was silently lost.
+			// advertises create in prompt_values_supported must act on it. Without its own arm the
+			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
 				return new RegistrationRequired(model);
 
@@ -234,11 +235,15 @@ public class AuthorizationRequestProcessor(
 	/// Retrieves the available authentication sessions based on the request's constraints (e.g., max age, ACR values).
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level) are used.
 	/// </summary>
-	/// <param name="model">The authorization request containing parameters like max age and ACR values.</param>
-	/// <param name="clientInfo">The client, supplying default_max_age / default_acr_values fallbacks.</param>
+	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
+	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
+	/// <c>id_token_hint</c> named.</param>
 	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(AuthorizationRequest model, ClientInfo clientInfo)
+	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{
+		var model = request.Model;
+		var clientInfo = request.ClientInfo;
+
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
 		// Filter by maximum authentication age. When the request omits max_age, fall back to the
@@ -262,11 +267,37 @@ public class AuthorizationRequestProcessor(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
 		}
 
+		// OpenID Connect Core 1.0 Sections 3.1.2.1 and 3.1.2.2: when a request names an end user, a
+		// positive response is owed only if that end user is the one logged in, and otherwise the server
+		// MUST return an error. Comparing here rather than refusing outright is what serves the whole
+		// sentence: a request left with no session takes the arms above, so prompt=none answers
+		// login_required while anything else reaches the login page, which is where "is logged in as a
+		// result of the request" happens.
+		//
+		// That last part is the host's to finish, and it is worth saying because the failure is a loop
+		// rather than an error: a login page that returns the session it already has, without prompting,
+		// arrives back here to be filtered out again. The same is true of max_age and acr_values, and a
+		// host handling those already has the shape. What it needs from the request is the named end user,
+		// which the model carries verbatim.
+		//
+		// Two parameters name one, independently, and Section 3.1.2.2 puts them under a single MUST, so a
+		// request stating both has both applied. They are separate filters rather than a merged set of
+		// acceptable subjects, because merging would have to decide what an id_token_hint disagreeing with
+		// a claims request means - and nothing has to decide that if each simply binds.
+		if (request.IdTokenHintSubject is { } hinted)
+			authSessions = authSessions.Where(
+				session => subjectTypeConverter.Names(session, [hinted], clientInfo));
+
+		if (request.RequestedSubjects is { } requested)
+			authSessions = authSessions.Where(
+				session => subjectTypeConverter.Names(session, requested, clientInfo));
+
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no
 		// token-side cutoff can catch. This closes the repeatable door; the token endpoint closes the
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
-		// cheap filters above, so a session already ruled out by max_age or acr costs no store lookup.
+		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
+		// lookup.
 		return KeepUnrevokedAsync(authSessions);
 	}
 

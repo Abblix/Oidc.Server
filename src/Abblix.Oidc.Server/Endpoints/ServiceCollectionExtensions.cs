@@ -184,6 +184,17 @@ public static class ServiceCollectionExtensions
             // includes the scoped IdTokenResponseBuilder once EnableImplicitFlow() is called.
             ServiceDescriptor.Scoped<IAuthorizationContextValidator, FlowTypeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, ResponseModeValidator>(),
+            // After RedirectUriValidator and ResponseModeValidator, not merely after ClientValidator, even
+            // though ClientInfo is what it reads. Its refusals are the kind RFC 6749 Section 4.1.2.1 says the
+            // client must be told about, and the two validators above are what decide where a refusal goes and
+            // in which channel: before them ValidRedirectUri is null and the client gets a 400 in the end
+            // user's browser instead of a redirect carrying error and state. Placing it here also keeps
+            // signature verification behind the cheap parameter checks rather than in front of them.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.IdTokenHintValidator>(),
+            // Beside the hint validator because it answers the same question by the other parameter the
+            // specification names for it, and it inherits the placement reasoning above for the same reason.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator,
+                Authorization.Validation.RequestedSubjectValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
@@ -660,7 +671,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddEndSessionContextValidators(this IServiceCollection services)
     {
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IEndSessionContextValidator, IdTokenHintValidator>(),
+            ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, ConfirmationValidator>()
@@ -702,6 +713,10 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>(),
+            // Beside the identity hints, because it answers the same question by the other parameter the
+            // specification names for it.
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator,
+                BackChannelAuthentication.Validation.RequestedSubjectValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),

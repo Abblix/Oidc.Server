@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -22,17 +23,35 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
+/// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
+/// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
+    ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor)
-    : AuthenticationCompletionHandler(logger, storage)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;
+
+    /// <summary>
+    /// Removes the request rather than denying it, because a push client never polls.
+    /// </summary>
+    /// <remarks>
+    /// A denied request this client cannot read is an orphan sitting in storage until it expires, which is
+    /// why the token-generation failure below removes one too. CIBA Core 1.0 Section 10.3.1 has the outcome
+    /// travel to a push client through the notification endpoint, and this server does not send an error
+    /// payload there - so nothing is delivered either way, and the difference is only what is left behind.
+    /// </remarks>
+    protected override Task RefuseAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn)
+        => _storage.TryRemoveAsync(authenticationRequestId);
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
@@ -55,7 +74,9 @@ public partial class PushModeCompletionHandler(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+            // Removed rather than denied, for the reason RefuseAsync above states: this client never
+            // polls, so a denied request it cannot read is an orphan waiting out its expiry.
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
 

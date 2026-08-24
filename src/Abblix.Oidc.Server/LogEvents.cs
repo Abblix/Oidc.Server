@@ -476,6 +476,7 @@ internal static class LogEvents
             private const int Base = 7010;
 
             public const int MissingNotificationConfig = Base + 1;
+            public const int AuthenticatedUserNotTheOneRequested = Base + 2;
         }
 
         /// <summary>

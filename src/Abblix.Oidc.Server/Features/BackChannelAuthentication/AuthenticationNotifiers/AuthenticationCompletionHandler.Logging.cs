@@ -17,4 +17,11 @@ partial class AuthenticationCompletionHandler
         Level = LogLevel.Error,
         Message = "{ModeName} client missing notification endpoint or token. ClientId: {ClientId}, auth_req_id: {AuthReqId}, Endpoint: {Endpoint}, Token: {HasToken}")]
     private partial void LogMissingNotificationConfig(string ModeName, string ClientId, string AuthReqId, string Endpoint, bool HasToken);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.AuthenticatedUserNotTheOneRequested,
+        Level = LogLevel.Warning,
+        Message = "The end user authenticated for auth_req_id {AuthReqId} is not the one the request named, " +
+                  "so it is refused. ClientId: {ClientId}")]
+    private partial void LogAuthenticatedUserNotTheOneRequested(string AuthReqId, string ClientId);
 }

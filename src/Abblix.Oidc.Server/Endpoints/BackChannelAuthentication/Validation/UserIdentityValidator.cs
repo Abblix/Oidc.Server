@@ -18,10 +18,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// Validates the user's identity in a backchannel authentication request, ensuring that valid identity hints
 /// (e.g., login hints, tokens) are provided and correctly processed.
 /// </summary>
-/// <param name="idTokenValidator">Validator for ID tokens issued by the authorization server.</param>
+/// <param name="hintParser">Decides whether an <c>id_token_hint</c> is an ID token this server issued.</param>
 /// <param name="clientJwtValidator">Validator for JWTs issued by clients.</param>
 public class UserIdentityValidator(
-    IAuthServiceJwtValidator idTokenValidator,
+    IIdTokenHintParser hintParser,
     IClientJwtValidator clientJwtValidator): IBackChannelAuthenticationContextValidator
 {
     /// <summary>
@@ -122,32 +122,15 @@ public class UserIdentityValidator(
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
-        // The audience is checked below, against the requesting client, rather than by the shared validator,
-        // which accepts only the issuer. An ID token is the one type that names a client there: OpenID
-        // Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id of the Relying
-        // Party". Leaving the shared check on would refuse every hint.
-        var result = await idTokenValidator.ValidateAsync(
-            idTokenHint,
-            ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience);
-
-        if (result.TryGetFailure(out var error))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"The id token hint contains invalid token: {error.ToString()}");
-        }
+        // What makes a hint believable is the shared parser's question, and the audience is deliberately not
+        // part of it: the three endpoints accepting the parameter disagree about who must be in it. Here it
+        // is the requesting client, because OpenID Connect Core 1.0 Section 2 says an ID token's aud "MUST
+        // contain the OAuth 2.0 client_id of the Relying Party".
+        var result = await hintParser.ParseAsync(idTokenHint);
+        if (result.TryGetFailure(out var reason))
+            return new OidcError(ErrorCodes.InvalidRequest, reason);
 
         var token = result.GetSuccess();
-
-        // RFC 8725 §3.12: keep the validation rules for different kinds of JWT mutually exclusive, so another
-        // own-issued token whose audience happens to match - an access or refresh token - cannot be replayed
-        // here, which the signature and audience checks alone would not catch. Stated as a refusal because an
-        // ID token carries no type of its own; see JwtTypes.IsPermitted.
-        if (!JwtTypes.IsPermitted(token.Header.Type))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest, "The id token hint is not an ID Token");
-        }
 
         var audiences = token.Payload.Audiences;
         if (!audiences.Contains(context.ClientInfo.ClientId, StringComparer.Ordinal))
@@ -155,6 +138,17 @@ public class UserIdentityValidator(
             return new OidcError(
                 ErrorCodes.InvalidRequest,
                 "The id token hint contains token issued for the client other than specified");
+        }
+
+        // The one untyped own-issued shape that clears everything above is a JARM response JWT, which
+        // carries exp and this client's audience and no sub - the same refusal the authorization endpoint
+        // makes. Here it matters more: the hint is this request's identity source, so a hint naming nobody
+        // would start an authentication bound to nothing, and whoever the host reached would be accepted.
+        // CIBA Core 1.0 Section 13 defines the code for exactly this: the provider "is not able to identify
+        // which end-user the Client wishes to be authenticated by means of the hint provided".
+        if (token.Payload.Subject is not { Length: > 0 })
+        {
+            return new OidcError(ErrorCodes.UnknownUserId, "The id token hint names no subject");
         }
 
         return token;

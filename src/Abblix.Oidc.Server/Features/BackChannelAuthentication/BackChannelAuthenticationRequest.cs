@@ -48,4 +48,22 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// Provided by the client in the authentication request for secure notification delivery.
     /// </summary>
     public string? ClientNotificationToken { get; set; }
+
+    /// <summary>
+    /// The end users the request will accept, spelled as the requesting client sees them, or <c>null</c>
+    /// when it named nobody in particular. An empty array accepts nobody.
+    /// </summary>
+    /// <remarks>
+    /// Recorded here rather than compared once and discarded, because in a decoupled flow the end user
+    /// authenticates long after the request was made: the session that answers it arrives through
+    /// <see cref="Interfaces.IAuthenticationCompletionHandler.CompleteAsync"/>, and OpenID Connect Core 1.0
+    /// Section 3.1.2.2 forbids answering for anyone else. Without this the comparison would have nothing left
+    /// to compare against by the time there is a session to judge.
+    /// <para>
+    /// A set rather than a name, because the two parameters that can name an end user do not agree on the
+    /// shape: an <c>id_token_hint</c> names one, and a <c>claims</c> request may list several it would
+    /// accept. Section 3.1.2.2 puts both under a single requirement, so both land here.
+    /// </para>
+    /// </remarks>
+    public string[]? RequestedSubjects { get; set; }
 }
