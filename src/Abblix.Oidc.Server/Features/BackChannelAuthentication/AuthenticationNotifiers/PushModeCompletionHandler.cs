@@ -61,7 +61,6 @@ public partial class PushModeCompletionHandler(
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
     /// <param name="expiresIn">How long the request remains in storage if token generation fails.</param>
-
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,

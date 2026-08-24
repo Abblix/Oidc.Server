@@ -165,7 +165,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     [Theory]
     [InlineData(Alice)]
     [InlineData(Bob)]
-    public async Task ARequestedSubject_PicksTheUserItNames(string requested)
+    public async Task A_requested_subject_picks_the_user_it_names(string requested)
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
@@ -187,7 +187,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// A <c>claims</c> request naming somebody who is not signed in answers <c>login_required</c>.
     /// </summary>
     [Fact]
-    public async Task ARequestedSubjectNobodySignedIn_AnswersLoginRequired()
+    public async Task A_requested_subject_nobody_signed_in_answers_login_required()
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
@@ -213,7 +213,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// forbids outright.
     /// </remarks>
     [Fact]
-    public async Task TheTwoParametersNamingDifferentUsers_AnswerLoginRequired()
+    public async Task The_two_parameters_naming_different_users_answer_login_required()
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
@@ -248,7 +248,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task OneRequestWhoseQualifiersDisagree_AnswersLoginRequired()
+    public async Task One_request_whose_qualifiers_disagree_answers_login_required()
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
@@ -269,7 +269,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// A requested <c>sub</c> that is not a string is refused by redirect, like any other bad parameter.
     /// </summary>
     [Fact]
-    public async Task ARequestedSubjectThatIsNotAString_IsAnInvalidRequest()
+    public async Task A_requested_subject_that_is_not_a_string_is_an_invalid_request()
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
