@@ -26,6 +26,12 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Valid
 /// </summary>
 public class UserIdentityValidatorTests
 {
+    /// <summary>
+    /// Any instant will do: the lifetime is deliberately not validated for a hint, and only the claim's
+    /// presence is what parts an ID token from a signed UserInfo response.
+    /// </summary>
+    private static readonly DateTimeOffset Expiry = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
+
     private readonly Mock<IAuthServiceJwtValidator> _idTokenValidator;
     private readonly Mock<IClientJwtValidator> _clientJwtValidator;
     private readonly UserIdentityValidator _validator;
@@ -34,7 +40,8 @@ public class UserIdentityValidatorTests
     {
         _idTokenValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
-        _validator = new UserIdentityValidator(_idTokenValidator.Object, _clientJwtValidator.Object);
+        _validator = new UserIdentityValidator(
+            new IdTokenHintParser(_idTokenValidator.Object), _clientJwtValidator.Object);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(
@@ -235,7 +242,7 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Payload = { Audiences = ["test-client"] },
+            Payload = { Audiences = ["test-client"], ExpiresAt = Expiry },
         };
 
         _idTokenValidator
@@ -328,7 +335,7 @@ public class UserIdentityValidatorTests
         // Arrange
         var token = new JsonWebToken
         {
-            Payload = { Audiences = ["different-client"] },
+            Payload = { Audiences = ["different-client"], ExpiresAt = Expiry },
         };
 
         _idTokenValidator

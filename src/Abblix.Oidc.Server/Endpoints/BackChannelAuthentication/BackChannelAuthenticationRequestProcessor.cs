@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -35,11 +36,16 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// <param name="options">Configuration options related to backchannel authentication.</param>
 /// <param name="userDeviceAuthenticationHandler">Handler for initiating authentication on the user's device.</param>
 /// <param name="timeProvider">Time provider for managing authentication request expiration.</param>
+/// <param name="subjectTypeConverter">
+/// Seals a session's subject the way the requesting client sees it, so the session the host authenticated can
+/// be compared against the end user an <c>id_token_hint</c> named.
+/// </param>
 public class BackChannelAuthenticationRequestProcessor(
 	IBackChannelRequestStorage storage,
 	IOptionsSnapshot<OidcOptions> options,
 	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
-	TimeProvider timeProvider) : IBackChannelAuthenticationRequestProcessor
+	TimeProvider timeProvider,
+	ISubjectTypeConverter subjectTypeConverter) : IBackChannelAuthenticationRequestProcessor
 {
 	/// <inheritdoc />
 	/// <summary>
@@ -71,6 +77,27 @@ public class BackChannelAuthenticationRequestProcessor(
 			};
 		}
 
+		var authSession = authResult.GetSuccess();
+
+		// The host decides who approved on the device, and a request carrying an id_token_hint already said
+		// who it means. OpenID Connect Core 1.0 Section 3.1.2.2: the server "MUST NOT reply with an ID Token
+		// or Access Token for a different user, even if they have an active session with the Authorization
+		// Server". Nothing in a device flow lets this server observe who picked up the phone, so a host
+		// routing the notification to the wrong contact - stale details, a shared device, the wrong claim
+		// used to look somebody up - would otherwise have tokens minted for whoever answered and handed to a
+		// client that asked about someone else.
+		//
+		// Checked here rather than left to the host because a host cannot perform it: the hint carries the
+		// pseudonym this client sees, and sealing a session to compare against it needs the pairwise
+		// settings, which belong to the server. The same comparison serves the authorization endpoint.
+		if (request.IdToken?.Payload.Subject is { Length: > 0 } named &&
+			!subjectTypeConverter.Names(authSession, [named], request.ClientInfo))
+		{
+			return new BackChannelAuthenticationForbidden(
+				ErrorCodes.AccessDenied,
+				"The authenticated end user is not the one the id token hint named");
+		}
+
 		var authContext = new AuthorizationContext(
 			request.ClientInfo.ClientId,
 			request.Scope,
@@ -83,7 +110,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			AuthorizationDetails = request.AuthorizationDetails,
 		};
 
-		var authorizedGrant = new AuthorizedGrant(authResult.GetSuccess(), authContext);
+		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
 
 		var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
 

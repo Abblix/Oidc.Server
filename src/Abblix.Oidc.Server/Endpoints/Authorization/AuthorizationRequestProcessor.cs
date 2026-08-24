@@ -285,10 +285,12 @@ public class AuthorizationRequestProcessor(
 		// acceptable subjects, because merging would have to decide what an id_token_hint disagreeing with
 		// a claims request means - and nothing has to decide that if each simply binds.
 		if (request.IdTokenHintSubject is { } hinted)
-			authSessions = authSessions.Where(session => Names(session, [hinted], clientInfo));
+			authSessions = authSessions.Where(
+				session => subjectTypeConverter.Names(session, [hinted], clientInfo));
 
 		if (request.RequestedSubjects is { } requested)
-			authSessions = authSessions.Where(session => Names(session, requested, clientInfo));
+			authSessions = authSessions.Where(
+				session => subjectTypeConverter.Names(session, requested, clientInfo));
 
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no
@@ -297,37 +299,6 @@ public class AuthorizationRequestProcessor(
 		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
 		// lookup.
 		return KeepUnrevokedAsync(authSessions);
-	}
-
-	/// <summary>
-	/// Whether this session belongs to one of the end users the request named.
-	/// </summary>
-	/// <remarks>
-	/// The session is converted forward rather than the hint opened, because only the forward direction
-	/// answers for a client whose sector moved since the hint was minted: opening would fail, while sealing
-	/// produces the pseudonym that client would receive today and compares it against what it sent.
-	/// <para>
-	/// Neither direction is total. Sealing needs pairwise settings the deployment may not have configured,
-	/// and a client registered as pairwise without them makes the converter throw. That is a configuration
-	/// fault rather than an answer about this end user, so it is reported as no match: the request loses
-	/// this session and takes the login arms, instead of the endpoint faulting for every request that
-	/// merely carried a hint.
-	/// </para>
-	/// </remarks>
-	private bool Names(AuthSession session, string[] subjects, ClientInfo clientInfo)
-	{
-		try
-		{
-			// Ordinal: a subject is an opaque identifier compared octet for octet, and two that differ only
-			// in case are two different end users.
-			return subjects.Contains(
-				subjectTypeConverter.Convert(session.Subject, clientInfo),
-				StringComparer.Ordinal);
-		}
-		catch (InvalidOperationException)
-		{
-			return false;
-		}
 	}
 
 	/// <summary>
