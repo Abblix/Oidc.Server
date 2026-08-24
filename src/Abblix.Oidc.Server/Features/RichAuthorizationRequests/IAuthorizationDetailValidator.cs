@@ -57,6 +57,39 @@ public interface IAuthorizationDetailValidator
         CancellationToken token);
 
     /// <summary>
+    /// Validates a single entry as the consent decision left it, which may carry values the server
+    /// itself added while the end-user was choosing. Defaults to <see cref="ValidateAsync"/>, so a
+    /// type that does not enrich answers the same question in both phases.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §7.1 says that "Whether enrichment is allowed and specifics of how it works are
+    /// necessarily part of the definition of the respective authorization details type", and in this
+    /// library the definition of a type is this validator. Its worked example (Figures 16 and 17) is
+    /// an <c>account_information</c> entry whose empty arrays are placeholders the server fills with
+    /// the identifiers the user picked.
+    /// <para>
+    /// That shape is one a conforming request-time validator has to REFUSE: RFC 9396 §5 makes the
+    /// server reject an entry "containing fields with invalid values for the authorization details
+    /// type", and a client choosing the accounts is exactly that. So a validator for an enrichable
+    /// type overrides this member to accept what the consent decision produced, while
+    /// <see cref="ValidateAsync"/> keeps refusing the same shape when a client sends it.
+    /// </para>
+    /// </remarks>
+    /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
+    /// this validator's <see cref="Type"/>.</param>
+    /// <param name="client">The client the grant is being issued to.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>The validated (and possibly normalised) detail on success, or an
+    /// <see cref="OidcError"/> describing the rejection. A rejection here means the consent decision
+    /// escalated beyond what this type permits, which is a host-side defect rather than a client
+    /// error.</returns>
+    Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        AuthorizationDetail detail,
+        ClientInfo client,
+        CancellationToken token)
+        => ValidateAsync(detail, client, token);
+
+    /// <summary>
     /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing
     /// what consenting to this entry authorises, so the consent UI can render a meaningful screen
     /// instead of a raw JSON dump. Default returns <c>null</c>; hosts that opt out simply fall back

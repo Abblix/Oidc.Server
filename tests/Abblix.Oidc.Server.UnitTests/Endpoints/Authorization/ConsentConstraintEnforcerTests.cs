@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -10,6 +10,7 @@ using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -20,6 +21,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 
@@ -76,7 +78,7 @@ public class ConsentConstraintEnforcerTests
 
     private void SetupPolicyPassThrough() =>
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
                 Result<JsonArray?, OidcError>.Success(ad));
@@ -142,7 +144,7 @@ public class ConsentConstraintEnforcerTests
 
         // The type-level subset check fails before any per-type re-validation is attempted.
         _authorizationDetailsPolicy.Verify(
-            p => p.ApplyAsync(It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()),
+            p => p.ApplyGrantedAsync(It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -156,7 +158,7 @@ public class ConsentConstraintEnforcerTests
 
         // The per-type policy rejects the granted entry (e.g. amount escalated beyond the client's cap).
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Failure(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, "amount exceeds the client's cap")));
@@ -178,5 +180,71 @@ public class ConsentConstraintEnforcerTests
             () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_ConsentEnrichedTheEntry_DoesNotThrow()
+    {
+        // RFC 9396 section 7.1, worked in Figures 16 and 17: the client asks for account information
+        // with empty placeholders, the user picks the accounts, and the server writes the identifiers
+        // in. A validator implementing section 5 refuses populated placeholders in a REQUEST, because
+        // the client must not choose the accounts - so re-running the granted entry through the
+        // request-time question rejects what the specification says the server may do.
+        //
+        // A real composite policy, not a mock: the permissive stub is what kept this green.
+        var services = new ServiceCollection();
+        services.AddRichAuthorizationRequests();
+        services.AddAuthorizationDetailValidator<PlaceholderAccountValidator>(
+            PlaceholderAccountValidator.AccountInformation);
+        var enforcer = new ConsentConstraintEnforcer(
+            services.BuildServiceProvider().GetRequiredService<IAuthorizationDetailsPolicy>());
+
+        var request = CreateRequest(authorizationDetails: new JsonArray(
+            new JsonObject
+            {
+                ["type"] = PlaceholderAccountValidator.AccountInformation,
+                ["access"] = new JsonObject { ["accounts"] = new JsonArray() },
+            }));
+
+        var granted = Granted(authorizationDetails: new JsonArray(
+            new JsonObject
+            {
+                ["type"] = PlaceholderAccountValidator.AccountInformation,
+                ["access"] = new JsonObject
+                {
+                    ["accounts"] = new JsonArray(
+                        new JsonObject { ["iban"] = "DE2310010010123456789" }),
+                },
+            }));
+
+        var exception = await Record.ExceptionAsync(
+            () => enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// A conforming validator for an enrichable type: it refuses a request whose placeholders are
+    /// already filled (RFC 9396 section 5, "invalid values for the authorization details type"), and
+    /// accepts the filled shape once the consent decision produced it (section 7.1).
+    /// </summary>
+    private sealed class PlaceholderAccountValidator : IAuthorizationDetailValidator
+    {
+        public const string AccountInformation = "account_information";
+
+        public string Type => AccountInformation;
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
+                    ? new OidcError(
+                        ErrorCodes.InvalidAuthorizationDetails,
+                        "access.accounts is chosen by the end-user, so a request must leave it empty")
+                    : detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 }

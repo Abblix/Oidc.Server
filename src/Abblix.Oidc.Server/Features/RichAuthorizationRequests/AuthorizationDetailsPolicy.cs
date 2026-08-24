@@ -1,4 +1,4 @@
-// Abblix OIDC Server Library
+﻿// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -35,10 +35,42 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 internal sealed class AuthorizationDetailsPolicy(
     IServiceProvider serviceProvider) : IAuthorizationDetailsPolicy
 {
+    /// <summary>
+    /// The per-entry question, which is the only thing the request phase and the granted phase differ
+    /// in: everything around it (object shape, known type, per-client allowlist) binds in both.
+    /// </summary>
+    private delegate Task<Result<AuthorizationDetail, OidcError>> AskValidator(
+        IAuthorizationDetailValidator validator,
+        AuthorizationDetail detail,
+        ClientInfo client,
+        CancellationToken token);
+
     /// <inheritdoc/>
-    public async Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
+        CancellationToken token)
+        => ApplyCoreAsync(
+            raw,
+            client,
+            static (validator, detail, client, token) => validator.ValidateAsync(detail, client, token),
+            token);
+
+    /// <inheritdoc/>
+    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+        JsonArray? granted,
+        ClientInfo client,
+        CancellationToken token)
+        => ApplyCoreAsync(
+            granted,
+            client,
+            static (validator, detail, client, token) => validator.ValidateGrantedAsync(detail, client, token),
+            token);
+
+    private async Task<Result<JsonArray?, OidcError>> ApplyCoreAsync(
+        JsonArray? raw,
+        ClientInfo client,
+        AskValidator ask,
         CancellationToken token)
     {
         if (raw is not { Count: > 0 })
@@ -71,7 +103,7 @@ internal sealed class AuthorizationDetailsPolicy(
                 return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
-        var result = await ValidateAsync(authorizationDetails, client, token);
+        var result = await ValidateAsync(authorizationDetails, client, ask, token);
 
         // Rebuild the raw array from the validated typed list (RFC 9396 §7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
@@ -86,6 +118,7 @@ internal sealed class AuthorizationDetailsPolicy(
     private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
         IEnumerable<AuthorizationDetail> details,
         ClientInfo client,
+        AskValidator ask,
         CancellationToken cancellationToken)
     {
         var validated = new List<AuthorizationDetail>();
@@ -106,7 +139,7 @@ internal sealed class AuthorizationDetailsPolicy(
                     $"unknown authorization_details type: '{detail.Type}'");
             }
 
-            var result = await validator.ValidateAsync(detail, client, cancellationToken);
+            var result = await ask(validator, detail, client, cancellationToken);
             if (result.TryGetFailure(out var failure))
             {
                 return failure;

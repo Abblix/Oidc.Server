@@ -73,6 +73,13 @@ public class AuthorizationRequestProcessorTests
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
 
+        // The backstop asks the GRANTED-phase question (RFC 9396 section 7.1), which is a different
+        // member on the policy and therefore a different setup on a strict mock.
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyGrantedAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
+
         _timeProvider = new FakeTimeProvider();
 
         // No cutoff recorded is the ordinary case; the tests about revocation build their own.

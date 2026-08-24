@@ -386,6 +386,50 @@ public class AuthorizationDetailsPolicyTests
         Assert.Equal(wire, validated!.ToJsonString());
     }
 
+    [Fact]
+    public async Task ApplyGrantedAsync_without_an_override_asks_the_request_time_question()
+    {
+        // The granted phase is a distinct question, not a weaker one: a type that does not enrich
+        // answers the same way in both phases, so the anti-escalation re-check keeps biting for
+        // every validator written before this member existed.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await composite.ApplyGrantedAsync(raw, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains(RejectingValidator.Reason, error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_uses_the_overridden_granted_phase()
+    {
+        // RFC 9396 §7.1 enrichment: the same entry that must be refused from a client is the one the
+        // consent decision produces, so the two phases have to be able to disagree.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var enriched = new JsonArray(new JsonObject
+        {
+            ["type"] = "account_information",
+            ["access"] = new JsonObject
+            {
+                ["accounts"] = new JsonArray(new JsonObject { ["iban"] = "DE2310010010123456789" }),
+            },
+        });
+
+        var asRequest = await composite.ApplyAsync(
+            (JsonArray)enriched.DeepClone(), TestClient, TestContext.Current.CancellationToken);
+        var asGranted = await composite.ApplyGrantedAsync(
+            enriched, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(asRequest.TryGetFailure(out _));
+        Assert.True(asGranted.TryGetSuccess(out var validated));
+        Assert.NotNull(validated);
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
     {
         var services = new ServiceCollection();
@@ -431,6 +475,28 @@ public class AuthorizationDetailsPolicyTests
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
+    }
+
+    /// <summary>
+    /// An enrichable type, in the shape of RFC 9396 §7.1 Figures 16 and 17: the client sends empty
+    /// placeholders, and the server writes the identifiers the user picked into them.
+    /// </summary>
+    private sealed class EnrichableAccountValidator : IAuthorizationDetailValidator
+    {
+        public string Type => "account_information";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
+                    ? new OidcError(
+                        ErrorCodes.InvalidAuthorizationDetails,
+                        "access.accounts is chosen by the end-user, so a request must leave it empty")
+                    : detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
 
     private sealed class InvocationCounter

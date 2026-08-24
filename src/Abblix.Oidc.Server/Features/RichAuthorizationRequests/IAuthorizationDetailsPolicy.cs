@@ -59,4 +59,27 @@ public interface IAuthorizationDetailsPolicy
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token);
+
+    /// <summary>
+    /// The same validation applied to a set the consent decision produced rather than one a client
+    /// sent, dispatching each entry to
+    /// <see cref="IAuthorizationDetailValidator.ValidateGrantedAsync"/>. Defaults to
+    /// <see cref="ApplyAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// Everything outside the per-type question is phase-independent and still applies: the entries
+    /// must be JSON objects, their types must be known, and the per-client allowlist still binds.
+    /// Only the question put to the per-type validator differs, because RFC 9396 §7.1 lets the server
+    /// add values during consent that §5 obliges it to refuse from a client.
+    /// </remarks>
+    /// <param name="granted">The <c>authorization_details</c> the consent decision granted.</param>
+    /// <param name="client">The client the grant is being issued to.</param>
+    /// <param name="token">Cancellation token forwarded to per-type validators.</param>
+    /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
+    /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
+    Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+        JsonArray? granted,
+        ClientInfo client,
+        CancellationToken token)
+        => ApplyAsync(granted, client, token);
 }
