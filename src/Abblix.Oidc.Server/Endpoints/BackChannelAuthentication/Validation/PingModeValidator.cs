@@ -46,8 +46,9 @@ public class PingModeValidator : IBackChannelAuthenticationContextValidator
                 "The client is not configured with a backchannel_client_notification_endpoint"));
         }
 
-        // HTTPS enforcement per CIBA spec Section 10.2.1:
-        // "The Client Notification Endpoint MUST use HTTPS"
+        // CIBA Core 1.0 Section 4 defines backchannel_client_notification_endpoint and says of it:
+        // "It MUST be an HTTPS URL." The same paragraph adds that communication with the endpoint
+        // MUST use TLS, which is the transport rather than the registered value and is the host's.
         if (!string.Equals(
             context.ClientInfo.BackChannelClientNotificationEndpoint.Scheme,
             Uri.UriSchemeHttps,
