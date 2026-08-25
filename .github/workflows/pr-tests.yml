@@ -86,8 +86,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Audit rather than block: the job fetches from rfc-editor.org on a cache miss, and the point
-      # of the baseline is to show that it talks to nothing else.
+      # Audit rather than block: the job fetches from rfc-editor.org and openid.net, on a cache miss
+      # and to revalidate a cached copy, and the point of the baseline is to show that it talks to
+      # nothing else.
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
@@ -100,9 +101,11 @@ jobs:
           persist-credentials: false
         timeout-minutes: 3
       - name: List the cited documents
-        # Written to a file because the cache key is derived from it. A published RFC never changes,
-        # so the one thing that can make a cached copy insufficient is a citation naming a document
-        # nobody cited before - which is precisely what this list says.
+        # Written to a file because the cache key is derived from it. The key decides WHICH documents
+        # a cached entry holds, which is what this list says. Whether each of them is still current is
+        # a separate question, and the script answers it per document by revalidating the copy: the
+        # OpenID documents are republished at the same address as errata are incorporated, so a key
+        # alone would serve whichever text arrived first, silently.
         run: python3 .github/scripts/verify-spec-citations.py . --list-documents > .cited-documents.txt
         timeout-minutes: 3
       - name: Cache the specification texts
