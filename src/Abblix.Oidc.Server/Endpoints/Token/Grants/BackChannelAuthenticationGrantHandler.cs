@@ -160,10 +160,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
             return true;
 
-        var requestedTypes = requested.ToTypedArray()!
-            .Select(detail => detail.Type)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
+        var requestedTypes = AuthorizationDetailTypes.NamedBy(requested);
 
         return !typed.All(detail => detail.Type is { } type && requestedTypes.Contains(type));
     }

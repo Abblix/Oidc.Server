@@ -13,6 +13,8 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.Logging;
 
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
 /// <summary>
@@ -142,10 +144,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (Array.Exists(typed, detail => detail.Type is null))
             return ["an entry carrying no type"];
 
-        var requestedTypes = requested.ToTypedArray()!
-            .Select(detail => detail.Type)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
+        var requestedTypes = AuthorizationDetailTypes.NamedBy(requested);
 
         return typed
             .Select(detail => detail.Type!)

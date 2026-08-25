@@ -10,6 +10,8 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
@@ -50,14 +52,15 @@ internal static class GrantedAuthorizationDetails
         if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
             return ["an entry that is not a JSON object"];
 
-        // Absence is named rather than compared. A typeless entry is refused either way - the request side
-        // filters its own types with OfType<string>(), so no request can hold a null to match one with -
-        // and what this arm changes is the log: without it the refusal reports an empty string in the list
-        // of escaped types, which reads as a defect in the message rather than as the grant's shape.
+        // Absence is named rather than compared. A typeless entry is refused either way, because
+        // AuthorizationDetailTypes.NamedBy drops one from the baseline, so no request can hold a null to
+        // match one with. What this arm changes is the log: without it the refusal reports
+        // an empty string in the list of escaped types, which reads as a defect in the message rather
+        // than as the grant's shape.
         if (Array.Exists(typed, detail => detail.Type is null))
             return ["an entry carrying no type"];
 
-        var requestedTypes = RequestedTypes(request.AuthorizationDetails);
+        var requestedTypes = AuthorizationDetailTypes.NamedBy(request.AuthorizationDetails);
 
         return typed
             .Select(detail => detail.Type!)
@@ -65,16 +68,4 @@ internal static class GrantedAuthorizationDetails
             .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
-
-    /// <summary>The types the request asked for.</summary>
-    /// <remarks>
-    /// No arity guard here, unlike the grant side: an entry of the REQUEST that cannot be read as a JSON
-    /// object is dropped rather than refused, which narrows the baseline and therefore admits less. The
-    /// grant side has to refuse instead, because there the same silence would admit more.
-    /// </remarks>
-    private static HashSet<string> RequestedTypes(JsonArray? requested)
-        => (requested?.ToTypedArray() ?? [])
-            .Select(detail => detail.Type)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
 }
