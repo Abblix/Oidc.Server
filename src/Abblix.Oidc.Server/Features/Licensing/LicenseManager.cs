@@ -129,11 +129,46 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
-        // Scans from the start every call and mutates no shared cursor: the method runs concurrently under
-        // the read lock, so advancing a shared start index here let racing readers overshoot a valid license
-        // and permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
+        var (result, expired) = Scan(utcNow);
+
+        // An expiry is reported only when nothing was left in force, which is the fact that makes it worth
+        // reporting and the one the scan can only know at its end. A superseded license expired too, and
+        // saying so daily at Critical for every license a deployment has ever loaded would bury the one
+        // record that means something under records that mean nothing - and they share an event id and a
+        // severity, so the operator who filters out the noise has filtered out the signal.
+        //
+        // With nothing in force the message is exactly true: the server is on the free tier, which allows
+        // one issuer, and a deployment serving more than one then refuses every issuer it has seen,
+        // including the first, until it restarts under a valid license.
+        if (result is null && expired is not null)
+        {
+            foreach (var license in expired)
+                ReportStatus(license, LicenseStatus.Expired, utcNow);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Walks the licenses and returns what is in force, together with the expired ones seen on the way.
+    /// </summary>
+    /// <param name="utcNow">The moment to evaluate each license at.</param>
+    /// <returns>The license in force, or <c>null</c> for the free tier, and the expired licenses.</returns>
+    /// <remarks>
+    /// Separate from <see cref="GenerateActiveLicense"/> so the early exit below stays an early exit while
+    /// the reporting keeps a single place to happen. Guarding two exits with the same condition is how the
+    /// two come to disagree.
+    ///
+    /// Scans from the start every call and mutates no shared cursor: the method runs concurrently under the
+    /// read lock, so advancing a shared start index here let racing readers overshoot a valid license and
+    /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
+    /// </remarks>
+    private (License? InForce, List<License>? Expired) Scan(DateTimeOffset utcNow)
+    {
         License? result = null;
         bool? activeLicenseFound = null;
+        List<License>? expired = null;
+
         for (var indexCurrent = 0; indexCurrent < _licenses.Count; indexCurrent++)
         {
             var license = _licenses[indexCurrent];
@@ -141,13 +176,8 @@ public partial class LicenseManager
             switch (status)
             {
                 case LicenseStatus.Expired:
-                    // Reported and not merged. The moment a license stops applying is the one an operator
-                    // alerts on, because what follows is not graceful: the server falls back to the free
-                    // tier, and a deployment serving more than one issuer then refuses every issuer it has
-                    // seen, including the first, until it restarts under a valid license. Drop the report
-                    // and that fallback happens in silence for the ordinary single-license installation,
-                    // which never reaches the report inside FindActiveLicensesInFuture.
-                    ReportStatus(license, status, utcNow);
+                    // Collected, never merged: its limits stopped applying, which is the whole event.
+                    (expired ??= []).Add(license);
                     break;
 
                 case LicenseStatus.Active:
@@ -163,11 +193,14 @@ public partial class LicenseManager
                     break;
 
                 case LicenseStatus.NotActiveYet:
-                    return result;
+                    // Licenses are held sorted by the moment they start, so everything past this one starts
+                    // later still and the scan is over. Whatever the caller reports, it reports about the
+                    // licenses already collected, which is all of them that could matter.
+                    return (result, expired);
             }
         }
 
-        return result;
+        return (result, expired);
     }
 
     /// <summary>
@@ -190,33 +223,19 @@ public partial class LicenseManager
     /// the ones that still apply. A successor takes over on its own, at the moment
     /// <see cref="GetLicenseStatus"/> starts calling it active.
     ///
-    /// Expired licenses stepped over on the way are reported HERE and only when the search succeeds,
-    /// because that is the one case where <paramref name="indexCurrent"/> leaps past them and the caller's
-    /// own loop never sees them. Reporting them on the way past would report them twice on every other
-    /// call, with nothing but the log throttle absorbing the second - and a throttle suppresses a symptom
-    /// rather than deciding anything.
+    /// Nothing is reported from here, including the expired licenses the search leaps over. A true answer
+    /// merges an active license, so something is in force, and an expiry that changed nothing is exactly
+    /// what the caller declines to report. A false answer leaps over nothing, so the caller's own loop
+    /// meets every license itself.
     /// </remarks>
     private bool FindActiveLicensesInFuture(DateTimeOffset utcNow, ref int indexCurrent, ref License? result)
     {
-        List<License>? expiredSteppedOver = null;
-
         for (var indexNext = indexCurrent + 1; indexNext < _licenses.Count; indexNext++)
         {
             var nextLicense = _licenses[indexNext];
             var nextStatus = GetLicenseStatus(nextLicense, utcNow);
             if (nextStatus != LicenseStatus.Active)
-            {
-                if (nextStatus == LicenseStatus.Expired)
-                    (expiredSteppedOver ??= []).Add(nextLicense);
-
                 continue;
-            }
-
-            if (expiredSteppedOver is not null)
-            {
-                foreach (var expired in expiredSteppedOver)
-                    ReportStatus(expired, LicenseStatus.Expired, utcNow);
-            }
 
             indexCurrent = indexNext;
 

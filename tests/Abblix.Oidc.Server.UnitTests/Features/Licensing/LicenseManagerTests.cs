@@ -657,24 +657,25 @@ public class LicenseManagerTests
     }
 
     /// <summary>
-    /// An expired license the successor search steps over is still reported.
+    /// A deployment that renewed in time hears nothing about the licenses it superseded.
     /// </summary>
     /// <remarks>
-    /// Finding an active successor leaps the index past everything on the way, so the caller's own loop
-    /// never sees those licenses and the search is the only place that can report them. Without that the
-    /// expiry an operator alerts on goes unrecorded for exactly the deployment holding a renewal.
+    /// The expiry record says service access will be affected, and for a renewed installation that is
+    /// simply untrue - a valid license is in force. Saying it once a day for every license a customer has
+    /// ever loaded would bury the one record that means something under records that mean nothing, and
+    /// they carry the same event id and the same severity, so an operator who filters out the noise has
+    /// filtered out the signal too.
     ///
-    /// The count is asserted for shape rather than as proof of anything: reporting the same license twice
-    /// in one evaluation produces one record either way, because the throttle keys on the license and
-    /// status and suppresses the second. That the search reports only on this path is therefore not
-    /// observable here, and is a property of the code rather than of what it writes.
+    /// Three superseded licenses rather than one, because the cost of getting this wrong grows with the
+    /// number of renewals and a single-license arrangement would not show it.
     /// </remarks>
     [Fact]
-    public void GenerateActiveLicense_ExpiredLicenseSteppedOver_IsStillRecorded()
+    public void GenerateActiveLicense_SupersededLicensesBesideAnActiveOne_AreNotReported()
     {
         var manager = new LicenseManager();
-        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: 5) with { ClientLimit = 5 });
-        manager.AddLicense(LicenseAround(-15, -1) with { ClientLimit = 10 });
+        manager.AddLicense(LicenseAround(-40, -30) with { ClientLimit = 1 });
+        manager.AddLicense(LicenseAround(-30, -20) with { ClientLimit = 2 });
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 });
         manager.AddLicense(LicenseAround(-1, 30) with { ClientLimit = 50 });
 
         TestLicense.ClearLogThrottle();
@@ -691,10 +692,44 @@ public class LicenseManagerTests
             LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
         }
 
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+    }
+
+    /// <summary>
+    /// Every expired license is reported when nothing was left in force.
+    /// </summary>
+    /// <remarks>
+    /// The control for the silence above, and the reason that silence is a decision rather than the report
+    /// having been lost: the same three licenses, with the renewal removed, produce a record each. The
+    /// throttle keys on the license value paired with the status, so three licenses carrying distinct
+    /// terms are three keys and three records.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_SeveralExpiredAndNothingInForce_ReportsEach()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-40, -30) with { ClientLimit = 1 });
+        manager.AddLicense(LicenseAround(-30, -20) with { ClientLimit = 2 });
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Null(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
         var expiries = records.Entries
             .Where(entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired)
             .ToList();
 
-        Assert.Single(expiries);
+        Assert.Equal(3, expiries.Count);
     }
 }
