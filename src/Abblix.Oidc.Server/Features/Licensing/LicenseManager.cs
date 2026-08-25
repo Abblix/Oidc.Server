@@ -137,7 +137,7 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
-        var (result, expired, merged, nextStartsAt) = Scan(utcNow);
+        var (result, expired, merged, next) = Scan(utcNow);
 
         // What was MERGED is reported by whoever consults the licenses, for the same reason the expiry
         // below is: the scan also runs on every insert, while the list is still arriving, and a license in
@@ -147,19 +147,19 @@ public partial class LicenseManager
         {
             foreach (var (license, status) in merged)
             {
-                // An expiry a loaded renewal already covers is not worth a warning. "Please renew promptly
-                // to avoid service interruption" is untrue of a deployment holding a license that starts
-                // before this one ends: there is no interruption to avoid, and the operator who acts on the
-                // record has nothing to do. A renewal starting AFTER the gap is a different matter and
-                // still says so, because the gap is real and only the operator can close it.
+                // An expiry a successor carries through is not worth a warning: "Please renew promptly
+                // to avoid service interruption" is untrue of a deployment that will not be interrupted,
+                // and the operator who acts on the record has nothing to do.
                 //
-                // Only the expiring-soon status is suppressed. A grace period means the license has already
-                // expired and the deployment is running on borrowed time, which a successor beginning later
-                // does not make untrue - and one beginning NOW is merged by the search above instead.
-                if (status == LicenseStatus.Active &&
-                    license.ExpiresAt is { } expiresAt &&
-                    nextStartsAt is { } starts &&
-                    starts <= expiresAt)
+                // What is NOT judged is what the successor is WORTH. One with fewer clients or a narrower
+                // issuer set carries the period and still changes what the deployment may do, and that is
+                // a different sentence - saying it through "renew promptly" would be untrue the other way.
+                //
+                // Only the expiring-soon status is suppressed. The arithmetic already excludes the others,
+                // since a license in its grace period has expired and nothing can start after now and
+                // before that - but the status is named anyway, so a later reader changing the dates does
+                // not silently widen what this covers.
+                if (status == LicenseStatus.Active && CarriedThrough(license, next))
                 {
                     continue;
                 }
@@ -236,7 +236,7 @@ public partial class LicenseManager
     /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
     /// </remarks>
     private (License? InForce, IReadOnlyList<License>? Expired, IReadOnlyList<(License License,
-        LicenseStatus Status)>? Merged, DateTimeOffset? NextStartsAt) Scan(DateTimeOffset utcNow)
+        LicenseStatus Status)>? Merged, License? Next) Scan(DateTimeOffset utcNow)
     {
         License? result = null;
         bool? activeLicenseFound = null;
@@ -280,7 +280,7 @@ public partial class LicenseManager
                     // list is sorted, so a caller comparing it against an expiry learns whether the gap
                     // between them is a gap at all - and a renewal already loaded that starts before the
                     // current license ends leaves nothing to warn anybody about.
-                    return (result, expired, merged, license.NotBefore);
+                    return (result, expired, merged, license);
             }
         }
 
@@ -373,6 +373,39 @@ public partial class LicenseManager
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="next"/> leaves no moment of <paramref name="license"/>'s expiry uncovered.
+    /// </summary>
+    /// <param name="license">The license about to expire.</param>
+    /// <param name="next">The earliest license that has not started yet, or <c>null</c> when there is none.
+    /// </param>
+    /// <remarks>
+    /// Two questions, and the second is the one that is easy to leave out. Starting before the expiry is
+    /// not the same as outliving it: a license that begins inside the window and ends FIRST is an add-on
+    /// bought alongside, or a short one issued by mistake, and the expiry is still coming. Suppressing
+    /// there would spend the last advance notice the deployment gets before it falls to the free tier,
+    /// which allows one issuer and throws on every other one this server has seen.
+    ///
+    /// The start is compared inclusively because <see cref="GetLicenseStatus"/> is: a license is active at
+    /// both of its endpoints, so a successor beginning at the instant this one ends leaves no moment
+    /// uncovered, and one beginning a tick later leaves exactly one.
+    ///
+    /// The end is compared strictly, for the mirror reason: a successor ending at the same instant moves
+    /// nothing, and the expiry a deployment is being warned about is still that instant. A successor with
+    /// no expiry outlives everything.
+    ///
+    /// Only the FIRST license that has not started is examined, which is the earliest of them. A chain
+    /// where a third license covers what the second does not therefore still produces the warning: that
+    /// errs toward saying something true and unnecessary rather than staying silent about a real lapse.
+    /// </remarks>
+    private static bool CarriedThrough(License license, License? next)
+    {
+        if (license.ExpiresAt is not { } expiresAt || next is not { NotBefore: { } starts })
+            return false;
+
+        return starts <= expiresAt && (next.ExpiresAt is not { } ends || expiresAt < ends);
     }
 
     /// <summary>
