@@ -12,9 +12,16 @@ namespace Abblix.Oidc.Server;
 /// Named EventId constants for every <c>[LoggerMessage]</c> in this assembly,
 /// grouped into nested static classes per feature area. Refer to events as
 /// <c>LogEvents.Endpoints.SomeEvent</c>, <c>LogEvents.ClientAuth.SomeEvent</c>,
-/// etc., from the attribute. See <c>LOGGING.md</c> at the repository root for
-/// the canonical range allocation and authoring rules.
+/// etc., from the attribute.
 /// </summary>
+/// <remarks>
+/// This file is the range allocation; there is no companion document. Each range and sub-range carries
+/// its own bounds, and where the bounds are not round, the reason.
+///
+/// Read the neighbours before taking a number. Several windows are narrower than they look, because
+/// something that is not theirs sits inside them, and an id already in a deployment's alerts cannot move -
+/// so a class needing one more takes a second window rather than displacing anybody.
+/// </remarks>
 internal static class LogEvents
 {
     /// <summary>
@@ -447,9 +454,15 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 7000-7099: <c>Features/DeviceAuthorization</c>,
+    /// Range 7000-7199: <c>Features/DeviceAuthorization</c>,
     /// <c>Features/BackChannelAuthentication</c>, <c>Features/LogoutNotification</c>.
     /// </summary>
+    /// <remarks>
+    /// Widened from 7000-7099 rather than continued elsewhere. 7000-7099 was allocated to the last id,
+    /// and the two sub-ranges that could have grown are hemmed in by a back-channel logout sender sitting
+    /// between them - moving that would change ids a deployment may already alert on. 7100-7199 was free,
+    /// so a class needing a third id takes a second window here and keeps its name.
+    /// </remarks>
     public static class Device
     {
         /// <summary>
@@ -584,13 +597,13 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/Token/Grants/DeviceCodeGrantHandler.cs</c> - what the token endpoint refuses when
-        /// the stored grant no longer matches the request (sub-range 7083-7084).
+        /// the stored record is not one a token can be issued from (sub-ranges 7083-7084 and 7100-7119).
         /// </summary>
         /// <remarks>
-        /// Two ids rather than a round ten, because this is what the Device range has left: 7085-7099
+        /// Two windows rather than one, because 7083-7084 is all the original range had left: 7085-7099
         /// belongs to the back-channel logout sender above, which sits in this range and is not the device
-        /// flow at all. Moving it would change ids an operator may already alert on, so the misfiling stays
-        /// and the window here is honest about its size. A third event needs the range widened first.
+        /// flow at all. Moving either that or the two ids below would change ids a deployment may already
+        /// alert on, so the third event takes the range's continuation instead.
         /// </remarks>
         public static class DeviceCodeGrantHandler
         {
@@ -598,6 +611,10 @@ internal static class LogEvents
 
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base;
             public const int GrantedAuthorizationDetailsRefused = Base + 1;
+
+            private const int Continued = 7100;
+
+            public const int AuthorizedRecordCarriesNoGrant = Continued;
         }
     }
 

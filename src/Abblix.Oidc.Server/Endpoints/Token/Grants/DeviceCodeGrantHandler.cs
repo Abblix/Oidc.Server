@@ -90,9 +90,9 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized }
                 when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
 
-                // Use atomic get-and-remove to prevent race conditions where two concurrent requests
-                // could both retrieve the authorized grant. Per RFC 8628 Section 3.5, each device code
-                // MUST only be exchanged for tokens once.
+                // Atomic get-and-remove, so two concurrent polls cannot both retrieve the authorized
+                // grant and both be issued tokens. RFC 8628 states no such rule anywhere - exchanging a
+                // device code once is this library's decision, and this arm is where it is enforced.
 
                 return new OidcError(
                     ErrorCodes.ExpiredToken,
@@ -102,9 +102,9 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
 
                 // Judged again, on what is actually being redeemed. IUserCodeVerificationService refuses a
-                // widened grant when the end user approves, but the host owns the same storage and can
-                // write to it afterwards - a retried or corrected approval is the ordinary shape of that,
-                // not an attack. CIBA judges at both ends for the same reason.
+                // widened grant when the end user approves, but a host writes to that same storage through
+                // the public seam and can do so afterwards - a retried or corrected approval is the ordinary
+                // shape of that, not an attack. CIBA judges at both ends for the same reason.
                 //
                 // What this catches is a host that FORGOT, not one that lies: the baseline it compares
                 // against lives in the same host-owned record, so anything able to widen the grant can
@@ -141,6 +141,41 @@ public partial class DeviceCodeGrantHandler(
                 }
 
                 return authorizedGrant;
+
+            // Authorized, and nothing to issue from. Reached only when the grant is missing, because the
+            // arm above binds it - and nothing in this library writes such a record: approval sets the
+            // grant beside the status. Both members are public and settable on a record any host can read
+            // back through the public storage interface, so writing the two apart takes one line.
+            //
+            // What it used to reach was the default arm, which threw naming the STATUS: "Unexpected device
+            // authorization status: Authorized", about a status this switch plainly handles. The client
+            // got HTTP 500 and an operator got a sentence pointing at a state machine that is not the
+            // problem.
+            //
+            // The code is already claimed by the arm two above, which removes it before anything is
+            // judged, so the record is gone by the time this is reached: a retry answers expired_token and
+            // nobody can look at what was stored. That makes this log line the only account of it, which
+            // is why it names the missing member rather than the status, and why it sits at Error.
+            //
+            // Refusing WITHOUT consuming the code, so the record survives for an operator to inspect, is
+            // the real alternative. It cannot be taken HERE, because by this point the code is already
+            // spent, but it could be taken in an arm of its own placed above the claiming one - a property
+            // pattern naming the missing member compiles there and leaves storage untouched.
+            //
+            // Declined anyway. Such an arm carves an exception out of single use, and makes whether a
+            // device code survives its redemption depend on which member of the record happened to be
+            // missing - a rule nobody would find while reading either arm on its own.
+            //
+            // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
+            // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather
+            // than one the end user denied or one that ran out of time.
+            case { Status: DeviceAuthorizationStatus.Authorized }:
+
+                LogAuthorizedRecordCarriesNoGrant(clientInfo.ClientId);
+
+                return new OidcError(
+                    ErrorCodes.InvalidGrant,
+                    "The device authorization cannot be redeemed");
 
             // Authorization still pending - check polling rate
             case { Status: DeviceAuthorizationStatus.Pending, NextPollAt: { } nextPollAt }

@@ -251,7 +251,8 @@ public class DistributedCacheExtensionsTests
 	{
 		// The documented contract is "false if ... the key didn't exist". Without a value-existence
 		// check the protocol only verified its own lock token survived and wrongly reported success,
-		// breaking exactly-once removal (RFC 8628 3.5, RFC 6749 4.1.2) across non-overlapping lock windows.
+		// breaking exactly-once removal across non-overlapping lock windows - which RFC 6749 4.1.2 requires
+		// of an authorization code, and which this codebase additionally chooses for a device_code.
 		var cache = CreateCache();
 
 		var result = await cache.TryRemoveAsync("nonexistent-key", cancellationToken: TestContext.Current.CancellationToken);

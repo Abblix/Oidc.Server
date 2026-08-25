@@ -226,8 +226,9 @@ public class BackChannelAuthenticationGrantHandlerTests
 
     /// <summary>
     /// The completion path judges what the end user approved, and the redemption judges it again, for the
-    /// reason the subject comparison beside it already does: the host owns the same storage and can replace
-    /// the stored grant between the two, which is the ordinary shape of a retried or corrected completion.
+    /// reason the subject comparison beside it already does: a host writes to that same storage through the
+    /// public seam and can replace the stored grant between the two, which is the ordinary shape of a retried
+    /// or corrected completion.
     /// A host that never calls the completion path at all reaches this check and nothing else.
     /// </summary>
     [Fact]
@@ -1262,9 +1263,9 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// </summary>
     /// <remarks>
     /// The grant processor consumes the stored request itself: it removes the entry and returns the grant it
-    /// found there. Between the handler's read and that removal, the host - which owns the same storage -
-    /// can replace what is stored, which is the ordinary shape of a retried or corrected completion rather
-    /// than an attack. Judging the earlier copy would approve one grant and hand over another.
+    /// found there. Between the handler's read and that removal, a host - writing to that same storage
+    /// through the public seam - can replace what is stored, which is the ordinary shape of a retried or
+    /// corrected completion rather than an attack. Judging the earlier copy would approve one grant and hand over another.
     /// <para>
     /// Driven by making the two reads disagree, which is what every other test here cannot do: they stub
     /// both calls to return the same object, so no arrangement of them could observe this.
