@@ -76,17 +76,19 @@ jobs:
   citations:
     # A section number cited in a comment reads as checkable, which is exactly why nobody checks it,
     # so it survives review and is then repeated in commit messages and release notes. This asks each
-    # cited document whether the section exists at all. It cannot tell whether a real section says
+    # cited document whether the section exists at all, across the RFCs and the OpenID specifications
+    # alike, since the sources cite both in the same shape. It cannot tell whether a real section says
     # what the comment claims - that still needs a reader - and it says so when it could not fetch a
     # document, rather than counting the unread ones as good.
-    name: RFC citations
+    name: Specification citations
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      # Audit rather than block: the job fetches from rfc-editor.org on a cache miss, and the point
-      # of the baseline is to show that it talks to nothing else.
+      # Audit rather than block: the job fetches from rfc-editor.org and openid.net, on a cache miss
+      # and to revalidate a cached copy, and the point of the baseline is to show that it talks to
+      # nothing else.
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
@@ -98,23 +100,26 @@ jobs:
           # GITHUB_TOKEN from the runner git config after checkout.
           persist-credentials: false
         timeout-minutes: 3
-      - name: List the cited RFCs
-        # Written to a file because the cache key is derived from it. A published RFC never changes,
-        # so the one thing that can make a cached copy insufficient is a citation naming a document
-        # nobody cited before - which is precisely what this list says.
-        run: python3 .github/scripts/verify-rfc-citations.py . --list-rfcs > .rfc-cited.txt
+      - name: List the cited documents
+        # Written to a file because the cache key is derived from it. The key decides WHICH documents
+        # a cached entry holds, which is what this list says. Whether each of them is still current is
+        # a separate question, and the script answers it per document by revalidating the copy: the
+        # OpenID documents are republished at the same address as errata are incorporated, so a key
+        # alone would serve whichever text arrived first, silently.
+        run: python3 .github/scripts/verify-spec-citations.py . --list-documents > .cited-documents.txt
         timeout-minutes: 3
-      - name: Cache the RFC texts
+      - name: Cache the specification texts
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
-          path: ~/.cache/rfc-citations
-          key: ${{ runner.os }}-rfc-texts-${{ hashFiles('.rfc-cited.txt') }}
-          # A partial hit is worth taking: the documents it holds are still the current ones, and
-          # only the newly cited RFC is fetched.
-          restore-keys: ${{ runner.os }}-rfc-texts-
+          path: ~/.cache/spec-citations
+          key: ${{ runner.os }}-spec-texts-${{ hashFiles('.cited-documents.txt') }}
+          # A partial hit is worth taking: the script revalidates every document it reads, so an
+          # older entry costs a conditional request rather than a stale answer, and a newly cited
+          # document is simply fetched.
+          restore-keys: ${{ runner.os }}-spec-texts-
         timeout-minutes: 3
       - name: Verify every cited section exists
-        run: python3 .github/scripts/verify-rfc-citations.py .
+        run: python3 .github/scripts/verify-spec-citations.py .
         timeout-minutes: 3
 
   test:
@@ -138,6 +143,6 @@ jobs:
       - name: Fail if the multi-framework build failed
         if: needs.build.result != 'success'
         run: exit 1
-      - name: Fail if a cited RFC section does not exist
+      - name: Fail if a cited section does not exist
         if: needs.citations.result != 'success'
         run: exit 1

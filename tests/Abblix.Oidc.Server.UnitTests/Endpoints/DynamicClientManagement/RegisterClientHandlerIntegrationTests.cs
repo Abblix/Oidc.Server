@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// validators exist, but that they participate in the registration pipeline a host actually
 /// invokes via <c>IRegisterClientHandler</c>. Construction of the registration request goes
 /// through the public DTO; resolution goes through DI; rejections come back as OidcError
-/// per OIDC DCR §3.2.2.
+/// per OIDC DCR §3.3, Client Registration Error Response.
 /// </summary>
 public class RegisterClientHandlerIntegrationTests
 {
