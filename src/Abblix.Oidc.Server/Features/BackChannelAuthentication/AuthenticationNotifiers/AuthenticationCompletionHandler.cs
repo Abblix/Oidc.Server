@@ -96,16 +96,13 @@ public abstract partial class AuthenticationCompletionHandler(
             return;
         }
 
-        // What is NOT asked here, and where it is asked instead. The per-type validators are consulted
-        // again when a grant is spent, by GrantedRevalidation, and that happens at the token endpoint.
-        // A poll or ping client reaches it. A push client never does: its tokens are minted from
-        // here and delivered to its notification endpoint, so for push this method is where the grant is
-        // spent and the content check is missing from it. The type comparison above cannot stand in - it
-        // sees a raised amount inside an entry of a requested type as not escaping.
-        //
-        // Wiring it here needs the policy on this constructor and therefore on all three delivery modes,
-        // and it also has to decide what a refusal at completion means, which is a denial rather than an
-        // error to a waiting client. Both belong to that change rather than to this one.
+        // What is NOT asked here, and where each mode asks it. The per-type validators judge the
+        // CONTENT of an entry whose type was requested, which the comparison above structurally cannot
+        // see. Poll and ping meet that question at the token endpoint when the grant is redeemed, and
+        // asking it again here would pre-empt that one: the refusal would become a denial, and the
+        // client would read access_denied where the redemption gate answers with the code RFC 9396
+        // registers for it. Push has no token endpoint to reach, so PushModeCompletionHandler asks it
+        // there, before it mints.
 
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;

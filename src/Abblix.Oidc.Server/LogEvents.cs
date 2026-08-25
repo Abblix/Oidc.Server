@@ -525,6 +525,7 @@ internal static class LogEvents
             public const int TokensDelivered = Base + 2;
             public const int TokenGenerationFailed = Base + 3;
             public const int PushDeliveryFailed = Base + 4;
+            public const int GrantedAuthorizationDetailsRefused = Base + 5;
         }
 
         /// <summary>

@@ -18,13 +18,17 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// Why a grant's <c>authorization_details</c> will not be issued: what the client is told, and what the
 /// operator is told.
 /// </summary>
-/// <param name="Error">The answer that goes on the wire, deliberately saying nothing specific.</param>
+/// <param name="Error">The answer for a client that is waiting for one, deliberately saying nothing
+/// specific.</param>
 /// <param name="Reason">The validator's own words, for the log.</param>
 /// <remarks>
 /// Two strings because they have two audiences. A granted-phase rejection names a HOST-side defect, so the
 /// validator writes for whoever has to fix it and may name a tenant, a ceiling or a configuration key. That
 /// is not a sentence a client asking for a token should receive, and no other granted-phase refusal in this
 /// library reaches one - the authorization endpoint wraps its own in an exception.
+///
+/// One caller has no client to answer and uses <c>Reason</c> alone: the CIBA push mode delivers through a
+/// notification endpoint this server sends no error payload to, so there is nowhere for <c>Error</c> to go.
 /// </remarks>
 internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 
@@ -38,10 +42,15 @@ internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 /// decision. A host that raises an amount inside an entry of a type the request did ask for therefore
 /// passes every type check there is. Only the validator for that type can refuse it.
 ///
-/// Reached from the token endpoint, which is where the device flow and the CIBA poll and ping modes spend
-/// a grant. The CIBA push mode does not spend its grant there and therefore never arrives here; the note
-/// in <see cref="BackChannelAuthentication.AuthenticationNotifiers.AuthenticationCompletionHandler"/> says
-/// what that leaves unasked.
+/// Reached from the token endpoint, where the device flow and the CIBA poll and ping modes redeem, and
+/// from
+/// <see cref="BackChannelAuthentication.AuthenticationNotifiers.PushModeCompletionHandler"/>, which is
+/// where the CIBA PUSH mode spends its grant instead - its tokens are minted at completion and posted to
+/// the client, so it never travels through the token endpoint at all.
+///
+/// Deliberately NOT asked at completion for poll and ping. They meet it at redemption, and asking earlier
+/// would pre-empt rather than add: a refusal at completion is a denial, and a denied CIBA request reaches
+/// its client as <c>access_denied</c> rather than as the code registered for this condition.
 ///
 /// Apply while FORMING a grant, check while SPENDING one. At the authorization endpoint the validators run
 /// as part of building the grant, so what they return is the decision and the caller emits it. Here the
@@ -119,9 +128,11 @@ internal static class GrantedRevalidation
     /// about WHEN, not something the specification asks for - §6 covers a different case, the
     /// <c>authorization_details</c> token request parameter, and nothing is requested on these flows.
     ///
-    /// It is also the only available code that is TRUE on both flows - CIBA Core §11 defines
-    /// <c>access_denied</c> as "The end-user denied the authorization request", and here the end user
-    /// approved while the deployment refused.
+    /// It is also the only available code that is TRUE on the flows that answer a waiting client - CIBA
+    /// Core §11 defines <c>access_denied</c> as "The end-user denied the authorization request", and here
+    /// the end user approved while the deployment refused. The push mode answers nobody and discards this
+    /// code, which is why keeping poll and ping on the redemption path matters: they are the ones that can
+    /// still be told the truth.
     /// </remarks>
     private static GrantRefusal Refusal(string? reason)
         => new(

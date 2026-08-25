@@ -9,6 +9,8 @@
 using System;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -18,11 +20,13 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -51,9 +55,11 @@ public class AuthenticationCompletionHandlerTests
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
             _notificationService.Object);
 
-    private PushModeCompletionHandler CreatePushModeHandler() =>
+    private PushModeCompletionHandler CreatePushModeHandler(
+        StubAuthorizationDetailsPolicy? policy = null) =>
         new(Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
-            _notificationService.Object, _tokenRequestProcessor.Object);
+            _notificationService.Object, _tokenRequestProcessor.Object,
+            policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
     /// <summary>
     /// A converter for a public client, where what the client sees is the session's own subject.
@@ -662,7 +668,8 @@ public class AuthenticationCompletionHandlerTests
     /// </summary>
     private static BackChannelAuthenticationRequest CreateRequestWithAuthorizationDetails(
         string[] requestedTypes,
-        string[] grantedTypes)
+        string[] grantedTypes,
+        bool deliverable = false)
         => new(
             new AuthorizedGrant(
                 new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test"),
@@ -674,6 +681,13 @@ public class AuthenticationCompletionHandlerTests
         {
             ClientNotificationToken = NotificationToken,
             RequestedAuthorizationDetails = Details(requestedTypes),
+
+            // Push delivery reads the endpoint off the REQUEST rather than off the client, so a fixture
+            // without it refuses on the notification configuration before reaching anything else - which
+            // makes every later assertion hold for a reason that is not the one under test.
+            ClientNotificationEndpoint = deliverable
+                ? new Uri("https://client.example.com/ciba/notify")
+                : null,
         };
 
     private static JsonArray Details(string[] types)
@@ -784,5 +798,118 @@ public class AuthenticationCompletionHandlerTests
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    /// <summary>
+    /// A push client is not delivered a grant whose CONTENT the per-type validator refuses.
+    /// </summary>
+    /// <remarks>
+    /// The type comparison above cannot see this: the type was asked for, so a raised amount inside the
+    /// entry passes every check the flow can make on its own. Push is the mode where that matters,
+    /// because its tokens are minted at completion and posted to the client's notification endpoint, so
+    /// it never reaches the token endpoint where the same question is asked at redemption.
+    ///
+    /// The fixture is DELIVERABLE on purpose. Push reads its endpoint off the request rather than off
+    /// the client, and a request without one is refused on the notification configuration before the
+    /// gate is reached - which satisfies every assertion below for a reason that is not the gate.
+    ///
+    /// Asserted through the token processor never being called, not through the status: for push a
+    /// refusal removes the request, so a status assertion would hold over a handler that minted the
+    /// tokens first and then declined to deliver them, having already spent the grant.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorRefusesTheGrant_DeliversNothing()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
+
+        await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(1, policy.GrantedCalls);
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        _notificationService.VerifyNoOtherCalls();
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// A validator that answers by EDITING the entry refuses the grant, and does not edit the grant.
+    /// </summary>
+    /// <remarks>
+    /// A normalising validator says what it wants by changing what it was handed, which is how the
+    /// narrowing fixtures in this repository are written. At completion the end user has already
+    /// approved this grant out of band, so an edit here would change what was approved where nobody is
+    /// watching - the question is asked on a copy and the answer read as yes or no.
+    ///
+    /// Driven with a validator that actually normalises rather than one that only accepts, so the
+    /// assertion on the untouched grant is about the copy rather than about a stub that would have
+    /// changed nothing either way.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorNormalises_RefusesAndLeavesTheGrant()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+
+        var granted = request.AuthorizedGrant.Context.AuthorizationDetails!;
+        var before = granted.ToJsonString();
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");
+
+        await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(1, policy.GrantedCalls);
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        Assert.NotSame(granted, policy.LastSeen);
+        Assert.Equal(before, granted.ToJsonString());
+    }
+
+    /// <summary>
+    /// Only the push handler is wired to the per-type validators.
+    /// </summary>
+    /// <remarks>
+    /// The decision this change rests on, asserted about the WIRING rather than about an outcome. Poll and
+    /// ping meet the same question at the token endpoint when their client redeems, and asking it again at
+    /// completion would pre-empt rather than add: a refusal at completion is a denial, and a denied CIBA
+    /// request reaches its client as access_denied, where the redemption gate answers with the code
+    /// RFC 9396 section 14.6 registers for this condition.
+    ///
+    /// A behavioural test cannot hold this. Driving a poll completion and asserting it succeeds passes
+    /// identically whether the validators were never asked or were asked and accepted, so putting the gate
+    /// back into the shared base - which is what a reader who finds this decision surprising would do -
+    /// leaves such a test green. What separates the two states in THAT shape is whether the handler has a
+    /// policy at all, which is what this asserts. A gate written somewhere other than a handler's
+    /// constructor - in the router, say, which already resolves services - would pass this and is not what
+    /// it guards against.
+    ///
+    /// Named types rather than a scan of the assembly, and the list is complete by construction rather
+    /// than by luck: CIBA Core 1.0 defines exactly three delivery modes and this library ships a handler
+    /// for each. A fourth would be a specification change, which is a moment somebody reads this anyway.
+    /// </remarks>
+    [Fact]
+    public void OnlyThePushHandler_TakesThePerTypeValidators()
+    {
+        Assert.True(TakesThePolicy(typeof(PushModeCompletionHandler)));
+
+        Assert.False(TakesThePolicy(typeof(AuthenticationCompletionHandler)));
+        Assert.False(TakesThePolicy(typeof(PollModeCompletionHandler)));
+        Assert.False(TakesThePolicy(typeof(PingModeCompletionHandler)));
+
+        static bool TakesThePolicy(Type handler)
+            => handler
+                .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .SelectMany(constructor => constructor.GetParameters())
+                .Any(parameter => parameter.ParameterType == typeof(IAuthorizationDetailsPolicy));
     }
 }
