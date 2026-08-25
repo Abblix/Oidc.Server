@@ -193,6 +193,15 @@ public class InfrastructureIntegrationTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+
+        // The code stays SignatureInvalid on purpose, because it drives the receiver's retry and the key
+        // resolver already refetches on an unseen key identifier. What the description adds is the reason
+        // to look at the wiring rather than at the sender: the receiver is reading a key document the
+        // issuer does not sign with. Without that sentence, a JWK Set that moved is indistinguishable in
+        // the log from a forged token, and the forged reading is the one an operator reaches for first.
+        Assert.Contains(
+            "not among the keys this receiver holds", error.Description, StringComparison.Ordinal);
+        Assert.Contains(signingKey.KeyId!, error.Description, StringComparison.Ordinal);
     }
 
     [Fact]

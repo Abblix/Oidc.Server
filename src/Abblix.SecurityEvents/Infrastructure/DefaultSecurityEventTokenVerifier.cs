@@ -40,6 +40,15 @@ public sealed class DefaultSecurityEventTokenVerifier(
         // promise the receiver.
         var noKeysResolved = false;
 
+        // The token names a key the receiver's document does not hold. Said in the description and not in
+        // the CODE, which drives the receiver's retry: the resolver already refetches on an unseen key
+        // identifier, bounded by its own cooldown, so a second layer of retrying above it would buy
+        // nothing and cost a request per forged token. What is missing is not a decision, it is the
+        // sentence that tells an operator which way to look - a key document that has aged out reports as
+        // a signature that does not verify, and that reads as a forged token to the first person who sees
+        // it.
+        var namedKeyMissing = false;
+
         var parameters = new ValidationParameters
         {
             Options = ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey,
@@ -50,7 +59,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
 
         return result.Match<Result<JsonWebToken, SecurityEventTokenValidationError>>(
             token => token,
-            jwtError => Translate(jwtError, noKeysResolved));
+            jwtError => Translate(jwtError, noKeysResolved, namedKeyMissing, keyId));
 
         async IAsyncEnumerable<JsonWebKey> ResolveBuffered(string issuer)
         {
@@ -61,6 +70,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
             }
 
             noKeysResolved = keys.Count == 0;
+            namedKeyMissing = keyId is not null && keys.TrueForAll(key => key.KeyId != keyId);
 
             foreach (var key in keys)
             {
@@ -69,7 +79,11 @@ public sealed class DefaultSecurityEventTokenVerifier(
         }
     }
 
-    private static SecurityEventTokenValidationError Translate(JwtValidationError error, bool noKeysResolved)
+    private static SecurityEventTokenValidationError Translate(
+        JwtValidationError error,
+        bool noKeysResolved,
+        bool namedKeyMissing,
+        string? keyId)
     {
         var code = error.Error switch
         {
@@ -78,6 +92,15 @@ public sealed class DefaultSecurityEventTokenVerifier(
             _ => SecurityEventTokenErrorCode.SignatureInvalid,
         };
 
-        return new SecurityEventTokenValidationError(code, error.ErrorDescription);
+        // Named, because the identifier is the whole diagnosis: it says the receiver is reading a
+        // different key document from the one the issuer signs with, and it says which key would have
+        // answered. Without it the operator has a failed signature and no reason to suspect wiring.
+        var description = namedKeyMissing
+            ? error.ErrorDescription
+              + $" The token names key '{keyId}', which is not among the keys this receiver holds for that"
+              + " issuer, so the key document it reads is not the one the issuer signs with."
+            : error.ErrorDescription;
+
+        return new SecurityEventTokenValidationError(code, description);
     }
 }
