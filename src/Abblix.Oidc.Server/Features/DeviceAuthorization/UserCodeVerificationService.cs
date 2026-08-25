@@ -98,7 +98,7 @@ public partial class UserCodeVerificationService(
         // authorization request never asked for gives the device authority nobody requested, and this is
         // the last place holding both sides: the requested entries live on the record, and the grant
         // about to replace them is the one the token is built from.
-        if (GrantedAuthorizationDetails.Escaping(request, authorizedGrant) is { Length: > 0 } escaped)
+        if (GrantedAuthorizationDetails.EscapedTypes(request, authorizedGrant) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
                 request.ClientId, string.Join(", ", escaped));

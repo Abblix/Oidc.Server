@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -62,6 +63,7 @@ public class DeviceCodeGrantHandlerTests
         });
 
         _handler = new DeviceCodeGrantHandler(
+            NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
             timeProvider,
             options);
@@ -163,6 +165,13 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+
+        // The arm that claims the code runs first, so the refusal follows a code that no longer exists and
+        // a second poll answers expired_token rather than access_denied. That is right - RFC 8628 section
+        // 3.5 has the client stop polling on any code other than authorization_pending or slow_down, and
+        // the user-denial refusal beside this one removes first for the same reason - but it depends on the
+        // order of the arms, which nothing else here would notice being changed.
+        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>

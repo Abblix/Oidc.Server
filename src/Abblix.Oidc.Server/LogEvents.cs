@@ -580,6 +580,17 @@ internal static class LogEvents
             public const int GrantedAuthorizationDetailsNotCarried = Base + 1;
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 2;
         }
+
+        /// <summary>
+        /// <c>Endpoints/Token/Grants/DeviceCodeGrantHandler.cs</c> - what the token endpoint refuses when
+        /// the stored grant no longer matches the request (sub-range 7085-7089).
+        /// </summary>
+        public static class DeviceCodeGrantHandler
+        {
+            private const int Base = 7085;
+
+            public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 1;
+        }
     }
 
     /// <summary>

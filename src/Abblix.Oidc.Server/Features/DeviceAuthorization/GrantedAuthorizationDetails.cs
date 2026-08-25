@@ -42,7 +42,7 @@ internal static class GrantedAuthorizationDetails
     /// member predates this comparison on the stored record, so a null there says the client asked for
     /// nothing rather than that the request was written by a build without the field.
     /// </remarks>
-    public static string[] Escaping(DeviceAuthorizationRequest request, AuthorizedGrant grant)
+    public static string[] EscapedTypes(DeviceAuthorizationRequest request, AuthorizedGrant grant)
     {
         if (grant.Context.AuthorizationDetails is not { Count: > 0 } granted)
             return [];
@@ -64,6 +64,12 @@ internal static class GrantedAuthorizationDetails
             .ToArray();
     }
 
+    /// <summary>The types the request asked for.</summary>
+    /// <remarks>
+    /// No arity guard here, unlike the grant side: an entry of the REQUEST that cannot be read as a JSON
+    /// object is dropped rather than refused, which narrows the baseline and therefore admits less. The
+    /// grant side has to refuse instead, because there the same silence would admit more.
+    /// </remarks>
     private static HashSet<string> RequestedTypes(JsonArray? requested)
         => (requested?.ToTypedArray() ?? [])
             .Select(detail => detail.Type)
