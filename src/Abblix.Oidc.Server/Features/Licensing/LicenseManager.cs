@@ -144,7 +144,9 @@ public partial class LicenseManager
                     // Reported and not merged. The moment a license stops applying is the one an operator
                     // alerts on, because what follows is not graceful: the server falls back to the free
                     // tier, and a deployment serving more than one issuer then refuses every issuer it has
-                    // seen, including the first, until it restarts under a valid license.
+                    // seen, including the first, until it restarts under a valid license. Drop the report
+                    // and that fallback happens in silence for the ordinary single-license installation,
+                    // which never reaches the report inside FindActiveLicensesInFuture.
                     ReportStatus(license, status, utcNow);
                     break;
 
@@ -169,33 +171,51 @@ public partial class LicenseManager
     }
 
     /// <summary>
-    /// Searches for active licenses that will become valid in the future, starting from the current index in the licenses list.
+    /// Looks past a license in its grace period for one that is active now, and merges that one instead.
     /// </summary>
     /// <param name="utcNow">The current UTC time for license evaluation.</param>
-    /// <param name="indexCurrent">The current index in the licenses list from which to start the search.</param>
-    /// <param name="result">The license that has been determined to be active or will soon be active, to be updated by this method.</param>
-    /// <returns>True if an active license is found in the future; otherwise, false.</returns>
+    /// <param name="indexCurrent">The index the search starts after, advanced past everything it stepped
+    /// over when it finds an active license.</param>
+    /// <param name="result">The result license, updated with the active license when one is found.</param>
+    /// <returns>True when an active license was found and merged; otherwise, false.</returns>
     /// <remarks>
-    /// This method is used internally by GenerateActiveLicense to find licenses that are not yet active but will become so,
-    /// allowing for a seamless transition between licenses as they expire or become valid.
+    /// Only an ACTIVE license answers this question, and that is the whole of it: a license whose terms do
+    /// not apply at <paramref name="utcNow"/> cannot decide what applies at <paramref name="utcNow"/>.
+    /// One that has expired is over, and one that has not started is not the deployment's yet - handing
+    /// today the allowance of a license beginning next week is what <c>NotBefore</c> exists to forbid, and
+    /// the answer would stick, because <see cref="TryGetCurrentLicenseLimit"/> caches any result whose
+    /// <c>ExpiresAt</c> is still ahead.
+    ///
+    /// A false answer therefore leaves the grace-period license in force, which is correct: its terms are
+    /// the ones that still apply. A successor takes over on its own, at the moment
+    /// <see cref="GetLicenseStatus"/> starts calling it active.
+    ///
+    /// Expired licenses stepped over on the way are reported HERE and only when the search succeeds,
+    /// because that is the one case where <paramref name="indexCurrent"/> leaps past them and the caller's
+    /// own loop never sees them. Reporting them on the way past would report them twice on every other
+    /// call, with nothing but the log throttle absorbing the second - and a throttle suppresses a symptom
+    /// rather than deciding anything.
     /// </remarks>
     private bool FindActiveLicensesInFuture(DateTimeOffset utcNow, ref int indexCurrent, ref License? result)
     {
+        List<License>? expiredSteppedOver = null;
+
         for (var indexNext = indexCurrent + 1; indexNext < _licenses.Count; indexNext++)
         {
             var nextLicense = _licenses[indexNext];
             var nextStatus = GetLicenseStatus(nextLicense, utcNow);
-            if (nextStatus == LicenseStatus.GracePeriod)
-                continue;
-
-            // An expired license is no more a license found in the future than one in its grace period is.
-            // Taking it used to merge limits that had stopped applying into the license in force, and tell
-            // the caller a successor existed - so a deployment kept the allowance of a license it no longer
-            // held, on the strength of a later one that had already run out.
-            if (nextStatus == LicenseStatus.Expired)
+            if (nextStatus != LicenseStatus.Active)
             {
-                ReportStatus(nextLicense, nextStatus, utcNow);
+                if (nextStatus == LicenseStatus.Expired)
+                    (expiredSteppedOver ??= []).Add(nextLicense);
+
                 continue;
+            }
+
+            if (expiredSteppedOver is not null)
+            {
+                foreach (var expired in expiredSteppedOver)
+                    ReportStatus(expired, LicenseStatus.Expired, utcNow);
             }
 
             indexCurrent = indexNext;
@@ -248,14 +268,15 @@ public partial class LicenseManager
     /// <param name="status">Its status at <paramref name="utcNow"/>.</param>
     /// <param name="utcNow">The moment the status was evaluated at.</param>
     /// <remarks>
-    /// Separate from <see cref="AppendLicense"/> because reporting and merging answer to different callers.
-    /// An expired license has to be reported and must NOT be merged - its limits stopped applying, which is
-    /// the whole event - and while the two lived in one method the only way to report one was to fold its
-    /// limits into the license in force. So the arm was left empty, and a single-license deployment reached
-    /// the free tier in silence.
+    /// Separate from <see cref="AppendLicense"/> because the two answer different callers. An expired
+    /// license has to be reported and must NOT be merged, its limits having stopped applying, which is the
+    /// whole event; joining the two would make every report of an expired license also grant its limits.
     ///
-    /// The throttle is per license and status, so a list holding several expired licenses records each of
-    /// them once a day rather than on every evaluation.
+    /// The throttle key is the license VALUE paired with the status, not the instance: <see cref="License"/>
+    /// is a record, so two separately issued licenses carrying identical dates and limits are one key and
+    /// produce one record between them. Records are therefore per distinct set of terms per day, which is
+    /// what an operator reads them as anyway - and a license differing in any field, including a
+    /// <c>ValidIssuers</c> set held in another instance, is a key of its own.
     /// </remarks>
     private static void ReportStatus(License license, LicenseStatus status, DateTimeOffset utcNow)
     {

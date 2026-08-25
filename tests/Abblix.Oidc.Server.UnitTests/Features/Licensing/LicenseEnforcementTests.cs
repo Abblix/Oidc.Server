@@ -275,7 +275,6 @@ public sealed class LicenseEnforcementTests : IDisposable
         }
     }
 
-
     /// <summary>A factory whose loggers fail on write, standing in for one whose provider has been disposed.</summary>
     private sealed class ThrowingLoggerFactory : ILoggerFactory
     {
