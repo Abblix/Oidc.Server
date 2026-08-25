@@ -180,7 +180,7 @@ public class ConsentConstraintEnforcerTests
         var capped = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" });
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(capped));
 
@@ -204,7 +204,7 @@ public class ConsentConstraintEnforcerTests
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
@@ -228,7 +228,7 @@ public class ConsentConstraintEnforcerTests
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(
                 new JsonArray(new JsonObject { ["amount"] = "999999" })));
@@ -253,7 +253,7 @@ public class ConsentConstraintEnforcerTests
 
         // Refused before the policy is consulted: it is the guard's own reading that failed.
         _authorizationDetailsPolicy.Verify(
-            p => p.ApplyAsync(It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()),
+            p => p.ApplyGrantedAsync(It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -271,7 +271,7 @@ public class ConsentConstraintEnforcerTests
             new JsonArray(new JsonObject { ["type"] = standIn }));
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = standIn },
@@ -295,7 +295,7 @@ public class ConsentConstraintEnforcerTests
             new JsonObject { ["type"] = "account_information" }));
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
@@ -319,7 +319,7 @@ public class ConsentConstraintEnforcerTests
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
@@ -342,7 +342,7 @@ public class ConsentConstraintEnforcerTests
         var granted = Granted(authorizationDetails: grantedAd);
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
             {
@@ -368,7 +368,7 @@ public class ConsentConstraintEnforcerTests
         var granted = Granted(authorizationDetails: grantedAd);
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray()));
 
@@ -389,7 +389,7 @@ public class ConsentConstraintEnforcerTests
         var granted = Granted(authorizationDetails: grantedAd);
 
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<JsonArray?, OidcError>.Success(null));
 
