@@ -365,9 +365,11 @@ public class AuthorizationDetailsPolicyTests
 
         Assert.True(result.TryGetSuccess(out var validated));
         var wire = validated!.ToJsonString();
-        // Single-element arrays collapse to a string per the OAuth single-or-array
-        // convention (see AuthorizationDetail.SetArrayOrStringOrNull).
-        Assert.Contains("\"actions\":\"initiate\"", wire);
+        // Still an array, though only one action survived deduplication. The single-or-array
+        // convention belongs to JWT claims such as aud (RFC 7519 Section 4.1.3); RFC 9396
+        // Section 2.2 defines actions as an array of strings and canonicalisation is precisely
+        // the path that reduces one to a single element.
+        Assert.Contains("\"actions\":[\"initiate\"]", wire);
     }
 
     [Fact]

@@ -165,6 +165,29 @@ public static class JsonWebTokenExtensions
     }
 
     /// <summary>
+    /// Assigns a collection of strings to a property as a JSON array whatever its length, or removes the
+    /// property when the collection is <c>null</c> or empty.
+    /// </summary>
+    /// <param name="json">The object to write to.</param>
+    /// <param name="name">The name of the property.</param>
+    /// <param name="values">The values to assign, or <c>null</c> to remove the property.</param>
+    /// <remarks>
+    /// The single-element case is the whole difference from <see cref="SetArrayOrStringOrNull"/>, and it
+    /// is why both exist. A JWT claim a specification defines as "a string or an array of strings" - aud,
+    /// per RFC 7519 Section 4.1.3 - may collapse; a member defined as "an array of strings" may not, and
+    /// writing a bare string there produces a document that parses and does not conform. Neither reader
+    /// complains, so the divergence is only ever noticed by the party that rejects the token.
+    /// </remarks>
+    public static void SetArrayOrNull(this JsonObject json, string name, IEnumerable<string>? values)
+    {
+        var array = values is null
+            ? null
+            : new JsonArray(values.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray());
+
+        json.SetProperty(name, array is { Count: > 0 } ? array : null);
+    }
+
+    /// <summary>
     /// Converts a collection of strings to a JSON node, which will be either a single JSON value if there's only one string,
     /// or a JSON array if there are multiple strings.
     /// </summary>

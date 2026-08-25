@@ -54,7 +54,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Locations
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Locations);
-        set => Json.SetArrayOrStringOrNull(Parameters.Locations, value);
+        set => Json.SetArrayOrNull(Parameters.Locations, value);
     }
 
     /// <summary>
@@ -63,7 +63,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Actions
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Actions);
-        set => Json.SetArrayOrStringOrNull(Parameters.Actions, value);
+        set => Json.SetArrayOrNull(Parameters.Actions, value);
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Datatypes
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Datatypes);
-        set => Json.SetArrayOrStringOrNull(Parameters.Datatypes, value);
+        set => Json.SetArrayOrNull(Parameters.Datatypes, value);
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Privileges
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Privileges);
-        set => Json.SetArrayOrStringOrNull(Parameters.Privileges, value);
+        set => Json.SetArrayOrNull(Parameters.Privileges, value);
     }
 
     /// <summary>

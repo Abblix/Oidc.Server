@@ -231,16 +231,18 @@ public class IntrospectionRequestProcessor(
 	/// The entry as this caller receives it: its own copy, carrying only the locations it matched.
 	/// </summary>
 	/// <remarks>
-	/// The locations are written as an array rather than through the typed setter, which collapses a
-	/// single value to a bare string: §9.2 has the member carry "the same structure defined in Section 2",
-	/// and §2.2 defines <c>locations</c> as an array of strings.
+	/// Written through the typed setter, which keeps <c>locations</c> an array however few entries
+	/// survive the match: RFC 9396 §9.2 has the member carry "the same structure defined in Section 2",
+	/// and §2.2 defines it as an array of strings. A single surviving location is the case that would
+	/// otherwise leave this endpoint answering with a shape no caller is required to accept.
 	/// </remarks>
 	private static JsonNode Disclose(AuthorizationDetail detail, string[] matchedLocations)
 	{
-		var disclosed = (JsonObject)detail.Json.DeepClone();
-		disclosed[AuthorizationDetail.Parameters.Locations] = new JsonArray(
-			matchedLocations.Select(location => (JsonNode)JsonValue.Create(location)).ToArray());
+		var disclosed = new AuthorizationDetail((JsonObject)detail.Json.DeepClone())
+		{
+			Locations = matchedLocations,
+		};
 
-		return disclosed;
+		return disclosed.Json;
 	}
 }
