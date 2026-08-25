@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,7 +37,16 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// <summary>Refuses everything, naming <paramref name="reason"/> in the error description.</summary>
     public static StubAuthorizationDetailsPolicy Refusing(string reason) => new() { _refusal = reason };
 
+    /// <summary>
+    /// Accepts, having rewritten a member of every entry - the way a validator enforces a ceiling by
+    /// capping rather than by saying no. The authorization endpoint honours that answer; a grant already
+    /// approved out of band cannot be rewritten, so at redemption it has to become a refusal.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Capping(string member, string value) =>
+        new() { _cap = (member, value) };
+
     private string? _refusal;
+    private (string Member, string Value)? _cap;
 
     /// <summary>What the last call was handed, so a test can see whether it was the live array.</summary>
     public JsonArray? LastSeen { get; private set; }
@@ -51,7 +61,15 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     {
         LastSeen = raw;
         if (_refusal is null)
+        {
+            if (_cap is { } cap && raw is not null)
+            {
+                foreach (var entry in raw.OfType<JsonObject>())
+                    entry[cap.Member] = cap.Value;
+            }
+
             return Task.FromResult<Result<JsonArray?, OidcError>>(raw);
+        }
 
         return Task.FromResult<Result<JsonArray?, OidcError>>(
             new OidcError(ErrorCodes.InvalidAuthorizationDetails, _refusal));

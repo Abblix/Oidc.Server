@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -63,6 +64,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(_storage.Object);
 
         _handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             _storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
@@ -265,6 +267,113 @@ public class BackChannelAuthenticationGrantHandlerTests
         // was never going to be issued.
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Never);
     }
+
+    /// <summary>
+    /// A grant of a requested type whose CONTENT the per-type validator refuses is not redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The type comparison above structurally cannot see this: the type was asked for, so a raised amount
+    /// or a widened set of accounts inside the entry passes it. RFC 9396 section 6.1 leaves that to the
+    /// definition of the type, which is what the per-type validator is.
+    ///
+    /// The code is invalid_authorization_details, which section 14.6 registers for the token endpoint and
+    /// section 6 describes in words. Not access_denied: CIBA Core section 11 defines that as the end user
+    /// having denied the request, and here the end user approved while the deployment refused.
+    /// </remarks>
+    [Fact]
+    public async Task AuthenticatedRequest_WhoseGrantTheValidatorRefuses_IsNotRedeemed()
+    {
+        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
+        var handler = HandlerWith(policy);
+
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var authRequest = new BackChannelAuthenticationRequest(
+            GrantWithDetails(granted), _currentTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedAuthorizationDetails =
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+
+        // The validator's own words name a tenant, a ceiling or a configuration key, so they go to the log
+        // and a fixed string goes on the wire. A granted-phase rejection is a host-side defect, and no
+        // other one in this library reaches a client.
+        Assert.DoesNotContain("instructedAmount", error.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A validator that narrows the grant instead of refusing it is a refusal at this point.
+    /// </summary>
+    /// <remarks>
+    /// Apply while forming a grant, check while spending one. The authorization endpoint consumes what the
+    /// validators return, so a validator expressing its ceiling by capping an amount is honoured there.
+    /// Here the grant already exists and the end user approved it out of band, so it cannot be rewritten -
+    /// and discarding the change would let the deployment issue more than its own validator permits, which
+    /// is the same hole inverted.
+    /// </remarks>
+    [Fact]
+    public async Task AuthenticatedRequest_WhoseGrantTheValidatorWouldNarrow_IsNotRedeemed()
+    {
+        var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");
+        var handler = HandlerWith(policy);
+
+        var granted = new JsonArray(new JsonObject
+        {
+            ["type"] = "payment_initiation",
+            ["instructedAmount"] = "5000",
+        });
+
+        var authRequest = new BackChannelAuthenticationRequest(
+            GrantWithDetails(granted), _currentTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedAuthorizationDetails =
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+
+        // And the grant is left as it was found: refused, not rewritten.
+        Assert.Equal("5000", granted[0]!["instructedAmount"]!.GetValue<string>());
+    }
+
+    private AuthorizedGrant GrantWithDetails(JsonArray details)
+        => new(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null) { AuthorizationDetails = details });
+
+    private BackChannelAuthenticationGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
+        => new(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
+            _storage.Object,
+            policy,
+            new FakeTimeProvider(_currentTime),
+            Options.Create(new OidcOptions
+            {
+                BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
+            }),
+            CreateMockServiceProvider(_storage.Object),
+            PublicSubjects());
 
     /// <summary>
     /// Verifies that when the authentication request is not found in storage (expired or never existed),
@@ -747,6 +856,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
         var handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
@@ -837,6 +947,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
         var handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
@@ -937,6 +1048,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
         var handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
@@ -995,6 +1107,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
         var handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
@@ -1220,6 +1333,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         });
 
         var handler = new BackChannelAuthenticationGrantHandler(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,

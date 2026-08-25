@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +35,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
+/// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
 /// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
 /// authorization_details are still acceptable, which is the only comparison that can see inside an
 /// entry.</param>
@@ -43,7 +45,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
 /// against the end user the original request named.
 /// </param>
-public class BackChannelAuthenticationGrantHandler(
+public partial class BackChannelAuthenticationGrantHandler(
+    ILogger<BackChannelAuthenticationGrantHandler> logger,
     IBackChannelRequestStorage storage,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
@@ -121,8 +124,14 @@ public class BackChannelAuthenticationGrantHandler(
         // And what the type comparison structurally cannot see: an entry of a type the request DID ask
         // for, carrying content it did not. RFC 9396 §6.1 leaves that to the type's own validator, so this
         // asks it - on a copy, because the question must not rewrite its own subject.
-        return await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, cancellationToken)
-            is { } refusal ? refusal : grant;
+        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, cancellationToken)
+            is not { } refusal)
+            return grant;
+
+        // The reason goes to the log and a fixed string to the client: a granted-phase rejection names
+        // a host-side defect, and its text is written for whoever has to fix it.
+        LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
+        return refusal.Error;
     }
 
     private static OidcError NotTheRequestedEndUser()

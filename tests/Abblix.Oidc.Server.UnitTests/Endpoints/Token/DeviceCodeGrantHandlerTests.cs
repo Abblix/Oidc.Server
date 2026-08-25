@@ -327,11 +327,15 @@ public class DeviceCodeGrantHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
 
-        // The validator's own words, because they name the entry and the reason; the code is a denial,
-        // because by this point the end user approved something the deployment will not issue.
-        Assert.Contains("instructedAmount", error.ErrorDescription, StringComparison.Ordinal);
+        // RFC 9396 section 14.6 registers this for the token endpoint and section 6 describes the
+        // condition in words: the underlying grant does not allow issuing these details.
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+
+        // The validator's own words name a tenant, a ceiling or a configuration key, so they go to the log
+        // and a fixed string goes on the wire. A granted-phase rejection is a host-side defect, and no
+        // other one in this library reaches a client.
+        Assert.DoesNotContain("instructedAmount", error.ErrorDescription, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -133,7 +133,11 @@ public partial class DeviceCodeGrantHandler(
                 if (await authorizationDetailsPolicy.RefuseAsync(
                         authorizedGrant, clientInfo, cancellationToken) is { } refusal)
                 {
-                    return refusal;
+                    // The reason goes to the log and a fixed string to the client, matching the gate
+                    // above: a granted-phase rejection names a host-side defect, and its text is
+                    // written for whoever fixes it.
+                    LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
+                    return refusal.Error;
                 }
 
                 return authorizedGrant;
