@@ -25,9 +25,11 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// </remarks>
 /// <param name="loggerFactory">Logger factory for initializing the license logger.</param>
 /// <param name="licenseJwtProvider">The provider used to retrieve the license JWT.</param>
+/// <param name="clock">The clock the loaded licenses are evaluated against once loading has finished.</param>
 internal class LicenseLoadingService(
     ILoggerFactory loggerFactory,
-    ILicenseJwtProvider licenseJwtProvider) : IHostedService
+    ILicenseJwtProvider licenseJwtProvider,
+    TimeProvider clock) : IHostedService
 {
     private readonly ILicenseJwtProvider _licenseJwtProvider = Init(loggerFactory, licenseJwtProvider);
 
@@ -59,6 +61,16 @@ internal class LicenseLoadingService(
                     await LicenseLoader.LoadAsync(license);
             }
         }
+
+        // The loop is where the list stops growing, so this is the first moment anything can be said about
+        // the licenses without the answer depending on the order they arrived in. For a deployment holding
+        // ONE valid license it is also the only moment: every other route into the reporting is a request
+        // path, and the request path returns the cached license without evaluating it while that license
+        // is still valid, so nothing would ever say it expires next week.
+        //
+        // The clock is the host's, while the enforcement in LicenseChecker reads the system clock. They
+        // agree wherever TimeProvider.System is registered, which is what the registration extensions do.
+        LicenseChecker.ReportLoadedLicenses(clock.GetUtcNow());
     }
 
     /// <summary>

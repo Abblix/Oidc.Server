@@ -789,4 +789,85 @@ public class LicenseManagerTests
 
         Assert.Equal(3, expiries.Count);
     }
+
+    /// <summary>
+    /// Loading a license in its grace period beside the renewal that supersedes it reports nothing.
+    /// </summary>
+    /// <remarks>
+    /// The twin of <see cref="AddLicense_LoadingLicenses_ReportsNothing"/>, one event id over and at Error
+    /// rather than Critical. "Renew immediately to maintain service access" is untrue of a deployment that
+    /// has already renewed, and whether it is said at all depends on the order the provider yields its
+    /// licenses in: the grace license is reported as it is inserted, before the renewal has arrived.
+    ///
+    /// Positioned against the wall clock rather than <see cref="Moment"/>, because <c>AddLicense</c> reads
+    /// the system clock directly. A license placed relative to any other instant is already expired when
+    /// the insert evaluates it, and an expired license takes an arm that reports nothing, so the
+    /// arrangement would prove itself silent for the wrong reason.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddLicense_GraceLicenseBesideItsRenewal_ReportsNothing(bool oldestFirst)
+    {
+        var inGrace = CreateLicense(notBefore: -20, expiresAt: -3, gracePeriod: 5) with { ClientLimit = 5 };
+        var renewal = CreateLicense(notBefore: -1, expiresAt: 60) with { ClientLimit = 50 };
+        var arriving = oldestFirst ? new[] { inGrace, renewal } : [renewal, inGrace];
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        var manager = new LicenseManager();
+        try
+        {
+            foreach (var license in arriving)
+                manager.AddLicense(license);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseInGracePeriod);
+
+        // The control on the arrangement: without it the silence above would also hold over a manager that
+        // took no licenses in, which is silent for a reason nobody wants.
+        var active = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
+        Assert.NotNull(active);
+        Assert.Equal(50, active!.ClientLimit);
+    }
+
+    /// <summary>
+    /// A license in its grace period with no renewal behind it is reported when the license is consulted.
+    /// </summary>
+    /// <remarks>
+    /// The control for the silence above, and the reason that silence is a decision rather than the record
+    /// having been lost on the way to the recorder: the same license, with the renewal removed, produces
+    /// the record the operator needs.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_GraceLicenseWithNoRenewal_ReportsIt()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(CreateLicense(notBefore: -20, expiresAt: -3, gracePeriod: 5) with { ClientLimit = 5 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            var active = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
+            Assert.NotNull(active);
+            Assert.Equal(5, active!.ClientLimit);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseInGracePeriod, record.EventId.Id);
+        Assert.Equal(LogLevel.Error, record.Level);
+    }
 }

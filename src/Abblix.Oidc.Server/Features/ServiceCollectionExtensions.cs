@@ -469,6 +469,12 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IHostedService, LicenseLoadingService>());
         services.TryAddSingleton<ILicenseJwtProvider, OptionsLicenseJwtProvider>();
+
+        // The hosted service evaluates the loaded licenses against this clock. Registered here rather than
+        // relied upon from elsewhere: this method is public and a host may call it on a collection that has
+        // nothing else of ours in it, where the missing registration surfaces at BuildServiceProvider as a
+        // failure to activate a type whose name says nothing about licensing.
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 
@@ -492,6 +498,10 @@ public static class ServiceCollectionExtensions
         // any ILicenseJwtProvider previously registered by AddLicenseFromOptions.
         services.Replace(ServiceDescriptor.Singleton<ILicenseJwtProvider>(
             sp => sp.CreateService<StaticLicenseJwtProvider>(Dependency.Override(licenseJwt))));
+
+        // See AddLicenseFromOptions: the hosted service needs a clock, and this method is equally reachable
+        // on a collection carrying nothing else of ours.
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 

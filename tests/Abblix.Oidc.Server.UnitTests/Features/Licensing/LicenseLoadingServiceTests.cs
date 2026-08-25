@@ -13,8 +13,12 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -38,6 +42,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 ///
 /// Full integration testing with valid licenses requires actual Abblix license JWTs.
 /// </remarks>
+// Joins the non-parallel collection because starting the service writes to process-wide state that other
+// classes assert on: it replaces LicenseLogger.Instance with the factory it was given, and it reports the
+// loaded licenses once the loop closes. A class recording what the licensing writes would otherwise have
+// its recorder swapped out mid-assertion, or catch a record this class produced, rarely enough to arrive
+// as an unreproducible failure somewhere else.
+[Collection(nameof(LicenseEnforcementTests))]
 public class LicenseLoadingServiceTests
 {
     #region Helper Classes
@@ -70,7 +80,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -90,7 +100,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var emptyLicenses = AsyncEnumerable.Empty<string>();
         var provider = new MockLicenseJwtProvider(emptyLicenses);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -116,7 +126,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var licenses = new[] { string.Empty }.ToAsyncEnumerable();
         var provider = new MockLicenseJwtProvider(licenses);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         var cancellationToken = CancellationToken.None;
 
         // Act - Should skip empty string without throwing
@@ -136,7 +146,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
         var licenses = new[] { "invalid.jwt.token" }.ToAsyncEnumerable();
         var provider = new MockLicenseJwtProvider(licenses);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         var cancellationToken = CancellationToken.None;
 
         // Act & Assert - Invalid license should throw during validation
@@ -153,7 +163,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         var cancellationToken = CancellationToken.None;
 
         // Act
@@ -181,7 +191,7 @@ public class LicenseLoadingServiceTests
         }
 
         var provider = new MockLicenseJwtProvider(SlowLicenses(TestContext.Current.CancellationToken));
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         using var cts = new CancellationTokenSource();
 
         // Act - the token is already cancelled when enumeration starts, so the first await inside the sequence
@@ -204,7 +214,7 @@ public class LicenseLoadingServiceTests
         // Arrange
         var loggerFactory = NullLoggerFactory.Instance;
         var provider = new MockLicenseJwtProvider(null);
-        var service = new LicenseLoadingService(loggerFactory, provider);
+        var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         using var cts = new CancellationTokenSource();
 
         // Act - Should complete immediately (no enumeration needed)
@@ -230,7 +240,7 @@ public class LicenseLoadingServiceTests
         var provider = new MockLicenseJwtProvider(null);
 
         // Act
-        _ = new LicenseLoadingService(loggerFactory, provider);
+        _ = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
 
         // Assert - LicenseLogger.Instance should be initialized
         // We can verify this by checking if IsEnabled returns expected value
@@ -317,4 +327,106 @@ public class LicenseLoadingServiceTests
     }
 
     #endregion
+
+    /// <summary>
+    /// Starting the service reports what the loaded licenses mean, at the clock it was given.
+    /// </summary>
+    /// <remarks>
+    /// The call site, not the reporting, which <c>LicenseManagerTests</c> covers. Without a test here the
+    /// seam is a method nobody has shown runs, and the deployment it exists for is the one that starts
+    /// holding a valid license and then serves no traffic: every other route into the reporting is a
+    /// request path, and one of them returns the cached license without evaluating it.
+    ///
+    /// The provider yields nothing on purpose. What is reported is the license the assembly installs, so
+    /// the record proves the report happened after the loop rather than inside it, on whatever the manager
+    /// was holding by then.
+    ///
+    /// The clock is placed past that license's expiry, which is what makes the assertion deterministic
+    /// without a signing key: no test can mint an expired license, and every real one expires eventually.
+    /// The assembly's license runs into the twenty-second century, so the moment has to clear that rather
+    /// than merely be far away - at an earlier one the license is simply active and says nothing.
+    /// </remarks>
+    [Fact]
+    public async Task StartAsync_AfterLoading_ReportsWhatTheLicensesMean()
+    {
+        TestLicense.ResetChecker();
+        TestLicense.ClearLogThrottle();
+
+        var records = new RecordingLoggerFactory();
+        var service = new LicenseLoadingService(
+            records,
+            new MockLicenseJwtProvider(null),
+            new FixedClock(new DateTimeOffset(2200, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+            TestLicense.ClearLogThrottle();
+        }
+
+        Assert.Contains(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+    }
+
+    /// <summary>
+    /// Either public licence registration builds a container the hosted service can be activated from.
+    /// </summary>
+    /// <remarks>
+    /// Both methods are public and take an <c>IServiceCollection</c>, so a host may call one on a
+    /// collection carrying nothing else of ours. Every dependency the hosted service takes has to be
+    /// registered by the method that registers the service, and a dependency supplied elsewhere in the
+    /// shipped composition is a property of that composition rather than of this method.
+    ///
+    /// The failure this pins arrives at <c>BuildServiceProvider</c> and names a type whose name says
+    /// nothing about licensing, so it reads as a container defect rather than a missing registration.
+    /// In a host <c>ValidateOnBuild</c> is what makes it arrive at build time rather than at start; here
+    /// it arrives either way, because the assertion below is itself a resolution of the hosted services.
+    ///
+    /// Logging and options are supplied here rather than expected from the registration, because every
+    /// ASP.NET host has both before any of this is called and a library registering its own logging would
+    /// be reaching further than it needs to. So the collection stands for a host that has the framework
+    /// and nothing of ours, which is the case these methods have to survive.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LicenseRegistration_OnACollectionCarryingNothingElse_ActivatesTheHostedService(
+        bool fromOptions)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddLogging();
+
+        if (fromOptions)
+            services.AddLicenseFromOptions();
+        else
+            services.AddLicense("not.a.real.jwt");
+
+        try
+        {
+            using var provider = services.BuildServiceProvider(
+                new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+
+            Assert.Single(provider.GetServices<IHostedService>());
+        }
+        finally
+        {
+            // Activating the hosted service rebinds the process-wide logger to one from the container this
+            // test is about to dispose, and every write through a disposed logger is swallowed. The class
+            // joined the serial collection for exactly this reason, so the test that proves the point is
+            // the last one that may skip the restore.
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+    }
+
+    /// <summary>A clock that answers one moment, so a test can stand anywhere on the timeline.</summary>
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }
