@@ -43,7 +43,15 @@ public partial class LicenseManager
             var i = _licenses.BinarySearch(license, new ActivityPeriodComparer());
             _licenses.Insert(i < 0 ? ~i : i, license);
 
-            _currentLicense = GenerateActiveLicense(DateTimeOffset.UtcNow);
+            // The scan rather than the reporting wrapper, because the list is still arriving: a host
+            // loads licenses one at a time, so every insert but the last evaluates a PARTIAL list, and
+            // an expiry that a license still in the queue is about to supersede would be announced as a
+            // fallback to the free tier - once per superseded license, and only when the provider
+            // happens to yield oldest first, which makes the log depend on arrival order.
+            //
+            // What an insert needs is the refreshed value. The report belongs where the license is
+            // consulted, on a list that has stopped growing.
+            _currentLicense = Scan(DateTimeOffset.UtcNow).InForce;
         }
         finally
         {
@@ -129,11 +137,46 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
-        // Scans from the start every call and mutates no shared cursor: the method runs concurrently under
-        // the read lock, so advancing a shared start index here let racing readers overshoot a valid license
-        // and permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
+        var (result, expired) = Scan(utcNow);
+
+        // An expiry is reported only when nothing was left in force, which is the fact that makes it worth
+        // reporting and the one the scan can only know at its end. A superseded license expired too, and
+        // saying so daily at Critical for every license a deployment has ever loaded would bury the one
+        // record that means something under records that mean nothing - and they share an event id and a
+        // severity, so the operator who filters out the noise has filtered out the signal.
+        //
+        // With nothing in force the message is exactly true: the server is on the free tier, which allows
+        // one issuer, and a deployment serving more than one then refuses every issuer it has seen,
+        // including the first, until it restarts under a valid license.
+        if (result is null && expired is not null)
+        {
+            foreach (var license in expired)
+                ReportStatus(license, LicenseStatus.Expired, utcNow);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Walks the licenses and returns what is in force, together with the expired ones seen on the way.
+    /// </summary>
+    /// <param name="utcNow">The moment to evaluate each license at.</param>
+    /// <returns>The license in force, or <c>null</c> for the free tier, and the expired licenses.</returns>
+    /// <remarks>
+    /// Separate from <see cref="GenerateActiveLicense"/> so the early exit below stays an early exit while
+    /// the reporting keeps a single place to happen. Guarding two exits with the same condition is how the
+    /// two come to disagree.
+    ///
+    /// Scans from the start every call and mutates no shared cursor: the method runs concurrently under the
+    /// read lock, so advancing a shared start index here let racing readers overshoot a valid license and
+    /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
+    /// </remarks>
+    private (License? InForce, IReadOnlyList<License>? Expired) Scan(DateTimeOffset utcNow)
+    {
         License? result = null;
         bool? activeLicenseFound = null;
+        List<License>? expired = null;
+
         for (var indexCurrent = 0; indexCurrent < _licenses.Count; indexCurrent++)
         {
             var license = _licenses[indexCurrent];
@@ -141,6 +184,8 @@ public partial class LicenseManager
             switch (status)
             {
                 case LicenseStatus.Expired:
+                    // Collected, never merged: its limits stopped applying, which is the whole event.
+                    (expired ??= []).Add(license);
                     break;
 
                 case LicenseStatus.Active:
@@ -156,23 +201,40 @@ public partial class LicenseManager
                     break;
 
                 case LicenseStatus.NotActiveYet:
-                    return result;
+                    // Licenses are held sorted by the moment they start, so everything past this one starts
+                    // later still and the scan is over. Whatever the caller reports, it reports about the
+                    // licenses already collected, which is all of them that could matter.
+                    return (result, expired);
             }
         }
 
-        return result;
+        return (result, expired);
     }
 
     /// <summary>
-    /// Searches for active licenses that will become valid in the future, starting from the current index in the licenses list.
+    /// Looks past a license in its grace period for one that is active now, and merges that one instead.
     /// </summary>
     /// <param name="utcNow">The current UTC time for license evaluation.</param>
-    /// <param name="indexCurrent">The current index in the licenses list from which to start the search.</param>
-    /// <param name="result">The license that has been determined to be active or will soon be active, to be updated by this method.</param>
-    /// <returns>True if an active license is found in the future; otherwise, false.</returns>
+    /// <param name="indexCurrent">The index the search starts after, advanced past everything it stepped
+    /// over when it finds an active license.</param>
+    /// <param name="result">The result license, updated with the active license when one is found.</param>
+    /// <returns>True when an active license was found and merged; otherwise, false.</returns>
     /// <remarks>
-    /// This method is used internally by GenerateActiveLicense to find licenses that are not yet active but will become so,
-    /// allowing for a seamless transition between licenses as they expire or become valid.
+    /// Only an ACTIVE license answers this question, and that is the whole of it: a license whose terms do
+    /// not apply at <paramref name="utcNow"/> cannot decide what applies at <paramref name="utcNow"/>.
+    /// One that has expired is over, and one that has not started is not the deployment's yet - handing
+    /// today the allowance of a license beginning next week is what <c>NotBefore</c> exists to forbid, and
+    /// the answer would stick, because <see cref="TryGetCurrentLicenseLimit"/> caches any result whose
+    /// <c>ExpiresAt</c> is still ahead.
+    ///
+    /// A false answer therefore leaves the grace-period license in force, which is correct: its terms are
+    /// the ones that still apply. A successor takes over on its own, at the moment
+    /// <see cref="GetLicenseStatus"/> starts calling it active.
+    ///
+    /// Nothing is reported from here, including the expired licenses the search leaps over. A true answer
+    /// merges an active license, so something is in force, and an expiry that changed nothing is exactly
+    /// what the caller declines to report. A false answer leaps over nothing, so the caller's own loop
+    /// meets every license itself.
     /// </remarks>
     private bool FindActiveLicensesInFuture(DateTimeOffset utcNow, ref int indexCurrent, ref License? result)
     {
@@ -180,7 +242,7 @@ public partial class LicenseManager
         {
             var nextLicense = _licenses[indexNext];
             var nextStatus = GetLicenseStatus(nextLicense, utcNow);
-            if (nextStatus == LicenseStatus.GracePeriod)
+            if (nextStatus != LicenseStatus.Active)
                 continue;
 
             indexCurrent = indexNext;
@@ -206,6 +268,44 @@ public partial class LicenseManager
     /// and updates the result license to reflect the most appropriate active license based on the current time.
     /// </remarks>
     private static License AppendLicense(License? result, License license, LicenseStatus status, DateTimeOffset utcNow)
+    {
+        ReportStatus(license, status, utcNow);
+
+        if (result == null)
+        {
+            result = license;
+        }
+        else
+        {
+            result = result with {
+                ClientLimit = result.ClientLimit.Greater(license.ClientLimit),
+                IssuerLimit = result.IssuerLimit.Greater(license.IssuerLimit),
+                ExpiresAt = result.ExpiresAt.Lesser(license.ExpiresAt),
+                ValidIssuers = result.ValidIssuers.Join(license.ValidIssuers),
+            };
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Records what a license's status means for the deployment, without deciding anything about it.
+    /// </summary>
+    /// <param name="license">The license the record is about.</param>
+    /// <param name="status">Its status at <paramref name="utcNow"/>.</param>
+    /// <param name="utcNow">The moment the status was evaluated at.</param>
+    /// <remarks>
+    /// Separate from <see cref="AppendLicense"/> because the two answer different callers. An expired
+    /// license has to be reported and must NOT be merged, its limits having stopped applying, which is the
+    /// whole event; joining the two would make every report of an expired license also grant its limits.
+    ///
+    /// The throttle key is the license VALUE paired with the status, not the instance: <see cref="License"/>
+    /// is a record, so two separately issued licenses carrying identical dates and limits are one key and
+    /// produce one record between them. Records are therefore per distinct set of terms per day, which is
+    /// what an operator reads them as anyway - and a license differing in any field, including a
+    /// <c>ValidIssuers</c> set held in another instance, is a key of its own.
+    /// </remarks>
+    private static void ReportStatus(License license, LicenseStatus status, DateTimeOffset utcNow)
     {
         switch (status)
         {
@@ -233,22 +333,6 @@ public partial class LicenseManager
                     (int)(utcNow - expiresAt).TotalDays);
                 break;
         }
-
-        if (result == null)
-        {
-            result = license;
-        }
-        else
-        {
-            result = result with {
-                ClientLimit = result.ClientLimit.Greater(license.ClientLimit),
-                IssuerLimit = result.IssuerLimit.Greater(license.IssuerLimit),
-                ExpiresAt = result.ExpiresAt.Lesser(license.ExpiresAt),
-                ValidIssuers = result.ValidIssuers.Join(license.ValidIssuers),
-            };
-        }
-
-        return result;
     }
 
     /// <summary>

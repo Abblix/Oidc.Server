@@ -13,11 +13,20 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
+// Joins the non-parallel collection because the tests below reach the same process-wide state it exists to
+// protect: LicenseLogger.Instance is a singleton, and ClearLogThrottle empties the whole shared window map
+// rather than one key. Running beside a class that asserts on the throttle, or on being the single writer,
+// would let this one wipe a window mid-assertion or capture a foreign write into its own recorder - rarely,
+// and therefore as an unreproducible failure in whichever class happened to be running.
+[Collection(nameof(LicenseEnforcementTests))]
 public class LicenseManagerTests
 {
     private static License CreateLicense(int? notBefore, int? expiresAt, int? gracePeriod = null)
@@ -514,4 +523,270 @@ public class LicenseManagerTests
     }
 
     #endregion
+
+    /// <summary>
+    /// A fixed instant the tests below measure against, so the day count a record carries is the one they
+    /// arranged rather than whatever the clock says between building a license and judging it.
+    /// </summary>
+    private static readonly DateTimeOffset Moment = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>A license positioned in days relative to <see cref="Moment"/>.</summary>
+    private static License LicenseAround(int notBefore, int expiresAt, int? gracePeriod = null)
+        => new()
+        {
+            NotBefore = Moment.AddDays(notBefore),
+            ExpiresAt = Moment.AddDays(expiresAt),
+            GracePeriod = gracePeriod.HasValue ? Moment.AddDays(gracePeriod.Value) : null,
+        };
+
+    /// <summary>
+    /// One license, expired past its grace period, is reported.
+    /// </summary>
+    /// <remarks>
+    /// The ordinary shape of a deployment, and the one an operator alerts on: without this record the
+    /// server falls back to the free tier in silence, and the fallback is not graceful - a deployment
+    /// serving more than one issuer starts refusing every issuer it has seen.
+    ///
+    /// Deliberately not the two-license arrangement that also reaches the record. That one enters through
+    /// the grace-period search and exercises a path a single-license installation never takes, so a test
+    /// built on it would say nothing about the ordinary case.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_OneExpiredLicense_RecordsTheExpiry()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(notBefore: -30, expiresAt: -10, gracePeriod: -5));
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Null(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseExpired, record.EventId.Id);
+        Assert.Equal(LogLevel.Critical, record.Level);
+
+        // The count of days is what tells an operator whether this started ten minutes or ten weeks ago,
+        // and it is computed rather than carried, so it is worth reading out of the message.
+        Assert.Contains("10 days ago", record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An expired license reaching the outer loop lends its limits to nothing.
+    /// </summary>
+    /// <remarks>
+    /// A standing invariant rather than a guard on any one arm: reporting an expired license must never
+    /// become merging it, whichever site does the reporting. It holds today because the arm reporting it
+    /// does not merge, and it is the assertion that would fail if somebody later reached for AppendLicense
+    /// there - which is the obvious way to add a second thing that arm should do.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiredLicenseBesideAnActiveOne_DoesNotRaiseTheActiveLimits()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-30, -10, -5) with { ClientLimit = 1000, IssuerLimit = 1000 });
+        manager.AddLicense(LicenseAround(-1, 10) with { ClientLimit = 5, IssuerLimit = 1 });
+
+        TestLicense.ClearLogThrottle();
+        var active = manager.GenerateActiveLicense(Moment);
+
+        Assert.NotNull(active);
+        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(1, active.IssuerLimit);
+    }
+
+    /// <summary>
+    /// A license in its grace period followed by an expired one keeps the grace license's own limits.
+    /// </summary>
+    /// <remarks>
+    /// The search for an active successor is entered only from a license in its grace period, and only an
+    /// active license answers it. An expired one is over, so it cannot decide what applies now, and taking
+    /// it would both lend limits that stopped applying and suppress the grace license whose limits still do.
+    ///
+    /// Ordering is part of the arrangement rather than incidental: licenses are held sorted by the moment
+    /// they start, so the expired one has to start later than the grace one for the search to reach it.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiredLicenseAfterOneInGrace_DoesNotLendItsLimits()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: 5) with { ClientLimit = 5, IssuerLimit = 1 });
+        manager.AddLicense(LicenseAround(-10, -1) with { ClientLimit = 1000, IssuerLimit = 1000 });
+
+        TestLicense.ClearLogThrottle();
+        var active = manager.GenerateActiveLicense(Moment);
+
+        Assert.NotNull(active);
+        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(1, active.IssuerLimit);
+    }
+
+    /// <summary>
+    /// A license that has not started lends nothing to the license in force today.
+    /// </summary>
+    /// <remarks>
+    /// What <c>NotBefore</c> means: a renewal beginning next week decides nothing about this week. The
+    /// answer would also stick, because <c>TryGetCurrentLicenseLimit</c> caches any result whose
+    /// <c>ExpiresAt</c> is still ahead, so a future license's generous terms would be served unchanged
+    /// until that date - past the end of the grace period the deployment is actually in.
+    ///
+    /// The expired license in the middle is what makes the search walk far enough to meet the future one,
+    /// and it is the arrangement a renewal purchased late produces.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_FutureLicenseBeyondAnExpiredOne_DoesNotLendItsLimits()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: 5) with { ClientLimit = 5, IssuerLimit = 1 });
+        manager.AddLicense(LicenseAround(-15, -1) with { ClientLimit = 10, IssuerLimit = 10 });
+        manager.AddLicense(LicenseAround(2, 100) with { ClientLimit = 1000, IssuerLimit = 1000 });
+
+        TestLicense.ClearLogThrottle();
+        var active = manager.GenerateActiveLicense(Moment);
+
+        Assert.NotNull(active);
+        Assert.Equal(5, active!.ClientLimit);
+        Assert.Equal(1, active.IssuerLimit);
+    }
+
+    /// <summary>
+    /// A deployment that renewed in time hears nothing about the licenses it superseded.
+    /// </summary>
+    /// <remarks>
+    /// The expiry record says service access will be affected, and for a renewed installation that is
+    /// simply untrue - a valid license is in force. Saying it once a day for every license a customer has
+    /// ever loaded would bury the one record that means something under records that mean nothing, and
+    /// they carry the same event id and the same severity, so an operator who filters out the noise has
+    /// filtered out the signal too.
+    ///
+    /// Three superseded licenses rather than one, because the cost of getting this wrong grows with the
+    /// number of renewals and a single-license arrangement would not show it.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_SupersededLicensesBesideAnActiveOne_AreNotReported()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-40, -30) with { ClientLimit = 1 });
+        manager.AddLicense(LicenseAround(-30, -20) with { ClientLimit = 2 });
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 });
+        manager.AddLicense(LicenseAround(-1, 30) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            var active = manager.GenerateActiveLicense(Moment);
+            Assert.NotNull(active);
+            Assert.Equal(50, active!.ClientLimit);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+    }
+
+    /// <summary>
+    /// Loading licenses reports nothing, whatever order they arrive in.
+    /// </summary>
+    /// <remarks>
+    /// A host loads licenses one at a time, so every insert but the last evaluates a PARTIAL list. Reporting
+    /// there announces a fallback to the free tier for a license the next insert is about to supersede, and
+    /// whether it does so depends on the order the provider happens to yield - the same deployment logs
+    /// differently after a reshuffle, with nothing in the diff to explain it. An insert therefore takes the
+    /// value and leaves the reporting to whoever consults the license.
+    ///
+    /// Both orders are driven, though neither is what makes this test bite: `AddLicense` reads the wall
+    /// clock and takes no <c>TimeProvider</c>, so a test cannot place these licenses relative to the instant
+    /// it will use. Against that clock all three are past, which is enough to prove the insert must not
+    /// report at all - the invariant that holds whatever the order, and the one worth pinning.
+    ///
+    /// The recorder is bound around the LOAD rather than around a single evaluation, which is why nothing
+    /// caught this: every other test here calls GenerateActiveLicense on a list that has stopped growing.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddLicense_LoadingLicenses_ReportsNothing(bool oldestFirst)
+    {
+        var superseded = new[]
+        {
+            LicenseAround(-40, -30) with { ClientLimit = 1 },
+            LicenseAround(-30, -20) with { ClientLimit = 2 },
+            LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 },
+        };
+        var renewal = LicenseAround(-1, 30) with { ClientLimit = 50 };
+        var arriving = oldestFirst ? [..superseded, renewal] : new[] { renewal }.Concat(superseded).ToArray();
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        var manager = new LicenseManager();
+        try
+        {
+            foreach (var license in arriving)
+                manager.AddLicense(license);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+
+        // The control on the arrangement itself: without it the silence above would also hold over a
+        // manager that never took the licenses in, which is silent for a reason nobody wants.
+        var active = manager.GenerateActiveLicense(Moment);
+        Assert.NotNull(active);
+        Assert.Equal(50, active!.ClientLimit);
+    }
+
+    /// <summary>
+    /// Every expired license is reported when nothing was left in force.
+    /// </summary>
+    /// <remarks>
+    /// The control for the silence above, and the reason that silence is a decision rather than the report
+    /// having been lost: the same three licenses, with the renewal removed, produce a record each. The
+    /// throttle keys on the license value paired with the status, so three licenses carrying distinct
+    /// terms are three keys and three records.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_SeveralExpiredAndNothingInForce_ReportsEach()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-40, -30) with { ClientLimit = 1 });
+        manager.AddLicense(LicenseAround(-30, -20) with { ClientLimit = 2 });
+        manager.AddLicense(LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.Null(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var expiries = records.Entries
+            .Where(entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired)
+            .ToList();
+
+        Assert.Equal(3, expiries.Count);
+    }
 }
