@@ -178,7 +178,8 @@ public partial class LicenseManager
     /// would hear nothing about a license expiring next week, and a lapsed server taking no traffic would
     /// say nothing about that either. A deployment holding SEVERAL licenses does reach both statuses on a
     /// request path, because the cached value carries the shortest expiry among them: once that one passes,
-    /// every consult rescans and the licenses outliving it are judged again, expiring-soon included.
+    /// the NEXT consult rescans and the licenses outliving it are judged again, expiring-soon
+    /// included. Only the next one: that scan installs the survivor, so caching resumes behind it.
     ///
     /// The list has provably stopped growing when this is called, so what is said does not depend on the
     /// order it arrived in.
@@ -254,7 +255,13 @@ public partial class LicenseManager
                 case LicenseStatus.NotActiveYet:
                     // Licenses are held sorted by the moment they start, so everything past this one starts
                     // later still and the scan is over. Whatever the caller reports, it reports about the
-                    // licenses already collected, which is all of them that could matter.
+                    // licenses already collected, which is all of them that could matter for what is IN
+                    // FORCE now.
+                    //
+                    // It is not all of them that could matter for what is SAID. A renewal starting before
+                    // the current license expires sits past this return, so an expiring-soon warning is
+                    // issued to a deployment that has already renewed. Tracked as issue 425 rather than
+                    // fixed here: the answer reaches into this early exit rather than into the reporting.
                     return (result, expired, merged);
             }
         }
