@@ -44,10 +44,10 @@ public partial class LicenseManager
             _licenses.Insert(i < 0 ? ~i : i, license);
 
             // The scan rather than the reporting wrapper, because the list is still arriving: a host
-            // loads licenses one at a time, so every insert but the last evaluates a PARTIAL list, and
-            // an expiry that a license still in the queue is about to supersede would be announced as a
-            // fallback to the free tier - once per superseded license, and only when the provider
-            // happens to yield oldest first, which makes the log depend on arrival order.
+            // loads licenses one at a time, so every insert but the last evaluates a PARTIAL list.
+            // Reporting from here announces an expiry, or a grace period, that a license still in the
+            // queue is about to supersede - and only when the provider happens to yield the older
+            // license first, which makes the log depend on arrival order.
             //
             // What an insert needs is the refreshed value. The report belongs where the license is
             // consulted, on a list that has stopped growing.
@@ -137,7 +137,17 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
-        var (result, expired) = Scan(utcNow);
+        var (result, expired, merged) = Scan(utcNow);
+
+        // What was MERGED is reported here rather than where it was merged, for the same reason the
+        // expiry below is: the scan runs on every insert while the list is still arriving, and a license
+        // in its grace period would then be announced before the renewal superseding it has been read.
+        // The status is carried out of the scan and reported once, on a list that has stopped growing.
+        if (merged is not null)
+        {
+            foreach (var (license, status) in merged)
+                ReportStatus(license, status, utcNow);
+        }
 
         // An expiry is reported only when nothing was left in force, which is the fact that makes it worth
         // reporting and the one the scan can only know at its end. A superseded license expired too, and
@@ -158,6 +168,33 @@ public partial class LicenseManager
     }
 
     /// <summary>
+    /// Reports what the loaded licenses mean for the deployment, once the list has stopped growing.
+    /// </summary>
+    /// <param name="utcNow">The moment to evaluate the licenses at.</param>
+    /// <remarks>
+    /// The one record a deployment gets without serving a request, and the only route by which an
+    /// expiring-soon warning can be heard at all. Every other route into the reporting runs from
+    /// <see cref="TryGetCurrentLicenseLimit"/>, which returns the cached license untouched while it is
+    /// still valid - so a server holding a license that expires next week would never evaluate it, and a
+    /// lapsed server taking no traffic would say nothing about that either.
+    ///
+    /// Called after loading rather than from each insert, which is the whole of the difference: here the
+    /// list has provably stopped growing, so what is said does not depend on the order it arrived in.
+    /// </remarks>
+    internal void ReportLoadedLicenses(DateTimeOffset utcNow)
+    {
+        _rwLock.EnterReadLock();
+        try
+        {
+            GenerateActiveLicense(utcNow);
+        }
+        finally
+        {
+            _rwLock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
     /// Walks the licenses and returns what is in force, together with the expired ones seen on the way.
     /// </summary>
     /// <param name="utcNow">The moment to evaluate each license at.</param>
@@ -171,11 +208,16 @@ public partial class LicenseManager
     /// read lock, so advancing a shared start index here let racing readers overshoot a valid license and
     /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
     /// </remarks>
-    private (License? InForce, IReadOnlyList<License>? Expired) Scan(DateTimeOffset utcNow)
+    private (License? InForce, IReadOnlyList<License>? Expired, IReadOnlyList<(License License,
+        LicenseStatus Status)>? Merged) Scan(DateTimeOffset utcNow)
     {
         License? result = null;
         bool? activeLicenseFound = null;
         List<License>? expired = null;
+
+        // Allocated up front rather than on first use, because every merge appends to it and there are at
+        // most a handful of licenses. The caller decides whether any of it is worth saying.
+        List<(License License, LicenseStatus Status)> merged = [];
 
         for (var indexCurrent = 0; indexCurrent < _licenses.Count; indexCurrent++)
         {
@@ -189,14 +231,15 @@ public partial class LicenseManager
                     break;
 
                 case LicenseStatus.Active:
-                    result = AppendLicense(result, license, status, utcNow);
+                    result = AppendLicense(result, license, status, merged);
                     break;
 
                 case LicenseStatus.GracePeriod:
-                    activeLicenseFound ??= FindActiveLicensesInFuture(utcNow, ref indexCurrent, ref result);
+                    activeLicenseFound ??= FindActiveLicensesInFuture(
+                        utcNow, ref indexCurrent, ref result, merged);
 
                     if (activeLicenseFound == false)
-                        result = AppendLicense(result, license, status, utcNow);
+                        result = AppendLicense(result, license, status, merged);
 
                     break;
 
@@ -204,12 +247,21 @@ public partial class LicenseManager
                     // Licenses are held sorted by the moment they start, so everything past this one starts
                     // later still and the scan is over. Whatever the caller reports, it reports about the
                     // licenses already collected, which is all of them that could matter.
-                    return (result, expired);
+                    return (result, expired, Collected(merged));
             }
         }
 
-        return (result, expired);
+        return (result, expired, Collected(merged));
     }
+
+    /// <summary>The merged licenses, or <c>null</c> when nothing was merged.</summary>
+    /// <remarks>
+    /// Null rather than an empty list, so the two things a scan can carry read the same way at the call
+    /// site and neither invites a loop over nothing.
+    /// </remarks>
+    private static IReadOnlyList<(License License, LicenseStatus Status)>? Collected(
+        List<(License License, LicenseStatus Status)> merged)
+        => merged.Count > 0 ? merged : null;
 
     /// <summary>
     /// Looks past a license in its grace period for one that is active now, and merges that one instead.
@@ -218,6 +270,7 @@ public partial class LicenseManager
     /// <param name="indexCurrent">The index the search starts after, advanced past everything it stepped
     /// over when it finds an active license.</param>
     /// <param name="result">The result license, updated with the active license when one is found.</param>
+    /// <param name="merged">Collects what was merged, for a caller that decides whether to report it.</param>
     /// <returns>True when an active license was found and merged; otherwise, false.</returns>
     /// <remarks>
     /// Only an ACTIVE license answers this question, and that is the whole of it: a license whose terms do
@@ -231,12 +284,16 @@ public partial class LicenseManager
     /// the ones that still apply. A successor takes over on its own, at the moment
     /// <see cref="GetLicenseStatus"/> starts calling it active.
     ///
-    /// Nothing is reported from here, including the expired licenses the search leaps over. A true answer
-    /// merges an active license, so something is in force, and an expiry that changed nothing is exactly
-    /// what the caller declines to report. A false answer leaps over nothing, so the caller's own loop
-    /// meets every license itself.
+    /// The expired licenses the search leaps over are not collected, and nothing here is reported. A true
+    /// answer merges an active license, so something is in force, and an expiry that changed nothing is
+    /// exactly what the caller declines to report. A false answer leaps over nothing, so the caller's own
+    /// loop meets every license itself.
     /// </remarks>
-    private bool FindActiveLicensesInFuture(DateTimeOffset utcNow, ref int indexCurrent, ref License? result)
+    private bool FindActiveLicensesInFuture(
+        DateTimeOffset utcNow,
+        ref int indexCurrent,
+        ref License? result,
+        List<(License License, LicenseStatus Status)> merged)
     {
         for (var indexNext = indexCurrent + 1; indexNext < _licenses.Count; indexNext++)
         {
@@ -247,7 +304,7 @@ public partial class LicenseManager
 
             indexCurrent = indexNext;
 
-            result = AppendLicense(result, nextLicense, nextStatus, utcNow);
+            result = AppendLicense(result, nextLicense, nextStatus, merged);
             return true;
         }
 
@@ -261,15 +318,20 @@ public partial class LicenseManager
     /// <param name="result">The current result license, which may be updated by this method.</param>
     /// <param name="license">The license to append or compare against the result.</param>
     /// <param name="status">The status of the given license.</param>
-    /// <param name="utcNow">The current UTC time for evaluating the license's status.</param>
+    /// <param name="merged">Collects what was merged, for a caller that decides whether to report it.</param>
     /// <returns>The updated result license after considering the given license.</returns>
     /// <remarks>
-    /// Depending on the status of the given license, this method may log warnings or errors about license expiration
-    /// and updates the result license to reflect the most appropriate active license based on the current time.
+    /// Merges and records what it merged, and reports nothing. The two were one method, and joining them
+    /// is what made the reporting fire from every insert: the scan runs while the list is still arriving,
+    /// so it has to be able to merge without announcing anything.
     /// </remarks>
-    private static License AppendLicense(License? result, License license, LicenseStatus status, DateTimeOffset utcNow)
+    private static License AppendLicense(
+        License? result,
+        License license,
+        LicenseStatus status,
+        List<(License License, LicenseStatus Status)> merged)
     {
-        ReportStatus(license, status, utcNow);
+        merged.Add((license, status));
 
         if (result == null)
         {

@@ -48,6 +48,13 @@ public static partial class LicenseChecker
     internal static void AddLicense(License license) => LicenseManager.AddLicense(license);
 
     /// <summary>
+    /// Reports what the loaded licenses mean for the deployment, once loading has finished.
+    /// </summary>
+    /// <param name="utcNow">The moment to evaluate the licenses at.</param>
+    internal static void ReportLoadedLicenses(DateTimeOffset utcNow)
+        => LicenseManager.ReportLoadedLicenses(utcNow);
+
+    /// <summary>
     /// Asynchronously applies licensing checks to a task that returns client information.
     /// </summary>
     /// <param name="clientInfo">The task returning client information to be checked against licensing constraints.
