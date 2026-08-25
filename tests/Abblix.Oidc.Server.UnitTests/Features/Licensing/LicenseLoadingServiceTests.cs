@@ -13,9 +13,12 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -368,6 +371,46 @@ public class LicenseLoadingServiceTests
         Assert.Contains(
             records.Entries,
             entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+    }
+
+    /// <summary>
+    /// Either public licence registration builds a container the hosted service can be activated from.
+    /// </summary>
+    /// <remarks>
+    /// Both methods are public and take an <c>IServiceCollection</c>, so a host may call one on a
+    /// collection carrying nothing else of ours. Every dependency the hosted service takes has to be
+    /// registered by the method that registers the service, and a dependency supplied elsewhere in the
+    /// shipped composition is a property of that composition rather than of this method.
+    ///
+    /// The failure this pins arrives at <c>BuildServiceProvider</c> and names a type whose name says
+    /// nothing about licensing, so it reads as a container defect rather than a missing registration.
+    /// <c>ValidateOnBuild</c> is what makes it arrive at all: without it the container answers happily
+    /// until something asks for the hosted services, which is host start.
+    ///
+    /// Logging and options are supplied here rather than expected from the registration, because every
+    /// ASP.NET host has both before any of this is called and a library registering its own logging would
+    /// be reaching further than it needs to. So the collection stands for a host that has the framework
+    /// and nothing of ours, which is the case these methods have to survive.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LicenseRegistration_OnACollectionCarryingNothingElse_ActivatesTheHostedService(
+        bool fromOptions)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddLogging();
+
+        if (fromOptions)
+            services.AddLicenseFromOptions();
+        else
+            services.AddLicense("not.a.real.jwt");
+
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+
+        Assert.Single(provider.GetServices<IHostedService>());
     }
 
     /// <summary>A clock that answers one moment, so a test can stand anywhere on the timeline.</summary>

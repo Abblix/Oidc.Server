@@ -63,10 +63,13 @@ internal class LicenseLoadingService(
         }
 
         // The loop is where the list stops growing, so this is the first moment anything can be said about
-        // the licenses without the answer depending on the order they arrived in. It is also the only
-        // moment a deployment whose license is still valid says anything at all: every other route into
-        // the reporting is a request path, and one of them returns the cached license without evaluating
-        // it. A server that has just loaded a license expiring next week hears about it here or nowhere.
+        // the licenses without the answer depending on the order they arrived in. For a deployment holding
+        // ONE valid license it is also the only moment: every other route into the reporting is a request
+        // path, and the request path returns the cached license without evaluating it while that license
+        // is still valid, so nothing would ever say it expires next week.
+        //
+        // The clock is the host's, while the enforcement in LicenseChecker reads the system clock. They
+        // agree wherever TimeProvider.System is registered, which is what the registration extensions do.
         LicenseChecker.ReportLoadedLicenses(clock.GetUtcNow());
     }
 

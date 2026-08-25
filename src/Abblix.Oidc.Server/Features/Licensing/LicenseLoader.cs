@@ -44,6 +44,18 @@ public static class LicenseLoader
     /// <exception cref="UnexpectedTypeException">Thrown if an unexpected validation result type is encountered.
     /// </exception>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    /// <remarks>
+    /// Loading reports nothing, deliberately. A caller loads licenses one at a time, so every load but the
+    /// last sees a partial set, and a license in its grace period would be announced before the renewal
+    /// superseding it had arrived - once per superseded license, and only in the arrival order that puts
+    /// the older one first. What the licenses mean is said on the next consult instead, and once at
+    /// startup by the hosted service the registration extensions install, which is the moment the set has
+    /// provably stopped growing.
+    ///
+    /// A host loading licenses through this method after startup therefore gets no record from the load
+    /// itself. The consult that follows says everything except that a license still valid is expiring
+    /// soon, which is the one status a valid cached license never reaches.
+    /// </remarks>
     public static async Task LoadAsync(string licenseJwt)
     {
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
