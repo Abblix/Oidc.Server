@@ -322,13 +322,13 @@ public class AuthorizationDetailTests
     {
         Assert.Null(((JsonArray?)null).ToTypedArray());
 
-        Assert.Empty(new JsonArray().ToTypedArray()!);
+        Assert.Empty(new JsonArray().ToTypedArray());
 
         // Nothing here is a JSON object, so every element is dropped and the result is empty rather
         // than null.
-        Assert.Empty(new JsonArray(JsonValue.Create(PaymentInitiationType), JsonValue.Create(1)).ToTypedArray()!);
+        Assert.Empty(new JsonArray(JsonValue.Create(PaymentInitiationType), JsonValue.Create(1)).ToTypedArray());
 
         var readable = new JsonArray(new JsonObject { ["type"] = PaymentInitiationType });
-        Assert.Equal(PaymentInitiationType, Assert.Single(readable.ToTypedArray()!).Type);
+        Assert.Equal(PaymentInitiationType, Assert.Single(readable.ToTypedArray()).Type);
     }
 }

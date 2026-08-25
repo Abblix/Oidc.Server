@@ -10,6 +10,8 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
@@ -57,7 +59,7 @@ internal static class GrantedAuthorizationDetails
         if (Array.Exists(typed, detail => detail.Type is null))
             return ["an entry carrying no type"];
 
-        var requestedTypes = RequestedTypes(request.AuthorizationDetails);
+        var requestedTypes = AuthorizationDetailTypes.NamedBy(request.AuthorizationDetails);
 
         return typed
             .Select(detail => detail.Type!)
@@ -65,16 +67,4 @@ internal static class GrantedAuthorizationDetails
             .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
-
-    /// <summary>The types the request asked for.</summary>
-    /// <remarks>
-    /// No arity guard here, unlike the grant side: an entry of the REQUEST that cannot be read as a JSON
-    /// object is dropped rather than refused, which narrows the baseline and therefore admits less. The
-    /// grant side has to refuse instead, because there the same silence would admit more.
-    /// </remarks>
-    private static HashSet<string> RequestedTypes(JsonArray? requested)
-        => (requested?.ToTypedArray() ?? [])
-            .Select(detail => detail.Type)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
 }
