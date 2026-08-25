@@ -8,12 +8,15 @@
 
 using System.Net;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -186,8 +189,119 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.NotNull(discovery.BackChannelAuthenticationEndpoint);
     }
 
+    [Fact]
+    public async Task A_push_client_is_delivered_its_tokens_at_the_notification_endpoint()
+    {
+        // Push is the one mode whose delivery path is entirely different: the tokens are minted when the
+        // host completes and posted to the client, which never comes to the token endpoint at all. Nothing
+        // outside unit tests watched that path, so a token that is minted and not delivered - or delivered
+        // to the wrong place, or without the token that proves the notification came from here - looked the
+        // same as success.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+        await CompleteAsync(host, authRequestId, RequestedDetails);
+
+        var delivery = Assert.Single(deliveries.Received);
+        Assert.Equal(NotificationEndpoint, delivery.Endpoint);
+
+        // The notification token is what tells the client this POST is the answer to its own request rather
+        // than an unsolicited one, so a delivery carrying the tokens without it is not a delivery.
+        Assert.Equal(NotificationToken, delivery.BearerToken);
+
+        var payload = delivery.Payload;
+        Assert.Equal(authRequestId, payload["auth_req_id"]!.GetValue<string>());
+        Assert.False(string.IsNullOrEmpty(payload["access_token"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task The_narrowing_a_host_performs_at_completion_reaches_the_pushed_token()
+    {
+        // A push client cannot be asked to check what it was granted - it never redeems anything, it just
+        // receives a token. So an end user who approved one of two entries is only honoured if the
+        // narrowing survives every step between the completion call and the bytes on the wire. Asserting
+        // it in storage would prove the host wrote it down, which is the half that was never in doubt.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, BothDetails, NotificationToken);
+        await CompleteAsync(host, authRequestId, ApprovedDetail);
+
+        var delivered = Assert.Single(deliveries.Received);
+        var granted = ReadAuthorizationDetails(delivered.Payload["access_token"]!.GetValue<string>());
+
+        var entry = Assert.Single(granted);
+        Assert.Equal(TestConstants.PaymentInitiationType, entry!["type"]!.GetValue<string>());
+
+        // The action is what separates the two entries, so it is what proves the refused one was dropped
+        // rather than that the array merely came out the right length.
+        Assert.Equal("status", entry["actions"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_push_grant_the_per_type_validator_refuses_delivers_nothing()
+    {
+        // The per-type gate for push exists because a push client is never judged at the token endpoint,
+        // where the other two modes are. A gate that refuses and delivers anyway, or that lets a grant the
+        // validator rejected through, is invisible to a unit test whose fixture could not be delivered to
+        // in the first place. Here a token either arrives or it does not.
+        //
+        // The narrowing is one a host got WRONG rather than a malicious one: the entry keeps the type it
+        // asked for and loses the amount, which is the shape the type comparison structurally cannot see
+        // and the reason the per-type validator is asked at all.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+        await CompleteAsync(host, authRequestId, DetailWithoutAmount);
+
+        Assert.Empty(deliveries.Received);
+
+        // And the request does not sit there afterwards. A push client never polls, so a refused request
+        // left in storage is an orphan nobody reads until it expires.
+        using var scope = host.Services.CreateScope();
+        var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+        Assert.Null(await storage.TryGetAsync(authRequestId));
+    }
+
     /// <summary>The identifier the client passes to name the end-user to be contacted.</summary>
     private const string LoginHint = "e2e-subject";
+
+    /// <summary>
+    /// Where a push client is told to deliver. Absolute and https because dynamic registration requires it;
+    /// nothing resolves this name, since the recorder below stands in for the transport.
+    /// </summary>
+    private static readonly Uri NotificationEndpoint = new("https://client.e2e.invalid/ciba-push");
+
+    /// <summary>The value the client sends at initiation and expects back on the notification.</summary>
+    private const string NotificationToken = "e2e-client-notification-token";
+
+    private const string RequestedDetails =
+        """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
+
+    private const string BothDetails =
+        """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
+
+    /// <summary>The second of <see cref="BothDetails"/> alone: the end user approved the cheaper one.</summary>
+    private const string ApprovedDetail =
+        """[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
+
+    /// <summary>
+    /// A narrowing of <see cref="RequestedDetails"/> that keeps the type and drops the amount, which is what
+    /// <c>PaymentInitiationValidator</c> refuses.
+    /// </summary>
+    private const string DetailWithoutAmount =
+        """[{"type":"payment_initiation","actions":["initiate"]}]""";
 
     private sealed record CibaClient(string ClientId, string ClientSecret);
 
@@ -226,20 +340,41 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// Drives a well-formed backchannel authentication request and returns the issued auth_req_id, asserting
     /// the request was accepted so that a later assertion cannot pass against a flow that never started.
     /// </summary>
-    private static async Task<string> InitiateAsync(
+    private static Task<string> InitiateAsync(
         HttpClient client, DiscoveryDocument discovery, CibaClient ciba)
+        => InitiateAsync(client, discovery, ciba, authorizationDetails: null, notificationToken: null);
+
+    /// <summary>
+    /// Starts a backchannel authentication carrying authorization_details and the notification token a push
+    /// client must present back, asserting acceptance so a later assertion cannot pass against a flow that
+    /// never started.
+    /// </summary>
+    private static async Task<string> InitiateAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        CibaClient ciba,
+        string? authorizationDetails,
+        string? notificationToken)
     {
-        var response = await FormPostHelpers.PostFormAsync(
-            client,
-            discovery.BackChannelAuthenticationEndpoint!,
-            new Dictionary<string, string>
+        var form = new Dictionary<string, string>
             {
                 [CibaParameters.Scope] = Scopes.OpenId,
                 [CibaParameters.LoginHint] = LoginHint,
                 [CibaParameters.BindingMessage] = "e2e-binding",
                 [ClientRequest.Parameters.ClientId] = ciba.ClientId,
                 [ClientRequest.Parameters.ClientSecret] = ciba.ClientSecret,
-            });
+            };
+
+        // Omitted rather than sent empty: a poll client has no notification endpoint to be told about, and
+        // an empty authorization_details is not the same request as one that carries none.
+        if (notificationToken is not null)
+            form[CibaParameters.ClientNotificationToken] = notificationToken;
+
+        if (authorizationDetails is not null)
+            form[CibaParameters.AuthorizationDetails] = authorizationDetails;
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.BackChannelAuthenticationEndpoint!, form);
 
         var body = await ReadJsonAsync(response);
         Assert.True(response.IsSuccessStatusCode,
@@ -276,6 +411,28 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
                 services.Replace(ServiceDescriptor
                     .Scoped<IUserDeviceAuthenticationHandler, ReachableUserDeviceHandler>())));
 
+    /// <summary>
+    /// Builds the CIBA host with the notification transport pointed at <paramref name="recorder"/>, so what
+    /// the server posts to a push client can be read back.
+    /// </summary>
+    /// <remarks>
+    /// The recorder replaces the client's PRIMARY handler, which is where the SSRF validation of a
+    /// client-supplied endpoint lives - so these tests say nothing about that validation, and the endpoint
+    /// they register is never resolved. Chaining an outer handler instead would leave the validation in
+    /// front of an address no test host can own.
+    /// </remarks>
+    private WebApplicationFactory<Program> CreateCibaHost(NotificationRecorder recorder)
+        => Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.Replace(ServiceDescriptor
+                    .Scoped<IUserDeviceAuthenticationHandler, ReachableUserDeviceHandler>());
+
+                services
+                    .AddHttpClient(BackChannelNotificationTransport.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => recorder);
+            }));
+
     private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
         => host.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -285,6 +442,106 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+
+    /// <summary>
+    /// Registers a CIBA client in PUSH mode, with the notification endpoint the recorder answers on and the
+    /// authorization-detail type the host has a validator for.
+    /// </summary>
+    private static async Task<CibaClient> RegisterPushCibaClientAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
+        var registered = await RegisterClientAsync(client, discovery, new JsonObject
+        {
+            [RegistrationMembers.ClientName] = $"ciba-push-{Guid.NewGuid():N}",
+            [RegistrationMembers.ResponseTypes] = new JsonArray(),
+            [RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba),
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+            [RegistrationMembers.BackChannelTokenDeliveryMode] = BackchannelTokenDeliveryModes.Push,
+            [RegistrationMembers.BackChannelClientNotificationEndpoint] = NotificationEndpoint.AbsoluteUri,
+            [RegistrationMembers.AuthorizationDetailsTypes] =
+                new JsonArray(TestConstants.PaymentInitiationType),
+        });
+
+        return new CibaClient(
+            registered[RegistrationResponse.ClientId]!.GetValue<string>(),
+            registered[RegistrationResponse.ClientSecret]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Does what an integrator does when the end user answers on their device: reads the stored request,
+    /// puts the session and the grant the user actually approved on it, marks it authenticated and hands it
+    /// to the completion handler. Nothing in the library drives this - the answer arrives from outside.
+    /// </summary>
+    /// <param name="grantedDetails">
+    /// The authorization_details the end user approved, which is how a partial answer is expressed: the
+    /// grant's context is what will be issued, and replacing it is the only place that answer exists.
+    /// </param>
+    private static async Task CompleteAsync(
+        WebApplicationFactory<Program> host, string authenticationRequestId, string grantedDetails)
+    {
+        using var scope = host.Services.CreateScope();
+        var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        Assert.NotNull(stored);
+
+        var session = new AuthSession(
+            Subject: LoginHint,
+            SessionId: Guid.NewGuid().ToString("N"),
+            AuthenticationTime: scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
+            IdentityProvider: "e2e-test");
+
+        var granted = stored.AuthorizedGrant.Context with
+        {
+            AuthorizationDetails = JsonNode.Parse(grantedDetails)!.AsArray(),
+        };
+
+        var completed = stored with { AuthorizedGrant = new AuthorizedGrant(session, granted) };
+        completed.Status = BackChannelAuthenticationStatus.Authenticated;
+
+        await scope.ServiceProvider
+            .GetRequiredService<IAuthenticationCompletionHandler>()
+            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+    }
+
+    private static JsonArray ReadAuthorizationDetails(string accessToken)
+        => DecodeJwtPayload(accessToken)[IanaClaimTypes.AuthorizationDetails]!.AsArray();
+
+    /// <summary>What the server posted to a push or ping client's notification endpoint.</summary>
+    private sealed record RecordedNotification(Uri Endpoint, string? BearerToken, JsonObject Payload);
+
+    /// <summary>
+    /// Stands in for the client's notification endpoint. It answers 200 to every POST and keeps what
+    /// arrived, which is the whole point: a push client's tokens exist nowhere else once delivery succeeds.
+    /// </summary>
+    private sealed class NotificationRecorder : HttpMessageHandler
+    {
+        private readonly List<RecordedNotification> _received = [];
+
+        public IReadOnlyList<RecordedNotification> Received
+        {
+            get
+            {
+                lock (_received) return _received.ToArray();
+            }
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = request.Content is null
+                ? new JsonObject()
+                : JsonNode.Parse(await request.Content.ReadAsStringAsync(cancellationToken))!.AsObject();
+
+            lock (_received)
+            {
+                _received.Add(new RecordedNotification(
+                    request.RequestUri!, request.Headers.Authorization?.Parameter, body));
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
 
     /// <summary>
     /// Test double for the integrator-supplied device interaction. It reports that the user was reached and
