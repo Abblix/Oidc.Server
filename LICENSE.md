@@ -123,25 +123,33 @@ Commercial production use is permitted free of charge under this Section: passin
 
 3.7. **Software Updates.** Updates and maintenance terms for commercial licenses are specified in your purchase agreement. Users of the Software free of charge under Section 2.3 receive it "as is", with no guaranteed response time and no commitment to updates or maintenance; community channels remain open to them.
 
-3.8. **Rights Reserved While the Copyright Holder Exists.** Nothing in Sections 3.9 and 3.10 limits the Copyright Holder's ownership of the Software or its rights in it. For so long as the Copyright Holder exists, it retains the sole right to license, sell, transfer, relicense, republish, discontinue, withdraw from sale, revive, or otherwise deal with the Software as it sees fit, and no such decision transfers any right in the Software to any other person except as those Sections expressly provide. Discontinuing the Software, withdrawing it from sale, ceasing to publish updates for it, or ceasing to offer support for it is a commercial decision the Copyright Holder is free to take, and taking it forfeits nothing.
+3.8. **Rights Reserved to the Copyright Holder.** Nothing in Sections 3.9 and 3.10 limits the Copyright Holder's ownership of the Software or its rights in it. The Copyright Holder retains the sole right to license, sell, transfer, relicense, republish, discontinue, withdraw from sale, revive, or otherwise deal with the Software as it sees fit, and no such decision transfers any right in the Software to any other person except as those Sections expressly provide. Discontinuing the Software, withdrawing it from sale, ceasing to publish updates for it, or ceasing to offer support for it takes nothing from the Copyright Holder's ownership of the Software; its only consequence under this Agreement is the conversion described in Section 3.9(b), which affects licenses for which a fee has been paid and no others.
 
-3.9. **Continuity of Use for Licensees.** If either of the following occurs, the license of every licensee whose license is in force on that date converts, automatically and without further act, into a perpetual, irrevocable, royalty-free, non-exclusive license to use, modify and compile the Software for that licensee's own internal purposes, including the right to apply corrections and to build from source:
+   The parties acknowledge that the rights granted by Sections 3.9 and 3.10 form part of the consideration for the license fee, are granted at the outset of every license and not in contemplation of insolvency, and are granted because the assurance they provide materially assists the Copyright Holder in licensing the Software.
 
-   (a) the Copyright Holder permanently ceases to carry on business, as defined in Section 3.10; or
+   For the purposes of Sections 3.9 and 3.10 only, "Software" does not include Software Extensions as defined in Section 1.5, nor any other software product of the Copyright Holder licensed separately. Neither Section applies to a license that permits redistribution of the Software, and no such license converts under Section 3.9.
 
-   (b) the Copyright Holder discontinues the Software and ceases to offer licenses and support for it, and does not resume within **one hundred and eighty (180) days**.
+3.9. **Continuity of Use for Paid Licenses.** This Section applies only to a license for which a fee has been paid and which is in force on the Conversion Date. A license granted at no charge under Section 2.3 does not convert and continues on its existing terms.
 
-   The conversion grants no right to distribute the Software, or any work derived from it, to any third party, and no right in the Software's source code beyond the licensee's own use of it. Sections 10 and 11 continue to apply. The Copyright Holder's own rights are unaffected: a licensee's converted license runs alongside them and takes nothing from them.
+   On the Conversion Date, such a license converts, automatically and without further act, into a perpetual, irrevocable, royalty-free, non-exclusive license to use, modify and compile the Software for Your own internal purposes, including the right to apply corrections and to build from source.
 
-   This Section is a present grant, made now and conditioned on a future event, rather than a promise to grant a license later. It takes effect by its own terms, and no act, consent or decision of the Copyright Holder, of any successor, or of any officer appointed over the Copyright Holder's business is required for it to take effect.
+   The **Conversion Date** is:
 
-3.10. **Succession and Public Release.** The Copyright Holder may transfer the Software, together with its obligations under this Agreement, to a successor; Section 14 governs such a transfer, and this Agreement continues unchanged in the successor's hands.
+   (a) where the Copyright Holder permanently ceases to carry on business, as defined in Section 3.10, the date on which it does so; or
 
-   For the purposes of this Section and Section 3.9, the Copyright Holder **permanently ceases to carry on business** when it is dissolved, struck off or wound up, other than for the purpose of a solvent reorganisation or of a transfer to a successor. Discontinuation of the Software is not, by itself, a cessation of business, and is addressed by Section 3.9(b) alone.
+   (b) where the Copyright Holder gives written notice under Section 11.6, or publishes at the address in Section 1.1, a statement that it has discontinued the Software, and does not resume offering licenses and support for the Software within **one hundred and eighty (180) days** of that notice, the day following the last day of that period.
 
-   If the Copyright Holder permanently ceases to carry on business and no transfer to a successor takes effect within **twelve (12) months** of that date, the source code of the Software as published at that date is, from the expiry of that period, licensed to the public under the Apache License, Version 2.0.
+   **"For Your own internal purposes"** means use within Your own business, including to authenticate the end users of applications You Yourself operate. It does not include making the Software, or any service whose principal function is the functionality of the Software, available to any third party.
 
-   The twelve-month period is deliberate. Where an officer is appointed over the Copyright Holder's business, that officer's duty is to realise its assets, and the Software is one of them; a period short enough to expire during a sale would destroy the value of the asset being sold, which would put this Section in conflict with the estate and make it the first thing an administrator challenges. Twelve months is intended to leave a genuine sale process time to complete while still giving licensees and the public a date certain.
+   Every other term of this Agreement continues to apply to the converted license, and in particular Sections 2.2(c), 2.2(e), 2.2(f), 5, 8, 9, 10 and 11. Sections 2.2(a) and 2.2(b) do not apply to it, to the extent necessary to exercise the rights this Section grants. For the purpose of exercising the converted license You may modify or disable the license-key validation described in Section 3.6 to the extent necessary to continue operating the Software, and Sections 2.2(d), 3.5(a)(ii) and 3.5(a)(iii) do not apply to that modification; You may not rely on this permission while the Copyright Holder or a Successor continues to offer licenses for the Software.
+
+   This Section is a present grant, made now and conditioned on a future event, rather than a promise to grant a license later. It takes effect by its own terms, and no act, consent or decision of the Copyright Holder, of any Successor, or of any officer appointed over the Copyright Holder's business is required for it to take effect.
+
+3.10. **Succession and Public Release.** A **Successor** is a person to whom the Copyright Holder, or an officer appointed over its business, transfers the copyright in the Software and who assumes the Copyright Holder's obligations under this Agreement by a written instrument. You consent in advance to such an assumption, and this Agreement continues unchanged in the Successor's hands. The Copyright Holder shall procure that any person to whom it transfers the copyright in the Software takes that copyright subject to Sections 3.9 and 3.10, whether or not that person is a Successor.
+
+   For the purposes of this Section and Section 3.9, the Copyright Holder **permanently ceases to carry on business** on the date it is dissolved or otherwise removed from the register of legal entities of its jurisdiction of incorporation, unless within **twelve (12) months** of that date the copyright in the Software has been transferred to a Successor. Discontinuation of the Software is not, by itself, a cessation of business, and is addressed by Section 3.9(b) alone.
+
+   The Copyright Holder grants now, irrevocably, to every person, a license under the Apache License, Version 2.0 in the source code of the Software as most recently published in the repository identified in Section 1.1 before the date on which the Copyright Holder is dissolved, that license becoming exercisable on the expiry of **twelve (12) months** from that date if no transfer to a Successor has taken effect by then.
 
    This Section is likewise a present grant conditioned on a future event, made now and effective by its own terms.
 
@@ -248,7 +256,7 @@ You may not assign this Agreement without prior written consent of the Copyright
 
 ## 15. Survival
 
-The following sections shall survive termination or expiration of this Agreement: Section 5 (Software Rights), Section 9 (Limitation of Liability), Section 10 (Intellectual Property Rights and Confidentiality), Section 11 (Governing Law and Dispute Resolution), and this Section 15 (Survival).
+The following sections shall survive termination or expiration of this Agreement: Section 3.8 (Rights Reserved to the Copyright Holder), Section 3.9 (Continuity of Use for Paid Licenses), Section 3.10 (Succession and Public Release), Section 5 (Software Rights), Section 8 (Warranty Disclaimer), Section 9 (Limitation of Liability), Section 10 (Intellectual Property Rights and Confidentiality), Section 11 (Governing Law and Dispute Resolution), and this Section 15 (Survival). A license converted under Section 3.9 is perpetual and is not affected by the expiration of the term for which a fee was paid.
 
 ## 16. Contact Information
 
