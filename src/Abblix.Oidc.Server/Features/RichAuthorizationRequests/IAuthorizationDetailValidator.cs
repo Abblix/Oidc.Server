@@ -57,6 +57,55 @@ public interface IAuthorizationDetailValidator
         CancellationToken token);
 
     /// <summary>
+    /// Validates a single entry as the consent decision left it, which may carry values the server
+    /// itself added while the end-user was choosing. Defaults to <see cref="ValidateAsync"/>, so a
+    /// type that does not enrich answers the same question in both phases.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §7.1 says that "Whether enrichment is allowed and specifics of how it works are
+    /// necessarily part of the definition of the respective authorization details type", and in this
+    /// library the definition of a type is this validator. Its worked example (Figures 16 and 17) is
+    /// an <c>account_information</c> entry whose empty arrays are placeholders the server fills with
+    /// the identifiers the user picked.
+    /// <para>
+    /// That shape is one the request-time question may legitimately refuse: RFC 9396 §5 has the server
+    /// reject an entry that "contains fields with invalid values for the authorization details type",
+    /// and a type whose definition says the client must not choose the accounts makes a populated
+    /// placeholder exactly that. Such a type overrides this member so the consent decision's own
+    /// output is accepted, while <see cref="ValidateAsync"/> keeps refusing it from a client.
+    /// </para>
+    /// <para>
+    /// An override MUST still refuse everything <see cref="ValidateAsync"/> refuses, apart from the
+    /// fields its type declares enrichable. This is the anti-escalation re-check, and the consent
+    /// decision reaching it has often crossed the browser: what the library still guarantees for an
+    /// overriding type is only that entries are JSON objects, that their types are known, requested
+    /// and on the client's allowlist. Everything inside an entry - an amount, an account, a list of
+    /// locations - is guaranteed by this method and by nothing else. An override that returns its
+    /// input unconditionally hands a tampered consent decision straight to the issued token.
+    /// </para>
+    /// <para>
+    /// Note what this method is NOT given: the entry the client originally sent, and the end user who
+    /// answered. So an enrichable field can be bounded here only by rules that hold on their own - a
+    /// ceiling, a format, a per-client limit - and not by comparing the value against the request it
+    /// came from. A type whose enrichment needs that comparison has to make it where both sides are in
+    /// hand, which today is the consent provider that produced the decision.
+    /// </para>
+    /// </remarks>
+    /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
+    /// this validator's <see cref="Type"/>.</param>
+    /// <param name="client">The client the grant is being issued to.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>The validated (and possibly normalised) detail on success, or an
+    /// <see cref="OidcError"/> describing the rejection. A rejection here means the consent decision
+    /// escalated beyond what this type permits, which is a host-side defect rather than a client
+    /// error.</returns>
+    Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        AuthorizationDetail detail,
+        ClientInfo client,
+        CancellationToken token)
+        => ValidateAsync(detail, client, token);
+
+    /// <summary>
     /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing
     /// what consenting to this entry authorises, so the consent UI can render a meaningful screen
     /// instead of a raw JSON dump. Default returns <c>null</c>; hosts that opt out simply fall back

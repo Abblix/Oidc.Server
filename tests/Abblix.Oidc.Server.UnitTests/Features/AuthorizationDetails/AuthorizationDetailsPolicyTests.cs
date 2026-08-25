@@ -386,6 +386,137 @@ public class AuthorizationDetailsPolicyTests
         Assert.Equal(wire, validated!.ToJsonString());
     }
 
+    [Fact]
+    public async Task ApplyGrantedAsync_without_an_override_asks_the_request_time_question()
+    {
+        // The granted phase is a distinct question, not a weaker one: a type that does not enrich
+        // answers the same way in both phases, so the anti-escalation re-check keeps biting for
+        // every validator written before this member existed.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await composite.ApplyGrantedAsync(raw, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains(RejectingValidator.Reason, error.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_uses_the_overridden_granted_phase()
+    {
+        // RFC 9396 §7.1 enrichment: the same entry that must be refused from a client is the one the
+        // consent decision produces, so the two phases have to be able to disagree.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var enriched = new JsonArray(new JsonObject
+        {
+            ["type"] = "account_information",
+            ["access"] = new JsonObject
+            {
+                ["accounts"] = new JsonArray(new JsonObject { ["iban"] = "DE2310010010123456789" }),
+            },
+        });
+
+        var asRequest = await composite.ApplyAsync(
+            (JsonArray)enriched.DeepClone(), TestClient, TestContext.Current.CancellationToken);
+        var asGranted = await composite.ApplyGrantedAsync(
+            enriched, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(asRequest.TryGetFailure(out _));
+        Assert.True(asGranted.TryGetSuccess(out var validated));
+        Assert.NotNull(validated);
+    }
+
+    [Theory]
+    [InlineData("allowlist")]
+    [InlineData("empty-allowlist")]
+    [InlineData("unknown-type")]
+    [InlineData("missing-type")]
+    [InlineData("not-an-object")]
+    public async Task ApplyGrantedAsync_keeps_every_check_outside_the_per_type_question(string shape)
+    {
+        // The granted phase changes ONE question. The claim that everything around it still binds is
+        // otherwise carried by prose alone, and prose does not fail when an implementation stops
+        // honouring it: a granted path that skipped these would take a type the client may not use,
+        // a type nobody implements, or an entry that is not an object at all.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<PaymentValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+
+        var (client, granted, expected) = shape switch
+        {
+            "allowlist" => (
+                new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] },
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+                "payment_initiation"),
+            "empty-allowlist" => (
+                new ClientInfo("c") { AuthorizationDetailsTypes = [] },
+                new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+                "not permitted"),
+            "unknown-type" => (
+                new ClientInfo("c"),
+                new JsonArray(new JsonObject { ["type"] = "never_registered" }),
+                "unknown"),
+            "missing-type" => (
+                new ClientInfo("c"),
+                new JsonArray(new JsonObject { ["amount"] = "999999" }),
+                "type"),
+            "not-an-object" => (
+                new ClientInfo("c"),
+                new JsonArray(JsonValue.Create("payment_initiation")),
+                "JSON object"),
+            _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unhandled shape"),
+        };
+
+        var result = await composite.ApplyGrantedAsync(granted, client, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+        Assert.Contains(expected, error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_falls_back_to_ApplyAsync_when_a_policy_does_not_override_it()
+    {
+        // The default member is what makes this addition non-breaking, and the shipped composite
+        // overrides it - so nothing would notice if the default stopped deferring and started
+        // accepting everything. A host that implements the interface itself is the case it protects.
+        IAuthorizationDetailsPolicy policy = new RefusingPolicy();
+
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await policy.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
+
+        // Forwarded, not merely reached: a default that called ApplyAsync with nothing would take the
+        // "no entries" exit and answer success for every granted set, and a policy that ignores its
+        // arguments cannot tell the two apart.
+        var refusing = (RefusingPolicy)policy;
+        Assert.Same(granted, refusing.LastRaw);
+        Assert.Same(TestClient, refusing.LastClient);
+    }
+
+    [Fact]
+    public async Task ApplyGrantedAsync_still_applies_the_rules_the_type_did_not_exempt()
+    {
+        // An enrichable type exempts the field the server fills in, and nothing else. Its other rules
+        // hold against a consent decision exactly as they hold against a client.
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var granted = new JsonArray(new JsonObject { ["type"] = "account_information" });
+
+        var result = await composite.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("access is required", error.ErrorDescription);
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
     {
         var services = new ServiceCollection();
@@ -431,6 +562,59 @@ public class AuthorizationDetailsPolicyTests
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
+    }
+
+    /// <summary>
+    /// An enrichable type, in the shape of RFC 9396 §7.1 Figures 16 and 17: the client sends empty
+    /// placeholders, and the server writes the identifiers the user picked into them.
+    /// </summary>
+    private sealed class EnrichableAccountValidator : IAuthorizationDetailValidator
+    {
+        public string Type => "account_information";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult(
+                detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
+                    ? Refuse("access.accounts is chosen by the end-user, so a request must leave it empty")
+                    : SharedRules(detail));
+
+        // Only the enrichable field is exempt here. Everything else the type refuses, it refuses in
+        // both phases: a consent decision that crossed the browser is not more trusted than a client.
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult(SharedRules(detail));
+
+        private static Result<AuthorizationDetail, OidcError> SharedRules(AuthorizationDetail detail)
+            => detail.Json["access"] is JsonObject
+                ? detail
+                : Refuse("access is required for account_information");
+
+        private static Result<AuthorizationDetail, OidcError> Refuse(string description)
+            => new OidcError(ErrorCodes.InvalidAuthorizationDetails, description);
+    }
+
+    /// <summary>
+    /// A host's own policy: it implements the interface and knows nothing of the granted phase, which
+    /// is the shape the default member exists for.
+    /// </summary>
+    private sealed class RefusingPolicy : IAuthorizationDetailsPolicy
+    {
+        public const string Reason = "refused by the host's own policy";
+
+        public JsonArray? LastRaw { get; private set; }
+
+        public ClientInfo? LastClient { get; private set; }
+
+        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+            JsonArray? raw, ClientInfo client, CancellationToken token)
+        {
+            LastRaw = raw;
+            LastClient = client;
+
+            return Task.FromResult<Result<JsonArray?, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
+        }
     }
 
     private sealed class InvocationCounter

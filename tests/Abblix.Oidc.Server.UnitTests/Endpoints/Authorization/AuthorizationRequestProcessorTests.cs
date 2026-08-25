@@ -65,12 +65,12 @@ public class AuthorizationRequestProcessorTests
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
         _authorizationDetailsPolicy = new Mock<IAuthorizationDetailsPolicy>(MockBehavior.Strict);
 
-        // The anti-escalation backstop re-runs granted authorization_details through the per-type
-        // policy. For the processor tests the granted set is already a valid narrowing, so the
-        // policy passes it through unchanged; AD escalation/failure cases are covered in
-        // ConsentConstraintEnforcerTests against the real enforcer.
+        // The processor reaches the policy only through the backstop, which asks the GRANTED-phase
+        // question (RFC 9396 section 7.1). For these tests the granted set is already a valid
+        // narrowing, so the policy passes it through unchanged; escalation and failure cases are
+        // covered in ConsentConstraintEnforcerTests against the real enforcer.
         _authorizationDetailsPolicy
-            .Setup(p => p.ApplyAsync(
+            .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
 

@@ -105,7 +105,7 @@ public class ConsentConstraintEnforcer(
         // the per-type validators and per-client allowlist and let the per-type validator own that
         // decision. A rejection means a granted entry's content escalated beyond what the validator
         // permits for this client.
-        var revalidation = await authorizationDetailsPolicy.ApplyAsync(
+        var revalidation = await authorizationDetailsPolicy.ApplyGrantedAsync(
             grantedAuthorizationDetails, request.ClientInfo, cancellationToken);
 
         if (!revalidation.TryGetSuccess(out var revalidated))
