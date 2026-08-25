@@ -277,7 +277,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// definition of the type, which is what the per-type validator is.
     ///
     /// The code is invalid_authorization_details, which section 14.6 registers with the token endpoint
-    /// among its usage locations and references to section 5, the requirement to refuse details that do
+    /// among its usage locations and refers to section 5, the requirement to refuse details that do
     /// not conform to their type definition. Not access_denied: CIBA Core section 11 defines that as the
     /// end user having denied the request, and here the end user approved while the deployment refused.
     /// </remarks>

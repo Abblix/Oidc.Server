@@ -101,7 +101,7 @@ public abstract partial class AuthenticationCompletionHandler(
         // A poll or ping client reaches it. A push client never does: its tokens are minted from
         // here and delivered to its notification endpoint, so for push this method is where the grant is
         // spent and the content check is missing from it. The type comparison above cannot stand in - it
-        // sees a raised amount inside an entry of a requested type as unchanged.
+        // sees a raised amount inside an entry of a requested type as not escaping.
         //
         // Wiring it here needs the policy on this constructor and therefore on all three delivery modes,
         // and it also has to decide what a refusal at completion means, which is a denial rather than an
