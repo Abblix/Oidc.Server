@@ -42,8 +42,8 @@ partial class PushModeCompletionHandler
     /// <remarks>
     /// A refusal here names a HOST-side defect: the end user approved something the deployment will not
     /// issue, so whoever has to fix it is an operator rather than the client. The client is told nothing
-    /// at all in push mode, since the outcome travels to it through a notification endpoint this server
-    /// sends no error payload to, and in poll and ping it learns only that the request was denied.
+    /// at all, because a push outcome travels through a notification endpoint this server sends no error
+    /// payload to - which is why this record is the only account of the refusal anybody gets.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.GrantedAuthorizationDetailsRefused,

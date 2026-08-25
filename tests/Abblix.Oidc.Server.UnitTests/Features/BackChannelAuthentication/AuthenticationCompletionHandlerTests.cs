@@ -9,6 +9,8 @@
 using System;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -18,6 +20,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
@@ -873,33 +876,36 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// A poll client meets this question at the token endpoint, so completion does not ask it.
+    /// Only the push handler is wired to the per-type validators.
     /// </summary>
     /// <remarks>
-    /// Asking here as well would pre-empt the redemption gate rather than add to it: the refusal at
-    /// completion is a denial, and a denied request reaches the client as access_denied, where the
-    /// redemption gate answers with the code RFC 9396 section 14.6 registers for this condition. Poll
-    /// and ping lose nothing by waiting, because the host-rewrite window the redemption gate exists for
-    /// closes after completion rather than before it.
+    /// The decision this change rests on, asserted about the WIRING rather than about an outcome. Poll and
+    /// ping meet the same question at the token endpoint when their client redeems, and asking it again at
+    /// completion would pre-empt rather than add: a refusal at completion is a denial, and a denied CIBA
+    /// request reaches its client as access_denied, where the redemption gate answers with the code
+    /// RFC 9396 section 14.6 registers for this condition.
     ///
-    /// Pinned rather than left implicit, because the natural reading of "the validators judge a spent
-    /// grant" is that they should run wherever a grant is completed, and this is the one mode where
-    /// that costs a worse answer.
+    /// A behavioural test cannot hold this. Driving a poll completion and asserting it succeeds passes
+    /// identically whether the validators were never asked or were asked and accepted, so putting the gate
+    /// back into the shared base - which is what a reader who finds this decision surprising would do -
+    /// leaves such a test green. What separates the two states is whether the handler has a policy at all.
+    ///
+    /// Named types rather than a scan of the assembly, so a fourth delivery mode arriving does not
+    /// silently satisfy this by not existing yet.
     /// </remarks>
     [Fact]
-    public async Task CompleteAuthenticationAsync_PollMode_DoesNotAskThePerTypeValidators()
+    public void OnlyThePushHandler_TakesThePerTypeValidators()
     {
-        var request = CreateRequestWithAuthorizationDetails(
-            requestedTypes: ["payment_initiation"],
-            grantedTypes: ["payment_initiation"]);
+        Assert.True(TakesThePolicy(typeof(PushModeCompletionHandler)));
 
-        _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
-            .Returns(Task.CompletedTask);
+        Assert.False(TakesThePolicy(typeof(AuthenticationCompletionHandler)));
+        Assert.False(TakesThePolicy(typeof(PollModeCompletionHandler)));
+        Assert.False(TakesThePolicy(typeof(PingModeCompletionHandler)));
 
-        await CreatePollModeHandler().CompleteAuthenticationAsync(
-            AuthReqId, request, PollClient(), _expiresIn);
-
-        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+        static bool TakesThePolicy(Type handler)
+            => handler
+                .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .SelectMany(constructor => constructor.GetParameters())
+                .Any(parameter => parameter.ParameterType == typeof(IAuthorizationDetailsPolicy));
     }
 }
