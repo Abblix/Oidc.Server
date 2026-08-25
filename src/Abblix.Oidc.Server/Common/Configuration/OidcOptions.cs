@@ -272,6 +272,18 @@ public record OidcOptions
 	/// server where the client did not ask, and §13 asks for need-to-know "as determined by local policy".
 	/// This is that policy, stated once.
 	///
+	/// The shape this was written for: several resource servers, every access token that carries
+	/// authorization details minted for a <c>resource</c>, and each server's <c>locations</c> written
+	/// exactly as the resource indicator it is registered under. That is RFC 9396 §12's
+	/// multiple-resource-server case, which is what <c>locations</c> was defined for. Matching a deployment
+	/// against that description is the operator's judgement, not a recommendation made here.
+	///
+	/// With no <see cref="Resources"/> registered and no token exchange in use, the audience is the issuer
+	/// on every token and the filter can only delete: nothing can put a resource in the audience for a
+	/// <c>locations</c> value to match. That combination is not refused at startup, because it cannot be
+	/// told apart there from a deployment whose audiences arrive through RFC 8693 token exchange, where
+	/// they come from the client's own allowlist rather than from this list and the filter works.
+	///
 	/// Turn it on and an entry naming only other resource servers stops travelling to this one, which is
 	/// what §9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
 	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
