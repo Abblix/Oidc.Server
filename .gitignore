@@ -395,5 +395,3 @@ RELEASE_NOTES*
 !*.sln.DotSettings
 !*.csproj.DotSettings
 
-# Written by the specification-citation check so its cache key can be derived from it.
-.cited-documents.txt
