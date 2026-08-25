@@ -2,7 +2,7 @@
 
 **Effective Date:** November 18, 2025
 
-This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership ("Copyright Holder") for the OIDC Server ("Software").
+This License Agreement ("Agreement") is a legal agreement between you (as a person or entity, "You") and Abblix Limited Liability Partnership, a limited liability partnership registered in the Republic of Kazakhstan ("Copyright Holder"), for the OIDC Server ("Software").
 
 **ATTENTION!** Please thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you agree to be bound by the terms set forth in this License Agreement. If you do not agree to these terms, you have no right to use the Software and must promptly uninstall it from your System.
 
@@ -147,9 +147,11 @@ Commercial production use is permitted free of charge under this Section: passin
 
 3.10. **Succession and Public Release.** A **Successor** is a person to whom the Copyright Holder, or an officer appointed over its business, transfers the copyright in the Software and who assumes the Copyright Holder's obligations under this Agreement by a written instrument. You consent in advance to such an assumption, and this Agreement continues unchanged in the Successor's hands. The Copyright Holder shall procure that any person to whom it transfers the copyright in the Software takes that copyright subject to Sections 3.9 and 3.10, whether or not that person is a Successor.
 
-   For the purposes of this Section and Section 3.9, the Copyright Holder **permanently ceases to carry on business** on the date it is dissolved or otherwise removed from the register of legal entities of its jurisdiction of incorporation, unless within **twelve (12) months** of that date the copyright in the Software has been transferred to a Successor. Discontinuation of the Software is not, by itself, a cessation of business, and is addressed by Section 3.9(b) alone.
+   The **Dissolution Date** is the date on which the Copyright Holder is dissolved or otherwise ceases to be registered as a legal entity in the state register of the Republic of Kazakhstan in which it is recorded, or, if by that time it is registered as a legal entity in another jurisdiction instead, in the equivalent register of that jurisdiction.
 
-   The Copyright Holder grants now, irrevocably, to every person, a license under the Apache License, Version 2.0 in the source code of the Software as most recently published in the repository identified in Section 1.1 before the date on which the Copyright Holder is dissolved, that license becoming exercisable on the expiry of **twelve (12) months** from that date if no transfer to a Successor has taken effect by then.
+   For the purposes of this Section and Section 3.9, the Copyright Holder **permanently ceases to carry on business** on the Dissolution Date, unless within **twelve (12) months** of that date the copyright in the Software has been transferred to a Successor. Discontinuation of the Software is not, by itself, a cessation of business, and is addressed by Section 3.9(b) alone.
+
+   The Copyright Holder grants now, irrevocably, to every person, a license under the Apache License, Version 2.0 in the source code of the Software as most recently published in the repository identified in Section 1.1 before the Dissolution Date, that license becoming exercisable on the expiry of **twelve (12) months** from the Dissolution Date if no transfer to a Successor has taken effect by then.
 
    This Section is likewise a present grant conditioned on a future event, made now and effective by its own terms.
 
