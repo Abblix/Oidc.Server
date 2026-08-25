@@ -225,10 +225,16 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.Equal(TokenTypes.Bearer, payload["token_type"]!.GetValue<string>());
         Assert.True(payload["expires_in"]!.GetValue<int>() > 0);
 
-        // And the request is gone. CIBA Core 1.0 section 10.3.1 has a push client's request removed once
-        // the tokens are delivered, and a push client never polls - so one left behind is an authenticated
-        // grant nobody reads until it expires. Without this line the removal, and the whole branch that
-        // decides between it and the retry path, is unmeasured.
+        // And the request is gone. That removal is this library's choice rather than a requirement -
+        // CIBA Core 1.0 section 10.3.1 says nothing about what the OP keeps - and the reason is that a
+        // push client never polls, so one left behind is an authenticated grant nobody reads until it
+        // expires.
+        //
+        // Both arms of the delivery branch are already pinned by AuthenticationCompletionHandlerTests,
+        // through a mock's call count. What this line adds is the same fact at the level a client sees,
+        // which is the level where a removal that stops happening actually costs something. It does not
+        // pin the branch: hoisting the removal above the if, so it runs whether or not delivery
+        // succeeded, leaves every test in this file green and only the unit test red.
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
         Assert.Null(await storage.TryGetAsync(authRequestId));
@@ -280,10 +286,14 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
 
-        // What the request ASKED for has to be on it, or the rest of this test passes for a reason it does
-        // not name: with nothing requested, the type comparison one step earlier refuses first, removes the
-        // request and delivers nothing - the identical observable state, reached without the per-type
-        // validator ever being asked.
+        // What the request ASKED for has to be on it. With nothing requested, the type comparison one
+        // step earlier refuses first, removes the request and delivers nothing - the identical observable
+        // state, reached without the per-type validator ever being asked, and this rules that out.
+        //
+        // It rules out only that. The same comparison also refuses a granted type absent from a non-empty
+        // baseline, and no assertion here separates the two refusals: they differ in the log line and in
+        // nothing a client can see. The narrowing below keeps the type it asked for, so the comparison
+        // has no reason to fire - but that is an argument, not a measurement.
         await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
 
         await CompleteAsync(host, authRequestId, DetailWithoutAmount);
@@ -493,17 +503,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     }
 
     /// <summary>
-    /// Does what an integrator does when the end user answers on their device: reads the stored request,
-    /// puts the session and the grant the user actually approved on it, marks it authenticated and hands it
-    /// to the completion handler. Nothing in the library drives this - the answer arrives from outside.
-    /// </summary>
-    /// <param name="grantedDetails">
-    /// The authorization_details the end user approved, which is how a partial answer is expressed: the
-    /// grant's context is what will be issued, and replacing it is the only place that answer exists.
-    /// </param>
-    /// <summary>
-    /// Reads back what the request ASKED for, so a test about the per-type validator cannot be
-    /// satisfied by the type comparison that runs before it.
+    /// Reads back what the request ASKED for, which rules out one of the two ways the comparison that runs
+    /// before the per-type validator can refuse: an empty requested baseline.
     /// </summary>
     private static async Task AssertTheRequestCarriesWhatWasAskedFor(
         WebApplicationFactory<Program> host, string authenticationRequestId)
@@ -516,6 +517,15 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.NotEmpty(stored.RequestedAuthorizationDetails ?? []);
     }
 
+    /// <summary>
+    /// Does what an integrator does when the end user answers on their device: reads the stored request,
+    /// puts the session and the grant the user actually approved on it, marks it authenticated and hands it
+    /// to the completion handler. Nothing in the library drives this - the answer arrives from outside.
+    /// </summary>
+    /// <param name="grantedDetails">
+    /// The authorization_details the end user approved, which is how a partial answer is expressed: the
+    /// grant's context is what will be issued, and replacing it is the only place that answer exists.
+    /// </param>
     private static async Task CompleteAsync(
         WebApplicationFactory<Program> host, string authenticationRequestId, string grantedDetails)
     {

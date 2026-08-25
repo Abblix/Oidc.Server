@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <summary>
 /// Handles CIBA push mode token delivery where tokens are sent directly to the client's notification endpoint
 /// immediately upon authentication completion.
-/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage per CIBA spec 10.3.1.
+/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
@@ -59,7 +59,8 @@ public partial class PushModeCompletionHandler(
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The authentication request is removed from storage after successful delivery per CIBA spec 10.3.1.
+    /// The authentication request is removed from storage after successful delivery, because a push client
+    /// never polls: one left behind is an authenticated grant nobody reads until it expires.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
@@ -147,7 +148,10 @@ public partial class PushModeCompletionHandler(
 
                 if (delivered)
                 {
-                    // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes).
+                    // Removed here and not in poll or ping mode, because only this client is finished
+                    // with the request: it has the tokens and will never come to the token endpoint.
+                    // CIBA Core 1.0 does not require this - section 10.3.1 says nothing about what the OP
+                    // keeps - so it is a choice, made because the alternative is an orphan.
                     await _storage.TryRemoveAsync(authenticationRequestId);
                     LogTokensDelivered(authenticationRequestId);
                 }
@@ -165,7 +169,8 @@ public partial class PushModeCompletionHandler(
             {
                 LogTokenGenerationFailed(authenticationRequestId, error.Error);
 
-                // Per CIBA spec 10.3.1, remove from storage after push attempt (success or failure)
+                // Removed after the attempt either way, for the same reason: nothing will come to
+                // collect it. Not a requirement of CIBA Core 1.0, which does not say.
                 // Push mode clients cannot poll, so storing denied status would orphan the request
                 await _storage.TryRemoveAsync(authenticationRequestId);
 
