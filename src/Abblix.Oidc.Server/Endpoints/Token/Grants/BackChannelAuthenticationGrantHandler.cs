@@ -81,8 +81,8 @@ public partial class BackChannelAuthenticationGrantHandler(
     /// Judged twice, on two different objects, because one comparison cannot do both jobs. Before the
     /// request is consumed, so an ordinary mismatch spends nothing - redeeming removes the stored entry.
     /// And again on the grant the processor returned, because the processor consumes the stored request
-    /// itself, and between the earlier read and that removal the host - which owns the same storage - can
-    /// replace what is stored. Judging only the earlier copy would approve one grant and hand over another.
+    /// itself, and between the earlier read and that removal a host - writing to that same storage through
+    /// the public seam - can replace what is stored. Judging only the earlier copy would approve one grant and hand over another.
     /// </para>
     /// </remarks>
     private async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(

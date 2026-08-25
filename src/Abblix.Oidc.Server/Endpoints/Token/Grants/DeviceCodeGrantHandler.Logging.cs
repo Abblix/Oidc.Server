@@ -61,8 +61,10 @@ partial class DeviceCodeGrantHandler
     /// and a second poll answers expired_token. Nothing else says what was wrong with it.
     ///
     /// Error rather than Warning, and it names the MEMBER rather than the status: nothing in this library
-    /// writes a record in this shape, so it is a host-side defect in code that owns the storage, and the
-    /// operator reading it needs to be sent to the writer rather than to the state machine.
+    /// writes a record in this shape, so it is a defect in code outside it that WRITES one, and the
+    /// operator reading it needs to be sent to that writer rather than to the state machine. Not to
+    /// whoever implements the storage - this library ships and registers an implementation, so in a
+    /// default deployment that reader would be sent to look for code they never wrote.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceCodeGrantHandler.AuthorizedRecordCarriesNoGrant,

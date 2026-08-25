@@ -138,9 +138,10 @@ public class DeviceCodeGrantHandlerTests
     /// A stored grant carrying a type the device never asked for is refused when the code is redeemed.
     /// </summary>
     /// <remarks>
-    /// The approval path already refuses a widened grant, and that check is not enough on its own: the host
-    /// owns this storage and can write to it after approving, which a retried or corrected approval does
-    /// routinely. Between the two the device polls, and whatever is stored by then is what would be issued.
+    /// The approval path already refuses a widened grant, and that check is not enough on its own: a host
+    /// writes to that same storage through the public seam and can do so after approving, which a retried or
+    /// corrected approval does routinely. Between the two the device polls, and whatever is stored by then
+    /// is what would be issued.
     ///
     /// The comparison costs no new state because the record still carries what the client asked for, and it
     /// is the same computation the approval path runs rather than a second one written to match.

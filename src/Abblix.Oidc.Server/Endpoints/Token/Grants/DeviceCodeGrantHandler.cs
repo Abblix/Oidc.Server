@@ -102,9 +102,9 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
 
                 // Judged again, on what is actually being redeemed. IUserCodeVerificationService refuses a
-                // widened grant when the end user approves, but the host owns the same storage and can
-                // write to it afterwards - a retried or corrected approval is the ordinary shape of that,
-                // not an attack. CIBA judges at both ends for the same reason.
+                // widened grant when the end user approves, but a host writes to that same storage through
+                // the public seam and can do so afterwards - a retried or corrected approval is the ordinary
+                // shape of that, not an attack. CIBA judges at both ends for the same reason.
                 //
                 // What this catches is a host that FORGOT, not one that lies: the baseline it compares
                 // against lives in the same host-owned record, so anything able to widen the grant can
@@ -158,9 +158,10 @@ public partial class DeviceCodeGrantHandler(
             // is why it names the missing member rather than the status, and why it sits at Error.
             //
             // Refusing WITHOUT consuming the code, so the record survives for an operator to inspect, is
-            // the real alternative. It is declined because single use is enforced one arm above, and an
-            // exception here would be a second, quieter rule about when a device code survives
-            // redemption, triggered by which member of the record happened to be missing.
+            // the real alternative, and it would have to be taken in that same claiming arm rather than
+            // here - by the time this is reached the code is spent. It is declined because that arm is
+            // where single use is enforced, and carving an exception out of it would make whether a device
+            // code survives redemption depend on which member of the record happened to be missing.
             //
             // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
             // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather
