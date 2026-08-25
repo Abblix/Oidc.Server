@@ -166,6 +166,252 @@ public class ConsentConstraintEnforcerTests
     }
 
     [Fact]
+    public async Task EnforceAsync_PolicyNormalisesGrantedDetails_ReturnsWhatThePolicyReturned()
+    {
+        // A per-type validator that narrows by RETURNING a capped entry is making the decision in its
+        // return value, so the enforcer must hand that value on. Returning the granted array instead
+        // would leave the cap behind in a variable nobody reads.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "5000" }));
+        var capped = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" });
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(capped));
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Same(capped, enforced);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsATypeTheUserDidNotGrant_Throws()
+    {
+        // The array that leaves this method is the one the grant is built from, so the type check has
+        // to cover it - and against what the consent decision GRANTED, not merely against what was
+        // requested. Here the user was asked about two types and granted one; an entry of the other
+        // coming back from re-validation resurrects what they refused. It is the SECOND entry, because
+        // a guard that stops at the first reads as working on every single-entry fixture.
+        var request = CreateRequest(authorizationDetails: new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+                new JsonObject { ["type"] = "payment_initiation" },
+                new JsonObject { ["type"] = "account_information" })));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Contains("account_information", ex.Message);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsAnEntryWithoutAType_Throws()
+    {
+        // A missing type passes "not among the types nobody granted" by being unreadable, and RFC 9396
+        // §2 makes type REQUIRED on every entry - so the answer is a refusal, not a skip. Change the
+        // type and the guard refuses; delete it and it must not wave the entry through.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(
+                new JsonArray(new JsonObject { ["amount"] = "999999" })));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EnforceAsync_GrantedCarriesAnEntryThatIsNotAnObject_Throws()
+    {
+        // The guard reads entries through a conversion that DROPS anything that is not an object, so a
+        // shorter result would let it report "no escaped types" about an array it could not read.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails: new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            JsonValue.Create("payment_initiation")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        // Refused before the policy is consulted: it is the guard's own reading that failed.
+        _authorizationDetailsPolicy.Verify(
+            p => p.ApplyAsync(It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsAnEntryWithoutATypeAndTheRequestNamedTheStandIn_Throws()
+    {
+        // A missing type must not be compared as a value. If it were folded into a stand-in string, a
+        // client could ask for a type spelled exactly that way and thereby admit every typeless entry
+        // the validators return - the guard would read them as a type the request carried.
+        const string standIn = "(no type)";
+
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = standIn }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = standIn }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+                new JsonObject { ["type"] = standIn },
+                new JsonObject { ["amount"] = "999999" })));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsSeveralEntriesAndOneEscapes_Throws()
+    {
+        // The granted array here has two entries, so a guard that read only the first would pass. The
+        // escaping entry is the second on BOTH sides, which is the shape a single-entry fixture cannot
+        // tell apart from a guard that works.
+        var request = CreateRequest(authorizationDetails: new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" }));
+        var granted = Granted(authorizationDetails: new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+                new JsonObject { ["type"] = "payment_initiation" },
+                new JsonObject { ["type"] = "admin_access" })));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Contains("admin_access", ex.Message);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsAnEntryThatIsNotAnObject_Throws()
+    {
+        // The shape guard has to cover the array that LEAVES, not only the one that arrived: the entry
+        // the caller emits is the policy's output, and the conversion the guard reads through drops a
+        // non-object silently.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+                new JsonObject { ["type"] = "payment_initiation" },
+                JsonValue.Create("payment_initiation"))));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EnforceAsync_ValidatorEditsTheTypeInPlaceAndReturnsNothing_Throws()
+    {
+        // Every narrowing validator in this repository's own fixtures edits the entry IN PLACE and
+        // returns the same wrapper, and the typed wrappers alias the source nodes - so a policy that
+        // answers "nothing to change" can still have rewritten the array it was handed. The types read
+        // before the call are the only untouched copy, and that path has to be guarded too.
+        var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails: grantedAd);
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
+            {
+                ad![0]!["type"] = "wire_transfer";
+                return Result<JsonArray?, OidcError>.Success(null);
+            });
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+
+        Assert.Contains("wire_transfer", ex.Message);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsAnEmptySet_Throws()
+    {
+        // Null and empty are different statements. Empty says every entry was removed, and this same
+        // request answers access_denied to a consent decision that granted none - so emitting the
+        // granted set here would put back exactly what the validators took out.
+        var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails: grantedAd);
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray()));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PolicyReturnsNothing_KeepsTheGrantedSet()
+    {
+        // A null result means "nothing to change" everywhere else this policy is consumed - the
+        // request-time, CIBA and device validators all keep what they had - so reading it here as
+        // "the validators emptied the set" would drop authorization_details RFC 9396 section 7
+        // obliges the server to return, on a path where nobody can tell.
+        var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted(authorizationDetails: grantedAd);
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(null));
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Same(grantedAd, enforced);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_GrantedCarriesNoAuthorizationDetails_ReturnsNull()
+    {
+        // Null is how a consent provider says it has no authorization_details opinion at all, and the
+        // caller keys its fall-back to the request on exactly that. The policy is never consulted,
+        // which the strict mock asserts by construction.
+        var request = CreateRequest(authorizationDetails:
+            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
+        var granted = Granted();
+
+        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
+
+        Assert.Null(enforced);
+    }
+
+    [Fact]
     public async Task EnforceAsync_GrantedAuthorizationDetailsValidNarrowing_DoesNotThrow()
     {
         var request = CreateRequest(authorizationDetails:

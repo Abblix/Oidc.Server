@@ -157,7 +157,8 @@ public class AuthorizationRequestProcessor(
 		// browser tampering it failed to intersect against the request), so it surfaces as an
 		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
 		// TokenAuthorizationContextEvaluator at the token endpoint.
-		await consentConstraintEnforcer.EnforceAsync(request, userConsents.Granted, CancellationToken.None);
+		var enforcedAuthorizationDetails = await consentConstraintEnforcer.EnforceAsync(
+			request, userConsents.Granted, CancellationToken.None);
 
 		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
 		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
@@ -165,7 +166,7 @@ public class AuthorizationRequestProcessor(
 		// child of its own DTO, the second serialise will throw because the JsonNode is parented
 		// twice. DeepClone defensively on the boundary so the two consumers each see independent
 		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
-		var sourceAd = userConsents.Granted.AuthorizationDetails ?? request.AuthorizationDetails;
+		var sourceAd = enforcedAuthorizationDetails ?? request.AuthorizationDetails;
 		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
 			? (JsonArray?)sourceAd.DeepClone()
 			: null;

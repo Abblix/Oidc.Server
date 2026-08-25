@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -1636,6 +1637,66 @@ public class AuthorizationRequestProcessorTests
         // Defensive DeepClone at the boundary (C2): the AuthorizationContext receives a clone,
         // not the same reference -- assert value-equality through the wire JSON instead.
         Assert.Equal(narrowedAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_PolicyNormalisesGrantedDetails_TokenReflectsTheNormalisedSet()
+    {
+        // The request already carries the capped amount, because the request-time validator narrowed
+        // it before consent was asked. A provider that rebuilds its granted array from the original
+        // client request hands back the uncapped one; its type was requested, so the type-level subset
+        // check passes, and the per-type validator answers by RETURNING the capped entry rather than
+        // by failing - which is how a normalising validator says "this far and no further".
+        // Emitting the provider's number instead of the returned one would put an amount in the token
+        // that no validator ever approved.
+        var requestedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "1000" });
+        var grantedAd = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "5000" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: grantedAd);
+
+        _authorizationDetailsPolicy
+            .Setup(p => p.ApplyAsync(
+                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => CapAmount(ad, 800m));
+
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.NotNull(capture.Grant);
+        var emitted = capture.Grant.Context.AuthorizationDetails!;
+        Assert.Equal("800", emitted[0]!["amount"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A normalising per-type validator: over the cap it returns a capped CLONE rather than mutating
+    /// the entry it was handed, which is what makes the returned value the only place the decision lives.
+    /// </summary>
+    private static JsonArray? CapAmount(JsonArray? details, decimal cap)
+    {
+        if (details is null)
+            return null;
+
+        var capped = new JsonArray();
+        foreach (var entry in details)
+        {
+            var clone = (JsonObject)entry!.DeepClone();
+            var parsed = decimal.TryParse(
+                clone["amount"]?.GetValue<string>(),
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out var amount);
+
+            if (parsed && amount > cap)
+                clone["amount"] = cap.ToString(CultureInfo.InvariantCulture);
+
+            capped.Add(clone);
+        }
+
+        return capped;
     }
 
     [Fact]
