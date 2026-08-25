@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -128,6 +129,83 @@ public class DeviceCodeGrantHandlerTests
 
         _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
     }
+
+    /// <summary>
+    /// A stored grant carrying a type the device never asked for is refused when the code is redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The approval path already refuses a widened grant, and that check is not enough on its own: the host
+    /// owns this storage and can write to it after approving, which a retried or corrected approval does
+    /// routinely. Between the two the device polls, and whatever is stored by then is what would be issued.
+    ///
+    /// The comparison costs no new state because the record still carries what the client asked for, and it
+    /// is the same computation the approval path runs rather than a second one written to match.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantWideningTheRequest_IsRefusedWhenTheCodeIsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A stored grant that stays inside what the device asked for is redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The control for the refusal above. Without it the same assertions would hold over a handler that
+    /// refused every request carrying <c>authorization_details</c> at all, which is the shape a guard
+    /// written slightly too wide takes.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantInsideTheRequest_IsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            AuthorizationDetails = new JsonArray(
+                new JsonObject { ["type"] = "payment_initiation" },
+                new JsonObject { ["type"] = "account_information" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(UserId, grant!.AuthSession.Subject);
+    }
+
+    private AuthorizedGrant GrantWith(JsonArray authorizationDetails)
+        => new(
+            new AuthSession(UserId, "session_123", _currentTime, "device"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+            {
+                AuthorizationDetails = authorizationDetails,
+            });
 
     /// <summary>
     /// Verifies that when atomic removal fails (race condition - another concurrent request claimed the device code),

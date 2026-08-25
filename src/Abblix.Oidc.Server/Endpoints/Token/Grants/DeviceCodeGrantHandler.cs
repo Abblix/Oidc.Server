@@ -91,6 +91,24 @@ public class DeviceCodeGrantHandler(
 
             // User has authorized the device - return the authorized grant
             case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
+
+                // Judged again, on what is actually being redeemed. IUserCodeVerificationService refuses a
+                // widened grant when the end user approves, but the host owns the same storage and can
+                // write to it afterwards - a retried or corrected approval is the ordinary shape of that,
+                // not an attack. Approving one grant and handing over another is the whole failure the
+                // comparison exists to prevent, and it is why CIBA judges at both ends too.
+                //
+                // The record still carries what the client asked for, so the comparison costs no new state.
+                // The same computation as at approval, deliberately: a second, slightly different test here
+                // would disagree with the first on exactly the inputs nobody wrote a test for.
+                if (GrantedAuthorizationDetails.Escaping(deviceRequest, authorizedGrant) is { Length: > 0 })
+                {
+                    return new OidcError(
+                        ErrorCodes.AccessDenied,
+                        "The grant carries authorization_details the device authorization request "
+                        + "did not ask for");
+                }
+
                 return authorizedGrant;
 
             // Authorization still pending - check polling rate
