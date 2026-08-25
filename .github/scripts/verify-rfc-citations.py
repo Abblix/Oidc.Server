@@ -35,6 +35,22 @@ SKIP_DIRS = {'bin', 'obj', '.git', 'node_modules', 'TestResults'}
 EXTENSIONS = ('.cs', '.md')
 
 
+def citations(root):
+    """Yield (relative path, line number, rfc, section) for every citation under root."""
+    for directory, subdirectories, filenames in os.walk(root):
+        subdirectories[:] = [name for name in subdirectories if name not in SKIP_DIRS]
+        for filename in filenames:
+            if not filename.endswith(EXTENSIONS):
+                continue
+            full = os.path.join(directory, filename)
+            relative = os.path.relpath(full, root).replace(os.sep, '/')
+            with open(full, encoding='utf-8', errors='replace') as handle:
+                lines = handle.read().split('\n')
+            for number, line in enumerate(lines, 1):
+                for rfc, section in CITATION.findall(line):
+                    yield relative, number, rfc, section
+
+
 def sections_of(rfc, cache):
     path = os.path.join(cache, f'rfc{rfc}.txt')
     if not os.path.exists(path):
@@ -53,7 +69,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('root', nargs='?', default='.')
     parser.add_argument('--cache', default=os.path.join(os.path.expanduser('~'), '.cache', 'rfc-citations'))
+    parser.add_argument(
+        '--list-rfcs',
+        action='store_true',
+        help='print the cited RFC numbers, one per line, and fetch nothing. This is what a cache of '
+             'the fetched texts is keyed on: the documents never change, so the only thing that '
+             'invalidates such a cache is a citation naming an RFC that was not cited before.')
     arguments = parser.parse_args()
+
+    if arguments.list_rfcs:
+        for rfc in sorted({rfc for _, _, rfc, _ in citations(arguments.root)}, key=int):
+            print(rfc)
+        return 0
+
     os.makedirs(arguments.cache, exist_ok=True)
 
     known = {}
@@ -61,24 +89,14 @@ def main():
     unfetchable = set()
     checked = 0
 
-    for directory, subdirectories, filenames in os.walk(arguments.root):
-        subdirectories[:] = [name for name in subdirectories if name not in SKIP_DIRS]
-        for filename in filenames:
-            if not filename.endswith(EXTENSIONS):
-                continue
-            full = os.path.join(directory, filename)
-            with open(full, encoding='utf-8', errors='replace') as handle:
-                lines = handle.read().split('\n')
-            for number, line in enumerate(lines, 1):
-                for rfc, section in CITATION.findall(line):
-                    checked += 1
-                    if rfc not in known:
-                        known[rfc] = sections_of(rfc, arguments.cache)
-                    if known[rfc] is None:
-                        unfetchable.add(rfc)
-                    elif section not in known[rfc]:
-                        relative = os.path.relpath(full, arguments.root).replace(os.sep, '/')
-                        bad[f'RFC {rfc} section {section}'].append(f'{relative}:{number}')
+    for relative, number, rfc, section in citations(arguments.root):
+        checked += 1
+        if rfc not in known:
+            known[rfc] = sections_of(rfc, arguments.cache)
+        if known[rfc] is None:
+            unfetchable.add(rfc)
+        elif section not in known[rfc]:
+            bad[f'RFC {rfc} section {section}'].append(f'{relative}:{number}')
 
     print(f'{checked} citations across {len(known)} RFCs')
     if unfetchable:
