@@ -299,10 +299,10 @@ public record OidcOptions
 	/// endpoint, which no resource indicator names, so an opted-in deployment following that example loses
 	/// the entry from every token it issues.
 	///
-	/// One more consequence to weigh: introspection filters an entry with no <c>locations</c> the other
-	/// way, withholding it from a caller that did not register for it. With this on, a resource server can
-	/// therefore read an un-located entry out of the token and not get it back when it introspects the
-	/// same token.
+	/// Worth knowing, and NOT a cost of turning this on: introspection already treats an entry with no
+	/// <c>locations</c> the other way round, withholding it from a caller that did not register for it. A
+	/// resource server can read such an entry out of the token and not get it back when it introspects the
+	/// same token, and that holds with this setting off as well.
 	///
 	/// The refresh token is never filtered: it is read by this server rather than by a resource server, and
 	/// it is what a later refresh for a DIFFERENT resource is rebuilt from.
