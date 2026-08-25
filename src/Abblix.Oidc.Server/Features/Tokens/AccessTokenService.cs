@@ -123,7 +123,8 @@ internal class AccessTokenService(
 		var audienceContext = authContext.WithDefaultResource(options.Value.DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
-		NarrowAuthorizationDetailsToAudience(accessToken.Payload);
+		if (options.Value.FilterAuthorizationDetailsByLocation)
+			NarrowAuthorizationDetailsToAudience(accessToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
@@ -139,52 +140,49 @@ internal class AccessTokenService(
 	}
 
 	/// <summary>
-	/// Drops the <c>authorization_details</c> entries this token's audience has no business reading.
+	/// Drops the <c>authorization_details</c> entries this token's audience has no business reading, when
+	/// the deployment has said its <c>locations</c> and its audiences are drawn from the same namespace.
 	/// </summary>
 	/// <param name="payload">The access token payload, with its audience already settled.</param>
 	/// <remarks>
-	/// RFC 9396 §9.1: the authorization server is RECOMMENDED to add the authorization details "filtered to
-	/// the specific audience". An entry names the resource servers it is meant for in <c>locations</c>
-	/// (§2.2), so an entry naming only servers this token is not addressed to describes a permission its
-	/// bearer cannot exercise here, and carrying it hands the reader information about the end user's other
-	/// grants for nothing in return (§13, need to know).
+	/// Off unless <see cref="OidcOptions.FilterAuthorizationDetailsByLocation"/> says otherwise, because
+	/// nothing here can check that the two members are comparable. RFC 9396 §2.2 says <c>locations</c>
+	/// "typically" holds URIs identifying resource servers, and §9.1's own example pairs a client-style
+	/// <c>aud</c> with a resource URI in <c>locations</c>, so a deployment where they do agree has decided
+	/// that, and one where they do not would lose every located entry. §7 leaves what the token carries to
+	/// this server where the client did not ask, and §13 asks for need-to-know as local policy determines.
 	///
 	/// Applied to the ACCESS token only, and here rather than in
-	/// <see cref="AuthorizationContextExtensions.ApplyTo"/>, which a refresh token goes through as well.
-	/// A refresh token is read by this server rather than by a resource server, and it is what a later
-	/// refresh for a DIFFERENT resource is rebuilt from, so narrowing it would not protect anybody and
-	/// would permanently lose the entries that refresh needs.
+	/// <see cref="AuthorizationContextExtensions.ApplyTo"/>, which a refresh token goes through as well. A
+	/// refresh token is read by this server rather than by a resource server, and it is what a later refresh
+	/// for a DIFFERENT resource is rebuilt from, so narrowing it would protect nobody and would permanently
+	/// lose the entries that refresh needs.
 	///
-	/// Nothing is dropped when no specific audience was asked for. The audience then falls back to the
-	/// issuer, which names this server rather than a resource, so there is no "specific audience" for §9.1
-	/// to filter to - and a deployment that uses <c>locations</c> without resource indicators keeps
-	/// emitting exactly what it emitted before. The fallback is recognised from the settled value rather
-	/// than re-derived from the context, so this and the audience it filters against cannot disagree.
+	/// An entry carrying no <c>locations</c> survives. §2.2 makes the member optional, and reading its
+	/// absence as "nowhere" would empty the claim for every deployment that does not use it. The member is
+	/// REMOVED when nothing survives rather than written as an empty array or a null: §14.2 registers the
+	/// claim as a JSON array, so a null is a document no resource server owes us a reading of, and an empty
+	/// array would say the end user granted nothing.
 	///
-	/// Comparison is ordinal on the text, per RFC 9396 §12: "No additional transformation or normalization
-	/// is to be done in evaluating equivalence of string values."
+	/// Comparison is ordinal on the text, per §12: "No additional transformation or normalization is to be
+	/// done in evaluating equivalence of string values."
 	/// </remarks>
 	private static void NarrowAuthorizationDetailsToAudience(JsonWebTokenPayload payload)
 	{
 		if (payload.Json[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
 			return;
 
-		var audiences = payload.Audiences.ToArray();
-		if (audiences is [var only] && only == payload.Issuer)
-			return;
+		var addressed = payload.Audiences.ToHashSet(StringComparer.Ordinal);
 
-		var addressed = audiences.ToHashSet(StringComparer.Ordinal);
-
-		// An entry carrying no locations names no resource server, so it is not addressed away from this
-		// one. RFC 9396 §2.2 makes the member optional, and reading its absence as "nowhere" would empty
-		// the claim for every deployment that does not use it.
 		var kept = details
 			.ToTypedArray()?
 			.Where(detail => detail.Locations is not { } locations ||
 			                 locations.Any(location => addressed.Contains(location)))
 			.ToRawJsonArray();
 
-		payload.Json[IanaClaimTypes.AuthorizationDetails] = kept is { Count: > 0 } ? kept : null;
+		payload.Json.SetProperty(
+			IanaClaimTypes.AuthorizationDetails,
+			kept is { Count: > 0 } ? kept : null);
 	}
 
 	/// <summary>

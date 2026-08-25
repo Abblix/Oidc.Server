@@ -576,7 +576,8 @@ public class AccessTokenServiceTests
     /// listed for it. A resource mapped to an empty array is registered but publishes no key.
     /// </summary>
     private AccessTokenService CreateServiceWithResources(
-        Dictionary<Uri, JsonWebKey[]> resources)
+        Dictionary<Uri, JsonWebKey[]> resources,
+        bool filterByLocation = false)
     {
         var manager = new Mock<IResourceManager>(MockBehavior.Strict);
         var keys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
@@ -601,7 +602,7 @@ public class AccessTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
-            Options.Create(new OidcOptions()),
+            Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             new AudienceKeyResolver(manager.Object, keys.Object));
     }
 
@@ -682,8 +683,6 @@ public class AccessTokenServiceTests
     private static AuthorizationContext ContextAddressedTo(Uri[] resources, JsonArray details) =>
         new(ClientId, [Scopes.OpenId], null) { Resources = resources, AuthorizationDetails = details };
 
-    private static AuthorizationContext ContextWithoutResource(JsonArray details) =>
-        new(ClientId, [Scopes.OpenId, Scopes.Profile], null) { AuthorizationDetails = details };
 
     private static JsonArray DetailsForPayments(params string?[] locations) =>
         new(locations
@@ -725,7 +724,7 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt()
     {
-        var service = CreateServiceWithResources(new() { [OrdersApi] = [] });
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] }, filterByLocation: true);
         var context = ContextAddressedTo(
             [OrdersApi],
             DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null));
@@ -753,33 +752,41 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_WhenEveryDetailNamesAnotherResource_OmitsTheClaim()
     {
-        var service = CreateServiceWithResources(new() { [OrdersApi] = [] });
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] }, filterByLocation: true);
         var context = ContextAddressedTo([OrdersApi], DetailsForPayments(BillingApi.OriginalString));
 
         var token = await MintAsync(service, context);
 
-        Assert.Null(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+        // ContainsKey rather than the indexer, which answers null for an absent member and for a present
+        // null alike. RFC 9396 section 14.2 registers the claim as a JSON array, so a null is a document no
+        // resource server owes us a reading of - and a test blind to the difference passes over the wrong
+        // one.
+        Assert.False(token.Payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
     }
 
     /// <summary>
-    /// With no resource requested, nothing is dropped.
+    /// Without the switch, the audience decides nothing about what the token carries.
     /// </summary>
     /// <remarks>
-    /// The control, and the reason this is not a behaviour change for a deployment that never used resource
-    /// indicators. The audience falls back to the issuer, which names this server rather than a resource,
-    /// so there is no specific audience for section 9.1 to filter to - and without this test the filter
-    /// above would read the same whether it narrowed by audience or simply dropped every located entry.
+    /// The shipped default, so this is what every deployment that does not opt in keeps getting. The token
+    /// is addressed to one API and carries an entry located at another, which survives.
+    ///
+    /// It pins the default and nothing about the predicate: the mutation that drops every located entry
+    /// leaves this green, because a service built without the flag never reaches the filter. What
+    /// discriminates the predicate is the pair of tests above, and saying so here is the point - a control
+    /// that is trusted for a guarantee it does not give is worse than none.
     /// </remarks>
     [Fact]
-    public async Task CreateAccessToken_WithNoResourceRequested_KeepsEveryDetail()
+    public async Task CreateAccessToken_WithoutTheSwitch_KeepsEveryDetail()
     {
-        var context = ContextWithoutResource(
-            DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null));
-
-        var token = await MintAsync(_service, context);
+        var token = await MintAsync(
+            CreateServiceWithResources(new() { [OrdersApi] = [] }),
+            ContextAddressedTo(
+                [OrdersApi],
+                DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null)));
 
         var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
         Assert.Equal(3, details.Count);
-        Assert.Equal([Issuer], token.Payload.Audiences);
+        Assert.Equal([OrdersApi.OriginalString], token.Payload.Audiences);
     }
 }
