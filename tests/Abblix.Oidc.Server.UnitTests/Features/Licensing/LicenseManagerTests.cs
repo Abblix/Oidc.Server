@@ -989,6 +989,48 @@ public class LicenseManagerTests
     }
 
     /// <summary>
+    /// A successor with no expiry outlives everything, so it silences the warning.
+    /// </summary>
+    /// <remarks>
+    /// A perpetual license is first-class here - <c>ExpiresAt</c> is nullable, the merge treats a null as
+    /// infinity, and the status walk falls straight through to Active - so this is an arrangement a
+    /// deployment can be in rather than a shape only a test can build.
+    ///
+    /// Pinned because the predicate says it in words: "A successor with no expiry outlives everything."
+    /// Requiring a non-null expiry there instead leaves every other test in this file green, so the
+    /// sentence would be the only thing holding the branch.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_PerpetualSuccessor_SaysNothing()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(
+            new License
+            {
+                NotBefore = Moment.AddDays(5),
+                ExpiresAt = null,
+                ClientLimit = 50,
+            });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon);
+    }
+
+    /// <summary>
     /// A successor starting at the exact moment the current license ends covers it; a tick later does not.
     /// </summary>
     /// <remarks>
