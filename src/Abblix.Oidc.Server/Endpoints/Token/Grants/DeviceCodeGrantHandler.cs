@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -28,11 +29,15 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="logger">Records a refusal the client learns nothing from, and the approval path cannot
 /// have reported.</param>
 /// <param name="storage">Service for storing and retrieving device authorization requests.</param>
+/// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
+/// authorization_details are still acceptable, which is the only comparison that can see inside an
+/// entry.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing polling interval settings.</param>
 public partial class DeviceCodeGrantHandler(
     ILogger<DeviceCodeGrantHandler> logger,
     IDeviceAuthorizationStorage storage,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IAuthorizationGrantHandler
 {
@@ -119,6 +124,20 @@ public partial class DeviceCodeGrantHandler(
                         ErrorCodes.AccessDenied,
                         "The grant carries authorization_details the device authorization request "
                         + "did not ask for");
+                }
+
+                // And what the type comparison above structurally cannot see: an entry of a type the
+                // request DID ask for, carrying content it did not - a raised amount, a widened set of
+                // accounts. RFC 9396 §6.1 leaves that to the type's own validator, so this asks it.
+                // On a copy: the question must not rewrite its own subject.
+                if (await authorizationDetailsPolicy.RefuseAsync(
+                        authorizedGrant, clientInfo, cancellationToken) is { } refusal)
+                {
+                    // The reason goes to the log and a fixed string to the client, matching the gate
+                    // above: a granted-phase rejection names a host-side defect, and its text is
+                    // written for whoever fixes it.
+                    LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
+                    return refusal.Error;
                 }
 
                 return authorizedGrant;

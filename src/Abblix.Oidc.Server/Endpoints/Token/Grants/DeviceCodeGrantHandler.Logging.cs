@@ -37,4 +37,19 @@ partial class DeviceCodeGrantHandler
                   "is by type, because RFC 9396 §6.1 defines no universal comparator for two arbitrary " +
                   "entries.")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
+
+    /// <summary>
+    /// The per-type validator's own words, which the client never sees.
+    /// </summary>
+    /// <remarks>
+    /// A granted-phase rejection names a host-side defect, so the validator writes for whoever has to fix
+    /// it and may name a tenant, a ceiling or a configuration key. The client is told only that the
+    /// deployment will not issue these details; this is where the sentence that explains it lives.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = LogEvents.Device.DeviceCodeGrantHandler.GrantedAuthorizationDetailsRefused,
+        Level = LogLevel.Warning,
+        Message = "Client {ClientId} presented a device code whose stored grant the per-type validators " +
+                  "will not issue, so the redemption is refused and no token was issued: {Reason}")]
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string Reason);
 }

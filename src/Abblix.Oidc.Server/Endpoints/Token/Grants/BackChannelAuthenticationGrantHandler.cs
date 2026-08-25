@@ -15,8 +15,10 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
@@ -33,14 +35,20 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
+/// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
+/// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
+/// authorization_details are still acceptable, which is the only comparison that can see inside an
+/// entry.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific grant processors.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 /// <param name="subjectTypeConverter">
 /// Seals the authenticated session's subject the way the requesting client sees it, so it can be compared
 /// against the end user the original request named.
 /// </param>
-public class BackChannelAuthenticationGrantHandler(
+public partial class BackChannelAuthenticationGrantHandler(
+    ILogger<BackChannelAuthenticationGrantHandler> logger,
     IBackChannelRequestStorage storage,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
@@ -81,7 +89,8 @@ public class BackChannelAuthenticationGrantHandler(
         string authenticationRequestId,
         StoredRequest request,
         ClientInfo clientInfo,
-        IBackChannelGrantProcessor processor)
+        IBackChannelGrantProcessor processor,
+        CancellationToken cancellationToken)
     {
         // Refused before the request is consumed, so an ordinary mismatch costs the client nothing it could
         // have used: redeeming removes the entry, and a request answerable only for the wrong end user is
@@ -109,7 +118,20 @@ public class BackChannelAuthenticationGrantHandler(
         // And the same for what the grant authorises. The completion path judges this too, but a host can
         // complete with a narrowed grant and then store a wider one before the client polls - the same
         // window the subject comparison above exists for, and the same answer.
-        return WidensTheRequest(request, grant) ? NotWhatTheRequestAskedFor() : grant;
+        if (WidensTheRequest(request, grant))
+            return NotWhatTheRequestAskedFor();
+
+        // And what the type comparison structurally cannot see: an entry of a type the request DID ask
+        // for, carrying content it did not. RFC 9396 §6.1 leaves that to the type's own validator, so this
+        // asks it - on a copy, because the question must not rewrite its own subject.
+        if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, cancellationToken)
+            is not { } refusal)
+            return grant;
+
+        // The reason goes to the log and a fixed string to the client: a granted-phase rejection names
+        // a host-side defect, and its text is written for whoever has to fix it.
+        LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
+        return refusal.Error;
     }
 
     private static OidcError NotTheRequestedEndUser()
@@ -224,7 +246,8 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                => await RedeemAsync(request.AuthenticationRequestId, authenticated, clientInfo, processor),
+                => await RedeemAsync(
+                    request.AuthenticationRequestId, authenticated, clientInfo, processor, cancellationToken),
 
             // If the request is still pending and not yet time to poll again
             { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
@@ -329,7 +352,8 @@ public class BackChannelAuthenticationGrantHandler(
         }
 
         var updatedRequest = await storage.TryGetAsync(authenticationRequestId);
-        return await ProcessUpdatedRequest(updatedRequest, authenticationRequestId, clientInfo);
+        return await ProcessUpdatedRequest(
+            updatedRequest, authenticationRequestId, clientInfo, cancellationToken);
     }
 
     /// <summary>
@@ -339,11 +363,14 @@ public class BackChannelAuthenticationGrantHandler(
     /// <param name="updatedRequest">The updated authentication request from storage, or null if expired.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
+    /// <param name="cancellationToken">Forwarded to the per-type validators that judge the grant's
+    /// authorization_details before it is handed over.</param>
     /// <returns>Either an authorized grant, access denied error, expired token error, or authorization_pending.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> ProcessUpdatedRequest(
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest? updatedRequest,
         string authenticationRequestId,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+        CancellationToken cancellationToken)
     {
         // Validate client ownership before processing (security critical)
         if (updatedRequest?.AuthorizedGrant.Context.ClientId != clientInfo.ClientId)
@@ -357,7 +384,8 @@ public class BackChannelAuthenticationGrantHandler(
         switch (updatedRequest)
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
-                return await RedeemAsync(authenticationRequestId, authenticated, clientInfo, grantProcessor);
+                return await RedeemAsync(
+                    authenticationRequestId, authenticated, clientInfo, grantProcessor, cancellationToken);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(

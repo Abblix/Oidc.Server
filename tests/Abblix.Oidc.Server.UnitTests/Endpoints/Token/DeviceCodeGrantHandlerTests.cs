@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -65,6 +66,7 @@ public class DeviceCodeGrantHandlerTests
         _handler = new DeviceCodeGrantHandler(
             NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options);
     }
@@ -293,6 +295,107 @@ public class DeviceCodeGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
+
+    /// <summary>
+    /// A grant of a requested type whose CONTENT the per-type validator refuses is not redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The type comparison structurally cannot see this: the type was asked for, so a raised amount or a
+    /// widened set of accounts inside the entry passes every check the flow can make on its own. RFC 9396
+    /// section 6.1 defines no standardized way to compare two arbitrary entries and leaves it to the
+    /// definition of the type, which is what the per-type validator is.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantTheValidatorRefuses_IsNotRedeemed()
+    {
+        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds what was requested");
+        var handler = HandlerWith(policy);
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+
+        // RFC 9396 section 14.6 registers this with the token endpoint among its usage locations and
+        // refers to section 5: details not conforming to their type definition must be refused.
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
+
+        // The validator's own words name a tenant, a ceiling or a configuration key, so they go to the log
+        // and a fixed string goes on the wire. A granted-phase rejection is a host-side defect, and no
+        // other one in this library reaches a client.
+        Assert.DoesNotContain("instructedAmount", error.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The question is asked on a copy, so a validator cannot rewrite the grant it was asked about.
+    /// </summary>
+    /// <remarks>
+    /// A normalising validator says what it wants by editing the entry it was handed, which is what every
+    /// narrowing fixture in this repository does. Here the grant already exists and the end user approved
+    /// it out of band, so an edit at this point changes what was approved where nobody is watching. The
+    /// answer is read as yes or no and the subject is left alone.
+    ///
+    /// Asserted through the object the validator SAW rather than through the grant, because the grant
+    /// being unchanged also holds over a handler that never asked - which is the reading this must exclude.
+    /// </remarks>
+    [Fact]
+    public async Task TheValidatorIsAskedOnACopy_NotOnTheGrant()
+    {
+        var policy = StubAuthorizationDetailsPolicy.Accepting;
+        var handler = HandlerWith(policy);
+
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(granted),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await handler.AuthorizeAsync(
+            new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(1, policy.GrantedCalls);
+        Assert.NotNull(policy.LastSeen);
+        Assert.NotSame(granted, policy.LastSeen);
+        Assert.Equal(granted.ToJsonString(), policy.LastSeen!.ToJsonString());
+    }
+
+    private DeviceCodeGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
+        => new(
+            NullLogger<DeviceCodeGrantHandler>.Instance,
+            _storage.Object,
+            policy,
+            new FakeTimeProvider(_currentTime),
+            Options.Create(new OidcOptions
+            {
+                DeviceAuthorization = new DeviceAuthorizationOptions
+                {
+                    CodeLifetime = TimeSpan.FromMinutes(15),
+                    PollingInterval = _pollingInterval,
+                    DeviceCodeLength = 32,
+                    UserCodeLength = 8,
+                    VerificationUri = new Uri("https://example.com/device"),
+                },
+            }));
 
     private AuthorizedGrant GrantWith(JsonArray authorizationDetails)
         => new(

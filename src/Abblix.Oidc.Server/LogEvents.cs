@@ -596,6 +596,7 @@ internal static class LogEvents
             private const int Base = 7083;
 
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base;
+            public const int GrantedAuthorizationDetailsRefused = Base + 1;
         }
     }
 
@@ -756,6 +757,32 @@ internal static class LogEvents
             public const int TokenRefusedByCutoff = Base + 1;
             public const int SubjectCouldNotBeResolved = Base + 2;
             public const int SessionRefusedByCutoff = Base + 3;
+        }
+    }
+
+    /// <summary>
+    /// Range 10200-10299: <c>Endpoints/Token/Grants</c> and
+    /// <c>Features/BackChannelAuthentication</c> - what the CIBA grant refuses when the stored
+    /// request no longer matches what may be issued.
+    /// </summary>
+    /// <remarks>
+    /// A range of its own rather than a corner of the device one. CIBA is not the device flow, and
+    /// the Device range 7000-7099 is fully allocated - partly to a back-channel logout sender that
+    /// is not the device flow either, and whose numbers cannot move without changing ids an
+    /// operator may already alert on.
+    /// </remarks>
+    public static class Ciba
+    {
+        /// <summary>
+        /// <c>Endpoints/Token/Grants/BackChannelAuthenticationGrantHandler.cs</c> - what the token
+        /// endpoint refuses when the stored grant is not one the deployment will issue
+        /// (sub-range 10200-10219).
+        /// </summary>
+        public static class BackChannelAuthenticationGrantHandler
+        {
+            private const int Base = 10200;
+
+            public const int GrantedAuthorizationDetailsRefused = Base;
         }
     }
 }
