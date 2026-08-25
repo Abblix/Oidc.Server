@@ -250,11 +250,16 @@ public class DeviceCodeGrantHandlerTests
     /// A grant this comparison cannot read is refused rather than read as carrying nothing.
     /// </summary>
     /// <remarks>
-    /// Both shapes reach the same conclusion by different routes, and both were uncovered. An entry that is
-    /// not a JSON object is dropped silently by the conversion, so counting what survived would report
-    /// "nothing escaped" about what could be read rather than about the grant. An entry carrying no type is
-    /// refused on its own rather than compared as if absence were a type, which a client could otherwise
-    /// request as a real type and thereby admit every entry that has none.
+    /// Both shapes are refused, by different routes and with different amounts of help from the code. An
+    /// entry that is not a JSON object is dropped silently by the conversion, so without the arity guard
+    /// the count of survivors would describe what could be read rather than what was granted: that guard
+    /// carries the verdict, and removing it lets this grant through.
+    ///
+    /// An entry carrying no type is refused whether or not its own arm exists, because the request side
+    /// filters its types with OfType and so can never hold a null to match one with. That arm changes the
+    /// LOG rather than the verdict. This test therefore pins the outcome of the arrangement without
+    /// pinning the arm, and holding the arm would mean asserting on the logged sentinel, which needs a
+    /// recording logger this handler test does not have.
     ///
     /// The request asks for a type in both arrangements, so a refusal here cannot be the ordinary
     /// escaped-type refusal wearing a different fixture.
