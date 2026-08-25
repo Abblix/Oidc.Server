@@ -208,6 +208,87 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(UserId, grant!.AuthSession.Subject);
     }
 
+    /// <summary>
+    /// A device that asked for no <c>authorization_details</c> at all is not a device that asked for any.
+    /// </summary>
+    /// <remarks>
+    /// The escalation this whole gate exists for, and the one arrangement where the baseline is empty rather
+    /// than merely narrow: a request carrying nothing meets a stored grant carrying <c>admin_access</c>.
+    /// A null baseline is judged strictly rather than skipped, so every type in the grant escapes.
+    ///
+    /// Pinned separately because the strict reading is a decision rather than a consequence, and the
+    /// opposite one is a single early return away. CIBA takes that opposite reading deliberately, for a
+    /// reason that does not hold here: its stored member arrived after the flow shipped, so a null there
+    /// says the request predates the field, while the device record has carried this member since the
+    /// flow's first release and a null means the client asked for nothing.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantWhereTheRequestAskedForNone_IsRefusedWhenTheCodeIsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })),
+            AuthorizationDetails = null,
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A grant this comparison cannot read is refused rather than read as carrying nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both shapes reach the same conclusion by different routes, and both were uncovered. An entry that is
+    /// not a JSON object is dropped silently by the conversion, so counting what survived would report
+    /// "nothing escaped" about what could be read rather than about the grant. An entry carrying no type is
+    /// refused on its own rather than compared as if absence were a type, which a client could otherwise
+    /// request as a real type and thereby admit every entry that has none.
+    ///
+    /// The request asks for a type in both arrangements, so a refusal here cannot be the ordinary
+    /// escaped-type refusal wearing a different fixture.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AuthorizedGrantTheComparisonCannotRead_IsRefusedWhenTheCodeIsRedeemed(bool notAnObject)
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var unreadable = notAnObject
+            ? new JsonArray(JsonValue.Create("payment_initiation"))
+            : new JsonArray(new JsonObject { ["actions"] = new JsonArray(JsonValue.Create("initiate")) });
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(unreadable),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
     private AuthorizedGrant GrantWith(JsonArray authorizationDetails)
         => new(
             new AuthSession(UserId, "session_123", _currentTime, "device"),

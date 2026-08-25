@@ -13,8 +13,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 partial class DeviceCodeGrantHandler
 {
     /// <summary>
-    /// The escaped TYPES only, matching the approval-side record: what a type carries is its own business,
-    /// and here it is payment and account data.
+    /// The escaped TYPES only, matching the approval-side record: what an entry of a type carries is that
+    /// type's own business, and naming it here would put a deployment's data in a log line.
     /// </summary>
     /// <remarks>
     /// The refusal an operator has the least other evidence for: the approval path refuses the same shape,
@@ -33,8 +33,8 @@ partial class DeviceCodeGrantHandler
         Level = LogLevel.Warning,
         Message = "Client {ClientId} presented a device code whose stored grant carries " +
                   "authorization_details types the device authorization request never asked for, so the " +
-                  "redemption is refused and no token was issued. Types: {EscapedTypes}. Either the stored " +
-                  "record changed after the approval refused this shape, or the approval was bypassed " +
-                  "(RFC 9396 §6.1 defines no universal comparator, so the check is by type).")]
+                  "redemption is refused and no token was issued. Types: {EscapedTypes}. The comparison " +
+                  "is by type, because RFC 9396 §6.1 defines no universal comparator for two arbitrary " +
+                  "entries.")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
 }

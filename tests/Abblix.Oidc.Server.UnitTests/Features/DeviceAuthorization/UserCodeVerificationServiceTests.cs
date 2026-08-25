@@ -153,6 +153,29 @@ public class UserCodeVerificationServiceTests
     }
 
     [Fact]
+    public async Task Approve_WithAnyTypeWhereTheRequestAskedForNone_RefusesAndLeavesTheRequestPending()
+    {
+        // A request carrying nothing is judged strictly rather than skipped, so every type in the grant
+        // escapes. Pinned on its own because the strict reading is a decision and its opposite is one
+        // early return away: skipping a null baseline would let a host attach any authority at all to a
+        // device that asked for none, which is the wider version of the case above rather than a
+        // different one.
+        //
+        // CIBA takes the opposite reading deliberately, for a reason that does not hold here: its stored
+        // member arrived after the flow shipped, so a null there says the request predates the field. The
+        // device record has carried this member since the flow's first release.
+        var service = BuildService(requestedDetails: null, out var logs);
+
+        var approved = await service.ApproveAsync(
+            CanonicalUserCode,
+            GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })));
+
+        Assert.False(approved);
+        var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains("admin_access", warning.Message);
+    }
+
+    [Fact]
     public async Task Approve_CarryingTheAuthorizationDetails_SaysNothing()
     {
         var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
