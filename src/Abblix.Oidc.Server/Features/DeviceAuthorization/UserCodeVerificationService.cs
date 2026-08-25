@@ -98,7 +98,7 @@ public partial class UserCodeVerificationService(
         // authorization request never asked for gives the device authority nobody requested, and this is
         // the last place holding both sides: the requested entries live on the record, and the grant
         // about to replace them is the one the token is built from.
-        if (EscapedAuthorizationDetailTypes(request, authorizedGrant) is { Length: > 0 } escaped)
+        if (GrantedAuthorizationDetails.EscapedTypes(request, authorizedGrant) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
                 request.ClientId, string.Join(", ", escaped));
@@ -125,42 +125,6 @@ public partial class UserCodeVerificationService(
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// The <c>authorization_details</c> types the grant carries and the device authorization request never
-    /// asked for, empty when the grant stays inside what was requested.
-    /// </summary>
-    /// <remarks>
-    /// Types only: RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing
-    /// of that one", so
-    /// what can be judged here is whether an entry of that type was asked for at all. An entry that cannot
-    /// be read as a JSON object counts as escaped, because the conversion drops it silently and "nothing
-    /// escaped" would then describe what could be read rather than the grant.
-    /// </remarks>
-    private static string[] EscapedAuthorizationDetailTypes(
-        DeviceAuthorizationRequest request,
-        AuthorizedGrant authorizedGrant)
-    {
-        if (authorizedGrant.Context.AuthorizationDetails is not { Count: > 0 } granted)
-            return [];
-
-        if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
-            return ["an entry that is not a JSON object"];
-
-        if (Array.Exists(typed, detail => detail.Type is null))
-            return ["an entry carrying no type"];
-
-        var requestedTypes = (request.AuthorizationDetails?.ToTypedArray() ?? [])
-            .Select(detail => detail.Type)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
-
-        return typed
-            .Select(detail => detail.Type!)
-            .Where(type => !requestedTypes.Contains(type))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
     }
 
     /// <inheritdoc />

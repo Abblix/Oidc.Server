@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -18,6 +19,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -61,6 +63,7 @@ public class DeviceCodeGrantHandlerTests
         });
 
         _handler = new DeviceCodeGrantHandler(
+            NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
             timeProvider,
             options);
@@ -128,6 +131,176 @@ public class DeviceCodeGrantHandlerTests
 
         _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
     }
+
+    /// <summary>
+    /// A stored grant carrying a type the device never asked for is refused when the code is redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The approval path already refuses a widened grant, and that check is not enough on its own: the host
+    /// owns this storage and can write to it after approving, which a retried or corrected approval does
+    /// routinely. Between the two the device polls, and whatever is stored by then is what would be issued.
+    ///
+    /// The comparison costs no new state because the record still carries what the client asked for, and it
+    /// is the same computation the approval path runs rather than a second one written to match.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantWideningTheRequest_IsRefusedWhenTheCodeIsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+
+        // The arm that claims the code runs first, so the refusal follows a code that no longer exists and
+        // a second poll answers expired_token rather than access_denied. That is right - RFC 8628 section
+        // 3.5 has the client stop polling on any code other than authorization_pending or slow_down, and
+        // the user-denial refusal beside this one removes first for the same reason - but it depends on the
+        // order of the arms, which nothing else here would notice being changed.
+        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+    }
+
+    /// <summary>
+    /// A stored grant that stays inside what the device asked for is redeemed.
+    /// </summary>
+    /// <remarks>
+    /// The control for the refusal above. Without it the same assertions would hold over a handler that
+    /// refused every request carrying <c>authorization_details</c> at all, which is the shape a guard
+    /// written slightly too wide takes.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantInsideTheRequest_IsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            AuthorizationDetails = new JsonArray(
+                new JsonObject { ["type"] = "payment_initiation" },
+                new JsonObject { ["type"] = "account_information" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(UserId, grant!.AuthSession.Subject);
+    }
+
+    /// <summary>
+    /// A device that asked for no <c>authorization_details</c> at all is not a device that asked for any.
+    /// </summary>
+    /// <remarks>
+    /// The escalation this whole gate exists for, and the one arrangement where the baseline is empty rather
+    /// than merely narrow: a request carrying nothing meets a stored grant carrying <c>admin_access</c>.
+    /// A null baseline is judged strictly rather than skipped, so every type in the grant escapes.
+    ///
+    /// Pinned separately because the strict reading is a decision rather than a consequence, and the
+    /// opposite one is a single early return away. CIBA takes that opposite reading deliberately, for a
+    /// reason that does not hold here: its stored member arrived after the flow shipped, so a null there
+    /// says the request predates the field, while the device record has carried this member since the
+    /// flow's first release and a null means the client asked for nothing.
+    /// </remarks>
+    [Fact]
+    public async Task AuthorizedGrantWhereTheRequestAskedForNone_IsRefusedWhenTheCodeIsRedeemed()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })),
+            AuthorizationDetails = null,
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A grant this comparison cannot read is refused rather than read as carrying nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both shapes are refused, by different routes and with different amounts of help from the code. An
+    /// entry that is not a JSON object is dropped silently by the conversion, so without the arity guard
+    /// the count of survivors would describe what could be read rather than what was granted: that guard
+    /// carries the verdict, and removing it lets this grant through.
+    ///
+    /// An entry carrying no type is refused whether or not its own arm exists, because the request side
+    /// filters its types with OfType and so can never hold a null to match one with. That arm changes the
+    /// LOG rather than the verdict. This test therefore pins the outcome of the arrangement without
+    /// pinning the arm, and holding the arm would mean asserting on the logged sentinel, which needs a
+    /// recording logger this handler test does not have.
+    ///
+    /// The request asks for a type in both arrangements, so a refusal here cannot be the ordinary
+    /// escaped-type refusal wearing a different fixture.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AuthorizedGrantTheComparisonCannotRead_IsRefusedWhenTheCodeIsRedeemed(bool notAnObject)
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var unreadable = notAnObject
+            ? new JsonArray(JsonValue.Create("payment_initiation"))
+            : new JsonArray(new JsonObject { ["actions"] = new JsonArray(JsonValue.Create("initiate")) });
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(unreadable),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    private AuthorizedGrant GrantWith(JsonArray authorizationDetails)
+        => new(
+            new AuthSession(UserId, "session_123", _currentTime, "device"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+            {
+                AuthorizationDetails = authorizationDetails,
+            });
 
     /// <summary>
     /// Verifies that when atomic removal fails (race condition - another concurrent request claimed the device code),

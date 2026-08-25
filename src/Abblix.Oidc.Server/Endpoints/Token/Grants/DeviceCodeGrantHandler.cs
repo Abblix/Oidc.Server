@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -24,10 +25,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// This handler validates token requests for the device authorization flow,
 /// checking the device code status and returning tokens when authorized.
 /// </summary>
+/// <param name="logger">Records a refusal the client learns nothing from, and the approval path cannot
+/// have reported.</param>
 /// <param name="storage">Service for storing and retrieving device authorization requests.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options containing polling interval settings.</param>
-public class DeviceCodeGrantHandler(
+public partial class DeviceCodeGrantHandler(
+    ILogger<DeviceCodeGrantHandler> logger,
     IDeviceAuthorizationStorage storage,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IAuthorizationGrantHandler
@@ -91,6 +95,32 @@ public class DeviceCodeGrantHandler(
 
             // User has authorized the device - return the authorized grant
             case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
+
+                // Judged again, on what is actually being redeemed. IUserCodeVerificationService refuses a
+                // widened grant when the end user approves, but the host owns the same storage and can
+                // write to it afterwards - a retried or corrected approval is the ordinary shape of that,
+                // not an attack. CIBA judges at both ends for the same reason.
+                //
+                // What this catches is a host that FORGOT, not one that lies: the baseline it compares
+                // against lives in the same host-owned record, so anything able to widen the grant can
+                // widen the baseline in the same write. Worth having anyway, because forgetting is what
+                // actually happens, and the record still carries what the client asked for, so the
+                // comparison costs no new state.
+                //
+                // The same computation as at approval, deliberately: a second, slightly different test here
+                // would disagree with the first on exactly the inputs nobody wrote a test for.
+                if (GrantedAuthorizationDetails.EscapedTypes(deviceRequest, authorizedGrant) is
+                    { Length: > 0 } escaped)
+                {
+                    LogGrantedAuthorizationDetailsExceedTheRequest(
+                        clientInfo.ClientId, string.Join(", ", escaped));
+
+                    return new OidcError(
+                        ErrorCodes.AccessDenied,
+                        "The grant carries authorization_details the device authorization request "
+                        + "did not ask for");
+                }
+
                 return authorizedGrant;
 
             // Authorization still pending - check polling rate
