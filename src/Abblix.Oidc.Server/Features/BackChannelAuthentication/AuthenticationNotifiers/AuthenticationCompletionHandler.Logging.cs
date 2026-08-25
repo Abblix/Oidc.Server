@@ -36,21 +36,4 @@ partial class AuthenticationCompletionHandler
                   "never asked for, so it is refused. ClientId: {ClientId}, types: {EscapedTypes}")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(
         string AuthReqId, string ClientId, string EscapedTypes);
-
-    /// <summary>
-    /// The validator's own words, which the client never sees.
-    /// </summary>
-    /// <remarks>
-    /// A refusal here names a HOST-side defect: the end user approved something the deployment will not
-    /// issue, so whoever has to fix it is an operator rather than the client. The client is told nothing
-    /// at all in push mode, since the outcome travels to it through a notification endpoint this server
-    /// sends no error payload to, and in poll and ping it learns only that the request was denied.
-    /// </remarks>
-    [LoggerMessage(
-        EventId = LogEvents.Device.AuthenticationCompletionHandler.GrantedAuthorizationDetailsRefused,
-        Level = LogLevel.Warning,
-        Message = "The per-type validators will not issue the authorization_details completing " +
-                  "auth_req_id {AuthReqId}, so it is refused. ClientId: {ClientId}, reason: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsRefused(
-        string AuthReqId, string ClientId, string Reason);
 }

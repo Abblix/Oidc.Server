@@ -37,7 +37,7 @@ public partial class PushModeCompletionHandler(
     INotificationDeliveryService notificationService,
     ITokenRequestProcessor tokenRequestProcessor,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, authorizationDetailsPolicy)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;
@@ -80,6 +80,31 @@ public partial class PushModeCompletionHandler(
         {
             // Removed rather than denied, for the reason RefuseAsync above states: this client never
             // polls, so a denied request it cannot read is an orphan waiting out its expiry.
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
+
+        // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
+        // reach the same question at the token endpoint when their client redeems; a push client never
+        // goes there, so without this the content of an entry whose type was requested - a raised amount,
+        // a widened set of accounts - is never judged for push at all, while the identical client in
+        // another mode is refused.
+        //
+        // Asked after the configuration check rather than before it, so a client that cannot be delivered
+        // to does not spend a validator's round trip, and so the log names the fault an operator has to
+        // fix first. Both outcomes remove the request either way.
+        //
+        // The refusal's own error code is discarded, unlike at the token endpoint: nothing carries an
+        // error to a push client. CIBA Core 1.0 Section 10.3.1 has the outcome travel through the
+        // notification endpoint, and this server sends no error payload there.
+        //
+        // No cancellation token, because nothing on the path from the router down carries one.
+        if (await authorizationDetailsPolicy.RefuseAsync(
+                request.AuthorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
+        {
+            LogGrantedAuthorizationDetailsRefused(
+                authenticationRequestId, clientInfo.ClientId, refusal.Reason);
+
             await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }

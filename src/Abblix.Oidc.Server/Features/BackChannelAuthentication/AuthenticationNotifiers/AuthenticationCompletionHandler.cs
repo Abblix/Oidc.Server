@@ -11,7 +11,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -30,13 +29,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
-/// <param name="authorizationDetailsPolicy">The per-type validators, asked here whether the grant the
-/// host completed with is still one the deployment will issue.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
-    ISubjectTypeConverter subjectTypeConverter,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
+    ISubjectTypeConverter subjectTypeConverter)
 {
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -100,28 +96,13 @@ public abstract partial class AuthenticationCompletionHandler(
             return;
         }
 
-        // The content check, which the type comparison above structurally cannot make: a raised amount
-        // inside an entry of a type the request did ask for does not escape, and only the validator for
-        // that type can refuse it.
-        //
-        // Asked here rather than only at the token endpoint, because for a PUSH client this method is
-        // where the grant is spent - its tokens are minted at completion and delivered to its
-        // notification endpoint, so it never reaches the token endpoint at all. Asking here also gives
-        // poll and ping a second look, taken at a different moment: this one judges what the host
-        // completed with, and the one at redemption judges what is in storage when the client arrives,
-        // which is what a host writing between the two would change.
-        //
-        // No cancellation token, because nothing on the path from the router down carries one and
-        // inventing one here would change a public signature for a parameter nobody can supply.
-        if (await authorizationDetailsPolicy.RefuseAsync(
-                request.AuthorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
-        {
-            LogGrantedAuthorizationDetailsRefused(
-                authenticationRequestId, clientInfo.ClientId, refusal.Reason);
-
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
-            return;
-        }
+        // What is NOT asked here, and where each mode asks it. The per-type validators judge the
+        // CONTENT of an entry whose type was requested, which the comparison above structurally cannot
+        // see. Poll and ping meet that question at the token endpoint when the grant is redeemed, and
+        // asking it again here would pre-empt that one: the refusal would become a denial, and the
+        // client would read access_denied where the redemption gate answers with the code RFC 9396
+        // registers for it. Push has no token endpoint to reach, so PushModeCompletionHandler asks it
+        // there, before it mints.
 
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;

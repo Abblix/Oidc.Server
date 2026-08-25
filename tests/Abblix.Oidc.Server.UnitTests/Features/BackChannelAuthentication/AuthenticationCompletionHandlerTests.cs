@@ -45,15 +45,12 @@ public class AuthenticationCompletionHandlerTests
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
     private readonly TimeSpan _expiresIn = TimeSpan.FromMinutes(5);
 
-    private PollModeCompletionHandler CreatePollModeHandler(
-        StubAuthorizationDetailsPolicy? policy = null) =>
-        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null,
-            policy ?? StubAuthorizationDetailsPolicy.Accepting);
+    private PollModeCompletionHandler CreatePollModeHandler() =>
+        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null);
 
-    private PingModeCompletionHandler CreatePingModeHandler(
-        StubAuthorizationDetailsPolicy? policy = null) =>
+    private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
-            _notificationService.Object, policy ?? StubAuthorizationDetailsPolicy.Accepting);
+            _notificationService.Object);
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null) =>
@@ -668,7 +665,8 @@ public class AuthenticationCompletionHandlerTests
     /// </summary>
     private static BackChannelAuthenticationRequest CreateRequestWithAuthorizationDetails(
         string[] requestedTypes,
-        string[] grantedTypes)
+        string[] grantedTypes,
+        bool deliverable = false)
         => new(
             new AuthorizedGrant(
                 new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test"),
@@ -680,6 +678,13 @@ public class AuthenticationCompletionHandlerTests
         {
             ClientNotificationToken = NotificationToken,
             RequestedAuthorizationDetails = Details(requestedTypes),
+
+            // Push delivery reads the endpoint off the REQUEST rather than off the client, so a fixture
+            // without it refuses on the notification configuration before reaching anything else - which
+            // makes every later assertion hold for a reason that is not the one under test.
+            ClientNotificationEndpoint = deliverable
+                ? new Uri("https://client.example.com/ciba/notify")
+                : null,
         };
 
     private static JsonArray Details(string[] types)
@@ -797,20 +802,25 @@ public class AuthenticationCompletionHandlerTests
     /// </summary>
     /// <remarks>
     /// The type comparison above cannot see this: the type was asked for, so a raised amount inside the
-    /// entry passes every check the flow can make on its own. Push is the mode where that matters most,
-    /// because its tokens are minted here and posted to the client's notification endpoint, so it never
-    /// reaches the token endpoint where the same question is asked at redemption.
+    /// entry passes every check the flow can make on its own. Push is the mode where that matters,
+    /// because its tokens are minted at completion and posted to the client's notification endpoint, so
+    /// it never reaches the token endpoint where the same question is asked at redemption.
     ///
-    /// Asserted through what did NOT happen to the token processor, not only through the status: a
-    /// refusal that still minted the tokens and then declined to deliver them would satisfy a status
-    /// assertion while having already spent the grant.
+    /// The fixture is DELIVERABLE on purpose. Push reads its endpoint off the request rather than off
+    /// the client, and a request without one is refused on the notification configuration before the
+    /// gate is reached - which satisfies every assertion below for a reason that is not the gate.
+    ///
+    /// Asserted through the token processor never being called, not through the status: for push a
+    /// refusal removes the request, so a status assertion would hold over a handler that minted the
+    /// tokens first and then declined to deliver them, having already spent the grant.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorRefusesTheGrant_DeliversNothing()
     {
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: ["payment_initiation"],
-            grantedTypes: ["payment_initiation"]);
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
 
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
 
@@ -826,45 +836,58 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// A poll client's request is denied on the same refusal.
+    /// A validator that answers by EDITING the entry refuses the grant, and does not edit the grant.
     /// </summary>
     /// <remarks>
-    /// The second look poll and ping gain from this. They also meet the question at redemption, and the
-    /// two are not redundant: this one judges what the host completed with, the other judges what is in
-    /// storage when the client arrives, and a host writing between the two is exactly what the second
-    /// look exists for.
+    /// A normalising validator says what it wants by changing what it was handed, which is how the
+    /// narrowing fixtures in this repository are written. At completion the end user has already
+    /// approved this grant out of band, so an edit here would change what was approved where nobody is
+    /// watching - the question is asked on a copy and the answer read as yes or no.
+    ///
+    /// Driven with a validator that actually normalises rather than one that only accepts, so the
+    /// assertion on the untouched grant is about the copy rather than about a stub that would have
+    /// changed nothing either way.
     /// </remarks>
     [Fact]
-    public async Task CompleteAuthenticationAsync_PollMode_WhenTheValidatorRefusesTheGrant_Denies()
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorNormalises_RefusesAndLeavesTheGrant()
     {
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: ["payment_initiation"],
-            grantedTypes: ["payment_initiation"]);
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
 
-        _storage
-            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
-            .Returns(Task.CompletedTask);
+        var granted = request.AuthorizedGrant.Context.AuthorizationDetails!;
+        var before = granted.ToJsonString();
 
-        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
 
-        await CreatePollModeHandler(policy).CompleteAuthenticationAsync(
-            AuthReqId, request, PollClient(), _expiresIn);
+        var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");
 
-        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+        await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
         Assert.Equal(1, policy.GrantedCalls);
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        Assert.NotSame(granted, policy.LastSeen);
+        Assert.Equal(before, granted.ToJsonString());
     }
 
     /// <summary>
-    /// The validators are asked on a copy, so one cannot rewrite the grant it was asked about.
+    /// A poll client meets this question at the token endpoint, so completion does not ask it.
     /// </summary>
     /// <remarks>
-    /// The control for both refusals, and the reason they are refusals rather than edits: a normalising
-    /// validator says what it wants by editing the entry it was handed. Here the end user has already
-    /// approved this grant out of band, so an edit at completion changes what was approved at a point
-    /// where nobody is watching.
+    /// Asking here as well would pre-empt the redemption gate rather than add to it: the refusal at
+    /// completion is a denial, and a denied request reaches the client as access_denied, where the
+    /// redemption gate answers with the code RFC 9396 section 14.6 registers for this condition. Poll
+    /// and ping lose nothing by waiting, because the host-rewrite window the redemption gate exists for
+    /// closes after completion rather than before it.
+    ///
+    /// Pinned rather than left implicit, because the natural reading of "the validators judge a spent
+    /// grant" is that they should run wherever a grant is completed, and this is the one mode where
+    /// that costs a worse answer.
     /// </remarks>
     [Fact]
-    public async Task CompleteAuthenticationAsync_AsksTheValidatorsOnACopy_AndCompletes()
+    public async Task CompleteAuthenticationAsync_PollMode_DoesNotAskThePerTypeValidators()
     {
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: ["payment_initiation"],
@@ -874,14 +897,9 @@ public class AuthenticationCompletionHandlerTests
             .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
             .Returns(Task.CompletedTask);
 
-        var policy = StubAuthorizationDetailsPolicy.Accepting;
-
-        await CreatePollModeHandler(policy).CompleteAuthenticationAsync(
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
-        Assert.Equal(1, policy.GrantedCalls);
-        Assert.NotNull(policy.LastSeen);
-        Assert.NotSame(request.AuthorizedGrant.Context.AuthorizationDetails, policy.LastSeen);
     }
 }
