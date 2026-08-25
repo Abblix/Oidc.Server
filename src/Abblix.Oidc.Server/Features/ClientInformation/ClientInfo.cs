@@ -268,6 +268,37 @@ public record ClientInfo(string ClientId)
     public string[]? TokenExchangeAllowedAudiences { get; set; }
 
     /// <summary>
+    /// The locations this client answers for when it acts as a resource server, matched against the
+    /// RFC 9396 §2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
+    /// issued to somebody else returns the entries addressed to one of these, and nothing when the
+    /// list is absent.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §9 obliges the server to make the granted details available to the resource server
+    /// enforcing them, and allows either channel: the access token, or the introspection response.
+    /// A deployment whose access tokens are readable by their audience needs neither this member nor
+    /// the disclosure, since the details ride in the token. One encrypting them to its own keys has
+    /// only introspection left, and this is how a resource server names itself for it.
+    /// <para>
+    /// Absent by default, so no existing deployment starts disclosing anything.
+    /// </para>
+    /// <para>
+    /// Matching is TEXTUAL and exact. RFC 9396 §12 requires it: "No additional transformation or
+    /// normalization is to be done in evaluating equivalence of string values". A location is
+    /// therefore compared to what is written here character for character, so a trailing slash, a
+    /// spelled-out default port or a different case is a different location. Write the value exactly
+    /// as the clients spell it in <c>locations</c>.
+    /// </para>
+    /// <para>
+    /// The type is <see cref="Uri"/> so a value that is not one is refused where it was written, not
+    /// silently never matched. That catches most of what a typo produces and not all of it: a missing
+    /// scheme with a port (<c>payments.example.com:8443</c>) parses, with the whole name read as the
+    /// scheme and an empty host, and then matches nothing.
+    /// </para>
+    /// </remarks>
+    public Uri[]? ResourceLocations { get; set; }
+
+    /// <summary>
     /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
     /// <c>subject_token</c> was originally issued to a different client than the one presenting
     /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an

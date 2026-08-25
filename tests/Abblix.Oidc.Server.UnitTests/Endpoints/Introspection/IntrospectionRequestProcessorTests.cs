@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -65,10 +66,12 @@ public class IntrospectionRequestProcessorTests
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(
         IntrospectionRequest request,
         JsonWebToken? token = null,
-        string? callerClientId = null)
+        string? callerClientId = null,
+        Uri[]? callerResourceLocations = null)
     {
         var clientId = callerClientId ?? token?.Payload.ClientId ?? "test_client";
-        return new ValidIntrospectionRequest(request, new ClientInfo(clientId), token!);
+        var caller = new ClientInfo(clientId) { ResourceLocations = callerResourceLocations };
+        return new ValidIntrospectionRequest(request, caller, token!);
     }
 
     /// <summary>
@@ -218,6 +221,186 @@ public class IntrospectionRequestProcessorTests
         // The caller still gets what it came for: who the token is for and what it may do.
         Assert.Equal("client_456", success.Claims[IanaClaimTypes.ClientId]?.GetValue<string>());
         Assert.Equal("openid profile", success.Claims[IanaClaimTypes.Scope]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 9396 §9 makes the granted authorization_details reaching the resource server a MUST, by the
+    /// access token or by introspection. A deployment encrypting its access tokens to its own keys has
+    /// only the second, and the caller names itself through the locations it answers for (§2.2), which
+    /// is the filter §9.2 sanctions.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ForAResourceServerNamedInLocations_ReturnsItsOwnEntries()
+    {
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "payment_initiation",
+                ["locations"] = new JsonArray("https://payments.example.com"),
+            },
+            new JsonObject
+            {
+                ["type"] = "account_information",
+                ["locations"] = new JsonArray("https://accounts.example.com"),
+            },
+            new JsonObject { ["type"] = "addressed_to_nobody" });
+
+        var validRequest = CreateValidIntrospectionRequest(
+            request,
+            token,
+            callerClientId: "payments_resource_server",
+            callerResourceLocations: [new Uri("https://payments.example.com")]);
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
+
+        // Its own entry, and only that one: the other resource server's is not its business, and an
+        // entry naming no location is addressed to nobody in particular.
+        var entry = Assert.Single(details);
+        Assert.Equal("payment_initiation", entry!["type"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ForACallerThatNamesNoLocations_WithholdsTheDetails()
+    {
+        // The disclosure is opt-in per client, so a deployment that has not named any resource server
+        // answers exactly as it did before this existed.
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "payment_initiation",
+                ["locations"] = new JsonArray("https://payments.example.com"),
+            });
+
+        var validRequest = CreateValidIntrospectionRequest(
+            request, token, callerClientId: "payments_resource_server");
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+    }
+
+    /// <summary>
+    /// RFC 9396 §12: "No additional transformation or normalization is to be done in evaluating
+    /// equivalence of string values". Every input here is one that a parsed comparison would have called
+    /// equal, and each of them opens one resource server's entry to another - the dot-segment case joins
+    /// two resource servers separated only by a path, which is the ordinary deployment shape.
+    /// </summary>
+    [Theory]
+    [InlineData("https://api.example.com/accounts/../payments")]
+    [InlineData("https://api.example.com/pa%79ments")]
+    [InlineData("HTTPS://API.EXAMPLE.COM/PAYMENTS")]
+    [InlineData("https://api.example.com:443/payments")]
+    [InlineData("https://api.example.com/payments/")]
+    [InlineData("https://api.example.com/payments#fragment")]
+    [InlineData("https://someone@api.example.com/payments")]
+    [InlineData("  https://api.example.com/payments  ")]
+    public async Task ProcessAsync_ForALocationThatOnlyMatchesAfterNormalisation_WithholdsTheDetails(
+        string location)
+    {
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "payment_initiation",
+                ["locations"] = new JsonArray(location),
+            });
+
+        var validRequest = CreateValidIntrospectionRequest(
+            request,
+            token,
+            callerClientId: "payments_resource_server",
+            callerResourceLocations: [new Uri("https://api.example.com/payments")]);
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ForAnEntryNamingSeveralLocations_DisclosesOnlyTheCallersOwn()
+    {
+        // RFC 7662 §2.2 grants the latitude to answer resources differently "to prevent a protected
+        // resource from learning more about the larger network than is necessary for its operation", and
+        // §9.2 of RFC 9396 allows the member to be filtered for the caller. An entry naming three
+        // addresses would otherwise hand each of them the other two.
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "payment_initiation",
+                ["locations"] = new JsonArray(
+                    "https://payments.example.com",
+                    "https://internal-ledger.corp.example/private"),
+            });
+
+        var validRequest = CreateValidIntrospectionRequest(
+            request,
+            token,
+            callerClientId: "payments_resource_server",
+            callerResourceLocations: [new Uri("https://payments.example.com")]);
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
+        var locations = Assert.IsType<JsonArray>(Assert.Single(details)!["locations"]);
+
+        Assert.Equal("https://payments.example.com", Assert.Single(locations)!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ForACallerOnTheSameHostButAnotherPath_WithholdsTheDetails()
+    {
+        // Two resource servers behind one host is the ordinary shape, and a comparison that stopped at
+        // the host would hand each of them the other's entries.
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject
+            {
+                ["type"] = "payment_initiation",
+                ["locations"] = new JsonArray("https://api.example.com/payments"),
+            });
+
+        var validRequest = CreateValidIntrospectionRequest(
+            request,
+            token,
+            callerClientId: "accounts_resource_server",
+            callerResourceLocations: [new Uri("https://api.example.com/accounts")]);
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ForTheTokensOwnClient_ReturnsTheDetailsWithoutAnyFilter()
+    {
+        // The token's own client receives its payload as it stands, which is what it already holds.
+        var request = CreateIntrospectionRequest();
+        var token = CreateValidToken();
+        token.Payload.Json[IanaClaimTypes.AuthorizationDetails] = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" });
+
+        var validRequest = CreateValidIntrospectionRequest(request, token);
+
+        var result = await _processor.ProcessAsync(validRequest);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        var details = Assert.IsType<JsonArray>(success.Claims![IanaClaimTypes.AuthorizationDetails]);
+        Assert.Single(details);
     }
 
     /// <summary>
