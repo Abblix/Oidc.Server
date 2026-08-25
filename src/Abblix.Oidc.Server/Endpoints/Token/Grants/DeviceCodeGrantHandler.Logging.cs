@@ -17,17 +17,24 @@ partial class DeviceCodeGrantHandler
     /// and here it is payment and account data.
     /// </summary>
     /// <remarks>
-    /// The refusal an operator has the least other evidence for. Its premise is that the stored grant
-    /// changed after approval, so the warning the approval path writes cannot have fired, and the client
-    /// sees an <c>access_denied</c> that says nothing about which type escaped.
+    /// The refusal an operator has the least other evidence for: the approval path refuses the same shape,
+    /// so its warning cannot have fired on this record, and the client sees an <c>access_denied</c> that
+    /// says nothing about which type escaped.
+    ///
+    /// The message states what was observed and what was done, and stops there. What it must NOT say is
+    /// which write produced the mismatch: the baseline and the grant live in the same host-owned record,
+    /// so narrowing the baseline reads identically to widening the grant, and a host may have replaced
+    /// <see cref="Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces.IUserCodeVerificationService"/>
+    /// so that no approval ran at all. Naming a cause the gate cannot establish sends an operator looking
+    /// for a write that never happened.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceCodeGrantHandler.GrantedAuthorizationDetailsExceedTheRequest,
         Level = LogLevel.Warning,
-        Message = "Client {ClientId} redeemed a device code whose stored grant carries " +
-                  "authorization_details types the device authorization request never asked for: " +
-                  "{EscapedTypes}. The approval " +
-                  "refuses this, so the grant was written to storage after it (RFC 9396 §6.1 defines no " +
-                  "universal comparator, so the check is by type).")]
+        Message = "Client {ClientId} presented a device code whose stored grant carries " +
+                  "authorization_details types the device authorization request never asked for, so the " +
+                  "redemption is refused and no token was issued. Types: {EscapedTypes}. Either the stored " +
+                  "record changed after the approval refused this shape, or the approval was bypassed " +
+                  "(RFC 9396 §6.1 defines no universal comparator, so the check is by type).")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
 }

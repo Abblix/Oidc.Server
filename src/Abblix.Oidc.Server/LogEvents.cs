@@ -571,7 +571,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Features/DeviceAuthorization/UserCodeVerificationService.cs</c> - RFC 8628 user-code
-        /// approval, and what the approval left behind (sub-range 7080-7084).
+        /// approval, and what the approval left behind (sub-range 7080-7082).
         /// </summary>
         public static class UserCodeVerificationService
         {
@@ -583,13 +583,19 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/Token/Grants/DeviceCodeGrantHandler.cs</c> - what the token endpoint refuses when
-        /// the stored grant no longer matches the request (sub-range 7085-7089).
+        /// the stored grant no longer matches the request (sub-range 7083-7084).
         /// </summary>
+        /// <remarks>
+        /// Two ids rather than a round ten, because this is what the Device range has left: 7085-7099
+        /// belongs to the back-channel logout sender above, which sits in this range and is not the device
+        /// flow at all. Moving it would change ids an operator may already alert on, so the misfiling stays
+        /// and the window here is honest about its size. A third event needs the range widened first.
+        /// </remarks>
         public static class DeviceCodeGrantHandler
         {
-            private const int Base = 7085;
+            private const int Base = 7083;
 
-            public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 1;
+            public const int GrantedAuthorizationDetailsExceedTheRequest = Base;
         }
     }
 
