@@ -870,7 +870,7 @@ public class DeviceCodeGrantHandlerTests
     /// status the switch plainly handles. The client got HTTP 500 and an operator got a sentence pointing
     /// at a state machine that is not the problem.
     ///
-    /// The device code is already gone by then, because the arm above claims it before anything else is
+    /// The device code is already gone by then, because the claiming arm takes it before anything else is
     /// judged - so a retry answers expired_token and the record cannot be looked at afterwards. That makes
     /// the log line the only account of it, and the reason it names the missing member rather than the
     /// status. Exchanging a device code once is this library's decision rather than an RFC 8628 rule, and
