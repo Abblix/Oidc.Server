@@ -123,6 +123,18 @@ Commercial production use is permitted free of charge under this Section: passin
 
 3.7. **Software Updates.** Updates and maintenance terms for commercial licenses are specified in your purchase agreement. Users of the Software free of charge under Section 2.3 receive it "as is", with no guaranteed response time and no commitment to updates or maintenance; community channels remain open to them.
 
+3.8. **Wind-down Conversion.** If the Copyright Holder permanently ceases to carry on the business of licensing and supporting the Software, the license of every licensee whose license is in force on that date converts, automatically and without further act, into a perpetual, irrevocable, royalty-free, non-exclusive license to use, modify and compile the Software for that licensee's own internal purposes, including the right to apply corrections and to build from source. The conversion does not grant any right to distribute the Software or works derived from it to third parties, and Sections 10 and 11 continue to apply to it.
+
+   For the purposes of this Section and Section 3.9, the Copyright Holder **permanently ceases to carry on the business** when any of the following occurs: (i) the Copyright Holder is dissolved, struck off or wound up, other than for the purpose of a solvent reorganisation or a transfer to a successor under Section 3.9; (ii) a liquidator, administrator or equivalent officer is appointed over the whole of the Copyright Holder's business and does not, within **one hundred and eighty (180) days** of appointment, either resume licensing and supporting the Software or transfer it to a successor; or (iii) the Copyright Holder publicly announces the discontinuation of the Software and does not, within **one hundred and eighty (180) days** of that announcement, transfer it to a successor.
+
+   This Section is a present grant, made now and conditioned on a future event, rather than a promise to grant a license later. It takes effect by its own terms, and no act, consent or decision of the Copyright Holder, of any successor, or of any officer appointed over the Copyright Holder's business is required for it to take effect.
+
+3.9. **Succession and Public Release.** The Copyright Holder may transfer the Software, together with its obligations under this Agreement, to a successor that undertakes in writing to continue licensing and supporting it; Section 14 governs such a transfer, and this Agreement continues unchanged in the successor's hands.
+
+   If no such transfer takes effect within **one hundred and eighty (180) days** of the date on which the Copyright Holder permanently ceases to carry on the business as defined in Section 3.8, the source code of the Software as published at that date is, from that date, licensed to the public under the Apache License, Version 2.0.
+
+   This Section is likewise a present grant conditioned on a future event, made now and effective by its own terms.
+
 ## 4. Data Processing
 
 4.1. **Library Architecture.** The Software is a library integrated into your applications. It does not transmit data to the Copyright Holder or any third parties. All data processing occurs within your infrastructure under your control.
