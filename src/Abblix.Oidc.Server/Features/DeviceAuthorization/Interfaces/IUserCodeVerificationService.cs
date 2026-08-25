@@ -34,7 +34,7 @@ public interface IUserCodeVerificationService
     /// context. Its <c>authorization_details</c> are what the device is granted: the library adds none, and
     /// refuses an approval carrying a type the request never asked for. Its scopes and resources are a
     /// starting point rather than the final word - the token endpoint narrows them against the token
-    /// request (RFC 6749 §6, RFC 8707 §2.2) and adds the certificate and proof-key confirmations.</param>
+    /// request (RFC 8707 §2.2) and adds the certificate and proof-key confirmations.</param>
     /// <returns>
     /// A task that returns true if the approval was successful; false if the code is invalid or expired.
     /// </returns>
@@ -46,8 +46,9 @@ public interface IUserCodeVerificationService
     /// payment nobody was shown is worse than granting none.
     /// <para>
     /// Approving with entries on the record and none on the grant is therefore allowed and logged at
-    /// warning level. §7 is satisfied either way, since its MUST is to return what the resource owner
-    /// GRANTED and nothing granted is nothing to return. §9 is the one that matters here: it makes the
+    /// warning level. RFC 9396 §7 is satisfied either way, since its MUST is to return what the
+    /// resource owner GRANTED and nothing granted is nothing to return. §9 of that document is the
+    /// one that matters here: it makes the
     /// details reaching the resource server the point of having them, and a token carrying none leaves
     /// it nothing to enforce, which is worth seeing in a log rather than discovering at the resource
     /// server.

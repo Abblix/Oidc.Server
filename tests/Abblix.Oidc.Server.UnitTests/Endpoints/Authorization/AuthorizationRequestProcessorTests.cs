@@ -1702,7 +1702,8 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ConsentDropsOneEntryFromMultiSet_TokenReflectsRemaining()
     {
-        // RFC 9396 §5 partial-consent drop-entry. Client requested two entries, user
+        // RFC 9396 §3 notes the user may grant a subset of what was requested, and §7 then has the
+        // server return what was granted. Client requested two entries, user
         // agreed to one. Consent layer is the right surface for this -- per-type
         // validators only see a single entry and cannot reason cross-entry.
         var requestedAd = new JsonArray(
@@ -1727,7 +1728,8 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ConsentAppliesCrossDetailCapAcrossEntries_TokenReflectsCappedSet()
     {
-        // RFC 9396 §5 cross-detail policy. Client requested three payment_initiation
+        // The same §3 note read across entries rather than within one. Client requested three
+        // payment_initiation
         // entries of 500 each (total 1500); host policy caps total at 1000; consent
         // provider sees the entire list and returns the cross-cut narrow with the
         // last entry zeroed out. Per-type validators have no signal that the third

@@ -132,7 +132,8 @@ public partial class UserCodeVerificationService(
     /// asked for, empty when the grant stays inside what was requested.
     /// </summary>
     /// <remarks>
-    /// Types only: RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so
+    /// Types only: RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing
+    /// of that one", so
     /// what can be judged here is whether an entry of that type was asked for at all. An entry that cannot
     /// be read as a JSON object counts as escaped, because the conversion drops it silently and "nothing
     /// escaped" would then describe what could be read rather than the grant.

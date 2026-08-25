@@ -394,3 +394,6 @@ RELEASE_NOTES*
 # a project outside src/ carries the same shared template.
 !*.sln.DotSettings
 !*.csproj.DotSettings
+
+# Written by the RFC citation check so its cache key can be derived from it.
+.rfc-cited.txt

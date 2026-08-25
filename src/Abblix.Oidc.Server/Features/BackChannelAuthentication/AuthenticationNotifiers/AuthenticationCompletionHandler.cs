@@ -107,7 +107,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// the grant stays inside what was requested.
     /// </summary>
     /// <remarks>
-    /// Types only. RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so
+    /// Types only. RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing
+    /// of that one", so
     /// what can be judged without knowing a type's schema is whether an entry of that type was asked for at
     /// all. An entry that cannot be read as a JSON object counts as escaped: the conversion drops it silently,
     /// and "nothing escaped" would then be a statement about what could be read rather than about the grant.

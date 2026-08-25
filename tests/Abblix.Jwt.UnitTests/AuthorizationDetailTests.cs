@@ -249,4 +249,58 @@ public class AuthorizationDetailTests
         Assert.Equal([InitiateAction], detail.Actions);
         Assert.Null(detail.Identifier);
     }
+
+    /// <summary>
+    /// A single value assigned to an array member is written as an array of one, not as a bare string.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §2.2 defines locations, actions, datatypes and privileges as arrays of strings, and the
+    /// count of what a host happens to grant does not change that. The case matters because narrowing is
+    /// what these setters exist for: a validator that keeps one location out of three is the ordinary
+    /// path, and it is exactly the path that used to emit a shape no resource server owes us a reading of.
+    /// </remarks>
+    [Theory]
+    [InlineData("locations", "https://api.bank.example/payments")]
+    [InlineData("actions", InitiateAction)]
+    [InlineData("datatypes", "contacts")]
+    [InlineData("privileges", "admin")]
+    public void AuthorizationDetail_ArrayMemberWithOneValue_IsWrittenAsAnArray(string member, string value)
+    {
+        var detail = new AuthorizationDetail(new JsonObject { ["type"] = PaymentInitiationType });
+
+        switch (member)
+        {
+            case "locations": detail.Locations = [value]; break;
+            case "actions": detail.Actions = [value]; break;
+            case "datatypes": detail.Datatypes = [value]; break;
+            case "privileges": detail.Privileges = [value]; break;
+            default: throw new ArgumentOutOfRangeException(nameof(member), member, "Unknown array member");
+        }
+
+        Assert.Equal($$"""{"type":"{{PaymentInitiationType}}","{{member}}":["{{value}}"]}""",
+            detail.Json.ToJsonString());
+    }
+
+    /// <summary>
+    /// An empty collection removes the member rather than writing an empty array.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §2.2 makes every one of these members optional, so absence is the honest way to say
+    /// "none" - and it keeps the behaviour a caller already had before the single-value case was fixed,
+    /// which is what stops that fix from being a second, silent change.
+    /// </remarks>
+    [Fact]
+    public void AuthorizationDetail_ArrayMemberSetToEmpty_RemovesTheMember()
+    {
+        var detail = new AuthorizationDetail(new JsonObject
+        {
+            ["type"] = PaymentInitiationType,
+            ["locations"] = new JsonArray("https://api.bank.example/payments"),
+        });
+
+        detail.Locations = [];
+
+        Assert.Equal($$"""{"type":"{{PaymentInitiationType}}"}""", detail.Json.ToJsonString());
+        Assert.Null(detail.Locations);
+    }
 }

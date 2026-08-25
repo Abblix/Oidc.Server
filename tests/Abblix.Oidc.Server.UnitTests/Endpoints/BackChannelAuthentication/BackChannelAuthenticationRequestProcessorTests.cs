@@ -8,6 +8,7 @@
 
 using System;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -78,7 +79,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     private ValidBackChannelAuthenticationRequest Request(
-        string? hintedSubject, string? claimsJson = null)
+        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null)
     {
         var hint = hintedSubject is null
             ? null
@@ -102,6 +103,7 @@ public class BackChannelAuthenticationRequestProcessorTests
                 Scope = [new ScopeDefinition(Scopes.OpenId)],
                 ExpiresIn = TimeSpan.FromMinutes(5),
                 IdToken = hint,
+                AuthorizationDetails = authorizationDetails,
             });
     }
 
@@ -115,6 +117,46 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
             .Returns(Task.FromResult(session));
+    }
+
+    /// <summary>
+    /// Rewriting the grant's <c>authorization_details</c> in place leaves the requested set untouched.
+    /// </summary>
+    /// <remarks>
+    /// Narrowing in place is how a host says the end user approved part of the request, and the requested
+    /// set is the only record of what was asked for by the time that happens. Sharing one array between
+    /// the two would make the widening check at completion compare a value against itself, which cannot
+    /// refuse anything - and it would do so silently, because the shipped storage serialises both and
+    /// separates them, so the defect would wait for the first host that registers an in-memory
+    /// <c>IEntityStorage</c>. Reference identity is asserted through the behaviour it decides rather than
+    /// on its own, so the test still means something if the copy is made somewhere else.
+    /// </remarks>
+    [Fact]
+    public async Task NarrowingTheGrantInPlace_LeavesTheRequestedDetailsAsTheyWere()
+    {
+        HostAuthenticates(Approved);
+
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.NotNull(stored);
+
+        var granted = stored.AuthorizedGrant.Context.AuthorizationDetails;
+        Assert.NotNull(granted);
+        granted.Clear();
+        granted.Add(new JsonObject { ["type"] = "admin_access" });
+
+        Assert.Equal(
+            """[{"type":"payment_initiation"}]""",
+            stored.RequestedAuthorizationDetails!.ToJsonString());
     }
 
     /// <summary>

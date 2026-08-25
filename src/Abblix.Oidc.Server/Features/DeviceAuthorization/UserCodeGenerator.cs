@@ -34,8 +34,9 @@ public class UserCodeGenerator(IOptions<OidcOptions> options) : IUserCodeGenerat
         for (var i = 0; i < length; i++)
         {
             // Use GetInt32 for uniform distribution without modulo bias
-            // RFC 8628 Section 6.1: User codes MUST contain only characters from a predefined character set
-            // with uniform random distribution for security
+            // RFC 8628 Section 6.1 recommends restricting the character set so the code is quick to
+            // type on a phone; it states no requirement, so the fixed alphabet is this server's choice.
+            // The uniform draw is what makes the entropy claim in Section 5.1 true of it.
             chars[i] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
         }
 

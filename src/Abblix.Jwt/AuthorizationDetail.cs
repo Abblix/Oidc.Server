@@ -36,7 +36,8 @@ public record AuthorizationDetail(JsonObject Json)
     public JsonObject Json { get; } = Json;
 
     /// <summary>
-    /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec;
+    /// The authorization-detail type identifier. RFC 9396 §2 makes it REQUIRED, and §2.1 governs
+    /// what a value may be;
     /// the per-type validator rejects entries where this member is missing with
     /// <c>invalid_authorization_details</c>.
     /// </summary>
@@ -53,7 +54,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Locations
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Locations);
-        set => Json.SetArrayOrStringOrNull(Parameters.Locations, value);
+        set => Json.SetArrayOrNull(Parameters.Locations, value);
     }
 
     /// <summary>
@@ -62,7 +63,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Actions
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Actions);
-        set => Json.SetArrayOrStringOrNull(Parameters.Actions, value);
+        set => Json.SetArrayOrNull(Parameters.Actions, value);
     }
 
     /// <summary>
@@ -71,7 +72,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Datatypes
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Datatypes);
-        set => Json.SetArrayOrStringOrNull(Parameters.Datatypes, value);
+        set => Json.SetArrayOrNull(Parameters.Datatypes, value);
     }
 
     /// <summary>
@@ -89,7 +90,7 @@ public record AuthorizationDetail(JsonObject Json)
     public IEnumerable<string>? Privileges
     {
         get => Json.GetArrayOfStringsOrNull(Parameters.Privileges);
-        set => Json.SetArrayOrStringOrNull(Parameters.Privileges, value);
+        set => Json.SetArrayOrNull(Parameters.Privileges, value);
     }
 
     /// <summary>

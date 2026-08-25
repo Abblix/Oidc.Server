@@ -26,7 +26,7 @@ public record DeviceAuthorizationOptions
 
     /// <summary>
     /// The minimum device code length in bytes (128 bits). The device code is never displayed to
-    /// the user, so it carries no usability constraint and RFC 8628 Section 5.2 requires very high
+    /// the user, so it carries no usability constraint and RFC 8628 Section 5.2 asks for very high
     /// entropy; 128 bits is the conventional cryptographic floor for a non-guessable random value.
     /// </summary>
     private const int MinDeviceCodeLengthBytes = 16;
@@ -73,7 +73,8 @@ public record DeviceAuthorizationOptions
     /// <summary>
     /// The user-facing URI where users can enter their user code.
     /// This should be short and easy to remember as users will manually type it.
-    /// MUST use HTTPS for security per RFC 8628 Section 6.1.
+    /// Must use HTTPS. RFC 8628 does not say so for verification_uri; the requirement is RFC 6749
+    /// Section 3.1's, which asks for TLS wherever the user authenticates.
     /// </summary>
     public required Uri VerificationUri
     {
@@ -91,7 +92,8 @@ public record DeviceAuthorizationOptions
             if (!string.Equals(value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
-                    "The verification_uri MUST use HTTPS for security per RFC 8628 Section 6.1",
+                    "The verification_uri must use HTTPS: the user authenticates there, and RFC 6749 "
+                    + "Section 3.1 requires TLS for that",
                     nameof(VerificationUri));
             }
             _verificationUri = value;
@@ -100,7 +102,8 @@ public record DeviceAuthorizationOptions
 
     /// <summary>
     /// The maximum number of failed user code verification attempts before exponential backoff is applied.
-    /// Recommended by RFC 8628 Section 5.2 to prevent brute force attacks.
+    /// RFC 8628 Section 5.1 recommends rate-limiting user code attempts, the user code being short
+    /// enough to type and therefore short enough to guess.
     /// </summary>
     public int MaxFailuresBeforeBackoff { get; set; } = 3;
 

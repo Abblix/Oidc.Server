@@ -12,7 +12,9 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
 /// <summary>
 /// Defines the contract for rate limiting user code verification attempts to prevent brute force attacks.
-/// Per RFC 8628 Section 5.2, implementations SHOULD implement rate limiting to prevent abuse.
+/// RFC 8628 Section 5.1 recommends that the server rate-limit user code attempts. The word there is
+/// lowercase, so this is a mitigation the server chooses rather than one it inherits - and the choice
+/// is what makes the entropy argument in that section hold.
 /// </summary>
 public interface IUserCodeRateLimiter
 {

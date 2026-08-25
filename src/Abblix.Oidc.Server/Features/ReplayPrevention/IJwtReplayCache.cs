@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
 /// Tracks JWT IDs (jti claims) presented to the server, so a JWT-bearing flow can detect
-/// replay attempts. Both RFC 7523 §5.2 (JWT-bearer-grant assertion replay) and RFC 9449
+/// replay attempts. Both RFC 7523 §3 (JWT-bearer-grant assertion replay) and RFC 9449
 /// §11.1 (DPoP proof replay) want this primitive; it is intentionally namespace-neutral
 /// so a single distributed-cache instance serves every consumer.
 /// </summary>

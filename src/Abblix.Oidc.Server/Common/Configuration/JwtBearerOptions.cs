@@ -31,14 +31,17 @@ public record JwtBearerOptions
 	/// <summary>
 	/// The clock skew tolerance for JWT validation.
 	/// Allows for small differences in clock times between the JWT issuer and this server.
-	/// Default is 5 minutes, as recommended by RFC 7523 Section 3.
+	/// Default is 5 minutes. RFC 7523 Section 3 allows for clock skew without naming a bound,
+	/// so the number is this server's choice rather than the specification's.
 	/// </summary>
 	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(5);
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.
 	/// When enabled, JWTs without a jti claim will be rejected to prevent replay attacks.
-	/// Default is true per RFC 7523 Section 5.2 security recommendation.
+	/// Default is true. RFC 7523 Section 6 leaves replay protection optional and at the
+	/// implementation's discretion, so refusing an assertion without a jti is this server's
+	/// choice rather than a requirement it inherits.
 	/// </summary>
 	public bool RequireJti { get; set; } = true;
 

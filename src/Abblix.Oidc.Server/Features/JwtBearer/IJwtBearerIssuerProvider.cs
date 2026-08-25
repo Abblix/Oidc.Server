@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// This interface centralizes JWT Bearer security functionality to:
 /// - Validate that the JWT issuer (iss claim) is from a trusted identity provider
 /// - Resolve the signing keys (JWKS) for verifying the JWT signature
-/// - Provide replay protection per RFC 7523 Section 5.2
+/// - Provide replay protection per RFC 7523 Section 3
 /// - Expose configuration settings (clock skew, algorithm whitelist, etc.)
 /// </remarks>
 public interface IJwtBearerIssuerProvider

@@ -73,15 +73,59 @@ jobs:
         run: dotnet build Abblix.Oidc.slnx --no-restore -c Release
         timeout-minutes: 3
 
+  citations:
+    # A section number cited in a comment reads as checkable, which is exactly why nobody checks it,
+    # so it survives review and is then repeated in commit messages and release notes. This asks each
+    # cited document whether the section exists at all. It cannot tell whether a real section says
+    # what the comment claims - that still needs a reader - and it says so when it could not fetch a
+    # document, rather than counting the unread ones as good.
+    name: RFC citations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Audit rather than block: the job fetches from rfc-editor.org on a cache miss, and the point
+      # of the baseline is to show that it talks to nothing else.
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Nothing here reads history, and this may run on an untrusted fork PR, so strip the
+          # GITHUB_TOKEN from the runner git config after checkout.
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: List the cited RFCs
+        # Written to a file because the cache key is derived from it. A published RFC never changes,
+        # so the one thing that can make a cached copy insufficient is a citation naming a document
+        # nobody cited before - which is precisely what this list says.
+        run: python3 .github/scripts/verify-rfc-citations.py . --list-rfcs > .rfc-cited.txt
+        timeout-minutes: 3
+      - name: Cache the RFC texts
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/rfc-citations
+          key: ${{ runner.os }}-rfc-texts-${{ hashFiles('.rfc-cited.txt') }}
+          # A partial hit is worth taking: the documents it holds are still the current ones, and
+          # only the newly cited RFC is fetched.
+          restore-keys: ${{ runner.os }}-rfc-texts-
+        timeout-minutes: 3
+      - name: Verify every cited section exists
+        run: python3 .github/scripts/verify-rfc-citations.py .
+        timeout-minutes: 3
+
   test:
-    # Single required status check aggregating the shards and the multi-framework build: it succeeds
-    # only when both did. It stays a job of THIS workflow on purpose - a job inside a called workflow
+    # Single required status check aggregating the shards, the multi-framework build and the citation
+    # check: it succeeds only when all three did. It stays a job of THIS workflow on purpose - a job inside a called workflow
     # is reported as "<caller job> / <job name>", which would rename the check that branch protection
     # requires and leave every pull request waiting for a check that no longer appears. The name is
     # narrower than what it now covers, and stays that way for the same reason: renaming it silently
     # detaches branch protection from the only gate a pull request has.
     name: Unit tests
-    needs: [shards, build]
+    needs: [shards, build, citations]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -93,4 +137,7 @@ jobs:
         run: exit 1
       - name: Fail if the multi-framework build failed
         if: needs.build.result != 'success'
+        run: exit 1
+      - name: Fail if a cited RFC section does not exist
+        if: needs.citations.result != 'success'
         run: exit 1

@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
 /// Implements rate limiting for user code verification attempts to prevent brute force attacks.
-/// Uses exponential backoff and per-IP rate limiting as recommended by RFC 8628 Section 5.2.
+/// Uses exponential backoff and per-IP rate limiting as recommended by RFC 8628 Section 5.1.
 /// </summary>
 /// <param name="logger">Logger for security events.</param>
 /// <param name="storage">The storage service for persisting rate limit state.</param>
@@ -80,7 +80,7 @@ public partial class UserCodeRateLimiter(
     {
         // NOTE: the counter updates below are a non-atomic get-increment-set. Under a highly concurrent
         // burst of failures the count can undercount (multiple callers read the same value and write
-        // value+1), weakening the backoff and per-IP cap (RFC 8628 §5.2). A precise limit requires a backend
+        // value+1), weakening the backoff and per-IP cap (RFC 8628 §5.1). A precise limit requires a backend
         // atomic increment (for example Redis INCR) or a CAS loop on a versioned record, which the current
         // IEntityStorage abstraction does not expose. Tracked as a follow-up
         var now = timeProvider.GetUtcNow();
@@ -148,7 +148,7 @@ public partial class UserCodeRateLimiter(
     {
         // Clear the per-user-code backoff: this code has now been verified, so its own attempt
         // history is no longer relevant. The per-IP counter is deliberately left intact - it caps
-        // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.2),
+        // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.1),
         // and an occasional successful verification must not reset that cross-code budget.
         var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);
         await storage.RemoveAsync(userCodeKey);

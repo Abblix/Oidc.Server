@@ -10,7 +10,7 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// <summary>
 /// Remembers the identifiers of single-use tokens so a second presentation of the same one can
 /// be told from the first. Every JWT profile that forbids replay needs this and needs it in the
-/// same shape - a DPoP proof (RFC 9449 Section 11.1), a client assertion (RFC 7523 Section 5.2)
+/// same shape - a DPoP proof (RFC 9449 Section 11.1), a client assertion (RFC 7523 Section 3)
 /// and a Security Event Token (RFC 8417 Section 2.2) differ in what they call the identifier and
 /// how long it stays interesting, never in the question they ask of the cache.
 /// </summary>
