@@ -142,7 +142,7 @@ public abstract partial class AuthenticationCompletionHandler(
         if (Array.Exists(typed, detail => detail.Type is null))
             return ["an entry carrying no type"];
 
-        var requestedTypes = requested.ToTypedArray()!
+        var requestedTypes = requested.ToTypedArray()
             .Select(detail => detail.Type)
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);

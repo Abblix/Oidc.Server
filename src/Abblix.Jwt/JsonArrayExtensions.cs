@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
@@ -50,6 +51,14 @@ public static class JsonArrayExtensions
     /// </summary>
     /// <param name="jsonArray">The raw array, or <c>null</c>.</param>
     /// <returns>A wrapper array, or <c>null</c> when the input is <c>null</c>.</returns>
+    /// <remarks>
+    /// The attribute states in the type system what the sentence above states in prose: null in, null out,
+    /// and never null out for an input that was not. Without it a caller holding a non-null array still
+    /// gets a nullable result, and the way that is silenced is a null-forgiving operator - which then
+    /// keeps compiling if the guard above it is ever moved or removed, asserting something no longer true.
+    /// Here the compiler carries the claim instead, and re-checks it at every call site.
+    /// </remarks>
+    [return: NotNullIfNotNull(nameof(jsonArray))]
     public static AuthorizationDetail[]? ToTypedArray(this JsonArray? jsonArray)
     {
         return jsonArray?

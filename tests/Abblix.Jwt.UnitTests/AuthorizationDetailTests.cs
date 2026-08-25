@@ -303,4 +303,32 @@ public class AuthorizationDetailTests
         Assert.Equal($$"""{"type":"{{PaymentInitiationType}}"}""", detail.Json.ToJsonString());
         Assert.Null(detail.Locations);
     }
+
+    /// <summary>
+    /// <c>ToTypedArray</c> answers null for a null array and never for one that is not null.
+    /// </summary>
+    /// <remarks>
+    /// The conversion drops every element it cannot read, so an array of nothing readable comes back
+    /// EMPTY rather than null - which is the case a caller is most likely to get wrong, and the one the
+    /// <c>NotNullIfNotNull</c> attribute now promises the compiler. An attribute is a claim the compiler
+    /// enforces at every call site and cannot check inside the method, so if the body ever started
+    /// answering null for an empty result the promise would become a lie that only crashes a caller.
+    ///
+    /// Both directions are asserted, because a test of the null case alone would also pass over a method
+    /// that answered null for everything.
+    /// </remarks>
+    [Fact]
+    public void ToTypedArray_AnswersNullOnlyForANullArray()
+    {
+        Assert.Null(((JsonArray?)null).ToTypedArray());
+
+        Assert.Empty(new JsonArray().ToTypedArray()!);
+
+        // Nothing here is a JSON object, so every element is dropped and the result is empty rather
+        // than null.
+        Assert.Empty(new JsonArray(JsonValue.Create(PaymentInitiationType), JsonValue.Create(1)).ToTypedArray()!);
+
+        var readable = new JsonArray(new JsonObject { ["type"] = PaymentInitiationType });
+        Assert.Equal(PaymentInitiationType, Assert.Single(readable.ToTypedArray()!).Type);
+    }
 }
