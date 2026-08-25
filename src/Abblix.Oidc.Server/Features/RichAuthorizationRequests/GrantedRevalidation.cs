@@ -65,7 +65,7 @@ internal static class GrantedRevalidation
         // which every narrowing fixture in this repository does. Passing the live array would let the
         // question rewrite its own subject: the grant would leave here altered, silently, by a call whose
         // whole purpose is to decide rather than to change.
-        var asStored = granted.ToJsonString();
+        var asStored = (JsonArray)granted.DeepClone();
         var probe = (JsonArray)granted.DeepClone();
 
         var result = await policy.ApplyGrantedAsync(probe, client, cancellationToken);
@@ -82,9 +82,19 @@ internal static class GrantedRevalidation
         // Both shapes are compared, because the two ways of answering are equally common: an edit IN PLACE
         // shows on the probe, a rewritten entry shows in what comes back. Null means nothing to change,
         // which is how every other caller reads it.
+        //
+        // Compared STRUCTURALLY rather than as text. Deserialise, validate, return a fresh entry is the
+        // natural way to write a validator in C#, and the interface invites it, so a validator that changed
+        // nothing but the order its members came out in would be accused of changing the grant - refused,
+        // and told so in a log naming a change that does not exist.
+        //
+        // One residual, accepted knowingly: DeepEquals compares a JSON number by its text on .NET 8 and by
+        // its value from .NET 10, so a validator that reads a member as a double and writes it back turns
+        // 1.0 into 1 and is refused on the older runtime alone. Fail-closed, and the same deployment on two
+        // runtimes will disagree about the same validator, which is worth knowing when one does.
         var revalidated = result.GetSuccess();
-        var changed = probe.ToJsonString() != asStored ||
-                      (revalidated is not null && revalidated.ToJsonString() != asStored);
+        var changed = !JsonNode.DeepEquals(probe, asStored) ||
+                      (revalidated is not null && !JsonNode.DeepEquals(revalidated, asStored));
 
         return changed
             ? Refusal(

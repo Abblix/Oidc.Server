@@ -782,7 +782,7 @@ internal static class LogEvents
         {
             private const int Base = 10200;
 
-            public const int GrantedAuthorizationDetailsRefused = Base + 1;
+            public const int GrantedAuthorizationDetailsRefused = Base;
         }
     }
 }
