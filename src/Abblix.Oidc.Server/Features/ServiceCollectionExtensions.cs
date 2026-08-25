@@ -149,6 +149,10 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>());
 
+        services.TryAddEnumerable(
+            ServiceDescriptor
+                .Singleton<IValidateOptions<OidcOptions>, AuthorizationDetailsFilterValidator>());
+
         // Refuse a registration body limit that would answer every request with a refusal, which surfaces as
         // a broken endpoint rather than as the misconfiguration it is.
         services.TryAddEnumerable(

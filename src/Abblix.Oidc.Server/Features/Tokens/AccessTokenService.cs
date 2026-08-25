@@ -159,10 +159,17 @@ internal class AccessTokenService(
 	/// lose the entries that refresh needs.
 	///
 	/// An entry with no <c>locations</c> MEMBER survives. §2.2 makes it optional, and reading its absence
-	/// as "nowhere" would empty the claim for every deployment that does not use it. A member that is
-	/// present and names nothing - an empty array, a null, a value that is not an array of strings - is
-	/// treated as naming nowhere and dropped, because absence and emptiness are different statements and
-	/// only the first of them is silence. The member is
+	/// as "nowhere" would empty the claim for every deployment that does not use it. An entry whose
+	/// <c>locations</c> is PRESENT is dropped when none of the strings that member yields names an
+	/// audience - so an empty array and a null are dropped, absence and emptiness being different
+	/// statements of which only the first is silence.
+	///
+	/// The test is a match rather than a check of shape, and that has a consequence worth naming: the
+	/// reader accepts a bare string as well as an array and SKIPS elements that are not strings, so
+	/// <c>["https://orders.example.com", 7]</c> matches on its first element and the entry is kept. A
+	/// partly malformed member can therefore keep an entry alive, which is the opposite direction from
+	/// everything else here. Refusing it instead belongs with the five sibling call sites that refuse an
+	/// unreadable entry, not in a filter. The member is
 	/// REMOVED when nothing survives rather than written as an empty array or a null: §14.2 registers the
 	/// claim as a JSON array, so a null is a document no resource server owes us a reading of, and an empty
 	/// array would say the end user granted nothing.
