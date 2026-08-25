@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -141,7 +142,7 @@ public class ReceiverAddressPolicyTests
         var outbox = new InMemoryEventOutbox();
         await outbox.EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy());
+        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance);
         var stream = new StreamState
         {
             ReceiverId = "receiver-a",

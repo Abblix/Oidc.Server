@@ -12,6 +12,7 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using Abblix.SecurityEvents.Delivery;
+using Microsoft.Extensions.Logging;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 
@@ -27,11 +28,46 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="httpClient">The client transmissions travel through.</param>
 /// <param name="outbox">The queues being drained.</param>
 /// <param name="addressPolicy">Judges the receiver's address before anything is sent to it.</param>
-public sealed class PushDeliverySender(
+/// <param name="logger">Carries the receiver's own reason for a refusal into this deployment's log.</param>
+public sealed partial class PushDeliverySender(
     HttpClient httpClient,
     IEventOutbox outbox,
-    ReceiverAddressPolicy addressPolicy)
+    ReceiverAddressPolicy addressPolicy,
+    ILogger<PushDeliverySender> logger)
 {
+    /// <summary>How much of the receiver's description is carried into the log.</summary>
+    /// <remarks>
+    /// The field is the receiver's to fill and RFC 8935 Section 2.3 puts no bound on it - "the exact content
+    /// of this field is implementation specific" - so it arrives as text of any length from a party this
+    /// deployment does not control. A diagnostic that does not fit in this much is not a diagnostic.
+    /// </remarks>
+    private const int DescriptionBudget = 256;
+
+    /// <summary>Stands in for a receiver that answered 400 without the error body it owes.</summary>
+    /// <remarks>
+    /// A code rather than a sentence, because the code is the field a log query groups by: a bucket named
+    /// with prose sits beside invalid_audience and access_denied and cannot be told from one of them.
+    /// </remarks>
+    private static readonly DeliveryError Unexplained = new("(none)", string.Empty);
+
+    /// <summary>The receiver's own words, bounded and stripped of anything that could forge a log line.</summary>
+    /// <remarks>
+    /// Control characters go first. A plain-text sink writes a newline as a newline, so a receiver could
+    /// otherwise put a whole fabricated entry into this deployment's log through a field it fills itself -
+    /// and the escapes that clear a terminal or rewrite its title ride the same path.
+    /// </remarks>
+    private static string Readable(string? description)
+    {
+        if (string.IsNullOrEmpty(description))
+        {
+            return "(none)";
+        }
+
+        var kept = description.Length <= DescriptionBudget ? description : description[..DescriptionBudget];
+        var text = new string([.. kept.Select(character => char.IsControl(character) ? ' ' : character)]);
+        return description.Length <= DescriptionBudget ? text : text + "...";
+    }
+
     /// <summary>
     /// Sends what one stream has pending.
     /// </summary>
@@ -81,6 +117,12 @@ public sealed class PushDeliverySender(
 
         var delivered = 0;
         var rejected = 0;
+
+        // The first refusal of the pass, kept so the summary below can name a reason. Per-SET logging
+        // is what the queue's own shape rules out: it is read whole, so a receiver that refuses a
+        // backlog would write one line per event - thousands in one pass, differing only in the
+        // identifier, which is the drowning this line exists to prevent rather than cause.
+        DeliveryError? firstRefusal = null;
         foreach (var item in pending)
         {
             HttpResponseMessage response;
@@ -104,8 +146,12 @@ public sealed class PushDeliverySender(
                     {
                         // The receiver objects to this transmitter, not to this event: leave it queued so a
                         // later pass can deliver it once the credentials or the grant are put right.
+                        // Non-null by construction: IsFinal answers false only for a code it recognises.
+                        LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
                         break;
                     }
+
+                    firstRefusal ??= verdict ?? Unexplained;
 
                     await outbox.AcknowledgeAsync(stream.StreamId, [item.JwtId], cancellationToken);
                     rejected++;
@@ -120,6 +166,16 @@ public sealed class PushDeliverySender(
                 await outbox.AcknowledgeAsync(stream.StreamId, [item.JwtId], cancellationToken);
                 delivered++;
             }
+        }
+
+        // Once for the pass, naming the count and the first reason. The receiver owes a reason with a
+        // 400 (RFC 8935 Section 2.3) and it is read here to decide whether a retransmission could ever
+        // succeed; nothing else carries it onward, so without this the only thing this side holds about
+        // a stream refusing everything is a number that looks like a stream refusing nothing.
+        if (rejected > 0)
+        {
+            LogSetsRefused(
+                stream.StreamId, rejected, firstRefusal!.Error, Readable(firstRefusal.Description));
         }
 
         return new PushDeliveryPassOutcome(delivered, rejected);

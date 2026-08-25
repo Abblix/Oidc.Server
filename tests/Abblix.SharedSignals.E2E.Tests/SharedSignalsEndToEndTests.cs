@@ -25,6 +25,7 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Abblix.SharedSignals.E2E.Tests;
@@ -307,7 +308,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         var sender = new PushDeliverySender(
             _receiver.GetTestClient(),
             _transmitter.Services.GetRequiredService<IEventOutbox>(),
-            _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>());
+            _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>(), NullLogger<PushDeliverySender>.Instance);
 
         return await sender.SendPendingAsync(stream!, cancellationToken);
     }
