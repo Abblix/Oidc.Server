@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
 /// Wires replay protection, which several unrelated features need and none of them owns:
-/// JWT-bearer assertions (RFC 7523 Section 5.2), client assertions, and DPoP proofs
+/// JWT-bearer assertions (RFC 7523 Section 3), client assertions, and DPoP proofs
 /// (RFC 9449 Section 11.1) all reserve identifiers in the same place.
 /// </summary>
 public static class ServiceCollectionExtensions

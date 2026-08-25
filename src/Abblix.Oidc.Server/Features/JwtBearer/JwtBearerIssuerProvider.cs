@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// </summary>
 /// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
-/// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 5.2.</param>
+/// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 3.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection and caching.</param>
 /// <param name="timeProvider">Dates the fallback retention window for an assertion without an
 /// expiry.</param>

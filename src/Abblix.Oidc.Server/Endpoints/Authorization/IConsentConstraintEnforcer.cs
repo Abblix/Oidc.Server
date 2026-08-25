@@ -51,7 +51,7 @@ public interface IConsentConstraintEnforcer
     /// second entry of its own type means.
     /// </remarks>
     /// <remarks>
-    /// RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so the
+    /// RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing of that one", so the
     /// per-type validator owns that decision - and a normalising validator expresses it by RETURNING
     /// a modified entry rather than by failing. The value that comes back is therefore the decision
     /// itself, and the caller emits it; emitting what went in instead would put content in the token

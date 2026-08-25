@@ -36,7 +36,8 @@ public record AuthorizationDetail(JsonObject Json)
     public JsonObject Json { get; } = Json;
 
     /// <summary>
-    /// The authorization-detail type identifier per RFC 9396 §2.1. Required by the spec;
+    /// The authorization-detail type identifier. RFC 9396 §2 makes it REQUIRED, and §2.1 governs
+    /// what a value may be;
     /// the per-type validator rejects entries where this member is missing with
     /// <c>invalid_authorization_details</c>.
     /// </summary>

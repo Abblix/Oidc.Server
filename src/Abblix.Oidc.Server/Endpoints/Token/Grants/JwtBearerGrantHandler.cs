@@ -39,7 +39,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// - sub (subject): Identifies the principal that is the subject of the JWT
 /// - aud (audience): Identifies the recipients that the JWT is intended for (must include this authorization server)
 /// - exp (expiration time): Identifies the expiration time on or after which the JWT MUST NOT be accepted
-/// - jti (JWT ID): Optional but recommended for replay protection per RFC 7523 Section 5.2
+/// - jti (JWT ID): Optional per RFC 7523 Section 3, which lets the authorization server keep
+///   the set of used values and refuse a repeat
 ///
 /// The authorization server validates the JWT signature, claims, and ensures the issuer is trusted
 /// before issuing an access token.
@@ -273,7 +274,7 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
-	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 5.2).
+	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 3).
 	/// </summary>
 	private async Task<Result<ValidationContext, OidcError>> ValidateReplayProtectionAsync(ValidationContext ctx, ClientInfo clientInfo)
 	{

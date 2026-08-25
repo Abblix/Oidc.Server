@@ -123,7 +123,8 @@ public class BackChannelAuthenticationGrantHandler(
     /// Whether the grant carries an <c>authorization_details</c> type the request never asked for.
     /// </summary>
     /// <remarks>
-    /// Types only, for the reason the completion path gives: RFC 9396 defines no universal comparator for
+    /// Types only, for the reason the completion path gives: RFC 9396 §6.1 defines no universal
+    /// comparator for
     /// intra-entry narrowing. A null baseline means the request predates the field rather than asked for
     /// nothing, and is left alone, since refusing it would deny an authentication the end user approved
     /// before the upgrade.

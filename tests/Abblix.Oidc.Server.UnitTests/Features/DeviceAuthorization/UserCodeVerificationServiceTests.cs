@@ -101,7 +101,7 @@ public class UserCodeVerificationServiceTests
         // Whether the entries reach the grant is the host's call, because only its verification page
         // knows what it displayed. What must not happen is that the omission passes unremarked: the
         // token that follows carries no authorization_details, and a resource server enforcing them
-        // has nothing to enforce (RFC 9396 section 7).
+        // has nothing to enforce (RFC 9396 section 9).
         var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var service = BuildService(requestedDetails, out var logs);
 

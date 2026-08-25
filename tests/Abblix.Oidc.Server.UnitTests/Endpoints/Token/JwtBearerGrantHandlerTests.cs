@@ -774,7 +774,8 @@ public class JwtBearerGrantHandlerTests
 
 	/// <summary>
 	/// Verifies that replay attacks are detected when the same jti is used twice.
-	/// Per RFC 7523 Section 5.2: JTI values MUST be unique to prevent replay attacks.
+	/// RFC 7523 Section 3 lets the authorization server keep the set of used jti values and
+	/// refuse a repeat. Uniqueness is not a MUST there - this server chooses to enforce it.
 	/// </summary>
 	[Fact]
 	public async Task ReplayAttack_WithReusedJti_ShouldReject()
@@ -834,7 +835,8 @@ public class JwtBearerGrantHandlerTests
 
 	/// <summary>
 	/// Verifies that JWTs without jti are rejected when RequireJti is enabled.
-	/// Per RFC 7523 Section 5.2: JTI claim is recommended for replay protection.
+	/// RFC 7523 Section 3 makes jti optional, so requiring it is this server's own setting;
+	/// what the test pins is that the setting, once on, actually refuses.
 	/// </summary>
 	[Fact]
 	public async Task ReplayProtection_WithMissingJti_WhenRequired_ShouldReject()
