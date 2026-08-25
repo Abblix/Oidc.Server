@@ -52,10 +52,11 @@ internal static class GrantedAuthorizationDetails
         if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
             return ["an entry that is not a JSON object"];
 
-        // Absence is named rather than compared. A typeless entry is refused either way - the request side
-        // filters its own types with OfType<string>(), so no request can hold a null to match one with -
-        // and what this arm changes is the log: without it the refusal reports an empty string in the list
-        // of escaped types, which reads as a defect in the message rather than as the grant's shape.
+        // Absence is named rather than compared. A typeless entry is refused either way, because
+        // AuthorizationDetailTypes.NamedBy drops one from the baseline, so no request can hold a null to
+        // match one with. What this arm changes is the log: without it the refusal reports
+        // an empty string in the list of escaped types, which reads as a defect in the message rather
+        // than as the grant's shape.
         if (Array.Exists(typed, detail => detail.Type is null))
             return ["an entry carrying no type"];
 
