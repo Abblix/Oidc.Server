@@ -276,9 +276,10 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// or a widened set of accounts inside the entry passes it. RFC 9396 section 6.1 leaves that to the
     /// definition of the type, which is what the per-type validator is.
     ///
-    /// The code is invalid_authorization_details, which section 14.6 registers for the token endpoint and
-    /// section 6 describes in words. Not access_denied: CIBA Core section 11 defines that as the end user
-    /// having denied the request, and here the end user approved while the deployment refused.
+    /// The code is invalid_authorization_details, which section 14.6 registers with the token endpoint
+    /// among its usage locations and references to section 5, the requirement to refuse details that do
+    /// not conform to their type definition. Not access_denied: CIBA Core section 11 defines that as the
+    /// end user having denied the request, and here the end user approved while the deployment refused.
     /// </remarks>
     [Fact]
     public async Task AuthenticatedRequest_WhoseGrantTheValidatorRefuses_IsNotRedeemed()

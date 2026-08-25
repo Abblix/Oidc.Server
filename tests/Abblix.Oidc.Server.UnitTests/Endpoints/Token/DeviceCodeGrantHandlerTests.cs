@@ -328,8 +328,8 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
 
-        // RFC 9396 section 14.6 registers this for the token endpoint and section 6 describes the
-        // condition in words: the underlying grant does not allow issuing these details.
+        // RFC 9396 section 14.6 registers this with the token endpoint among its usage locations and
+        // references to section 5: details not conforming to their type definition must be refused.
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
 
         // The validator's own words name a tenant, a ceiling or a configuration key, so they go to the log

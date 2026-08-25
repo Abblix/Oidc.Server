@@ -38,6 +38,11 @@ internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 /// decision. A host that raises an amount inside an entry of a type the request did ask for therefore
 /// passes every type check there is. Only the validator for that type can refuse it.
 ///
+/// Reached from the token endpoint, which is where the device flow and the CIBA poll and ping modes spend
+/// a grant. The CIBA push mode does not spend its grant there and therefore never arrives here; the note
+/// in <see cref="BackChannelAuthentication.AuthenticationNotifiers.AuthenticationCompletionHandler"/> says
+/// what that leaves unasked.
+///
 /// Apply while FORMING a grant, check while SPENDING one. At the authorization endpoint the validators run
 /// as part of building the grant, so what they return is the decision and the caller emits it. Here the
 /// grant already exists and the end user has already approved it, out of band and possibly days ago, so a
@@ -107,12 +112,16 @@ internal static class GrantedRevalidation
     /// The refusal, with the code RFC 9396 registers for it.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §14.6 registers <c>invalid_authorization_details</c> for the token endpoint, and §6
-    /// describes this exact condition: the authorization server checks whether the underlying grant allows
-    /// issuing an access token with these details, and refuses with that code otherwise. It is also the
-    /// only available code that is TRUE on both flows - CIBA Core §11 defines <c>access_denied</c> as "The
-    /// end-user denied the authorization request", and here the end user approved while the deployment
-    /// refused.
+    /// RFC 9396 §14.6 registers <c>invalid_authorization_details</c> with the token endpoint among its
+    /// usage locations, and points its Reference at §5, which is the requirement being enforced here: the
+    /// authorization server MUST refuse authorization details not conforming to the respective type
+    /// definition. Applying that requirement again when a stored grant is spent is this library's choice
+    /// about WHEN, not something the specification asks for - §6 covers a different case, the
+    /// <c>authorization_details</c> token request parameter, and nothing is requested on these flows.
+    ///
+    /// It is also the only available code that is TRUE on both flows - CIBA Core §11 defines
+    /// <c>access_denied</c> as "The end-user denied the authorization request", and here the end user
+    /// approved while the deployment refused.
     /// </remarks>
     private static GrantRefusal Refusal(string? reason)
         => new(
