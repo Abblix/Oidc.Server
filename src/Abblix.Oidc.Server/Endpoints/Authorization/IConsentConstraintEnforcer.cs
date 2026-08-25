@@ -44,6 +44,13 @@ public interface IConsentConstraintEnforcer
     /// consent decision carried none. A re-validation that returns nothing leaves the granted set
     /// standing, so <c>null</c> never means "the validators emptied it".</returns>
     /// <remarks>
+    /// What this bounds is TYPES and shapes, and deliberately not cardinality: a per-type validator
+    /// answering with several entries of a type the user did grant is accepted, because RFC 9396 offers
+    /// no comparator that would say whether three entries of a type narrow one. A deployment that needs
+    /// that bound sets it inside the per-type validator, which is the only place that knows what a
+    /// second entry of its own type means.
+    /// </remarks>
+    /// <remarks>
     /// RFC 9396 defines no universal comparator for "is this entry a narrowing of that one", so the
     /// per-type validator owns that decision - and a normalising validator expresses it by RETURNING
     /// a modified entry rather than by failing. The value that comes back is therefore the decision
