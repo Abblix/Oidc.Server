@@ -142,6 +142,31 @@ public partial class DeviceCodeGrantHandler(
 
                 return authorizedGrant;
 
+            // Authorized, and nothing to issue from. Reached only when the grant is missing, because the
+            // arm above binds it - and nothing in this library writes such a record: approval sets the
+            // grant beside the status. A host owns this storage and can write the two apart.
+            //
+            // What it used to reach was the default arm, which threw naming the STATUS: "Unexpected device
+            // authorization status: Authorized", about a status this switch plainly handles. The client
+            // got HTTP 500 and an operator got a sentence pointing at a state machine that is not the
+            // problem.
+            //
+            // The code is already claimed by the arm two above, which removes before anything is judged,
+            // and RFC 8628 section 3.5 has each device code exchanged once - so the record is gone, a
+            // retry answers expired_token, and this log line is the only account of what happened. That is
+            // why it names the missing member rather than the status.
+            //
+            // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
+            // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather
+            // than one the end user denied or one that ran out of time.
+            case { Status: DeviceAuthorizationStatus.Authorized }:
+
+                LogAuthorizedRecordCarriesNoGrant(clientInfo.ClientId);
+
+                return new OidcError(
+                    ErrorCodes.InvalidGrant,
+                    "The device authorization cannot be redeemed");
+
             // Authorization still pending - check polling rate
             case { Status: DeviceAuthorizationStatus.Pending, NextPollAt: { } nextPollAt }
                 when now < nextPollAt:

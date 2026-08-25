@@ -52,4 +52,24 @@ partial class DeviceCodeGrantHandler
         Message = "Client {ClientId} presented a device code whose stored grant the per-type validators " +
                   "will not issue, so the redemption is refused and no token was issued: {Reason}")]
     private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string Reason);
+
+    /// <summary>
+    /// The only account of a record that cannot be looked at afterwards.
+    /// </summary>
+    /// <remarks>
+    /// The device code is claimed before anything is judged, so by the time this fires the record is gone
+    /// and a second poll answers expired_token. Nothing else says what was wrong with it.
+    ///
+    /// Error rather than Warning, and it names the MEMBER rather than the status: nothing in this library
+    /// writes a record in this shape, so it is a host-side defect in code that owns the storage, and the
+    /// operator reading it needs to be sent to the writer rather than to the state machine.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = LogEvents.Device.DeviceCodeGrantHandler.AuthorizedRecordCarriesNoGrant,
+        Level = LogLevel.Error,
+        Message = "Client {ClientId} presented a device code whose stored record is marked authorized " +
+                  "and carries no AuthorizedGrant, so there is nothing to issue and the redemption is " +
+                  "refused. The record is written by whoever implements IDeviceAuthorizationStorage; " +
+                  "this library sets the grant and the status together.")]
+    private partial void LogAuthorizedRecordCarriesNoGrant(string ClientId);
 }
