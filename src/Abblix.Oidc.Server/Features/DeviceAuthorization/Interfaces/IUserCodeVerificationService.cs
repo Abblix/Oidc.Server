@@ -30,10 +30,34 @@ public interface IUserCodeVerificationService
     /// Approves the device authorization request, linking the user's authorization to the pending device.
     /// </summary>
     /// <param name="userCode">The user-entered verification code.</param>
-    /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and context.</param>
+    /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and
+    /// context. Its <c>authorization_details</c> are what the device is granted: the library adds none, and
+    /// refuses an approval carrying a type the request never asked for. Its scopes and resources are a
+    /// starting point rather than the final word - the token endpoint narrows them against the token
+    /// request (RFC 6749 §6, RFC 8707 §2.2) and adds the certificate and proof-key confirmations.</param>
     /// <returns>
     /// A task that returns true if the approval was successful; false if the code is invalid or expired.
     /// </returns>
+    /// <remarks>
+    /// <c>authorization_details</c> are the host's to carry. The requested entries arrive on
+    /// <see cref="ValidUserCode"/>, and the decision the user made about them belongs on this grant's
+    /// <c>AuthorizationContext</c> - narrowed, enriched or dropped, as the verification page decided. The
+    /// library does not copy them across, because only that page knows what it displayed, and granting a
+    /// payment nobody was shown is worse than granting none.
+    /// <para>
+    /// Approving with entries on the record and none on the grant is therefore allowed and logged at
+    /// warning level. §7 is satisfied either way, since its MUST is to return what the resource owner
+    /// GRANTED and nothing granted is nothing to return. §9 is the one that matters here: it makes the
+    /// details reaching the resource server the point of having them, and a token carrying none leaves
+    /// it nothing to enforce, which is worth seeing in a log rather than discovering at the resource
+    /// server.
+    /// </para>
+    /// <para>
+    /// The opposite direction is refused rather than logged. A grant carrying a type the device
+    /// authorization request never asked for gives the device authority nobody requested, so the
+    /// approval answers <c>false</c> and the request stays pending.
+    /// </para>
+    /// </remarks>
     Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant);
 
     /// <summary>
