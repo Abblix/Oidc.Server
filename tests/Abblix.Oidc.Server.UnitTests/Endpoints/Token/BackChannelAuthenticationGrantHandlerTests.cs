@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -63,6 +64,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         _handler = new BackChannelAuthenticationGrantHandler(
             _storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             serviceProvider,
@@ -746,6 +748,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             serviceProvider,
@@ -835,6 +838,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             serviceProvider,
@@ -934,6 +938,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             serviceProvider,
@@ -991,6 +996,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             serviceProvider,
@@ -1215,6 +1221,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         var handler = new BackChannelAuthenticationGrantHandler(
             storage.Object,
+            StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
             CreateMockServiceProvider(storage.Object),
