@@ -158,8 +158,11 @@ internal class AccessTokenService(
 	/// for a DIFFERENT resource is rebuilt from, so narrowing it would protect nobody and would permanently
 	/// lose the entries that refresh needs.
 	///
-	/// An entry carrying no <c>locations</c> survives. §2.2 makes the member optional, and reading its
-	/// absence as "nowhere" would empty the claim for every deployment that does not use it. The member is
+	/// An entry with no <c>locations</c> MEMBER survives. §2.2 makes it optional, and reading its absence
+	/// as "nowhere" would empty the claim for every deployment that does not use it. A member that is
+	/// present and names nothing - an empty array, a null, a value that is not an array of strings - is
+	/// treated as naming nowhere and dropped, because absence and emptiness are different statements and
+	/// only the first of them is silence. The member is
 	/// REMOVED when nothing survives rather than written as an empty array or a null: §14.2 registers the
 	/// claim as a JSON array, so a null is a document no resource server owes us a reading of, and an empty
 	/// array would say the end user granted nothing.

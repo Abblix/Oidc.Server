@@ -683,7 +683,6 @@ public class AccessTokenServiceTests
     private static AuthorizationContext ContextAddressedTo(Uri[] resources, JsonArray details) =>
         new(ClientId, [Scopes.OpenId], null) { Resources = resources, AuthorizationDetails = details };
 
-
     private static JsonArray DetailsForPayments(params string?[] locations) =>
         new(locations
             .Select(location => location is null
@@ -714,12 +713,15 @@ public class AccessTokenServiceTests
     /// A token minted for one resource server carries only the entries addressed to it.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 section 9.1: the authorization details go into the token "filtered to the specific
-    /// audience". An entry naming another server describes a permission its bearer cannot exercise here,
-    /// and carrying it tells this reader about the end user's other grants for nothing in return.
+    /// What a deployment opts into: an entry naming another server describes a permission its bearer
+    /// cannot exercise here, and carrying it tells this reader about the end user's other grants for
+    /// nothing in return. Section 7 leaves that to this server where the client did not ask, and section
+    /// 13 asks for need-to-know as local policy determines. Not section 9.1, whose own worked example
+    /// pairs a client-style aud with a resource URI in locations and retains the entry.
     ///
-    /// The entry carrying no locations survives, which is the half that keeps the filter honest: section
-    /// 2.2 makes the member optional, so absence means the entry names no server rather than naming none.
+    /// The entry with no locations member survives, which is the half that keeps the filter honest:
+    /// section 2.2 makes it optional, so its absence means the entry names no server rather than
+    /// naming none.
     /// </remarks>
     [Fact]
     public async Task CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt()

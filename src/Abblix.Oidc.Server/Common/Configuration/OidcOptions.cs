@@ -278,6 +278,20 @@ public record OidcOptions
 	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
 	/// off until a host says the two agree, because nothing here can check that they do.
 	///
+	/// The case worth knowing about is not a misconfiguration. A request that names no resource gets the
+	/// issuer as its audience, and the issuer names this server rather than any resource, so EVERY located
+	/// entry is dropped from that token. Correct under the policy - such a token is addressed here, and an
+	/// entry located elsewhere cannot be exercised with it - and it means a deployment using resource
+	/// indicators for its APIs while also issuing ordinary OpenID Connect tokens loses located entries from
+	/// all of the latter. RFC 9396 Appendix A.1 is exactly that shape: it locates an entry at the UserInfo
+	/// endpoint, which no resource indicator names, so an opted-in deployment following that example loses
+	/// the entry from every token it issues.
+	///
+	/// One more consequence to weigh: introspection filters an entry with no <c>locations</c> the other
+	/// way, withholding it from a caller that did not register for it. With this on, a resource server can
+	/// therefore read an un-located entry out of the token and not get it back when it introspects the
+	/// same token.
+	///
 	/// The refresh token is never filtered: it is read by this server rather than by a resource server, and
 	/// it is what a later refresh for a DIFFERENT resource is rebuilt from.
 	/// </remarks>
