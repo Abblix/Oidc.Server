@@ -210,12 +210,28 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.Equal(NotificationEndpoint, delivery.Endpoint);
 
         // The notification token is what tells the client this POST is the answer to its own request rather
-        // than an unsolicited one, so a delivery carrying the tokens without it is not a delivery.
+        // than an unsolicited one, so a delivery carrying the tokens without it is not a delivery. The
+        // scheme is asserted beside it because CIBA Core 1.0 section 10.3.1 names Bearer, and a token in
+        // the right header under the wrong scheme is what a client's own middleware would reject.
+        Assert.Equal("Bearer", delivery.AuthorizationScheme);
         Assert.Equal(NotificationToken, delivery.BearerToken);
 
+        // Every member the client is issued, not just the one that proves something arrived. Each of these
+        // can be dropped from the payload on its own, and an assertion only on access_token sees none of it.
         var payload = delivery.Payload;
         Assert.Equal(authRequestId, payload["auth_req_id"]!.GetValue<string>());
         Assert.False(string.IsNullOrEmpty(payload["access_token"]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(payload["id_token"]?.GetValue<string>()));
+        Assert.Equal(TokenTypes.Bearer, payload["token_type"]!.GetValue<string>());
+        Assert.True(payload["expires_in"]!.GetValue<int>() > 0);
+
+        // And the request is gone. CIBA Core 1.0 section 10.3.1 has a push client's request removed once
+        // the tokens are delivered, and a push client never polls - so one left behind is an authenticated
+        // grant nobody reads until it expires. Without this line the removal, and the whole branch that
+        // decides between it and the retry path, is unmeasured.
+        using var scope = host.Services.CreateScope();
+        var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+        Assert.Null(await storage.TryGetAsync(authRequestId));
     }
 
     [Fact]
@@ -263,6 +279,13 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         var ciba = await RegisterPushCibaClientAsync(client, discovery);
 
         var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+
+        // What the request ASKED for has to be on it, or the rest of this test passes for a reason it does
+        // not name: with nothing requested, the type comparison one step earlier refuses first, removes the
+        // request and delivers nothing - the identical observable state, reached without the per-type
+        // validator ever being asked.
+        await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
+
         await CompleteAsync(host, authRequestId, DetailWithoutAmount);
 
         Assert.Empty(deliveries.Received);
@@ -365,8 +388,9 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
                 [ClientRequest.Parameters.ClientSecret] = ciba.ClientSecret,
             };
 
-        // Omitted rather than sent empty: a poll client has no notification endpoint to be told about, and
-        // an empty authorization_details is not the same request as one that carries none.
+        // Omitted rather than sent empty, because that is what a client that wants neither actually
+        // sends. The server does not distinguish the two - the processor stores an empty array either
+        // way - but a request the poll tests share should not carry parameters they never used.
         if (notificationToken is not null)
             form[CibaParameters.ClientNotificationToken] = notificationToken;
 
@@ -416,10 +440,11 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// the server posts to a push client can be read back.
     /// </summary>
     /// <remarks>
-    /// The recorder replaces the client's PRIMARY handler, which is where the SSRF validation of a
-    /// client-supplied endpoint lives - so these tests say nothing about that validation, and the endpoint
-    /// they register is never resolved. Chaining an outer handler instead would leave the validation in
-    /// front of an address no test host can own.
+    /// The recorder replaces the client's PRIMARY handler. That is where the address validation of a
+    /// client-supplied endpoint lives, together with the transport it wraps - which also refuses
+    /// redirects, default credentials and automatic decompression. So these tests say nothing about any
+    /// of that, and the endpoint they register is never resolved. Chaining an outer handler instead
+    /// would leave the validation standing in front of an address no test host can own.
     /// </remarks>
     private WebApplicationFactory<Program> CreateCibaHost(NotificationRecorder recorder)
         => Factory.WithWebHostBuilder(builder =>
@@ -444,8 +469,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
     /// <summary>
-    /// Registers a CIBA client in PUSH mode, with the notification endpoint the recorder answers on and the
-    /// authorization-detail type the host has a validator for.
+    /// Registers a CIBA client in PUSH mode, with the notification endpoint the recorder captures POSTs
+    /// to and the authorization-detail type the host has a validator for.
     /// </summary>
     private static async Task<CibaClient> RegisterPushCibaClientAsync(
         HttpClient client, DiscoveryDocument discovery)
@@ -476,6 +501,21 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// The authorization_details the end user approved, which is how a partial answer is expressed: the
     /// grant's context is what will be issued, and replacing it is the only place that answer exists.
     /// </param>
+    /// <summary>
+    /// Reads back what the request ASKED for, so a test about the per-type validator cannot be
+    /// satisfied by the type comparison that runs before it.
+    /// </summary>
+    private static async Task AssertTheRequestCarriesWhatWasAskedFor(
+        WebApplicationFactory<Program> host, string authenticationRequestId)
+    {
+        using var scope = host.Services.CreateScope();
+        var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        Assert.NotNull(stored);
+        Assert.NotEmpty(stored.RequestedAuthorizationDetails ?? []);
+    }
+
     private static async Task CompleteAsync(
         WebApplicationFactory<Program> host, string authenticationRequestId, string grantedDetails)
     {
@@ -508,7 +548,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         => DecodeJwtPayload(accessToken)[IanaClaimTypes.AuthorizationDetails]!.AsArray();
 
     /// <summary>What the server posted to a push or ping client's notification endpoint.</summary>
-    private sealed record RecordedNotification(Uri Endpoint, string? BearerToken, JsonObject Payload);
+    private sealed record RecordedNotification(
+        Uri Endpoint, string? AuthorizationScheme, string? BearerToken, JsonObject Payload);
 
     /// <summary>
     /// Stands in for the client's notification endpoint. It answers 200 to every POST and keeps what
@@ -536,7 +577,10 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
             lock (_received)
             {
                 _received.Add(new RecordedNotification(
-                    request.RequestUri!, request.Headers.Authorization?.Parameter, body));
+                    request.RequestUri!,
+                    request.Headers.Authorization?.Scheme,
+                    request.Headers.Authorization?.Parameter,
+                    body));
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK);
