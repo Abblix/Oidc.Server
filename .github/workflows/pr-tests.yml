@@ -113,8 +113,9 @@ jobs:
         with:
           path: ~/.cache/spec-citations
           key: ${{ runner.os }}-spec-texts-${{ hashFiles('.cited-documents.txt') }}
-          # A partial hit is worth taking: the documents it holds are still the current ones, and
-          # only the newly cited RFC is fetched.
+          # A partial hit is worth taking: the script revalidates every document it reads, so an
+          # older entry costs a conditional request rather than a stale answer, and a newly cited
+          # document is simply fetched.
           restore-keys: ${{ runner.os }}-spec-texts-
         timeout-minutes: 3
       - name: Verify every cited section exists

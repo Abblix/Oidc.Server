@@ -8,8 +8,10 @@ and compares the number against that document's own heading list.
 
     python .github/scripts/verify-spec-citations.py [root] [--cache DIR] [--list-documents]
 
-Two families are covered: RFCs from rfc-editor.org, and the OpenID specifications, which
-number their sections the same way and are cited in the same shape.
+Two families are covered: RFCs from rfc-editor.org, and the specifications published at
+openid.net, which number their sections the same way and are cited in the same shape. The
+second family is a NAMED list rather than a rule, so a document nobody has added is reported
+as an unknown name rather than checked - which is why the run prints those names.
 
 Exit code 1 when a citation names a section its document does not have, and equally when a
 cited document could not be fetched. A run that read no document proves nothing about the
@@ -31,6 +33,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 # The grammar of a citation, not the instances anyone happened to fix. A number is dotted; a
@@ -38,22 +41,33 @@ import urllib.request
 # range "Sections 8.1.1.1-8.1.1.4" as readily as it cites one. Every number in the run is
 # checked: a range whose endpoints exist is a range that exists, and a list is its members.
 NUMBER = r'\d+(?:\.\d+)*'
-NUMBERS = rf'{NUMBER}(?:\s*(?:,|and|to|through|-|–)\s*{NUMBER})*'
-SECTION = rf'[, ]*(?:§§?|[Ss]ections?\s+)({NUMBERS})'
 
-# The reversed order is the same citation read the other way round: "Section 4.3 of RFC 7636".
-OF_SECTION = rf'(?:§§?|[Ss]ections?\s+)({NUMBERS})\s+of\s+'
+# What joins two numbers into one reference. A conjunction or a range dash joins them in any
+# citation. A COMMA joins them only after a PLURAL marker: "Sections 3.1, 3.2 and 3.3" is a list,
+# while "Section 4.1, 2026 saw the revision" is a sentence carrying on, and a singular "Section"
+# cites one. Reading the comma either way would invent section 2026 out of a date.
+JOIN = r'\s*(?:and|to|through|-|–)\s*'
+JOIN_LIST = r'\s*(?:,|and|to|through|-|–)\s*'
+ONE_NUMBER = rf'{NUMBER}(?:{JOIN}{NUMBER})*'
+MANY_NUMBERS = rf'{NUMBER}(?:{JOIN_LIST}{NUMBER})*'
+
+# The marker itself, in both grammatical numbers. The section sign may be followed by a space:
+# "RFC 6749 § 3.3" is as ordinary as "RFC 6749 §3.3".
+SECTION = rf'[, ]*(?:(?:§§\s*|[Ss]ections\s+)({MANY_NUMBERS})|(?:§\s*|[Ss]ection\s+)({ONE_NUMBER}))'
+OF_SECTION = rf'(?:(?:§§\s*|[Ss]ections\s+)({MANY_NUMBERS})|(?:§\s*|[Ss]ection\s+)({ONE_NUMBER}))\s+of\s+'
 
 # An OpenID document is named rather than numbered, and the sources name the same one several
-# ways, so the name is captured as written and resolved below. Non-greedy up to the section
-# marker; letters, digits, dots and hyphens, so "Back-Channel Logout" survives while a sentence
-# continuing past the name does not join it.
-OPENID_NAME = r'(?:OpenID|OIDC|CIBA)[A-Za-z0-9.\- ]{0,40}?'
+# ways, so the name is captured as written and resolved below. Letters, digits, dots and hyphens,
+# so "Back-Channel Logout" survives. Non-greedy in the forward form, where the section marker ends
+# the name; GREEDY in the reversed form, where the name runs to the end of the phrase and stopping
+# at the first word would capture "OpenID" and resolve to nothing.
+OPENID_NAME = r'(?:OpenID|OIDC|CIBA|SSF|Shared Signals|CAEP|JARM)[A-Za-z0-9.\- ]{0,40}?'
+OPENID_NAME_GREEDY = r'(?:OpenID|OIDC|CIBA|SSF|Shared Signals|CAEP|JARM)[A-Za-z0-9.\- ]{0,40}'
 
 RFC_CITATION = re.compile(r'RFC\s?(\d{3,4})' + SECTION)
 RFC_OF_CITATION = re.compile(OF_SECTION + r'RFC\s?(\d{3,4})')
 OPENID_CITATION = re.compile(rf'({OPENID_NAME})' + SECTION)
-OPENID_OF_CITATION = re.compile(OF_SECTION + rf'({OPENID_NAME})(?=[\s,.;:)\]]|$)')
+OPENID_OF_CITATION = re.compile(OF_SECTION + rf'({OPENID_NAME_GREEDY})')
 
 # Appendices are lettered rather than numbered and the documents head them differently from
 # their sections, so they are counted and named rather than checked. Silence about them would
@@ -61,26 +75,39 @@ OPENID_OF_CITATION = re.compile(OF_SECTION + rf'({OPENID_NAME})(?=[\s,.;:)\]]|$)
 APPENDIX = re.compile(
     rf'(?:RFC\s?\d{{3,4}}|{OPENID_NAME})[, ]*(?:[Aa]ppendix|[Aa]ppendices)\s+[A-Z](?:\.\d+)*')
 
-# Ordered, most specific first, because every one of these names contains "OpenID Connect" and
-# several contain each other: "OpenID Connect CIBA specification" names CIBA rather than Core,
-# and "OpenID Connect Back-Channel Logout" names the logout document rather than Core.
+# A name is matched against ALL of these rather than against the first that answers, because every
+# one of these documents is called "OpenID Connect something" and a captured name is a run of prose
+# that can carry two of them. Two matches means the citation was not read, and resolve() says so
+# instead of picking, so order carries no meaning here.
+#
+# The second pattern is what DISQUALIFIES an entry, for the one overlap that is a fact about the
+# titles rather than a run of prose: the CIBA document is called "Client Initiated Backchannel
+# Authentication Core", so every citation of it contains the word that names Core. Without this
+# "CIBA Core 1.0" would be refused as ambiguous, which is a checker declining to read the plainest
+# name any of these documents has.
 OPENID_DOCUMENTS = [
-    (re.compile(r'CIBA'), 'openid-ciba-core',
+    (re.compile(r'CIBA'), None, 'openid-ciba-core',
      'https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html'),
-    (re.compile(r'Back-?[Cc]hannel Logout'), 'openid-connect-backchannel',
+    (re.compile(r'Back-?[Cc]hannel Logout'), None, 'openid-connect-backchannel',
      'https://openid.net/specs/openid-connect-backchannel-1_0.html'),
-    (re.compile(r'Front-?[Cc]hannel Logout'), 'openid-connect-frontchannel',
+    (re.compile(r'Front-?[Cc]hannel Logout'), None, 'openid-connect-frontchannel',
      'https://openid.net/specs/openid-connect-frontchannel-1_0.html'),
-    (re.compile(r'RP-?Initiated Logout'), 'openid-connect-rpinitiated',
+    (re.compile(r'RP-?Initiated Logout'), None, 'openid-connect-rpinitiated',
      'https://openid.net/specs/openid-connect-rpinitiated-1_0.html'),
-    (re.compile(r'Session Management'), 'openid-connect-session',
+    (re.compile(r'Session Management'), None, 'openid-connect-session',
      'https://openid.net/specs/openid-connect-session-1_0.html'),
-    (re.compile(r'DCR|Dynamic Client Registration|Registration'), 'openid-connect-registration',
+    (re.compile(r'DCR|Dynamic Client Registration|Registration'), None, 'openid-connect-registration',
      'https://openid.net/specs/openid-connect-registration-1_0.html'),
-    (re.compile(r'Discovery'), 'openid-connect-discovery',
+    (re.compile(r'Discovery'), None, 'openid-connect-discovery',
      'https://openid.net/specs/openid-connect-discovery-1_0.html'),
-    (re.compile(r'Core'), 'openid-connect-core',
+    (re.compile(r'Core'), re.compile(r'CIBA|SSF|Shared Signals'), 'openid-connect-core',
      'https://openid.net/specs/openid-connect-core-1_0.html'),
+    (re.compile(r'SSF|Shared Signals'), None, 'openid-sharedsignals-framework',
+     'https://openid.net/specs/openid-sharedsignals-framework-1_0.html'),
+    (re.compile(r'CAEP'), None, 'openid-caep',
+     'https://openid.net/specs/openid-caep-1_0.html'),
+    (re.compile(r'JARM'), None, 'oauth-v2-jarm',
+     'https://openid.net/specs/oauth-v2-jarm.html'),
 ]
 
 # A heading in an RFC text file starts at column 0 and is followed by its title. The trailing
@@ -89,12 +116,16 @@ OPENID_DOCUMENTS = [
 # anyway, from being read as headings.
 RFC_HEADING = re.compile(r'^(\d+(?:\.\d+)*)\.?\s+(?=\D)')
 
-# The OpenID documents are HTML and use two shapes between them: Core and Discovery number the
-# heading text, CIBA carries the number in the anchor. Both are read, so neither document's
-# choice has to be remembered.
+# The OpenID documents are HTML and use three shapes between them: Core and Discovery number the
+# heading text, CIBA carries the number in an "rfc.section" anchor, and the ones published through
+# the newer toolchain carry it in a "section" anchor. All three are read, so no document's choice
+# has to be remembered - and a document whose shape is not here yields NO headings at all, which
+# makes every citation of it a finding. That is the loudest failure this script has, so a new
+# document is worth a run before it is trusted.
 HTML_HEADINGS = [
     re.compile(r'<h[1-6][^>]*>\s*(\d+(?:\.\d+)*)\.(?:&nbsp;|\s)'),
     re.compile(r'id="rfc\.section\.(\d+(?:\.\d+)*)"'),
+    re.compile(r'id="section-(\d+(?:\.\d+)*)"'),
 ]
 
 # What a wrapped comment puts between the two halves of a citation. Joining the raw lines leaves
@@ -106,11 +137,28 @@ SKIP_DIRS = {'bin', 'obj', '.git', 'node_modules', 'TestResults'}
 EXTENSIONS = ('.cs', '.md', '.proto')
 
 
-def resolve(name):
-    """The document an OpenID citation names, or None when the name is not one we know."""
-    for pattern, key, url in OPENID_DOCUMENTS:
-        if pattern.search(name):
-            return key, url
+def resolve(name, skipped):
+    """The document an OpenID citation names, or None with a reason recorded.
+
+    A name is a run of prose up to forty characters, and every one of these documents is called
+    "OpenID Connect something", so a captured name can carry two of them: "OpenID Connect Core 1.0
+    Client Registration Section 3.1.2.2" contains both Core and Registration. Taking the first
+    match by order would answer with whichever pattern happens to be listed earlier - which reds a
+    correct Core citation against the Registration document, or worse passes silently when the
+    number exists in both. An ambiguous name is refused and counted instead: a checker that cannot
+    tell which document was meant has not read the citation, and saying so is the only honest
+    answer available to a pattern.
+    """
+    hits = [(key, url) for pattern, unless, key, url in OPENID_DOCUMENTS
+            if pattern.search(name) and not (unless is not None and unless.search(name))]
+
+    if len(hits) == 1:
+        return hits[0]
+
+    if skipped is not None:
+        skipped[
+            f'name matching more than one document: {name.strip()}' if hits
+            else f'unknown document name: {name.strip()}'] += 1
     return None
 
 
@@ -123,27 +171,25 @@ def found(text, skipped):
     """
     entries = set()
 
-    for rfc, run in RFC_CITATION.findall(text):
+    for rfc, plural, singular in RFC_CITATION.findall(text):
         url = f'https://www.rfc-editor.org/rfc/rfc{rfc}.txt'
-        entries.update((f'RFC {rfc}', url, section) for section in re.findall(NUMBER, run))
+        entries.update((f'RFC {rfc}', url, section)
+                       for section in re.findall(NUMBER, plural or singular))
 
-    for run, rfc in RFC_OF_CITATION.findall(text):
+    for plural, singular, rfc in RFC_OF_CITATION.findall(text):
         url = f'https://www.rfc-editor.org/rfc/rfc{rfc}.txt'
-        entries.update((f'RFC {rfc}', url, section) for section in re.findall(NUMBER, run))
+        entries.update((f'RFC {rfc}', url, section)
+                       for section in re.findall(NUMBER, plural or singular))
 
-    for name, run in OPENID_CITATION.findall(text):
-        if (document := resolve(name)) is None:
-            if skipped is not None:
-                skipped[f'unknown document name: {name.strip()}'] += 1
-            continue
-        entries.update((*document, section) for section in re.findall(NUMBER, run))
+    for name, plural, singular in OPENID_CITATION.findall(text):
+        if (document := resolve(name, skipped)) is not None:
+            entries.update((*document, section)
+                           for section in re.findall(NUMBER, plural or singular))
 
-    for run, name in OPENID_OF_CITATION.findall(text):
-        if (document := resolve(name)) is None:
-            if skipped is not None:
-                skipped[f'unknown document name: {name.strip()}'] += 1
-            continue
-        entries.update((*document, section) for section in re.findall(NUMBER, run))
+    for plural, singular, name in OPENID_OF_CITATION.findall(text):
+        if (document := resolve(name, skipped)) is not None:
+            entries.update((*document, section)
+                           for section in re.findall(NUMBER, plural or singular))
 
     return entries
 
@@ -246,10 +292,10 @@ def sections_of(key, url, cache, stale):
     if path.endswith('.txt'):
         return {match.group(1) for match in map(RFC_HEADING.match, text.split('\n')) if match}
 
-    found = set()
+    headings = set()
     for pattern in HTML_HEADINGS:
-        found.update(pattern.findall(text))
-    return found
+        headings.update(pattern.findall(text))
+    return headings
 
 
 def main():
