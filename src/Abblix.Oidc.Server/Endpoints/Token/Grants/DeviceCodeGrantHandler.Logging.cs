@@ -62,9 +62,10 @@ partial class DeviceCodeGrantHandler
     ///
     /// Error rather than Warning, and it names the MEMBER rather than the status: nothing in this library
     /// writes a record in this shape, so it is a defect in code outside it that WRITES one, and the
-    /// operator reading it needs to be sent to that writer rather than to the state machine. Not to
-    /// whoever implements the storage - this library ships and registers an implementation, so in a
-    /// default deployment that reader would be sent to look for code they never wrote.
+    /// operator reading it needs to be sent to that writer rather than to the state machine. The message
+    /// therefore leads with the calls a host makes, and names a replacement implementation only after
+    /// them: this library ships and registers one, so a reader sent to the implementer FIRST would go
+    /// looking for code they never wrote.
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceCodeGrantHandler.AuthorizedRecordCarriesNoGrant,

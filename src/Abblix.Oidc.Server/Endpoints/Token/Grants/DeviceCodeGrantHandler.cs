@@ -158,10 +158,13 @@ public partial class DeviceCodeGrantHandler(
             // is why it names the missing member rather than the status, and why it sits at Error.
             //
             // Refusing WITHOUT consuming the code, so the record survives for an operator to inspect, is
-            // the real alternative, and it would have to be taken in that same claiming arm rather than
-            // here - by the time this is reached the code is spent. It is declined because that arm is
-            // where single use is enforced, and carving an exception out of it would make whether a device
-            // code survives redemption depend on which member of the record happened to be missing.
+            // the real alternative. It cannot be taken HERE, because by this point the code is already
+            // spent, but it could be taken in an arm of its own placed above the claiming one - a property
+            // pattern naming the missing member compiles there and leaves storage untouched.
+            //
+            // Declined anyway. Such an arm carves an exception out of single use, and makes whether a
+            // device code survives its redemption depend on which member of the record happened to be
+            // missing - a rule nobody would find while reading either arm on its own.
             //
             // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
             // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather

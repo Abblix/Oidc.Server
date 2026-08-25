@@ -108,10 +108,10 @@ public partial class BackChannelAuthenticationGrantHandler(
         var grant = result.GetSuccess();
 
         // Judged again, on what was actually consumed. The processor removes the stored entry and returns
-        // the grant it found there, so between the check above and that removal the host - which owns the
-        // same storage - can replace what is stored, which is the ordinary shape of a retried or corrected
-        // completion rather than an attack. Approving one grant and handing over another is the whole
-        // failure this comparison exists to prevent.
+        // the grant it found there, so between the check above and that removal a host - writing to that
+        // same storage through the public seam - can replace what is stored, which is the ordinary shape
+        // of a retried or corrected completion rather than an attack. Approving one grant and handing over
+        // another is the whole failure this comparison exists to prevent.
         if (!NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo))
             return NotTheRequestedEndUser();
 
