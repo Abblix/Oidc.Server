@@ -116,14 +116,27 @@ OPENID_DOCUMENTS = [
 # anyway, from being read as headings.
 RFC_HEADING = re.compile(r'^(\d+(?:\.\d+)*)\.?\s+(?=\D)')
 
-# The OpenID documents are HTML and use three shapes between them: Core and Discovery number the
-# heading text, CIBA carries the number in an "rfc.section" anchor, and the ones published through
-# the newer toolchain carry it in a "section" anchor. All three are read, so no document's choice
-# has to be remembered - and a document whose shape is not here yields NO headings at all, which
-# makes every citation of it a finding. That is the loudest failure this script has, so a new
-# document is worth a run before it is trusted.
+# The documents at openid.net use three shapes between them: the number in the heading's own text,
+# the number in an "rfc.section" anchor, and the number in a "section" anchor from the newer
+# toolchain. All three are read, so no document's choice has to be remembered.
+#
+# The heading is taken as a BLOCK and its tags stripped before the number is read, rather than
+# matched straight after the opening tag. CIBA heads its references as
+# <h1 id="rfc.references"><a href="#rfc.references">17.</a> References</h1>: the number sits inside
+# a nested anchor, and the id is not an "rfc.section" one, so a pattern anchored to the opening tag
+# reaches none of it. That cost three of CIBA's thirty-five sections, and a citation of Section 17.1
+# was reported as nonexistent while Section 16 beside it passed.
+#
+# Which is the failure worth naming here: an unknown shape yields NO headings and makes every
+# citation of that document a finding, loudly. A shape understood for MOST of a document under-reads
+# the rest in silence, and only the citations of those sections go red. A new document is therefore
+# worth a run, and a document that goes red in one region and passes everywhere else is more likely
+# to be this than to be a wrong citation.
+HEADING_BLOCK = re.compile(r'<h[1-6][^>]*>(.*?)</h[1-6]>', re.DOTALL)
+HEADING_TAGS = re.compile(r'<[^>]+>')
+HEADING_NUMBER = re.compile(r'^\s*(\d+(?:\.\d+)*)\.\s')
+
 HTML_HEADINGS = [
-    re.compile(r'<h[1-6][^>]*>\s*(\d+(?:\.\d+)*)\.(?:&nbsp;|\s)'),
     re.compile(r'id="rfc\.section\.(\d+(?:\.\d+)*)"'),
     re.compile(r'id="section-(\d+(?:\.\d+)*)"'),
 ]
@@ -295,6 +308,12 @@ def sections_of(key, url, cache, stale):
     headings = set()
     for pattern in HTML_HEADINGS:
         headings.update(pattern.findall(text))
+
+    for block in HEADING_BLOCK.findall(text):
+        plain = HEADING_TAGS.sub(' ', block).replace('&nbsp;', ' ')
+        if (match := HEADING_NUMBER.match(plain)) is not None:
+            headings.add(match.group(1))
+
     return headings
 
 
