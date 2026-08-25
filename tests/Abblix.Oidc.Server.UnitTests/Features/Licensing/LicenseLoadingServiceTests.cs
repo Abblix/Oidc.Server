@@ -384,8 +384,8 @@ public class LicenseLoadingServiceTests
     ///
     /// The failure this pins arrives at <c>BuildServiceProvider</c> and names a type whose name says
     /// nothing about licensing, so it reads as a container defect rather than a missing registration.
-    /// <c>ValidateOnBuild</c> is what makes it arrive at all: without it the container answers happily
-    /// until something asks for the hosted services, which is host start.
+    /// In a host <c>ValidateOnBuild</c> is what makes it arrive at build time rather than at start; here
+    /// it arrives either way, because the assertion below is itself a resolution of the hosted services.
     ///
     /// Logging and options are supplied here rather than expected from the registration, because every
     /// ASP.NET host has both before any of this is called and a library registering its own logging would
@@ -407,10 +407,21 @@ public class LicenseLoadingServiceTests
         else
             services.AddLicense("not.a.real.jwt");
 
-        using var provider = services.BuildServiceProvider(
-            new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+        try
+        {
+            using var provider = services.BuildServiceProvider(
+                new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 
-        Assert.Single(provider.GetServices<IHostedService>());
+            Assert.Single(provider.GetServices<IHostedService>());
+        }
+        finally
+        {
+            // Activating the hosted service rebinds the process-wide logger to one from the container this
+            // test is about to dispose, and every write through a disposed logger is swallowed. The class
+            // joined the serial collection for exactly this reason, so the test that proves the point is
+            // the last one that may skip the restore.
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
     }
 
     /// <summary>A clock that answers one moment, so a test can stand anywhere on the timeline.</summary>

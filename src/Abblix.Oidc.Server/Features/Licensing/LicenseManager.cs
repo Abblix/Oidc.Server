@@ -176,13 +176,17 @@ public partial class LicenseManager
     /// runs from <see cref="TryGetCurrentLicenseLimit"/>, which returns the cached license untouched while
     /// it is still valid, so a deployment holding one valid license reaches the reporting nowhere else: it
     /// would hear nothing about a license expiring next week, and a lapsed server taking no traffic would
-    /// say nothing about that either. A deployment holding SEVERAL licenses does rescan on a request path,
-    /// because the cached value carries the shortest expiry among them and the ones behind it outlive it.
+    /// say nothing about that either. A deployment holding SEVERAL licenses does reach both statuses on a
+    /// request path, because the cached value carries the shortest expiry among them: once that one passes,
+    /// every consult rescans and the licenses outliving it are judged again, expiring-soon included.
     ///
     /// The list has provably stopped growing when this is called, so what is said does not depend on the
     /// order it arrived in.
     ///
-    /// Acquires the read lock, so it must not be called from anywhere holding the write lock.
+    /// Acquires the read lock, and the lock forbids recursion, so this must not be called from anywhere
+    /// already holding EITHER lock. The read one is the likelier mistake: a maintainer wanting to report
+    /// from <see cref="TryGetCurrentLicenseLimit"/> is standing inside its read lock, and that throws just
+    /// as the write lock does.
     /// </remarks>
     internal void ReportLoadedLicenses(DateTimeOffset utcNow)
     {
