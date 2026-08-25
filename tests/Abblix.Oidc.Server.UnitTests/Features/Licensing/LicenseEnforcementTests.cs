@@ -275,39 +275,6 @@ public sealed class LicenseEnforcementTests : IDisposable
         }
     }
 
-    /// <summary>What a single log write carried.</summary>
-    private sealed record LogRecord(LogLevel Level, EventId EventId, string Message);
-
-    /// <summary>A factory whose loggers keep what was written, so a test can assert on the record itself.</summary>
-    private sealed class RecordingLoggerFactory : ILoggerFactory
-    {
-        public List<LogRecord> Entries { get; } = [];
-
-        public ILogger CreateLogger(string categoryName) => new RecordingLogger(Entries);
-
-        public void AddProvider(ILoggerProvider provider)
-        {
-        }
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class RecordingLogger(List<LogRecord> entries) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter)
-                => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception)));
-        }
-    }
 
     /// <summary>A factory whose loggers fail on write, standing in for one whose provider has been disposed.</summary>
     private sealed class ThrowingLoggerFactory : ILoggerFactory

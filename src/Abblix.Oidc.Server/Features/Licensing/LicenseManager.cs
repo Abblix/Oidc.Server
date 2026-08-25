@@ -141,6 +141,11 @@ public partial class LicenseManager
             switch (status)
             {
                 case LicenseStatus.Expired:
+                    // Reported and not merged. The moment a license stops applying is the one an operator
+                    // alerts on, because what follows is not graceful: the server falls back to the free
+                    // tier, and a deployment serving more than one issuer then refuses every issuer it has
+                    // seen, including the first, until it restarts under a valid license.
+                    ReportStatus(license, status, utcNow);
                     break;
 
                 case LicenseStatus.Active:
@@ -183,6 +188,16 @@ public partial class LicenseManager
             if (nextStatus == LicenseStatus.GracePeriod)
                 continue;
 
+            // An expired license is no more a license found in the future than one in its grace period is.
+            // Taking it used to merge limits that had stopped applying into the license in force, and tell
+            // the caller a successor existed - so a deployment kept the allowance of a license it no longer
+            // held, on the strength of a later one that had already run out.
+            if (nextStatus == LicenseStatus.Expired)
+            {
+                ReportStatus(nextLicense, nextStatus, utcNow);
+                continue;
+            }
+
             indexCurrent = indexNext;
 
             result = AppendLicense(result, nextLicense, nextStatus, utcNow);
@@ -206,6 +221,43 @@ public partial class LicenseManager
     /// and updates the result license to reflect the most appropriate active license based on the current time.
     /// </remarks>
     private static License AppendLicense(License? result, License license, LicenseStatus status, DateTimeOffset utcNow)
+    {
+        ReportStatus(license, status, utcNow);
+
+        if (result == null)
+        {
+            result = license;
+        }
+        else
+        {
+            result = result with {
+                ClientLimit = result.ClientLimit.Greater(license.ClientLimit),
+                IssuerLimit = result.IssuerLimit.Greater(license.IssuerLimit),
+                ExpiresAt = result.ExpiresAt.Lesser(license.ExpiresAt),
+                ValidIssuers = result.ValidIssuers.Join(license.ValidIssuers),
+            };
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Records what a license's status means for the deployment, without deciding anything about it.
+    /// </summary>
+    /// <param name="license">The license the record is about.</param>
+    /// <param name="status">Its status at <paramref name="utcNow"/>.</param>
+    /// <param name="utcNow">The moment the status was evaluated at.</param>
+    /// <remarks>
+    /// Separate from <see cref="AppendLicense"/> because reporting and merging answer to different callers.
+    /// An expired license has to be reported and must NOT be merged - its limits stopped applying, which is
+    /// the whole event - and while the two lived in one method the only way to report one was to fold its
+    /// limits into the license in force. So the arm was left empty, and a single-license deployment reached
+    /// the free tier in silence.
+    ///
+    /// The throttle is per license and status, so a list holding several expired licenses records each of
+    /// them once a day rather than on every evaluation.
+    /// </remarks>
+    private static void ReportStatus(License license, LicenseStatus status, DateTimeOffset utcNow)
     {
         switch (status)
         {
@@ -233,22 +285,6 @@ public partial class LicenseManager
                     (int)(utcNow - expiresAt).TotalDays);
                 break;
         }
-
-        if (result == null)
-        {
-            result = license;
-        }
-        else
-        {
-            result = result with {
-                ClientLimit = result.ClientLimit.Greater(license.ClientLimit),
-                IssuerLimit = result.IssuerLimit.Greater(license.IssuerLimit),
-                ExpiresAt = result.ExpiresAt.Lesser(license.ExpiresAt),
-                ValidIssuers = result.ValidIssuers.Join(license.ValidIssuers),
-            };
-        }
-
-        return result;
     }
 
     /// <summary>
