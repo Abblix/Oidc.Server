@@ -888,10 +888,14 @@ public class AuthenticationCompletionHandlerTests
     /// A behavioural test cannot hold this. Driving a poll completion and asserting it succeeds passes
     /// identically whether the validators were never asked or were asked and accepted, so putting the gate
     /// back into the shared base - which is what a reader who finds this decision surprising would do -
-    /// leaves such a test green. What separates the two states is whether the handler has a policy at all.
+    /// leaves such a test green. What separates the two states in THAT shape is whether the handler has a
+    /// policy at all, which is what this asserts. A gate written somewhere other than a handler's
+    /// constructor - in the router, say, which already resolves services - would pass this and is not what
+    /// it guards against.
     ///
-    /// Named types rather than a scan of the assembly, so a fourth delivery mode arriving does not
-    /// silently satisfy this by not existing yet.
+    /// Named types rather than a scan of the assembly, and the list is complete by construction rather
+    /// than by luck: CIBA Core 1.0 defines exactly three delivery modes and this library ships a handler
+    /// for each. A fourth would be a specification change, which is a moment somebody reads this anyway.
     /// </remarks>
     [Fact]
     public void OnlyThePushHandler_TakesThePerTypeValidators()
