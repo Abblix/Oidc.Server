@@ -870,4 +870,212 @@ public class LicenseManagerTests
         Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseInGracePeriod, record.EventId.Id);
         Assert.Equal(LogLevel.Error, record.Level);
     }
+
+    /// <summary>
+    /// A deployment whose renewal is already loaded is not told to renew promptly.
+    /// </summary>
+    /// <remarks>
+    /// "Please renew promptly to avoid service interruption" is untrue of a deployment that has renewed,
+    /// and the renewal here has not merely been bought: it is IN the manager, starting before the current
+    /// license ends, so there is no interruption to avoid.
+    ///
+    /// The successor sits past the scan's early return, which stops at the first license that has not
+    /// started. That return is right about what is IN FORCE - everything past it starts later still - and
+    /// wrong about what is worth SAYING, which is the whole of this.
+    ///
+    /// The renewal starts before the current license expires on purpose. A gap between them is a real
+    /// interruption and the warning is then the truth, which the test below holds.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiringSoonWithARenewalAlreadyLoaded_SaysNothing()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(LicenseAround(5, 100) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            var active = manager.GenerateActiveLicense(Moment);
+            Assert.NotNull(active);
+            Assert.Equal(5, active!.ClientLimit);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon);
+    }
+
+    /// <summary>
+    /// A renewal that starts after the current license ends does not silence the warning.
+    /// </summary>
+    /// <remarks>
+    /// The control for the silence above, and the line the rule is drawn on. A successor beginning after
+    /// the gap is a successor the deployment will reach through an interruption, so "renew promptly" is
+    /// exactly right and the operator is the only one who can close it.
+    ///
+    /// Without this the same silence would hold over a manager that suppressed the warning whenever ANY
+    /// future license existed, which is the shape a guard written slightly too wide takes.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiringSoonWithARenewalStartingAfterTheGap_SaysSo()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(LicenseAround(15, 100) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseExpiringSoon, record.EventId.Id);
+    }
+
+    /// <summary>
+    /// A successor that starts in time and ends sooner does not silence the warning.
+    /// </summary>
+    /// <remarks>
+    /// Starting before the current license ends is not the same as carrying the deployment past it. An
+    /// add-on bought alongside, or a short licence issued by mistake, begins inside the window and is over
+    /// first - so the expiry is still coming, the warning is still true, and suppressing it would spend the
+    /// last advance notice the deployment gets. What follows is the free tier, which allows one issuer and
+    /// throws on every other one this server has seen.
+    ///
+    /// Three shapes, because they fail the same test for different reasons: one that ends before the
+    /// current license does, one whose own end precedes its own start, which is a record a host can write,
+    /// and one ending at the SAME instant - which moves nothing, since the expiry being warned about is
+    /// still that instant.
+    /// </remarks>
+    [Theory]
+    [InlineData(8)]
+    [InlineData(3)]
+    [InlineData(10)]
+    public void GenerateActiveLicense_SuccessorThatDoesNotOutliveTheCurrentOne_SaysSo(int successorExpiresAt)
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(LicenseAround(5, successorExpiresAt) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.Contains(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon);
+    }
+
+    /// <summary>
+    /// A successor with no expiry outlives everything, so it silences the warning.
+    /// </summary>
+    /// <remarks>
+    /// A perpetual license is first-class here - <c>ExpiresAt</c> is nullable, the merge treats a null as
+    /// infinity, and the status walk falls straight through to Active - so this is an arrangement a
+    /// deployment can be in rather than a shape only a test can build.
+    ///
+    /// Pinned because the predicate says it in words: "A successor with no expiry outlives everything."
+    /// Requiring a non-null expiry there instead leaves every other test in this file green, so the
+    /// sentence would be the only thing holding the branch.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_PerpetualSuccessor_SaysNothing()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(
+            new License
+            {
+                NotBefore = Moment.AddDays(5),
+                ExpiresAt = null,
+                ClientLimit = 50,
+            });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon);
+    }
+
+    /// <summary>
+    /// A successor starting at the exact moment the current license ends covers it; a tick later does not.
+    /// </summary>
+    /// <remarks>
+    /// The line the rule is drawn on, and it is drawn where <c>GetLicenseStatus</c> draws it: a license is
+    /// active at both of its endpoints, so a successor beginning at the instant the current one ends leaves
+    /// no moment uncovered, and one beginning a tick after leaves exactly one.
+    ///
+    /// Pinned because the comparison is a single character. Relaxing it to a strict one leaves every other
+    /// test in this file green, which is what makes the boundary worth its own arrangement rather than a
+    /// remark.
+    /// </remarks>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public void GenerateActiveLicense_SuccessorAtTheBoundary_SpeaksOnlyWhenAMomentIsUncovered(
+        int ticksAfterTheExpiry,
+        bool expectsWarning)
+    {
+        var expiresAt = Moment.AddDays(10);
+
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(
+            new License
+            {
+                NotBefore = expiresAt.AddTicks(ticksAfterTheExpiry),
+                ExpiresAt = Moment.AddDays(100),
+                ClientLimit = 50,
+            });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.Equal(
+            expectsWarning,
+            records.Entries.Any(
+                entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon));
+    }
 }
