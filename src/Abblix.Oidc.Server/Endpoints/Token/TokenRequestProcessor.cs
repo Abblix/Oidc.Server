@@ -103,7 +103,12 @@ public class TokenRequestProcessor(
 			// the entries this audience may read, so a response built from the context would advertise the
 			// ones that were dropped. A client told that would send the token to a location its own claim
 			// does not name, and the refusal would come back from the resource server looking like a bad
-			// token. Copied byte-exact, so the client still sees the wire shape that was authorised.
+			// token.
+			//
+			// Copied rather than handed over, because the array is parented inside the token's payload:
+			// a host attaching the response's array to its own object would parent the same node twice
+			// and the second serialise would throw, and anything editing it would be editing the claim
+			// inside the issued token.
 			AuthorizationDetails =
 				accessToken.Token.Payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray issued
 					? (JsonArray)issued.DeepClone()
