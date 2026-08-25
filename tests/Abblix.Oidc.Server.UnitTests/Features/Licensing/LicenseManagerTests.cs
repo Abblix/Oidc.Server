@@ -698,6 +698,63 @@ public class LicenseManagerTests
     }
 
     /// <summary>
+    /// Loading licenses reports nothing, whatever order they arrive in.
+    /// </summary>
+    /// <remarks>
+    /// A host loads licenses one at a time, so every insert but the last evaluates a PARTIAL list. Reporting
+    /// there announces a fallback to the free tier for a license the next insert is about to supersede, and
+    /// whether it does so depends on the order the provider happens to yield - the same deployment logs
+    /// differently after a reshuffle, with nothing in the diff to explain it. An insert therefore takes the
+    /// value and leaves the reporting to whoever consults the license.
+    ///
+    /// Both orders are driven, though neither is what makes this test bite: `AddLicense` reads the wall
+    /// clock and takes no <c>TimeProvider</c>, so a test cannot place these licenses relative to the instant
+    /// it will use. Against that clock all three are past, which is enough to prove the insert must not
+    /// report at all - the invariant that holds whatever the order, and the one worth pinning.
+    ///
+    /// The recorder is bound around the LOAD rather than around a single evaluation, which is why nothing
+    /// caught this: every other test here calls GenerateActiveLicense on a list that has stopped growing.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddLicense_LoadingLicenses_ReportsNothing(bool oldestFirst)
+    {
+        var superseded = new[]
+        {
+            LicenseAround(-40, -30) with { ClientLimit = 1 },
+            LicenseAround(-30, -20) with { ClientLimit = 2 },
+            LicenseAround(-20, -3, gracePeriod: -1) with { ClientLimit = 3 },
+        };
+        var renewal = LicenseAround(-1, 30) with { ClientLimit = 50 };
+        var arriving = oldestFirst ? [..superseded, renewal] : new[] { renewal }.Concat(superseded).ToArray();
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        var manager = new LicenseManager();
+        try
+        {
+            foreach (var license in arriving)
+                manager.AddLicense(license);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpired);
+
+        // The control on the arrangement itself: without it the silence above would also hold over a
+        // manager that never took the licenses in, which is silent for a reason nobody wants.
+        var active = manager.GenerateActiveLicense(Moment);
+        Assert.NotNull(active);
+        Assert.Equal(50, active!.ClientLimit);
+    }
+
+    /// <summary>
     /// Every expired license is reported when nothing was left in force.
     /// </summary>
     /// <remarks>

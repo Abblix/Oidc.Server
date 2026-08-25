@@ -43,7 +43,15 @@ public partial class LicenseManager
             var i = _licenses.BinarySearch(license, new ActivityPeriodComparer());
             _licenses.Insert(i < 0 ? ~i : i, license);
 
-            _currentLicense = GenerateActiveLicense(DateTimeOffset.UtcNow);
+            // The scan rather than the reporting wrapper, because the list is still arriving: a host
+            // loads licenses one at a time, so every insert but the last evaluates a PARTIAL list, and
+            // an expiry that a license still in the queue is about to supersede would be announced as a
+            // fallback to the free tier - once per superseded license, and only when the provider
+            // happens to yield oldest first, which makes the log depend on arrival order.
+            //
+            // What an insert needs is the refreshed value. The report belongs where the license is
+            // consulted, on a list that has stopped growing.
+            _currentLicense = Scan(DateTimeOffset.UtcNow).InForce;
         }
         finally
         {
@@ -163,7 +171,7 @@ public partial class LicenseManager
     /// read lock, so advancing a shared start index here let racing readers overshoot a valid license and
     /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
     /// </remarks>
-    private (License? InForce, List<License>? Expired) Scan(DateTimeOffset utcNow)
+    private (License? InForce, IReadOnlyList<License>? Expired) Scan(DateTimeOffset utcNow)
     {
         License? result = null;
         bool? activeLicenseFound = null;
