@@ -80,6 +80,13 @@ public abstract partial class AuthenticationCompletionHandler(
         // Narrowing is the host's to make; widening is not. The types are compared against what the
         // client actually sent, kept on the stored request precisely because the grant's own copy is the
         // one the host has just overwritten.
+        //
+        // An EMPTY granted set completes rather than refusing, and that differs on purpose from the
+        // authorization endpoint, which answers access_denied to a consent decision that granted no
+        // entries. There the refusal has somewhere to go: a browser is waiting and the client learns why.
+        // Here the only way to say "the user refused" is to deny the whole request, which a host does
+        // through its own denial path; turning an empty set into a denial would take that choice away and
+        // refuse a host that legitimately issues a token with no authorization_details at all.
         if (EscapedAuthorizationDetailTypes(request) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
