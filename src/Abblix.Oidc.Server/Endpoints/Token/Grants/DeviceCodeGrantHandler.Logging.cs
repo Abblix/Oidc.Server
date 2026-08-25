@@ -69,7 +69,9 @@ partial class DeviceCodeGrantHandler
         Level = LogLevel.Error,
         Message = "Client {ClientId} presented a device code whose stored record is marked authorized " +
                   "and carries no AuthorizedGrant, so there is nothing to issue and the redemption is " +
-                  "refused. The record is written by whoever implements IDeviceAuthorizationStorage; " +
-                  "this library sets the grant and the status together.")]
+                  "refused. This library always sets the grant and the status together, so audit the " +
+                  "code outside it that writes a device authorization record - a call to " +
+                  "IDeviceAuthorizationStorage.UpdateAsync or StoreAsync, or a replacement registered " +
+                  "for that interface.")]
     private partial void LogAuthorizedRecordCarriesNoGrant(string ClientId);
 }

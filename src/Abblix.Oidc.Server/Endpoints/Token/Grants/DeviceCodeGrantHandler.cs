@@ -90,9 +90,9 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized }
                 when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
 
-                // Use atomic get-and-remove to prevent race conditions where two concurrent requests
-                // could both retrieve the authorized grant. Per RFC 8628 Section 3.5, each device code
-                // MUST only be exchanged for tokens once.
+                // Atomic get-and-remove, so two concurrent polls cannot both retrieve the authorized
+                // grant and both be issued tokens. RFC 8628 states no such rule anywhere - exchanging a
+                // device code once is this library's decision, and this arm is where it is enforced.
 
                 return new OidcError(
                     ErrorCodes.ExpiredToken,
@@ -144,17 +144,23 @@ public partial class DeviceCodeGrantHandler(
 
             // Authorized, and nothing to issue from. Reached only when the grant is missing, because the
             // arm above binds it - and nothing in this library writes such a record: approval sets the
-            // grant beside the status. A host owns this storage and can write the two apart.
+            // grant beside the status. Both members are public and settable on a record any host can read
+            // back through the public storage interface, so writing the two apart takes one line.
             //
             // What it used to reach was the default arm, which threw naming the STATUS: "Unexpected device
             // authorization status: Authorized", about a status this switch plainly handles. The client
             // got HTTP 500 and an operator got a sentence pointing at a state machine that is not the
             // problem.
             //
-            // The code is already claimed by the arm two above, which removes before anything is judged,
-            // and RFC 8628 section 3.5 has each device code exchanged once - so the record is gone, a
-            // retry answers expired_token, and this log line is the only account of what happened. That is
-            // why it names the missing member rather than the status.
+            // The code is already claimed by the arm two above, which removes it before anything is
+            // judged, so the record is gone by the time this is reached: a retry answers expired_token and
+            // nobody can look at what was stored. That makes this log line the only account of it, which
+            // is why it names the missing member rather than the status, and why it sits at Error.
+            //
+            // Refusing WITHOUT consuming the code, so the record survives for an operator to inspect, is
+            // the real alternative. It is declined because single use is enforced one arm above, and an
+            // exception here would be a second, quieter rule about when a device code survives
+            // redemption, triggered by which member of the record happened to be missing.
             //
             // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
             // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather

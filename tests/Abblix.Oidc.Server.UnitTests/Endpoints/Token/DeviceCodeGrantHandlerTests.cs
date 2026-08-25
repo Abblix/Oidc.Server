@@ -776,7 +776,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 8628 §3.5: a poll that races a just-completed approval must not overwrite the Authorized
+    /// A poll that races a just-completed approval must not overwrite the Authorized
     /// status with its stale Pending snapshot. The handler must re-read and surface the granted tokens
     /// instead of persisting authorization_pending forever.
     /// </summary>
@@ -862,15 +862,19 @@ public class DeviceCodeGrantHandlerTests
     /// </summary>
     /// <remarks>
     /// Nothing in this library writes that record - the approval always sets the grant beside the status -
-    /// so it comes from a host writing the seam itself. What it used to reach was the switch's default
+    /// so it comes from a host writing the record itself, which takes one line: both members are public
+    /// and settable, and the storage that holds them is a public interface. What it used to reach was the
+    /// switch's default
     /// arm, which threw naming the status: "Unexpected device authorization status: Authorized", about a
     /// status the switch plainly handles. The client got HTTP 500 and an operator got a sentence pointing
     /// at a state machine that is not the problem.
     ///
     /// The device code is already gone by then, because the arm above claims it before anything else is
-    /// judged, and RFC 8628 section 3.5 has each code exchanged once - so a retry answers expired_token
-    /// and the record cannot be looked at afterwards. That makes the log line the only account of it, and
-    /// the reason it names the missing member rather than the status.
+    /// judged - so a retry answers expired_token and the record cannot be looked at afterwards. That makes
+    /// the log line the only account of it, and the reason it names the missing member rather than the
+    /// status. Exchanging a device code once is this library's decision rather than an RFC 8628 rule, and
+    /// refusing here without consuming the code was declined as a quieter second rule about when a code
+    /// survives redemption.
     ///
     /// invalid_grant rather than a device-specific code: section 3.5 admits the errors of RFC 6749
     /// section 5.2 alongside its own four, and this is a grant that is not usable rather than one the end
