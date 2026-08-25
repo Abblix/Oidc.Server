@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -145,10 +146,18 @@ public class BackChannelAuthenticationRequestProcessor(
 			// issued and the host replaces it when the end user approves part of the request; this one is
 			// what that answer is judged against, and there is no other copy left by then.
 			//
+			// A CLONE rather than the same array, because the two are compared against each other later.
+			// Serialising through storage would separate them today, but that is a property of whichever
+			// IEntityStorage a host has registered, not of this code: an in-memory store handing both
+			// references back would let a host narrowing the grant in place move the baseline with it, and
+			// a check comparing an array against itself can never refuse anything.
+			//
 			// An EMPTY array when the request carried none, never null: null is what a request written by
 			// a build without this field reads back as, and the two must not be confused. Denying such a
 			// request would refuse, mid-upgrade, every in-flight authentication the user had approved.
-			RequestedAuthorizationDetails = request.AuthorizationDetails ?? [],
+			RequestedAuthorizationDetails = request.AuthorizationDetails is { } requested
+				? (JsonArray)requested.DeepClone()
+				: [],
 
 			// The client may poll from the moment it holds the request id, so the first allowed poll is
 			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section
