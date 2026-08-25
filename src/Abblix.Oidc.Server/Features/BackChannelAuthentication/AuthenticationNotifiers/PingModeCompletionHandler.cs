@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
@@ -25,12 +26,15 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="notificationService">Service for sending ping notifications.</param>
+/// <param name="authorizationDetailsPolicy">The per-type validators, asked before delivery whether
+/// the grant the host completed with is still one the deployment will issue.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
-    INotificationDeliveryService notificationService)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    INotificationDeliveryService notificationService,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, authorizationDetailsPolicy)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;

@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -44,16 +45,21 @@ public class AuthenticationCompletionHandlerTests
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
     private readonly TimeSpan _expiresIn = TimeSpan.FromMinutes(5);
 
-    private PollModeCompletionHandler CreatePollModeHandler() =>
-        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null);
+    private PollModeCompletionHandler CreatePollModeHandler(
+        StubAuthorizationDetailsPolicy? policy = null) =>
+        new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null,
+            policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
-    private PingModeCompletionHandler CreatePingModeHandler() =>
+    private PingModeCompletionHandler CreatePingModeHandler(
+        StubAuthorizationDetailsPolicy? policy = null) =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
-            _notificationService.Object);
+            _notificationService.Object, policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
-    private PushModeCompletionHandler CreatePushModeHandler() =>
+    private PushModeCompletionHandler CreatePushModeHandler(
+        StubAuthorizationDetailsPolicy? policy = null) =>
         new(Mock.Of<ILogger<PushModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
-            _notificationService.Object, _tokenRequestProcessor.Object);
+            _notificationService.Object, _tokenRequestProcessor.Object,
+            policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
     /// <summary>
     /// A converter for a public client, where what the client sees is the session's own subject.
@@ -784,5 +790,98 @@ public class AuthenticationCompletionHandlerTests
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    /// <summary>
+    /// A push client is not delivered a grant whose CONTENT the per-type validator refuses.
+    /// </summary>
+    /// <remarks>
+    /// The type comparison above cannot see this: the type was asked for, so a raised amount inside the
+    /// entry passes every check the flow can make on its own. Push is the mode where that matters most,
+    /// because its tokens are minted here and posted to the client's notification endpoint, so it never
+    /// reaches the token endpoint where the same question is asked at redemption.
+    ///
+    /// Asserted through what did NOT happen to the token processor, not only through the status: a
+    /// refusal that still minted the tokens and then declined to deliver them would satisfy a status
+    /// assertion while having already spent the grant.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorRefusesTheGrant_DeliversNothing()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"]);
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
+
+        await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(1, policy.GrantedCalls);
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+        _notificationService.VerifyNoOtherCalls();
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// A poll client's request is denied on the same refusal.
+    /// </summary>
+    /// <remarks>
+    /// The second look poll and ping gain from this. They also meet the question at redemption, and the
+    /// two are not redundant: this one judges what the host completed with, the other judges what is in
+    /// storage when the client arrives, and a host writing between the two is exactly what the second
+    /// look exists for.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PollMode_WhenTheValidatorRefusesTheGrant_Denies()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"]);
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
+
+        await CreatePollModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+        Assert.Equal(1, policy.GrantedCalls);
+    }
+
+    /// <summary>
+    /// The validators are asked on a copy, so one cannot rewrite the grant it was asked about.
+    /// </summary>
+    /// <remarks>
+    /// The control for both refusals, and the reason they are refusals rather than edits: a normalising
+    /// validator says what it wants by editing the entry it was handed. Here the end user has already
+    /// approved this grant out of band, so an edit at completion changes what was approved at a point
+    /// where nobody is watching.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_AsksTheValidatorsOnACopy_AndCompletes()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"]);
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        var policy = StubAuthorizationDetailsPolicy.Accepting;
+
+        await CreatePollModeHandler(policy).CompleteAuthenticationAsync(
+            AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+        Assert.Equal(1, policy.GrantedCalls);
+        Assert.NotNull(policy.LastSeen);
+        Assert.NotSame(request.AuthorizedGrant.Context.AuthorizationDetails, policy.LastSeen);
     }
 }

@@ -478,6 +478,7 @@ internal static class LogEvents
             public const int MissingNotificationConfig = Base + 1;
             public const int AuthenticatedUserNotTheOneRequested = Base + 2;
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 3;
+            public const int GrantedAuthorizationDetailsRefused = Base + 4;
         }
 
         /// <summary>

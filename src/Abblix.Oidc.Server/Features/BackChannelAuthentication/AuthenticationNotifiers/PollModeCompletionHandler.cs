@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -24,12 +25,15 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes.
 /// Null when long-polling is disabled.</param>
+/// <param name="authorizationDetailsPolicy">The per-type validators, asked before delivery whether
+/// the grant the host completed with is still one the deployment will issue.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
-    IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    IBackChannelLongPollingService? statusNotifier,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, authorizationDetailsPolicy)
 {
     private readonly IBackChannelRequestStorage _storage = storage;
 

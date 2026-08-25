@@ -38,10 +38,13 @@ internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 /// decision. A host that raises an amount inside an entry of a type the request did ask for therefore
 /// passes every type check there is. Only the validator for that type can refuse it.
 ///
-/// Reached from the token endpoint, which is where the device flow and the CIBA poll and ping modes spend
-/// a grant. The CIBA push mode does not spend its grant there and therefore never arrives here; the note
-/// in <see cref="BackChannelAuthentication.AuthenticationNotifiers.AuthenticationCompletionHandler"/> says
-/// what that leaves unasked.
+/// Reached from two places, and the difference between them is WHEN rather than what. The token endpoint
+/// asks it as the device flow and the CIBA poll and ping modes redeem, which judges what is in storage
+/// when the client arrives.
+/// <see cref="BackChannelAuthentication.AuthenticationNotifiers.AuthenticationCompletionHandler"/> asks it
+/// as a CIBA request completes, which judges what the host completed with - and for the CIBA PUSH mode
+/// that is the only ask there is, since its tokens are minted at completion and never travel through the
+/// token endpoint at all.
 ///
 /// Apply while FORMING a grant, check while SPENDING one. At the authorization endpoint the validators run
 /// as part of building the grant, so what they return is the decision and the caller emits it. Here the

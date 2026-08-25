@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
@@ -27,13 +28,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="notificationService">Service for delivering tokens to client endpoint.</param>
 /// <param name="tokenRequestProcessor">Processor for generating tokens.</param>
+/// <param name="authorizationDetailsPolicy">The per-type validators, asked before delivery whether
+/// the grant the host completed with is still one the deployment will issue.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
-    ITokenRequestProcessor tokenRequestProcessor)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    ITokenRequestProcessor tokenRequestProcessor,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, authorizationDetailsPolicy)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
     private readonly IBackChannelRequestStorage _storage = storage;

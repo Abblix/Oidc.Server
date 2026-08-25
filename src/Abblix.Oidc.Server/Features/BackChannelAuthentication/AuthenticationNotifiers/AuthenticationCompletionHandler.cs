@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
@@ -29,10 +30,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
+/// <param name="authorizationDetailsPolicy">The per-type validators, asked here whether the grant the
+/// host completed with is still one the deployment will issue.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
-    ISubjectTypeConverter subjectTypeConverter)
+    ISubjectTypeConverter subjectTypeConverter,
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
 {
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -96,16 +100,28 @@ public abstract partial class AuthenticationCompletionHandler(
             return;
         }
 
-        // What is NOT asked here, and where it is asked instead. The per-type validators are consulted
-        // again when a grant is spent, by GrantedRevalidation, and that happens at the token endpoint.
-        // A poll or ping client reaches it. A push client never does: its tokens are minted from
-        // here and delivered to its notification endpoint, so for push this method is where the grant is
-        // spent and the content check is missing from it. The type comparison above cannot stand in - it
-        // sees a raised amount inside an entry of a requested type as not escaping.
+        // The content check, which the type comparison above structurally cannot make: a raised amount
+        // inside an entry of a type the request did ask for does not escape, and only the validator for
+        // that type can refuse it.
         //
-        // Wiring it here needs the policy on this constructor and therefore on all three delivery modes,
-        // and it also has to decide what a refusal at completion means, which is a denial rather than an
-        // error to a waiting client. Both belong to that change rather than to this one.
+        // Asked here rather than only at the token endpoint, because for a PUSH client this method is
+        // where the grant is spent - its tokens are minted at completion and delivered to its
+        // notification endpoint, so it never reaches the token endpoint at all. Asking here also gives
+        // poll and ping a second look, taken at a different moment: this one judges what the host
+        // completed with, and the one at redemption judges what is in storage when the client arrives,
+        // which is what a host writing between the two would change.
+        //
+        // No cancellation token, because nothing on the path from the router down carries one and
+        // inventing one here would change a public signature for a parameter nobody can supply.
+        if (await authorizationDetailsPolicy.RefuseAsync(
+                request.AuthorizedGrant, clientInfo, CancellationToken.None) is { } refusal)
+        {
+            LogGrantedAuthorizationDetailsRefused(
+                authenticationRequestId, clientInfo.ClientId, refusal.Reason);
+
+            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            return;
+        }
 
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
