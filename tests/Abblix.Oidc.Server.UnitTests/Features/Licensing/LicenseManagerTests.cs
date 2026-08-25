@@ -870,4 +870,79 @@ public class LicenseManagerTests
         Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseInGracePeriod, record.EventId.Id);
         Assert.Equal(LogLevel.Error, record.Level);
     }
+
+    /// <summary>
+    /// A deployment whose renewal is already loaded is not told to renew promptly.
+    /// </summary>
+    /// <remarks>
+    /// "Please renew promptly to avoid service interruption" is untrue of a deployment that has renewed,
+    /// and the renewal here has not merely been bought: it is IN the manager, starting before the current
+    /// license ends, so there is no interruption to avoid.
+    ///
+    /// The successor sits past the scan's early return, which stops at the first license that has not
+    /// started. That return is right about what is IN FORCE - everything past it starts later still - and
+    /// wrong about what is worth SAYING, which is the whole of this.
+    ///
+    /// The renewal starts before the current license expires on purpose. A gap between them is a real
+    /// interruption and the warning is then the truth, which the test below holds.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiringSoonWithARenewalAlreadyLoaded_SaysNothing()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(LicenseAround(5, 100) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            var active = manager.GenerateActiveLicense(Moment);
+            Assert.NotNull(active);
+            Assert.Equal(5, active!.ClientLimit);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        Assert.DoesNotContain(
+            records.Entries,
+            entry => entry.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseExpiringSoon);
+    }
+
+    /// <summary>
+    /// A renewal that starts after the current license ends does not silence the warning.
+    /// </summary>
+    /// <remarks>
+    /// The control for the silence above, and the line the rule is drawn on. A successor beginning after
+    /// the gap is a successor the deployment will reach through an interruption, so "renew promptly" is
+    /// exactly right and the operator is the only one who can close it.
+    ///
+    /// Without this the same silence would hold over a manager that suppressed the warning whenever ANY
+    /// future license existed, which is the shape a guard written slightly too wide takes.
+    /// </remarks>
+    [Fact]
+    public void GenerateActiveLicense_ExpiringSoonWithARenewalStartingAfterTheGap_SaysSo()
+    {
+        var manager = new LicenseManager();
+        manager.AddLicense(LicenseAround(-20, 10) with { ClientLimit = 5 });
+        manager.AddLicense(LicenseAround(15, 100) with { ClientLimit = 50 });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            Assert.NotNull(manager.GenerateActiveLicense(Moment));
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var record = Assert.Single(records.Entries);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.LicenseExpiringSoon, record.EventId.Id);
+    }
 }

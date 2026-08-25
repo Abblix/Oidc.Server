@@ -137,7 +137,7 @@ public partial class LicenseManager
     /// </remarks>
     internal License? GenerateActiveLicense(DateTimeOffset utcNow)
     {
-        var (result, expired, merged) = Scan(utcNow);
+        var (result, expired, merged, nextStartsAt) = Scan(utcNow);
 
         // What was MERGED is reported by whoever consults the licenses, for the same reason the expiry
         // below is: the scan also runs on every insert, while the list is still arriving, and a license in
@@ -146,7 +146,26 @@ public partial class LicenseManager
         if (merged is not null)
         {
             foreach (var (license, status) in merged)
+            {
+                // An expiry a loaded renewal already covers is not worth a warning. "Please renew promptly
+                // to avoid service interruption" is untrue of a deployment holding a license that starts
+                // before this one ends: there is no interruption to avoid, and the operator who acts on the
+                // record has nothing to do. A renewal starting AFTER the gap is a different matter and
+                // still says so, because the gap is real and only the operator can close it.
+                //
+                // Only the expiring-soon status is suppressed. A grace period means the license has already
+                // expired and the deployment is running on borrowed time, which a successor beginning later
+                // does not make untrue - and one beginning NOW is merged by the search above instead.
+                if (status == LicenseStatus.Active &&
+                    license.ExpiresAt is { } expiresAt &&
+                    nextStartsAt is { } starts &&
+                    starts <= expiresAt)
+                {
+                    continue;
+                }
+
                 ReportStatus(license, status, utcNow);
+            }
         }
 
         // An expiry is reported only when nothing was left in force, which is the fact that makes it worth
@@ -217,7 +236,7 @@ public partial class LicenseManager
     /// permanently degrade the server to FreeLicense. License lists are tiny, so a full scan is cheap.
     /// </remarks>
     private (License? InForce, IReadOnlyList<License>? Expired, IReadOnlyList<(License License,
-        LicenseStatus Status)>? Merged) Scan(DateTimeOffset utcNow)
+        LicenseStatus Status)>? Merged, DateTimeOffset? NextStartsAt) Scan(DateTimeOffset utcNow)
     {
         License? result = null;
         bool? activeLicenseFound = null;
@@ -254,19 +273,19 @@ public partial class LicenseManager
 
                 case LicenseStatus.NotActiveYet:
                     // Licenses are held sorted by the moment they start, so everything past this one starts
-                    // later still and the scan is over. Whatever the caller reports, it reports about the
-                    // licenses already collected, which is all of them that could matter for what is IN
-                    // FORCE now.
+                    // later still and the scan is over for what is IN FORCE now.
                     //
-                    // It is not all of them that could matter for what is SAID. A renewal starting before
-                    // the current license expires sits past this return, so an expiring-soon warning is
-                    // issued to a deployment that has already renewed. Tracked as issue 425 rather than
-                    // fixed here: the answer reaches into this early exit rather than into the reporting.
-                    return (result, expired, merged);
+                    // Not for what is worth SAYING, which is why this one moment travels out. The license
+                    // in hand is the EARLIEST-starting of the ones that have not begun, again because the
+                    // list is sorted, so a caller comparing it against an expiry learns whether the gap
+                    // between them is a gap at all - and a renewal already loaded that starts before the
+                    // current license ends leaves nothing to warn anybody about.
+                    return (result, expired, merged, license.NotBefore);
             }
         }
 
-        return (result, expired, merged);
+        // Nothing that has not started, so nothing to set against an expiry.
+        return (result, expired, merged, null);
     }
 
     /// <summary>
