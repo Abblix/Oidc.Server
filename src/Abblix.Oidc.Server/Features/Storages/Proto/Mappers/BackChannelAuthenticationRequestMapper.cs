@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -44,6 +45,9 @@ internal static class BackChannelAuthenticationRequestMapper
             proto.RequestedSubjects.Values.AddRange(accepted);
         }
 
+        if (source.RequestedAuthorizationDetails is { } requestedDetails)
+            proto.RequestedAuthorizationDetailsJson = requestedDetails.ToJsonString();
+
         return proto;
     }
 
@@ -62,6 +66,9 @@ internal static class BackChannelAuthenticationRequestMapper
                 ? new Uri(source.ClientNotificationEndpoint)
                 : null,
             RequestedSubjects = source.RequestedSubjects?.Values.ToArray(),
+            RequestedAuthorizationDetails = source.HasRequestedAuthorizationDetailsJson
+                ? JsonNode.Parse(source.RequestedAuthorizationDetailsJson) as JsonArray
+                : null,
             ClientNotificationToken = source.HasClientNotificationToken
                 ? source.ClientNotificationToken
                 : null,

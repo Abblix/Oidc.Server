@@ -24,4 +24,16 @@ partial class AuthenticationCompletionHandler
         Message = "The end user authenticated for auth_req_id {AuthReqId} is not the one the request named, " +
                   "so it is refused. ClientId: {ClientId}")]
     private partial void LogAuthenticatedUserNotTheOneRequested(string AuthReqId, string ClientId);
+
+    /// <summary>
+    /// The escaped TYPES, never the entries: an authorization_details entry carries whatever its type
+    /// defines, which for the types this serves is payment and account data.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.GrantedAuthorizationDetailsExceedTheRequest,
+        Level = LogLevel.Warning,
+        Message = "The grant completing auth_req_id {AuthReqId} carries authorization_details the request " +
+                  "never asked for, so it is refused. ClientId: {ClientId}, types: {EscapedTypes}")]
+    private partial void LogGrantedAuthorizationDetailsExceedTheRequest(
+        string AuthReqId, string ClientId, string EscapedTypes);
 }

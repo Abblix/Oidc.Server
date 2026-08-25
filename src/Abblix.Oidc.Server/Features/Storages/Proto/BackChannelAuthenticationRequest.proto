@@ -54,4 +54,12 @@ message BackChannelAuthenticationRequest {
   // which a request reaches by naming a value outside its own list of values. A repeated
   // field cannot tell the two apart, so the constraint would vanish on the way back.
   AcceptedSubjects requested_subjects = 7;
+
+  // The authorization_details the client asked for, serialised as a JSON string, kept apart
+  // from the ones on the grant. The grant carries what will be issued, and the host replaces
+  // it when the end user narrows the request; this is what that answer is judged against, and
+  // it stays as the request-time validators left it. Absent means a request written before this
+  // field existed, which is not the same as a request that asked for nothing: that one is stored as
+  // an empty array. Same scheme as the device authorization request.
+  optional string requested_authorization_details_json = 8;
 }

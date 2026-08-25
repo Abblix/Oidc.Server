@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -88,6 +89,9 @@ public class BackChannelAuthenticationGrantHandler(
         if (!NamesTheRequestedEndUser(request.RequestedSubjects, request.AuthorizedGrant, clientInfo))
             return NotTheRequestedEndUser();
 
+        if (WidensTheRequest(request, request.AuthorizedGrant))
+            return NotWhatTheRequestAskedFor();
+
         var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
         if (result.TryGetFailure(out var error))
             return error;
@@ -99,13 +103,47 @@ public class BackChannelAuthenticationGrantHandler(
         // same storage - can replace what is stored, which is the ordinary shape of a retried or corrected
         // completion rather than an attack. Approving one grant and handing over another is the whole
         // failure this comparison exists to prevent.
-        return NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo)
-            ? grant
-            : NotTheRequestedEndUser();
+        if (!NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo))
+            return NotTheRequestedEndUser();
+
+        // And the same for what the grant authorises. The completion path judges this too, but a host can
+        // complete with a narrowed grant and then store a wider one before the client polls - the same
+        // window the subject comparison above exists for, and the same answer.
+        return WidensTheRequest(request, grant) ? NotWhatTheRequestAskedFor() : grant;
     }
 
     private static OidcError NotTheRequestedEndUser()
         => new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+
+    private static OidcError NotWhatTheRequestAskedFor()
+        => new(ErrorCodes.AccessDenied,
+            "The grant carries authorization_details the authentication request did not ask for");
+
+    /// <summary>
+    /// Whether the grant carries an <c>authorization_details</c> type the request never asked for.
+    /// </summary>
+    /// <remarks>
+    /// Types only, for the reason the completion path gives: RFC 9396 defines no universal comparator for
+    /// intra-entry narrowing. A null baseline means the request predates the field rather than asked for
+    /// nothing, and is left alone, since refusing it would deny an authentication the end user approved
+    /// before the upgrade.
+    /// </remarks>
+    private static bool WidensTheRequest(StoredRequest request, AuthorizedGrant grant)
+    {
+        if (grant.Context.AuthorizationDetails is not { Count: > 0 } granted ||
+            request.RequestedAuthorizationDetails is not { } requested)
+            return false;
+
+        if (granted.ToTypedArray() is not { } typed || typed.Length != granted.Count)
+            return true;
+
+        var requestedTypes = requested.ToTypedArray()!
+            .Select(detail => detail.Type)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        return !typed.All(detail => detail.Type is { } type && requestedTypes.Contains(type));
+    }
 
     /// <summary>
     /// Specifies the grant types supported by this handler, specifically the "CIBA" (Client-Initiated Backchannel

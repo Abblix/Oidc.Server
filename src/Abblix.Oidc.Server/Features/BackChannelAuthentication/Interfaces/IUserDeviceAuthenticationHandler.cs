@@ -116,6 +116,26 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   </item>
 /// </list>
 ///
+/// <para><strong>Partial consent (RFC 9396 authorization_details):</strong></para>
+/// <para>
+/// The grant carried on the stored request is what will be issued, so an end user who approved part of
+/// what the client asked for is expressed by replacing its <c>AuthorizationContext</c> before completing:
+/// keep the entries they agreed to, drop the ones they refused, and hand the result to
+/// <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>. The example above copies the context
+/// unchanged, which is the "they agreed to all of it" case.
+/// </para>
+/// <para>
+/// This is the only moment such an answer exists. <see cref="IUserDeviceAuthenticationHandler.InitiateAuthenticationAsync"/>
+/// runs before the end user has seen anything - the session it returns names who is about to be reached,
+/// and the request is stored pending either way - so there is nothing to narrow there.
+/// </para>
+/// <para>
+/// Narrowing is yours to decide; widening is refused. Completion compares the grant's
+/// <c>authorization_details</c> types against what the client actually sent, and a type the request never
+/// carried denies the request rather than issuing it. RFC 9396 §7 has the server return what was granted,
+/// which is only meaningful while "granted" stays inside "requested".
+/// </para>
+///
 /// <para><strong>Additional Key Points:</strong></para>
 /// <list type="bullet">
 ///   <item><strong>Binding Message:</strong> Display request.Model.BindingMessage to user for transaction confirmation</item>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -217,6 +218,50 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Verify the request was removed from storage
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// The completion path judges what the end user approved, and the redemption judges it again, for the
+    /// reason the subject comparison beside it already does: the host owns the same storage and can replace
+    /// the stored grant between the two, which is the ordinary shape of a retried or corrected completion.
+    /// A host that never calls the completion path at all reaches this check and nothing else.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatedRequest_WhoseGrantWidensTheRequest_ReturnsAccessDenied()
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var widened = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+            {
+                AuthorizationDetails = new JsonArray(
+                    new JsonObject { ["type"] = "account_information" },
+                    new JsonObject { ["type"] = "payment_initiation" }),
+            });
+
+        var authRequest = new BackChannelAuthenticationRequest(widened, _currentTime.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            RequestedAuthorizationDetails =
+                new JsonArray(new JsonObject { ["type"] = "account_information" }),
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+
+        // Refused before the request is consumed: an irreversible removal is not spent on a grant that
+        // was never going to be issued.
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Never);
     }
 
     /// <summary>
