@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -122,6 +123,8 @@ internal class AccessTokenService(
 		var audienceContext = authContext.WithDefaultResource(options.Value.DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
+		NarrowAuthorizationDetailsToAudience(accessToken.Payload);
+
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
@@ -133,6 +136,55 @@ internal class AccessTokenService(
 		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
+	}
+
+	/// <summary>
+	/// Drops the <c>authorization_details</c> entries this token's audience has no business reading.
+	/// </summary>
+	/// <param name="payload">The access token payload, with its audience already settled.</param>
+	/// <remarks>
+	/// RFC 9396 §9.1: the authorization server is RECOMMENDED to add the authorization details "filtered to
+	/// the specific audience". An entry names the resource servers it is meant for in <c>locations</c>
+	/// (§2.2), so an entry naming only servers this token is not addressed to describes a permission its
+	/// bearer cannot exercise here, and carrying it hands the reader information about the end user's other
+	/// grants for nothing in return (§13, need to know).
+	///
+	/// Applied to the ACCESS token only, and here rather than in
+	/// <see cref="AuthorizationContextExtensions.ApplyTo"/>, which a refresh token goes through as well.
+	/// A refresh token is read by this server rather than by a resource server, and it is what a later
+	/// refresh for a DIFFERENT resource is rebuilt from, so narrowing it would not protect anybody and
+	/// would permanently lose the entries that refresh needs.
+	///
+	/// Nothing is dropped when no specific audience was asked for. The audience then falls back to the
+	/// issuer, which names this server rather than a resource, so there is no "specific audience" for §9.1
+	/// to filter to - and a deployment that uses <c>locations</c> without resource indicators keeps
+	/// emitting exactly what it emitted before. The fallback is recognised from the settled value rather
+	/// than re-derived from the context, so this and the audience it filters against cannot disagree.
+	///
+	/// Comparison is ordinal on the text, per RFC 9396 §12: "No additional transformation or normalization
+	/// is to be done in evaluating equivalence of string values."
+	/// </remarks>
+	private static void NarrowAuthorizationDetailsToAudience(JsonWebTokenPayload payload)
+	{
+		if (payload.Json[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
+			return;
+
+		var audiences = payload.Audiences.ToArray();
+		if (audiences is [var only] && only == payload.Issuer)
+			return;
+
+		var addressed = audiences.ToHashSet(StringComparer.Ordinal);
+
+		// An entry carrying no locations names no resource server, so it is not addressed away from this
+		// one. RFC 9396 §2.2 makes the member optional, and reading its absence as "nowhere" would empty
+		// the claim for every deployment that does not use it.
+		var kept = details
+			.ToTypedArray()?
+			.Where(detail => detail.Locations is not { } locations ||
+			                 locations.Any(location => addressed.Contains(location)))
+			.ToRawJsonArray();
+
+		payload.Json[IanaClaimTypes.AuthorizationDetails] = kept is { Count: > 0 } ? kept : null;
 	}
 
 	/// <summary>

@@ -676,4 +676,110 @@ public class AccessTokenServiceTests
         Assert.Contains(OrdersApi.OriginalString, exception.Message);
         Assert.Contains(BillingApi.OriginalString, exception.Message);
     }
+
+    // Narrowing authorization_details to the audience the token is addressed to
+
+    private static AuthorizationContext ContextAddressedTo(Uri[] resources, JsonArray details) =>
+        new(ClientId, [Scopes.OpenId], null) { Resources = resources, AuthorizationDetails = details };
+
+    private static AuthorizationContext ContextWithoutResource(JsonArray details) =>
+        new(ClientId, [Scopes.OpenId, Scopes.Profile], null) { AuthorizationDetails = details };
+
+    private static JsonArray DetailsForPayments(params string?[] locations) =>
+        new(locations
+            .Select(location => location is null
+                ? new JsonObject { ["type"] = "payment_initiation" }
+                : new JsonObject
+                {
+                    ["type"] = "payment_initiation",
+                    ["locations"] = new JsonArray(location),
+                })
+            .Cast<JsonNode?>()
+            .ToArray());
+
+    private async Task<JsonWebToken> MintAsync(AccessTokenService service, AuthorizationContext context)
+    {
+        JsonWebToken? captured = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => captured = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(CreateAuthSession(), context, CreateClientInfo());
+
+        Assert.NotNull(captured);
+        return captured!;
+    }
+
+    /// <summary>
+    /// A token minted for one resource server carries only the entries addressed to it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 section 9.1: the authorization details go into the token "filtered to the specific
+    /// audience". An entry naming another server describes a permission its bearer cannot exercise here,
+    /// and carrying it tells this reader about the end user's other grants for nothing in return.
+    ///
+    /// The entry carrying no locations survives, which is the half that keeps the filter honest: section
+    /// 2.2 makes the member optional, so absence means the entry names no server rather than naming none.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt()
+    {
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] });
+        var context = ContextAddressedTo(
+            [OrdersApi],
+            DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null));
+
+        var token = await MintAsync(service, context);
+
+        var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+        var located = details
+            .Select(entry => entry?["locations"]?.ToJsonString())
+            .ToList();
+
+        Assert.Equal(2, details.Count);
+        Assert.Contains($"[\"{OrdersApi.OriginalString}\"]", located);
+        Assert.Contains(null, located);
+        Assert.DoesNotContain($"[\"{BillingApi.OriginalString}\"]", located);
+    }
+
+    /// <summary>
+    /// A token whose every entry names another server carries no claim at all.
+    /// </summary>
+    /// <remarks>
+    /// An empty array would say the end user granted nothing, which is false. The member's absence says
+    /// this token authorises nothing detail-wise here, which is what happened.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_WhenEveryDetailNamesAnotherResource_OmitsTheClaim()
+    {
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] });
+        var context = ContextAddressedTo([OrdersApi], DetailsForPayments(BillingApi.OriginalString));
+
+        var token = await MintAsync(service, context);
+
+        Assert.Null(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+    }
+
+    /// <summary>
+    /// With no resource requested, nothing is dropped.
+    /// </summary>
+    /// <remarks>
+    /// The control, and the reason this is not a behaviour change for a deployment that never used resource
+    /// indicators. The audience falls back to the issuer, which names this server rather than a resource,
+    /// so there is no specific audience for section 9.1 to filter to - and without this test the filter
+    /// above would read the same whether it narrowed by audience or simply dropped every located entry.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_WithNoResourceRequested_KeepsEveryDetail()
+    {
+        var context = ContextWithoutResource(
+            DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null));
+
+        var token = await MintAsync(_service, context);
+
+        var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+        Assert.Equal(3, details.Count);
+        Assert.Equal([Issuer], token.Payload.Audiences);
+    }
 }
