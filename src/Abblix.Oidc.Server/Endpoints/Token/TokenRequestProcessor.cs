@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -92,10 +94,25 @@ public class TokenRequestProcessor(
 			clientInfo.AccessTokenExpiresIn,
 			TokenTypeIdentifiers.AccessToken)
 		{
-			// RFC 9396 §7: the AS MUST return authorization_details in the token response.
-			// Pass the raw JsonArray byte-exact so the client sees the exact wire shape that
-			// was authorised.
-			AuthorizationDetails = authContext.AuthorizationDetails,
+			// RFC 9396 §7: the AS MUST return the authorization_details "as granted by the resource owner
+			// and assigned to the respective access token", and the same section lets the server OMIT
+			// values while never letting it name more than the token holds.
+			//
+			// Read out of the token that was just minted rather than out of the context it was minted
+			// from. The two diverge whenever FilterAuthorizationDetailsByLocation is on: the token carries
+			// the entries this audience may read, so a response built from the context would advertise the
+			// ones that were dropped. A client told that would send the token to a location its own claim
+			// does not name, and the refusal would come back from the resource server looking like a bad
+			// token.
+			//
+			// Copied rather than handed over, because the array is parented inside the token's payload:
+			// a host attaching the response's array to its own object would parent the same node twice
+			// and the second serialise would throw, and anything editing it would be editing the claim
+			// inside the issued token.
+			AuthorizationDetails =
+				accessToken.Token.Payload.Json[IanaClaimTypes.AuthorizationDetails] is JsonArray issued
+					? (JsonArray)issued.DeepClone()
+					: null,
 		};
 
 		// RFC 6749 §4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange

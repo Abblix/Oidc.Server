@@ -259,6 +259,57 @@ public record OidcOptions
 	public Uri? DefaultResourceIndicator { get; set; }
 
 	/// <summary>
+	/// Whether an access token carries only the <c>authorization_details</c> entries whose
+	/// <c>locations</c> name one of its audiences. Off, every granted entry is emitted, which is what
+	/// prior versions did.
+	/// </summary>
+	/// <remarks>
+	/// A deployment fact rather than a protocol one, which is why it is a switch and not a default. RFC
+	/// 9396 §2.2 says <c>locations</c> "typically" holds URIs identifying resource servers, and §9.1's own
+	/// worked example pairs a client-style <c>aud</c> with a resource URI in <c>locations</c> - so the two
+	/// members are not required to be drawn from the same namespace, and comparing them is only meaningful
+	/// where a deployment has decided they are. §7 leaves what an access token carries to the authorization
+	/// server where the client did not ask, and §13 asks for need-to-know "as determined by local policy".
+	/// This is that policy, stated once.
+	///
+	/// The shape this was written for: several resource servers, every access token that carries
+	/// authorization details minted for a <c>resource</c>, and each server's <c>locations</c> written
+	/// exactly as the resource indicator it is registered under. That is RFC 9396 §12's
+	/// multiple-resource-server case, which is what <c>locations</c> was defined for. Matching a deployment
+	/// against that description is the operator's judgement, not a recommendation made here.
+	///
+	/// With no <see cref="Resources"/> registered and no token exchange in use, the audience is the issuer
+	/// on every token and the filter can only delete: nothing can put a resource in the audience for a
+	/// <c>locations</c> value to match. That combination is not refused at startup, because it cannot be
+	/// told apart there from a deployment whose audiences arrive through RFC 8693 token exchange, where
+	/// they come from the client's own allowlist rather than from this list and the filter works.
+	///
+	/// Turn it on and an entry naming only other resource servers stops travelling to this one, which is
+	/// what §9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
+	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
+	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
+	/// off until a host says the two agree, because nothing here can check that they do.
+	///
+	/// The case worth knowing about is not a misconfiguration. A request that names no resource gets the
+	/// issuer as its audience, and the issuer names this server rather than any resource, so EVERY located
+	/// entry is dropped from that token. Correct under the policy - such a token is addressed here, and an
+	/// entry located elsewhere cannot be exercised with it - and it means a deployment using resource
+	/// indicators for its APIs while also issuing ordinary OpenID Connect tokens loses located entries from
+	/// all of the latter. RFC 9396 Appendix A.1 is exactly that shape: it locates an entry at the UserInfo
+	/// endpoint, which no resource indicator names, so an opted-in deployment following that example loses
+	/// the entry from every token it issues.
+	///
+	/// Worth knowing, and NOT a cost of turning this on: introspection already treats an entry with no
+	/// <c>locations</c> the other way round, withholding it from a caller that did not register for it. A
+	/// resource server can read such an entry out of the token and not get it back when it introspects the
+	/// same token, and that holds with this setting off as well.
+	///
+	/// The refresh token is never filtered: it is read by this server rather than by a resource server, and
+	/// it is what a later refresh for a DIFFERENT resource is rebuilt from.
+	/// </remarks>
+	public bool FilterAuthorizationDetailsByLocation { get; set; }
+
+	/// <summary>
 	/// Configuration options for the backchannel authentication flow,
 	/// used in scenarios such as Client-Initiated Backchannel Authentication (CIBA).
 	/// </summary>

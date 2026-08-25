@@ -576,7 +576,8 @@ public class AccessTokenServiceTests
     /// listed for it. A resource mapped to an empty array is registered but publishes no key.
     /// </summary>
     private AccessTokenService CreateServiceWithResources(
-        Dictionary<Uri, JsonWebKey[]> resources)
+        Dictionary<Uri, JsonWebKey[]> resources,
+        bool filterByLocation = false)
     {
         var manager = new Mock<IResourceManager>(MockBehavior.Strict);
         var keys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
@@ -601,7 +602,7 @@ public class AccessTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new SubjectTypeConverter(),
-            Options.Create(new OidcOptions()),
+            Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             new AudienceKeyResolver(manager.Object, keys.Object));
     }
 
@@ -675,5 +676,119 @@ public class AccessTokenServiceTests
 
         Assert.Contains(OrdersApi.OriginalString, exception.Message);
         Assert.Contains(BillingApi.OriginalString, exception.Message);
+    }
+
+    // Narrowing authorization_details to the audience the token is addressed to
+
+    private static AuthorizationContext ContextAddressedTo(Uri[] resources, JsonArray details) =>
+        new(ClientId, [Scopes.OpenId], null) { Resources = resources, AuthorizationDetails = details };
+
+    private static JsonArray DetailsForPayments(params string?[] locations) =>
+        new(locations
+            .Select(location => location is null
+                ? new JsonObject { ["type"] = "payment_initiation" }
+                : new JsonObject
+                {
+                    ["type"] = "payment_initiation",
+                    ["locations"] = new JsonArray(location),
+                })
+            .Cast<JsonNode?>()
+            .ToArray());
+
+    private async Task<JsonWebToken> MintAsync(AccessTokenService service, AuthorizationContext context)
+    {
+        JsonWebToken? captured = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => captured = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(CreateAuthSession(), context, CreateClientInfo());
+
+        Assert.NotNull(captured);
+        return captured!;
+    }
+
+    /// <summary>
+    /// A token minted for one resource server carries only the entries addressed to it.
+    /// </summary>
+    /// <remarks>
+    /// What a deployment opts into: an entry naming another server describes a permission its bearer
+    /// cannot exercise here, and carrying it tells this reader about the end user's other grants for
+    /// nothing in return. Section 7 leaves that to this server where the client did not ask, and section
+    /// 13 asks for need-to-know as local policy determines. Not section 9.1, whose own worked example
+    /// pairs a client-style aud with a resource URI in locations and retains the entry.
+    ///
+    /// The entry with no locations member survives, which is the half that keeps the filter honest:
+    /// section 2.2 makes it optional, so its absence means the entry names no server rather than
+    /// naming none.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt()
+    {
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] }, filterByLocation: true);
+        var context = ContextAddressedTo(
+            [OrdersApi],
+            DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null));
+
+        var token = await MintAsync(service, context);
+
+        var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+        var located = details
+            .Select(entry => entry?["locations"]?.ToJsonString())
+            .ToList();
+
+        Assert.Equal(2, details.Count);
+        Assert.Contains($"[\"{OrdersApi.OriginalString}\"]", located);
+        Assert.Contains(null, located);
+        Assert.DoesNotContain($"[\"{BillingApi.OriginalString}\"]", located);
+    }
+
+    /// <summary>
+    /// A token whose every entry names another server carries no claim at all.
+    /// </summary>
+    /// <remarks>
+    /// An empty array would say the end user granted nothing, which is false. The member's absence says
+    /// this token authorises nothing detail-wise here, which is what happened.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_WhenEveryDetailNamesAnotherResource_OmitsTheClaim()
+    {
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [] }, filterByLocation: true);
+        var context = ContextAddressedTo([OrdersApi], DetailsForPayments(BillingApi.OriginalString));
+
+        var token = await MintAsync(service, context);
+
+        // ContainsKey rather than the indexer, which answers null for an absent member and for a present
+        // null alike. RFC 9396 section 14.2 registers the claim as a JSON array, so a null is a document no
+        // resource server owes us a reading of - and a test blind to the difference passes over the wrong
+        // one.
+        Assert.False(token.Payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+    }
+
+    /// <summary>
+    /// Without the switch, the audience decides nothing about what the token carries.
+    /// </summary>
+    /// <remarks>
+    /// The shipped default, so this is what every deployment that does not opt in keeps getting. The token
+    /// is addressed to one API and carries an entry located at another, which survives.
+    ///
+    /// It pins the default and nothing about the predicate: the mutation that drops every located entry
+    /// leaves this green, because a service built without the flag never reaches the filter. What
+    /// discriminates the predicate is the pair of tests above, and saying so here is the point - a control
+    /// that is trusted for a guarantee it does not give is worse than none.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAccessToken_WithoutTheSwitch_KeepsEveryDetail()
+    {
+        var token = await MintAsync(
+            CreateServiceWithResources(new() { [OrdersApi] = [] }),
+            ContextAddressedTo(
+                [OrdersApi],
+                DetailsForPayments(OrdersApi.OriginalString, BillingApi.OriginalString, null)));
+
+        var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
+        Assert.Equal(3, details.Count);
+        Assert.Equal([OrdersApi.OriginalString], token.Payload.Audiences);
     }
 }

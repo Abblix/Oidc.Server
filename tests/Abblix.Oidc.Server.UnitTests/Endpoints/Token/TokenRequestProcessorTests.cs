@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -800,5 +801,61 @@ public class TokenRequestProcessorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
         _accessTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// The token response names the authorization_details the access token actually carries.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 section 7 asks for the details "as granted by the resource owner and assigned to the
+    /// respective access token", and lets the server OMIT values rather than name more than the token
+    /// holds. The two sources diverge as soon as a deployment narrows the claim to the audience it minted
+    /// the token for: the context still holds every granted entry, so a response built from it advertises
+    /// the ones the token no longer names. The client then sends that token to a location its own claim
+    /// does not carry, and the resource server's refusal arrives looking like a bad token.
+    ///
+    /// The context carries two entries here and the token one, which is the only arrangement that can
+    /// tell the two sources apart. A fixture where they agree passes over the defect entirely.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_TokenNarrowedToItsAudience_ReturnsWhatTheTokenCarries()
+    {
+        var request = CreateValidTokenRequest([]);
+
+        var issued = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var accessToken = new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt");
+        accessToken.Token.Payload.Json[Jwt.IanaClaimTypes.AuthorizationDetails] = issued;
+
+        var granted = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation" },
+            new JsonObject { ["type"] = "account_information" });
+
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
+        {
+            AuthorizationDetails = granted,
+        };
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+
+        _accessTokenService
+            .Setup(svc => svc.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.True(JsonNode.DeepEquals(tokenIssued.AuthorizationDetails, issued));
+
+        // The control on the arrangement: the context really did carry more, so the assertion above is
+        // about WHICH source was read rather than about two arrays that happened to agree.
+        Assert.Equal(2, granted.Count);
+
+        // Copied rather than shared, so nothing downstream can edit the claim inside the issued token.
+        Assert.NotSame(issued, tokenIssued.AuthorizationDetails);
     }
 }
