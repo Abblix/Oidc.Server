@@ -86,11 +86,12 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
-	/// Reads a value and then removes it under a lock, for a cache with no native primitive of its own.
-	/// This is NOT the equivalent of Redis GETDEL. The bytes returned are the ones read BEFORE the lock,
-	/// so anything writing the key in between is destroyed by this caller while it is handed the earlier
-	/// value - and that is only one of the ways the two differ. AT MOST one caller is handed the value
-	/// when nothing writes the key, and none may be. Read the remarks before relying on it.
+	/// Reads a value and removes it, both under one hold of the per-key gate, for a cache with no native
+	/// primitive of its own. This is NOT the equivalent of Redis GETDEL. The gate holds out other
+	/// REDEMPTIONS of the key and nothing else, so a plain write landing between the read and the removal
+	/// is destroyed by this caller while it is handed the earlier bytes - and that is only one of the ways
+	/// the two differ. AT MOST one caller is handed the value when nothing writes the key, and none may be.
+	/// Read the remarks before relying on it.
 	/// </summary>
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
@@ -271,15 +272,9 @@ public static class DistributedCacheExtensions
 		// never meet: the gate exists only while a call is in flight and is discarded with the last one
 		// out.
 		//
-		// This gate is taken HERE and not in TryGetAndRemoveAsync, which calls this method - gating both
-		// naively would deadlock a caller against itself on one key.
-		//
-		// That placement is NOT settled, and this comment is not a reason to leave it. It is fine for the
-		// caller that LOSES: TryGetAndRemoveAsync discards the value it read whenever this returns false.
-		// The caller that WINS is issue 454 - it was handed the value it read before this gate, which is
-		// not necessarily the value removed inside it. Bringing the read inside the serialized section is
-		// what closes the in-process half; the deadlock is an objection to the naive shape of that, not to
-		// the goal.
+		// Both entry points hand their whole protocol to UnderGateAsync, which is the only place the gate
+		// is taken. Calling one public method from the other would take it twice on one key and deadlock a
+		// caller against itself, which is why the shared body is private rather than the public sibling.
 		return UnderGateAsync(
 			key, cancellationToken, () => RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken));
 	}
@@ -288,10 +283,17 @@ public static class DistributedCacheExtensions
 	/// Runs one redemption of a key with every other redemption of that key in this process held out.
 	/// </summary>
 	/// <remarks>
-	/// The single door to the gate, so a body cannot take it twice and deadlock against itself. Both
-	/// entry points hand their whole protocol in - <see cref="TryGetAndRemoveAsync"/> its read and its
-	/// removal together, which is what makes the value it returns the value it removed within this
-	/// process.
+	/// The only place the gate is taken. Both entry points hand their whole protocol in -
+	/// <see cref="TryGetAndRemoveAsync"/> its read and its removal together - and neither body calls the
+	/// other's public method, which is what a body taking the gate twice on one key would do.
+	/// <para>
+	/// What that buys is bounded by what the gate holds out, which is other REDEMPTIONS and not other
+	/// writers. A plain <c>SetAsync</c> on the same key takes nothing and is not held out at all - and
+	/// those callers are in this repository, on these keys: the authorization grant written back after
+	/// minting, the back-channel request updated on completion, the device record bumped while polling.
+	/// So the value returned is the value at the key when this caller got IN, which is a narrower window
+	/// than before and not a guarantee that it is the value removed.
+	/// </para>
 	/// </remarks>
 	private static async Task<T> UnderGateAsync<T>(
 		string key,
