@@ -268,9 +268,13 @@ public static class DistributedCacheExtensions
 	/// many exist, while these are keyed by the code being redeemed, so a table that never forgets would
 	/// grow by one entry for every authorization the deployment ever issues.
 	/// </remarks>
-	private static readonly Dictionary<string, GateEntry> Gates = new(StringComparer.Ordinal);
+	/// <remarks>
+	/// Internal rather than private so the test that proves it is emptied can name it and be carried
+	/// through a rename by the compiler. Read-only from outside this class either way.
+	/// </remarks>
+	internal static readonly Dictionary<string, GateEntry> Gates = new(StringComparer.Ordinal);
 
-	private sealed class GateEntry
+	internal sealed class GateEntry
 	{
 		public readonly SemaphoreSlim Gate = new(1, 1);
 		public int Waiters;

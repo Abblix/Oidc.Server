@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -30,7 +29,9 @@ public class RedemptionSerializationTests
 	/// sharing a key share a gate: one that fails while holding it leaves every later test on that key
 	/// waiting forever, and a hung test is reported as a smaller suite with nothing failing.
 	/// </summary>
-	private readonly string _key = $"the-authorization-{Guid.NewGuid():N}";
+	private readonly string _suffix = Guid.NewGuid().ToString("N");
+
+	private string Key => $"the-authorization-{_suffix}";
 
 	private static IDistributedCache CreateCache()
 		=> new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -57,10 +58,10 @@ public class RedemptionSerializationTests
 	public async Task TryRemoveAsync_OneCaller_TakesTheValue()
 	{
 		var cache = CreateCache();
-		await cache.SetAsync(_key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		await cache.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
 
-		Assert.True(await cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken));
-		Assert.Null(await cache.GetAsync(_key, TestContext.Current.CancellationToken));
+		Assert.True(await cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken));
+		Assert.Null(await cache.GetAsync(Key, TestContext.Current.CancellationToken));
 	}
 
 	/// <summary>
@@ -71,15 +72,15 @@ public class RedemptionSerializationTests
 	public async Task TryRemoveAsync_SameKey_TheSecondCallerWaitsOutsideTheProtocol()
 	{
 		var inner = CreateCache();
-		await inner.SetAsync(_key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
-		var cache = new ParkOnValueRead(inner, _key);
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		var cache = new ParkOnValueRead(inner, Key);
 
 		// The first caller enters and parks at its read of the value, holding the key.
-		var first = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var first = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
 		// The second is started and given every chance to get in.
-		var second = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var second = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		for (var i = 0; i < 50; i++) await Task.Yield();
 
 		// It did not. One caller is inside the protocol, not two - which is the whole property.
@@ -111,13 +112,13 @@ public class RedemptionSerializationTests
 	public async Task TryRemoveAsync_TwoCallersOnOneKey_SomebodyIsToldTheyTookIt()
 	{
 		var inner = CreateCache();
-		await inner.SetAsync(_key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
-		var cache = new ParkOnValueRead(inner, _key);
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		var cache = new ParkOnValueRead(inner, Key);
 
-		var first = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var first = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
-		var second = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var second = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Give the second every chance to get in beside the first. Under a gate it does not; without one it
 		// does, and that is the arrangement in which the value is lost.
@@ -143,7 +144,7 @@ public class RedemptionSerializationTests
 
 		var results = await Task.WhenAll(callers);
 
-		Assert.Null(await inner.GetAsync(_key, TestContext.Current.CancellationToken));
+		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
 
 		var winners = results.Count(won => won);
 		Assert.True(winners == 1, $"the value was removed and {winners} callers were told they took it");
@@ -158,30 +159,29 @@ public class RedemptionSerializationTests
 	{
 		var cache = CreateCache();
 
-		foreach (var key in new[] { "one", "two", "three" })
+		foreach (var key in new[] { $"one-{_suffix}", $"two-{_suffix}", $"three-{_suffix}" })
 		{
 			await cache.SetAsync(key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
 			Assert.True(await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken));
 		}
 
-		Assert.Equal(0, LiveGateCount());
+		Assert.Equal(0, LiveGatesForThisTest());
 	}
 
 	/// <summary>
-	/// Reads the private table the gates live in. Asserting on it directly is the only way to see a leak:
-	/// a table that never forgets behaves identically until the process runs out of memory.
+	/// The table the locks live in. Asserting on it directly is the only way to see a leak: a table that
+	/// never forgets behaves identically until the process runs out of memory.
 	/// </summary>
-	private static int LiveGateCount()
+	/// <remarks>
+	/// Counted under its own lock, because other tests in this process redeem their own keys at the same
+	/// time - only THIS test's keys are asserted about, and a bare Count would race them.
+	/// </remarks>
+	private int LiveGatesForThisTest()
 	{
-		var field = typeof(DistributedCacheExtensions).GetField(
-			"Gates", BindingFlags.NonPublic | BindingFlags.Static);
-
-		Assert.NotNull(field);
-
-		var gates = field.GetValue(null);
-		Assert.NotNull(gates);
-
-		return (int)gates.GetType().GetProperty("Count")!.GetValue(gates)!;
+		lock (DistributedCacheExtensions.Gates)
+		{
+			return DistributedCacheExtensions.Gates.Keys.Count(key => key.Contains(_suffix, StringComparison.Ordinal));
+		}
 	}
 
 	/// <summary>
@@ -223,15 +223,15 @@ public class RedemptionSerializationTests
 	public async Task TryRemoveAsync_TheProtocolThrowsWithACallerQueued_TheLockIsStillReleased()
 	{
 		var inner = CreateCache();
-		await inner.SetAsync(_key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
-		var cache = new ParkThenThrowOnValueRead(inner, _key);
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		var cache = new ParkThenThrowOnValueRead(inner, Key);
 
 		// The first caller holds the lock and parks inside the guarded section.
-		var failing = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var failing = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
 		// The second queues on the same lock, so the entry cannot be retired out from under it.
-		var queued = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var queued = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		for (var i = 0; i < 50; i++) await Task.Yield();
 		Assert.Equal(1, cache.Parked);
 
@@ -249,7 +249,7 @@ public class RedemptionSerializationTests
 
 		Assert.True(ReferenceEquals(finished, queued), "the lock was not released after the failure");
 		Assert.True(await AnsweredAsync(queued));
-		Assert.Null(await inner.GetAsync(_key, TestContext.Current.CancellationToken));
+		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
 	}
 
 	/// <summary>
@@ -264,14 +264,14 @@ public class RedemptionSerializationTests
 	public async Task TryRemoveAsync_CancelledWhileWaiting_LeavesTheLockUsable()
 	{
 		var inner = CreateCache();
-		await inner.SetAsync(_key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
-		var cache = new ParkOnValueRead(inner, _key);
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		var cache = new ParkOnValueRead(inner, Key);
 
-		var holder = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var holder = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
 		using var cancelled = new CancellationTokenSource();
-		var waiter = cache.TryRemoveAsync(_key, cancellationToken: cancelled.Token);
+		var waiter = cache.TryRemoveAsync(Key, cancellationToken: cancelled.Token);
 		await cancelled.CancelAsync();
 		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiter);
 
@@ -280,11 +280,11 @@ public class RedemptionSerializationTests
 
 		// If the cancelled waiter had over-released, two callers could now be inside at once. Drive the
 		// same arrangement again and require it to still serialize.
-		await inner.SetAsync(_key, Encoding.UTF8.GetBytes("again"), TestContext.Current.CancellationToken);
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("again"), TestContext.Current.CancellationToken);
 
-		var a = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var a = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
-		var b = cache.TryRemoveAsync(_key, cancellationToken: TestContext.Current.CancellationToken);
+		var b = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		for (var i = 0; i < 50; i++) await Task.Yield();
 
 		Assert.Equal(1, cache.Parked);
@@ -300,7 +300,7 @@ public class RedemptionSerializationTests
 	/// Parks every read of <paramref name="gatedKey"/>, and makes the FIRST of them throw when resumed, so
 	/// the failure lands inside the guarded section with a caller already queued behind it.
 	/// </summary>
-	private sealed class ParkThenThrowOnValueRead(IDistributedCache inner, string gated_key) : IDistributedCache
+	private sealed class ParkThenThrowOnValueRead(IDistributedCache inner, string gatedKey) : IDistributedCache
 	{
 		private readonly Queue<TaskCompletionSource> _parked = new();
 		private readonly Lock _sync = new();
@@ -329,7 +329,7 @@ public class RedemptionSerializationTests
 
 		public async Task<byte[]?> GetAsync(string key, CancellationToken token = default)
 		{
-			if (key != gated_key)
+			if (key != gatedKey)
 				return await inner.GetAsync(key, token);
 
 			var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
