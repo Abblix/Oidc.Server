@@ -37,6 +37,21 @@ public class RedemptionSerializationTests
 		=> new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
 	/// <summary>
+	/// Awaits a caller that must throw, with a bound. <c>Assert.ThrowsAsync</c> on its own waits forever
+	/// when the caller never answers, and a hung test does not fail the suite - it stops the runner, which
+	/// then prints no summary at all.
+	/// </summary>
+	private static async Task<TException> ThrewAsync<TException>(Task caller)
+		where TException : Exception
+	{
+		var finished = await Task.WhenAny(
+			caller, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
+		Assert.True(ReferenceEquals(finished, caller), "the caller never answered");
+		return await Assert.ThrowsAnyAsync<TException>(() => caller);
+	}
+
+	/// <summary>
 	/// Awaits a caller with a bound. A redemption that never answers must fail this suite rather than stop
 	/// it: a hung test takes the rest of its class with it, and the run then reports fewer tests and no
 	/// failures, which is indistinguishable from a pass.
@@ -124,29 +139,22 @@ public class RedemptionSerializationTests
 		// does, and that is the arrangement in which the value is lost.
 		for (var i = 0; i < 50; i++) await Task.Yield();
 
-		// Release whatever is parked, one at a time, until both callers have answered. This is the same
-		// driver in both worlds, so the test is measuring the outcome and not the shape of the gate.
-		var callers = new[] { first, second };
-		var step = 0;
-		while (callers.Any(caller => !caller.IsCompleted))
-		{
-			// Bounded, because an unbounded driver turns a wrong answer into a hang - and a hung test is
-			// reported as a smaller suite with nothing failing, which reads exactly like a pass.
-			Assert.True(step++ < 10_000, "a caller never answered; the driver gave up rather than hang");
+		// Release the first and let it FINISH before releasing the second. Resuming both and yielding
+		// between them is not the same thing and does not build the arrangement: the second's read runs
+		// before the first's removal, so it finds the value still there, removes it itself and comes away
+		// holding the surviving token - one winner, by luck, in a build with no serialization at all.
+		cache.ResumeNext();
+		var firstWon = await AnsweredAsync(first);
 
-			if (cache.Parked > 0)
-			{
-				cache.ResumeNext();
-			}
-
-			await Task.Yield();
-		}
-
-		var results = await Task.WhenAll(callers);
+		// Serialized, the second only reaches its read now; unserialized it has been parked since before
+		// the first ran. Either way its gate is the next one out.
+		await cache.WaitUntilParkedAsync(1);
+		cache.ResumeNext();
+		var secondWon = await AnsweredAsync(second);
 
 		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
 
-		var winners = results.Count(won => won);
+		var winners = (firstWon ? 1 : 0) + (secondWon ? 1 : 0);
 		Assert.True(winners == 1, $"the value was removed and {winners} callers were told they took it");
 	}
 
@@ -237,7 +245,7 @@ public class RedemptionSerializationTests
 
 		// Resume the first, which now fails inside the section.
 		cache.ResumeNext();
-		await Assert.ThrowsAsync<InvalidOperationException>(() => failing);
+		await ThrewAsync<InvalidOperationException>(failing);
 
 		// The queued caller must get in. Bounded, because without the release it would wait forever and a
 		// hanging test says nothing.
@@ -273,7 +281,7 @@ public class RedemptionSerializationTests
 		using var cancelled = new CancellationTokenSource();
 		var waiter = cache.TryRemoveAsync(Key, cancellationToken: cancelled.Token);
 		await cancelled.CancelAsync();
-		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiter);
+		await ThrewAsync<OperationCanceledException>(waiter);
 
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(holder));

@@ -303,7 +303,9 @@ public static class DistributedCacheExtensions
 			// Loud rather than defensive: every return is paired with a rent that put the entry here, so a
 			// miss means the invariant is already broken and swallowing it hides whatever broke it.
 			if (!Gates.TryGetValue(key, out var entry))
-				throw new InvalidOperationException($"No redemption gate is held for '{key}'.");
+				throw new InvalidOperationException(
+					$"No redemption gate is held. {nameof(RentGate)} and {nameof(ReturnGate)} are paired, so "
+					+ "this cannot happen unless one of them was changed.");
 
 			if (--entry.Waiters > 0)
 				return;
