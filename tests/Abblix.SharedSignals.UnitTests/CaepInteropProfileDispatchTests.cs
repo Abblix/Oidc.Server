@@ -96,7 +96,7 @@ public sealed class CaepInteropProfileDispatchTests
         var (dispatcher, outbox, _) = await CreateAsync(
             CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => dispatcher.DispatchAsync(
                 new SecurityEventDescriptor
                 {
@@ -105,6 +105,10 @@ public sealed class CaepInteropProfileDispatchTests
                 },
                 Cancellation));
 
+        // The distinguishing phrase. Without it the row passes when the null arm is deleted and the event
+        // falls through to "a payload of type '' cannot be read" - a sentence naming a type that is not
+        // there, for an event that simply carries nothing.
+        Assert.Contains("not a non-empty object", refusal.Message);
         Assert.Empty(await outbox.PendingAsync("s-1", null, Cancellation));
     }
 
@@ -147,14 +151,37 @@ public sealed class CaepInteropProfileDispatchTests
     /// by a typo or by the profile's own prose, which names its use cases <c>session-revoked</c> rather
     /// than by event type URI. That value is the row.
     /// </remarks>
+    [Theory]
+    [InlineData("session-revoked")]
+    [InlineData("sesion-revoked")]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AClaimedUseCaseTheProfileDoesNotDefine_IsRefusedAtConstruction(string? claimed)
+    {
+        // The array is what a configuration binder produces, so a null element is a shape a host reaches
+        // without writing one: a JSON array carrying a null, or a missing key read into the array. It sat
+        // in the first position deliberately - a search that returns the offending ELEMENT cannot tell a
+        // null it found from nothing at all, so a null here used to silence the guard for everything
+        // after it.
+        var refusal = Assert.Throws<ArgumentException>(
+            () => new CaepInteropProfilePolicy(claimed!, "sesion-change"));
+
+        // The value, not merely the list of valid ones - which the same message prints, so asserting a
+        // valid URI passes with the offending value dropped from the sentence entirely.
+        Assert.Contains(claimed is null ? "<null>" : $"'{claimed}'", refusal.Message);
+    }
+
+    /// <summary>
+    /// A null ahead of a real typo does not swallow it: the FIRST value the profile does not define is
+    /// the one named.
+    /// </summary>
     [Fact]
-    public void AClaimedUseCaseTheProfileDoesNotDefine_IsRefusedAtConstruction()
+    public void ANullAheadOfATypo_DoesNotSwallowIt()
     {
         var refusal = Assert.Throws<ArgumentException>(
-            () => new CaepInteropProfilePolicy("session-revoked"));
+            () => new CaepInteropProfilePolicy(null!, "sesion-revoked"));
 
-        Assert.Contains("session-revoked", refusal.Message);
-        Assert.Contains(CaepEventTypes.SessionRevoked, refusal.Message);
+        Assert.Contains("<null>", refusal.Message);
     }
 
     [Fact]

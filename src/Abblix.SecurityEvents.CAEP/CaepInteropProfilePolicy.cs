@@ -68,12 +68,19 @@ public sealed class CaepInteropProfilePolicy(params string[] claimedUseCases) : 
         if (claimedUseCases is not { Length: > 0 })
             return [.. UseCases];
 
-        if (claimedUseCases.FirstOrDefault(claimed => !UseCases.Contains(claimed, StringComparer.Ordinal))
-            is { } unknown)
+        // By INDEX, because the offending element can itself be null - a JSON array carrying a null, or
+        // a missing configuration key read straight into the array - and a search returning the element
+        // has no way to tell "found a null" from "found nothing". That sentinel collision is what let a
+        // null through the first version of this guard, taking any real typo behind it along.
+        var unknown = Array.FindIndex(
+            claimedUseCases,
+            claimed => !UseCases.Contains(claimed, StringComparer.Ordinal));
+
+        if (unknown >= 0)
         {
             throw new ArgumentException(
-                $"'{unknown}' is not a use case of the CAEP Interoperability Profile 1.0. Its Section 3 "
-                + $"defines three, by event type: {string.Join(", ", UseCases)}.",
+                $"'{claimedUseCases[unknown] ?? "<null>"}' is not a use case of the CAEP Interoperability "
+                + $"Profile 1.0. Its Section 3 defines three, by event type: {string.Join(", ", UseCases)}.",
                 nameof(claimedUseCases));
         }
 
