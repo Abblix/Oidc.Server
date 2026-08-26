@@ -95,12 +95,10 @@ public class RedemptionSerializationTests
 		var first = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
-		// The second is started and given every chance to get in.
+		// The second is started and given a real window of time to get in. It does not: one caller is
+		// inside the protocol, not two, which is the whole property.
 		var second = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
-		for (var i = 0; i < 50; i++) await Task.Yield();
-
-		// It did not. One caller is inside the protocol, not two - which is the whole property.
-		Assert.Equal(1, cache.Parked);
+		Assert.False(await cache.ParkedReachedAsync(2));
 
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(first));
@@ -136,9 +134,9 @@ public class RedemptionSerializationTests
 
 		var second = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 
-		// Give the second every chance to get in beside the first. Under a gate it does not; without one it
-		// does, and that is the arrangement in which the value is lost.
-		for (var i = 0; i < 50; i++) await Task.Yield();
+		// Give the second a real window to get in beside the first. Under a gate it does not; without one
+		// it does, and that is the arrangement in which the value is lost.
+		Assert.False(await cache.ParkedReachedAsync(2));
 
 		// Release the first and let it FINISH before releasing the second. Resuming both and yielding
 		// between them is not the same thing and does not build the arrangement: the second's read runs
@@ -396,8 +394,7 @@ public class RedemptionSerializationTests
 
 		// The second queues on the same lock, so the entry cannot be retired out from under it.
 		var queued = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
-		for (var i = 0; i < 50; i++) await Task.Yield();
-		Assert.Equal(1, cache.Parked);
+		Assert.False(await cache.ParkedReachedAsync(2));
 
 		// Resume the first, which now fails inside the section.
 		cache.ResumeNext();
@@ -449,9 +446,7 @@ public class RedemptionSerializationTests
 		var a = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 		var b = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
-		for (var i = 0; i < 50; i++) await Task.Yield();
-
-		Assert.Equal(1, cache.Parked);
+		Assert.False(await cache.ParkedReachedAsync(2));
 
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(a));
@@ -488,11 +483,9 @@ public class RedemptionSerializationTests
 		var holder = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilParkedAsync(1);
 
-		var taker = cache.TryGetAndRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
-		for (var i = 0; i < 50; i++) await Task.Yield();
-
 		// One, not two: the taker has not read anything, because it is waiting for the gate the holder has.
-		Assert.Equal(1, cache.Parked);
+		var taker = cache.TryGetAndRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
+		Assert.False(await cache.ParkedReachedAsync(2));
 
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(holder));
@@ -523,8 +516,24 @@ public class RedemptionSerializationTests
 	/// </remarks>
 	private sealed class ParkOnValueRead(IDistributedCache inner, params string[] gatedKeys) : IDistributedCache
 	{
+		/// <summary>
+		/// How long a wait for a parker may take before it is called a failure of the instrument rather
+		/// than of the property. Generous, because it is never spent on a passing run - a passing run
+		/// completes on the signal - and a busy shared runner is exactly where a tighter bound turns a
+		/// green property red.
+		/// </summary>
+		private static readonly TimeSpan ParkTimeout = TimeSpan.FromSeconds(30);
+
+		/// <summary>
+		/// How long a caller that should be held OUT is given to prove otherwise. Short, because this one
+		/// is spent on every passing run, and it is a fail-early assertion rather than the proof - see
+		/// <see cref="ParkedReachedAsync"/>.
+		/// </summary>
+		private static readonly TimeSpan SettleWindow = TimeSpan.FromMilliseconds(250);
+
 		private readonly HashSet<string> _gated = [..gatedKeys];
 		private readonly Queue<TaskCompletionSource> _parked = new();
+		private readonly List<(int Count, TaskCompletionSource Reached)> _watchers = [];
 		private readonly Lock _sync = new();
 		private int _resumedReads;
 
@@ -535,18 +544,60 @@ public class RedemptionSerializationTests
 		/// </summary>
 		public Action<int>? AfterResume { get; init; }
 
-		public int Parked
+		/// <summary>
+		/// Completes when at least <paramref name="count"/> callers are parked, and throws
+		/// <see cref="TimeoutException"/> if that has not happened within <see cref="ParkTimeout"/>.
+		/// </summary>
+		/// <remarks>
+		/// The wait is on a SIGNAL raised where the parking happens, not on a spin over
+		/// the parked count. A spin bounded by iterations of <c>Task.Yield</c> is bounded by
+		/// scheduling rather than by time: the yielding continuations go to the running thread's local
+		/// queue, so the loop can run to exhaustion on a busy pool while the awaited party's continuation
+		/// is still sitting in the global one. The two readings the test needs to tell apart - "the gate
+		/// held it out" and "the pool has not run it yet" - are then the same reading, and the row fails
+		/// in milliseconds under load having measured nothing.
+		/// <para>
+		/// The timeout is what keeps the instrument's own failure a DIFFERENT outcome from the property
+		/// being false: a <see cref="TimeoutException"/> says the parker never arrived, where a failed
+		/// assertion would say the gate admitted the wrong number.
+		/// </para>
+		/// </remarks>
+		public Task WaitUntilParkedAsync(int count)
 		{
-			get
+			TaskCompletionSource reached;
+			lock (_sync)
 			{
-				lock (_sync) return _parked.Count;
+				if (_parked.Count >= count) return Task.CompletedTask;
+
+				reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+				_watchers.Add((count, reached));
 			}
+
+			return reached.Task.WaitAsync(ParkTimeout);
 		}
 
-		public async Task WaitUntilParkedAsync(int count)
+		/// <summary>
+		/// Whether <paramref name="count"/> callers park within <see cref="SettleWindow"/>. Used to assert
+		/// that one does NOT: a caller held out by the gate never arrives, and the window is what makes
+		/// that a statement about elapsed time rather than about how many continuations happened to run.
+		/// </summary>
+		/// <remarks>
+		/// A negative bounded by a window can only ever say "not within this long", so it is not what
+		/// carries these rows. The proof is the ADMISSION that follows: after the holder is resumed, the
+		/// same caller parks, and it could not have done so twice. This assertion exists to fail early and
+		/// legibly when the gate lets both in at once, where waiting for the admission would pass.
+		/// </remarks>
+		public async Task<bool> ParkedReachedAsync(int count)
 		{
-			for (var i = 0; i < 1000 && Parked < count; i++) await Task.Yield();
-			Assert.Equal(count, Parked);
+			try
+			{
+				await WaitUntilParkedAsync(count).WaitAsync(SettleWindow);
+				return true;
+			}
+			catch (TimeoutException)
+			{
+				return false;
+			}
 		}
 
 		public void ResumeNext()
@@ -561,7 +612,20 @@ public class RedemptionSerializationTests
 			if (_gated.Contains(key))
 			{
 				var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-				lock (_sync) _parked.Enqueue(gate);
+
+				// Chosen under the same lock that enqueues, so a waiter registering concurrently either
+				// sees the new count itself or is in this list, never neither. Completed outside it, to
+				// keep what the lock covers to the state it guards.
+				List<TaskCompletionSource> reached;
+				lock (_sync)
+				{
+					_parked.Enqueue(gate);
+					reached = [.._watchers.Where(w => w.Count <= _parked.Count).Select(w => w.Reached)];
+					_watchers.RemoveAll(w => w.Count <= _parked.Count);
+				}
+
+				foreach (var watcher in reached) watcher.SetResult();
+
 				await gate.Task;
 
 				AfterResume?.Invoke(Interlocked.Increment(ref _resumedReads));

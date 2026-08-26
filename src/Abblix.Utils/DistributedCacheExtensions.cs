@@ -291,13 +291,19 @@ public static class DistributedCacheExtensions
 	/// What that buys is bounded by what the gate holds out, which is other REDEMPTIONS and nothing else.
 	/// A plain <c>SetAsync</c> or <c>RemoveAsync</c> on the same key takes nothing and is not held out at
 	/// all, so one landing between the read and the removal is destroyed by this caller while it is handed
-	/// the earlier bytes - or turns a live value into a refusal with nobody told. The live example in this
-	/// repository is the back-channel request, updated on completion from four handlers on the key this
-	/// protocol redeems, by an approval genuinely concurrent with a token-endpoint poll.
+	/// the earlier bytes - or turns a live value into a refusal with nobody told.
+	/// </para>
+	/// <para>
+	/// Both entry points are exposed to that, so both have live examples here. The back-channel request is
+	/// written on completion and again by the poll bumping its next-poll instant, on the key
+	/// <see cref="TryGetAndRemoveAsync"/> redeems. The device authorization request is written and
+	/// REMOVED outside the gate by its own storage, on the key <see cref="TryRemoveAsync"/> redeems, from
+	/// a user's approval or denial genuinely concurrent with a token-endpoint poll - which is where the
+	/// second half of the sentence above gets its site.
+	/// </para>
 	/// <para>
 	/// So the value returned is the value at the key when this caller got IN, which is a narrower window
 	/// than before and not a guarantee that it is the value removed.
-	/// </para>
 	/// </para>
 	/// </remarks>
 	private static async Task<T> UnderGateAsync<T>(

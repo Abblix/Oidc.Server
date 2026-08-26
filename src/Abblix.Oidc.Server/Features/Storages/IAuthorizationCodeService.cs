@@ -55,15 +55,17 @@ public interface IAuthorizationCodeService
     /// One exception on a single node, and it is a loss rather than a duplication: a removal can end with
     /// NOBODY receiving the grant, when the claim expires mid-protocol. A store fault after the removal
     /// costs the grant the same way, and raises rather than answering.
-    /// <para>
-    /// Two callers both receiving it needs a SECOND NODE. Within one process the read and the removal
-    /// happen under one hold of the per-key gate, so a redeemer is never between them while another
-    /// completes a take - which is what the write-back at that key would have to interleave with. Across
-    /// processes the gate holds nothing and the window reopens: the value is read before the claim is
-    /// taken, the second caller is handed what it read rather than what it removed, and the reuse check
-    /// sees no issued tokens. That is issue 435, and it needs a store primitive this interface does not
-    /// expose.
     /// </para>
+    /// <para>
+    /// Two callers both receiving it needs a SECOND NODE, and that holds of the storage this library
+    /// ships rather than of the seam: the read and the removal happen under one hold of a per-key gate,
+    /// so within one process a redeemer is never between them while another completes a take. A host
+    /// substituting its own <c>IEntityStorage</c> owns that property, and a naive get-then-remove
+    /// reopens the duplication on one node. Across processes the gate holds nothing either: the value is
+    /// read before the claim is taken, the second caller is handed what it read rather than what it
+    /// removed, and the reuse check sees no issued tokens. That is issue 435, and it needs a store
+    /// primitive <see cref="Microsoft.Extensions.Caching.Distributed.IDistributedCache"/> does not
+    /// expose.
     /// </para>
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
