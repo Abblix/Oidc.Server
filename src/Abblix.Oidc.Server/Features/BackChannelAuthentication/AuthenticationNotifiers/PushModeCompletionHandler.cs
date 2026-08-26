@@ -20,7 +20,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <summary>
 /// Handles CIBA push mode token delivery where tokens are sent directly to the client's notification endpoint
 /// immediately upon authentication completion.
-/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage.
+/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage -
+/// except when the delivery itself fails, which is the one outcome that leaves the record behind.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
@@ -65,9 +66,10 @@ public partial class PushModeCompletionHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">Unused here. Push removes the request on every outcome that ends the
-    /// flow, so there is no remaining lifetime to set; the parameter exists because the base class hands
-    /// it to every mode and poll and ping do use it.</param>
+    /// <param name="expiresIn">Has no effect here. Push either removes the request or leaves it exactly
+    /// as it was - it never writes a new lifetime - so on the one outcome that keeps the record, a failed
+    /// delivery, what expires is the lifetime set when the request was stored. The parameter exists
+    /// because the base class hands it to every mode, and poll and ping do use it.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -164,14 +166,19 @@ public partial class PushModeCompletionHandler(
                     //
                     // What survives in storage is the record as it stood BEFORE the completion, because
                     // push never writes back: the status and the narrowed grant were set on the in-memory
-                    // object, and only the poll and ping paths persist that with UpdateAsync. So the
-                    // stored record still reads Pending, still carries what the client originally asked
-                    // for rather than what the end user approved, and carries no session.
+                    // object, and only the poll and ping paths persist that with UpdateAsync. So it still
+                    // reads Pending and still carries what the client ASKED for rather than what the end
+                    // user approved.
                     //
-                    // It is left alone rather than removed so a host can see that the request existed and
-                    // decide what to do, and it expires on its own. What it is NOT is a grant that can be
-                    // completed again from storage - anything rebuilt from it would replay the request,
-                    // not the approval.
+                    // It does carry a session - the one the device handler returned at initiation, naming
+                    // the end user - because AuthorizedGrant takes it as a non-nullable member and the
+                    // request was stored with it. That is what makes the leftover dangerous rather than
+                    // inert: it has everything CompleteAsync needs, so a host that reads it back and
+                    // completes it again succeeds, mints, and delivers the entries the end user refused.
+                    //
+                    // It is kept rather than removed so a host can see the request existed, and it expires
+                    // on its own. Anything a host rebuilds from it replays what was asked for, and nothing
+                    // here refuses that.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 

@@ -35,9 +35,11 @@ partial class PushModeCompletionHandler
         Level = LogLevel.Warning,
         Message = "CIBA push delivery failed for auth_req_id: {AuthReqId}. The tokens were minted and " +
                   "are gone - nothing retries them. What is left in storage is the request as it stood " +
-                  "BEFORE the completion, still Pending and still carrying what the client asked for " +
-                  "rather than what the end user approved, because push never writes back. It expires on " +
-                  "its own and cannot be completed again from what is stored.")]
+                  "BEFORE the completion, because push never writes back: still Pending, still carrying " +
+                  "what the client asked for rather than what the end user approved, and still carrying " +
+                  "the session from initiation. It expires on its own, and until it does it CAN be " +
+                  "completed again - which would deliver what the end user refused, so treat a retry " +
+                  "from this record as re-asking the user rather than as resending.")]
     private partial void LogPushDeliveryFailed(string AuthReqId);
 
     /// <summary>
