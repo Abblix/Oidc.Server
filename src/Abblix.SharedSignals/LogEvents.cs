@@ -52,5 +52,8 @@ public static class LogEvents
 
         /// <summary>The advertised authorization schemes omit OAuth 2.0, which the CAEP profile requires.</summary>
         public const int OAuthSchemeNotAdvertised = Base + 10;
+
+        /// <summary>No scope is checked on the management API, which the CAEP profile requires.</summary>
+        public const int ScopeCheckingDisabled = Base + 11;
     }
 }

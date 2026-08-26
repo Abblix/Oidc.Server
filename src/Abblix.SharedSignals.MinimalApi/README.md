@@ -50,6 +50,17 @@ A gateway-fronted deployment adjusts this in the same options object, without mo
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
+Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile defines `ssf.read` and `ssf.manage` and requires a transmitter to check that a token is sufficient for what was asked. It assigns five operations: reading a stream's configuration and getting its status to `ssf.read`, creating a stream, deleting one and verification to `ssf.manage`. The other six routes it does not assign, and this library places them - everything that changes a stream needs `ssf.manage`, and poll needs `ssf.read`. Note what that last one costs: a poll acknowledges, acknowledging releases the transmitter from retaining those events, so `ssf.read` is enough to empty a queue - and while a stream is looked up by the caller's identity, the queue behind it is keyed by stream id alone, so two receivers naming one stream share it. Each route knows which scope it needs, but this package never sees a token, so it cannot find the granted scopes on its own:
+
+```csharp
+builder.Services.AddSingleton(new SharedSignalsEndpointOptions
+{
+    GrantedScopesSelector = ctx => ctx.User.FindFirst("scope")?.Value.Split(' ') ?? [],
+});
+```
+
+Set it and a caller whose token is too narrow gets 403 with `insufficient_scope` and the scope it needs to ask for. A caller nothing identified still gets the bare 401 instead - not having authenticated is not a scope problem. Leave the selector unset and no scope is checked at all, which is what this surface did before the option existed: a working deployment, and one outside the profile. Your authorization server has to be able to grant the two scope values; this library's own refuses any scope nobody registered with it.
+
 What one call maps, relative to the prefix:
 
 | Route | Method | SSF 1.0 |

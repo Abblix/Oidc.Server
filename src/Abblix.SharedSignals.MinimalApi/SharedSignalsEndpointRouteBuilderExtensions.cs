@@ -85,17 +85,42 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             return await next(context);
         });
 
-        group.MapPost(Routes.Stream, CreateStreamAsync);
-        group.MapGet(Routes.Stream, GetStreamsAsync);
-        group.MapPatch(Routes.Stream, UpdateStreamAsync);
-        group.MapPut(Routes.Stream, ReplaceStreamAsync);
-        group.MapDelete(Routes.Stream, DeleteStreamAsync);
-        group.MapGet(Routes.Status, GetStatusAsync);
-        group.MapPost(Routes.Status, UpdateStatusAsync);
-        group.MapPost(Routes.AddSubject, AddSubjectAsync);
-        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync);
-        group.MapPost(Routes.Verify, RequestVerificationAsync);
-        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync);
+        // The scope each route requires (CAEP Interoperability Profile Section 2.7.3). The profile names
+        // five of these eleven operations - Read Stream Configuration and Get Stream Status for
+        // ssf.read, Create Stream, Delete Stream and Stream Verification for ssf.manage - and says
+        // nothing about the other six.
+        //
+        // Those six are OUR reading, not the profile's, and they go the stricter way: everything that
+        // CHANGES a stream requires ssf.manage, because refusing a caller who should have been allowed
+        // is recoverable and the reverse is not.
+        //
+        // Poll is the exception and takes ssf.read, at a price worth naming. It is not a pure read: a
+        // poll acknowledges, and IEventOutbox.AcknowledgeAsync removes what was acknowledged -
+        // RFC 8936 Section 2.2's acknowledge-only poll is that half by itself. So a token carrying only
+        // ssf.read can empty its own queue. The alternative is worse: requiring ssf.manage for poll makes
+        // every polling receiver hold the scope that also lets it delete streams, which is the whole
+        // split gone.
+        //
+        // What was supposed to bound the damage is ownership: the handler looks the stream up BY the
+        // caller's identity. That bound holds only while stream identifiers are unique ACROSS receivers,
+        // which the dynamic path guarantees by minting a GUID and the declared path does not - the
+        // outbox is keyed by stream id alone while a stream is keyed by the pair, so two receivers
+        // naming one stream share one queue and either can acknowledge the other's events. That is
+        // issue 462 and it is not this scope's doing; it is named here because the sentence that used to
+        // stand in this place asserted the bound without its condition.
+        group.AddEndpointFilter(EnforceScopeAsync);
+
+        group.MapPost(Routes.Stream, CreateStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapGet(Routes.Stream, GetStreamsAsync).RequiresScope(SsfScopes.Read);
+        group.MapPatch(Routes.Stream, UpdateStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPut(Routes.Stream, ReplaceStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapDelete(Routes.Stream, DeleteStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapGet(Routes.Status, GetStatusAsync).RequiresScope(SsfScopes.Read);
+        group.MapPost(Routes.Status, UpdateStatusAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.AddSubject, AddSubjectAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.Verify, RequestVerificationAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync).RequiresScope(SsfScopes.Read);
 
         return group;
     }
@@ -148,10 +173,14 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     };
 
     /// <summary>
-    /// Says once, at startup, when the document is missing something the CAEP Interoperability Profile
-    /// 1.0 requires and the host looks unaware of it. Neither case refuses the host, and the two are not
-    /// equally optional elsewhere: SSF 1.0 requires jwks_uri of any transmitter that signs, which this one
-    /// always does, while it attaches no condition to authorization_schemes.
+    /// Says once, at startup, where this deployment falls outside the CAEP Interoperability Profile 1.0
+    /// and the host looks unaware of it. Nothing here refuses the host: each of these is a working
+    /// deployment, and each is a choice the host is entitled to make knowingly.
+    /// <para>
+    /// No count is given, because a count over a list that grows is the one thing in a comment guaranteed
+    /// to rot. What each warning says, and how optional the member it names really is elsewhere, lives on
+    /// that warning's own message.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// It does NOT announce every profile-rejected document, and one configuration is deliberately left
@@ -177,6 +206,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // needing to know what.
         if (options.AuthorizationSchemes is { Count: > 0 } schemes && !schemes.Any(IsOAuth))
             LogOAuthSchemeNotAdvertised(logger, schemes.Count);
+
+        if ((services.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions)
+            .GrantedScopesSelector is null)
+            LogScopeCheckingDisabled(logger);
     }
 
     private static bool IsOAuth(JsonObject scheme)
@@ -373,16 +406,19 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// The answer to a management request that named no receiver: 401 with a bare Bearer challenge.
     /// </summary>
     /// <remarks>
-    /// Bare, and deliberately so. Every refusal on this surface has the same cause - nothing identified
-    /// the caller - which is what RFC 6750 Section 3.1 describes as a request that "lacks any
-    /// authentication information", and for which it says the resource server "SHOULD NOT include an
-    /// error code or other error information". A caller that presented nothing has nothing to correct.
+    /// Bare, and deliberately so. This refusal has one cause - nothing identified the caller - which is
+    /// what RFC 6750 Section 3.1 describes as a request that "lacks any authentication information", and
+    /// for which it says the resource server "SHOULD NOT include an error code or other error
+    /// information". A caller that presented nothing has nothing to correct. It is not the only refusal
+    /// on this surface: a caller that IS identified but lacks the scope gets 403 from
+    /// <see cref="EnforceScopeAsync"/>, which runs first, and that ordering is deliberate.
     /// <para>
-    /// That section defines three codes and this method answers none of them. Two belong to whoever
-    /// validates the token, which is the host: <c>invalid_token</c> when a presented token is expired or
-    /// malformed, and <c>insufficient_scope</c> with 403 when it is valid but too narrow. This package
-    /// never sees a token - it reads whatever identity the host's authentication left behind, through
-    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
+    /// That section defines three codes and this method answers none of them. <c>invalid_token</c>
+    /// belongs to whoever validates the token, which is the host: this package never sees one, it reads
+    /// whatever identity the host's authentication left behind, through
+    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>. <c>insufficient_scope</c> IS
+    /// emitted by this package, from <see cref="EnforceScopeAsync"/>, once the host supplies the granted
+    /// scopes.
     /// </para>
     /// <para>
     /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
@@ -398,7 +434,8 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     private static IResult Unauthenticated(HttpContext http)
     {
         var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
-        return new BareChallengeResult(WwwAuthenticate.Challenge(BearerScheme, issuer));
+        return new ChallengeResult(
+            StatusCodes.Status401Unauthorized, WwwAuthenticate.Challenge(BearerScheme, issuer));
     }
 
     /// <summary>
@@ -414,14 +451,81 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     private const string BearerScheme = "Bearer";
 
     /// <summary>
-    /// A 401 carrying one <c>WWW-Authenticate</c> line and no body. Written by hand because
-    /// <c>Results.Unauthorized()</c> emits no headers, and the header is the whole point.
+    /// Records which scope a route requires, so the filter below can read it back off the endpoint.
     /// </summary>
-    private sealed class BareChallengeResult(string challenge) : IResult
+    private static void RequiresScope<TBuilder>(this TBuilder builder, string scope)
+        where TBuilder : IEndpointConventionBuilder
+        => builder.WithMetadata(new RequiredScope(scope));
+
+    private sealed record RequiredScope(string Scope);
+
+    /// <summary>
+    /// Refuses a request whose token was not granted the scope its route requires.
+    /// </summary>
+    /// <remarks>
+    /// Returns immediately unless the host set
+    /// <see cref="SharedSignalsEndpointOptions.GrantedScopesSelector"/>, because without it this package
+    /// has no way to learn what was granted and guessing would refuse every caller. That check is FIRST
+    /// deliberately: the clause after it calls a host-supplied delegate, and a deployment that never
+    /// opted in should not pay for a check that cannot fire.
+    /// <para>
+    /// With it set, <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/> is asked here and again
+    /// in the handler. Twice rather than once, because the two answers are wanted at two different
+    /// moments and threading the first through would put this package's state into the request. The
+    /// handler's call happens on every request either way; only the extra one here is gated.
+    /// </para>
+    /// <para>
+    /// RFC 6750 Section 3.1 names the answer: <c>insufficient_scope</c>, "The request requires higher
+    /// privileges than provided by the access token", with 403. The <c>scope</c> attribute is the one
+    /// that section says a resource server MAY include, and it is the only thing here that tells a
+    /// receiver what to ask its authorization server for next.
+    /// </para>
+    /// </remarks>
+    private static async ValueTask<object?> EnforceScopeAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        var options = http.RequestServices.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
+
+        // An unidentified caller is NOT a scope problem, and this filter runs before the handler that
+        // would say so. Left to itself it answers "insufficient_scope, scope=ssf.manage" to a request
+        // that carried no token at all - which RFC 6750 Section 3.1 forbids, and which sends a receiver
+        // whose token merely expired to fetch a scope it already has. Pass it through and let the
+        // handler emit the bare 401.
+        // A route carrying no RequiredScope is let through. That is fail-OPEN, and it is stated rather
+        // than relied on: every route this class maps declares one, and a future route that forgets is
+        // exempt with nothing to notice it. The alternative - refusing an endpoint whose metadata is
+        // absent - would break any route a host adds to this group itself.
+        if (options.GrantedScopesSelector is not { } selector ||
+            options.ReceiverIdSelector(http) is null ||
+            http.GetEndpoint()?.Metadata.GetMetadata<RequiredScope>() is not { } required ||
+            SsfScopes.Satisfies(selector(http), required.Scope))
+        {
+            return await next(context);
+        }
+
+        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        return new ChallengeResult(
+            StatusCodes.Status403Forbidden,
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "insufficient_scope"),
+                ("error_description", "The access token does not carry the scope this operation requires."),
+                ("scope", required.Scope)));
+    }
+
+    /// <summary>
+    /// A status and one <c>WWW-Authenticate</c> line, with no body: 401 with a bare challenge when
+    /// nobody was identified, 403 naming <c>insufficient_scope</c> when somebody was and their token is
+    /// too narrow. Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header
+    /// is the whole point.
+    /// </summary>
+    private sealed class ChallengeResult(int statusCode, string challenge) : IResult
     {
         public Task ExecuteAsync(HttpContext httpContext)
         {
-            httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            httpContext.Response.StatusCode = statusCode;
             httpContext.Response.Headers.WWWAuthenticate = challenge;
             return Task.CompletedTask;
         }

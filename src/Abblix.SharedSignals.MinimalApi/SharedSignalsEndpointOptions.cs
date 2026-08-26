@@ -25,6 +25,28 @@ public sealed record SharedSignalsEndpointOptions
     public Func<HttpContext, string?> ReceiverIdSelector { get; init; } = DefaultReceiverId;
 
     /// <summary>
+    /// Reads the scopes the caller's access token was granted. Null - the default - checks no scope at
+    /// all, which is what this surface did before the option existed.
+    /// </summary>
+    /// <remarks>
+    /// The CAEP Interoperability Profile Section 2.7.2 requires a transmitter to "verify that the
+    /// authorization represented by the access token is sufficient for the requested resource access",
+    /// and Section 2.7.3 says what sufficient means: <c>ssf.read</c> for reading, <c>ssf.manage</c> for
+    /// changing. This library can apply that split per route, but it cannot find the scopes on its own -
+    /// where they live depends on how the host authenticates, and this package never sees a token.
+    /// <para>
+    /// Set it and every route enforces its own requirement. Leave it null and none do, which keeps a
+    /// deployment that authorizes some other way working exactly as before - and outside the profile,
+    /// deliberately, rather than by omission.
+    /// </para>
+    /// <para>
+    /// A common wiring reads the <c>scope</c> claim: <c>ctx => ctx.User.FindFirst("scope")?.Value.Split(' ')
+    /// ?? []</c>.
+    /// </para>
+    /// </remarks>
+    public Func<HttpContext, IReadOnlyCollection<string>>? GrantedScopesSelector { get; init; }
+
+    /// <summary>
     /// The route prefix the management surface is mapped under. Behind a rewriting proxy this
     /// is the INTERNAL prefix; what the configuration document advertises is
     /// <see cref="AdvertisedPrefix"/>.
