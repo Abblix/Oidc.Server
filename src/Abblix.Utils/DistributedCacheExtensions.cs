@@ -172,9 +172,11 @@ public static class DistributedCacheExtensions
 	/// not the request data itself.
 	/// </para>
 	/// <para>
-	/// <strong>What this guarantees:</strong> within ONE process, exactly one caller removes the value and
-	/// every other caller is told the key was not there. Callers of this method on the same key are
-	/// serialized, so the protocol below never runs concurrently against itself.
+	/// <strong>What this guarantees:</strong> where ONE process touches the key, exactly one caller removes
+	/// the value and every other caller is told the key was not there. Callers of this method on the same
+	/// key are serialized in-process, so the protocol below never runs concurrently against itself. Note
+	/// the condition is the key's traffic, not the deployment: a second process redeeming the same key at
+	/// the same moment is outside this and lands in the paragraph below.
 	/// </para>
 	/// <para>
 	/// <strong>Across processes it guarantees only AT MOST one.</strong> Two nodes redeeming the same key
@@ -184,16 +186,21 @@ public static class DistributedCacheExtensions
 	/// this interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.
 	/// </para>
 	/// <para>
-	/// <strong>A deployment on several nodes that cannot afford that</strong> supplies its own storage - the
-	/// interfaces above this one are public and replaceable - and reaches for the primitive its store
-	/// already has. Which primitive that is depends on the store, which is why it cannot live here:
+	/// <strong>A deployment on several nodes that cannot afford that</strong> supplies its own storage and
+	/// reaches for the primitive its store already has. No new API is needed for that:
+	/// <c>IDeviceAuthorizationStorage</c>, <c>IBackChannelRequestStorage</c> and <c>IEntityStorage</c> are
+	/// public and registered with <c>TryAddSingleton</c>, so a host's own registration wins. Which
+	/// primitive to reach for depends on the store, which is why it cannot be chosen here:
 	/// </para>
 	/// <list type="bullet">
 	///   <item>Redis 6.2 and later: <c>GETDEL key</c>, one command, which returns the value to exactly one
 	///   caller and deletes it. Earlier versions get the same effect from a two-line <c>EVAL</c> script,
-	///   since Redis runs a script indivisibly.</item>
+	///   since Redis runs a script indivisibly. Both are for a storage of your own: they read a STRING,
+	///   and the <c>IDistributedCache</c> implementation for Redis keeps each entry as a hash whose value
+	///   sits in a field, so pointed at these keys they answer <c>WRONGTYPE</c>.</item>
 	///   <item>PostgreSQL: <c>DELETE FROM ... WHERE key = $1 RETURNING value</c>. The row lock picks the
-	///   winner and the losing statement returns no rows.</item>
+	///   winner, and at the default isolation level the loser returns no rows; under REPEATABLE READ or
+	///   SERIALIZABLE it fails to serialize instead, which is the same answer through an exception.</item>
 	///   <item>SQL Server: <c>DELETE ... OUTPUT deleted.value</c>, the same shape.</item>
 	///   <item>Oracle: <c>DELETE ... RETURNING value INTO :out</c>. Oracle documents the RETURNING INTO
 	///   clause as belonging to DELETE among others, and for a DELETE it yields the pre-deletion value.</item>
@@ -252,6 +259,12 @@ public static class DistributedCacheExtensions
 	/// <summary>
 	/// One gate per key, alive only while a redemption of that key is in flight.
 	/// </summary>
+	/// <remarks>
+	/// Retired on the way out, unlike the per-stream gate in the security-event outbox, and the difference
+	/// is the key space rather than taste: a stream is a long-lived entity and its gates are bounded by how
+	/// many exist, while these are keyed by the code being redeemed, so a table that never forgets would
+	/// grow by one entry for every authorization the deployment ever issues.
+	/// </remarks>
 	private static readonly Dictionary<string, GateEntry> Gates = new(StringComparer.Ordinal);
 
 	private sealed class GateEntry
@@ -280,8 +293,10 @@ public static class DistributedCacheExtensions
 	{
 		lock (Gates)
 		{
+			// Loud rather than defensive: every return is paired with a rent that put the entry here, so a
+			// miss means the invariant is already broken and swallowing it hides whatever broke it.
 			if (!Gates.TryGetValue(key, out var entry))
-				return;
+				throw new InvalidOperationException($"No redemption gate is held for '{key}'.");
 
 			if (--entry.Waiters > 0)
 				return;
