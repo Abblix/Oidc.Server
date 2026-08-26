@@ -24,9 +24,11 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
 /// <summary>
 /// Verifies the authorization-code reuse defense in <see cref="AuthorizationCodeReusePreventingDecorator"/>.
-/// The decorator atomically claims the code before delegating to the inner processor, so a second
-/// (concurrent or sequential) redemption of the same code cannot issue a second set of tokens
-/// (RFC 6749 §4.1.2, OAuth 2.0 Security BCP §4.13).
+/// The decorator claims the code before delegating to the inner processor, so a second redemption of the
+/// same code is refused, and one that got past the claim on another node is caught by the issued tokens
+/// written back at the key (RFC 6749 section 4.1.2, OAuth 2.0 Security BCP section 4.13). Within one
+/// process the claim is what refuses; across processes it is the write-back, and issue 435 is the gap
+/// between them.
 /// </summary>
 public class AuthorizationCodeReusePreventingDecoratorTests
 {

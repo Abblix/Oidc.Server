@@ -17,8 +17,9 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Enhances token processing by revoking tokens associated with previously used authorization codes,
-/// preventing authorization code reuse in compliance with OAuth 2.0 security best practices.
+/// Refuses a second redemption of an authorization code, and revokes the tokens the first one issued, in
+/// compliance with OAuth 2.0 security best practices. It claims the code to refuse a repeat within this
+/// process, and reads back the tokens written at the key to catch one that got past the claim elsewhere.
 /// </summary>
 /// <remarks>
 /// This class decorates the standard token request processing flow with additional security measures
@@ -58,11 +59,11 @@ public class AuthorizationCodeReusePreventingDecorator(
 
         // The code did not come back. What can reach this: a competitor claimed it between validation
         // and here, the entry's lifetime lapsed in that same window, or a claim expired mid-protocol -
-        // the last two needing no second request at all. What cannot: a code already consumed, because
-        // AuthorizeByCodeAsync reads the entry non-destructively and refuses before a consumed code ever
-        // becomes a valid request, and ORDINARY sequential reuse is caught by the next branch instead. Nor
-        // a store call that failed after the removal, which raises rather than answering. The refusal
-        // below is the right one for every case that does arrive, and a diagnosis for none.
+        // the last two needing no second request at all. What cannot: ordinary sequential reuse, which
+        // does NOT arrive gone, because the grant is written back at the key and comes back carrying its
+        // issued tokens - the next branch is where that is caught. Nor a store call that failed after the
+        // removal, which raises rather than answering. The refusal below is the right one for every case
+        // that does arrive, and a diagnosis for none.
         // Whichever of them it was, this redemption loses - reject without issuing a second set.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {

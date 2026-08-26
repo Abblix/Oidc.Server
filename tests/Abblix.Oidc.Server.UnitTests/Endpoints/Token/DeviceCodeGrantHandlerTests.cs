@@ -72,7 +72,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: a token request without the required device_code parameter is the caller's
+    /// RFC 6749 section 5.2: a token request without the required device_code parameter is the caller's
     /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
@@ -745,7 +745,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 8628 §3.2: once the device_code reaches its fixed lifetime the token endpoint returns
+    /// RFC 8628 section 3.2: once the device_code reaches its fixed lifetime the token endpoint returns
     /// expired_token and the record is cleaned up - polling must not keep an expired code alive.
     /// </summary>
     [Fact]
@@ -827,7 +827,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 8628 §3.2: each poll refreshes the cache TTL with the code's remaining lifetime, never the full
+    /// RFC 8628 section 3.2: each poll refreshes the cache TTL with the code's remaining lifetime, never the full
     /// CodeLifetime - so a client that keeps polling cannot extend the device_code past its fixed expiry.
     /// </summary>
     [Fact]

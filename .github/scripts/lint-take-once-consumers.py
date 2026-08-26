@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Refuse a new consumer of the take-once protocol that nobody has read the contract for.
 
-``DistributedCacheExtensions.TryRemoveAsync`` and ``TryGetAndRemoveAsync`` refuse for two reasons and
-only one involves a competitor: another caller took it, or the claim EXPIRED mid-protocol - the second
-on a single caller with nobody to lose to. A store call that fails after the removal is a third OUTCOME
-rather than a third cause: it raises, and the caller is handed an exception instead of an answer.
+``DistributedCacheExtensions.TryRemoveAsync`` and ``TryGetAndRemoveAsync`` answer that a caller took the
+value only when the protocol ran to the end AND its own claim was still in the store. Everything else is
+a refusal, and only one of the ways there involves a competitor. A store call that fails after the removal
+is an OUTCOME rather than a cause: it raises, and the caller is handed an exception instead of an answer.
+The ``CONTRACT`` string below is the sentence this file exists to make somebody read; it is stated as the
+condition rather than as a list, for the same reason the consumers are.
 
 Every consumer that wrote its own ``<returns>`` from the shape of the call - rather than from that
 contract - said "a concurrent request already claimed it", and an operator told a second request was the
@@ -16,7 +18,8 @@ files, and a detector with false positives trains everyone to wave it away. What
 is the REACH - who consumes the protocol at all. This list is the answer, and a change to it fails until
 somebody re-reads the contract and updates it deliberately.
 
-Usage: ``lint-take-once-consumers.py``; it walks the tracked ``.cs`` files.
+Usage: ``lint-take-once-consumers.py``; it walks the tracked ``.cs`` files under ``src/``, from anywhere
+in the working tree. Tests are outside its reach, so a test repeating the competitor story is not caught.
 """
 
 from __future__ import annotations
@@ -26,16 +29,24 @@ import re
 import subprocess
 import sys
 
-#: Three ways in. The two extension methods by name; the flag that routes a read through the same
-#: protocol one layer up - `IEntityStorage.GetAsync(..., removeOnRetrieval: true)` and
-#: `IAuthorizationRequestStorage.TryGetAsync(..., shouldRemove: true)`; and the DECLARATION of that
-#: flag, because the file declaring it is the one carrying the contract prose and it never passes the
-#: argument to itself. A name grep alone was blind to the second route, and both call-shaped routes
-#: were blind to the third - which is where the sentences this checker exists over actually live.
+#: A WRAPPER renames the protocol, so a file reaching it through one names none of the routes below.
+#: Naming the wrapper's own method here is what turns that from a hand-kept list into a measurement, and
+#: it finds both ends at once - the interface declaring it and every caller invoking it. A new wrapper
+#: adds its name here; that is the one manual step, and it is one line rather than a roll of files.
+WRAPPED = ["RemoveAuthorizationCodeAsync"]
+
+#: Four ways in. The two extension methods by name; the flag that routes a read through the same protocol
+#: one layer up - `IEntityStorage.GetAsync(..., removeOnRetrieval: true)` and
+#: `IAuthorizationRequestStorage.TryGetAsync(..., shouldRemove: true)`; the DECLARATION of that flag,
+#: because the file declaring it carries the contract prose and never passes the argument to itself; and
+#: the wrapper names above. A name grep alone was blind to the flag, both call-shaped routes were blind to
+#: the declaration - which is where the sentences this checker exists over live - and all three were blind
+#: to the wrapper, including the decorator that mints the refusal string an operator greps.
 CALL = re.compile(
     r"\b(TryRemoveAsync|TryGetAndRemoveAsync)\b"
     r"|\b(removeOnRetrieval|shouldRemove)\s*:\s*true\b"
-    r"|\bbool\s+(removeOnRetrieval|shouldRemove)\b")
+    r"|\bbool\s+(removeOnRetrieval|shouldRemove)\b"
+    r"|\b(" + "|".join(WRAPPED) + r")\b")
 
 DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 
@@ -43,8 +54,8 @@ DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 #: 455. Each was checked against the contract rather than against the call's shape, and adding a name
 #: here is the moment to read that contract.
 #:
-#: This is what the checker CAN see - the reach of the three routes above, rather than a proof that
-#: nothing else redeems. What it cannot see is in WRAPPERS below.
+#: This is the reach of the four routes above. It is not a proof that nothing else redeems: a route this
+#: file does not name finds nothing, which is why WRAPPED is a list rather than a paragraph of prose.
 KNOWN = {
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/BackChannelAuthenticationGrantHandler.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/DeviceCodeGrantHandler.cs",
@@ -60,16 +71,9 @@ KNOWN = {
     "src/Abblix.Oidc.Server/Features/Storages/AuthorizationCodeService.cs",
     "src/Abblix.Oidc.Server/Features/Storages/AuthorizationRequestStorage.cs",
     "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationRequestStorage.cs",
-    "src/Abblix.Oidc.Server/Features/Storages/IEntityStorage.cs",
-}
-
-#: A caller reaching the protocol through a WRAPPER that renames it names none of the three routes, so
-#: no pattern here finds it and no pattern here notices when it stops being one. These are recorded by
-#: hand, are not measured, and are listed so that the checker's blind spot is a NAMED file rather than a
-#: hypothetical: `IAuthorizationCodeService` declares `RemoveAuthorizationCodeAsync` over an
-#: implementation that IS measured, and describes this refusal in its own `<returns>`.
-WRAPPERS = {
     "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationCodeService.cs",
+    "src/Abblix.Oidc.Server/Features/Storages/IEntityStorage.cs",
+    "src/Abblix.Oidc.Server/Endpoints/Token/AuthorizationCodeReusePreventingDecorator.cs",
 }
 
 CONTRACT = (
@@ -134,8 +138,8 @@ def main() -> int:
         f"\nDescribe the refusal from that contract rather than from the shape of the call, then update "
         f"KNOWN in {pathlib.Path(__file__).name}.")
     print(
-        "\nOutside what this checker measures, and carrying the same contract by hand: "
-        + ", ".join(sorted(WRAPPERS)))
+        "\nA file reaching the protocol through a wrapper is found only if that wrapper's method is in "
+        f"WRAPPED, which currently names: {', '.join(WRAPPED)}.")
     return 1
 
 

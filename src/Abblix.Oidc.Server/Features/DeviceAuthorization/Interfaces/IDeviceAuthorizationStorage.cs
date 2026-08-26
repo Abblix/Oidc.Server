@@ -50,7 +50,7 @@ public interface IDeviceAuthorizationStorage
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="request">The updated device authorization request.</param>
     /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
-    /// the request's fixed expiry (RFC 8628 §3.2) so that repeated polling cannot extend the code.</param>
+    /// the request's fixed expiry (RFC 8628 section 3.2) so that repeated polling cannot extend the code.</param>
     /// <returns>A task that completes when the request is updated.</returns>
     Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
@@ -62,8 +62,9 @@ public interface IDeviceAuthorizationStorage
     Task RemoveAsync(string deviceCode);
 
     /// <summary>
-    /// Atomically attempts to remove a device authorization request by its device code.
-    /// This operation is thread-safe and returns whether the removal was successful.
+    /// Claims a device authorization request by its device code, deciding presence and removing it in one
+    /// protocol, so that a caller told it removed the request is the only caller that can be told so. It
+    /// narrows that window rather than closing it; the returns block below says what a false covers.
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
