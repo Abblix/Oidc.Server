@@ -182,10 +182,14 @@ public sealed class PollDeliveryByDefaultTests
     }
 
     /// <summary>
-    /// A host that names its own poll address still gets that one. The default is a floor, not a
-    /// replacement: a deployment reached through a gateway is the case the option was added for, and
-    /// there the address the outside world uses is not the one the route is mapped on.
+    /// A host that names its own poll address still gets that one. The mapped address is a floor, not a
+    /// replacement: it is assembled from the advertised prefix on the issuer's authority, and a deployment
+    /// delivering from somewhere that shape cannot express says so here.
     /// </summary>
+    /// <remarks>
+    /// A separate host name, as in this row. A proxy that merely rewrites PATHS is not this case and needs
+    /// nothing - <c>AdvertisedPrefix</c> is what the mapping declares, which <see cref="AHostBehindARewritingProxy_GetsTheAdvertisedPrefix"/> drives.
+    /// </remarks>
     [Fact]
     public async Task AHostWithItsOwnFactory_KeepsItsOwnAddress()
     {

@@ -313,11 +313,11 @@ public sealed class ConfigurationStreamStore : IStreamStore
         {
             throw new InvalidOperationException(
                 $"The stream '{declared.StreamId}' declares no push endpoint and the transmitter "
-                + $"offers no poll delivery: set {nameof(ConfiguredStream.PushEndpointUrl)}, or give the "
-                + "transmitter a poll address. The mapping call declares one, so a host that maps the "
-                + "endpoints AFTER something resolves this store - a hosted service, a seed, a warm-up - "
-                + "reaches this with the address not yet declared; map them first, or name the address "
-                + $"outright in {nameof(SharedSignalsTransmitterOptions)}."
+                + $"offers no poll delivery: set {nameof(ConfiguredStream.PushEndpointUrl)}, or give this "
+                + "transmitter a poll address. A host routing through Abblix.SharedSignals.MinimalAPI has "
+                + "one declared by the call that maps the endpoints, which must therefore run before "
+                + "anything resolves this store; a host routing any other way names the address in "
+                + $"{nameof(SharedSignalsTransmitterOptions)}."
                 + $"{nameof(SharedSignalsTransmitterOptions.PollEndpointFactory)}.");
         }
 

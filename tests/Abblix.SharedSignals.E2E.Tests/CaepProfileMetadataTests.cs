@@ -108,7 +108,7 @@ public sealed class CaepProfileMetadataTests
     /// no configuration can be wrong about.
     /// </remarks>
     [Fact]
-    public async Task AHostCarryingBothMembers_IsNotWarnedAboutEither()
+    public async Task AHostInsideTheProfileOnAllThree_IsNotWarned()
     {
         var recorder = new RecordingProvider();
 

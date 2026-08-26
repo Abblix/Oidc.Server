@@ -441,9 +441,9 @@ public class TransmitterDeliveryTests
         => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
             [System.Net.IPAddress.Parse("93.184.216.34")]));
     /// <summary>
-    /// The poll address, taken from the options the way the container would. These fixtures name it
-    /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
-    /// endpoints instead has it declared by the mapping, which is covered end to end.
+    /// The poll address, taken from the options the way the container would. This fixture names none, so
+    /// the service it builds offers no poll delivery - which is what these rows are about, since they
+    /// exercise push.
     /// </summary>
     private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
 }
