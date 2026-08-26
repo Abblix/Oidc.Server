@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.Time.Testing;
+using Abblix.SecurityEvents.Events;
 using Xunit;
 
 namespace Abblix.SecurityEvents.UnitTests;
@@ -25,6 +26,72 @@ public class SecurityEventTokenBuilderTests
         .WithIssuer("https://issuer.example.com")
         .WithJwtId("id-1")
         .WithEvent("https://example.com/events/test");
+
+    /// <summary>
+    /// A token declared to carry one event statement refuses the second, at the call that adds it.
+    /// </summary>
+    /// <remarks>
+    /// The CAEP Interoperability Profile 1.0 says "The 'events' claim of the SET MUST contain only one
+    /// event", which is tighter than RFC 8417 Section 2 - and a host minting SETs outside the SSF
+    /// dispatch path had nothing to hold it to. The message names the statement already there, because
+    /// "you already have one" without saying which is the least useful thing a builder can answer.
+    /// </remarks>
+    [Fact]
+    public void ASecondStatementOnASingleEventToken_IsRefusedWhereItIsAdded()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => builder.WithEvent("https://example.com/events/second"));
+
+        Assert.Contains("https://example.com/events/first", refusal.Message);
+        Assert.Contains("https://example.com/events/second", refusal.Message);
+    }
+
+    /// <summary>
+    /// The typed overload is the same door, so it is refused the same way.
+    /// </summary>
+    /// <remarks>
+    /// Its own row because the two overloads reach the collection independently: the typed one serializes
+    /// first and then adds, so a guard placed on the untyped one alone would leave the door a host using
+    /// the profile's own payload types walks through.
+    /// </remarks>
+    [Fact]
+    public void ASecondStatementThroughTheTypedOverload_IsRefusedToo()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        Assert.Throws<InvalidOperationException>(
+            () => builder.WithEvent("https://example.com/events/second", new StubPayload()));
+    }
+
+    /// <summary>
+    /// Left unset, several statements are built, because that is what RFC 8417 Section 2 allows and this
+    /// package speaks whatever profile the deployment does.
+    /// </summary>
+    /// <remarks>
+    /// The control, and the boundary of the change: without it, refusing the second statement outright
+    /// would satisfy both rows above and break every deployment building a SET the base specification
+    /// permits.
+    /// </remarks>
+    [Fact]
+    public void WithoutTheDeclaration_SeveralStatementsAreBuilt()
+    {
+        var token = new SecurityEventTokenBuilder()
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first")
+            .WithEvent("https://example.com/events/second")
+            .Build();
+
+        Assert.Equal(2, token.Events!.Count);
+    }
 
     [Fact]
     public void Build_WithoutIssuer_Fails()
@@ -304,4 +371,7 @@ public class SecurityEventTokenBuilderTests
             return Task.FromResult(Result);
         }
     }
+
+    /// <summary>A payload of no particular vocabulary, for exercising the typed overload.</summary>
+    private sealed record StubPayload : IEventPayload;
 }

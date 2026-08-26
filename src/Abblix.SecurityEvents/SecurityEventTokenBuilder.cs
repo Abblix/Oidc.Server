@@ -47,6 +47,22 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             [IanaClaimTypes.SubId] = nameof(WithSubjectId),
         };
 
+    /// <summary>
+    /// Whether the token carries a single event statement, refusing a second where RFC 8417 would take it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8417 Section 2 lets one SET carry several statements about different aspects of one transition,
+    /// and that is what this builder does by default, because it builds SETs for whatever profiles the
+    /// deployment speaks. A profile may be tighter: the CAEP Interoperability Profile 1.0 says "The
+    /// 'events' claim of the SET MUST contain only one event", and a deployment claiming it sets this.
+    /// <para>
+    /// Refused at the second <see cref="WithEvent(string, JsonObject)"/> rather than at
+    /// <see cref="Build"/>, so the failure names the call that broke the rule instead of the one that
+    /// noticed.
+    /// </para>
+    /// </remarks>
+    public bool SingleEventStatement { get; init; }
+
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly List<string> _audiences = [];
     private readonly EventsCollection _events = new();
@@ -190,11 +206,10 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// <exception cref="ArgumentException">
     /// A statement with the same event identifier was already added (RFC 8417 Section 2.2).
     /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// A second statement was added while <see cref="SingleEventStatement"/> is set.</exception>
     public SecurityEventTokenBuilder WithEvent(string eventType, JsonObject? payload = null)
-    {
-        _events.Add(eventType, payload);
-        return this;
-    }
+        => AddStatement(eventType, payload);
 
     /// <summary>
     /// Adds an event statement whose payload is a typed model, serialized here so the caller
@@ -233,7 +248,27 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
                 nameof(payload));
         }
 
-        _events.Add(eventType, payloadObject);
+        return AddStatement(eventType, payloadObject);
+    }
+
+    /// <summary>
+    /// The one door to the "events" claim, so the count is decided in a single place.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A second statement was added to a token declared to carry one.</exception>
+    private SecurityEventTokenBuilder AddStatement(string eventType, JsonObject? payload)
+    {
+        if (SingleEventStatement && _events.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"This token carries a single event statement and already holds '{_events.Single().Key}', so "
+                + $"'{eventType}' cannot be added. The CAEP Interoperability Profile 1.0 requires the "
+                + $"'{JwtClaimTypes.Events}' claim to contain only one event; clear "
+                + $"{nameof(SingleEventStatement)} to build the several-statement SET RFC 8417 Section 2 "
+                + "allows.");
+        }
+
+        _events.Add(eventType, payload);
         return this;
     }
 

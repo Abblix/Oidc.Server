@@ -159,7 +159,7 @@ public sealed partial class EventDispatcher(
         // across receivers is exactly the unintended-disclosure shape Section 4.1.8 warns about.
         var jwtId = Guid.NewGuid().ToString("N");
 
-        var builder = new SecurityEventTokenBuilder(clock)
+        var builder = new SecurityEventTokenBuilder(clock) { SingleEventStatement = true }
             .WithIssuer(_issuer)
             .WithJwtId(jwtId)
             .WithAudience([.. stream.Configuration.Audiences])
