@@ -71,8 +71,8 @@ public sealed class ConfigurationStreamStore : IStreamStore
 
     /// <summary>
     /// Materializes the configured streams: the transmitter's half - issuer, supported and
-    /// delivered sets, the poll endpoint - comes from <paramref name="options"/>, exactly as
-    /// the dynamic create would supply it.
+    /// delivered sets - comes from <paramref name="options"/>, and the poll endpoint from
+    /// <paramref name="pollEndpoints"/>, exactly as the dynamic create would supply them.
     /// </summary>
     /// <param name="options">The deployment's one-time decisions.</param>
     /// <param name="pollEndpoints">Where a declared poll stream is polled.</param>

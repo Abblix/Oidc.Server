@@ -495,9 +495,10 @@ public class StreamManagementServiceTests
         => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
             [System.Net.IPAddress.Parse("93.184.216.34")]));
     /// <summary>
-    /// The poll address, taken from the options the way the container would. These fixtures name it
-    /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
-    /// endpoints instead has it declared by the mapping, which is covered end to end.
+    /// The poll address, taken from the options the way the container would. Most fixtures here name it
+    /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>, and one deliberately
+    /// does not - the row that refuses a poll create on a push-only transmitter. A host that maps the
+    /// endpoints has the address declared by the mapping instead, which is covered end to end.
     /// </summary>
     private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
 }

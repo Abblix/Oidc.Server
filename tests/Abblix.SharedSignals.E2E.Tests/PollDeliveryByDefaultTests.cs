@@ -182,6 +182,36 @@ public sealed class PollDeliveryByDefaultTests
     }
 
     /// <summary>
+    /// An identifier reaches the address whole, rather than being read as the syntax that separates a
+    /// path from what follows it.
+    /// </summary>
+    /// <remarks>
+    /// This is the row the space could not write. Escaping the identifier is not enough on its own: a
+    /// <c>PathString</c> conversion decodes escaped text back and keeps only <c>%2F</c>, so an identifier
+    /// carrying <c>?</c> or <c>#</c> arrives at <c>Uri</c> as a delimiter, and the stored address becomes
+    /// that of a DIFFERENT stream with a query hanging off it - well-formed, served, and pointing at
+    /// somebody else. Nothing 404s, which is what makes it worse than issue 465.
+    /// </remarks>
+    [Theory]
+    [InlineData("alerts?eu", "%3F")]
+    [InlineData("alerts#eu", "%23")]
+    public async Task ADeclaredIdentifierCarryingUrlSyntax_SurvivesIntoTheAddressWhole(
+        string streamId, string escaped)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = streamId }]));
+
+        var streams = await host.GetTestClient()
+            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
+
+        Assert.Equal($"/ssf/poll/alerts{escaped}eu", poll.EndpointUrl!.AbsolutePath);
+        Assert.Empty(poll.EndpointUrl.Query);
+    }
+
+    /// <summary>
     /// A host that names its own poll address still gets that one. The mapped address is a floor, not a
     /// replacement: it is assembled from the advertised prefix on the issuer's authority, and a deployment
     /// delivering from somewhere that shape cannot express says so here.
