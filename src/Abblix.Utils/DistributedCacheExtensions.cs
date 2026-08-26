@@ -95,19 +95,25 @@ public static class DistributedCacheExtensions
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
-	///   <item><term>Step 1:</term> Get the value from cache</item>
-	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
+	///   <item><term>Step 1:</term> Take the per-key gate, so no other redemption of this key runs in
+	///   this process while the rest happens</item>
+	///   <item><term>Step 2:</term> Read the value, and give up if there is none</item>
+	///   <item><term>Step 3:</term> Run the removal protocol of <see cref="TryRemoveAsync"/> under the
+	///   same hold</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> the removal is delegated to
-	/// <see cref="TryRemoveAsync"/>, and the condition for reporting one is under that method.
+	/// <strong>How it provides atomicity:</strong> the removal reports itself under the same condition
+	/// <see cref="TryRemoveAsync"/> states, and the read is inside the same hold of the gate rather than
+	/// in front of it.
 	/// </para>
 	/// <para>
-	/// <strong>The value returned is the one read BEFORE that removal, not the one removed.</strong> The
-	/// read happens here and the removal happens inside the delegate, so anything that writes the key
-	/// between them is destroyed by this caller and handed to nobody, while this caller receives the
-	/// earlier bytes and is told it won. Nothing in this class closes that: a store whose own primitive
-	/// returns the removed value is what closes it, and issue 454 tracks the change.
+	/// <strong>What the read's placement buys, and what it does not.</strong> The bytes handed back are
+	/// the bytes at the key when this caller got IN - not the ones there before it waited, and that wait
+	/// is as long as another caller's whole redemption. What is still open is narrower and real: a writer
+	/// that takes no gate can land between the read and the removal, so this caller destroys that write
+	/// and is handed the earlier bytes. Nothing in this class closes THAT, and nothing here survives a
+	/// second process at all: a store whose own primitive returns the removed value is what closes both,
+	/// and issue 435 tracks it.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> the claim auto-expires after the specified timeout (5 seconds by
@@ -115,9 +121,10 @@ public static class DistributedCacheExtensions
 	/// means a caller slower than the timeout loses its own claim: see <see cref="TryRemoveAsync"/>.
 	/// </para>
 	/// <para>
-	/// <strong>Performance:</strong> up to six cache operations - one read here, and up to five inside
-	/// <see cref="TryRemoveAsync"/> - so it has higher latency than a store's own atomic primitive, and
-	/// works with any IDistributedCache in exchange.
+	/// <strong>Performance:</strong> up to six cache operations - one read, and up to five in the removal
+	/// protocol - so it has higher latency than a store's own atomic primitive, and works with any
+	/// IDistributedCache in exchange. All of them inside the gate, so a contended key serializes for the
+	/// whole of that rather than for the removal alone.
 	/// </para>
 	/// </remarks>
 	/// <param name="cache">The distributed cache instance.</param>
@@ -125,13 +132,13 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing the value READ BEFORE the removal
-	/// when this caller's own claim was still in the store afterwards - not necessarily the value it
-	/// removed, see the remarks and issue 454. Null otherwise, which does NOT mean somebody else took it:
-	/// see <see cref="TryRemoveAsync"/>, whose remarks carry the condition; this
-	/// method adds nothing to it beyond returning the value.
+	/// A task that completes when the operation finishes, containing the value read under this caller's
+	/// own hold of the gate, when its claim was still in the store afterwards. Null otherwise, which does
+	/// NOT mean somebody else took it: see <see cref="TryRemoveAsync"/>, whose remarks carry the
+	/// condition; this method adds nothing to it beyond returning the value. What the placement of the
+	/// read does and does not settle is in the remarks.
 	/// </returns>
-	public static async Task<byte[]?> TryGetAndRemoveAsync(
+	public static Task<byte[]?> TryGetAndRemoveAsync(
 		this IDistributedCache cache,
 		string key,
 		TimeSpan? lockTimeout = null,
@@ -140,23 +147,24 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
-		// Get the value (return null if not found)
-		var valueData = await cache.GetAsync(key, cancellationToken);
-		if (valueData == null)
+		// Read and removal under ONE hold of the gate, so the bytes handed back are the bytes that were at
+		// the key when this caller got in - rather than the ones that were there before it waited, which is
+		// a wait as long as another caller's whole redemption. RemoveUnderGateAsync is called directly
+		// instead of TryRemoveAsync, because taking the gate twice on one key deadlocks a caller against
+		// itself.
+		return UnderGateAsync(key, cancellationToken, async () =>
 		{
-			return null;
-		}
+			var valueData = await cache.GetAsync(key, cancellationToken);
+			if (valueData == null)
+			{
+				return null;
+			}
 
-		if (!await cache.TryRemoveAsync(key, lockTimeout, cancellationToken))
-		{
-			// Not necessarily somebody else: see TryRemoveAsync's remarks for what false covers.
-			return null;
-		}
-
-		// The claim held, so this caller is the one entitled to A value - but not necessarily to THIS
-		// one. These bytes were read before the gate, and what the protocol removed is whatever was at
-		// the key when it ran. See the remarks, and issue 454.
-		return valueData;
+			// Not necessarily somebody else when this is false: see TryRemoveAsync's remarks.
+			return await RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken)
+				? valueData
+				: null;
+		});
 	}
 
 	/// <summary>
@@ -199,12 +207,9 @@ public static class DistributedCacheExtensions
 	/// outcome reached by a fault, where the caller gets an exception rather than an answer at all.
 	/// </para>
 	/// <para>
-	/// <strong>Two things the check does NOT give you.</strong> It does not make this a take-once: the
-	/// gate serializes callers within one process, so a competitor cannot overwrite another's token HERE,
-	/// and nothing about that survives a second node - see below. And passing it is not the same as being
-	/// handed the value, because <see cref="TryGetAndRemoveAsync"/> returns what it read BEFORE the
-	/// protocol; where something writes the key in between, two callers pass and are handed the same
-	/// bytes. That is issue 454, and this class does not close it.
+	/// <strong>What the check does NOT give you.</strong> It does not make this a take-once: the gate
+	/// serializes callers within one process, so a competitor cannot overwrite another's token HERE, and
+	/// nothing about that survives a second node - see below.
 	/// </para>
 	/// <para>
 	/// <strong>Across processes even the overwrite reopens.</strong> Two nodes redeeming the same key at
@@ -250,7 +255,7 @@ public static class DistributedCacheExtensions
 	/// nobody can be told they took it. That last one does not need a second node: see the remarks. A
 	/// store fault after the removal raises rather than returning, and loses the value the same way.
 	/// </returns>
-	public static async Task<bool> TryRemoveAsync(
+	public static Task<bool> TryRemoveAsync(
 		this IDistributedCache cache,
 		string key,
 		TimeSpan? lockTimeout = null,
@@ -275,13 +280,31 @@ public static class DistributedCacheExtensions
 		// not necessarily the value removed inside it. Bringing the read inside the serialized section is
 		// what closes the in-process half; the deadlock is an objection to the naive shape of that, not to
 		// the goal.
+		return UnderGateAsync(
+			key, cancellationToken, () => RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken));
+	}
+
+	/// <summary>
+	/// Runs one redemption of a key with every other redemption of that key in this process held out.
+	/// </summary>
+	/// <remarks>
+	/// The single door to the gate, so a body cannot take it twice and deadlock against itself. Both
+	/// entry points hand their whole protocol in - <see cref="TryGetAndRemoveAsync"/> its read and its
+	/// removal together, which is what makes the value it returns the value it removed within this
+	/// process.
+	/// </remarks>
+	private static async Task<T> UnderGateAsync<T>(
+		string key,
+		CancellationToken cancellationToken,
+		Func<Task<T>> body)
+	{
 		var gate = RentGate(key);
 		try
 		{
 			await gate.WaitAsync(cancellationToken);
 			try
 			{
-				return await RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken);
+				return await body();
 			}
 			finally
 			{

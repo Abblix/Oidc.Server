@@ -461,6 +461,57 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
+	/// The value read by <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/> is read INSIDE the
+	/// serialized section, not before waiting for it.
+	/// </summary>
+	/// <remarks>
+	/// Measured by where the read happens rather than by trying to observe a stale value: one caller holds
+	/// the gate, parked at its own protocol read, and a second calls the take-once. If its read is outside
+	/// the gate it happens at once and parks too, so the store sees TWO parked reads; if it is inside, the
+	/// second caller is still waiting and the store sees one.
+	/// <para>
+	/// What this buys is the width of the window rather than its closure. Before, the bytes handed back
+	/// were the bytes present before an unbounded wait - the whole of another caller's redemption. Now they
+	/// are the bytes present when this caller got in, and what remains open is the removal protocol's own
+	/// few steps, to a writer that takes no gate and to any second process at all. That is issue 435, and
+	/// it needs a store primitive this interface does not expose.
+	/// </para>
+	/// </remarks>
+	[Fact]
+	public async Task TryGetAndRemoveAsync_ReadsInsideTheSerializedSection()
+	{
+		var inner = CreateCache();
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+		var cache = new ParkOnValueRead(inner, Key);
+
+		// The holder parks at its protocol read, inside the gate.
+		var holder = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
+		await cache.WaitUntilParkedAsync(1);
+
+		var taker = cache.TryGetAndRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
+		for (var i = 0; i < 50; i++) await Task.Yield();
+
+		// One, not two: the taker has not read anything, because it is waiting for the gate the holder has.
+		Assert.Equal(1, cache.Parked);
+
+		cache.ResumeNext();
+		Assert.True(await AnsweredAsync(holder));
+
+		// And it does read, once it is in. One park rather than two: the holder took the value, so the read
+		// finds nothing and the removal protocol - which would have read again - is never reached.
+		await cache.WaitUntilParkedAsync(1);
+		cache.ResumeNext();
+
+		var taken = await Task.WhenAny(
+			taker, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+		Assert.True(ReferenceEquals(taken, taker), "the taker never answered");
+
+		// The holder took the value, so there is nothing left for the taker: null is the right answer, and
+		// the row is about WHERE it looked rather than what it found.
+		Assert.Null(await taker);
+	}
+
+	/// <summary>
 	/// Parks every read of one of <paramref name="gatedKeys"/> until the test resumes it. The lock keys the
 	/// protocol reads are deliberately not among them: parking those would suspend a caller somewhere the
 	/// property under test says nothing about.
