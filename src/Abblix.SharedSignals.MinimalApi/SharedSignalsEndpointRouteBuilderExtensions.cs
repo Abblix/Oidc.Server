@@ -122,6 +122,23 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         group.MapPost(Routes.Verify, RequestVerificationAsync).RequiresScope(SsfScopes.Manage);
         group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync).RequiresScope(SsfScopes.Read);
 
+        // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
+        // and a receiver polls it for as long as the stream lives, so an address that does not lead back
+        // to this route is a 404 arriving long after the create that succeeded. Single-sourced from the
+        // route above for the same reason the configuration document is single-sourced from the five it
+        // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
+        //
+        // The identifier is escaped so that one an operator spelled out reaches the URL as itself rather
+        // than as syntax. That makes the address well-formed, not addressable: an identifier carrying a
+        // path separator still misses this route, which matches a single segment - issue 465.
+        var transmitter = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
+        var pollAuthority = AuthorityOf(transmitter);
+        var pollPrefix = AdvertisedPrefixOf(endpointOptions);
+        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
+            streamId => new Uri(
+                pollAuthority,
+                pollPrefix.Add($"{Routes.Poll}/{Uri.EscapeDataString(streamId)}").Value!));
+
         return group;
     }
 
@@ -152,16 +169,31 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
 
         WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
-        var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
-            ? endpointOptions.AdvertisedPrefix
-            : endpointOptions.ManagementPrefix;
+        var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
         return endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
-            (SharedSignalsTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
+            (SharedSignalsTransmitterOptions current, PollEndpointLocator pollEndpoints) =>
+                Results.Json(ConfigurationDocumentOf(current, pollEndpoints, advertisedPrefix)));
     }
+
+    /// <summary>
+    /// The prefix the outside world reaches this deployment on: the advertised one where a proxy rewrites
+    /// paths, the mapped one otherwise.
+    /// </summary>
+    private static PathString AdvertisedPrefixOf(SharedSignalsEndpointOptions endpointOptions)
+        => endpointOptions.AdvertisedPrefix.HasValue
+            ? endpointOptions.AdvertisedPrefix
+            : endpointOptions.ManagementPrefix;
+
+    /// <summary>
+    /// The authority every endpoint this deployment publishes lives on - the issuer's, which is what a
+    /// receiver holding nothing else already has.
+    /// </summary>
+    private static Uri AuthorityOf(SharedSignalsTransmitterOptions options)
+        => new(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
 
     /// <summary>
     /// The one scheme description the CAEP Interoperability Profile names.
@@ -366,13 +398,14 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static TransmitterConfiguration ConfigurationDocumentOf(
         SharedSignalsTransmitterOptions options,
+        PollEndpointLocator pollEndpoints,
         PathString prefix)
     {
-        var authority = new Uri(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
+        var authority = AuthorityOf(options);
         Uri EndpointOf(string route) => new(authority, prefix.Add(route).Value!);
 
         var deliveryMethods = new List<string> { PushDeliveryMethod.MethodUri };
-        if (options.PollEndpointFactory is not null)
+        if (pollEndpoints.IsOffered)
         {
             deliveryMethods.Add(PollDeliveryMethod.MethodUri);
         }

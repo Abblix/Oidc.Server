@@ -75,20 +75,23 @@ public sealed class ConfigurationStreamStore : IStreamStore
     /// the dynamic create would supply it.
     /// </summary>
     /// <param name="options">The deployment's one-time decisions.</param>
+    /// <param name="pollEndpoints">Where a declared poll stream is polled.</param>
     /// <param name="streams">The declared streams.</param>
     /// <param name="backingStore">
     /// Where the reconciled streams live. In memory unless the deployment supplies a shared one,
     /// which is what carries the receiver-owned half between instances.</param>
     /// <exception cref="InvalidOperationException">
     /// Two declarations share a receiver and stream identifier, or a poll stream is declared on
-    /// a transmitter with no poll endpoint factory - configuration bugs, refused loudly at
+    /// a transmitter that offers no poll delivery - configuration bugs, refused loudly at
     /// startup rather than surfacing as a broken stream later.</exception>
     public ConfigurationStreamStore(
         SharedSignalsTransmitterOptions options,
+        PollEndpointLocator pollEndpoints,
         IReadOnlyList<ConfiguredStream> streams,
         IStreamStore backingStore)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(pollEndpoints);
         ArgumentNullException.ThrowIfNull(streams);
 
         _streams = backingStore ?? throw new ArgumentNullException(nameof(backingStore));
@@ -117,7 +120,7 @@ public sealed class ConfigurationStreamStore : IStreamStore
                     + "more than once.");
             }
 
-            declared.Add(Materialize(options, stream));
+            declared.Add(Materialize(options, pollEndpoints, stream));
         }
 
         _declared = declared;
@@ -289,7 +292,10 @@ public sealed class ConfigurationStreamStore : IStreamStore
         }
     }
 
-    private static StreamState Materialize(SharedSignalsTransmitterOptions options, ConfiguredStream declared)
+    private static StreamState Materialize(
+        SharedSignalsTransmitterOptions options,
+        PollEndpointLocator pollEndpoints,
+        ConfiguredStream declared)
     {
         StreamDeliveryMethod delivery;
         if (declared.PushEndpointUrl is { } pushEndpoint)
@@ -299,15 +305,16 @@ public sealed class ConfigurationStreamStore : IStreamStore
                 AuthorizationHeader = declared.PushAuthorizationHeader,
             };
         }
-        else if (options.PollEndpointFactory is { } pollEndpointOf)
+        else if (pollEndpoints.Of(declared.StreamId) is { } pollEndpoint)
         {
-            delivery = new PollDeliveryMethod(pollEndpointOf(declared.StreamId));
+            delivery = new PollDeliveryMethod(pollEndpoint);
         }
         else
         {
             throw new InvalidOperationException(
                 $"The stream '{declared.StreamId}' declares no push endpoint and the transmitter "
-                + $"offers no poll delivery: set {nameof(ConfiguredStream.PushEndpointUrl)} or "
+                + $"offers no poll delivery: set {nameof(ConfiguredStream.PushEndpointUrl)}, map the "
+                + "transmitter's endpoints so the poll route declares its address, or set "
                 + $"{nameof(SharedSignalsTransmitterOptions)}.{nameof(SharedSignalsTransmitterOptions.PollEndpointFactory)}.");
         }
 

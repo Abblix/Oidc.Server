@@ -97,7 +97,8 @@ public class StreamManagementServiceTests
             NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer, clock: clock);
 
         return new Harness(
-            new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock),
+            new StreamManagementService(
+                store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock),
             store, outbox, signer, clock);
     }
 
@@ -188,7 +189,8 @@ public class StreamManagementServiceTests
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
-        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock);
+        var service = new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 
         var created = await service.CreateStreamAsync(
             Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
@@ -233,7 +235,8 @@ public class StreamManagementServiceTests
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
-        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options), clock);
+        var service = new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 
         var created = await service.CreateStreamAsync(
             Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
@@ -491,4 +494,10 @@ public class StreamManagementServiceTests
     private static ReceiverAddressPolicy PolicyFor(SharedSignalsTransmitterOptions options)
         => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
             [System.Net.IPAddress.Parse("93.184.216.34")]));
+    /// <summary>
+    /// The poll address, taken from the options the way the container would. These fixtures name it
+    /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
+    /// endpoints instead has it declared by the mapping, which is covered end to end.
+    /// </summary>
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
 }
