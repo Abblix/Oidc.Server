@@ -56,9 +56,10 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         };
 
     /// <summary>
-    /// When the code cannot be claimed (a concurrent request already claimed it, or it was already
-    /// consumed, so the atomic remove returns a failure), the decorator rejects with invalid_grant
-    /// and never invokes the inner processor - so no second set of tokens is issued.
+    /// When the code does not come back - a competitor claimed it, it was already consumed, or a claim
+    /// expired mid-protocol on a single caller - the decorator rejects with invalid_grant and never
+    /// invokes the inner processor, so no second set of tokens is issued. The refusal is the same for
+    /// each, which is why it is an answer rather than a diagnosis.
     /// </summary>
     [Fact]
     public async Task UnclaimableCode_IsRejected_WithoutIssuingTokens()

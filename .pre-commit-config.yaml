@@ -33,7 +33,9 @@ repos:
         entry: python .github/scripts/lint-take-once-consumers.py
         language: python
         pass_filenames: false
-        files: \.(cs)$
+        # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
+        # check, or the list is edited by whoever is not looking at what it holds.
+        files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py

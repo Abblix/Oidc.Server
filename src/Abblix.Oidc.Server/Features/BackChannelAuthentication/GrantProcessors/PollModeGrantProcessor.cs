@@ -33,7 +33,8 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     /// Atomically removes the authentication request from storage and returns its authorized grant.
     /// A removal that does not come back with the request is answered <c>invalid_grant</c> rather than
     /// re-issuing tokens. That is the right answer and not a diagnosis: a competitor produces it, and so
-    /// does a claim that expired mid-protocol or a store call that failed after the removal.
+    /// does a claim that expired mid-protocol, on one caller with nobody to lose to. A store fault after
+    /// the removal is a third outcome rather than a third cause - it raises past this method.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
@@ -45,8 +46,9 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
 
         if (removedRequest == null)
         {
-            // Not necessarily a competitor: the claim can expire mid-protocol and a store call after the
-            // removal can fail, both on a single caller. The receiver gets the same answer either way.
+            // Not necessarily a competitor: the claim can expire mid-protocol on a single caller with
+            // nobody to lose to, and the receiver is told the same thing either way. A store fault after
+            // the removal never reaches here - it raises, and the receiver gets no result at all.
             return new OidcError(
                 ErrorCodes.InvalidGrant,
                 "The authentication request has already been used");

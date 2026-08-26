@@ -407,9 +407,10 @@ public class DeviceCodeGrantHandlerTests
             });
 
     /// <summary>
-    /// Verifies that when atomic removal fails (race condition - another concurrent request claimed the device code),
-    /// the handler returns an ExpiredToken error per RFC 8628 Section 3.5.
-    /// This prevents double-issuance of tokens for the same device code.
+    /// Verifies that when the removal does not come back with the record - a competitor claimed the
+    /// device code, or a claim expired mid-protocol with nobody to lose to - the handler returns an
+    /// ExpiredToken error per RFC 8628 Section 3.5, which is what stops a second set of tokens being
+    /// issued for one device code.
     /// </summary>
     [Fact]
     public async Task AuthorizedRequest_RaceCondition_ShouldReturnExpiredTokenError()

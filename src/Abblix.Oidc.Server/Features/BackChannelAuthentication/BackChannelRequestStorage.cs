@@ -83,16 +83,18 @@ public class BackChannelRequestStorage(
 	}
 
 	/// <summary>
-	/// Atomically retrieves and removes a backchannel authentication request from storage.
-	/// This prevents race conditions in poll mode where concurrent requests could both retrieve
-	/// the same authentication request before removal, leading to duplicate token issuance.
+	/// Retrieves and removes a backchannel authentication request from storage, under one hold of the
+	/// store's per-key gate. That is what narrows the poll-mode window in which two requests could both
+	/// come back with the same grant and both be issued tokens; the returns block below says what it does
+	/// not close.
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
 	/// A task that returns the authentication request when this caller removed it and still held its own
 	/// claim afterwards. Null otherwise, and that covers more than a competitor: the request not being
-	/// there, a claim that expired while a store call was in flight, and the request being gone with
-	/// nobody able to be told they took it. The last two need no second caller and no second node.
+	/// there, and a claim that expired while a store call was in flight - the second on one caller with
+	/// nobody to lose to, its outcome being the request gone with nobody able to be told they took it. A
+	/// store call that fails after the removal raises instead of answering.
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId)
 	{

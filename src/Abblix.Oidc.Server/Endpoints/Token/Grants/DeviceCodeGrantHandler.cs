@@ -90,8 +90,10 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized }
                 when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
 
-                // Atomic get-and-remove, so two concurrent polls cannot both retrieve the authorized
-                // grant and both be issued tokens. RFC 8628 states no such rule anywhere - exchanging a
+                // Get-and-remove under the store's per-key gate, which narrows the window in which two
+                // polls both come back with the authorized grant. A refusal below is not a diagnosis: a
+                // competitor produces it, and so does a claim that expired mid-protocol with nobody to
+                // lose to. RFC 8628 states no such rule anywhere - exchanging a
                 // device code once is this library's decision, and this arm is where it is enforced.
 
                 return new OidcError(

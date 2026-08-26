@@ -457,8 +457,9 @@ public class AuthorizationCodeServiceTests
     }
 
     /// <summary>
-    /// Verifies that RemoveAuthorizationCodeAsync returns an invalid_grant failure when the code is
-    /// absent - already claimed by a concurrent request, already consumed, or never issued.
+    /// Verifies that RemoveAuthorizationCodeAsync returns an invalid_grant failure when the code does
+    /// not come back - claimed by a competitor, already consumed, never issued, or a claim that expired
+    /// mid-protocol with nobody to lose to.
     /// </summary>
     [Fact]
     public async Task RemoveAuthorizationCodeAsync_WithAbsentCode_ReturnsFailure()

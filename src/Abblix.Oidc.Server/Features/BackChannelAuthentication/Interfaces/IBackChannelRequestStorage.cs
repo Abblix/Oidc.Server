@@ -58,8 +58,9 @@ public interface IBackChannelRequestStorage
 	/// <returns>
 	/// A task that returns the authentication request when this caller removed it and still held its own
 	/// claim afterwards. Null otherwise, which covers the request not being there, another caller having
-	/// taken it, a claim that expired mid-protocol, and the request being gone with nobody able to be told
-	/// they took it - the last two without any competitor at all.
+	/// taken it, and a claim that expired mid-protocol - the last on one caller with nobody to lose to,
+	/// and its outcome is the request gone with nobody able to be told they took it. A store call that
+	/// fails after the removal raises instead of answering.
 	/// </returns>
 	Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId);
 }
