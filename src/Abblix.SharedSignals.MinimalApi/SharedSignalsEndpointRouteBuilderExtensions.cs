@@ -138,8 +138,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// The one scheme description the CAEP Interoperability Profile names, built fresh per call because
-    /// <see cref="JsonObject"/> is mutable and a shared instance would hand every caller the same one.
+    /// The one scheme description the CAEP Interoperability Profile names.
     /// </summary>
     private static JsonObject OAuthAuthorizationScheme() => new()
     {
@@ -149,9 +148,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
 
     /// <summary>
     /// Says once, at startup, what this deployment publishes that the CAEP Interoperability Profile 1.0
-    /// rejects. Neither condition is a fault under Shared Signals Framework 1.0 itself, where both members
-    /// are optional, so neither refuses the host - but a conformance run measures against the profile, and
-    /// a document that fails it should not do so silently.
+    /// rejects. Neither refuses the host, and the two are not equally optional elsewhere: SSF 1.0 requires
+    /// jwks_uri of any transmitter that signs, which this one always does, while it attaches no condition
+    /// to authorization_schemes. A conformance run measures against the profile, and a document that fails
+    /// it should not do so silently.
     /// </summary>
     private static void WarnIfOutsideTheCaepProfile(
         IServiceProvider services, SharedSignalsTransmitterOptions options)
@@ -168,13 +168,15 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // Only a host-supplied list can be short: the default IS the required entry. Asked positively -
         // does some scheme name OAuth 2.0 - so a list can carry anything else it likes without the check
         // needing to know what.
-        if (options.AuthorizationSchemes is { } schemes && !schemes.Any(IsOAuth))
+        if (options.AuthorizationSchemes is { Count: > 0 } schemes && !schemes.Any(IsOAuth))
             LogOAuthSchemeNotAdvertised(logger, schemes.Count);
     }
 
     private static bool IsOAuth(JsonObject scheme)
         => scheme.TryGetPropertyValue(TransmitterConfiguration.ParameterNames.SpecUrn, out var urn)
-           && urn?.GetValue<string>() == TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2;
+           && urn is JsonValue value
+           && value.TryGetValue<string>(out var specUrn)
+           && specUrn == TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2;
 
     private static SharedSignalsEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
         => endpoints.ServiceProvider.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
@@ -346,7 +348,16 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             AddSubjectEndpoint = EndpointOf(Routes.AddSubject),
             RemoveSubjectEndpoint = EndpointOf(Routes.RemoveSubject),
             VerificationEndpoint = EndpointOf(Routes.Verify),
-            AuthorizationSchemes = options.AuthorizationSchemes ?? [OAuthAuthorizationScheme()],
+            AuthorizationSchemes = options.AuthorizationSchemes switch
+            {
+                null => [OAuthAuthorizationScheme()],
+
+                // The host said "advertise none" explicitly. Publishing an empty array would advertise a
+                // member with no schemes in it, which says less than omitting it.
+                { Count: 0 } => null,
+
+                var supplied => supplied,
+            },
             DefaultSubjects = options.DefaultSubjectsValue,
         };
     }

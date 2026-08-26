@@ -81,10 +81,19 @@ public sealed record SharedSignalsTransmitterOptions
     /// authorization itself is the host's, not this package's.
     /// </summary>
     /// <remarks>
-    /// Null advertises OAuth 2.0, which the CAEP Interoperability Profile 1.0 Section 2.3.7 requires the
-    /// value to include and Section 2.4.3 requires receivers to use. A host that sets this takes the
-    /// member over entirely - including the responsibility for that entry - and is told at startup if it
-    /// leaves OAuth 2.0 out.
+    /// Three settings, and the first of them makes an assertion on the deployment's behalf.
+    /// <list type="bullet">
+    ///   <item>Left unset, the document advertises OAuth 2.0 - the value the CAEP Interoperability
+    ///   Profile 1.0 Section 2.3.7 requires and Section 2.4.3 requires receivers to use. That is a claim
+    ///   about how this deployment authorizes its Stream Management API, made by this package because the
+    ///   profile demands it and most deployments do exactly that. A deployment authorizing by something
+    ///   else must not leave it unset.</item>
+    ///   <item>Set to a list, the member is that list verbatim. The host owns it, including whether the
+    ///   OAuth entry is in it, and is told once at startup if it is not.</item>
+    ///   <item>Set to an EMPTY list, the member is omitted entirely. That is how a deployment says it
+    ///   advertises no scheme at all, and nothing warns about it, because it is a decision rather than an
+    ///   oversight.</item>
+    /// </list>
     /// </remarks>
     public IReadOnlyList<JsonObject>? AuthorizationSchemes { get; init; }
 

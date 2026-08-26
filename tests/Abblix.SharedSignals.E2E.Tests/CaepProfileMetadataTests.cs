@@ -26,11 +26,13 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// and the receiver's own client rather than off the options object.
 /// </summary>
 /// <remarks>
-/// The CAEP Interoperability Profile 1.0 Section 2.3.7 requires the advertised authorization schemes to
-/// include OAuth 2.0, and Section 2.4.3 requires a receiver to use OAuth 2.0 for Stream Management API
-/// requests. Nothing in Shared Signals Framework 1.0 requires either member, so a host is never refused
-/// here - but a conformance run measures against the profile, and a document that fails it should not do
-/// so in silence.
+/// The CAEP Interoperability Profile 1.0 requires both members: Section 2.3.3 for jwks_uri and Section
+/// 2.3.7 for authorization_schemes, whose value must include OAuth 2.0. The two are not equally optional
+/// outside that profile. Shared Signals Framework 1.0 Section 7.1 attaches a condition to jwks_uri -
+/// "This value MUST be specified if the Transmitter intends to generate signed JWTs" - and this package
+/// always signs, so its absence is a violation there too. To authorization_schemes SSF attaches nothing.
+/// A host is refused for neither, but a document that fails a conformance run should not do so in
+/// silence.
 /// </remarks>
 public sealed class CaepProfileMetadataTests
 {
@@ -89,14 +91,23 @@ public sealed class CaepProfileMetadataTests
             recorder);
 
         Assert.Contains(recorder.Warnings, message => message.Contains(SchemeUrns.OAuth2));
+
+        // The count is the message's only template argument, and nothing else here would notice it going
+        // wrong: both other assertions match literals that live in the template itself.
+        Assert.Contains(recorder.Warnings, message => message.Contains("The 1 configured"));
     }
 
     /// <summary>
-    /// The control for the warning. One that fires on every deployment is not a check, and one that
+    /// The control for both warnings. One that fires on every deployment is not a check, and one that
     /// fires on the DEFAULT would fire on every deployment that configures nothing.
     /// </summary>
+    /// <remarks>
+    /// Scoped to the two metadata members this change is about. A fixture carrying both is not thereby
+    /// conformant overall - this one supplies no poll endpoint, and the profile's Section 2.3.8.1 requires
+    /// a transmitter to accept a Create Stream naming poll, which Section 2.4.5.1 makes the default.
+    /// </remarks>
     [Fact]
-    public async Task AHostInsideTheProfile_IsNotWarnedAtAll()
+    public async Task AHostCarryingBothMembers_IsNotWarnedAboutEither()
     {
         var recorder = new RecordingProvider();
 
@@ -124,6 +135,54 @@ public sealed class CaepProfileMetadataTests
         await using var host = await StartAsync(BaseOptions(), recorder);
 
         Assert.Contains(recorder.Warnings, message => message.Contains("jwks_uri"));
+    }
+
+    /// <summary>
+    /// An empty list is the host saying it advertises no scheme at all. The member is omitted rather than
+    /// published empty, and nothing warns, because that is a decision rather than an oversight.
+    /// </summary>
+    [Fact]
+    public async Task AHostThatAdvertisesNoScheme_PublishesNoMemberAndIsNotWarned()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var recorder = new RecordingProvider();
+
+        await using var host = await StartAsync(
+            BaseOptions() with
+            {
+                JwksUri = new Uri($"{Issuer}/jwks"),
+                AuthorizationSchemes = [],
+            },
+            recorder);
+
+        var metadata = await ReadDocumentAsync(host, cancellationToken);
+
+        Assert.Null(metadata.AuthorizationSchemes);
+        Assert.Empty(recorder.Warnings);
+    }
+
+    /// <summary>
+    /// The member is raw JSON because its shape is scheme-specific and belongs to the host, so reading it
+    /// must answer the question rather than fault on a shape this package does not own.
+    /// </summary>
+    /// <remarks>
+    /// A <c>spec_urn</c> that is not a string used to throw a JSON type error out of the route-mapping
+    /// call, naming neither the member nor the option - an operator would have had nothing to go on.
+    /// </remarks>
+    [Fact]
+    public async Task AHostWithANonStringSpecUrn_StartsAndIsWarned()
+    {
+        var recorder = new RecordingProvider();
+
+        await using var host = await StartAsync(
+            BaseOptions() with
+            {
+                JwksUri = new Uri($"{Issuer}/jwks"),
+                AuthorizationSchemes = [new JsonObject { ["spec_urn"] = 123 }],
+            },
+            recorder);
+
+        Assert.Contains(recorder.Warnings, message => message.Contains(SchemeUrns.OAuth2));
     }
 
     private static SharedSignalsTransmitterOptions BaseOptions() => new()
@@ -176,8 +235,8 @@ public sealed class CaepProfileMetadataTests
 
     /// <summary>
     /// Records warning-level messages so a test can assert on what an operator would have seen. Written
-    /// by hand rather than mocked, because the assertion is about the RENDERED text - which is what
-    /// reaches a log, and what a template argument mistake would break.
+    /// by hand rather than mocked, because the assertion is about the RENDERED text: the template and its
+    /// arguments composed, which is what reaches a log and what neither half proves on its own.
     /// </summary>
     private sealed class RecordingProvider : ILoggerProvider
     {
