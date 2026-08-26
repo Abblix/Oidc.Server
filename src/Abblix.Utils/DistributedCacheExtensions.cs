@@ -294,12 +294,14 @@ public static class DistributedCacheExtensions
 	/// the earlier bytes - or turns a live value into a refusal with nobody told.
 	/// </para>
 	/// <para>
-	/// Both entry points are exposed to that, so both have live examples here. The back-channel request is
-	/// written on completion and again by the poll bumping its next-poll instant, on the key
-	/// <see cref="TryGetAndRemoveAsync"/> redeems. The device authorization request is written and
-	/// REMOVED outside the gate by its own storage, on the key <see cref="TryRemoveAsync"/> redeems, from
-	/// a user's approval or denial genuinely concurrent with a token-endpoint poll - which is where the
-	/// second half of the sentence above gets its site.
+	/// Both entry points are exposed to that, so both have live examples here, and in both the other actor
+	/// is another POLL rather than a user. The back-channel request is written on completion and again by
+	/// a poll bumping its next-poll instant, on the key <see cref="TryGetAndRemoveAsync"/> redeems. The
+	/// device authorization request is written the same way, by a poll's next-poll bump, and REMOVED
+	/// outside the gate on the key <see cref="TryRemoveAsync"/> redeems - by a second poll taking the
+	/// expired or the denied arm, which is where the removal half of the sentence above gets its site.
+	/// A user's approval or denial writes that key too, but only while the record is still pending, and a
+	/// hold is entered only once it is authorized.
 	/// </para>
 	/// <para>
 	/// So the value returned is the value at the key when this caller got IN, which is a narrower window
