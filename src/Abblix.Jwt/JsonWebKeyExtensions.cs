@@ -182,6 +182,99 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
+	/// The smallest RSA modulus RFC 7518 permits. Four sections state it, one per family: Section 3.3
+	/// and Section 3.5 for signing, Section 4.2 and Section 4.3 for key encryption. Almost the same
+	/// words - 3.3 and 4.3 govern several algorithms and say "these", 3.5 and 4.2 govern one and say
+	/// "this". One number here, so the sites that enforce it cannot drift apart.
+	/// </summary>
+	public const int MinimumRsaKeyBits = 2048;
+
+	/// <summary>
+	/// The RFC 7518 section that carries the key-size requirement for <paramref name="algorithm"/>.
+	/// </summary>
+	/// <remarks>
+	/// A refusal has to send the operator to the paragraph that refused them. Sections 3 and 4 are
+	/// container headings and state no size requirement at all, so citing either leaves the reader
+	/// looking at a table of algorithm names and no MUST - which reads as the library inventing the rule.
+	/// </remarks>
+	/// <exception cref="ArgumentException">The algorithm is not one this library enforces a floor for.</exception>
+	public static string RsaSectionFor(string algorithm) => SectionOrNull(algorithm)
+		?? throw new ArgumentException($"No RSA key-size section is known for {algorithm}.", nameof(algorithm));
+
+	/// <summary>
+	/// The WHOLE citation phrase, ready to drop into a refusal message - "per RFC 7518 Section 3.3", or
+	/// "for RSA signatures" when the algorithm has no section of its own.
+	/// </summary>
+	/// <remarks>
+	/// Two differences from <see cref="RsaSectionFor"/>, and both matter at a call site. This one never
+	/// throws, because an unknown algorithm must not replace the refusal the operator was about to read
+	/// with a complaint about the citation - and it is reachable, since an RSA key carrying no
+	/// <c>alg</c> resolves to <c>SigningAlgorithms.None</c>. And this one carries the words "per RFC
+	/// 7518" itself, where <see cref="RsaSectionFor"/> returns the bare section and leaves them to the
+	/// caller. Interpolate this one into a sentence that writes them too and the message says them twice.
+	/// </remarks>
+	public static string RsaSectionForOrNothing(string algorithm)
+		=> SectionOrNull(algorithm) is { } section ? $"per RFC 7518 {section}" : "for RSA signatures";
+
+	private static string? SectionOrNull(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 => "Section 3.3",
+		SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 => "Section 3.5",
+		EncryptionAlgorithms.KeyManagement.Rsa1_5 => "Section 4.2",
+		EncryptionAlgorithms.KeyManagement.RsaOaep or EncryptionAlgorithms.KeyManagement.RsaOaep256
+			=> "Section 4.3",
+		_ => null,
+	};
+
+	/// <summary>
+	/// The real bit length of the key's modulus, ignoring any leading zero octets.
+	/// </summary>
+	/// <remarks>
+	/// <c>RSA.KeySize</c> is not this number, and how far it differs depends on the platform. It reports
+	/// the key as the importer built it: Windows CNG keeps a left-padded modulus at its padded length and
+	/// reports twice the real strength, while Linux (OpenSSL) strips the leading zeros and reports the
+	/// true one. So a size check written against that property refuses a downgraded key on one operating
+	/// system and admits it on another - which is a worse failure than either, because the deployment
+	/// that admits it looks identical to the one that does not, and the forgery arrives later from
+	/// whoever factored the real modulus.
+	/// <para>
+	/// Measuring the modulus itself removes the platform from the question. It is also never larger than
+	/// <c>RSA.KeySize</c>, so switching to it can only add refusals, never remove one.
+	/// </para>
+	/// <para>
+	/// RFC 7518 Section 2 requires the minimal encoding - "The octet sequence MUST utilize the minimum
+	/// number of octets needed to represent the value" - which is what this measurement follows. Padding
+	/// far enough to matter is NOT something a library does by accident: the one benign quirk the
+	/// specification records is a single extra zero octet (Section 6.3.1.1, "returning 257 octets for a
+	/// 2048-bit key"), and one octet moves neither check in either direction. Sixty-four of them is a
+	/// malformed or hostile JWKS entry.
+	/// </para>
+	/// <para>
+	/// The leading octet contributes only the bits from its own highest set bit down, which is what makes
+	/// this the modulus's true length rather than a rounded-up octet count.
+	/// </para>
+	/// </remarks>
+	public static int ModulusBitLength(this RsaJsonWebKey key)
+	{
+		var modulus = key.Modulus;
+		if (modulus is null)
+			return 0;
+
+		var first = 0;
+		while (first < modulus.Length && modulus[first] == 0)
+			first++;
+
+		if (first == modulus.Length)
+			return 0;
+
+		var bitsInLeadingOctet = 8;
+		for (var mask = 0x80; mask != 0 && (modulus[first] & mask) == 0; mask >>= 1)
+			bitsInLeadingOctet--;
+
+		return (modulus.Length - first - 1) * 8 + bitsInLeadingOctet;
+	}
+
+	/// <summary>
 	/// Converts an RsaJsonWebKey to RSAParameters, which represent the key parameters used in RSA cryptographic operations.
 	/// </summary>
 	/// <param name="key">The RsaJsonWebKey to be converted.</param>
