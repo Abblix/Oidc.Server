@@ -13,14 +13,16 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Utils.UnitTests;
 
 /// <summary>
-/// Covers the guarantee <see cref="DistributedCacheExtensions.TryRemoveAsync"/> gives within one process:
-/// exactly one caller removes the value, and it is never removed with nobody told they took it.
+/// Covers what <see cref="DistributedCacheExtensions.TryRemoveAsync"/> guarantees: at most one caller ever
+/// removes the value, and a caller is told it took the value only when its own lock token was still there
+/// afterwards.
 /// </summary>
 /// <remarks>
-/// The interleaving that loses a value needs two callers inside the protocol at once - one removing the
-/// value while the other has already overwritten the lock token. Serializing callers on the key makes that
-/// arrangement unreachable here, so the tests below measure the serialization directly rather than trying
-/// to observe the absence of an interleaving.
+/// Serializing callers on a key stops one of them overwriting another's token, which is one of the three
+/// ways a value goes with nobody told. The tests below measure that serialization directly rather than
+/// trying to observe the absence of an interleaving - and then measure one of the ways it does NOT close,
+/// because a guarantee stated as a list of prevented causes is the shape that keeps turning out to be
+/// short by one.
 /// </remarks>
 public class RedemptionSerializationTests
 {
@@ -110,8 +112,8 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
-	/// The outcome: a value that is gone was taken by somebody. This is the property issue 433 states, and
-	/// where one process touches the key it now holds.
+	/// The outcome the serialization buys: with no competitor able to overwrite a token, a value that is
+	/// gone was taken by somebody. Issue 433's property, for the one cause this closes.
 	/// </summary>
 	/// <remarks>
 	/// Driven rather than raced. Eight callers started at once measure the scheduler: the distributed
@@ -193,8 +195,8 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
-	/// Serializing callers closes ONE of the two ways a redemption loses its value. This is the other one,
-	/// and it needs neither a second caller nor a second node.
+	/// Serializing callers closes ONE of the three ways a redemption loses its value. This is a second one,
+	/// and it needs neither a competitor nor a second node.
 	/// </summary>
 	/// <remarks>
 	/// A caller reports a loss when the lock token it reads back is not the one it wrote. Somebody
@@ -261,6 +263,70 @@ public class RedemptionSerializationTests
 			=> inner.SetAsync(key, value, options, token);
 
 		public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+
+		public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+
+		public byte[]? Get(string key) => inner.Get(key);
+
+		public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+			=> inner.Set(key, value, options);
+
+		public void Remove(string key) => inner.Remove(key);
+
+		public void Refresh(string key) => inner.Refresh(key);
+	}
+
+	/// <summary>
+	/// The third way, and the one no amount of serialization or lock lifetime reaches: the removal
+	/// succeeds and a store call AFTER it fails.
+	/// </summary>
+	/// <remarks>
+	/// The protocol removes the value and then makes two more round trips to the same store - reading the
+	/// lock token back and cleaning it up. A fault in either leaves the value gone and the caller holding
+	/// an exception rather than an answer, so nothing anywhere reports a winner.
+	///
+	/// This is why the guarantee is stated as what must be TRUE for a win rather than as a list of ways to
+	/// lose: the list was short by this one for four review rounds.
+	/// </remarks>
+	[Fact]
+	public async Task TryRemoveAsync_TheStoreFaultsAfterTheRemoval_TheValueIsGoneAndNobodyIsTold()
+	{
+		var inner = CreateCache();
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+
+		var cache = new FaultAfterValueRemoval(inner, Key);
+
+		await Assert.ThrowsAsync<TimeoutException>(
+			() => cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken));
+
+		// The half that matters: the caller got no answer AND the value is gone. Either alone is ordinary -
+		// a fault before the removal loses nothing, and a false over a present value is a plain refusal.
+		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
+	}
+
+	/// <summary>
+	/// Passes everything through until the value is removed, then faults the next read - which is the lock
+	/// read-back, the first thing the protocol does once the value is already gone.
+	/// </summary>
+	private sealed class FaultAfterValueRemoval(IDistributedCache inner, string valueKey) : IDistributedCache
+	{
+		private bool _removed;
+
+		public async Task RemoveAsync(string key, CancellationToken token = default)
+		{
+			await inner.RemoveAsync(key, token);
+			if (key == valueKey) _removed = true;
+		}
+
+		public async Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+		{
+			if (_removed) throw new TimeoutException("the store stopped answering after the removal");
+			return await inner.GetAsync(key, token);
+		}
+
+		public Task SetAsync(
+			string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+			=> inner.SetAsync(key, value, options, token);
 
 		public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
 

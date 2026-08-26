@@ -55,9 +55,11 @@ public interface IAuthorizationCodeService
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
     /// <returns>
-    /// The grant on success when this caller won the claim; an <c>invalid_grant</c>
-    /// <see cref="OidcError"/> when the code is absent - already claimed by a concurrent request,
-    /// already consumed, expired, or never issued.
+    /// The grant when this caller won the claim; an <c>invalid_grant</c> <see cref="OidcError"/>
+    /// otherwise. Otherwise is wider than the obvious list - a concurrent request, an earlier
+    /// consumption, an expiry, a code never issued - because the claim can also CONSUME the code and
+    /// still refuse, when the lock guarding it expires mid-protocol. So a refusal does not prove another
+    /// request took it, and looking for one is how that case is missed.
     /// </returns>
     /// <remarks>
     /// A successfully claimed grant whose <c>IssuedTokens</c> is non-empty indicates the code was

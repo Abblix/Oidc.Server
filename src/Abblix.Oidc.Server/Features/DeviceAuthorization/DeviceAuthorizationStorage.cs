@@ -126,8 +126,10 @@ public class DeviceAuthorizationStorage(
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
     /// <returns>
-    /// A task that completes when the operation finishes, containing true if the request was successfully
-    /// removed by this thread; false if another thread won the race or the device code didn't exist.
+    /// A task that completes when the operation finishes, containing true when this caller removed the
+    /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
+    /// won or it was never there": the code can be consumed and the caller still told false, when the lock
+    /// guarding the removal expires mid-protocol. The extension's remarks carry the full condition.
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
     {

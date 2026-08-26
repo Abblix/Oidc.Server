@@ -164,10 +164,9 @@ public static class DistributedCacheExtensions
 	/// </list>
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
-	/// and return false. In one process that branch is unreachable - callers on a key are serialized, so
-	/// nobody else writes that lock and every caller's own token survives - and the winner is picked by
-	/// the value-existence check instead. What that leaves is spelled out below.
+	/// lock token survives (last-write-wins) will return true. A caller whose token is not there returns
+	/// false - and in one process that is not because somebody overwrote it, since callers on a key are
+	/// serialized, but because it EXPIRED. What that leaves is spelled out below.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without
@@ -181,14 +180,15 @@ public static class DistributedCacheExtensions
 	/// never runs concurrently against itself here.
 	/// </para>
 	/// <para>
-	/// <strong>What it does NOT guarantee is that a removal has a winner</strong>, and the serialization
-	/// only closes one of the two ways to lose one. A caller reports a loss when the lock token it reads
-	/// back is not the one it wrote, and there are two ways for that: somebody overwrote it, which needs a
-	/// second caller and is what the serialization prevents within a process; or it EXPIRED, which needs
-	/// only time. The lock carries <paramref name="lockTimeout"/>, five seconds by default, and three cache
-	/// round trips sit between writing it and reading it back - so a stalled cache call, a garbage
-	/// collection pause or a starved thread pool is enough for ONE caller on ONE node to remove the value
-	/// and be told it did not.
+	/// <strong>What it does NOT guarantee is that a removal has a winner.</strong> A caller is told it took
+	/// the value only when the protocol runs to the end AND finds its own lock token still in the store.
+	/// State it that way round rather than listing the ways to lose, because that list is not closable:
+	/// the token can be overwritten, which needs a competitor and is what the serialization prevents here;
+	/// it can EXPIRE, which needs only time; and the two store calls that follow the removal can fail, in
+	/// which case the value is gone and the caller gets an exception rather than an answer at all. Only the
+	/// first of those three needs a second caller, so a single caller on a single node can lose a value -
+	/// <paramref name="lockTimeout"/> is five seconds by default, and a stalled cache call, a garbage
+	/// collection pause or a starved thread pool is enough.
 	/// </para>
 	/// <para>
 	/// <strong>Across processes the second way opens too.</strong> Two nodes redeeming the same key at the
@@ -227,10 +227,11 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing true if the value was removed by this
-	/// caller; false if another caller took it, if the key did not exist, or if the value was removed and
-	/// no caller could be told it took it - which needs a second node OR merely a lock that expired
-	/// mid-protocol, and so is reachable with one caller on one node.
+	/// A task that completes when the operation finishes, containing true when the value was removed by
+	/// this caller AND its own lock token was still in the store afterwards. False otherwise - which covers
+	/// the key not being there, another caller having taken it, and the case where the value is gone and
+	/// nobody can be told they took it. That last one does not need a second node: see the remarks. A
+	/// store fault after the removal raises rather than returning, and loses the value the same way.
 	/// </returns>
 	public static async Task<bool> TryRemoveAsync(
 		this IDistributedCache cache,
@@ -242,9 +243,11 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(key);
 
 		// Redemptions of the SAME key are serialized within this process, so the protocol below never runs
-		// concurrently against itself here and the interleaving that loses a value cannot form. Callers on
-		// different keys never meet: the gate exists only while a call is in flight and is discarded with
-		// the last one out.
+		// concurrently against itself here and no caller can overwrite another's lock token. That is one of
+		// the three ways a value is lost with nobody told; the other two - an expiring lock and a store
+		// fault after the removal - need no competitor and are untouched by this. Callers on different keys
+		// never meet: the gate exists only while a call is in flight and is discarded with the last one
+		// out.
 		//
 		// This gate is taken HERE and not in TryGetAndRemoveAsync, which calls this method - gating both
 		// would deadlock a caller against itself on one key. That is safe: TryGetAndRemoveAsync discards
