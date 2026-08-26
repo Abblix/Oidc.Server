@@ -189,9 +189,10 @@ public sealed class PollDeliveryByDefaultTests
     /// <remarks>
     /// This is the row the space could not write. Escaping the identifier is not enough on its own: a
     /// <c>PathString</c> conversion decodes escaped text back and keeps only <c>%2F</c>, so an identifier
-    /// carrying <c>?</c> or <c>#</c> arrives at <c>Uri</c> as a delimiter, and the stored address becomes
-    /// that of a DIFFERENT stream with a query hanging off it - well-formed, served, and pointing at
-    /// somebody else. Nothing 404s, which is what makes it worse than issue 465.
+    /// carrying <c>?</c> or <c>#</c> arrives at <c>Uri</c> as a delimiter and the remainder is cut off the
+    /// path - into a query for one, into a fragment for the other. Either way the stored address is that of
+    /// a DIFFERENT stream, well-formed and served. Nothing 404s, which is what makes it worse than issue
+    /// 465.
     /// </remarks>
     [Theory]
     [InlineData("alerts?eu", "%3F")]
@@ -220,19 +221,22 @@ public sealed class PollDeliveryByDefaultTests
     }
 
     /// <summary>
-    /// A prefix ending in a separator mints an address the route still serves.
+    /// Every shape of prefix a host can write mints an address the route still serves.
     /// </summary>
     /// <remarks>
-    /// The trap is that the five management addresses would stay right while this one silently did not:
-    /// they are composed through <c>PathString.Add</c>, which trims a duplicated separator, and an address
-    /// composed by hand does not. <c>/ssf//poll/{id}</c> is well-formed, is stored in every stream, and
-    /// matches nothing - the failure this whole change exists to prevent, arriving through its own fix.
-    /// Nothing validates a prefix, so this is the only thing that would say so.
+    /// The rows come from the GRAMMAR of a prefix rather than from deployments anyone described: with a
+    /// trailing separator, at root spelled two ways, nested. A suite whose prefixes all read
+    /// <c>/one-or-two/segments</c> varies nothing in the dimension that breaks, which is how a trailing
+    /// separator once minted and stored <c>/ssf//poll/{id}</c> - well-formed, matching nothing, and
+    /// invisible because the five management addresses are composed through <c>PathString.Add</c> and
+    /// stayed correct. Nothing validates a prefix, so these rows are the only thing that would say so.
     /// </remarks>
     [Theory]
     [InlineData("/ssf/")]
     [InlineData("/api/ssf/")]
-    public async Task APrefixEndingInASeparator_MintsAnAddressTheRouteServes(string prefix)
+    [InlineData("/")]
+    [InlineData("")]
+    public async Task EveryPrefixShapeAHostCanExpress_MintsAnAddressTheRouteServes(string prefix)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await StartAsync(new SharedSignalsEndpointOptions
