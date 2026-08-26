@@ -8,9 +8,9 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.Time.Testing;
-using Abblix.SecurityEvents.Events;
 using Xunit;
 
 namespace Abblix.SecurityEvents.UnitTests;
@@ -76,10 +76,36 @@ public class SecurityEventTokenBuilderTests
     /// package speaks whatever profile the deployment does.
     /// </summary>
     /// <remarks>
-    /// The control, and the boundary of the change: without it, refusing the second statement outright
-    /// would satisfy both rows above and break every deployment building a SET the base specification
-    /// permits.
+    /// The explicit boundary of the change. Refusing the second statement outright turns five red rather
+    /// than this one - four of them pre-existing, including the fixture that rebuilds RFC 8417's own
+    /// two-statement figure - so this row is not what stands between the change and that mistake. It is
+    /// what says the permission is intended, in one place a reader can find, rather than inferred from a
+    /// fixture about something else.
     /// </remarks>
+    /// <summary>
+    /// The same identifier twice is still RFC 8417 Section 2.2's rule, not the profile's, even on a token
+    /// carrying one statement.
+    /// </summary>
+    /// <remarks>
+    /// Two guards stand over one call and both would fire, so which answers decides what an operator is
+    /// told. Saying "this token carries one event" about a caller repeating one identifier points at a
+    /// profile that has nothing to say about saying the same thing twice, and hides the rule that does.
+    /// </remarks>
+    [Fact]
+    public void TheSameIdentifierTwiceOnASingleEventToken_IsTheDuplicateRule()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        var refusal = Assert.Throws<ArgumentException>(
+            () => builder.WithEvent("https://example.com/events/first"));
+
+        Assert.Contains("already present", refusal.Message);
+        Assert.Contains("2.2", refusal.Message);
+    }
+
     [Fact]
     public void WithoutTheDeclaration_SeveralStatementsAreBuilt()
     {

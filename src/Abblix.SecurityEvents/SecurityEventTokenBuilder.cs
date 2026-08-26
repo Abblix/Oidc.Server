@@ -56,9 +56,9 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// deployment speaks. A profile may be tighter: the CAEP Interoperability Profile 1.0 says "The
     /// 'events' claim of the SET MUST contain only one event", and a deployment claiming it sets this.
     /// <para>
-    /// Refused at the second <see cref="WithEvent(string, JsonObject)"/> rather than at
-    /// <see cref="Build"/>, so the failure names the call that broke the rule instead of the one that
-    /// noticed.
+    /// Refused at the second statement - through either <see cref="WithEvent(string, JsonObject)"/> or
+    /// <see cref="WithEvent{TPayload}"/> - rather than at <see cref="Build"/>, so the failure names the
+    /// call that broke the rule instead of the one that noticed.
     /// </para>
     /// </remarks>
     public bool SingleEventStatement { get; init; }
@@ -226,6 +226,8 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// A statement with the same event identifier was already added, or the payload serialized
     /// into something other than a JSON object, which RFC 8417 Section 2.2 requires the value to
     /// be.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// A second statement was added while <see cref="SingleEventStatement"/> is set.</exception>
     public SecurityEventTokenBuilder WithEvent<TPayload>(
         string eventType,
         TPayload payload,
@@ -258,14 +260,21 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// A second statement was added to a token declared to carry one.</exception>
     private SecurityEventTokenBuilder AddStatement(string eventType, JsonObject? payload)
     {
-        if (SingleEventStatement && _events.Count > 0)
+        // Read once and consumed by both the decision and the message, so the two cannot disagree about
+        // which statement is already there.
+        var present = _events.Count > 0 ? _events.First().Key : null;
+
+        // A repeat of the SAME identifier is RFC 8417 Section 2.2's rule, and the collection names that
+        // section when it refuses. Answering it here would point a caller at a profile with nothing to
+        // say about saying one thing twice.
+        if (SingleEventStatement && present is not null && present != eventType)
         {
             throw new InvalidOperationException(
-                $"This token carries a single event statement and already holds '{_events.Single().Key}', so "
+                $"This token carries a single event statement and already holds '{present}', so "
                 + $"'{eventType}' cannot be added. The CAEP Interoperability Profile 1.0 requires the "
-                + $"'{JwtClaimTypes.Events}' claim to contain only one event; clear "
-                + $"{nameof(SingleEventStatement)} to build the several-statement SET RFC 8417 Section 2 "
-                + "allows.");
+                + $"'{JwtClaimTypes.Events}' claim to contain only one event; build the token without "
+                + $"{nameof(SingleEventStatement)} for the several-statement SET RFC 8417 Section 2 "
+                + "allows - the property is init-only, so it is settled when the builder is constructed.");
         }
 
         _events.Add(eventType, payload);
