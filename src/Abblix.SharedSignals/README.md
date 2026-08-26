@@ -42,6 +42,19 @@ builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
 });
 ```
 
+Two things the configuration document says about that deployment come from defaults rather than from the
+snippet above, and both are worth knowing before it goes anywhere real.
+
+`authorization_schemes` is published as OAuth 2.0 unless you set it. The CAEP Interoperability Profile
+requires that value to be there, and it is a claim about how your Stream Management API is authorized -
+so if yours is authorized by something else, mutual TLS for instance, set `AuthorizationSchemes` to your
+own list, or to an empty list to advertise none at all.
+
+`JwksUri` has no default and no way to have one, because only you know where your JWK Set is published.
+Without it a receiver cannot obtain a key and cannot verify a single event. Shared Signals Framework 1.0
+requires the member of any transmitter that signs, which this one always does, so leave it unset only
+while you are still wiring things up. Both gaps are logged once, when the routes are mapped.
+
 When a session actually ends, one call reaches every receiver that subscribed to it:
 
 ```csharp
