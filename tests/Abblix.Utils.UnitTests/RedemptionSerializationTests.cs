@@ -232,7 +232,13 @@ public class RedemptionSerializationTests
 	{
 		var inner = CreateCache();
 		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
-		var cache = new ParkThenThrowOnValueRead(inner, Key);
+		var cache = new ParkOnValueRead(inner, Key)
+		{
+			AfterResume = resumed =>
+			{
+				if (resumed == 1) throw new InvalidOperationException("the store failed mid-redemption");
+			},
+		};
 
 		// The first caller holds the lock and parks inside the guarded section.
 		var failing = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
@@ -305,82 +311,28 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
-	/// Parks every read of <paramref name="gatedKey"/>, and makes the FIRST of them throw when resumed, so
-	/// the failure lands inside the guarded section with a caller already queued behind it.
-	/// </summary>
-	private sealed class ParkThenThrowOnValueRead(IDistributedCache inner, string gatedKey) : IDistributedCache
-	{
-		private readonly Queue<TaskCompletionSource> _parked = new();
-		private readonly Lock _sync = new();
-		private int _reads;
-
-		public int Parked
-		{
-			get
-			{
-				lock (_sync) return _parked.Count;
-			}
-		}
-
-		public async Task WaitUntilParkedAsync(int count)
-		{
-			for (var i = 0; i < 1000 && Parked < count; i++) await Task.Yield();
-			Assert.Equal(count, Parked);
-		}
-
-		public void ResumeNext()
-		{
-			TaskCompletionSource gate;
-			lock (_sync) gate = _parked.Dequeue();
-			gate.SetResult();
-		}
-
-		public async Task<byte[]?> GetAsync(string key, CancellationToken token = default)
-		{
-			if (key != gatedKey)
-				return await inner.GetAsync(key, token);
-
-			var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-			lock (_sync) _parked.Enqueue(gate);
-			await gate.Task;
-
-			if (Interlocked.Increment(ref _reads) == 1)
-				throw new InvalidOperationException("the store failed mid-redemption");
-
-			return await inner.GetAsync(key, token);
-		}
-
-		public Task SetAsync(
-			string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
-			=> inner.SetAsync(key, value, options, token);
-
-		public Task RemoveAsync(string key, CancellationToken token = default)
-			=> inner.RemoveAsync(key, token);
-
-		public Task RefreshAsync(string key, CancellationToken token = default)
-			=> inner.RefreshAsync(key, token);
-
-		public byte[]? Get(string key) => inner.Get(key);
-
-		public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
-			=> inner.Set(key, value, options);
-
-		public void Remove(string key) => inner.Remove(key);
-
-		public void Refresh(string key) => inner.Refresh(key);
-	}
-
-	/// <summary>
 	/// Parks every read of one of <paramref name="gatedKeys"/> until the test resumes it. The lock keys the
 	/// protocol reads are deliberately not among them: parking those would suspend a caller somewhere the
 	/// property under test says nothing about.
 	/// </summary>
+	/// <remarks>
+	/// One double rather than two. A second copy differing only in what happens after the read is resumed
+	/// is a copy that drifts: a fix to the parking, the counting or the resume order lands in one of them.
+	/// What varies is passed in.
+	/// </remarks>
 	private sealed class ParkOnValueRead(IDistributedCache inner, params string[] gatedKeys) : IDistributedCache
 	{
 		private readonly HashSet<string> _gated = [..gatedKeys];
-
 		private readonly Queue<TaskCompletionSource> _parked = new();
 		private readonly Lock _sync = new();
+		private int _resumedReads;
+
+		/// <summary>
+		/// Runs after a resumed read, before the value is fetched, so a test can make the store fail INSIDE
+		/// the guarded section rather than before it. The argument is how many reads have been resumed so
+		/// far, one-based, which is how a test says "only the first".
+		/// </summary>
+		public Action<int>? AfterResume { get; init; }
 
 		public int Parked
 		{
@@ -410,6 +362,8 @@ public class RedemptionSerializationTests
 				var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 				lock (_sync) _parked.Enqueue(gate);
 				await gate.Task;
+
+				AfterResume?.Invoke(Interlocked.Increment(ref _resumedReads));
 			}
 
 			return await inner.GetAsync(key, token);
