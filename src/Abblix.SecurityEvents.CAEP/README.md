@@ -56,6 +56,24 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+## Claiming the interoperability profile
+
+`reason_admin` is optional in CAEP 1.0 and required of a transmitter by the CAEP Interoperability Profile
+1.0: each of the three use cases in its Section 3 demands a non-empty object. The type cannot carry that
+rule, because the receive side follows the base specification, which requires an empty `session-revoked`
+payload to be accepted.
+
+So the rule is a policy a deployment registers, and registering it is how the deployment claims the
+profile:
+
+```csharp
+services.AddSingleton<IEventPayloadPolicy, CaepInteropProfilePolicy>();
+```
+
+The dispatcher then refuses `session-revoked`, `credential-change` and `device-compliance-change` without
+the member, before anything is minted, and says which event and what is missing. A host that registers
+nothing emits CAEP 1.0 events, which is a smaller claim and a valid one.
+
 ## Part of the Abblix product family
 
 The events themselves travel over the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) transmitter and receiver; the sibling dictionary for account risk incidents is [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC), and both compose on one registry.

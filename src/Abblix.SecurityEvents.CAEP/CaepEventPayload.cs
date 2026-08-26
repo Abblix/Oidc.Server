@@ -58,6 +58,14 @@ public abstract record CaepEventPayload : IEventPayload
     /// OPTIONAL. The administrative message for logging and auditing, keyed by BCP 47 language
     /// tag (CAEP 1.0 Section 2).
     /// </summary>
+    /// <remarks>
+    /// Optional to CAEP 1.0, and required of a TRANSMITTER by the CAEP Interoperability Profile 1.0: each
+    /// of the three use cases in its Section 3 demands a non-empty object here. The property stays
+    /// nullable because the two documents disagree and the receive side follows the base specification -
+    /// CAEP 1.0 Section 3.1.1 positively requires an empty <c>session-revoked</c> payload to be accepted.
+    /// A deployment claiming the profile registers <see cref="CaepInteropProfilePolicy"/>, which refuses
+    /// the event rather than the type.
+    /// </remarks>
     [JsonPropertyName(CaepClaimNames.ReasonAdmin)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? ReasonAdmin { get; init; }
