@@ -42,12 +42,7 @@ public interface IEntityStorage
     /// <param name="removeOnRetrieval">When true, the entry must be removed atomically with the
     /// read so that a concurrent caller cannot observe the same value.</param>
     /// <param name="token">An optional cancellation token.</param>
-    /// <returns>
-    /// The stored entity, or <c>null</c>. With <paramref name="removeOnRetrieval"/> set, null does not
-    /// mean the entry was absent: the removal is a protocol over a store with no indivisible
-    /// read-modify-write, so it also covers another caller having taken it, a claim that expired while a
-    /// store call was in flight, and the entry being gone with nobody able to be told they took it.
-    /// </returns>
+    /// <returns>The stored entity, or <c>null</c> when no entry is present or it has expired.</returns>
     Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null);
 
     /// <summary>

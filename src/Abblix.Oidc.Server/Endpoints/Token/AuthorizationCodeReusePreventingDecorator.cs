@@ -56,12 +56,14 @@ public class AuthorizationCodeReusePreventingDecorator(
         // now contend for a single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
-        // The code did not come back. That covers a competitor claiming it, a code already consumed, and
-        // a claim that expired mid-protocol - the last needing no second request at all. A store call
-        // that fails after the removal does not arrive here: it raises, and the caller gets an exception
-        // rather than an answer. The refusal below is the right one for every case that DOES arrive, and
-        // a diagnosis for none of them.
-        // Either way this redemption loses - reject without issuing a second set of tokens.
+        // The code did not come back. What can reach this: a competitor claimed it between validation
+        // and here, the entry's lifetime lapsed in that same window, or a claim expired mid-protocol -
+        // the last two needing no second request at all. What cannot: a code already consumed, because
+        // AuthorizeByCodeAsync reads the entry non-destructively and refuses before a consumed code ever
+        // becomes a valid request, and ORDINARY sequential reuse is caught by the next branch instead. Nor
+        // a store call that failed after the removal, which raises rather than answering. The refusal
+        // below is the right one for every case that does arrive, and a diagnosis for none.
+        // Whichever of them it was, this redemption loses - reject without issuing a second set.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {
             return new OidcError(

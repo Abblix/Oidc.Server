@@ -30,7 +30,8 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     public OidcError? ValidateTokenEndpointAccess() => null;
 
     /// <summary>
-    /// Atomically removes the authentication request from storage and returns its authorized grant.
+    /// Removes the authentication request from storage under the store's per-key gate and returns its
+    /// authorized grant.
     /// A removal that does not come back with the request is answered <c>invalid_grant</c> rather than
     /// re-issuing tokens. That is the right answer and not a diagnosis: a competitor produces it, and so
     /// does a claim that expired mid-protocol, on one caller with nobody to lose to. A store fault after
@@ -40,8 +41,10 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // Removed atomically so two polls cannot both come back with the grant, which is the duplicate
-        // token issuance this exists to stop. Null does not say WHY - see the storage contract.
+        // Removed under the store's per-key gate, which NARROWS the window in which two polls both come
+        // back with the grant - the duplicate token issuance this exists to stop. Narrows rather than
+        // closes: the value is read before the claim is taken, so a write landing in between is destroyed
+        // and the earlier bytes handed out. Null does not say WHY - see the storage contract.
         var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
 
         if (removedRequest == null)

@@ -32,7 +32,8 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
     public OidcError? ValidateTokenEndpointAccess() => null;
 
     /// <summary>
-    /// Atomically removes the authentication request from storage and returns its authorized grant.
+    /// Removes the authentication request from storage under the store's per-key gate and returns its
+    /// authorized grant.
     /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a retrieval that
     /// does not come back with the request is rejected with <c>invalid_grant</c> rather than re-issuing
     /// tokens. Which is the right answer to give the caller, and not a diagnosis: a second retrieval

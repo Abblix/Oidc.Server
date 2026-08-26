@@ -35,9 +35,12 @@ public interface IAuthorizationRequestStorage
 	/// Asynchronously retrieves an authorization request using a previously stored unique identifier.
 	/// This method facilitates the retrieval of authorization requests for further processing or validation.
 	/// The shouldRemove parameter controls whether the request is deleted from storage upon retrieval,
-	/// which is what narrows the window in which it is retrieved twice - essential for the one-time use
-	/// RFC 9126 requires of a request_uri. Narrows rather than closes: the removal is a protocol over a
-	/// store with no indivisible read-modify-write, and the returns block says what a null covers.
+	/// which is what narrows the window in which it is retrieved twice. RFC 9126 puts the MUST on the
+	/// client - "the client MUST only use a request_uri value once" (Section 2.2) - and asks the
+	/// authorization server for no more than a SHOULD, in the same sentence that contemplates a server
+	/// allowing a duplicate after a user reloads. Consuming it here is therefore this library's choice
+	/// rather than an inherited requirement. Narrows rather than closes: the returns block says what a
+	/// null covers.
 	/// </summary>
 	/// <param name="requestUri">The unique identifier of the authorization request, typically a URI,
 	/// used to locate the request in storage.</param>
