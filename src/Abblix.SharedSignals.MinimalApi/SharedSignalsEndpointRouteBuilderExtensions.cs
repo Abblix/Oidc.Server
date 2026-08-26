@@ -147,12 +147,18 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     };
 
     /// <summary>
-    /// Says once, at startup, what this deployment publishes that the CAEP Interoperability Profile 1.0
-    /// rejects. Neither refuses the host, and the two are not equally optional elsewhere: SSF 1.0 requires
-    /// jwks_uri of any transmitter that signs, which this one always does, while it attaches no condition
-    /// to authorization_schemes. A conformance run measures against the profile, and a document that fails
-    /// it should not do so silently.
+    /// Says once, at startup, when the document is missing something the CAEP Interoperability Profile
+    /// 1.0 requires and the host looks unaware of it. Neither case refuses the host, and the two are not
+    /// equally optional elsewhere: SSF 1.0 requires jwks_uri of any transmitter that signs, which this one
+    /// always does, while it attaches no condition to authorization_schemes.
     /// </summary>
+    /// <remarks>
+    /// It does NOT announce every profile-rejected document, and one configuration is deliberately left
+    /// silent: an EMPTY <see cref="SharedSignalsTransmitterOptions.AuthorizationSchemes"/> omits the
+    /// member, which Section 2.3.7 rejects, and says nothing - because the host wrote that empty list on
+    /// purpose and a warning it cannot act on is one it learns to ignore. A conformance run failing 2.3.7
+    /// against a clean startup log is therefore possible, and this is the configuration that does it.
+    /// </remarks>
     private static void WarnIfOutsideTheCaepProfile(
         IServiceProvider services, SharedSignalsTransmitterOptions options)
     {

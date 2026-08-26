@@ -69,9 +69,10 @@ public sealed record SharedSignalsTransmitterOptions
     public TimeSpan? MinVerificationInterval { get; init; }
 
     /// <summary>
-    /// Where this transmitter publishes the JWK Set its SETs verify against, advertised as
-    /// "jwks_uri" (SSF 1.0 Section 7.1); null publishes no key location, leaving key
-    /// distribution to some out-of-band agreement.
+    /// Where this transmitter publishes the JWK Set its SETs verify against, advertised as "jwks_uri"
+    /// (SSF 1.0 Section 7.1). Required in practice AND on paper: that section says "This value MUST be
+    /// specified if the Transmitter intends to generate signed JWTs", and this transmitter signs every
+    /// event it sends. Left null, no receiver can obtain a key and the deployment is told so at startup.
     /// </summary>
     public Uri? JwksUri { get; init; }
 

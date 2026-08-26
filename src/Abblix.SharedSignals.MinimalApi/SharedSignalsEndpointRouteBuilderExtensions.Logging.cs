@@ -18,10 +18,12 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// <remarks>
     /// Shared Signals Framework 1.0 Section 7.1 marks "jwks_uri" OPTIONAL and then attaches a condition
     /// two sentences later: "This value MUST be specified if the Transmitter intends to generate signed
-    /// JWTs." This package always signs - <c>AddSecurityEvents</c> refuses to start without a signing key
-    /// source, and every SET goes through the signer - so there is no deployment here for which the
-    /// member is genuinely optional. The CAEP profile says the same thing unconditionally in Section
-    /// 2.3.3, and Section 2.4.2 sends a receiver to this member for the keys.
+    /// JWTs." This package always signs: <c>EventDispatcher</c> takes the signer as a required
+    /// dependency and every event it sends goes through it, so a transmitter that emits anything at all
+    /// has signed it. (Not because startup refuses a host with no key: that refusal lives in a factory
+    /// body and fires on the first resolve, and a host supplying its own signer never reaches it - either
+    /// way what comes out is signed.) The CAEP profile says the same thing unconditionally in Section
+    /// 2.3.3 of draft 01, and Section 2.4.2 sends a receiver to this member for the keys.
     /// <para>
     /// A warning rather than a refusal because the transmitter is otherwise functional and the host may
     /// be mid-configuration; nothing here can distribute a key on its behalf. Said once, at startup,
