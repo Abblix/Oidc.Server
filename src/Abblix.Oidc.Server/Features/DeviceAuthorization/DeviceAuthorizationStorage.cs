@@ -116,11 +116,11 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
-    /// which serializes redemptions of one device code in-process, so at most one caller ever removes it
-    /// and the rest are told it was not there. What that does not give is a winner for every removal: a
-    /// lock expiring mid-protocol loses the code with one caller on one node, and a second node loses it
-    /// without the expiry. The extension's own remarks carry both and name the store primitive that closes
-    /// them. After successful removal, cleans up the user code mapping.
+    /// which serializes redemptions of one device code in-process, so at most one caller ever removes it.
+    /// What that does NOT give is a winner for every removal - the code can be consumed with nobody told
+    /// they took it, and that needs neither a second caller nor a second node. The extension's own remarks
+    /// carry the condition and name the store primitive that closes it. After a successful removal, cleans
+    /// up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
@@ -129,7 +129,12 @@ public class DeviceAuthorizationStorage(
     /// A task that completes when the operation finishes, containing true when this caller removed the
     /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
     /// won or it was never there": the code can be consumed and the caller still told false, when the lock
-    /// guarding the removal expires mid-protocol. The extension's remarks carry the full condition.
+    /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
+    /// <para>
+    /// They cannot cover the cleanup below them, which is this method's own call: if removing the user-code
+    /// index throws, the device code is already consumed and the caller gets the exception instead of true,
+    /// so no tokens are issued for a code that can never be presented again. Tracked as issue 453.
+    /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
     {

@@ -120,8 +120,10 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing the retrieved value if found and
-	/// successfully removed; otherwise, null if the value was not found or another thread won the race.
+	/// A task that completes when the operation finishes, containing the retrieved value when this caller
+	/// removed it AND its own claim was still in the store afterwards. Null otherwise - which does NOT mean
+	/// somebody else took it. See <see cref="TryRemoveAsync"/>, whose remarks carry the condition; this
+	/// method adds nothing to it beyond returning the value.
 	/// </returns>
 	public static async Task<byte[]?> TryGetAndRemoveAsync(
 		this IDistributedCache cache,
@@ -141,11 +143,11 @@ public static class DistributedCacheExtensions
 
 		if (!await cache.TryRemoveAsync(key, lockTimeout, cancellationToken))
 		{
-			// Another thread's lock overwrote ours - they won the race
+			// Not necessarily somebody else: see TryRemoveAsync's remarks for what false covers.
 			return null;
 		}
 
-		// Our lock survived - we won the race, return the value
+		// The claim held, so this caller is the one entitled to the value.
 		return valueData;
 	}
 
@@ -366,11 +368,13 @@ public static class DistributedCacheExtensions
 		var survivingLockToken = await cache.GetAsync(lockKey, cancellationToken);
 		if (survivingLockToken == null || !ourLockToken.SequenceEqual(survivingLockToken))
 		{
-			// Another thread's lock overwrote ours - they won the race
+			// The claim is not ours any more. Do NOT read that as a competitor: it is equally the claim
+			// having EXPIRED, which one caller alone reaches, and the value is already gone either way.
 			return false;
 		}
 
-		// Our lock survived - we won the race, return the value
+		// The claim is still ours, which is the whole condition for reporting the removal as this
+		// caller's: nothing overwrote it and it did not expire.
 		await cache.RemoveAsync(lockKey, cancellationToken); // Cleanup lock
 		return true;
 	}
