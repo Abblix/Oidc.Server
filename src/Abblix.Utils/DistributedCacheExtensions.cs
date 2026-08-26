@@ -172,6 +172,33 @@ public static class DistributedCacheExtensions
 	/// not the request data itself.
 	/// </para>
 	/// <para>
+	/// <strong>What this guarantees:</strong> within ONE process, exactly one caller removes the value and
+	/// every other caller is told the key was not there. Callers of this method on the same key are
+	/// serialized, so the protocol below never runs concurrently against itself.
+	/// </para>
+	/// <para>
+	/// <strong>Across processes it guarantees only AT MOST one.</strong> Two nodes redeeming the same key
+	/// at the same moment can end with the value removed and neither told it took it, because the lock
+	/// protocol is assembled from <c>Get</c>, <c>Set</c> and <c>Remove</c> as three separate operations and
+	/// there is a window between any two of them. A take-once needs one indivisible read-modify-write, and
+	/// this interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.
+	/// </para>
+	/// <para>
+	/// <strong>A deployment on several nodes that cannot afford that</strong> supplies its own storage - the
+	/// interfaces above this one are public and replaceable - and reaches for the primitive its store
+	/// already has. Which primitive that is depends on the store, which is why it cannot live here:
+	/// </para>
+	/// <list type="bullet">
+	///   <item>Redis 6.2 and later: <c>GETDEL key</c>, one command, which returns the value to exactly one
+	///   caller and deletes it. Earlier versions get the same effect from a two-line <c>EVAL</c> script,
+	///   since Redis runs a script indivisibly.</item>
+	///   <item>PostgreSQL: <c>DELETE FROM ... WHERE key = $1 RETURNING value</c>. The row lock picks the
+	///   winner and the losing statement returns no rows.</item>
+	///   <item>SQL Server: <c>DELETE ... OUTPUT deleted.value</c>, the same shape.</item>
+	///   <item>Oracle: <c>DELETE ... RETURNING value INTO :out</c>. Oracle documents the RETURNING INTO
+	///   clause as belonging to DELETE among others, and for a DELETE it yields the pre-deletion value.</item>
+	/// </list>
+	/// <para>
 	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
 	/// to prevent orphaned locks if a process crashes between writing the lock token and cleaning it up.
 	/// </para>
@@ -181,8 +208,9 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing true if the value was successfully
-	/// removed by this thread; false if another thread won the race or the key didn't exist.
+	/// A task that completes when the operation finishes, containing true if the value was removed by this
+	/// caller; false if another caller took it, if the key did not exist, or - only across processes - if
+	/// the value was removed and no caller could be told it took it.
 	/// </returns>
 	public static async Task<bool> TryRemoveAsync(
 		this IDistributedCache cache,
@@ -193,6 +221,84 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
+		// Redemptions of the SAME key are serialized within this process, so the protocol below never runs
+		// concurrently against itself here and the interleaving that loses a value cannot form. Callers on
+		// different keys never meet: the gate exists only while a call is in flight and is discarded with
+		// the last one out.
+		//
+		// This gate is taken HERE and not in TryGetAndRemoveAsync, which calls this method - gating both
+		// would deadlock a caller against itself on one key. That is safe: TryGetAndRemoveAsync discards
+		// the value it read whenever this returns false, so a caller that lost inside the gate hands back
+		// nothing.
+		var gate = RentGate(key);
+		try
+		{
+			await gate.WaitAsync(cancellationToken);
+			try
+			{
+				return await RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken);
+			}
+			finally
+			{
+				gate.Release();
+			}
+		}
+		finally
+		{
+			ReturnGate(key);
+		}
+	}
+
+	/// <summary>
+	/// One gate per key, alive only while a redemption of that key is in flight.
+	/// </summary>
+	private static readonly Dictionary<string, GateEntry> Gates = new(StringComparer.Ordinal);
+
+	private sealed class GateEntry
+	{
+		public readonly SemaphoreSlim Gate = new(1, 1);
+		public int Waiters;
+	}
+
+	private static SemaphoreSlim RentGate(string key)
+	{
+		lock (Gates)
+		{
+			if (!Gates.TryGetValue(key, out var entry))
+			{
+				entry = new GateEntry();
+				Gates[key] = entry;
+			}
+
+			// Incremented before the caller waits, so nobody else can retire this gate underneath it.
+			entry.Waiters++;
+			return entry.Gate;
+		}
+	}
+
+	private static void ReturnGate(string key)
+	{
+		lock (Gates)
+		{
+			if (!Gates.TryGetValue(key, out var entry))
+				return;
+
+			if (--entry.Waiters > 0)
+				return;
+
+			// The last caller out retires the gate, which is what keeps the table the size of the traffic
+			// in flight rather than the size of every key ever redeemed.
+			Gates.Remove(key);
+			entry.Gate.Dispose();
+		}
+	}
+
+	private static async Task<bool> RemoveUnderGateAsync(
+		IDistributedCache cache,
+		string key,
+		TimeSpan? lockTimeout,
+		CancellationToken cancellationToken)
+	{
 		// Use fully qualified type name to avoid collisions with application keys
 		var lockKey = $"{nameof(Abblix)}.{nameof(Utils)}.{nameof(DistributedCacheExtensions)}:{nameof(TryRemoveAsync)}:{key}";
 
