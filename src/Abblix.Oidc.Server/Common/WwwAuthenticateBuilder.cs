@@ -54,19 +54,21 @@ public static class WwwAuthenticateBuilder
     /// JWS algorithms the AS accepts on a proof.
     /// </summary>
     public static string BuildDPoPChallenge(OidcError error, string? realm, IEnumerable<string> algs)
-    {
         // RFC 6750 §3.1 applies to the DPoP line too: an unauthenticated request gets a bare
-        // challenge advertising the scheme, without error attributes.
-        var challenge = error is MissingAuthenticationError
-            ? WwwAuthenticate.Challenge(TokenTypes.DPoP, realm)
-            : WwwAuthenticate.Challenge(TokenTypes.DPoP, realm, error.Error, error.ErrorDescription);
-
-        // "algs" is DPoP's own parameter (RFC 9449 Section 7.1) rather than part of the shared grammar,
-        // so it is appended here, quoted as the grammar quotes every other parameter.
-        return algs.ToArray() is { Length: > 0 } names
-            ? $"{challenge}, algs=\"{string.Join(' ', names)}\""
-            : challenge;
-    }
+        // challenge advertising the scheme, without error attributes. "algs" is DPoP's own parameter
+        // (RFC 9449 §7.1) and is passed through the same grammar as the rest - the figure there prints
+        // it as the FIRST parameter of a challenge with no realm, where the separator is a space.
+        => error is MissingAuthenticationError
+            ? WwwAuthenticate.Challenge(
+                TokenTypes.DPoP,
+                ("realm", realm),
+                ("algs", string.Join(' ', algs)))
+            : WwwAuthenticate.Challenge(
+                TokenTypes.DPoP,
+                ("realm", realm),
+                ("error", error.Error),
+                ("error_description", error.ErrorDescription),
+                ("algs", string.Join(' ', algs)));
 
     /// <summary>
     /// Builds the full set of <c>WWW-Authenticate</c> challenge lines for an error
