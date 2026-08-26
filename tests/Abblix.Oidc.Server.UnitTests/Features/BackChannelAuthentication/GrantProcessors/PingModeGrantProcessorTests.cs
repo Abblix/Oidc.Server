@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication.GrantP
 
 /// <summary>
 /// Verifies that CIBA ping mode consumes the <c>auth_req_id</c> on token retrieval. CIBA Core 1.0
-/// Section 7.3 states the <c>auth_req_id</c> can be used only once; Section 10.1.1 defines the
-/// token response identically for poll and ping. Ping therefore must remove the grant from storage
+/// Section 10.1.1 says "Once redeemed for a successful token response, the auth_req_id value that
+/// was used is no longer valid", and defines the token response identically for poll and ping. Ping therefore must remove the grant from storage
 /// on first successful retrieval, exactly like poll, so a notified client cannot replay the same
 /// <c>auth_req_id</c> to mint fresh tokens until expiry.
 /// </summary>

@@ -361,9 +361,16 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when push delivery fails, the authenticated request is retained in storage
-    /// rather than removed. Push clients cannot poll, so discarding the grant on a failed delivery
-    /// would silently lose tokens the client never received; the request is kept until it expires.
+    /// Verifies that when push delivery fails, the stored record is left alone rather than removed.
+    /// </summary>
+    /// <remarks>
+    /// It is not the authenticated request. Push never writes back - the status and the narrowed grant
+    /// were set on the in-memory object - so what stays is the PRE-completion record: Pending, carrying
+    /// what the client asked for, and carrying the session from initiation.
+    ///
+    /// Nor does keeping it save any tokens: the ones just minted are dropped with the lambda that made
+    /// them, and nothing retries. It is kept so a host can see the request existed, and because a host can
+    /// complete it again - which is a hazard rather than a recovery, and is issue 451.
     /// </summary>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_DeliveryFails_RetainsRequest()
@@ -414,11 +421,12 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when token generation fails in push mode, the error status is updated in storage
-    /// and no token delivery is attempted.
+    /// Verifies that when token generation fails in push mode, the request is REMOVED and no delivery is
+    /// attempted. Not marked denied: a push client never polls, so a status it will never read is an
+    /// orphan waiting out its expiry.
     /// </summary>
     [Fact]
-    public async Task CompleteAuthenticationAsync_PushMode_TokenGenerationFails_UpdatesStatus()
+    public async Task CompleteAuthenticationAsync_PushMode_TokenGenerationFails_RemovesRequest()
     {
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
@@ -459,11 +467,103 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when push mode is configured but the client notification endpoint is missing,
-    /// the system treats it as a configuration error and updates the request status to Denied.
+    /// Push REMOVES a misconfigured request rather than marking it Denied, and this holds the ENDPOINT
+    /// clause of the check.
     /// </summary>
+    /// <remarks>
+    /// The guard is two clauses, so it takes two fixtures: this one supplies the token and omits the
+    /// endpoint, <c>PushMode_MissingToken_RemovesRequest</c> does the reverse. Blinding either clause
+    /// kills exactly one of them.
+    ///
+    /// Why removal: a push client never comes to the token endpoint, so a status it will never read is an
+    /// orphan sitting in storage until it expires.
+    /// </remarks>
     [Fact]
-    public async Task CompleteAuthenticationAsync_PushMode_MissingEndpoint_SetsStatusToDenied()
+    public async Task CompleteAuthenticationAsync_PushMode_MissingEndpoint_RemovesRequest()
+    {
+        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            ClientNotificationEndpoint = null,
+            ClientNotificationToken = NotificationToken,
+        };
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+
+        // The half that separates this from ping, and the reason the override exists.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+
+        // Nothing is minted or delivered for a client that cannot be reached.
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _notificationService.Verify(
+            s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The other clause: the endpoint is registered and the token is not, which push must also refuse.
+    /// </summary>
+    /// <remarks>
+    /// Without this, blinding the token half of the guard kills only a PING test - push would carry a
+    /// divergent check that drops the token and ship green.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_MissingToken_RemovesRequest()
+    {
+        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            ClientNotificationEndpoint = new Uri("https://client.example/ciba"),
+            ClientNotificationToken = null,
+        };
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _notificationService.Verify(
+            s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that when the client notification endpoint is missing, PING mode treats it as a
+    /// configuration error and marks the request Denied.
+    /// </summary>
+    /// <remarks>
+    /// Ping, not push, which the handler this builds has always been; the name said otherwise. Push
+    /// removes instead of denying: the two tests above are its clauses.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
     {
         // Arrange
         var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
@@ -477,7 +577,7 @@ public class AuthenticationCompletionHandlerTests
 
         var clientInfo = new ClientInfo(ClientId)
         {
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
         };
 
         _storage.Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))

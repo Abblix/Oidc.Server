@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// <summary>
 /// Handles CIBA poll mode token retrieval at the token endpoint.
 /// In poll mode, clients repeatedly poll until authentication completes.
-/// Tokens are removed from storage immediately after retrieval to prevent duplicate issuance.
+/// The stored request is removed immediately on retrieval to prevent duplicate issuance.
 /// Uses atomic try-remove operation to prevent race conditions.
 /// </summary>
 /// <param name="storage">Storage for backchannel authentication requests.</param>
