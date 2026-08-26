@@ -90,9 +90,10 @@ public class RsaSignerTests
         Assert.Contains("2048", error.Message);
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
 
-        // Which key, out of however many the deployment holds, and which paragraph refused it.
+        // Which key, out of however many the deployment holds. The SECTION is asserted against
+        // hardcoded strings in RsaKeyFloorTests instead - computing it here from the mapping under test
+        // would prove only that the message carries whatever that mapping returns.
         Assert.Contains("undersized", error.Message);
-        Assert.Contains(JsonWebKeyExtensions.RsaSectionFor(algorithm), error.Message);
     }
 
     /// <summary>
@@ -101,10 +102,11 @@ public class RsaSignerTests
     /// reports the octets that were imported rather than the value they encode.
     /// </summary>
     /// <remarks>
-    /// Not an exotic attack. RFC 7518 Section 2 requires the minimal encoding, and Section 6.3.1.1 warns
-    /// that implementations emit the extra octet anyway - so the malformed modulus arrives without malice,
-    /// and the forgery arrives later from whoever factored the real one. Only the public half is supplied,
-    /// which is exactly what a peer publishes in its JWKS.
+    /// The padding here is not the benign quirk RFC 7518 records: Section 6.3.1.1 describes a single
+    /// extra zero octet, which moves no check at all. A modulus padded to twice its length is a malformed
+    /// or hostile JWKS entry, and it is cheap to publish - only the public half is needed, which is
+    /// exactly what a peer publishes. The forgery arrives later, from whoever factored the real
+    /// modulus.
     /// </remarks>
     [Theory]
     [MemberData(nameof(Algorithms))]

@@ -23,9 +23,12 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	/// 3.5, for PS256/PS384/PS512, says it of the singular: "with this algorithm."
 	/// </summary>
 	/// <remarks>
-	/// Enforced here AND at the signing seam, because they are different doors. This one is the contract
-	/// of the byte-level algorithm and the one its own tests drive. The seam's is the one a key held by an
-	/// external custodian passes through, and such a key never reaches this class at all.
+	/// Enforced here AND at the signing seam, because they are different doors and neither covers the
+	/// other. A key whose private half lives with a custodian never reaches this class FOR SIGNING - the
+	/// seam is what refuses it there. It reaches this class for every VERIFICATION, because verification
+	/// is always local: the validator resolves the keyed algorithm by key type and never consults the
+	/// seam. So the floor below runs in both directions, and deleting it would leave a custodian
+	/// deployment with nothing refusing an undersized key published in a peer's JWKS.
 	/// </remarks>
 	private const int MinimumKeySizeBits = JsonWebKeyExtensions.MinimumRsaKeyBits;
 

@@ -27,9 +27,10 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
         CancellationToken cancellationToken)
     {
         // The floor RFC 7518 sets on an RSA key belongs to the DEPLOYMENT's keys, not to one backend's
-        // code path. RsaSigner enforces it for what it signs in process; a key whose private half lives
-        // with a custodian never reaches that class, so without this the same deployment mints RS256 over
-        // an undersized modulus through the external backend while refusing to verify its own output.
+        // code path. RsaSigner enforces it for what it SIGNS in process, and a key whose private half
+        // lives with a custodian never reaches that class for signing - it does reach it for every
+        // verification, which is local. So without this the same deployment mints RS256 over an
+        // undersized modulus through the external backend and then refuses to verify its own output.
         //
         // Measured from the modulus rather than from RSA.KeySize, which reports the imported octet count -
         // an external key is public-only and its modulus is all there is to read.
@@ -38,7 +39,8 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
             throw new ArgumentException(
                 $"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
                 $"least {JsonWebKeyExtensions.MinimumRsaKeyBits} bits per RFC 7518 " +
-                $"{JsonWebKeyExtensions.RsaSectionFor(algorithm)}, and this deployment would not be able " +
+                $"{JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm)}, and this deployment would " +
+                "not be able " +
                 "to verify what it signed with this key.",
                 nameof(key));
         }

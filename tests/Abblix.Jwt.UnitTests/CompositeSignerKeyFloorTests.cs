@@ -71,6 +71,29 @@ public class CompositeSignerKeyFloorTests
         Assert.NotEmpty(signature);
     }
 
+    /// <summary>
+    /// An RSA key carrying no <c>alg</c> resolves to <c>SigningAlgorithms.None</c>, which has no floor
+    /// section of its own. The seam must still refuse it for its SIZE, and say so.
+    /// </summary>
+    /// <remarks>
+    /// Building the citation by a method that throws on an unknown algorithm would replace this refusal
+    /// with a complaint about the citation, on the one path where the operator most needs the size.
+    /// </remarks>
+    [Fact]
+    public async Task SignAsync_AnUndersizedKeyWithNoAlgorithm_IsStillRefusedForItsSize()
+    {
+        var custodian = new RecordingCustodian();
+        var composite = new CompositeSigner([new ExternalKeys.ExternalKeySigner(custodian)]);
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(
+            () => composite.SignAsync(PublicOnlyKey(BelowTheFloor), SigningAlgorithms.None, SampleData,
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains(BelowTheFloor.ToString(), error.Message);
+        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+        Assert.False(custodian.WasAsked);
+    }
+
     private static RsaJsonWebKey PublicOnlyKey(int bits)
     {
         using var rsa = RSA.Create(bits);

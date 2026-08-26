@@ -47,6 +47,18 @@ public class RsaKeyFloorTests
             () => JsonWebKeyExtensions.RsaSectionFor(SigningAlgorithms.ES256));
 
     /// <summary>
+    /// The message-building form must never throw, because it is called while composing a refusal: an
+    /// unknown algorithm there would replace the size refusal the operator was about to read.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, "per RFC 7518 Section 3.3")]
+    [InlineData(SigningAlgorithms.PS512, "per RFC 7518 Section 3.5")]
+    [InlineData(SigningAlgorithms.None, "for RSA signatures")]
+    [InlineData(SigningAlgorithms.ES256, "for RSA signatures")]
+    public void RsaSectionForOrNothing_NeverThrows(string algorithm, string expected)
+        => Assert.Equal(expected, JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm));
+
+    /// <summary>
     /// The encryption-side floor. Deleting it outright used to pass the whole suite.
     /// </summary>
     [Fact]
@@ -111,8 +123,14 @@ public class RsaKeyFloorTests
 
     /// <summary>
     /// Minting is where a configured key size becomes a key, so it is where a size this library will
-    /// later refuse to sign with has to be refused - not at the token endpoint, on first use.
+    /// later refuse to sign with has to be refused.
     /// </summary>
+    /// <remarks>
+    /// How early that lands still depends on the ring. <c>KeyRing</c> mints on its first refresh, inside
+    /// the hosted service, so the process stops at startup. <c>InMemoryKeyRing</c> mints lazily by
+    /// design, so a misconfigured host reaches this refusal on its first JWKS or token request instead.
+    /// Closing that difference means validating the configured size at startup, which is its own change.
+    /// </remarks>
     [Fact]
     public void CreateRsa_BelowTheFloor_Refuses()
     {

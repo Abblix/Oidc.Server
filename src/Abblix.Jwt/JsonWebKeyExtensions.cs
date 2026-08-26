@@ -182,9 +182,10 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
-	/// The smallest RSA modulus RFC 7518 permits. Four sections state it in the same words, one per
-	/// family: Section 3.3 and Section 3.5 for signing, Section 4.2 and Section 4.3 for key encryption.
-	/// One number here, so the sites that enforce it cannot drift apart.
+	/// The smallest RSA modulus RFC 7518 permits. Four sections state it, one per family: Section 3.3
+	/// and Section 3.5 for signing, Section 4.2 and Section 4.3 for key encryption. Almost the same
+	/// words - 3.3 and 4.3 govern several algorithms and say "these", 3.5 and 4.2 govern one and say
+	/// "this". One number here, so the sites that enforce it cannot drift apart.
 	/// </summary>
 	public const int MinimumRsaKeyBits = 2048;
 
@@ -197,15 +198,29 @@ public static class JsonWebKeyExtensions
 	/// looking at a table of algorithm names and no MUST - which reads as the library inventing the rule.
 	/// </remarks>
 	/// <exception cref="ArgumentException">The algorithm is not one this library enforces a floor for.</exception>
-	public static string RsaSectionFor(string algorithm) => algorithm switch
+	public static string RsaSectionFor(string algorithm) => SectionOrNull(algorithm)
+		?? throw new ArgumentException($"No RSA key-size section is known for {algorithm}.", nameof(algorithm));
+
+	/// <summary>
+	/// The same citation, for use INSIDE a refusal message.
+	/// </summary>
+	/// <remarks>
+	/// An unknown algorithm here must not replace the refusal the operator was about to read with a
+	/// complaint about the citation, so this yields a section-free phrase instead of throwing and the
+	/// sentence still names the key, the size and the floor. Reachable: an RSA key carrying no
+	/// <c>alg</c> resolves to <c>SigningAlgorithms.None</c>, which has no floor of its own.
+	/// </remarks>
+	public static string RsaSectionForOrNothing(string algorithm)
+		=> SectionOrNull(algorithm) is { } section ? $"per RFC 7518 {section}" : "for RSA signatures";
+
+	private static string? SectionOrNull(string algorithm) => algorithm switch
 	{
 		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 => "Section 3.3",
 		SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 => "Section 3.5",
 		EncryptionAlgorithms.KeyManagement.Rsa1_5 => "Section 4.2",
 		EncryptionAlgorithms.KeyManagement.RsaOaep or EncryptionAlgorithms.KeyManagement.RsaOaep256
 			=> "Section 4.3",
-		_ => throw new ArgumentException(
-			$"No RSA key-size section is known for {algorithm}.", nameof(algorithm)),
+		_ => null,
 	};
 
 	/// <summary>
@@ -213,12 +228,17 @@ public static class JsonWebKeyExtensions
 	/// </summary>
 	/// <remarks>
 	/// <c>RSA.KeySize</c> is not this number. It reports the length of the octets that were IMPORTED, so a
-	/// modulus left-padded to twice its size reports twice its strength - and a peer supplying one is not
-	/// necessarily attacking: RFC 7518 Section 2 requires the minimal encoding ("The octet sequence MUST
-	/// utilize the minimum number of octets needed to represent the value"), while Section 6.3.1.1 warns
-	/// that implementations emit the extra octet anyway. So a size check written against
+	/// modulus left-padded to twice its size reports twice its strength: a size check written against
 	/// <c>RSA.KeySize</c> passes on a key half the strength it claims, and the forgery arrives later from
 	/// whoever factored the real modulus.
+	/// <para>
+	/// RFC 7518 Section 2 requires the minimal encoding - "The octet sequence MUST utilize the minimum
+	/// number of octets needed to represent the value" - which is what this measurement follows. Padding
+	/// far enough to matter is NOT something a library does by accident: the one benign quirk the
+	/// specification records is a single extra zero octet (Section 6.3.1.1, "returning 257 octets for a
+	/// 2048-bit key"), and one octet moves neither check in either direction. Sixty-four of them is a
+	/// malformed or hostile JWKS entry.
+	/// </para>
 	/// <para>
 	/// The leading octet contributes only the bits from its own highest set bit down, which is what makes
 	/// this the modulus's true length rather than a rounded-up octet count.
