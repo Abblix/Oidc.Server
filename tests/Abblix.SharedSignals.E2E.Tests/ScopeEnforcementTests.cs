@@ -63,9 +63,11 @@ public sealed class ScopeEnforcementTests
     /// </summary>
     /// <remarks>
     /// Which is a deliberate exception rather than a pure read: a poll acknowledges, and that releases
-    /// the transmitter from retaining the acknowledged events, so this scope can empty its own queue.
-    /// The route comment gives the reasoning; the row is here because the alternative - requiring
-    /// <c>ssf.manage</c> to poll - would make every receiver hold the scope that deletes streams.
+    /// the transmitter from retaining the acknowledged events, so this scope can empty a queue. Whose
+    /// queue depends on issue 462 - the outbox is keyed by stream id alone, so two receivers naming one
+    /// stream share it. The route comment gives the reasoning; the row is here because the alternative -
+    /// requiring <c>ssf.manage</c> to poll - would make every receiver hold the scope that deletes
+    /// streams.
     /// </remarks>
     [Fact]
     public async Task AReadScopedCaller_MayPoll()
@@ -103,6 +105,49 @@ public sealed class ScopeEnforcementTests
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
         Assert.DoesNotContain("error", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The lower bound on the read routes: a caller holding neither scope is refused them, and told which
+    /// one to ask for.
+    /// </summary>
+    /// <remarks>
+    /// Without this the read rows assert only that <c>ssf.read</c> is ENOUGH, never that anything is
+    /// required - so a route that quietly stopped declaring a scope would ship green. Deleting
+    /// <c>.RequiresScope</c> from poll used to leave the whole suite passing.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf/stream")]
+    [InlineData("/ssf/status")]
+    public async Task ACallerWithAnUnrelatedScope_IsRefusedTheReadRoutes(string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync("urn:example:something-else");
+
+        using var response = await host.GetTestClient().GetAsync(route, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The same for poll, which is the route whose scope this library assigns rather than the profile.
+    /// </summary>
+    [Fact]
+    public async Task ACallerWithAnUnrelatedScope_IsRefusedPoll()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync("urn:example:something-else");
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/poll/stream-1"), cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
     }
 
     /// <summary>

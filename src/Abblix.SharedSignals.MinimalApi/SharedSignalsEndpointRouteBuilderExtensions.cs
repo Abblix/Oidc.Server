@@ -99,9 +99,15 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // RFC 8936 Section 2.2's acknowledge-only poll is that half by itself. So a token carrying only
         // ssf.read can empty its own queue. The alternative is worse: requiring ssf.manage for poll makes
         // every polling receiver hold the scope that also lets it delete streams, which is the whole
-        // split gone. What bounds the damage is ownership - the handler looks the stream up BY the
-        // caller's identity, so nobody acknowledges anybody else's events - and what does not bound it is
-        // the scope, which is why this is said out loud rather than left to the reader.
+        // split gone.
+        //
+        // What was supposed to bound the damage is ownership: the handler looks the stream up BY the
+        // caller's identity. That bound holds only while stream identifiers are unique ACROSS receivers,
+        // which the dynamic path guarantees by minting a GUID and the declared path does not - the
+        // outbox is keyed by stream id alone while a stream is keyed by the pair, so two receivers
+        // naming one stream share one queue and either can acknowledge the other's events. That is
+        // issue 462 and it is not this scope's doing; it is named here because the sentence that used to
+        // stand in this place asserted the bound without its condition.
         group.AddEndpointFilter(EnforceScopeAsync);
 
         group.MapPost(Routes.Stream, CreateStreamAsync).RequiresScope(SsfScopes.Manage);
@@ -476,6 +482,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // that carried no token at all - which RFC 6750 Section 3.1 forbids, and which sends a receiver
         // whose token merely expired to fetch a scope it already has. Pass it through and let the
         // handler emit the bare 401.
+        // A route carrying no RequiredScope is let through. That is fail-OPEN, and it is stated rather
+        // than relied on: every route this class maps declares one, and a future route that forgets is
+        // exempt with nothing to notice it. The alternative - refusing an endpoint whose metadata is
+        // absent - would break any route a host adds to this group itself.
         if (options.GrantedScopesSelector is not { } selector ||
             options.ReceiverIdSelector(http) is null ||
             http.GetEndpoint()?.Metadata.GetMetadata<RequiredScope>() is not { } required ||
@@ -487,8 +497,12 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
         return new ChallengeResult(
             StatusCodes.Status403Forbidden,
-            $"{WwwAuthenticate.Challenge(BearerScheme, issuer, "insufficient_scope", "The access token " +
-            $"does not carry the scope this operation requires.")}, scope=\"{required.Scope}\"");
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "insufficient_scope"),
+                ("error_description", "The access token does not carry the scope this operation requires."),
+                ("scope", required.Scope)));
     }
 
     /// <summary>
