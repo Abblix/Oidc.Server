@@ -85,17 +85,29 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             return await next(context);
         });
 
-        group.MapPost(Routes.Stream, CreateStreamAsync);
-        group.MapGet(Routes.Stream, GetStreamsAsync);
-        group.MapPatch(Routes.Stream, UpdateStreamAsync);
-        group.MapPut(Routes.Stream, ReplaceStreamAsync);
-        group.MapDelete(Routes.Stream, DeleteStreamAsync);
-        group.MapGet(Routes.Status, GetStatusAsync);
-        group.MapPost(Routes.Status, UpdateStatusAsync);
-        group.MapPost(Routes.AddSubject, AddSubjectAsync);
-        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync);
-        group.MapPost(Routes.Verify, RequestVerificationAsync);
-        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync);
+        // The scope each route requires (CAEP Interoperability Profile Section 2.7.3). The profile names
+        // five of these eleven operations - Read Stream Configuration and Get Stream Status for
+        // ssf.read, Create Stream, Delete Stream and Stream Verification for ssf.manage - and says
+        // nothing about the other six.
+        //
+        // Those six are OUR reading, not the profile's, and they go the stricter way: everything that
+        // CHANGES a stream requires ssf.manage, because refusing a caller who should have been allowed
+        // is recoverable and the reverse is not. Poll is the exception and takes ssf.read: it delivers a
+        // receiver its own events rather than managing anything, and a caller who may read a stream's
+        // configuration may certainly read what that stream carries.
+        group.AddEndpointFilter(EnforceScopeAsync);
+
+        group.MapPost(Routes.Stream, CreateStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapGet(Routes.Stream, GetStreamsAsync).RequiresScope(SsfScopes.Read);
+        group.MapPatch(Routes.Stream, UpdateStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPut(Routes.Stream, ReplaceStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapDelete(Routes.Stream, DeleteStreamAsync).RequiresScope(SsfScopes.Manage);
+        group.MapGet(Routes.Status, GetStatusAsync).RequiresScope(SsfScopes.Read);
+        group.MapPost(Routes.Status, UpdateStatusAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.AddSubject, AddSubjectAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost(Routes.Verify, RequestVerificationAsync).RequiresScope(SsfScopes.Manage);
+        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync).RequiresScope(SsfScopes.Read);
 
         return group;
     }
@@ -392,7 +404,8 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     private static IResult Unauthenticated(HttpContext http)
     {
         var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
-        return new BareChallengeResult(WwwAuthenticate.Challenge(BearerScheme, issuer));
+        return new ChallengeResult(
+            StatusCodes.Status401Unauthorized, WwwAuthenticate.Challenge(BearerScheme, issuer));
     }
 
     /// <summary>
@@ -403,14 +416,57 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     private const string BearerScheme = "Bearer";
 
     /// <summary>
+    /// Records which scope a route requires, so the filter below can read it back off the endpoint.
+    /// </summary>
+    private static void RequiresScope<TBuilder>(this TBuilder builder, string scope)
+        where TBuilder : IEndpointConventionBuilder
+        => builder.WithMetadata(new RequiredScope(scope));
+
+    private sealed record RequiredScope(string Scope);
+
+    /// <summary>
+    /// Refuses a request whose token was not granted the scope its route requires.
+    /// </summary>
+    /// <remarks>
+    /// Does nothing at all unless the host set
+    /// <see cref="SharedSignalsEndpointOptions.GrantedScopesSelector"/>, because without it this package
+    /// has no way to learn what was granted and guessing would refuse every caller.
+    /// <para>
+    /// RFC 6750 Section 3.1 names the answer: <c>insufficient_scope</c>, "The request requires higher
+    /// privileges than provided by the access token", with 403. The <c>scope</c> attribute is the one
+    /// that section says a resource server MAY include, and it is the only thing here that tells a
+    /// receiver what to ask its authorization server for next.
+    /// </para>
+    /// </remarks>
+    private static async ValueTask<object?> EnforceScopeAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        var options = http.RequestServices.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
+
+        if (options.GrantedScopesSelector is not { } selector ||
+            http.GetEndpoint()?.Metadata.GetMetadata<RequiredScope>() is not { } required ||
+            SsfScopes.Satisfies(selector(http), required.Scope))
+        {
+            return await next(context);
+        }
+
+        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        return new ChallengeResult(
+            StatusCodes.Status403Forbidden,
+            $"{WwwAuthenticate.Challenge(BearerScheme, issuer, "insufficient_scope", "The access token " +
+            $"does not carry the scope this operation requires.")}, scope=\"{required.Scope}\"");
+    }
+
+    /// <summary>
     /// A 401 carrying one <c>WWW-Authenticate</c> line and no body. Written by hand because
     /// <c>Results.Unauthorized()</c> emits no headers, and the header is the whole point.
     /// </summary>
-    private sealed class BareChallengeResult(string challenge) : IResult
+    private sealed class ChallengeResult(int statusCode, string challenge) : IResult
     {
         public Task ExecuteAsync(HttpContext httpContext)
         {
-            httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            httpContext.Response.StatusCode = statusCode;
             httpContext.Response.Headers.WWWAuthenticate = challenge;
             return Task.CompletedTask;
         }
