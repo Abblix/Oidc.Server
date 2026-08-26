@@ -59,6 +59,32 @@ public abstract partial class AuthenticationCompletionHandler(
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
+        // One authentication, one completion. The end user answered once, so a second full token set is
+        // wrong whatever it contains - which is why this refuses rather than replaying the narrowed
+        // grant. Replaying would make the second set correctly scoped and no less of a second set.
+        //
+        // Loud rather than silent, and that is a behaviour change a host could be relying on: nothing on
+        // this seam returns a value, so a refusal a caller cannot detect is the one shape that reads as
+        // acceptance. The exception reaches the code writing the recovery, which is where the choice
+        // between re-completing and asking the end user again is actually made.
+        //
+        // Push is what makes this reachable at all. Poll and ping persist Authenticated before they
+        // deliver, so their records already answer this; push stored nothing until
+        // PushModeCompletionHandler was given the same write, and until then a failed delivery left a
+        // record that still read Pending and still carried what the CLIENT asked for.
+        if (request.Status != BackChannelAuthenticationStatus.Pending)
+        {
+            LogAlreadyCompleted(authenticationRequestId, request.Status.ToString());
+
+            throw new InvalidOperationException(
+                $"The authentication request has already been completed. Its "
+                + $"{nameof(request.Status)} is {request.Status}, and only "
+                + $"{BackChannelAuthenticationStatus.Pending} can be completed. Recovering from a failed "
+                + $"delivery by completing again would issue a second set of tokens for one "
+                + $"authentication, carrying what the client asked for rather than what the end user "
+                + $"approved.");
+        }
+
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
         // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,
         // even if they have an active session with the Authorization Server". The end user authenticated out

@@ -60,19 +60,18 @@ public partial class PushModeCompletionHandler(
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The authentication request is removed from storage after successful delivery. Not hygiene: push
-    /// never writes back, so a record left behind is the PRE-completion one - Pending, carrying what the
-    /// client asked for rather than what the end user approved, and carrying the session - and a host that
-    /// finds it can complete it again. Removing it is what stops that on the path where the tokens did
-    /// arrive.
+    /// The status transition is persisted before the tokens are minted, and the request is removed after
+    /// a delivery that succeeded. Neither is hygiene. The write is what leaves a record no second
+    /// completion can use on the one path where a record survives, and the removal is what leaves none at
+    /// all on the path where the tokens did arrive. The grant itself is still not persisted: the record
+    /// says the request was spent, not what it was spent on.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">Has no effect here. Push either removes the request or leaves it exactly
-    /// as it was - it never writes a new lifetime - so on the one outcome that keeps the record, a failed
-    /// delivery, what expires is the lifetime set when the request was stored. The parameter exists
-    /// because the base class hands it to every mode, and poll and ping do use it.</param>
+    /// <param name="expiresIn">The lifetime applied when the status transition is persisted, which is
+    /// what a record surviving a failed delivery then expires on. Push writes once and only for that,
+    /// so a delivery that succeeds removes the record long before the lifetime matters.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -116,6 +115,20 @@ public partial class PushModeCompletionHandler(
             await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
+
+        // Persisted BEFORE minting, and this is the only write push makes. The order is the whole point:
+        // written after delivery it would never happen on the failure path, which is the one path where
+        // the record survives to be completed again.
+        //
+        // The status alone, deliberately, not the narrowed grant the host completed with. Persisting the
+        // grant would let a second completion replay the approval, which is a correctly-scoped second
+        // token set for one authentication - the symptom fixed and the disease kept. What the record has
+        // to carry is that it was spent, and the base handler refuses everything that is not Pending.
+        //
+        // On the delivery path this write is undone moments later by the removal below. That is a wasted
+        // round trip on the successful case in exchange for the guarantee on the failing one, which is
+        // the case that mints tokens nobody asked for.
+        await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
 
         LogGeneratingTokens(authenticationRequestId);
 
@@ -167,21 +180,20 @@ public partial class PushModeCompletionHandler(
                     // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
                     // retries them.
                     //
-                    // What survives in storage is the record as it stood BEFORE the completion, because
-                    // push never writes back: the status and the narrowed grant were set on the in-memory
-                    // object, and only the poll and ping paths persist that with UpdateAsync. So it still
-                    // reads Pending and still carries what the client ASKED for rather than what the end
-                    // user approved.
+                    // What survives in storage reads Authenticated, written above before anything was
+                    // minted, and still carries what the client ASKED for rather than what the end user
+                    // approved - the narrowed grant was set on the in-memory object and is not persisted.
+                    // The status is what matters: the base handler completes only a Pending request, so
+                    // this record cannot be handed back for a second completion.
                     //
-                    // It does carry a session - the one the device handler returned at initiation, naming
-                    // the end user - because AuthorizedGrant takes it as a non-nullable member and the
-                    // request was stored with it. That is what makes the leftover dangerous rather than
-                    // inert: it has everything CompleteAsync needs, so a host that reads it back and
-                    // completes it again succeeds, mints, and delivers the entries the end user refused.
+                    // It carries a session too - the one the device handler returned at initiation,
+                    // naming the end user - because AuthorizedGrant takes it as a non-nullable member.
+                    // Before the write above, that made the leftover a live over-grant rather than a
+                    // record: everything CompleteAsync needed was in it except any sign it had been used.
                     //
                     // It is kept rather than removed so a host can see the request existed, and it expires
-                    // on its own. Anything a host rebuilds from it replays what was asked for, and nothing
-                    // here refuses that.
+                    // on its own. The correct recovery is to ask the end user again, which is what the
+                    // refusal now makes the only one available.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 

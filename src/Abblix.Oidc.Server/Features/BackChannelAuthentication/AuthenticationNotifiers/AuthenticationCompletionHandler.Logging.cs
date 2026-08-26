@@ -36,4 +36,16 @@ partial class AuthenticationCompletionHandler
                   "never asked for, so it is refused. ClientId: {ClientId}, types: {EscapedTypes}")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(
         string AuthReqId, string ClientId, string EscapedTypes);
+
+    /// <summary>
+    /// Logged as well as thrown. The throw reaches the host writing the recovery; the log reaches the
+    /// operator reading a live system, who sees the attempt whether or not the host caught it.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.AlreadyCompleted,
+        Level = LogLevel.Error,
+        Message = "auth_req_id {AuthReqId} was completed again, and refused: its status is {Status} " +
+                  "rather than Pending. A completion after a failed delivery is not a retry of that " +
+                  "delivery - it mints a second set of tokens for one authentication.")]
+    private partial void LogAlreadyCompleted(string AuthReqId, string Status);
 }
