@@ -385,16 +385,18 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// The answer to a management request that named no receiver: 401 with a bare Bearer challenge.
     /// </summary>
     /// <remarks>
-    /// Bare, and deliberately so. Every refusal on this surface has the same cause - nothing identified
-    /// the caller - which is what RFC 6750 Section 3.1 describes as a request that "lacks any
-    /// authentication information", and for which it says the resource server "SHOULD NOT include an
-    /// error code or other error information". A caller that presented nothing has nothing to correct.
+    /// Bare, and deliberately so. This refusal has one cause - nothing identified the caller - which is
+    /// what RFC 6750 Section 3.1 describes as a request that "lacks any authentication information", and
+    /// for which it says the resource server "SHOULD NOT include an error code or other error
+    /// information". A caller that presented nothing has nothing to correct. It is not the only refusal
+    /// on this surface: a caller that IS identified but lacks the scope gets 403 from the filter above,
+    /// and that ordering is deliberate.
     /// <para>
-    /// That section defines three codes and this method answers none of them. Two belong to whoever
-    /// validates the token, which is the host: <c>invalid_token</c> when a presented token is expired or
-    /// malformed, and <c>insufficient_scope</c> with 403 when it is valid but too narrow. This package
-    /// never sees a token - it reads whatever identity the host's authentication left behind, through
-    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
+    /// That section defines three codes and this method answers none of them. <c>invalid_token</c>
+    /// belongs to whoever validates the token, which is the host: this package never sees one, it reads
+    /// whatever identity the host's authentication left behind, through
+    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>. <c>insufficient_scope</c> IS
+    /// emitted here, by the filter above, once the host supplies the granted scopes.
     /// </para>
     /// <para>
     /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
@@ -454,7 +456,13 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var http = context.HttpContext;
         var options = http.RequestServices.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
 
-        if (options.GrantedScopesSelector is not { } selector ||
+        // An unidentified caller is NOT a scope problem, and this filter runs before the handler that
+        // would say so. Left to itself it answers "insufficient_scope, scope=ssf.manage" to a request
+        // that carried no token at all - which RFC 6750 Section 3.1 forbids, and which sends a receiver
+        // whose token merely expired to fetch a scope it already has. Pass it through and let the
+        // handler emit the bare 401.
+        if (options.ReceiverIdSelector(http) is null ||
+            options.GrantedScopesSelector is not { } selector ||
             http.GetEndpoint()?.Metadata.GetMetadata<RequiredScope>() is not { } required ||
             SsfScopes.Satisfies(selector(http), required.Scope))
         {
@@ -469,8 +477,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// A 401 carrying one <c>WWW-Authenticate</c> line and no body. Written by hand because
-    /// <c>Results.Unauthorized()</c> emits no headers, and the header is the whole point.
+    /// A status and one <c>WWW-Authenticate</c> line, with no body: 401 with a bare challenge when
+    /// nobody was identified, 403 naming <c>insufficient_scope</c> when somebody was and their token is
+    /// too narrow. Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header
+    /// is the whole point.
     /// </summary>
     private sealed class ChallengeResult(int statusCode, string challenge) : IResult
     {

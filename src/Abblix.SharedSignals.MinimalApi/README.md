@@ -50,6 +50,17 @@ A gateway-fronted deployment adjusts this in the same options object, without mo
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
+Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile splits this API in two - `ssf.read` for reading a stream's configuration or status, `ssf.manage` for everything that changes one - and requires a transmitter to check that a token is sufficient for what was asked. Each route knows which scope it needs, but this package never sees a token, so it cannot find the granted scopes on its own:
+
+```csharp
+builder.Services.AddSingleton(new SharedSignalsEndpointOptions
+{
+    GrantedScopesSelector = ctx => ctx.User.FindFirst("scope")?.Value.Split(' ') ?? [],
+});
+```
+
+Set it and a caller whose token is too narrow gets 403 with `insufficient_scope` and the scope it needs to ask for. Leave it unset and no scope is checked at all, which is what this surface did before the option existed - a working deployment, and one outside the profile. Your authorization server has to be able to grant the two scope values; this library's own refuses any scope nobody registered with it.
+
 What one call maps, relative to the prefix:
 
 | Route | Method | SSF 1.0 |

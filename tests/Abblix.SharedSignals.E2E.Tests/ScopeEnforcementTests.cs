@@ -36,18 +36,67 @@ public sealed class ScopeEnforcementTests
     private const string SomeEvent = "https://tenant.example.com/events/membership-changed";
 
     /// <summary>
-    /// Reading is what <c>ssf.read</c> is for, and it is enough for exactly the two operations the
-    /// profile names.
+    /// Reading is what <c>ssf.read</c> is for, and it is enough for both operations the profile names -
+    /// Read Stream Configuration and Get Stream Status - plus poll, which is this library's own reading
+    /// of a route the profile does not assign.
     /// </summary>
-    [Fact]
-    public async Task AReadScopedCaller_MayReadStreams()
+    /// <remarks>
+    /// A row each, because a summary claiming two are covered while one is driven is how a route quietly
+    /// tightens to <c>ssf.manage</c> and refuses a conformant read-only receiver with the suite green.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf/stream")]
+    [InlineData("/ssf/status")]
+    public async Task AReadScopedCaller_MayReach(string route)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await StartAsync(SsfScopes.Read);
 
-        using var response = await host.GetTestClient().GetAsync("/ssf/stream", cancellationToken);
+        using var response = await host.GetTestClient().GetAsync(route, cancellationToken);
 
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Poll delivers a receiver its own events. The profile assigns it no scope, and this library reads
+    /// it as <c>ssf.read</c> - so a read-only receiver can collect what its stream carries.
+    /// </summary>
+    [Fact]
+    public async Task AReadScopedCaller_MayPoll()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read);
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/poll/stream-1"), cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The refusal a caller with no identity gets is the 401 from the handler, not a 403 from the scope
+    /// filter - even with scope checking switched on.
+    /// </summary>
+    /// <remarks>
+    /// The filter runs before the handler that checks identity, so without an explicit pass-through it
+    /// answers "your scope is too narrow" to a request carrying no token at all. RFC 6750 Section 3.1
+    /// forbids naming an error there, and operationally it is worse than wrong: a receiver whose token
+    /// expired is sent to fetch a scope it already holds, and a client library that re-authenticates on
+    /// 401 and gives up on 403 stops retrying the one condition retrying would fix.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnidentifiedCaller_GetsTheBare401_EvenWithScopeCheckingOn()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read, identified: false);
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/verify"), cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.DoesNotContain("error", challenge.Parameter!);
     }
 
     /// <summary>
@@ -141,7 +190,7 @@ public sealed class ScopeEnforcementTests
             }),
         };
 
-    private static async Task<WebApplication> StartAsync(string? grantedScope)
+    private static async Task<WebApplication> StartAsync(string? grantedScope, bool identified = true)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -160,7 +209,7 @@ public sealed class ScopeEnforcementTests
 
         builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {
-            ReceiverIdSelector = _ => "receiver-1",
+            ReceiverIdSelector = _ => identified ? "receiver-1" : null,
             GrantedScopesSelector = grantedScope is null
                 ? null
                 : _ => [grantedScope],
