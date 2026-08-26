@@ -173,10 +173,14 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     };
 
     /// <summary>
-    /// Says once, at startup, when the document is missing something the CAEP Interoperability Profile
-    /// 1.0 requires and the host looks unaware of it. Neither case refuses the host, and the two are not
-    /// equally optional elsewhere: SSF 1.0 requires jwks_uri of any transmitter that signs, which this one
-    /// always does, while it attaches no condition to authorization_schemes.
+    /// Says once, at startup, where this deployment falls outside the CAEP Interoperability Profile 1.0
+    /// and the host looks unaware of it. Nothing here refuses the host: each of these is a working
+    /// deployment, and each is a choice the host is entitled to make knowingly.
+    /// <para>
+    /// No count is given, because a count over a list that grows is the one thing in a comment guaranteed
+    /// to rot. What each warning says, and how optional the member it names really is elsewhere, lives on
+    /// that warning's own message.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// It does NOT announce every profile-rejected document, and one configuration is deliberately left
