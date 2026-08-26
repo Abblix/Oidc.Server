@@ -6,7 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Text;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 
 namespace Abblix.Oidc.Server.Common;
@@ -35,20 +35,11 @@ public static class WwwAuthenticateBuilder
     /// dual-scheme responses where the Bearer line is informational.
     /// </summary>
     public static string BuildBearerChallenge(OidcError error, string? realm, bool includeError = true)
-    {
-        var challenge = new Challenge(TokenTypes.Bearer);
-        challenge.Append("realm", realm);
-
         // RFC 6750 §3.1: when the request carried no authentication information at all, the
         // challenge must stay bare - no error code or description, just the scheme (and realm).
-        if (includeError && error is not MissingAuthenticationError)
-        {
-            challenge.Append("error", error.Error);
-            challenge.Append("error_description", error.ErrorDescription);
-        }
-
-        return challenge.ToString();
-    }
+        => includeError && error is not MissingAuthenticationError
+            ? WwwAuthenticate.Challenge(TokenTypes.Bearer, realm, error.Error, error.ErrorDescription)
+            : WwwAuthenticate.Challenge(TokenTypes.Bearer, realm);
 
     /// <summary>
     /// Builds a <c>WWW-Authenticate: Basic</c> challenge per RFC 7617 §2 for client-authentication
@@ -56,32 +47,28 @@ public static class WwwAuthenticateBuilder
     /// the Basic scheme defines no error attributes, so the error itself stays in the JSON body.
     /// </summary>
     public static string BuildBasicChallenge(string? realm)
-    {
-        var challenge = new Challenge(TokenTypes.Basic);
-        challenge.Append("realm", realm);
-        return challenge.ToString();
-    }
+        => WwwAuthenticate.Challenge(TokenTypes.Basic, realm);
 
     /// <summary>
     /// Builds a <c>WWW-Authenticate: DPoP</c> challenge per RFC 9449 §7.1, advertising the
     /// JWS algorithms the AS accepts on a proof.
     /// </summary>
     public static string BuildDPoPChallenge(OidcError error, string? realm, IEnumerable<string> algs)
-    {
-        var challenge = new Challenge(TokenTypes.DPoP);
-        challenge.Append("realm", realm);
-
         // RFC 6750 §3.1 applies to the DPoP line too: an unauthenticated request gets a bare
-        // challenge advertising the scheme, without error attributes.
-        if (error is not MissingAuthenticationError)
-        {
-            challenge.Append("error", error.Error);
-            challenge.Append("error_description", error.ErrorDescription);
-        }
-
-        challenge.Append("algs", string.Join(' ', algs));
-        return challenge.ToString();
-    }
+        // challenge advertising the scheme, without error attributes. "algs" is DPoP's own parameter
+        // (RFC 9449 Section 7.1) and is passed through the same grammar as the rest - the figure there prints
+        // it as the FIRST parameter of a challenge with no realm, where the separator is a space.
+        => error is MissingAuthenticationError
+            ? WwwAuthenticate.Challenge(
+                TokenTypes.DPoP,
+                ("realm", realm),
+                ("algs", string.Join(' ', algs)))
+            : WwwAuthenticate.Challenge(
+                TokenTypes.DPoP,
+                ("realm", realm),
+                ("error", error.Error),
+                ("error_description", error.ErrorDescription),
+                ("algs", string.Join(' ', algs)));
 
     /// <summary>
     /// Builds the full set of <c>WWW-Authenticate</c> challenge lines for an error
@@ -100,43 +87,5 @@ public static class WwwAuthenticateBuilder
 
         var bearer = BuildBearerChallenge(error, realm, includeError: false);
         return [dpop, bearer];
-    }
-
-    /// <summary>
-    /// Accumulates a single <c>WWW-Authenticate</c> challenge value as
-    /// <c>scheme name1="v1", name2="v2", ...</c>. Owns the comma-vs-space delimiter logic so
-    /// callers stay declarative - they just append name/value pairs and skip empties.
-    /// </summary>
-    private sealed class Challenge(string scheme)
-    {
-        private readonly StringBuilder _builder = new(scheme);
-        private bool _first = true;
-
-        public void Append(string name, string? value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return;
-
-            _builder
-                .Append(_first ? " " : ", ")
-                .Append(name)
-                .Append("=\"");
-
-            // RFC 7235 §2.2 / RFC 9110 §5.6.4: inside a quoted-string each `"` MUST be
-            // backslash-escaped, and `\` itself MUST be doubled. Anything else (CR/LF
-            // and other control bytes) is rejected upstream - mutating values silently
-            // would obscure malformed inputs.
-            foreach (var c in value)
-            {
-                if (c is '"' or '\\')
-                    _builder.Append('\\');
-                _builder.Append(c);
-            }
-
-            _builder.Append('"');
-            _first = false;
-        }
-
-        public override string ToString() => _builder.ToString();
     }
 }

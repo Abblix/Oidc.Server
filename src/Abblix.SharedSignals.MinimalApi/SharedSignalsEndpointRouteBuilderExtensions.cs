@@ -11,6 +11,7 @@ using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -194,7 +195,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.CreateStreamAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     /// <summary>
     /// One route, two reads: with "stream_id" the single configuration, without it the list -
@@ -209,7 +210,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     {
         if (ReceiverIdOf(http) is not { } receiverId)
         {
-            return Results.Unauthorized();
+            return Unauthenticated(http);
         }
 
         return streamId is null
@@ -224,7 +225,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.UpdateStreamAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> ReplaceStreamAsync(
         HttpContext http,
@@ -233,7 +234,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.ReplaceStreamAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> DeleteStreamAsync(
         HttpContext http,
@@ -243,7 +244,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     {
         if (ReceiverIdOf(http) is not { } receiverId)
         {
-            return Results.Unauthorized();
+            return Unauthenticated(http);
         }
 
         // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
@@ -261,7 +262,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     {
         if (ReceiverIdOf(http) is not { } receiverId)
         {
-            return Results.Unauthorized();
+            return Unauthenticated(http);
         }
 
         // The status read has no list fallback: "stream_id" is its REQUIRED parameter
@@ -278,7 +279,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.UpdateStreamStatusAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> AddSubjectAsync(
         HttpContext http,
@@ -287,7 +288,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.AddSubjectAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> RemoveSubjectAsync(
         HttpContext http,
@@ -296,7 +297,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.RemoveSubjectAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> RequestVerificationAsync(
         HttpContext http,
@@ -305,7 +306,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
             ? Render(await service.RequestVerificationAsync(receiverId, request, cancellationToken))
-            : Results.Unauthorized();
+            : Unauthenticated(http);
 
     private static async Task<IResult> PollAsync(
         HttpContext http,
@@ -317,7 +318,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     {
         if (ReceiverIdOf(http) is not { } receiverId)
         {
-            return Results.Unauthorized();
+            return Unauthenticated(http);
         }
 
         return await store.FindAsync(receiverId, streamId, cancellationToken) is { } stream
@@ -366,6 +367,64 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             },
             DefaultSubjects = options.DefaultSubjectsValue,
         };
+    }
+
+    /// <summary>
+    /// The answer to a management request that named no receiver: 401 with a bare Bearer challenge.
+    /// </summary>
+    /// <remarks>
+    /// Bare, and deliberately so. Every refusal on this surface has the same cause - nothing identified
+    /// the caller - which is what RFC 6750 Section 3.1 describes as a request that "lacks any
+    /// authentication information", and for which it says the resource server "SHOULD NOT include an
+    /// error code or other error information". A caller that presented nothing has nothing to correct.
+    /// <para>
+    /// That section defines three codes and this method answers none of them. Two belong to whoever
+    /// validates the token, which is the host: <c>invalid_token</c> when a presented token is expired or
+    /// malformed, and <c>insufficient_scope</c> with 403 when it is valid but too narrow. This package
+    /// never sees a token - it reads whatever identity the host's authentication left behind, through
+    /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>.
+    /// </para>
+    /// <para>
+    /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
+    /// its <c>stream_id</c> is answered with a bare <c>Results.BadRequest()</c> by
+    /// <see cref="DeleteStreamAsync"/> and <see cref="GetStatusAsync"/>. That is a separate gap from
+    /// this one and is not closed by this method.
+    /// </para>
+    /// <para>
+    /// The realm is the transmitter's issuer, which is the one name a receiver already holds for this
+    /// protection space and the one it used to find these endpoints.
+    /// </para>
+    /// </remarks>
+    private static IResult Unauthenticated(HttpContext http)
+    {
+        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        return new BareChallengeResult(WwwAuthenticate.Challenge(BearerScheme, issuer));
+    }
+
+    /// <summary>
+    /// The scheme this surface advertises. Not a claim about how the host authenticates - it is what the
+    /// CAEP Interoperability Profile Section 2.7.2 obliges a transmitter to accept: "MUST accept access
+    /// tokens in the HTTP header as in Section 2.1 of OAuth 2.0 Bearer Token Usage [RFC6750]". So it is
+    /// the scheme a receiver reading this challenge is prepared to act on.
+    /// <para>
+    /// Section 2.4.3 is the neighbouring requirement and does NOT carry this: it says a receiver "MUST
+    /// use OAuth 2.0 [RFC6749]", which is the framework and fixes no token type.
+    /// </para>
+    /// </summary>
+    private const string BearerScheme = "Bearer";
+
+    /// <summary>
+    /// A 401 carrying one <c>WWW-Authenticate</c> line and no body. Written by hand because
+    /// <c>Results.Unauthorized()</c> emits no headers, and the header is the whole point.
+    /// </summary>
+    private sealed class BareChallengeResult(string challenge) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            httpContext.Response.Headers.WWWAuthenticate = challenge;
+            return Task.CompletedTask;
+        }
     }
 
     private static string? ReceiverIdOf(HttpContext context)
