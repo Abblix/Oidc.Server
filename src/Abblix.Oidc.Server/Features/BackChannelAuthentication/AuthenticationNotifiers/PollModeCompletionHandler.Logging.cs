@@ -15,6 +15,7 @@ partial class PollModeCompletionHandler
     [LoggerMessage(
         EventId = LogEvents.Device.PollModeCompletionHandler.TokensStored,
         Level = LogLevel.Debug,
-        Message = "Poll mode - tokens stored for auth_req_id: {AuthReqId}")]
+        Message = "Poll mode - the authenticated request is stored for auth_req_id: {AuthReqId}. No " +
+                  "token exists yet; they are minted at the token endpoint when the client redeems")]
     private partial void LogTokensStored(string AuthReqId);
 }

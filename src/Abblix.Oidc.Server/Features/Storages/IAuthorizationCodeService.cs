@@ -49,14 +49,24 @@ public interface IAuthorizationCodeService
     /// Atomically removes an authorization code from storage and returns the grant it held, in a
     /// single get-and-remove operation. This is how a code is claimed for redemption: it enforces
     /// the single-use guarantee against a race between two simultaneous redemptions of the same
-    /// code (RFC 6749 §4.1.2) - exactly one caller wins and receives the grant, every other caller
-    /// finds the code already gone and receives an <c>invalid_grant</c> failure.
+    /// code (RFC 6749 section 4.1.2) - every other caller finds the code already gone and receives an
+    /// <c>invalid_grant</c> failure.
+    /// <para>
+    /// Two exceptions, and neither needs a second node. A removal can end with NOBODY receiving the
+    /// grant - an expiring claim is one way there and a store fault after the removal is another. And two
+    /// callers CAN both receive it, when
+    /// one of them redeems while the other writes the grant back at the same key - the second is handed
+    /// what it read before the claim, not what it removed, so the reuse check sees no issued tokens and
+    /// mints a second set. That is issue 454, and it is why this sentence no longer says "never two".
+    /// </para>
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
     /// <returns>
-    /// The grant on success when this caller won the claim; an <c>invalid_grant</c>
-    /// <see cref="OidcError"/> when the code is absent - already claimed by a concurrent request,
-    /// already consumed, expired, or never issued.
+    /// The grant when this caller won the claim; an <c>invalid_grant</c> <see cref="OidcError"/>
+    /// otherwise. Otherwise is wider than the obvious list - a concurrent request, an earlier
+    /// consumption, an expiry, a code never issued - because the claim can also CONSUME the code and
+    /// still refuse, when the lock guarding it expires mid-protocol. So a refusal does not prove another
+    /// request took it, and looking for one is how that case is missed.
     /// </returns>
     /// <remarks>
     /// A successfully claimed grant whose <c>IssuedTokens</c> is non-empty indicates the code was

@@ -764,7 +764,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
     /// <summary>
     /// Verifies that in ping mode, the authenticated request is removed from storage on retrieval.
-    /// The auth_req_id is single-use (CIBA Core 1.0 Section 7.3), so a notified client cannot replay
+    /// The auth_req_id is single-use (CIBA Core 1.0 Section 10.1.1), so a notified client cannot replay
     /// it to mint fresh tokens; ping consumes the entry exactly like poll.
     /// </summary>
     [Fact]

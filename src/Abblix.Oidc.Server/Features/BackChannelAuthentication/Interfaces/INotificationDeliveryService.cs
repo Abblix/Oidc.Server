@@ -44,8 +44,14 @@ public interface INotificationDeliveryService
     /// </param>
     /// <returns>
     /// <c>true</c> if the client endpoint accepted the notification (2xx response); <c>false</c> if
-    /// delivery failed (non-success status or transport error). Push mode relies on this to avoid
-    /// discarding the grant when token delivery did not reach the client.
+    /// delivery failed (non-success status or transport error).
+    /// <para>
+    /// On <c>false</c> push keeps the stored record, and that is not a saved grant. The authenticated,
+    /// narrowed grant lives on the in-memory object and is dropped with it; what storage holds is the
+    /// PRE-completion record - Pending, carrying what the client asked for rather than what the end user
+    /// approved. It is kept so a host can see the request existed, not so delivery can be resumed, and a
+    /// host that completes it again delivers entries the end user refused. See issue 451.
+    /// </para>
     /// </returns>
     Task<bool> SendAsync(
         Uri clientNotificationEndpoint,

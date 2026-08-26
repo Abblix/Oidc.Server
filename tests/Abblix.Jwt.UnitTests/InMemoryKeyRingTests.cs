@@ -25,9 +25,10 @@ public class InMemoryKeyRingTests
         RotateEvery = TimeSpan.FromDays(30),
         KeepRetiredFor = TimeSpan.FromDays(7),
 
-        // The smallest RSA size the platform will generate. These tests care about which keys are offered and
-        // in what order, never about the strength of one, and a larger modulus only costs seconds per mint.
-        RsaKeySize = 512,
+        // These tests care about which keys are offered and in what order, never about the strength of
+        // one. The floor is what the factory will mint, so a smaller size is refused where it is created
+        // rather than at the first signature.
+        RsaKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits,
     };
 
     private static InMemoryKeyRing CreateRing(TimeProvider timeProvider, LocalKeys? policy = null)

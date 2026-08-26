@@ -69,9 +69,10 @@ public class AuthorizationCodeService(
 	/// <inheritdoc />
 	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode)
 	{
-		// removeOnRetrieval: true performs an atomic get-and-remove, so two concurrent redemptions
-		// of the same code cannot both observe the grant - exactly one wins the claim; every other
-		// caller finds the code already gone and is rejected.
+		// removeOnRetrieval: true claims the code, and every caller that finds it gone is rejected.
+		// What the claim does NOT give: a removal can end with nobody holding the grant, when the claim
+		// expires mid-protocol; and two callers can both hold it, because the value is read before the
+		// claim is taken and the reuse decorator writes the grant back at this same key. Issue 454.
 		var grant = await storage.GetAsync<AuthorizedGrant>(
 			keyFactory.AuthorizedGrantKey(authorizationCode), removeOnRetrieval: true);
 

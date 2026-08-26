@@ -86,9 +86,11 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
-	/// Atomically retrieves and removes a value from the distributed cache.
-	/// Uses a lock-based protocol to ensure atomic get-and-remove semantics even when the underlying
-	/// cache implementation doesn't support native atomic operations (e.g., Redis GETDEL).
+	/// Reads a value and then removes it under a lock, for a cache with no native primitive of its own.
+	/// This is NOT the equivalent of Redis GETDEL. The bytes returned are the ones read BEFORE the lock,
+	/// so anything writing the key in between is destroyed by this caller while it is handed the earlier
+	/// value - and that is only one of the ways the two differ. AT MOST one caller is handed the value
+	/// when nothing writes the key, and none may be. Read the remarks before relying on it.
 	/// </summary>
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
@@ -97,20 +99,25 @@ public static class DistributedCacheExtensions
 	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return the value. Other threads detect the lock mismatch
-	/// and return null. This ensures exactly one thread retrieves the value, even though individual cache
-	/// operations are not atomic.
+	/// <strong>How it provides atomicity:</strong> the removal is delegated to
+	/// <see cref="TryRemoveAsync"/>, and the condition for reporting one is under that method.
 	/// </para>
 	/// <para>
-	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
-	/// to prevent orphaned locks if a process crashes between writing the lock token (step 2) and
-	/// cleaning it up (after step 4).
+	/// <strong>The value returned is the one read BEFORE that removal, not the one removed.</strong> The
+	/// read happens here and the removal happens inside the delegate, so anything that writes the key
+	/// between them is destroyed by this caller and handed to nobody, while this caller receives the
+	/// earlier bytes and is told it won. Nothing in this class closes that: a store whose own primitive
+	/// returns the removed value is what closes it, and issue 454 tracks the change.
 	/// </para>
 	/// <para>
-	/// <strong>Performance:</strong> This operation performs 5 cache operations (1 get + 4 from TryRemoveAsync),
-	/// so it has higher latency than native atomic operations. However, it works with any IDistributedCache
-	/// implementation.
+	/// <strong>Lock timeout:</strong> the claim auto-expires after the specified timeout (5 seconds by
+	/// default), so a process that crashes mid-protocol does not leave the key claimed forever. It also
+	/// means a caller slower than the timeout loses its own claim: see <see cref="TryRemoveAsync"/>.
+	/// </para>
+	/// <para>
+	/// <strong>Performance:</strong> up to six cache operations - one read here, and up to five inside
+	/// <see cref="TryRemoveAsync"/> - so it has higher latency than a store's own atomic primitive, and
+	/// works with any IDistributedCache in exchange.
 	/// </para>
 	/// </remarks>
 	/// <param name="cache">The distributed cache instance.</param>
@@ -118,8 +125,11 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing the retrieved value if found and
-	/// successfully removed; otherwise, null if the value was not found or another thread won the race.
+	/// A task that completes when the operation finishes, containing the value READ BEFORE the removal
+	/// when this caller's own claim was still in the store afterwards - not necessarily the value it
+	/// removed, see the remarks and issue 454. Null otherwise, which does NOT mean somebody else took it:
+	/// see <see cref="TryRemoveAsync"/>, whose remarks carry the condition; this
+	/// method adds nothing to it beyond returning the value.
 	/// </returns>
 	public static async Task<byte[]?> TryGetAndRemoveAsync(
 		this IDistributedCache cache,
@@ -139,11 +149,13 @@ public static class DistributedCacheExtensions
 
 		if (!await cache.TryRemoveAsync(key, lockTimeout, cancellationToken))
 		{
-			// Another thread's lock overwrote ours - they won the race
+			// Not necessarily somebody else: see TryRemoveAsync's remarks for what false covers.
 			return null;
 		}
 
-		// Our lock survived - we won the race, return the value
+		// The claim held, so this caller is the one entitled to A value - but not necessarily to THIS
+		// one. These bytes were read before the gate, and what the protocol removed is whatever was at
+		// the key when it ran. See the remarks, and issue 454.
 		return valueData;
 	}
 
@@ -155,15 +167,16 @@ public static class DistributedCacheExtensions
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
-	///   <item><term>Step 1:</term> Write a unique lock token to fully-qualified lock key</item>
-	///   <item><term>Step 2:</term> Remove the value from cache</item>
-	///   <item><term>Step 3:</term> Read back the lock token and verify it matches ours</item>
-	///   <item><term>Step 4:</term> Clean up the lock key</item>
+	///   <item><term>Step 1:</term> Write a unique claim token to the fully-qualified lock key</item>
+	///   <item><term>Step 2:</term> Check the value is there at all, and give up early if it is not</item>
+	///   <item><term>Step 3:</term> Remove the value from cache</item>
+	///   <item><term>Step 4:</term> Read back the claim token and verify it is still ours</item>
+	///   <item><term>Step 5:</term> Clean up the lock key</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
-	/// and return false. This ensures exactly one thread successfully removes the value.
+	/// <strong>How it provides atomicity:</strong> a caller reports the removal as its own only when its
+	/// own claim is still in the store at the end of the protocol. What that condition does and does not
+	/// buy is spelled out below.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without
@@ -171,6 +184,56 @@ public static class DistributedCacheExtensions
 	/// Grant flow when a user denies authorization, you only need confirmation that the request was removed,
 	/// not the request data itself.
 	/// </para>
+	/// <para>
+	/// <strong>What the protocol decides:</strong> a caller is told it took the value only when the
+	/// protocol runs to the end AND finds its own lock token still in the store.
+	/// </para>
+	/// <para>
+	/// That is the whole contract, and it is deliberately not followed by a count of what can go wrong.
+	/// Such a list is not closable - the token can be overwritten, it can expire while a cache call
+	/// stalls, and the store calls after the removal can fail, and there is no argument that those are
+	/// all. What the tests carry instead, each dying when its fact stops holding:
+	/// <c>TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue</c> for a removal with
+	/// nobody told, on one node with no competitor, and
+	/// <c>TryRemoveAsync_TheStoreFaultsAfterTheRemoval_TheValueIsGoneAndNobodyIsTold</c> for the same
+	/// outcome reached by a fault, where the caller gets an exception rather than an answer at all.
+	/// </para>
+	/// <para>
+	/// <strong>Two things the check does NOT give you.</strong> It does not make this a take-once: the
+	/// gate serializes callers within one process, so a competitor cannot overwrite another's token HERE,
+	/// and nothing about that survives a second node - see below. And passing it is not the same as being
+	/// handed the value, because <see cref="TryGetAndRemoveAsync"/> returns what it read BEFORE the
+	/// protocol; where something writes the key in between, two callers pass and are handed the same
+	/// bytes. That is issue 454, and this class does not close it.
+	/// </para>
+	/// <para>
+	/// <strong>Across processes even the overwrite reopens.</strong> Two nodes redeeming the same key at
+	/// the same moment can end with the value removed and neither told it took it, because the lock
+	/// protocol is
+	/// assembled from <c>Get</c>, <c>Set</c> and <c>Remove</c> as three separate operations and there is a
+	/// window between any two of them. A take-once needs one indivisible read-modify-write, and this
+	/// interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.
+	/// </para>
+	/// <para>
+	/// <strong>A deployment on several nodes that cannot afford that</strong> supplies its own storage and
+	/// reaches for the primitive its store already has. No new API is needed for that:
+	/// <c>IDeviceAuthorizationStorage</c>, <c>IBackChannelRequestStorage</c> and <c>IEntityStorage</c> are
+	/// public and registered with <c>TryAddSingleton</c>, so a host's own registration wins. Which
+	/// primitive to reach for depends on the store, which is why it cannot be chosen here:
+	/// </para>
+	/// <list type="bullet">
+	///   <item>Redis 6.2 and later: <c>GETDEL key</c>, one command, which returns the value to exactly one
+	///   caller and deletes it. Earlier versions get the same effect from a two-line <c>EVAL</c> script,
+	///   since Redis runs a script indivisibly. Both are for a storage of your own: they read a STRING,
+	///   and the <c>IDistributedCache</c> implementation for Redis keeps each entry as a hash whose value
+	///   sits in a field, so pointed at these keys they answer <c>WRONGTYPE</c>.</item>
+	///   <item>PostgreSQL: <c>DELETE FROM ... WHERE key = $1 RETURNING value</c>. The row lock picks the
+	///   winner, and at the default isolation level the loser returns no rows; under REPEATABLE READ or
+	///   SERIALIZABLE it fails to serialize instead, which is the same answer through an exception.</item>
+	///   <item>SQL Server: <c>DELETE ... OUTPUT deleted.value</c>, the same shape.</item>
+	///   <item>Oracle: <c>DELETE ... RETURNING value INTO :out</c>. Oracle documents the RETURNING INTO
+	///   clause as belonging to DELETE among others, and for a DELETE it yields the pre-deletion value.</item>
+	/// </list>
 	/// <para>
 	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
 	/// to prevent orphaned locks if a process crashes between writing the lock token and cleaning it up.
@@ -181,8 +244,11 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing true if the value was successfully
-	/// removed by this thread; false if another thread won the race or the key didn't exist.
+	/// A task that completes when the operation finishes, containing true when the value was removed by
+	/// this caller AND its own lock token was still in the store afterwards. False otherwise - which covers
+	/// the key not being there, another caller having taken it, and the case where the value is gone and
+	/// nobody can be told they took it. That last one does not need a second node: see the remarks. A
+	/// store fault after the removal raises rather than returning, and loses the value the same way.
 	/// </returns>
 	public static async Task<bool> TryRemoveAsync(
 		this IDistributedCache cache,
@@ -193,6 +259,105 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
+		// Redemptions of the SAME key are serialized within this process, so the protocol below never runs
+		// concurrently against itself here and no caller can overwrite another's lock token. That is one of
+		// the three ways a value is lost with nobody told; the other two - an expiring lock and a store
+		// fault after the removal - need no competitor and are untouched by this. Callers on different keys
+		// never meet: the gate exists only while a call is in flight and is discarded with the last one
+		// out.
+		//
+		// This gate is taken HERE and not in TryGetAndRemoveAsync, which calls this method - gating both
+		// naively would deadlock a caller against itself on one key.
+		//
+		// That placement is NOT settled, and this comment is not a reason to leave it. It is fine for the
+		// caller that LOSES: TryGetAndRemoveAsync discards the value it read whenever this returns false.
+		// The caller that WINS is issue 454 - it was handed the value it read before this gate, which is
+		// not necessarily the value removed inside it. Bringing the read inside the serialized section is
+		// what closes the in-process half; the deadlock is an objection to the naive shape of that, not to
+		// the goal.
+		var gate = RentGate(key);
+		try
+		{
+			await gate.WaitAsync(cancellationToken);
+			try
+			{
+				return await RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken);
+			}
+			finally
+			{
+				gate.Release();
+			}
+		}
+		finally
+		{
+			ReturnGate(key);
+		}
+	}
+
+	/// <summary>
+	/// One gate per key, alive only while a redemption of that key is in flight.
+	/// </summary>
+	/// <remarks>
+	/// Retired on the way out, unlike the per-stream gate in the security-event outbox, and the difference
+	/// is the key space rather than taste: a stream is a long-lived entity and its gates are bounded by how
+	/// many exist, while these are keyed by the code being redeemed, so a table that never forgets would
+	/// grow by one entry for every authorization the deployment ever issues.
+	/// </remarks>
+	/// <remarks>
+	/// Internal rather than private so the test that proves it is emptied can name it and be carried
+	/// through a rename by the compiler. Read-only from outside this class either way.
+	/// </remarks>
+	internal static readonly Dictionary<string, GateEntry> Gates = new(StringComparer.Ordinal);
+
+	internal sealed class GateEntry
+	{
+		public readonly SemaphoreSlim Gate = new(1, 1);
+		public int Waiters;
+	}
+
+	private static SemaphoreSlim RentGate(string key)
+	{
+		lock (Gates)
+		{
+			if (!Gates.TryGetValue(key, out var entry))
+			{
+				entry = new GateEntry();
+				Gates[key] = entry;
+			}
+
+			// Incremented before the caller waits, so nobody else can retire this gate underneath it.
+			entry.Waiters++;
+			return entry.Gate;
+		}
+	}
+
+	private static void ReturnGate(string key)
+	{
+		lock (Gates)
+		{
+			// Loud rather than defensive: every return is paired with a rent that put the entry here, so a
+			// miss means the invariant is already broken and swallowing it hides whatever broke it.
+			if (!Gates.TryGetValue(key, out var entry))
+				throw new InvalidOperationException(
+					$"No redemption gate is held. {nameof(RentGate)} and {nameof(ReturnGate)} are paired, so "
+					+ "this cannot happen unless one of them was changed.");
+
+			if (--entry.Waiters > 0)
+				return;
+
+			// The last caller out retires the gate, which is what keeps the table the size of the traffic
+			// in flight rather than the size of every key ever redeemed.
+			Gates.Remove(key);
+			entry.Gate.Dispose();
+		}
+	}
+
+	private static async Task<bool> RemoveUnderGateAsync(
+		IDistributedCache cache,
+		string key,
+		TimeSpan? lockTimeout,
+		CancellationToken cancellationToken)
+	{
 		// Use fully qualified type name to avoid collisions with application keys
 		var lockKey = $"{nameof(Abblix)}.{nameof(Utils)}.{nameof(DistributedCacheExtensions)}:{nameof(TryRemoveAsync)}:{key}";
 
@@ -207,7 +372,7 @@ public static class DistributedCacheExtensions
 		// The value must still exist at the moment we hold the lock. Without this check a caller whose lock
 		// window does not overlap a prior successful removal would still see its own token survive and wrongly
 		// report success - breaking exactly-once removal (two token requests both redeeming the same
-		// device_code or authorization code). RFC 6749 §4.1.2 forbids reusing an authorization code; for a
+		// device_code or authorization code). RFC 6749 section 4.1.2 forbids reusing an authorization code; for a
 		// device_code no RFC says so, and single use is this codebase's own rule. The documented contract is
 		// "false if ... the key didn't exist".
 		if (await cache.GetAsync(key, cancellationToken) == null)
@@ -223,11 +388,13 @@ public static class DistributedCacheExtensions
 		var survivingLockToken = await cache.GetAsync(lockKey, cancellationToken);
 		if (survivingLockToken == null || !ourLockToken.SequenceEqual(survivingLockToken))
 		{
-			// Another thread's lock overwrote ours - they won the race
+			// The claim is not ours any more. Do NOT read that as a competitor: it is equally the claim
+			// having EXPIRED, which one caller alone reaches, and the value is already gone either way.
 			return false;
 		}
 
-		// Our lock survived - we won the race, return the value
+		// The claim is still ours, which is the whole condition for reporting the removal as this
+		// caller's: nothing overwrote it and it did not expire.
 		await cache.RemoveAsync(lockKey, cancellationToken); // Cleanup lock
 		return true;
 	}
