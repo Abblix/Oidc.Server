@@ -58,14 +58,26 @@ def split_blocks(path: pathlib.Path) -> list[tuple[int, int]]:
 
 def main() -> int:
     named = [pathlib.Path(a) for a in sys.argv[1:]]
-    paths = [p for p in named if p.suffix == ".cs" and p.is_file()] if named else tracked_sources()
+
+    # Filtered on BOTH routes, because the tracked list can name a file the working tree no longer has -
+    # deleted in a refactor and not yet staged - and reading it unguarded kills the walk on the first one,
+    # leaving every file after it unchecked under an exit code that means "found something".
+    readable = [p for p in (named or tracked_sources()) if p.suffix == ".cs" and p.is_file()]
 
     # A silence has to mean something was read. Given arguments that name no readable C# file - a
     # directory, a typo, a moved path - an exit of zero is an all-clear indistinguishable from a real
-    # one, which is the shape this whole family of checks exists to refuse.
-    if named and not paths:
-        print("None of the given paths is a readable .cs file, so nothing was checked.")
+    # one, which is the shape this whole family of checks exists to refuse. Named paths that are not
+    # readable are called out one by one rather than as a count, because the point is WHICH.
+    unreadable = [p for p in named if p not in readable]
+    for path in unreadable:
+        print(f"{path}: not a readable .cs file, so it was not checked.")
+
+    # Every named path, not merely one of them: nine unread out of ten is still an all-clear over nine
+    # files nobody looked at.
+    if unreadable:
         return 2
+
+    paths = readable
 
     failures = 0
     for path in paths:
