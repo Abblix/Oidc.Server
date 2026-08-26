@@ -17,9 +17,10 @@ namespace Abblix.Jwt.UnitTests;
 /// The 2048-bit floor and the citation that explains it, at the sites where nothing else measures them.
 /// </summary>
 /// <remarks>
-/// Every test here was written because a mutation survived the suite. The section a refusal cites could
+/// Every test here was written because a mutation survived the suite: the section a refusal cites could
 /// be swapped between families, the whole encryption-side floor could be deleted, and a modulus of all
-/// zero octets could be measured any way at all - each of those passed 607 of 607.
+/// zero octets could be measured any way at all, each with nothing going red. No pass count is given,
+/// because it was a mid-branch one and a figure that no longer reproduces reads as evidence.
 /// </remarks>
 public class RsaKeyFloorTests
 {
