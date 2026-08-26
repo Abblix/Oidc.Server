@@ -7,6 +7,7 @@
 
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
 
@@ -33,6 +34,11 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </param>
 /// <param name="clock">Supplies "iat"; null takes the system clock.</param>
 /// <param name="logger">Records the streams a fan-out could not reach.</param>
+/// <param name="payloadPolicy">
+/// What this deployment refuses to emit, over and above what the event vocabulary permits - how a
+/// deployment claims a profile such as the CAEP Interoperability Profile. Null emits whatever the host
+/// builds, which is what a transmitter claiming no profile does.
+/// </param>
 public sealed partial class EventDispatcher(
     ILogger<EventDispatcher> logger,
     IStreamStore streams,
@@ -40,6 +46,7 @@ public sealed partial class EventDispatcher(
     ISecurityEventTokenSigner signer,
     string issuer,
     IEventSharingPolicy? sharingPolicy = null,
+    IEventPayloadPolicy? payloadPolicy = null,
     TimeProvider? clock = null)
 {
     private readonly string _issuer = !string.IsNullOrEmpty(issuer)
@@ -58,6 +65,7 @@ public sealed partial class EventDispatcher(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
+        RefuseIfOutsidePolicy(descriptor);
 
         var reached = 0;
         foreach (var stream in await streams.ListAllAsync(cancellationToken))
@@ -128,7 +136,36 @@ public sealed partial class EventDispatcher(
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(descriptor);
 
+        // Deliberately unjudged. This door carries the framework's OWN signals - verification and
+        // stream-updated - minted by this library from payloads a host never built, and reached through a
+        // receiver's request: a refusal here would fire after the throttle or the status has already been
+        // written, turning a receiver's verification request into a fault mid-operation and breaking the
+        // very profile a policy was registered to claim. A policy is about what the HOST asks this
+        // transmitter to emit, and that is DispatchAsync.
         return MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses an event this deployment has undertaken not to emit, before anything is minted.
+    /// </summary>
+    /// <remarks>
+    /// Asked once per event rather than once per stream: the payload is identical for every receiver, so a
+    /// per-stream answer would emit to some and withhold from others by iteration order. Asked on this
+    /// entry point alone - <see cref="DispatchToStreamAsync"/> says why it is not.
+    /// <para>
+    /// It throws rather than dropping the event with a log line, and the choice is not a preference. A
+    /// dropped <c>session-revoked</c> is a revocation that never happens, which is a worse outcome than a
+    /// non-conformant event; and on this path the caller is the application code that built the payload,
+    /// so the throw reaches whoever can fix it. Nothing throws unless the host registered a policy.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The policy refused the event.</exception>
+    private void RefuseIfOutsidePolicy(SecurityEventDescriptor descriptor)
+    {
+        if (payloadPolicy?.RefusalOf(descriptor.EventType, descriptor.Payload) is { } refusal)
+        {
+            throw new InvalidOperationException(refusal);
+        }
     }
 
     /// <summary>
