@@ -81,15 +81,24 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		return encryptedKey;
 	}
 
+	/// <summary>
+	/// The RFC 3447 section bounding the plaintext for the padding in hand. NOT RFC 7518, which states no
+	/// such limit anywhere - Section 4 is two sentences about what JWE does with a CEK, and 4.2 and 4.3
+	/// both defer to RFC 3447 for the operation itself.
+	/// </summary>
+	private string PlaintextLimitSection => _padding == RSAEncryptionPadding.Pkcs1
+		? "RFC 3447 Section 7.2.1"
+		: "RFC 3447 Section 7.1.1";
+
 	private CryptographicException DiagnosticException(byte[] keyToEncrypt, RSA rsa)
 	{
 		// Calculate theoretical maximum CEK size for diagnostics
 		var keySizeBytes = rsa.KeySize / 8;
 
-		// Per RFC 7518 Section 4:
-		// - RSA1_5: key_size - 11 bytes
-		// - RSA-OAEP (SHA-1): key_size - 42 bytes (2 * hash_length + 2)
-		// - RSA-OAEP-256 (SHA-256): key_size - 66 bytes (2 * hash_length + 2)
+		// The limits come from RFC 3447, which RFC 7518 defers to for both padding schemes:
+		// - RSA1_5: k - 11 octets (Section 7.2.1)
+		// - RSA-OAEP with SHA-1: k - 2*20 - 2 = k - 42 (Section 7.1.1)
+		// - RSA-OAEP with SHA-256: k - 2*32 - 2 = k - 66 (Section 7.1.1)
 		var maxContentEncryptionKeySize = algorithm switch
 		{
 			EncryptionAlgorithms.KeyManagement.Rsa1_5 => keySizeBytes - 11,
@@ -101,12 +110,11 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		// Log diagnostic information before throwing
 		LogEncryptionFailed(algorithm, rsa.KeySize, keyToEncrypt.Length, maxContentEncryptionKeySize);
 
-		// Encryption failed - provide detailed error message per RFC 7518 Section 4
 		return new CryptographicException(
 			$"Failed to encrypt Content Encryption Key using {algorithm} with {rsa.KeySize}-bit RSA key. " +
 			$"CEK size: {keyToEncrypt.Length} bytes, theoretical maximum: {maxContentEncryptionKeySize} bytes. " +
-			$"The CEK may be too large for the RSA key size per RFC 7518 Section 4, which limits the maximum " +
-			$"plaintext size based on the key size and padding overhead.");
+			$"The CEK may be too large: {PlaintextLimitSection} bounds the plaintext by the modulus size " +
+			"less the padding overhead.");
 	}
 
 	/// <inheritdoc />

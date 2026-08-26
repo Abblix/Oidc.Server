@@ -98,9 +98,10 @@ public class CompositeSignerKeyFloorTests
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
         Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
 
-        // The arm with no section of its own has to read as a sentence too.
-        Assert.Contains("for RSA signatures", error.Message);
-        Assert.DoesNotContain("per RFC 7518 per", error.Message);
+        // The arm with no section of its own has to read as a sentence too - stated positively, because
+        // the negative form cannot fail here: this arm never begins with "per", so a doubled prefix
+        // upstream leaves it green while breaking the other one.
+        Assert.Contains("bits for RSA signatures", error.Message);
 
         Assert.False(custodian.WasAsked);
     }

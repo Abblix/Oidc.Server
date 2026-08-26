@@ -20,9 +20,14 @@ public static class JsonWebKeyFactory
     /// Creates an RSA JsonWebKey with a specified algorithm.
     /// </summary>
     /// <param name="usage">The intended usage of the key, typically 'sig' for signing or 'enc' for encryption.</param>
-    /// <param name="algorithm">The signing or encryption algorithm. Key size is determined automatically based on the algorithm.</param>
-    /// <param name="keySize">The size of the RSA key in bits. If null, determined by algorithm (defaults to 2048).</param>
+    /// <param name="algorithm">The signing or encryption algorithm the key declares. It does not affect
+    /// the key size.</param>
+    /// <param name="keySize">The size of the RSA key in bits, 2048 by default, which is also the smallest
+    /// this library will mint.</param>
     /// <returns>A <see cref="RsaJsonWebKey"/> configured for the specified algorithm.</returns>
+    /// <exception cref="ArgumentException">The usage is neither signing nor encryption, or
+    /// <paramref name="keySize"/> is below <see cref="JsonWebKeyExtensions.MinimumRsaKeyBits"/> - a size
+    /// this library would refuse to sign or encrypt with, so it does not produce one either.</exception>
     public static RsaJsonWebKey CreateRsa(string usage, string? algorithm = null, int keySize = 2048)
     {
         if (usage is not (PublicKeyUsages.Signature or PublicKeyUsages.Encryption))
