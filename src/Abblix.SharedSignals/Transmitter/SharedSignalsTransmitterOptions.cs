@@ -52,8 +52,10 @@ public sealed record SharedSignalsTransmitterOptions
     /// maps the transmitter's endpoints offers poll delivery without naming anything.
     /// </summary>
     /// <remarks>
-    /// Set it when the address a receiver must use is not the address the route is mapped on - a gateway
-    /// or CDN in front, the same case <c>AdvertisedPrefix</c> covers for the management surface. It wins
+    /// Set it when the poll address is not this deployment's advertised prefix plus the poll route on the
+    /// issuer's authority - a separate host name for delivery, say, or a path the route shape cannot
+    /// express. A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
+    /// mapping declares, so the poll address follows it along with the five management addresses. It wins
     /// over the mapped address wherever both exist.
     /// <para>
     /// It is also how a host that maps its own routes - on some other web framework, or by hand - offers

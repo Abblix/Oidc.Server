@@ -42,8 +42,30 @@ public sealed class PollEndpointLocatorTests
     }
 
     /// <summary>
+    /// A host that names an address offers poll delivery whether or not anything mapped a route, because
+    /// the address is the whole requirement. This is the shape of a host serving poll from its own
+    /// routing and taking only the configuration document from this package.
+    /// </summary>
+    /// <remarks>
+    /// Its own row because <see cref="PollEndpointLocator.IsOffered"/> is what the document advertises:
+    /// were it to consult the mapping alone, such a host would create poll streams happily while telling
+    /// every receiver it supports push only.
+    /// </remarks>
+    [Fact]
+    public void WithAHostsOwnAddressAndNoMapping_PollIsStillOffered()
+    {
+        var locator = new PollEndpointLocator(BareOptions() with
+        {
+            PollEndpointFactory = streamId => new Uri($"https://gateway.example/pull/{streamId}"),
+        });
+
+        Assert.True(locator.IsOffered);
+        Assert.Equal(new Uri("https://gateway.example/pull/s-1"), locator.Of("s-1"));
+    }
+
+    /// <summary>
     /// The host's own address wins over the mapped one, which is the whole point of keeping the option: a
-    /// deployment behind a gateway is reached at an address that is not where the route sits.
+    /// deployment whose delivery address the mapped prefix cannot describe names it here.
     /// </summary>
     /// <remarks>
     /// The direction matters and only this row states it. Were the mapped address to win, every such

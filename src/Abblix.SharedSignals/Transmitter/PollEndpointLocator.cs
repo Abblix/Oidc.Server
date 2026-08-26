@@ -15,11 +15,13 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// The address has two possible sources and they answer different questions.
 /// <list type="bullet">
-///   <item><see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> is where the outside world
-///   reaches the endpoint. A deployment behind a gateway is the case it exists for, and it wins.</item>
-///   <item><see cref="ServedAt"/> is where the endpoint is actually mapped, declared by whatever mapped
+///   <item><see cref="ServedAt"/> is the address the endpoint was mapped on, declared by whatever mapped
 ///   it. That is the only code that knows: the route and its prefix belong to the web framework adapter,
-///   and a host may move the prefix.</item>
+///   and a host may move either. A proxy that rewrites paths is covered here too, because what the
+///   mapping declares is the ADVERTISED prefix rather than the internal one.</item>
+///   <item><see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> is the address a host names
+///   itself, for a deployment the mapped one cannot describe - a separate delivery host, or a host that
+///   maps no routes through this framework at all. It wins.</item>
 /// </list>
 /// <para>
 /// Neither could be a default computed here. A guess assembled from the issuer alone would be right only

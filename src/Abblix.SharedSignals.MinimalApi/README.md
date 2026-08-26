@@ -70,7 +70,7 @@ What one call maps, relative to the prefix:
 | `/verify` | POST | verification request, Section 8.1.4 |
 | `/poll/{streamId}` | POST | poll delivery, RFC 8936 |
 
-The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address travels per stream rather than in the document, and it comes from the same prefix, so a stream's `endpoint_url` leads back to the route serving it whatever you set the prefix to. Set `PollEndpointFactory` when the address a receiver must use is not the address the route is mapped on - a gateway in front, the case `AdvertisedPrefix` covers for the five above - and it wins.
+The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address travels per stream rather than in the document, and it comes from the same prefix, so a stream's `endpoint_url` leads back to the route serving it whatever you set the prefix to. A proxy that rewrites paths needs nothing extra: what the mapping declares is `AdvertisedPrefix`, so the poll address follows it along with the five above. `PollEndpointFactory` is for the address that prefix cannot describe - delivery on a separate host name, say - and it wins.
 
 ## Receiver
 
