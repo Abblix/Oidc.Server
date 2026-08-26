@@ -85,8 +85,15 @@ services.AddSingleton<IEventPayloadPolicy>(
 ```
 
 One rule the policy applies is the base specification's rather than the profile's: `reason_admin`, once
-present, "MUST contain one or more key/value pairs" (CAEP 1.0 Section 2). An empty object is wrong with or
-without the profile.
+present, "MUST contain one or more key/value pairs" (CAEP 1.0 Section 2). It applies it only inside the
+use cases you claim, though - an unclaimed event carrying an empty object still goes out, because the
+policy is a statement about the profile and not a validator for CAEP 1.0.
+
+Two things the policy does not reach. Naming a use case the profile does not define is refused when the
+policy is built, because a value it does not recognise would otherwise leave it registered, consulted and
+refusing nothing. And `DispatchToStreamAsync` is not judged at all: it carries the framework's own
+verification and stream-updated signals, and its callers write state before dispatching, so a refusal
+there would fault mid-operation.
 
 ## Part of the Abblix product family
 

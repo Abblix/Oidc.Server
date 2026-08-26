@@ -42,13 +42,43 @@ namespace Abblix.SecurityEvents.CAEP;
 /// </param>
 public sealed class CaepInteropProfilePolicy(params string[] claimedUseCases) : IEventPayloadPolicy
 {
-    private readonly HashSet<string> _claimed = claimedUseCases is { Length: > 0 }
-        ? [.. claimedUseCases]
-        : [
-            CaepEventTypes.SessionRevoked,
-            CaepEventTypes.CredentialChange,
-            CaepEventTypes.DeviceComplianceChange,
-        ];
+    /// <summary>The event types the profile's Section 3 defines use cases for, and the only claimable
+    /// values.</summary>
+    private static readonly string[] UseCases =
+    [
+        CaepEventTypes.SessionRevoked,
+        CaepEventTypes.CredentialChange,
+        CaepEventTypes.DeviceComplianceChange,
+    ];
+
+    private readonly HashSet<string> _claimed = Claimed(claimedUseCases);
+
+    /// <summary>
+    /// The claimed set, refusing at construction anything the profile does not define.
+    /// </summary>
+    /// <remarks>
+    /// An unrecognised value would otherwise leave a policy that is registered, resolvable, consulted on
+    /// every event and refuses nothing - which is the state this class exists to prevent, reached by a
+    /// typo or by the profile's own prose, where the use cases are named <c>session-revoked</c> rather
+    /// than by their event type URI. Silence in the permissive direction is the one failure a deployment
+    /// cannot notice, so it is answered at startup, where an issuer is answered two files away.
+    /// </remarks>
+    private static HashSet<string> Claimed(string[] claimedUseCases)
+    {
+        if (claimedUseCases is not { Length: > 0 })
+            return [.. UseCases];
+
+        if (claimedUseCases.FirstOrDefault(claimed => !UseCases.Contains(claimed, StringComparer.Ordinal))
+            is { } unknown)
+        {
+            throw new ArgumentException(
+                $"'{unknown}' is not a use case of the CAEP Interoperability Profile 1.0. Its Section 3 "
+                + $"defines three, by event type: {string.Join(", ", UseCases)}.",
+                nameof(claimedUseCases));
+        }
+
+        return [.. claimedUseCases];
+    }
 
     /// <summary>
     /// Claims all three use cases.
@@ -74,7 +104,10 @@ public sealed class CaepInteropProfilePolicy(params string[] claimedUseCases) : 
         {
             true => null,
 
-            false => $"'{CaepClaimNames.ReasonAdmin}' is absent or empty on '{eventType}'. The CAEP "
+            // Stated as what the member is NOT, rather than as a guess at which way it failed. Absent, an
+            // empty object, and a string where an object belongs are one verdict here, and enumerating
+            // them would send a host debugging a relay to grep upstream for a member that is right there.
+            false => $"'{CaepClaimNames.ReasonAdmin}' is not a non-empty object on '{eventType}'. The CAEP "
                 + "Interoperability Profile 1.0 Section 3 requires a transmitter to populate it with a "
                 + "non-empty object on every use case it claims, and CAEP 1.0 Section 2 requires the "
                 + "object to carry one or more key/value pairs wherever it appears at all.",

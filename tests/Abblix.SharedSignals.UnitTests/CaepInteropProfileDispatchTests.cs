@@ -54,7 +54,11 @@ public sealed class CaepInteropProfileDispatchTests
             () => dispatcher.DispatchAsync(Descriptor(eventType, PayloadFor(eventType)), Cancellation));
 
         Assert.Contains(eventType, refusal.Message);
-        Assert.Contains("reason_admin", refusal.Message);
+
+        // The distinguishing phrase, not merely the member's name: the "cannot be read" refusal carries
+        // the event type and the member too, so a row asserting those alone passes when a CAEP payload
+        // falls through to the wrong arm.
+        Assert.Contains("not a non-empty object", refusal.Message);
         Assert.Empty(await outbox.PendingAsync("s-1", null, Cancellation));
     }
 
@@ -75,7 +79,82 @@ public sealed class CaepInteropProfileDispatchTests
                     new SessionRevokedPayload { ReasonAdmin = new Dictionary<string, string>() }),
                 Cancellation));
 
-        Assert.Contains("reason_admin", refusal.Message);
+        Assert.Contains("not a non-empty object", refusal.Message);
+    }
+
+    /// <summary>
+    /// An event carrying no payload at all is refused, which is the shape the issue was filed on.
+    /// </summary>
+    /// <remarks>
+    /// <c>SecurityEventDescriptor.Payload</c> is nullable and the builder has a branch for it, so a host
+    /// emitting <c>session-revoked</c> with nothing attached is emitting exactly the non-conformant event
+    /// this policy exists to stop - and every other refusing row here passes a payload.
+    /// </remarks>
+    [Fact]
+    public async Task AnEventWithNoPayloadAtAll_IsRefused()
+    {
+        var (dispatcher, outbox, _) = await CreateAsync(
+            CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcher.DispatchAsync(
+                new SecurityEventDescriptor
+                {
+                    EventType = CaepEventTypes.SessionRevoked,
+                    Subject = new EmailSubject("jdoe@example.com"),
+                },
+                Cancellation));
+
+        Assert.Empty(await outbox.PendingAsync("s-1", null, Cancellation));
+    }
+
+    /// <summary>
+    /// A member that is present and non-empty but not an object is refused for what it IS, not for being
+    /// absent.
+    /// </summary>
+    /// <remarks>
+    /// Reachable only through the relayed arm, since a wrongly typed member on a typed payload fails at
+    /// deserialization. Saying "absent or empty" of a member sitting right there sends a host debugging
+    /// its relay upstream to look for something that is not missing.
+    /// </remarks>
+    [Theory]
+    [InlineData("\"a message\"")]
+    [InlineData("[\"en\"]")]
+    [InlineData("0")]
+    public async Task ARelayedMemberOfTheWrongKind_IsRefusedForWhatItIs(string rawValue)
+    {
+        var json = new JsonObject
+        {
+            [CaepClaimNames.ReasonAdmin] = JsonNode.Parse(rawValue),
+        };
+        var (dispatcher, _, _) = await CreateAsync(
+            CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcher.DispatchAsync(
+                Descriptor(CaepEventTypes.SessionRevoked, new UnknownEventPayload(json)), Cancellation));
+
+        Assert.Contains("not a non-empty object", refusal.Message);
+        Assert.DoesNotContain("absent", refusal.Message);
+    }
+
+    /// <summary>
+    /// A claimed use case the profile does not define is refused at construction, not at dispatch.
+    /// </summary>
+    /// <remarks>
+    /// Left unchecked, it would produce a policy that is registered, resolvable, consulted on every event
+    /// and refuses nothing - the quietly non-conformant transmitter this class exists to prevent, reached
+    /// by a typo or by the profile's own prose, which names its use cases <c>session-revoked</c> rather
+    /// than by event type URI. That value is the row.
+    /// </remarks>
+    [Fact]
+    public void AClaimedUseCaseTheProfileDoesNotDefine_IsRefusedAtConstruction()
+    {
+        var refusal = Assert.Throws<ArgumentException>(
+            () => new CaepInteropProfilePolicy("session-revoked"));
+
+        Assert.Contains("session-revoked", refusal.Message);
+        Assert.Contains(CaepEventTypes.SessionRevoked, refusal.Message);
     }
 
     [Fact]
