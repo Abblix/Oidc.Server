@@ -48,10 +48,10 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 	/// <inheritdoc />
 	public byte[] EncryptKey(JsonWebTokenHeader header, RsaJsonWebKey rsaKey, byte[] keyToEncrypt)
 	{
-		// Measured from the modulus, NOT from RSA.KeySize, which reports the imported octet count: a
-		// modulus left-padded to twice its size reads as twice its strength. Checked before the import,
-		// which is where the distinction is lost. See ModulusBitLength for why padding on that scale is
-		// not the benign one-octet quirk the specification records.
+		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
+		// the platform's importer. Checked before the import, which is what introduces that dependence.
+		// See ModulusBitLength, both for the platform split and for why padding on that scale is not the
+		// benign one-octet quirk the specification records.
 		const int minimumKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits;
 		var bits = rsaKey.ModulusBitLength();
 		if (bits < minimumKeySize)

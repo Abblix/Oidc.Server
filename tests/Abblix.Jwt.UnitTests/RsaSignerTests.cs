@@ -105,8 +105,18 @@ public class RsaSignerTests
     /// The padding here is not the benign quirk RFC 7518 records: Section 6.3.1.1 describes a single
     /// extra zero octet, which moves no check at all. A modulus padded to twice its length is a malformed
     /// or hostile JWKS entry, and it is cheap to publish - only the public half is needed, which is
-    /// exactly what a peer publishes. The forgery arrives later, from whoever factored the real
-    /// modulus.
+    /// exactly what a peer publishes. The forgery arrives later, from whoever factored the real modulus.
+    /// <para>
+    /// Whether <c>RSA.KeySize</c> is fooled by it depends on the PLATFORM, which is the strongest reason
+    /// not to measure with it. Windows CNG keeps the padding and reports 2048 for the key below; Linux
+    /// (OpenSSL) strips the leading zeros on import and reports 1536, so the same size check refuses on
+    /// one operating system and admits on the other. That difference was invisible until CI ran the
+    /// suite on Linux, because every local run and every review of this branch was on Windows.
+    /// </para>
+    /// <para>
+    /// The assertions below are therefore the platform-independent ones: the modulus measures what it
+    /// really is, that measurement never exceeds what the import reports, and the signature is refused.
+    /// </para>
     /// </remarks>
     [Theory]
     [MemberData(nameof(Algorithms))]
@@ -133,9 +143,15 @@ public class RsaSignerTests
         privateKey.ImportParameters(weak.ExportParameters(true));
         var signature = privateKey.SignData(SampleData, HashOf(algorithm), PaddingOf(algorithm));
 
-        Assert.Equal(2048, key.ToRsa().KeySize);
         Assert.Equal(BelowTheFloor, key.ModulusBitLength());
         Assert.False(new RsaSigner(algorithm).Verify(key, SampleData, signature));
+
+        // The safety property, which holds on every platform and is what makes the change incapable of
+        // ADMITTING a key the old check refused: the measured modulus never exceeds what the import
+        // reports. Where the import keeps the padding, it is strictly smaller, and that gap is the
+        // vulnerability.
+        using var imported = key.ToRsa();
+        Assert.True(key.ModulusBitLength() <= imported.KeySize);
     }
 
     /// <summary>

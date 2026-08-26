@@ -230,10 +230,17 @@ public static class JsonWebKeyExtensions
 	/// The real bit length of the key's modulus, ignoring any leading zero octets.
 	/// </summary>
 	/// <remarks>
-	/// <c>RSA.KeySize</c> is not this number. It reports the length of the octets that were IMPORTED, so a
-	/// modulus left-padded to twice its size reports twice its strength: a size check written against
-	/// <c>RSA.KeySize</c> passes on a key half the strength it claims, and the forgery arrives later from
+	/// <c>RSA.KeySize</c> is not this number, and how far it differs depends on the platform. It reports
+	/// the key as the importer built it: Windows CNG keeps a left-padded modulus at its padded length and
+	/// reports twice the real strength, while Linux (OpenSSL) strips the leading zeros and reports the
+	/// true one. So a size check written against that property refuses a downgraded key on one operating
+	/// system and admits it on another - which is a worse failure than either, because the deployment
+	/// that admits it looks identical to the one that does not, and the forgery arrives later from
 	/// whoever factored the real modulus.
+	/// <para>
+	/// Measuring the modulus itself removes the platform from the question. It is also never larger than
+	/// <c>RSA.KeySize</c>, so switching to it can only add refusals, never remove one.
+	/// </para>
 	/// <para>
 	/// RFC 7518 Section 2 requires the minimal encoding - "The octet sequence MUST utilize the minimum
 	/// number of octets needed to represent the value" - which is what this measurement follows. Padding

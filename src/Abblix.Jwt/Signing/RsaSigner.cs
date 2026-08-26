@@ -40,9 +40,9 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	/// <inheritdoc />
 	public byte[] Sign(RsaJsonWebKey rsaKey, byte[] data)
 	{
-		// Measured from the modulus, NOT from RSA.KeySize, which reports the imported octet count and so
-		// reads a padded modulus as twice its strength. Checked before the import, because the import is
-		// where the distinction is lost.
+		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
+		// the platform's importer - see ModulusBitLength. Checked before the import, which is what makes
+		// the answer platform-dependent in the first place.
 		//
 		// Nothing upstream chooses the key - it arrives from whatever the host registered - so without
 		// this a deployment mints RS256 over a 1024-bit modulus and every peer accepts it, because the
