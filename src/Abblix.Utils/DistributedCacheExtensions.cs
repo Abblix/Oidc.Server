@@ -97,10 +97,13 @@ public static class DistributedCacheExtensions
 	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return the value. Other threads detect the lock mismatch
-	/// and return null. This ensures exactly one thread retrieves the value, even though individual cache
-	/// operations are not atomic.
+	/// <strong>What it guarantees, and what it does not:</strong> in a race, only the caller whose lock
+	/// token survives last-write-wins returns the value; the others detect the mismatch and return null.
+	/// AT MOST one caller ever retrieves it, never two. NOT exactly one: a caller can remove the value and
+	/// then find a later caller's lock in place, in which case the value is gone and neither caller is told
+	/// it took it. Nothing observes that from inside a call - the losing caller cannot tell whether anybody
+	/// else won - so it is not reported, only documented. Issue 435 carries the fix, which needs an
+	/// indivisible take this interface does not expose.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
@@ -163,7 +166,9 @@ public static class DistributedCacheExtensions
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
 	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
-	/// and return false. This ensures exactly one thread successfully removes the value.
+	/// and return false. So AT MOST one caller ever removes the value, never two - but not exactly one: a
+	/// caller that removes it and then finds a later caller's lock in place reports a loss over a value
+	/// that is already gone, and so does the other. Issue 435 carries the fix.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without
