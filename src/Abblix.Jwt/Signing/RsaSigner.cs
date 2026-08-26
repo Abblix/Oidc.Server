@@ -22,7 +22,12 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	/// RS256/RS384/RS512: "A key of size 2048 bits or larger MUST be used with these algorithms." Section
 	/// 3.5, for PS256/PS384/PS512, says it of the singular: "with this algorithm."
 	/// </summary>
-	private const int MinimumKeySizeBits = 2048;
+	/// <remarks>
+	/// Enforced here AND at the signing seam, because they are different doors. This one is the contract
+	/// of the byte-level algorithm and the one its own tests drive. The seam's is the one a key held by an
+	/// external custodian passes through, and such a key never reaches this class at all.
+	/// </remarks>
+	private const int MinimumKeySizeBits = JsonWebKeyExtensions.MinimumRsaKeyBits;
 
 	/// <summary>
 	/// The section that governs the algorithm in hand, so a refusal sends the reader to the paragraph that

@@ -182,6 +182,12 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
+	/// The smallest RSA modulus RFC 7518 permits, for signing (Section 3.3 and Section 3.5) and for key
+	/// encryption (Section 4) alike. One number, so the sites that enforce it cannot drift apart.
+	/// </summary>
+	public const int MinimumRsaKeyBits = 2048;
+
+	/// <summary>
 	/// The real bit length of the key's modulus, ignoring any leading zero octets.
 	/// </summary>
 	/// <remarks>

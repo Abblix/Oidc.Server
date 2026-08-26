@@ -52,7 +52,7 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		// modulus left-padded to twice its size reads as twice its strength, and RFC 7518 Section 6.3.1.1
 		// warns that implementations emit the extra octet. Checked before the import, which is where the
 		// distinction is lost.
-		const int minimumKeySize = 2048;
+		const int minimumKeySize = JsonWebKeyExtensions.MinimumRsaKeyBits;
 		var bits = rsaKey.ModulusBitLength();
 		if (bits < minimumKeySize)
 		{
