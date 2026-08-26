@@ -116,6 +116,37 @@ public class EventDispatcherTests
         Assert.True(minted.Events.TryGetPayload(MembershipChanged, out _));
     }
 
+    /// <summary>
+    /// A stream nobody added a subject to: everything under <c>All</c>, nothing under <c>None</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pair is what a conformant receiver meets. The CAEP Interoperability Profile 1.0 Section 2.4.4
+    /// tells it to "assume that all subjects are implicitly included in a Stream, without any Add Subject
+    /// method invocations", so it adds none - and against a transmitter whose new streams cover nothing it
+    /// receives nothing, with no error on either side. What each row uniquely holds is the EMPTY list on
+    /// its own side, measured rather than asserted: narrowing <c>None</c> to also cover a stream with no
+    /// added subjects kills this row alone out of the suite, and widening <c>All</c> to require a
+    /// non-empty removed list kills the other alone.
+    /// </remarks>
+    [Theory]
+    [InlineData(StreamSubjectsMode.All, 1)]
+    [InlineData(StreamSubjectsMode.None, 0)]
+    public async Task AStreamWithNoAddedSubjects_DeliversByItsMode(StreamSubjectsMode mode, int expected)
+    {
+        var subject = new EmailSubject("jdoe@example.com");
+        var (dispatcher, outbox, _) = await CreateDispatcherAsync(
+            policy: null,
+            CreateStream("s-1", mode: mode));
+
+        var reached = await dispatcher.DispatchAsync(
+            Descriptor(subject), TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, reached);
+        Assert.Equal(
+            expected,
+            (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken)).Count);
+    }
+
     [Fact]
     public async Task Dispatch_SkipsWhatDoesNotMatch()
     {

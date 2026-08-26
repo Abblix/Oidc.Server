@@ -253,6 +253,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         if ((services.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions)
             .GrantedScopesSelector is null)
             LogScopeCheckingDisabled(logger);
+
+        if (options.DefaultSubjectsMode is StreamSubjectsMode.None)
+            LogNoSubjectsIncludedByDefault(logger);
     }
 
     private static bool IsOAuth(JsonObject scheme)

@@ -33,6 +33,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" />
+
+        <!-- The CAEP profile policy and the dispatcher that consults it ship in packages that do not
+             reference each other, so only a test holding both can prove the pair actually runs. -->
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
     </ItemGroup>
 
 
