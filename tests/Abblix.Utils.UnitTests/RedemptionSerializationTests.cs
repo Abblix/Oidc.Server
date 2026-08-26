@@ -20,9 +20,9 @@ namespace Abblix.Utils.UnitTests;
 /// <remarks>
 /// Serializing callers on a key stops one of them overwriting another's token, which is one of the three
 /// ways a value goes with nobody told. The tests below measure that serialization directly rather than
-/// trying to observe the absence of an interleaving - and then measure one of the ways it does NOT close,
-/// because a guarantee stated as a list of prevented causes is the shape that keeps turning out to be
-/// short by one.
+/// trying to observe the absence of an interleaving - and then measure the ways it does NOT close, one
+/// test each for an expiring claim and for a store fault after the removal, because a guarantee stated as
+/// a list of prevented causes is the shape that keeps turning out to be short by one.
 /// </remarks>
 public class RedemptionSerializationTests
 {

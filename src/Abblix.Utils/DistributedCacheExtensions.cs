@@ -87,8 +87,10 @@ public static class DistributedCacheExtensions
 
 	/// <summary>
 	/// Reads a value and then removes it under a lock, for a cache with no native primitive of its own.
-	/// This is NOT the equivalent of Redis GETDEL: the bytes returned are the ones read before the lock,
-	/// so two callers can be handed the same value. Read the remarks before relying on it.
+	/// This is NOT the equivalent of Redis GETDEL: the bytes returned are the ones read BEFORE the lock,
+	/// so if anything writes the key between the read and the removal, this caller destroys that write and
+	/// is handed the earlier value. With nothing writing the key, exactly one caller is handed it. Read
+	/// the remarks before relying on it.
 	/// </summary>
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
@@ -183,9 +185,15 @@ public static class DistributedCacheExtensions
 	/// not the request data itself.
 	/// </para>
 	/// <para>
-	/// <strong>What this guarantees, always:</strong> AT MOST one caller removes the value. Never two,
-	/// wherever the traffic comes from. Callers on one key are serialized in-process, so the protocol below
-	/// never runs concurrently against itself here.
+	/// <strong>AT MOST one caller removes the value, and the lock-token protocol is what gives that</strong>
+	/// - not the in-process gate. Measured: eight callers on one key over two hundred rounds produce no
+	/// round with two winners either with the gate or without it.
+	/// </para>
+	/// <para>
+	/// <strong>What the gate buys is that a removal HAS a winner.</strong> In the same measurement it took
+	/// the rounds with NO winner from eleven to zero. That is liveness rather than exclusivity, and it is
+	/// worth knowing before moving the gate or dropping it: single use does not depend on it, and the
+	/// defect it closes does.
 	/// </para>
 	/// <para>
 	/// <strong>What it does NOT guarantee is that a removal has a winner.</strong> A caller is told it took
@@ -258,9 +266,14 @@ public static class DistributedCacheExtensions
 		// out.
 		//
 		// This gate is taken HERE and not in TryGetAndRemoveAsync, which calls this method - gating both
-		// would deadlock a caller against itself on one key. That is safe: TryGetAndRemoveAsync discards
-		// the value it read whenever this returns false, so a caller that lost inside the gate hands back
-		// nothing.
+		// naively would deadlock a caller against itself on one key.
+		//
+		// That placement is NOT settled, and this comment is not a reason to leave it. It is fine for the
+		// caller that LOSES: TryGetAndRemoveAsync discards the value it read whenever this returns false.
+		// The caller that WINS is issue 454 - it was handed the value it read before this gate, which is
+		// not necessarily the value removed inside it. Bringing the read inside the serialized section is
+		// what closes the in-process half; the deadlock is an objection to the naive shape of that, not to
+		// the goal.
 		var gate = RentGate(key);
 		try
 		{

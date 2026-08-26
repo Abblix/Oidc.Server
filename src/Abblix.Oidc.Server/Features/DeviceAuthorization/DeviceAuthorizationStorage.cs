@@ -116,7 +116,8 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
-    /// which serializes redemptions of one device code in-process, so at most one caller ever removes it.
+    /// which admits at most one caller through its lock-token protocol, and serializes redemptions of one
+    /// device code in-process so that a removal has a winner at all.
     /// What that does NOT give is a winner for every removal - the code can be consumed with nobody told
     /// they took it, and that needs neither a second caller nor a second node. The extension's own remarks
     /// carry the condition and name the store primitive that closes it. After a successful removal, cleans
