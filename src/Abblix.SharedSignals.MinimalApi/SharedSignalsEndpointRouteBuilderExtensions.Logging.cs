@@ -88,4 +88,34 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             + "that the token is sufficient for the requested action, and Section 2.7.3 defines "
             + "ssf.read and ssf.manage as what sufficient means.")]
     private static partial void LogScopeCheckingDisabled(ILogger logger);
+
+    /// <summary>
+    /// A new stream covers no subject until the receiver names one, and a receiver following the profile
+    /// never will.
+    /// </summary>
+    /// <remarks>
+    /// The quietest of the set, and the reason it is worth saying out loud. Nothing is refused and nothing
+    /// is logged at delivery: the dispatcher matches no stream, answers zero, and a receiver that is doing
+    /// exactly what Section 2.4.4 tells it to do waits forever on a stream that reads as healthy on both
+    /// sides. There is no error on the wire and nothing in the stream status to distinguish it from a quiet
+    /// period.
+    /// <para>
+    /// A warning rather than a refusal, and the default is not flipped, because the two readings are both
+    /// defensible: covering nothing until a subject is named is what keeps a misconfigured stream from
+    /// leaking, and covering everything is what an interoperable transmitter does. The profile binds only
+    /// the receiver here - Section 2.3 imposes no mirror - so this is a deployment's choice, and the only
+    /// thing wrong with it was that it was made silently.
+    /// </para>
+    /// </remarks>
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.NoSubjectsIncludedByDefault,
+        Level = LogLevel.Warning,
+        Message = "New streams will cover no subject: "
+            + "SharedSignalsTransmitterOptions.DefaultSubjectsMode is None, so a stream delivers only to "
+            + "subjects added through the Add Subject API. The CAEP Interoperability Profile 1.0 Section "
+            + "2.4.4 tells a receiver to \"assume that all subjects are implicitly included in a Stream, "
+            + "without any Add Subject method invocations\", so a conformant receiver adds none and "
+            + "receives nothing, silently. Set DefaultSubjectsMode to All, or keep None knowing that this "
+            + "transmitter expects its receivers to name their subjects.")]
+    private static partial void LogNoSubjectsIncludedByDefault(ILogger logger);
 }

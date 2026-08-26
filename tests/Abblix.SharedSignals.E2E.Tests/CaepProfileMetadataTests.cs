@@ -103,12 +103,12 @@ public sealed class CaepProfileMetadataTests
     /// fires on the DEFAULT would fire on every deployment that configures nothing.
     /// </summary>
     /// <remarks>
-    /// Scoped to the three things this check looks at. A fixture that fires none of them is not thereby
-    /// conformant overall: the check speaks about what a host configured, and the profile has requirements
-    /// no configuration can be wrong about.
+    /// Scoped to what this check looks at, and no count is given: the list grows, and a fixture that fires
+    /// none of them is not thereby conformant overall - the check speaks about what a host configured, and
+    /// the profile has requirements no configuration can be wrong about.
     /// </remarks>
     [Fact]
-    public async Task AHostInsideTheProfileOnAllThree_IsNotWarned()
+    public async Task AHostInsideTheProfile_IsNotWarned()
     {
         var recorder = new RecordingProvider();
 
@@ -117,11 +117,33 @@ public sealed class CaepProfileMetadataTests
             {
                 JwksUri = new Uri($"{Issuer}/jwks"),
                 AuthorizationSchemes = [SchemeOf(SchemeUrns.OAuth2)],
+                DefaultSubjectsMode = StreamSubjectsMode.All,
             },
             recorder,
             checksScopes: true);
 
         Assert.Empty(recorder.Warnings);
+    }
+
+    /// <summary>
+    /// A transmitter whose new streams cover nothing is told so, because a receiver following the profile
+    /// will never populate one and neither side will say why.
+    /// </summary>
+    /// <remarks>
+    /// Section 2.4.4 tells the receiver to "assume that all subjects are implicitly included in a Stream,
+    /// without any Add Subject method invocations". Section 2.3 puts no mirror on the transmitter, so this
+    /// is not a clause a deployment violates - which is exactly why the default is left alone and the
+    /// consequence is said out loud instead. The failure it prevents is the quietest kind: the dispatcher
+    /// matches no stream, answers zero, and the receiver waits on a stream that reads as healthy.
+    /// </remarks>
+    [Fact]
+    public async Task ATransmitterWhoseStreamsCoverNoSubject_IsWarnedAtStartup()
+    {
+        var recorder = new RecordingProvider();
+
+        await using var host = await StartAsync(BaseOptions(), recorder);
+
+        Assert.Contains(recorder.Warnings, message => message.Contains("DefaultSubjectsMode"));
     }
 
     /// <summary>
@@ -154,6 +176,7 @@ public sealed class CaepProfileMetadataTests
             {
                 JwksUri = new Uri($"{Issuer}/jwks"),
                 AuthorizationSchemes = [],
+                DefaultSubjectsMode = StreamSubjectsMode.All,
             },
             recorder,
             checksScopes: true);
