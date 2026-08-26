@@ -157,9 +157,11 @@ public partial class PushModeCompletionHandler(
                 }
                 else
                 {
-                    // Delivery failed: keep the request so the tokens are not silently lost. Push
-                    // clients cannot poll, so removing here would orphan an authenticated grant the
-                    // client never received; instead it is retained until it expires.
+                    // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
+                    // retries them. What is kept is the authenticated REQUEST, and the only thing that can
+                    // turn it back into tokens is a host reading storage and calling CompleteAsync again,
+                    // which is why it is retained rather than removed: removing it would take that
+                    // possibility away too. Left alone it expires on its own.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 
@@ -169,9 +171,9 @@ public partial class PushModeCompletionHandler(
             {
                 LogTokenGenerationFailed(authenticationRequestId, error.Error);
 
-                // Removed after the attempt either way, for the same reason: nothing will come to
-                // collect it. Not a requirement of CIBA Core 1.0, which does not say.
-                // Push mode clients cannot poll, so storing denied status would orphan the request
+                // No tokens were minted, so there is nothing a second attempt could deliver and nothing
+                // for a host to complete again. Removed rather than marked denied, because a push client
+                // never polls and would never read the mark. Not a requirement of CIBA Core 1.0.
                 await _storage.TryRemoveAsync(authenticationRequestId);
 
                 return null;
