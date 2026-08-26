@@ -100,19 +100,23 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// </para>
 /// <list type="bullet">
 ///   <item>
-///     <strong>Poll Mode:</strong> Stores tokens in <see cref="IBackChannelRequestStorage"/>.
-///     Client polls the token endpoint with <c>auth_req_id</c> until tokens are ready.
+///     <strong>Poll Mode:</strong> Stores the authenticated request in
+///     <see cref="IBackChannelRequestStorage"/>. No token exists yet - the client polls the token
+///     endpoint with its <c>auth_req_id</c>, and the tokens are minted there when it redeems.
 ///   </item>
 ///   <item>
-///     <strong>Ping Mode:</strong> Stores tokens and sends HTTP POST notification via
-///     <see cref="INotificationDeliveryService"/> to the client's <c>client_notification_endpoint</c>
-///     with the <c>auth_req_id</c>. Client then retrieves tokens from the token endpoint.
+///     <strong>Ping Mode:</strong> Stores the authenticated request as poll mode does, then sends an
+///     HTTP POST notification via <see cref="INotificationDeliveryService"/> to the client's
+///     <c>client_notification_endpoint</c> carrying the <c>auth_req_id</c>. The tokens are minted at
+///     the token endpoint when the client redeems, exactly as in poll mode.
 ///   </item>
 ///   <item>
 ///     <strong>Push Mode:</strong> Generates tokens via <see cref="ITokenRequestProcessor"/> and delivers
 ///     them directly via <see cref="INotificationDeliveryService"/> to the client's
-///     <c>client_notification_endpoint</c>. Tokens are removed from storage after successful delivery
-///     per CIBA specification section 10.3.1.
+///     <c>client_notification_endpoint</c>. This is the only mode where the tokens exist before the
+///     client asks for them, and the request is removed once they are delivered, because a push client
+///     never comes to the token endpoint. CIBA Core 1.0 does not require that removal - it says nothing
+///     about what the OP keeps - so it is this library's choice.
 ///   </item>
 /// </list>
 ///

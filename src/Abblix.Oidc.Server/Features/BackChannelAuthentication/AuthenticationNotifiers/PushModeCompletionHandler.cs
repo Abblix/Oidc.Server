@@ -20,7 +20,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <summary>
 /// Handles CIBA push mode token delivery where tokens are sent directly to the client's notification endpoint
 /// immediately upon authentication completion.
-/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage per CIBA spec 10.3.1.
+/// In push mode, tokens are generated, delivered via HTTP POST, and the request is removed from storage -
+/// except when the delivery itself fails, which is the one outcome that leaves the record behind.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
 /// <param name="storage">Storage for authentication requests.</param>
@@ -59,12 +60,19 @@ public partial class PushModeCompletionHandler(
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The authentication request is removed from storage after successful delivery per CIBA spec 10.3.1.
+    /// The authentication request is removed from storage after successful delivery. Not hygiene: push
+    /// never writes back, so a record left behind is the PRE-completion one - Pending, carrying what the
+    /// client asked for rather than what the end user approved, and carrying the session - and a host that
+    /// finds it can complete it again. Removing it is what stops that on the path where the tokens did
+    /// arrive.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">How long the request remains in storage if token generation fails.</param>
+    /// <param name="expiresIn">Has no effect here. Push either removes the request or leaves it exactly
+    /// as it was - it never writes a new lifetime - so on the one outcome that keeps the record, a failed
+    /// delivery, what expires is the lifetime set when the request was stored. The parameter exists
+    /// because the base class hands it to every mode, and poll and ping do use it.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -147,15 +155,33 @@ public partial class PushModeCompletionHandler(
 
                 if (delivered)
                 {
-                    // Per CIBA spec 10.3.1, remove after push delivery (unlike poll/ping modes).
+                    // Removed here and not in poll or ping mode, because only this client is finished
+                    // with the request: it has the tokens and will never come to the token endpoint.
+                    // CIBA Core 1.0 does not require this - section 10.3.1 says nothing about what the OP
+                    // keeps - so it is a choice, made because the alternative is an orphan.
                     await _storage.TryRemoveAsync(authenticationRequestId);
                     LogTokensDelivered(authenticationRequestId);
                 }
                 else
                 {
-                    // Delivery failed: keep the request so the tokens are not silently lost. Push
-                    // clients cannot poll, so removing here would orphan an authenticated grant the
-                    // client never received; instead it is retained until it expires.
+                    // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
+                    // retries them.
+                    //
+                    // What survives in storage is the record as it stood BEFORE the completion, because
+                    // push never writes back: the status and the narrowed grant were set on the in-memory
+                    // object, and only the poll and ping paths persist that with UpdateAsync. So it still
+                    // reads Pending and still carries what the client ASKED for rather than what the end
+                    // user approved.
+                    //
+                    // It does carry a session - the one the device handler returned at initiation, naming
+                    // the end user - because AuthorizedGrant takes it as a non-nullable member and the
+                    // request was stored with it. That is what makes the leftover dangerous rather than
+                    // inert: it has everything CompleteAsync needs, so a host that reads it back and
+                    // completes it again succeeds, mints, and delivers the entries the end user refused.
+                    //
+                    // It is kept rather than removed so a host can see the request existed, and it expires
+                    // on its own. Anything a host rebuilds from it replays what was asked for, and nothing
+                    // here refuses that.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 
@@ -165,8 +191,9 @@ public partial class PushModeCompletionHandler(
             {
                 LogTokenGenerationFailed(authenticationRequestId, error.Error);
 
-                // Per CIBA spec 10.3.1, remove from storage after push attempt (success or failure)
-                // Push mode clients cannot poll, so storing denied status would orphan the request
+                // No tokens were minted, so there is nothing a second attempt could deliver and nothing
+                // for a host to complete again. Removed rather than marked denied, because a push client
+                // never polls and would never read the mark. Not a requirement of CIBA Core 1.0.
                 await _storage.TryRemoveAsync(authenticationRequestId);
 
                 return null;
