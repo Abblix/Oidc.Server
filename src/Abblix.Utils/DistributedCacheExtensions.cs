@@ -112,9 +112,10 @@ public static class DistributedCacheExtensions
 	/// the bytes at the key when this caller got IN - not the ones there before it waited, and that wait
 	/// is as long as another caller's whole redemption. What is still open is narrower and real: a writer
 	/// that takes no gate can land between the read and the removal, so this caller destroys that write
-	/// and is handed the earlier bytes. Nothing in this class closes THAT, and nothing here survives a
-	/// second process at all: a store whose own primitive returns the removed value is what closes both,
-	/// and issue 435 tracks it.
+	/// and is handed the earlier bytes. Nothing in this class closes THAT, and the SERIALIZATION survives
+	/// no second process at all - the lock protocol still admits at most one winner across nodes, but
+	/// nothing there holds the read and the removal together. A store whose own primitive returns the
+	/// removed value closes both, and issue 435 tracks it.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> the claim auto-expires after the specified timeout (5 seconds by
@@ -287,12 +288,16 @@ public static class DistributedCacheExtensions
 	/// <see cref="TryGetAndRemoveAsync"/> its read and its removal together - and neither body calls the
 	/// other's public method, which is what a body taking the gate twice on one key would do.
 	/// <para>
-	/// What that buys is bounded by what the gate holds out, which is other REDEMPTIONS and not other
-	/// writers. A plain <c>SetAsync</c> on the same key takes nothing and is not held out at all - and
-	/// those callers are in this repository, on these keys: the authorization grant written back after
-	/// minting, the back-channel request updated on completion, the device record bumped while polling.
+	/// What that buys is bounded by what the gate holds out, which is other REDEMPTIONS and nothing else.
+	/// A plain <c>SetAsync</c> or <c>RemoveAsync</c> on the same key takes nothing and is not held out at
+	/// all, so one landing between the read and the removal is destroyed by this caller while it is handed
+	/// the earlier bytes - or turns a live value into a refusal with nobody told. The live example in this
+	/// repository is the back-channel request, updated on completion from four handlers on the key this
+	/// protocol redeems, by an approval genuinely concurrent with a token-endpoint poll.
+	/// <para>
 	/// So the value returned is the value at the key when this caller got IN, which is a narrower window
 	/// than before and not a guarantee that it is the value removed.
+	/// </para>
 	/// </para>
 	/// </remarks>
 	private static async Task<T> UnderGateAsync<T>(

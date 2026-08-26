@@ -52,12 +52,18 @@ public interface IAuthorizationCodeService
     /// code (RFC 6749 section 4.1.2) - every other caller finds the code already gone and receives an
     /// <c>invalid_grant</c> failure.
     /// <para>
-    /// Two exceptions, and neither needs a second node. A removal can end with NOBODY receiving the
-    /// grant - an expiring claim is one way there and a store fault after the removal is another. And two
-    /// callers CAN both receive it, when
-    /// one of them redeems while the other writes the grant back at the same key - the second is handed
-    /// what it read before the claim, not what it removed, so the reuse check sees no issued tokens and
-    /// mints a second set. That is issue 454, and it is why this sentence no longer says "never two".
+    /// One exception on a single node, and it is a loss rather than a duplication: a removal can end with
+    /// NOBODY receiving the grant, when the claim expires mid-protocol. A store fault after the removal
+    /// costs the grant the same way, and raises rather than answering.
+    /// <para>
+    /// Two callers both receiving it needs a SECOND NODE. Within one process the read and the removal
+    /// happen under one hold of the per-key gate, so a redeemer is never between them while another
+    /// completes a take - which is what the write-back at that key would have to interleave with. Across
+    /// processes the gate holds nothing and the window reopens: the value is read before the claim is
+    /// taken, the second caller is handed what it read rather than what it removed, and the reuse check
+    /// sees no issued tokens. That is issue 435, and it needs a store primitive this interface does not
+    /// expose.
+    /// </para>
     /// </para>
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
