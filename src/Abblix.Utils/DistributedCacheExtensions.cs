@@ -186,39 +186,30 @@ public static class DistributedCacheExtensions
 	/// </para>
 	/// <para>
 	/// <strong>What the protocol decides:</strong> a caller is told it took the value only when the
-	/// protocol runs to the end AND finds its own lock token still in the store. Everything below follows
-	/// from that one sentence, which is why it is stated instead of a list of what cannot happen.
+	/// protocol runs to the end AND finds its own lock token still in the store.
 	/// </para>
 	/// <para>
-	/// <strong>At most one caller passes that check</strong>, and the lock token is what decides it, not
-	/// the in-process gate: eight callers on one key over two hundred rounds produce no round with two
-	/// winners either with the gate or without it. Passing the check is not the same as being handed the
-	/// value, though - <see cref="TryGetAndRemoveAsync"/> hands back what it read BEFORE the protocol, so
-	/// where something writes the key in between, two callers can pass and be handed the same bytes. That
-	/// is issue 454, and this class does not close it.
+	/// That is the whole contract, and it is deliberately not followed by a count of what can go wrong.
+	/// Such a list is not closable - the token can be overwritten, it can expire while a cache call
+	/// stalls, and the store calls after the removal can fail, and there is no argument that those are
+	/// all. What the tests carry instead, each dying when its fact stops holding:
+	/// <c>TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue</c> for a removal with
+	/// nobody told, on one node with no competitor, and
+	/// <c>TryRemoveAsync_TheStoreFaultsAfterTheRemoval_TheValueIsGoneAndNobodyIsTold</c> for the same
+	/// outcome reached by a fault, where the caller gets an exception rather than an answer at all.
 	/// </para>
 	/// <para>
-	/// <strong>A removal may have NO winner, and the gate closes only one way of reaching that.</strong>
-	/// In the same measurement it took the no-winner rounds from eleven to zero, which is the
-	/// competitor-overwrite way. The other two survive it, so a single caller on a single node still
-	/// reaches a no-winner removal - <c>TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue</c>
-	/// and <c>TryRemoveAsync_TheStoreFaultsAfterTheRemoval_TheValueIsGoneAndNobodyIsTold</c> are those two.
-	/// Worth knowing before moving the gate or dropping it: what would come back is a loss that needs a
-	/// competitor, not a loss of single use.
+	/// <strong>Two things the check does NOT give you.</strong> It does not make this a take-once: the
+	/// gate serializes callers within one process, so a competitor cannot overwrite another's token HERE,
+	/// and nothing about that survives a second node - see below. And passing it is not the same as being
+	/// handed the value, because <see cref="TryGetAndRemoveAsync"/> returns what it read BEFORE the
+	/// protocol; where something writes the key in between, two callers pass and are handed the same
+	/// bytes. That is issue 454, and this class does not close it.
 	/// </para>
 	/// <para>
-	/// <strong>The three ways the check is not passed.</strong>
-	/// State it that way round rather than listing the ways to lose, because that list is not closable:
-	/// the token can be overwritten, which needs a competitor and is what the serialization prevents here;
-	/// it can EXPIRE, which needs only time; and the two store calls that follow the removal can fail, in
-	/// which case the value is gone and the caller gets an exception rather than an answer at all. Only the
-	/// first of those three needs a second caller, so a single caller on a single node can lose a value -
-	/// <paramref name="lockTimeout"/> is five seconds by default, and a stalled cache call, a garbage
-	/// collection pause or a starved thread pool is enough.
-	/// </para>
-	/// <para>
-	/// <strong>Across processes the second way opens too.</strong> Two nodes redeeming the same key at the
-	/// same moment can end with the value removed and neither told it took it, because the lock protocol is
+	/// <strong>Across processes even the overwrite reopens.</strong> Two nodes redeeming the same key at
+	/// the same moment can end with the value removed and neither told it took it, because the lock
+	/// protocol is
 	/// assembled from <c>Get</c>, <c>Set</c> and <c>Remove</c> as three separate operations and there is a
 	/// window between any two of them. A take-once needs one indivisible read-modify-write, and this
 	/// interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.

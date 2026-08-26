@@ -14,8 +14,7 @@ namespace Abblix.Utils.UnitTests;
 
 /// <summary>
 /// Covers what <see cref="DistributedCacheExtensions.TryRemoveAsync"/> decides: a caller is told it took
-/// the value only when its own lock token is still in the store at the end of the protocol, and at most
-/// one caller passes that check.
+/// the value only when its own lock token is still in the store at the end of the protocol.
 /// </summary>
 /// <remarks>
 /// Serializing callers on a key stops one of them overwriting another's token, which is one of the three

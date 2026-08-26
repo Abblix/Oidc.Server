@@ -53,7 +53,8 @@ public interface IAuthorizationCodeService
     /// <c>invalid_grant</c> failure.
     /// <para>
     /// Two exceptions, and neither needs a second node. A removal can end with NOBODY receiving the
-    /// grant, when the claim guarding it expires mid-protocol. And two callers CAN both receive it, when
+    /// grant - an expiring claim is one way there and a store fault after the removal is another. And two
+    /// callers CAN both receive it, when
     /// one of them redeems while the other writes the grant back at the same key - the second is handed
     /// what it read before the claim, not what it removed, so the reuse check sees no issued tokens and
     /// mints a second set. That is issue 454, and it is why this sentence no longer says "never two".
