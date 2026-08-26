@@ -82,8 +82,13 @@ public class WwwAuthenticateBuilderTests
     /// <remarks>
     /// The point of the figure is the SEPARATOR. With no realm, <c>algs</c> is the challenge's first
     /// parameter and follows the scheme with a space; a comma there is not a challenge under RFC 9110's
-    /// grammar, and a parser reads the scheme as parameterless and then chokes on the rest. Every other
-    /// row in this class passes a non-empty realm, so none of them can see it.
+    /// grammar, and a parser reads the scheme as parameterless and then chokes on the rest.
+    /// <para>
+    /// The rest of this class guards that separator well - breaking it alone kills twelve of these
+    /// fifteen rows, most of them because the realm is what comes first. What none of them can see is a
+    /// parameter that BYPASSES the builder, which is what <c>algs</c> did: these three rows are the only
+    /// thing in the solution that catches it, measured.
+    /// </para>
     /// </remarks>
     [Fact]
     public void BuildDPoPChallenge_WithoutRealm_MatchesTheSpecificationFigure()
