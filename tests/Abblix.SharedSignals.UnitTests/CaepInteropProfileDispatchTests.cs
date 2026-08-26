@@ -273,15 +273,27 @@ public sealed class CaepInteropProfileDispatchTests
     /// <c>reason_admin</c> - a statement about contents nothing had read. The pair is the point: same
     /// class, opposite verdicts, decided by the member.
     /// </remarks>
+    /// <remarks>
+    /// The empty-object row is its own, and it is what holds the relayed arm's NON-EMPTY half: with only
+    /// an absent member and a populated one, weakening <c>is JsonObject { Count: &gt; 0 }</c> to
+    /// <c>is JsonObject</c> leaves the whole suite green, because the typed arm's holder cannot see the
+    /// relayed one.
+    /// </remarks>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ARelayedPayload_IsJudgedByItsJson(bool populated)
+    [InlineData(RelayedMember.Populated)]
+    [InlineData(RelayedMember.Absent)]
+    [InlineData(RelayedMember.EmptyObject)]
+    public async Task ARelayedPayload_IsJudgedByItsJson(RelayedMember member)
     {
+        var populated = member is RelayedMember.Populated;
         var json = new JsonObject();
         if (populated)
         {
             json[CaepClaimNames.ReasonAdmin] = new JsonObject { ["en"] = "Landspeed policy violation" };
+        }
+        else if (member is RelayedMember.EmptyObject)
+        {
+            json[CaepClaimNames.ReasonAdmin] = new JsonObject();
         }
 
         var (dispatcher, outbox, _) = await CreateAsync(
@@ -391,6 +403,19 @@ public sealed class CaepInteropProfileDispatchTests
             // ANSWERED rather than refused.
             Assert.Equal(0, await dispatcher.DispatchAsync(descriptor, Cancellation));
         }
+    }
+
+    /// <summary>What a relayed payload's <c>reason_admin</c> looks like on the wire.</summary>
+    public enum RelayedMember
+    {
+        /// <summary>A non-empty object, which is what the profile asks a transmitter for.</summary>
+        Populated,
+
+        /// <summary>No member at all.</summary>
+        Absent,
+
+        /// <summary>The member present and empty, which CAEP 1.0 Section 2 refuses on its own.</summary>
+        EmptyObject,
     }
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
