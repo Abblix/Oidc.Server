@@ -72,7 +72,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         }
 
         // The claimed grant carries tokens from a prior successful redemption - a sequential reuse.
-        // Revoke those tokens (OAuth 2.0 Security BCP §4.13) and reject.
+        // Revoke those tokens (OAuth 2.0 Security BCP section 4.13) and reject.
         if (claimedGrant.IssuedTokens is { Length: > 0 } issuedTokens)
         {
             foreach (var (jwtId, expiresAt) in issuedTokens)

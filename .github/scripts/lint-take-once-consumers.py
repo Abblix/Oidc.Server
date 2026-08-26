@@ -26,13 +26,16 @@ import re
 import subprocess
 import sys
 
-#: Both ways in. The two extension methods by name, and the flag that routes a read through the same
+#: Three ways in. The two extension methods by name; the flag that routes a read through the same
 #: protocol one layer up - `IEntityStorage.GetAsync(..., removeOnRetrieval: true)` and
-#: `IAuthorizationRequestStorage.TryGetAsync(..., shouldRemove: true)`. A name grep alone was blind to
-#: the second, and files describing this refusal reach it only that way.
+#: `IAuthorizationRequestStorage.TryGetAsync(..., shouldRemove: true)`; and the DECLARATION of that
+#: flag, because the file declaring it is the one carrying the contract prose and it never passes the
+#: argument to itself. A name grep alone was blind to the second route, and both call-shaped routes
+#: were blind to the third - which is where the sentences this checker exists over actually live.
 CALL = re.compile(
     r"\b(TryRemoveAsync|TryGetAndRemoveAsync)\b"
-    r"|\b(removeOnRetrieval|shouldRemove)\s*:\s*true\b")
+    r"|\b(removeOnRetrieval|shouldRemove)\s*:\s*true\b"
+    r"|\bbool\s+(removeOnRetrieval|shouldRemove)\b")
 
 DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 
@@ -40,9 +43,8 @@ DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 #: 455. Each was checked against the contract rather than against the call's shape, and adding a name
 #: here is the moment to read that contract.
 #:
-#: This is what the checker CAN see. A caller reaching the protocol through some third wrapper, named
-#: neither way, is outside it - so the list is the reach of the two routes above rather than a proof that
-#: nothing else redeems.
+#: This is what the checker CAN see - the reach of the three routes above, rather than a proof that
+#: nothing else redeems. What it cannot see is in WRAPPERS below.
 KNOWN = {
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/BackChannelAuthenticationGrantHandler.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/DeviceCodeGrantHandler.cs",
@@ -56,6 +58,18 @@ KNOWN = {
     "src/Abblix.Oidc.Server/Features/Storages/DistributedCacheStorage.cs",
     "src/Abblix.Oidc.Server/Features/PushedAuthorization/PushedAuthorizationRequestProcessorDecorator.cs",
     "src/Abblix.Oidc.Server/Features/Storages/AuthorizationCodeService.cs",
+    "src/Abblix.Oidc.Server/Features/Storages/AuthorizationRequestStorage.cs",
+    "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationRequestStorage.cs",
+    "src/Abblix.Oidc.Server/Features/Storages/IEntityStorage.cs",
+}
+
+#: A caller reaching the protocol through a WRAPPER that renames it names none of the three routes, so
+#: no pattern here finds it and no pattern here notices when it stops being one. These are recorded by
+#: hand, are not measured, and are listed so that the checker's blind spot is a NAMED file rather than a
+#: hypothetical: `IAuthorizationCodeService` declares `RemoveAuthorizationCodeAsync` over an
+#: implementation that IS measured, and describes this refusal in its own `<returns>`.
+WRAPPERS = {
+    "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationCodeService.cs",
 }
 
 CONTRACT = (
@@ -68,21 +82,45 @@ CONTRACT = (
 
 
 def tracked_sources() -> list[str]:
+    # Two separate defaults are relative to the CURRENT directory here, and each has to be overridden by
+    # its own flag. `:(top)` anchors the PATTERN, without which the same command run from `src/` matches
+    # nothing and this checker answers a clean zero over a sweep that read no files. `--full-name`
+    # anchors the OUTPUT, without which the paths come back relative to the caller and neither KNOWN nor
+    # the read below can be written against them. Anchoring one and not the other still moves the reach.
     listed = subprocess.run(
-        ["git", "ls-files", "src/*.cs"], capture_output=True, text=True, check=True)
+        ["git", "ls-files", "--full-name", ":(top)src/*.cs"],
+        capture_output=True, text=True, check=True)
     return [line for line in listed.stdout.splitlines() if line]
 
 
+def repository_root() -> pathlib.Path:
+    # The paths `tracked_sources` yields are repo-relative, so they are only readable from here - the
+    # command works from any directory and its answer does not.
+    located = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+    return pathlib.Path(located.stdout.strip())
+
+
 def main() -> int:
+    root = repository_root()
+    sources = tracked_sources()
+
+    # A silence has to mean something was read. Nothing to read is a broken invocation, never an
+    # all-clear, and the two are the same output until this refuses one of them.
+    if not sources:
+        print("no tracked .cs files under src/; nothing was checked.")
+        return 2
+
     found = {
-        path for path in tracked_sources()
-        if path != DECLARING and CALL.search(pathlib.Path(path).read_text(encoding="utf-8-sig"))
+        path for path in sources
+        if path != DECLARING and CALL.search((root / path).read_text(encoding="utf-8-sig"))
     }
 
     added = sorted(found - KNOWN)
     gone = sorted(KNOWN - found)
 
     if not added and not gone:
+        print(f"{len(sources)} tracked source(s) read; {len(KNOWN)} known consumer(s), unchanged.")
         return 0
 
     for path in added:
@@ -95,6 +133,9 @@ def main() -> int:
     print(
         f"\nDescribe the refusal from that contract rather than from the shape of the call, then update "
         f"KNOWN in {pathlib.Path(__file__).name}.")
+    print(
+        "\nOutside what this checker measures, and carrying the same contract by hand: "
+        + ", ".join(sorted(WRAPPERS)))
     return 1
 
 
