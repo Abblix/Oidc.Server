@@ -56,8 +56,10 @@ public interface IBackChannelRequestStorage
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
-	/// A task that returns the authentication request if it existed and was successfully removed;
-	/// otherwise, null if the request was not found or already removed.
+	/// A task that returns the authentication request when this caller removed it and still held its own
+	/// claim afterwards. Null otherwise, which covers the request not being there, another caller having
+	/// taken it, a claim that expired mid-protocol, and the request being gone with nobody able to be told
+	/// they took it - the last two without any competitor at all.
 	/// </returns>
 	Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId);
 }

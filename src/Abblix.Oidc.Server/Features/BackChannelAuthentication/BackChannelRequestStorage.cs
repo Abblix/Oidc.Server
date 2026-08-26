@@ -89,8 +89,10 @@ public class BackChannelRequestStorage(
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
-	/// A task that returns the authentication request if it existed and was successfully removed;
-	/// otherwise, null if the request was not found or already removed by another concurrent request.
+	/// A task that returns the authentication request when this caller removed it and still held its own
+	/// claim afterwards. Null otherwise, and that covers more than a competitor: the request not being
+	/// there, a claim that expired while a store call was in flight, and the request being gone with
+	/// nobody able to be told they took it. The last two need no second caller and no second node.
 	/// </returns>
 	public Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId)
 	{

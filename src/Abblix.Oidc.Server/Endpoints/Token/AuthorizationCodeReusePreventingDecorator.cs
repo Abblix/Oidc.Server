@@ -56,7 +56,10 @@ public class AuthorizationCodeReusePreventingDecorator(
         // now contend for a single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
-        // The code is gone: a concurrent request already claimed it, or it was already consumed.
+        // The code did not come back. That covers a competitor claiming it and a code already consumed,
+        // and equally a claim that expired mid-protocol or a store call that failed after the removal -
+        // neither of which needs a second request. The caller is told the code was used, which is the
+        // right refusal for every one of them and a diagnosis for none.
         // Either way this redemption loses - reject without issuing a second set of tokens.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {

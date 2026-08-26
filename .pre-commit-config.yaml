@@ -28,6 +28,12 @@ repos:
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
         pass_filenames: false
+      - id: take-once-consumers
+        name: "Refuse an unreviewed consumer of the take-once protocol"
+        entry: python .github/scripts/lint-take-once-consumers.py
+        language: python
+        pass_filenames: false
+        files: \.(cs)$
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py

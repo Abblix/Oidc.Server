@@ -33,9 +33,11 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
 
     /// <summary>
     /// Atomically removes the authentication request from storage and returns its authorized grant.
-    /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a second retrieval
-    /// - or a concurrent one that lost the race - finds nothing and is rejected with
-    /// <c>invalid_grant</c> rather than re-issuing tokens.
+    /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a retrieval that
+    /// does not come back with the request is rejected with <c>invalid_grant</c> rather than re-issuing
+    /// tokens. Which is the right answer to give the caller, and not a diagnosis: a second retrieval
+    /// produces it, and so does a claim that expired mid-protocol or a store call that failed after the
+    /// removal, neither of which needs a competitor.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,

@@ -31,21 +31,22 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
 
     /// <summary>
     /// Atomically removes the authentication request from storage and returns its authorized grant.
-    /// If a concurrent request already consumed the entry, returns an <c>invalid_grant</c> error
-    /// to prevent duplicate token issuance.
+    /// A removal that does not come back with the request is answered <c>invalid_grant</c> rather than
+    /// re-issuing tokens. That is the right answer and not a diagnosis: a competitor produces it, and so
+    /// does a claim that expired mid-protocol or a store call that failed after the removal.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // Atomically remove from storage to prevent race condition where concurrent requests
-        // could both retrieve the same grant before removal (duplicate token issuance vulnerability)
-        // If another request already removed it, this returns null
+        // Removed atomically so two polls cannot both come back with the grant, which is the duplicate
+        // token issuance this exists to stop. Null does not say WHY - see the storage contract.
         var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
 
         if (removedRequest == null)
         {
-            // Request was already retrieved by another concurrent request
+            // Not necessarily a competitor: the claim can expire mid-protocol and a store call after the
+            // removal can fail, both on a single caller. The receiver gets the same answer either way.
             return new OidcError(
                 ErrorCodes.InvalidGrant,
                 "The authentication request has already been used");

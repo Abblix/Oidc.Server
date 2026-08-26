@@ -68,7 +68,12 @@ public interface IDeviceAuthorizationStorage
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
     /// <returns>
-    /// A task that returns true if the request was found and removed; false otherwise.
+    /// A task that returns true when this caller removed the request AND still held its own claim
+    /// afterwards. False otherwise, which is wider than "somebody else got it": it also covers the
+    /// request not being there, a claim that expired while a store call was in flight, and the request
+    /// being gone with nobody able to be told they took it. An operator told a second request was the
+    /// cause goes looking for a second node, and the single-caller cases are exactly the ones that never
+    /// produce one.
     /// </returns>
     Task<bool> TryRemoveAsync(string deviceCode, string userCode);
 }
