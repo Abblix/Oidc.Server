@@ -66,6 +66,47 @@ public class RsaSignerTests
     }
 
     /// <summary>
+    /// A weak key whose modulus is padded out to a respectable octet count must still be refused. This is
+    /// the case a size check written against <c>RSA.KeySize</c> walks straight past, because that property
+    /// reports the octets that were imported rather than the value they encode.
+    /// </summary>
+    /// <remarks>
+    /// Not an exotic attack. RFC 7518 Section 2 requires the minimal encoding, and Section 6.3.1.1 warns
+    /// that implementations emit the extra octet anyway - so the malformed modulus arrives without malice,
+    /// and the forgery arrives later from whoever factored the real one. Only the public half is supplied,
+    /// which is exactly what a peer publishes in its JWKS.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(Algorithms))]
+    public void Verify_APaddedModulusHidingAWeakKey_IsStillRefused(string algorithm)
+    {
+        using var weak = System.Security.Cryptography.RSA.Create(BelowTheFloor);
+        var parameters = weak.ExportParameters(false);
+
+        // Left-padded to the octet count of a 2048-bit key, which is what RSA.KeySize would then report.
+        var padded = new byte[2048 / 8];
+        parameters.Modulus!.CopyTo(padded, padded.Length - parameters.Modulus.Length);
+
+        var key = new RsaJsonWebKey
+        {
+            KeyId = "padded",
+            Usage = PublicKeyUsages.Signature,
+            Algorithm = algorithm,
+            Modulus = padded,
+            Exponent = parameters.Exponent,
+        };
+
+        // The signature is genuinely correct for that key, so what the test measures is the refusal.
+        using var privateKey = System.Security.Cryptography.RSA.Create();
+        privateKey.ImportParameters(weak.ExportParameters(true));
+        var signature = privateKey.SignData(SampleData, HashOf(algorithm), PaddingOf(algorithm));
+
+        Assert.Equal(2048, key.ToRsa().KeySize);
+        Assert.Equal(BelowTheFloor, key.ModulusBitLength());
+        Assert.False(new RsaSigner(algorithm).Verify(key, SampleData, signature));
+    }
+
+    /// <summary>
     /// The control. Without it, a signer that refused everything would pass the test above.
     /// </summary>
     [Theory]
@@ -95,19 +136,20 @@ public class RsaSignerTests
         // Produced outside the guarded path, because signing through it would throw - which is the
         // point: the only way an undersized signature reaches this deployment is from somewhere else.
         using var rsa = key.ToRsa();
-        var parameters = algorithm switch
-        {
-            SigningAlgorithms.RS256 or SigningAlgorithms.PS256 => System.Security.Cryptography.HashAlgorithmName.SHA256,
-            SigningAlgorithms.RS384 or SigningAlgorithms.PS384 => System.Security.Cryptography.HashAlgorithmName.SHA384,
-            _ => System.Security.Cryptography.HashAlgorithmName.SHA512,
-        };
-
-        var padding = algorithm.StartsWith("PS", StringComparison.Ordinal)
-            ? System.Security.Cryptography.RSASignaturePadding.Pss
-            : System.Security.Cryptography.RSASignaturePadding.Pkcs1;
-
-        var signature = rsa.SignData(SampleData, parameters, padding);
+        var signature = rsa.SignData(SampleData, HashOf(algorithm), PaddingOf(algorithm));
 
         Assert.False(new RsaSigner(algorithm).Verify(key, SampleData, signature));
     }
+
+    private static System.Security.Cryptography.HashAlgorithmName HashOf(string algorithm) => algorithm switch
+    {
+        SigningAlgorithms.RS256 or SigningAlgorithms.PS256 => System.Security.Cryptography.HashAlgorithmName.SHA256,
+        SigningAlgorithms.RS384 or SigningAlgorithms.PS384 => System.Security.Cryptography.HashAlgorithmName.SHA384,
+        _ => System.Security.Cryptography.HashAlgorithmName.SHA512,
+    };
+
+    private static System.Security.Cryptography.RSASignaturePadding PaddingOf(string algorithm)
+        => algorithm.StartsWith("PS", StringComparison.Ordinal)
+            ? System.Security.Cryptography.RSASignaturePadding.Pss
+            : System.Security.Cryptography.RSASignaturePadding.Pkcs1;
 }

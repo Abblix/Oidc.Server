@@ -48,16 +48,20 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 	/// <inheritdoc />
 	public byte[] EncryptKey(JsonWebTokenHeader header, RsaJsonWebKey rsaKey, byte[] keyToEncrypt)
 	{
-		using var rsa = rsaKey.ToRsa();
-
-		// Validate minimum key size per RFC 7518 Section 4
+		// Measured from the modulus, NOT from RSA.KeySize, which reports the imported octet count: a
+		// modulus left-padded to twice its size reads as twice its strength, and RFC 7518 Section 6.3.1.1
+		// warns that implementations emit the extra octet. Checked before the import, which is where the
+		// distinction is lost.
 		const int minimumKeySize = 2048;
-		if (rsa.KeySize < minimumKeySize)
+		var bits = rsaKey.ModulusBitLength();
+		if (bits < minimumKeySize)
 		{
 			throw new InvalidOperationException(
 				$"RSA key size must be at least {minimumKeySize} bits for {algorithm} per RFC 7518 Section 4. " +
-				$"Current key size: {rsa.KeySize} bits.");
+				$"The modulus is {bits} bits.");
 		}
+
+		using var rsa = rsaKey.ToRsa();
 
 		// Allocate buffer for encrypted output - RSA encryption output is always the key size in bytes
 		var encryptedKey = new byte[rsa.KeySize / 8];

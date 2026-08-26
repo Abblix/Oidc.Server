@@ -182,6 +182,42 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
+	/// The real bit length of the key's modulus, ignoring any leading zero octets.
+	/// </summary>
+	/// <remarks>
+	/// <c>RSA.KeySize</c> is not this number. It reports the length of the octets that were IMPORTED, so a
+	/// modulus left-padded to twice its size reports twice its strength - and a peer supplying one is not
+	/// necessarily attacking: RFC 7518 Section 2 requires the minimal encoding ("The octet sequence MUST
+	/// utilize the minimum number of octets needed to represent the value"), while Section 6.3.1.1 warns
+	/// that implementations emit the extra octet anyway. So a size check written against
+	/// <c>RSA.KeySize</c> passes on a key half the strength it claims, and the forgery arrives later from
+	/// whoever factored the real modulus.
+	/// <para>
+	/// Measured from the leading octet's own highest set bit rather than from the octet count, so a key
+	/// whose modulus simply begins below 0x80 is not mistaken for a smaller one.
+	/// </para>
+	/// </remarks>
+	public static int ModulusBitLength(this RsaJsonWebKey key)
+	{
+		var modulus = key.Modulus;
+		if (modulus is null)
+			return 0;
+
+		var first = 0;
+		while (first < modulus.Length && modulus[first] == 0)
+			first++;
+
+		if (first == modulus.Length)
+			return 0;
+
+		var bitsInLeadingOctet = 8;
+		for (var mask = 0x80; mask != 0 && (modulus[first] & mask) == 0; mask >>= 1)
+			bitsInLeadingOctet--;
+
+		return (modulus.Length - first - 1) * 8 + bitsInLeadingOctet;
+	}
+
+	/// <summary>
 	/// Converts an RsaJsonWebKey to RSAParameters, which represent the key parameters used in RSA cryptographic operations.
 	/// </summary>
 	/// <param name="key">The RsaJsonWebKey to be converted.</param>
