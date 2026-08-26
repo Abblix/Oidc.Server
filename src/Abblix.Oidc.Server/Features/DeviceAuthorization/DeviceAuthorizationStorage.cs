@@ -116,11 +116,11 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
-    /// which serializes redemptions of one device code in-process: where one process touches the code,
-    /// exactly one caller removes it and the rest are told it was not there. Across processes the protocol
-    /// gives at most one, never two, and a deployment that needs more than that supplies its own storage -
-    /// the extension's own remarks name the primitive to reach for. After successful removal, cleans up
-    /// the user code mapping.
+    /// which serializes redemptions of one device code in-process, so at most one caller ever removes it
+    /// and the rest are told it was not there. What that does not give is a winner for every removal: a
+    /// lock expiring mid-protocol loses the code with one caller on one node, and a second node loses it
+    /// without the expiry. The extension's own remarks carry both and name the store primitive that closes
+    /// them. After successful removal, cleans up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>

@@ -99,10 +99,10 @@ public static class DistributedCacheExtensions
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
 	/// lock token survives (last-write-wins) will return the value. Other threads detect the lock mismatch
-	/// and return null. So where one process touches the key, exactly one caller retrieves the value, even
-	/// though the individual cache operations are not atomic - and across processes, at most one. The
-	/// difference, and what to do about it, is under <see cref="TryRemoveAsync"/>, which this delegates to
-	/// and which carries the guarantee.
+	/// and return null. AT MOST one caller ever retrieves the value, never two - and the mechanism that
+	/// picks the winner is not the same on one node as on several. Both, and what a value can be lost to
+	/// even with a single caller, are under <see cref="TryRemoveAsync"/>, which this delegates to and
+	/// which carries the guarantee.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
@@ -165,8 +165,9 @@ public static class DistributedCacheExtensions
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
 	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
-	/// and return false. What that leaves is spelled out below, because it is not the same answer on one
-	/// node as on several.
+	/// and return false. In one process that branch is unreachable - callers on a key are serialized, so
+	/// nobody else writes that lock and every caller's own token survives - and the winner is picked by
+	/// the value-existence check instead. What that leaves is spelled out below.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without
@@ -175,18 +176,26 @@ public static class DistributedCacheExtensions
 	/// not the request data itself.
 	/// </para>
 	/// <para>
-	/// <strong>What this guarantees:</strong> where ONE process touches the key, exactly one caller removes
-	/// the value and every other caller is told the key was not there. Callers of this method on the same
-	/// key are serialized in-process, so the protocol below never runs concurrently against itself. Note
-	/// the condition is the key's traffic, not the deployment: a second process redeeming the same key at
-	/// the same moment is outside this and lands in the paragraph below.
+	/// <strong>What this guarantees, always:</strong> AT MOST one caller removes the value. Never two,
+	/// wherever the traffic comes from. Callers on one key are serialized in-process, so the protocol below
+	/// never runs concurrently against itself here.
 	/// </para>
 	/// <para>
-	/// <strong>Across processes it guarantees only AT MOST one.</strong> Two nodes redeeming the same key
-	/// at the same moment can end with the value removed and neither told it took it, because the lock
-	/// protocol is assembled from <c>Get</c>, <c>Set</c> and <c>Remove</c> as three separate operations and
-	/// there is a window between any two of them. A take-once needs one indivisible read-modify-write, and
-	/// this interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.
+	/// <strong>What it does NOT guarantee is that a removal has a winner</strong>, and the serialization
+	/// only closes one of the two ways to lose one. A caller reports a loss when the lock token it reads
+	/// back is not the one it wrote, and there are two ways for that: somebody overwrote it, which needs a
+	/// second caller and is what the serialization prevents within a process; or it EXPIRED, which needs
+	/// only time. The lock carries <paramref name="lockTimeout"/>, five seconds by default, and three cache
+	/// round trips sit between writing it and reading it back - so a stalled cache call, a garbage
+	/// collection pause or a starved thread pool is enough for ONE caller on ONE node to remove the value
+	/// and be told it did not.
+	/// </para>
+	/// <para>
+	/// <strong>Across processes the second way opens too.</strong> Two nodes redeeming the same key at the
+	/// same moment can end with the value removed and neither told it took it, because the lock protocol is
+	/// assembled from <c>Get</c>, <c>Set</c> and <c>Remove</c> as three separate operations and there is a
+	/// window between any two of them. A take-once needs one indivisible read-modify-write, and this
+	/// interface exposes none: no compare-and-swap, no set-if-absent, no delete-returning-value.
 	/// </para>
 	/// <para>
 	/// <strong>A deployment on several nodes that cannot afford that</strong> supplies its own storage and
@@ -219,8 +228,9 @@ public static class DistributedCacheExtensions
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
 	/// A task that completes when the operation finishes, containing true if the value was removed by this
-	/// caller; false if another caller took it, if the key did not exist, or - only across processes - if
-	/// the value was removed and no caller could be told it took it.
+	/// caller; false if another caller took it, if the key did not exist, or if the value was removed and
+	/// no caller could be told it took it - which needs a second node OR merely a lock that expired
+	/// mid-protocol, and so is reachable with one caller on one node.
 	/// </returns>
 	public static async Task<bool> TryRemoveAsync(
 		this IDistributedCache cache,

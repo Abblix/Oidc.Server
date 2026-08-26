@@ -193,6 +193,88 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
+	/// Serializing callers closes ONE of the two ways a redemption loses its value. This is the other one,
+	/// and it needs neither a second caller nor a second node.
+	/// </summary>
+	/// <remarks>
+	/// A caller reports a loss when the lock token it reads back is not the one it wrote. Somebody
+	/// overwriting it needs a competitor; the lock EXPIRING needs only time, and three cache round trips
+	/// sit between writing it and reading it back. So a stalled call, a collection pause or a starved
+	/// thread pool is enough - which is why the remarks say so rather than blaming a second node.
+	///
+	/// Driven with a delay rather than waited out: the point is the ordering, not the duration.
+	/// </remarks>
+	[Fact]
+	public async Task TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue()
+	{
+		var inner = CreateCache();
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+
+		var cache = new SlowValueRead(inner, Key, TimeSpan.FromMilliseconds(200));
+
+		var won = await cache.TryRemoveAsync(
+			Key,
+			lockTimeout: TimeSpan.FromMilliseconds(50),
+			cancellationToken: TestContext.Current.CancellationToken);
+
+		// Both halves, because either one alone reads as something else: a false with the value still
+		// there is an ordinary refusal, and a missing value with a true is a normal redemption.
+		Assert.False(won);
+		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
+	}
+
+	/// <summary>
+	/// The control for the test above. With the lock outliving the protocol, the same single caller wins,
+	/// so what that test measures is the expiry and not the delay.
+	/// </summary>
+	[Fact]
+	public async Task TryRemoveAsync_TheLockOutlivesTheProtocol_TheOneCallerWins()
+	{
+		var inner = CreateCache();
+		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("value"), TestContext.Current.CancellationToken);
+
+		var cache = new SlowValueRead(inner, Key, TimeSpan.FromMilliseconds(200));
+
+		var won = await cache.TryRemoveAsync(
+			Key,
+			lockTimeout: TimeSpan.FromSeconds(30),
+			cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.True(won);
+		Assert.Null(await inner.GetAsync(Key, TestContext.Current.CancellationToken));
+	}
+
+	/// <summary>
+	/// Passes everything through, delaying only the read of one key, which is how the protocol is made to
+	/// outlast its own lock without the test waiting out a real timeout.
+	/// </summary>
+	private sealed class SlowValueRead(IDistributedCache inner, string slowKey, TimeSpan delay) : IDistributedCache
+	{
+		public async Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+		{
+			if (key == slowKey) await Task.Delay(delay, token);
+			return await inner.GetAsync(key, token);
+		}
+
+		public Task SetAsync(
+			string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+			=> inner.SetAsync(key, value, options, token);
+
+		public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+
+		public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+
+		public byte[]? Get(string key) => inner.Get(key);
+
+		public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+			=> inner.Set(key, value, options);
+
+		public void Remove(string key) => inner.Remove(key);
+
+		public void Refresh(string key) => inner.Refresh(key);
+	}
+
+	/// <summary>
 	/// Different keys must not wait on each other, or the gate would serialize the whole endpoint rather
 	/// than one redemption.
 	/// </summary>
