@@ -97,22 +97,25 @@ public static class DistributedCacheExtensions
 	///   <item><term>Step 2:</term> Delegate to <see cref="TryRemoveAsync"/> for atomic removal</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return the value. Other threads detect the lock mismatch
-	/// and return null. AT MOST one caller ever retrieves the value, never two - and the mechanism that
-	/// picks the winner is not the same on one node as on several. Both, and what a value can be lost to
-	/// even with a single caller, are under <see cref="TryRemoveAsync"/>, which this delegates to and
-	/// which carries the guarantee.
+	/// <strong>How it provides atomicity:</strong> the removal is delegated to
+	/// <see cref="TryRemoveAsync"/>, and the condition for reporting one is under that method.
 	/// </para>
 	/// <para>
-	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
-	/// to prevent orphaned locks if a process crashes between writing the lock token (step 2) and
-	/// cleaning it up (after step 4).
+	/// <strong>The value returned is the one read BEFORE that removal, not the one removed.</strong> The
+	/// read happens here and the removal happens inside the delegate, so anything that writes the key
+	/// between them is destroyed by this caller and handed to nobody, while this caller receives the
+	/// earlier bytes and is told it won. Nothing in this class closes that: a store whose own primitive
+	/// returns the removed value is what closes it, and issue 454 tracks the change.
 	/// </para>
 	/// <para>
-	/// <strong>Performance:</strong> This operation performs 5 cache operations (1 get + 4 from TryRemoveAsync),
-	/// so it has higher latency than native atomic operations. However, it works with any IDistributedCache
-	/// implementation.
+	/// <strong>Lock timeout:</strong> the claim auto-expires after the specified timeout (5 seconds by
+	/// default), so a process that crashes mid-protocol does not leave the key claimed forever. It also
+	/// means a caller slower than the timeout loses its own claim: see <see cref="TryRemoveAsync"/>.
+	/// </para>
+	/// <para>
+	/// <strong>Performance:</strong> up to six cache operations - one read here, and up to five inside
+	/// <see cref="TryRemoveAsync"/> - so it has higher latency than a store's own atomic primitive, and
+	/// works with any IDistributedCache in exchange.
 	/// </para>
 	/// </remarks>
 	/// <param name="cache">The distributed cache instance.</param>
@@ -147,7 +150,9 @@ public static class DistributedCacheExtensions
 			return null;
 		}
 
-		// The claim held, so this caller is the one entitled to the value.
+		// The claim held, so this caller is the one entitled to A value - but not necessarily to THIS
+		// one. These bytes were read before the gate, and what the protocol removed is whatever was at
+		// the key when it ran. See the remarks, and issue 454.
 		return valueData;
 	}
 
@@ -165,10 +170,9 @@ public static class DistributedCacheExtensions
 	///   <item><term>Step 4:</term> Clean up the lock key</item>
 	/// </list>
 	/// <para>
-	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
-	/// lock token survives (last-write-wins) will return true. A caller whose token is not there returns
-	/// false - and in one process that is not because somebody overwrote it, since callers on a key are
-	/// serialized, but because it EXPIRED. What that leaves is spelled out below.
+	/// <strong>How it provides atomicity:</strong> a caller reports the removal as its own only when its
+	/// own claim is still in the store at the end of the protocol. What that condition does and does not
+	/// buy is spelled out below.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without

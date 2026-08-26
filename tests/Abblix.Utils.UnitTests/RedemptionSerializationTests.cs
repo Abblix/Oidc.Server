@@ -347,13 +347,16 @@ public class RedemptionSerializationTests
 	[Fact]
 	public async Task TryRemoveAsync_DifferentKeys_DoNotWaitOnEachOther()
 	{
-		var inner = CreateCache();
-		await inner.SetAsync("first", Encoding.UTF8.GetBytes("a"), TestContext.Current.CancellationToken);
-		await inner.SetAsync("second", Encoding.UTF8.GetBytes("b"), TestContext.Current.CancellationToken);
-		var cache = new ParkOnValueRead(inner, "first", "second");
+		var first = $"{Key}-first";
+		var second = $"{Key}-second";
 
-		var a = cache.TryRemoveAsync("first", cancellationToken: TestContext.Current.CancellationToken);
-		var b = cache.TryRemoveAsync("second", cancellationToken: TestContext.Current.CancellationToken);
+		var inner = CreateCache();
+		await inner.SetAsync(first, Encoding.UTF8.GetBytes("a"), TestContext.Current.CancellationToken);
+		await inner.SetAsync(second, Encoding.UTF8.GetBytes("b"), TestContext.Current.CancellationToken);
+		var cache = new ParkOnValueRead(inner, first, second);
+
+		var a = cache.TryRemoveAsync(first, cancellationToken: TestContext.Current.CancellationToken);
+		var b = cache.TryRemoveAsync(second, cancellationToken: TestContext.Current.CancellationToken);
 
 		// Both reach their read. Under a gate shared across keys the second would still be waiting.
 		await cache.WaitUntilParkedAsync(2);
