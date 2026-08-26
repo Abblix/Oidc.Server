@@ -55,11 +55,6 @@ public class UserCodeVerificationServiceTests
             .ReturnsAsync((string code) =>
                 code == CanonicalUserCode ? (DeviceCode, request) : null);
 
-        // See the note in BuildService: the decision reads the record again before writing it.
-        storage
-            .Setup(s => s.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
-
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
             .Setup(r => r.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
@@ -235,39 +230,65 @@ public class UserCodeVerificationServiceTests
     }
 
     /// <summary>
-    /// A decision taken on a record that was consumed while the decision was being taken does not write
-    /// that record back.
+    /// A decision taken on a record that stopped being pending while the decision was being taken does
+    /// not write that record back.
     /// </summary>
     /// <remarks>
-    /// Approval reads the record, checks its status, and writes it back. Between those, a poll can redeem
-    /// the device code and remove it - and the write then RESTORES an authorized record carrying its
-    /// grant. A later poll finds it, and a second full token set is issued for one device code. The
-    /// authorization-code path has a net for this, the reuse decorator inspecting IssuedTokens on the
-    /// claimed grant; the device path has none, so nothing downstream catches it.
+    /// Approval reads the record, checks its status, and writes it back. Between those the record can
+    /// move, in two ways, and the guard covers a record that is no longer pending rather than either of
+    /// them by name.
     /// <para>
-    /// The record is reported gone at the moment of the re-read rather than by racing two callers, so the
-    /// row measures the ordering the code guarantees rather than one a scheduler happened to produce.
+    /// A poll can redeem the device code and REMOVE it, and the write then restores an authorized record
+    /// carrying its grant. A later poll finds it, and a second full token set is issued for one device
+    /// code. The authorization-code path has a net for this, the reuse decorator inspecting IssuedTokens
+    /// on the claimed grant; the device path has none, so nothing downstream catches it.
+    /// </para>
+    /// <para>
+    /// Or another decision can land FIRST, leaving the record present and decided. Writing over it
+    /// reverses somebody's answer: an approval overwriting a denial hands the device the tokens the end
+    /// user refused. This half is the one with no removal in it, so a guard written for the first would
+    /// pass every row of the first and none of this.
+    /// </para>
+    /// <para>
+    /// What the re-read finds is arranged at the moment of the re-read rather than by racing two callers,
+    /// so the rows measure the ordering the code guarantees rather than one a scheduler happened to
+    /// produce. Where the record survives, the re-read returns a DISTINCT object, which is what makes
+    /// "wrote the stale one" a different outcome from "wrote the fresh one" instead of the same.
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ADecisionOnARecordConsumedMeanwhile_IsNotWrittenBack(bool approving)
+    [InlineData(true, null)]
+    [InlineData(false, null)]
+    [InlineData(true, DeviceAuthorizationStatus.Denied)]
+    [InlineData(true, DeviceAuthorizationStatus.Authorized)]
+    [InlineData(false, DeviceAuthorizationStatus.Authorized)]
+    [InlineData(false, DeviceAuthorizationStatus.Denied)]
+    public async Task ADecisionOnARecordNoLongerPending_IsNotWrittenBack(
+        bool approving, DeviceAuthorizationStatus? advancedTo)
     {
         var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
 
+        // What the re-read finds. Null is the record consumed and gone; a status is another decision
+        // having landed first, on a record that is still there.
+        var current = advancedTo is null
+            ? null
+            : new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+            {
+                ExpiresAt = Now.AddMinutes(5),
+                Status = advancedTo.Value,
+            };
+
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
             .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
 
-        // Consumed in between: the device code was redeemed and removed while the decision was taken.
         storage
             .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((DeviceAuthorizationRequest?)null);
+            .ReturnsAsync(current);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
