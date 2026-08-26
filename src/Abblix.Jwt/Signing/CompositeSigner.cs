@@ -38,10 +38,9 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
         {
             throw new ArgumentException(
                 $"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
-                $"least {JsonWebKeyExtensions.MinimumRsaKeyBits} bits per RFC 7518 " +
+                $"least {JsonWebKeyExtensions.MinimumRsaKeyBits} bits " +
                 $"{JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm)}, and this deployment would " +
-                "not be able " +
-                "to verify what it signed with this key.",
+                "not be able to verify what it signed with this key.",
                 nameof(key));
         }
 

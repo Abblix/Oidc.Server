@@ -202,13 +202,16 @@ public static class JsonWebKeyExtensions
 		?? throw new ArgumentException($"No RSA key-size section is known for {algorithm}.", nameof(algorithm));
 
 	/// <summary>
-	/// The same citation, for use INSIDE a refusal message.
+	/// The WHOLE citation phrase, ready to drop into a refusal message - "per RFC 7518 Section 3.3", or
+	/// "for RSA signatures" when the algorithm has no section of its own.
 	/// </summary>
 	/// <remarks>
-	/// An unknown algorithm here must not replace the refusal the operator was about to read with a
-	/// complaint about the citation, so this yields a section-free phrase instead of throwing and the
-	/// sentence still names the key, the size and the floor. Reachable: an RSA key carrying no
-	/// <c>alg</c> resolves to <c>SigningAlgorithms.None</c>, which has no floor of its own.
+	/// Two differences from <see cref="RsaSectionFor"/>, and both matter at a call site. This one never
+	/// throws, because an unknown algorithm must not replace the refusal the operator was about to read
+	/// with a complaint about the citation - and it is reachable, since an RSA key carrying no
+	/// <c>alg</c> resolves to <c>SigningAlgorithms.None</c>. And this one carries the words "per RFC
+	/// 7518" itself, where <see cref="RsaSectionFor"/> returns the bare section and leaves them to the
+	/// caller. Interpolate this one into a sentence that writes them too and the message says them twice.
 	/// </remarks>
 	public static string RsaSectionForOrNothing(string algorithm)
 		=> SectionOrNull(algorithm) is { } section ? $"per RFC 7518 {section}" : "for RSA signatures";

@@ -22,9 +22,9 @@ namespace Abblix.Jwt.UnitTests;
 /// passes would open the configuration most deployments run.
 ///
 /// What this door adds: a key whose private half lives with an external custodian is public-only, so
-/// <c>RsaSigner</c> never sees it - the composite routes it to the custodian backend instead. Without the
-/// floor here, such a deployment signs RS256 over an undersized modulus and then refuses to verify its own
-/// output, because verification is always local and always goes through <c>RsaSigner</c>.
+/// <c>RsaSigner</c> never sees it FOR SIGNING - the composite routes it to the custodian backend instead.
+/// It does see that key for every VERIFICATION, which is always local. So without the floor here, such a
+/// deployment signs RS256 over an undersized modulus and then refuses to verify its own output.
 /// </remarks>
 public class CompositeSignerKeyFloorTests
 {
@@ -48,6 +48,12 @@ public class CompositeSignerKeyFloorTests
 
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
         Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+
+        // The COMPOSED sentence, not the pieces. Two functions can each return something correct and
+        // still produce a message that says "per RFC 7518" twice, which is exactly what happened: the
+        // citation phrase carries those words and the sentence around it once wrote them as well.
+        Assert.Contains("per RFC 7518 Section 3.3", error.Message);
+        Assert.DoesNotContain("per RFC 7518 per", error.Message);
 
         // The refusal has to happen BEFORE the custodian is asked, or a hardware module has already
         // performed the operation this deployment cannot verify.
@@ -91,6 +97,11 @@ public class CompositeSignerKeyFloorTests
 
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
         Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+
+        // The arm with no section of its own has to read as a sentence too.
+        Assert.Contains("for RSA signatures", error.Message);
+        Assert.DoesNotContain("per RFC 7518 per", error.Message);
+
         Assert.False(custodian.WasAsked);
     }
 
