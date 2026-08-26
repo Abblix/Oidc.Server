@@ -60,8 +60,9 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 
 `reason_admin` is optional in CAEP 1.0 and required of a transmitter by the CAEP Interoperability Profile
 1.0: each of the three use cases in its Section 3 demands a non-empty object. The type cannot carry that
-rule, because the receive side follows the base specification, which requires an empty `session-revoked`
-payload to be accepted.
+rule, because the base specification permits the member's absence - Section 2 makes the common claims
+optional, Section 3.1.1 defines none of its own for `session-revoked` - so an empty payload is well-formed
+and a receiver has to be able to hold one.
 
 So the rule is a policy a deployment registers, and registering it is how the deployment claims the
 profile:
@@ -70,9 +71,22 @@ profile:
 services.AddSingleton<IEventPayloadPolicy, CaepInteropProfilePolicy>();
 ```
 
-The dispatcher then refuses `session-revoked`, `credential-change` and `device-compliance-change` without
-the member, before anything is minted, and says which event and what is missing. A host that registers
-nothing emits CAEP 1.0 events, which is a smaller claim and a valid one.
+The dispatcher then refuses the three events unless the member is populated, before anything is minted,
+and says which event and what is missing. A host that registers nothing emits CAEP 1.0 events, which is a
+smaller claim and a valid one.
+
+The profile lets you claim fewer than three: "Support for all use cases listed herein is not required in
+order to be considered compliant with this profile. An implementation can choose specific use cases to
+support." Name the ones you claim and the others go out as plain CAEP 1.0 events:
+
+```csharp
+services.AddSingleton<IEventPayloadPolicy>(
+    new CaepInteropProfilePolicy(CaepEventTypes.CredentialChange));
+```
+
+One rule the policy applies is the base specification's rather than the profile's: `reason_admin`, once
+present, "MUST contain one or more key/value pairs" (CAEP 1.0 Section 2). An empty object is wrong with or
+without the profile.
 
 ## Part of the Abblix product family
 

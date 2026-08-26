@@ -135,8 +135,13 @@ public sealed partial class EventDispatcher(
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(descriptor);
-        RefuseIfOutsidePolicy(descriptor);
 
+        // Deliberately unjudged. This door carries the framework's OWN signals - verification and
+        // stream-updated - minted by this library from payloads a host never built, and reached through a
+        // receiver's request: a refusal here would fire after the throttle or the status has already been
+        // written, turning a receiver's verification request into a fault mid-operation and breaking the
+        // very profile a policy was registered to claim. A policy is about what the HOST asks this
+        // transmitter to emit, and that is DispatchAsync.
         return MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
     }
 
@@ -145,13 +150,13 @@ public sealed partial class EventDispatcher(
     /// </summary>
     /// <remarks>
     /// Asked once per event rather than once per stream: the payload is identical for every receiver, so a
-    /// per-stream answer would emit to some and withhold from others by iteration order. Asked on both
-    /// entry points, because the direct one skips every other check and would otherwise be the hole.
+    /// per-stream answer would emit to some and withhold from others by iteration order. Asked on this
+    /// entry point alone - <see cref="DispatchToStreamAsync"/> says why it is not.
     /// <para>
     /// It throws rather than dropping the event with a log line, and the choice is not a preference. A
     /// dropped <c>session-revoked</c> is a revocation that never happens, which is a worse outcome than a
-    /// non-conformant event; and the caller is the application code that built the payload, so the throw
-    /// reaches whoever can fix it. Nothing throws unless the host registered a policy.
+    /// non-conformant event; and on this path the caller is the application code that built the payload,
+    /// so the throw reaches whoever can fix it. Nothing throws unless the host registered a policy.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">The policy refused the event.</exception>

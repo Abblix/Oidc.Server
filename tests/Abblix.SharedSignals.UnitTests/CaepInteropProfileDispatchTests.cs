@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
@@ -133,22 +134,109 @@ public sealed class CaepInteropProfileDispatchTests
     }
 
     /// <summary>
-    /// The stream-verification path takes its own method, which skips status, delivered types, subject
-    /// coverage and the sharing policy alike - so it is where a check placed on the fan-out alone would
-    /// have a hole.
+    /// The framework's own door is not judged, and that is a decision rather than an oversight.
     /// </summary>
+    /// <remarks>
+    /// It carries verification and stream-updated events, minted by this library and reached through a
+    /// receiver's own request. Its callers write state first - the verification throttle, the stream
+    /// status - so a refusal there would fire mid-operation and turn a conformant receiver's verification
+    /// request into a fault, breaking the very profile the policy was registered to claim. A policy speaks
+    /// about what the HOST asks this transmitter to emit.
+    /// </remarks>
     [Fact]
-    public async Task TheDirectPath_IsRefusedToo()
+    public async Task TheFrameworksOwnDoor_IsNotJudged()
     {
-        var (dispatcher, _, stream) = await CreateAsync(
+        var (dispatcher, outbox, stream) = await CreateAsync(
             CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => dispatcher.DispatchToStreamAsync(
-                stream,
-                Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()),
-                asStatusAnnouncement: false,
-                cancellationToken: Cancellation));
+        await dispatcher.DispatchToStreamAsync(
+            stream,
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()),
+            asStatusAnnouncement: false,
+            cancellationToken: Cancellation);
+
+        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+    }
+
+    /// <summary>
+    /// A relayed event is judged by what its JSON carries, not by which C# class holds it.
+    /// </summary>
+    /// <remarks>
+    /// An event of an unregistered type arrives as raw JSON and can be re-dispatched. Judging it by its
+    /// class would refuse a fully conformant event while telling its owner it carries no
+    /// <c>reason_admin</c> - a statement about contents nothing had read. The pair is the point: same
+    /// class, opposite verdicts, decided by the member.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ARelayedPayload_IsJudgedByItsJson(bool populated)
+    {
+        var json = new JsonObject();
+        if (populated)
+        {
+            json[CaepClaimNames.ReasonAdmin] = new JsonObject { ["en"] = "Landspeed policy violation" };
+        }
+
+        var (dispatcher, outbox, _) = await CreateAsync(
+            CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
+        var descriptor = Descriptor(CaepEventTypes.SessionRevoked, new UnknownEventPayload(json));
+
+        if (populated)
+        {
+            Assert.Equal(1, await dispatcher.DispatchAsync(descriptor, Cancellation));
+            Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => dispatcher.DispatchAsync(descriptor, Cancellation));
+        }
+    }
+
+    /// <summary>
+    /// A payload this policy cannot read is refused, and told so in those words.
+    /// </summary>
+    /// <remarks>
+    /// The third answer, and it needs its own message. Saying "this event carries none" of a payload
+    /// nothing read is a false statement about contents, and it sends a host looking for a member that may
+    /// well be there.
+    /// </remarks>
+    [Fact]
+    public async Task APayloadThisPolicyCannotRead_IsRefusedInThoseWords()
+    {
+        var (dispatcher, _, _) = await CreateAsync(
+            CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcher.DispatchAsync(
+                Descriptor(CaepEventTypes.SessionRevoked, new HostsOwnPayload()), Cancellation));
+
+        Assert.Contains("cannot be read", refusal.Message);
+        Assert.Contains(nameof(HostsOwnPayload), refusal.Message);
+    }
+
+    /// <summary>
+    /// A deployment claiming one use case may still emit the others as plain CAEP 1.0 events.
+    /// </summary>
+    /// <remarks>
+    /// The profile's Section 1 says so outright: "Support for all use cases listed herein is not required
+    /// in order to be considered compliant with this profile. An implementation can choose specific use
+    /// cases to support." Enforcing all three on a deployment that claimed one refuses an event both
+    /// documents permit, and the only escape would have been to drop enforcement on the claimed one too.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnclaimedUseCase_IsLeftToCaep10()
+    {
+        var (dispatcher, outbox, _) = await CreateAsync(
+            CaepEventTypes.SessionRevoked,
+            new CaepInteropProfilePolicy(CaepEventTypes.CredentialChange));
+
+        var reached = await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
+
+        Assert.Equal(1, reached);
+        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -206,9 +294,9 @@ public sealed class CaepInteropProfileDispatchTests
         CaepEventTypes.SessionRevoked => new SessionRevokedPayload(),
         CaepEventTypes.CredentialChange => new CredentialChangePayload
         {
-            // The profile's other two demands on this event, and the compiler already holds them: 3.2 names
-            // change_type and credential_type, and both are `required`. reason_admin is the one of the three
-            // nothing holds, which is the whole of this issue.
+            // Required by CAEP 1.0 Section 3.3.1, which is why the compiler holds them. The profile
+            // says something weaker about the pair - "Transmitters MAY generate any allowable value of
+            // this field" - and something stronger about reason_admin, which is the member nothing held.
             CredentialType = CredentialChangePayload.CredentialTypes.Password,
             ChangeType = CredentialChangePayload.ChangeTypes.Revoke,
         },
@@ -263,6 +351,9 @@ public sealed class CaepInteropProfileDispatchTests
             outbox,
             stream);
     }
+
+    /// <summary>A payload of the host's own, which this policy has no way to read.</summary>
+    private sealed class HostsOwnPayload : IEventPayload;
 
     private sealed class StubSigner : ISecurityEventTokenSigner
     {

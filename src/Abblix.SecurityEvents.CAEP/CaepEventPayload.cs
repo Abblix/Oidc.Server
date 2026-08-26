@@ -61,10 +61,16 @@ public abstract record CaepEventPayload : IEventPayload
     /// <remarks>
     /// Optional to CAEP 1.0, and required of a TRANSMITTER by the CAEP Interoperability Profile 1.0: each
     /// of the three use cases in its Section 3 demands a non-empty object here. The property stays
-    /// nullable because the two documents disagree and the receive side follows the base specification -
-    /// CAEP 1.0 Section 3.1.1 positively requires an empty <c>session-revoked</c> payload to be accepted.
-    /// A deployment claiming the profile registers <see cref="CaepInteropProfilePolicy"/>, which refuses
-    /// the event rather than the type.
+    /// nullable because the base specification permits its absence - Section 2 makes the common claims
+    /// optional and Section 3.1.1 defines no event-specific claim for <c>session-revoked</c> - so an
+    /// empty payload is well-formed and a receiver must be able to hold one. A deployment claiming the
+    /// profile registers <see cref="CaepInteropProfilePolicy"/>, which refuses the event rather than the
+    /// type.
+    /// <para>
+    /// One rule here is the base specification's rather than the profile's: "The object MUST contain one
+    /// or more key/value pairs" (CAEP 1.0 Section 2). An empty object is wrong wherever it appears, with
+    /// or without the profile.
+    /// </para>
     /// </remarks>
     [JsonPropertyName(CaepClaimNames.ReasonAdmin)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
