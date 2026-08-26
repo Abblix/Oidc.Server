@@ -1,4 +1,4 @@
-# Pre-commit hooks for GitHub Actions workflow safety.
+# Pre-commit hooks: workflow safety, committed-text hygiene and C# documentation.
 #
 # One-time setup per clone:
 #   pip install pre-commit
@@ -10,7 +10,7 @@
 # Bypass once (NOT recommended; CI re-runs the same checks):
 #   git commit --no-verify
 #
-# Rules and rationale: ../Docs/wiki/github-actions-security-checklist.md
+# Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
   - repo: https://github.com/rhysd/actionlint

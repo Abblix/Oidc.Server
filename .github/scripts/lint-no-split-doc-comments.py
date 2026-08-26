@@ -57,12 +57,18 @@ def split_blocks(path: pathlib.Path) -> list[tuple[int, int]]:
 
 
 def main() -> int:
-    paths = [pathlib.Path(a) for a in sys.argv[1:]] or tracked_sources()
+    named = [pathlib.Path(a) for a in sys.argv[1:]]
+    paths = [p for p in named if p.suffix == ".cs" and p.is_file()] if named else tracked_sources()
+
+    # A silence has to mean something was read. Given arguments that name no readable C# file - a
+    # directory, a typo, a moved path - an exit of zero is an all-clear indistinguishable from a real
+    # one, which is the shape this whole family of checks exists to refuse.
+    if named and not paths:
+        print("None of the given paths is a readable .cs file, so nothing was checked.")
+        return 2
 
     failures = 0
     for path in paths:
-        if path.suffix != ".cs" or not path.is_file():
-            continue
 
         for start, summaries in split_blocks(path):
             failures += 1
