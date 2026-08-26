@@ -33,6 +33,15 @@ public static class JsonWebKeyFactory
                 nameof(usage));
         }
 
+        if (keySize < JsonWebKeyExtensions.MinimumRsaKeyBits)
+        {
+            throw new ArgumentException(
+                $"An RSA key of {keySize} bits cannot be used for JOSE: RFC 7518 requires at least " +
+                $"{JsonWebKeyExtensions.MinimumRsaKeyBits}, and this library refuses to sign or encrypt " +
+                "with anything smaller. Raise the configured key size.",
+                nameof(keySize));
+        }
+
         using var rsa = RSA.Create();
         rsa.KeySize = keySize;
         var parameters = rsa.ExportParameters(true);

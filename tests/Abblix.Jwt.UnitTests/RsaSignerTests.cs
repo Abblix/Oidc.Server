@@ -37,6 +37,32 @@ public class RsaSignerTests
     private const int BelowTheFloor = 1536;
 
     /// <summary>
+    /// An undersized key with its private half, built here rather than through
+    /// <see cref="JsonWebKeyFactory"/>, which refuses to mint one at all - a size this library will not
+    /// sign with is not a size it should produce either.
+    /// </summary>
+    private static RsaJsonWebKey UndersizedKey(string algorithm)
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(BelowTheFloor);
+        var parameters = rsa.ExportParameters(true);
+
+        return new RsaJsonWebKey
+        {
+            KeyId = "undersized",
+            Algorithm = algorithm,
+            Usage = PublicKeyUsages.Signature,
+            Exponent = parameters.Exponent,
+            Modulus = parameters.Modulus,
+            PrivateExponent = parameters.D,
+            FirstPrimeFactor = parameters.P,
+            SecondPrimeFactor = parameters.Q,
+            FirstFactorCrtExponent = parameters.DP,
+            SecondFactorCrtExponent = parameters.DQ,
+            FirstCrtCoefficient = parameters.InverseQ,
+        };
+    }
+
+    /// <summary>
     /// Every algorithm this signer implements, since the floor is the same in both families and a
     /// guard written for one of them is the shape that silently leaves the other open.
     /// </summary>
@@ -55,7 +81,7 @@ public class RsaSignerTests
     public void Sign_KeyBelowTheFloor_IsRefused(string algorithm)
     {
         var signer = new RsaSigner(algorithm);
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm, keySize: BelowTheFloor);
+        var key = UndersizedKey(algorithm);
 
         var error = Assert.Throws<ArgumentException>(() => signer.Sign(key, SampleData));
 
@@ -63,6 +89,10 @@ public class RsaSignerTests
         // only that something was refused.
         Assert.Contains("2048", error.Message);
         Assert.Contains(BelowTheFloor.ToString(), error.Message);
+
+        // Which key, out of however many the deployment holds, and which paragraph refused it.
+        Assert.Contains("undersized", error.Message);
+        Assert.Contains(JsonWebKeyExtensions.RsaSectionFor(algorithm), error.Message);
     }
 
     /// <summary>
@@ -131,7 +161,7 @@ public class RsaSignerTests
     [MemberData(nameof(Algorithms))]
     public void Verify_KeyBelowTheFloor_IsRefusedWithoutChecking(string algorithm)
     {
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm, keySize: BelowTheFloor);
+        var key = UndersizedKey(algorithm);
 
         // Produced outside the guarded path, because signing through it would throw - which is the
         // point: the only way an undersized signature reaches this deployment is from somewhere else.

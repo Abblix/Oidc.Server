@@ -29,14 +29,6 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	/// </remarks>
 	private const int MinimumKeySizeBits = JsonWebKeyExtensions.MinimumRsaKeyBits;
 
-	/// <summary>
-	/// The section that governs the algorithm in hand, so a refusal sends the reader to the paragraph that
-	/// refused them rather than to both and neither.
-	/// </summary>
-	private string GoverningSection => _parameters.padding == RSASignaturePadding.Pkcs1
-		? "Section 3.3"
-		: "Section 3.5";
-
 	private readonly (HashAlgorithmName hashAlgorithm, RSASignaturePadding padding) _parameters = GetAlgorithmParameters(algorithm);
 
 	/// <inheritdoc />
@@ -55,8 +47,9 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 		var bits = rsaKey.ModulusBitLength();
 		if (bits < MinimumKeySizeBits)
 			throw new ArgumentException(
-				$"{algorithm} requires an RSA key of at least {MinimumKeySizeBits} bits per RFC 7518 " +
-				$"{GoverningSection}; the modulus is {bits} bits.",
+				$"The signing key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
+				$"least {MinimumKeySizeBits} bits per RFC 7518 " +
+				$"{JsonWebKeyExtensions.RsaSectionFor(algorithm)}.",
 				nameof(rsaKey));
 
 		using var rsa = rsaKey.ToRsa();

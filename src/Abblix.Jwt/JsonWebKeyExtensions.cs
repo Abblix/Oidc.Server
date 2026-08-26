@@ -182,10 +182,31 @@ public static class JsonWebKeyExtensions
 	}
 
 	/// <summary>
-	/// The smallest RSA modulus RFC 7518 permits, for signing (Section 3.3 and Section 3.5) and for key
-	/// encryption (Section 4) alike. One number, so the sites that enforce it cannot drift apart.
+	/// The smallest RSA modulus RFC 7518 permits. Four sections state it in the same words, one per
+	/// family: Section 3.3 and Section 3.5 for signing, Section 4.2 and Section 4.3 for key encryption.
+	/// One number here, so the sites that enforce it cannot drift apart.
 	/// </summary>
 	public const int MinimumRsaKeyBits = 2048;
+
+	/// <summary>
+	/// The RFC 7518 section that carries the key-size requirement for <paramref name="algorithm"/>.
+	/// </summary>
+	/// <remarks>
+	/// A refusal has to send the operator to the paragraph that refused them. Sections 3 and 4 are
+	/// container headings and state no size requirement at all, so citing either leaves the reader
+	/// looking at a table of algorithm names and no MUST - which reads as the library inventing the rule.
+	/// </remarks>
+	/// <exception cref="ArgumentException">The algorithm is not one this library enforces a floor for.</exception>
+	public static string RsaSectionFor(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 => "Section 3.3",
+		SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 => "Section 3.5",
+		EncryptionAlgorithms.KeyManagement.Rsa1_5 => "Section 4.2",
+		EncryptionAlgorithms.KeyManagement.RsaOaep or EncryptionAlgorithms.KeyManagement.RsaOaep256
+			=> "Section 4.3",
+		_ => throw new ArgumentException(
+			$"No RSA key-size section is known for {algorithm}.", nameof(algorithm)),
+	};
 
 	/// <summary>
 	/// The real bit length of the key's modulus, ignoring any leading zero octets.
@@ -199,8 +220,8 @@ public static class JsonWebKeyExtensions
 	/// <c>RSA.KeySize</c> passes on a key half the strength it claims, and the forgery arrives later from
 	/// whoever factored the real modulus.
 	/// <para>
-	/// Measured from the leading octet's own highest set bit rather than from the octet count, so a key
-	/// whose modulus simply begins below 0x80 is not mistaken for a smaller one.
+	/// The leading octet contributes only the bits from its own highest set bit down, which is what makes
+	/// this the modulus's true length rather than a rounded-up octet count.
 	/// </para>
 	/// </remarks>
 	public static int ModulusBitLength(this RsaJsonWebKey key)

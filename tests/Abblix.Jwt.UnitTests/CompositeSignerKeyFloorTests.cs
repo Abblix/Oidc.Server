@@ -12,14 +12,19 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// The RSA key-size floor is a property of the deployment's keys, so it has to hold at the seam every
-/// signing path crosses - not only inside the algorithm that signs in process.
+/// The RSA key-size floor is a property of the deployment's keys, so it holds at BOTH doors into
+/// signing - neither of which is always present.
 /// </summary>
 /// <remarks>
-/// A key whose private half lives with an external custodian is public-only, so <c>RsaSigner</c> never
-/// sees it: the composite routes it to the custodian backend instead. Without the floor at the seam, such
-/// a deployment signs RS256 over an undersized modulus and then refuses to verify its own output, because
-/// verification is always local and always goes through <c>RsaSigner</c>.
+/// <c>CompositeSigner</c> is registered only when a custodian is wired; a deployment with nothing but
+/// <c>AddJsonWebTokens()</c> resolves <c>IDataSigner</c> to <c>LocalKeySigner</c> and this class does not
+/// exist in it. So neither guard is redundant, and deleting the one in <c>RsaSigner</c> because this test
+/// passes would open the configuration most deployments run.
+///
+/// What this door adds: a key whose private half lives with an external custodian is public-only, so
+/// <c>RsaSigner</c> never sees it - the composite routes it to the custodian backend instead. Without the
+/// floor here, such a deployment signs RS256 over an undersized modulus and then refuses to verify its own
+/// output, because verification is always local and always goes through <c>RsaSigner</c>.
 /// </remarks>
 public class CompositeSignerKeyFloorTests
 {
@@ -37,7 +42,7 @@ public class CompositeSignerKeyFloorTests
         var custodian = new RecordingCustodian();
         var composite = new CompositeSigner([new ExternalKeys.ExternalKeySigner(custodian)]);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+        var error = await Assert.ThrowsAsync<ArgumentException>(
             () => composite.SignAsync(PublicOnlyKey(BelowTheFloor), SigningAlgorithms.RS256, SampleData,
                 TestContext.Current.CancellationToken));
 

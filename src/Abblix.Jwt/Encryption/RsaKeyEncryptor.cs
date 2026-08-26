@@ -57,8 +57,8 @@ internal sealed partial class RsaKeyEncryptor(ILogger<RsaKeyEncryptor> logger, s
 		if (bits < minimumKeySize)
 		{
 			throw new InvalidOperationException(
-				$"RSA key size must be at least {minimumKeySize} bits for {algorithm} per RFC 7518 Section 4. " +
-				$"The modulus is {bits} bits.");
+				$"The key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at least " +
+				$"{minimumKeySize} bits per RFC 7518 {JsonWebKeyExtensions.RsaSectionFor(algorithm)}.");
 		}
 
 		using var rsa = rsaKey.ToRsa();

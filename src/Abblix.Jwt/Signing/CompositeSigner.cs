@@ -35,10 +35,12 @@ internal sealed class CompositeSigner(IEnumerable<IDataSigner> backends) : IData
         // an external key is public-only and its modulus is all there is to read.
         if (key is RsaJsonWebKey rsaKey && rsaKey.ModulusBitLength() is var bits and < JsonWebKeyExtensions.MinimumRsaKeyBits)
         {
-            throw new InvalidOperationException(
-                $"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. RFC 7518 requires at least " +
-                $"{JsonWebKeyExtensions.MinimumRsaKeyBits} bits for RSA signatures, and this deployment " +
-                "would not be able to verify what it signed with this key.");
+            throw new ArgumentException(
+                $"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
+                $"least {JsonWebKeyExtensions.MinimumRsaKeyBits} bits per RFC 7518 " +
+                $"{JsonWebKeyExtensions.RsaSectionFor(algorithm)}, and this deployment would not be able " +
+                "to verify what it signed with this key.",
+                nameof(key));
         }
 
         var owner = backends.FirstOrDefault(backend => backend.CanSign(key));
