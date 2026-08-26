@@ -46,5 +46,11 @@ public static class LogEvents
 
         /// <summary>The receiver objected to this transmitter rather than to the SET, so the queue is held.</summary>
         public const int ReceiverObjected = Base + 8;
+
+        /// <summary>The configuration document publishes no jwks_uri, so no receiver can verify an event.</summary>
+        public const int NoJwksUriAdvertised = Base + 9;
+
+        /// <summary>The advertised authorization schemes omit OAuth 2.0, which the CAEP profile requires.</summary>
+        public const int OAuthSchemeNotAdvertised = Base + 10;
     }
 }

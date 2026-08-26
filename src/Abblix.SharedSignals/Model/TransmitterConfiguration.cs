@@ -111,8 +111,24 @@ public sealed record TransmitterConfiguration
         /// <summary>The supported authorization scheme descriptions.</summary>
         public const string AuthorizationSchemes = "authorization_schemes";
 
+        /// <summary>The member naming which specification an authorization scheme follows.</summary>
+        public const string SpecUrn = "spec_urn";
+
         /// <summary>The default subject behavior of newly created streams.</summary>
         public const string DefaultSubjects = "default_subjects";
+    }
+
+    /// <summary>
+    /// The values an authorization scheme's "spec_urn" member may carry.
+    /// </summary>
+    public static class AuthorizationSchemeUrns
+    {
+        /// <summary>
+        /// OAuth 2.0. The CAEP Interoperability Profile 1.0 Section 2.3.7 requires the advertised
+        /// schemes to include this one, and Section 2.4.3 requires a receiver to use OAuth 2.0 for
+        /// Stream Management API requests - so the two halves agree on it.
+        /// </summary>
+        public const string OAuth2 = "urn:ietf:rfc:6749";
     }
 
     /// <summary>

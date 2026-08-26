@@ -80,6 +80,12 @@ public sealed record SharedSignalsTransmitterOptions
     /// (SSF 1.0 Section 7.1.1), kept as raw JSON because their shape is scheme-specific and
     /// authorization itself is the host's, not this package's.
     /// </summary>
+    /// <remarks>
+    /// Null advertises OAuth 2.0, which the CAEP Interoperability Profile 1.0 Section 2.3.7 requires the
+    /// value to include and Section 2.4.3 requires receivers to use. A host that sets this takes the
+    /// member over entirely - including the responsibility for that entry - and is told at startup if it
+    /// leaves OAuth 2.0 out.
+    /// </remarks>
     public IReadOnlyList<JsonObject>? AuthorizationSchemes { get; init; }
 
     /// <summary>

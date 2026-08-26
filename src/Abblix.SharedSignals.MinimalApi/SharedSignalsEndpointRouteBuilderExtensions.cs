@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Text.Json.Nodes;
 
 namespace Abblix.SharedSignals.MinimalApi;
 
@@ -30,7 +32,7 @@ namespace Abblix.SharedSignals.MinimalApi;
 /// <c>MapPushDeliveryEndpoint</c> from <c>Abblix.SecurityEvents.MinimalApi</c>.
 /// </para>
 /// </summary>
-public static class SharedSignalsEndpointRouteBuilderExtensions
+public static partial class SharedSignalsEndpointRouteBuilderExtensions
 {
     /// <summary>
     /// The route segments of the management surface, single-sourced because the configuration
@@ -122,6 +124,8 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         var endpointOptions = EndpointOptionsOf(endpoints);
         var options = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
+
+        WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
         var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
             ? endpointOptions.AdvertisedPrefix
             : endpointOptions.ManagementPrefix;
@@ -132,6 +136,45 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SharedSignalsTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
+
+    /// <summary>
+    /// The one scheme description the CAEP Interoperability Profile names, built fresh per call because
+    /// <see cref="JsonObject"/> is mutable and a shared instance would hand every caller the same one.
+    /// </summary>
+    private static JsonObject OAuthAuthorizationScheme() => new()
+    {
+        [TransmitterConfiguration.ParameterNames.SpecUrn] =
+            TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2,
+    };
+
+    /// <summary>
+    /// Says once, at startup, what this deployment publishes that the CAEP Interoperability Profile 1.0
+    /// rejects. Neither condition is a fault under Shared Signals Framework 1.0 itself, where both members
+    /// are optional, so neither refuses the host - but a conformance run measures against the profile, and
+    /// a document that fails it should not do so silently.
+    /// </summary>
+    private static void WarnIfOutsideTheCaepProfile(
+        IServiceProvider services, SharedSignalsTransmitterOptions options)
+    {
+        var logger = services.GetService<ILoggerFactory>()
+            ?.CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
+
+        if (logger is null)
+            return;
+
+        if (options.JwksUri is null)
+            LogNoJwksUriAdvertised(logger);
+
+        // Only a host-supplied list can be short: the default IS the required entry. Asked positively -
+        // does some scheme name OAuth 2.0 - so a list can carry anything else it likes without the check
+        // needing to know what.
+        if (options.AuthorizationSchemes is { } schemes && !schemes.Any(IsOAuth))
+            LogOAuthSchemeNotAdvertised(logger, schemes.Count);
+    }
+
+    private static bool IsOAuth(JsonObject scheme)
+        => scheme.TryGetPropertyValue(TransmitterConfiguration.ParameterNames.SpecUrn, out var urn)
+           && urn?.GetValue<string>() == TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2;
 
     private static SharedSignalsEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
         => endpoints.ServiceProvider.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
@@ -303,7 +346,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
             AddSubjectEndpoint = EndpointOf(Routes.AddSubject),
             RemoveSubjectEndpoint = EndpointOf(Routes.RemoveSubject),
             VerificationEndpoint = EndpointOf(Routes.Verify),
-            AuthorizationSchemes = options.AuthorizationSchemes,
+            AuthorizationSchemes = options.AuthorizationSchemes ?? [OAuthAuthorizationScheme()],
             DefaultSubjects = options.DefaultSubjectsValue,
         };
     }
