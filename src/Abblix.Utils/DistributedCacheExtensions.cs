@@ -86,9 +86,9 @@ public static class DistributedCacheExtensions
 	}
 
 	/// <summary>
-	/// Atomically retrieves and removes a value from the distributed cache.
-	/// Uses a lock-based protocol to ensure atomic get-and-remove semantics even when the underlying
-	/// cache implementation doesn't support native atomic operations (e.g., Redis GETDEL).
+	/// Reads a value and then removes it under a lock, for a cache with no native primitive of its own.
+	/// This is NOT the equivalent of Redis GETDEL: the bytes returned are the ones read before the lock,
+	/// so two callers can be handed the same value. Read the remarks before relying on it.
 	/// </summary>
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
@@ -123,9 +123,10 @@ public static class DistributedCacheExtensions
 	/// <param name="lockTimeout">Duration after which the lock expires, 5 seconds if null.</param>
 	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
 	/// <returns>
-	/// A task that completes when the operation finishes, containing the retrieved value when this caller
-	/// removed it AND its own claim was still in the store afterwards. Null otherwise - which does NOT mean
-	/// somebody else took it. See <see cref="TryRemoveAsync"/>, whose remarks carry the condition; this
+	/// A task that completes when the operation finishes, containing the value READ BEFORE the removal
+	/// when this caller's own claim was still in the store afterwards - not necessarily the value it
+	/// removed, see the remarks and issue 454. Null otherwise, which does NOT mean somebody else took it:
+	/// see <see cref="TryRemoveAsync"/>, whose remarks carry the condition; this
 	/// method adds nothing to it beyond returning the value.
 	/// </returns>
 	public static async Task<byte[]?> TryGetAndRemoveAsync(
@@ -164,10 +165,11 @@ public static class DistributedCacheExtensions
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
 	/// <list type="number">
-	///   <item><term>Step 1:</term> Write a unique lock token to fully-qualified lock key</item>
-	///   <item><term>Step 2:</term> Remove the value from cache</item>
-	///   <item><term>Step 3:</term> Read back the lock token and verify it matches ours</item>
-	///   <item><term>Step 4:</term> Clean up the lock key</item>
+	///   <item><term>Step 1:</term> Write a unique claim token to the fully-qualified lock key</item>
+	///   <item><term>Step 2:</term> Check the value is there at all, and give up early if it is not</item>
+	///   <item><term>Step 3:</term> Remove the value from cache</item>
+	///   <item><term>Step 4:</term> Read back the claim token and verify it is still ours</item>
+	///   <item><term>Step 5:</term> Clean up the lock key</item>
 	/// </list>
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> a caller reports the removal as its own only when its
@@ -356,7 +358,7 @@ public static class DistributedCacheExtensions
 		// The value must still exist at the moment we hold the lock. Without this check a caller whose lock
 		// window does not overlap a prior successful removal would still see its own token survive and wrongly
 		// report success - breaking exactly-once removal (two token requests both redeeming the same
-		// device_code or authorization code). RFC 6749 §4.1.2 forbids reusing an authorization code; for a
+		// device_code or authorization code). RFC 6749 section 4.1.2 forbids reusing an authorization code; for a
 		// device_code no RFC says so, and single use is this codebase's own rule. The documented contract is
 		// "false if ... the key didn't exist".
 		if (await cache.GetAsync(key, cancellationToken) == null)

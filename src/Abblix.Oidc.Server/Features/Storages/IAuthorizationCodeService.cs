@@ -49,9 +49,15 @@ public interface IAuthorizationCodeService
     /// Atomically removes an authorization code from storage and returns the grant it held, in a
     /// single get-and-remove operation. This is how a code is claimed for redemption: it enforces
     /// the single-use guarantee against a race between two simultaneous redemptions of the same
-    /// code (RFC 6749 section 4.1.2) - at most one caller ever receives the grant, never two, though a
-    /// removal can still end with nobody receiving it, and every other caller
-    /// finds the code already gone and receives an <c>invalid_grant</c> failure.
+    /// code (RFC 6749 section 4.1.2) - every other caller finds the code already gone and receives an
+    /// <c>invalid_grant</c> failure.
+    /// <para>
+    /// Two exceptions, and neither needs a second node. A removal can end with NOBODY receiving the
+    /// grant, when the claim guarding it expires mid-protocol. And two callers CAN both receive it, when
+    /// one of them redeems while the other writes the grant back at the same key - the second is handed
+    /// what it read before the claim, not what it removed, so the reuse check sees no issued tokens and
+    /// mints a second set. That is issue 454, and it is why this sentence no longer says "never two".
+    /// </para>
     /// </summary>
     /// <param name="authorizationCode">The authorization code to remove and claim.</param>
     /// <returns>
