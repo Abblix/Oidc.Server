@@ -128,20 +128,27 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // route above for the same reason the configuration document is single-sourced from the five it
         // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
         //
-        // The identifier is escaped so that one an operator spelled out survives into the URL whole. It is
-        // composed against the prefix's raw value rather than through PathString.Add, which DECODES: that
-        // conversion runs the escaped text back through UrlDecoder and keeps only %2F, so a '?' would
-        // reach Uri as a query delimiter and the address would silently be that of a DIFFERENT stream -
-        // "alerts?eu" minting a poll endpoint for "alerts". Escaping alone does not make an identifier
-        // addressable: one carrying a path separator arrives whole and still misses this route, which
-        // matches a single segment - issue 465.
+        // The identifier is escaped so that one an operator spelled out survives into the URL whole, and
+        // the escaped text is handed over as a PathString rather than as a string. The distinction is the
+        // whole of it: PathString's implicit conversion FROM a string decodes - it runs the text back
+        // through UrlDecoder, keeping only %2F - so passing the interpolated string would undo the
+        // escaping one call later, and a '?' would reach Uri as a query delimiter. The address would then
+        // be that of a DIFFERENT stream, well-formed and served: "alerts?eu" minting the poll endpoint of
+        // "alerts". Composing by hand avoids the decode and loses the other thing Add does, which is to
+        // trim a duplicated separator - a prefix ending in '/' would mint "/ssf//poll/{id}", which this
+        // route does not match.
+        //
+        // Escaping is not the same as being addressable. An identifier carrying a path separator arrives
+        // whole, the route matches it, and the handler receives the still-encoded "a%2Fb" - so the lookup
+        // misses and the refusal comes from the store rather than from routing. That is issue 465, and
+        // knowing which of the two answers it is decides where the fix goes.
         var transmitter = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var pollAuthority = AuthorityOf(transmitter);
         var pollPrefix = AdvertisedPrefixOf(endpointOptions);
         endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
             streamId => new Uri(
                 pollAuthority,
-                $"{pollPrefix.Value}{Routes.Poll}/{Uri.EscapeDataString(streamId)}"));
+                pollPrefix.Add(new PathString($"{Routes.Poll}/{Uri.EscapeDataString(streamId)}")).Value!));
 
         return group;
     }

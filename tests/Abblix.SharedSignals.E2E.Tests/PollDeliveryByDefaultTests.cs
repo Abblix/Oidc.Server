@@ -155,9 +155,10 @@ public sealed class PollDeliveryByDefaultTests
     /// worth driving because that path materializes at startup rather than per request. And an operator
     /// names those identifiers by hand - <c>alerts</c>, or as here something with a space in it - where a
     /// created stream gets a GUID, so this is the only path on which an operator-spelled identifier reaches
-    /// a URL. What this row does NOT prove is the escaping: a space is escaped by <c>Uri</c> itself, and an
-    /// identifier carrying a path separator is unaddressable however it is written - the route matches one
-    /// segment and <c>%2F</c> does not reach it. That is issue 465.
+    /// a URL. What this row does NOT prove is the escaping: a space is escaped by <c>Uri</c> itself. And an
+    /// identifier carrying a path separator stays unaddressable however it is written - it reaches the
+    /// handler as the literal <c>a%2Fb</c>, which is the one escape the path decoder preserves, so the
+    /// lookup misses. That is issue 465, and the refusal comes from the store rather than from routing.
     /// </remarks>
     [Fact]
     public async Task ADeclaredStreamWithASpelledOutIdentifier_GetsAnAddressThatAnswers()
@@ -209,6 +210,47 @@ public sealed class PollDeliveryByDefaultTests
 
         Assert.Equal($"/ssf/poll/alerts{escaped}eu", poll.EndpointUrl!.AbsolutePath);
         Assert.Empty(poll.EndpointUrl.Query);
+
+        // And it is polled, not merely well-formed. Asserting the address alone would go on passing if a
+        // later change re-encoded it into something the route no longer matches.
+        using var polled = await host.GetTestClient().PostAsJsonAsync(
+            poll.EndpointUrl, new PollRequest { ReturnImmediately = true }, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+    }
+
+    /// <summary>
+    /// A prefix ending in a separator mints an address the route still serves.
+    /// </summary>
+    /// <remarks>
+    /// The trap is that the five management addresses would stay right while this one silently did not:
+    /// they are composed through <c>PathString.Add</c>, which trims a duplicated separator, and an address
+    /// composed by hand does not. <c>/ssf//poll/{id}</c> is well-formed, is stored in every stream, and
+    /// matches nothing - the failure this whole change exists to prevent, arriving through its own fix.
+    /// Nothing validates a prefix, so this is the only thing that would say so.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf/")]
+    [InlineData("/api/ssf/")]
+    public async Task APrefixEndingInASeparator_MintsAnAddressTheRouteServes(string prefix)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(new SharedSignalsEndpointOptions
+        {
+            ReceiverIdSelector = _ => ReceiverId,
+            ManagementPrefix = prefix,
+        });
+        var client = host.GetTestClient();
+
+        var endpoint = await PollEndpointOfNewStreamAsync(
+            client, cancellationToken, prefix: prefix.TrimEnd('/'));
+
+        Assert.DoesNotContain("//", endpoint.AbsolutePath);
+
+        using var polled = await client.PostAsJsonAsync(
+            endpoint, new PollRequest { ReturnImmediately = true }, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
     }
 
     /// <summary>
