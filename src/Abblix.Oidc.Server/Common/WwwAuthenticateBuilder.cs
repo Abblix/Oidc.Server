@@ -56,7 +56,7 @@ public static class WwwAuthenticateBuilder
     public static string BuildDPoPChallenge(OidcError error, string? realm, IEnumerable<string> algs)
         // RFC 6750 §3.1 applies to the DPoP line too: an unauthenticated request gets a bare
         // challenge advertising the scheme, without error attributes. "algs" is DPoP's own parameter
-        // (RFC 9449 §7.1) and is passed through the same grammar as the rest - the figure there prints
+        // (RFC 9449 Section 7.1) and is passed through the same grammar as the rest - the figure there prints
         // it as the FIRST parameter of a challenge with no realm, where the separator is a space.
         => error is MissingAuthenticationError
             ? WwwAuthenticate.Challenge(

@@ -386,8 +386,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// </para>
     /// <para>
     /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
-    /// its <c>stream_id</c> is answered with a bare <c>Results.BadRequest()</c> a few methods below. That
-    /// is a separate gap from this one and is not closed by this method.
+    /// its <c>stream_id</c> is answered with a bare <c>Results.BadRequest()</c> by
+    /// <see cref="DeleteStreamAsync"/> and <see cref="GetStatusAsync"/>. That is a separate gap from
+    /// this one and is not closed by this method.
     /// </para>
     /// <para>
     /// The realm is the transmitter's issuer, which is the one name a receiver already holds for this
