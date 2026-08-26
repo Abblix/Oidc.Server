@@ -36,6 +36,8 @@ namespace Abblix.SharedSignals.Transmitter;
 /// an address refused at delivery is refused for a reason that was already true when the receiver named
 /// it, and answering 201 to a stream that can never be delivered to tells the receiver nothing it can
 /// act on - the refusal then lives only in the transmitter's log.</param>
+/// <param name="pollEndpoints">Where a poll stream is polled - this transmitter's own address, and the
+/// one member of a stream's delivery it supplies rather than receives.</param>
 /// <param name="clock">Measures the verification throttle; null takes the system clock.</param>
 public sealed class StreamManagementService(
     IStreamStore store,
@@ -43,6 +45,7 @@ public sealed class StreamManagementService(
     EventDispatcher dispatcher,
     SharedSignalsTransmitterOptions options,
     ReceiverAddressPolicy addressPolicy,
+    PollEndpointLocator pollEndpoints,
     TimeProvider? clock = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -635,8 +638,8 @@ public sealed class StreamManagementService(
         => proposed switch
         {
             PushDeliveryMethod push => push,
-            PollDeliveryMethod or null when options.PollEndpointFactory is { } pollEndpointOf =>
-                new PollDeliveryMethod(pollEndpointOf(streamId)),
+            PollDeliveryMethod or null when pollEndpoints.Of(streamId) is { } pollEndpoint =>
+                new PollDeliveryMethod(pollEndpoint),
             _ => null,
         };
 
@@ -658,9 +661,9 @@ public sealed class StreamManagementService(
     /// refusal. Asking only the fixed half also keeps this endpoint from driving the transmitter's
     /// resolver at request rate against names a caller chooses.
     ///
-    /// Poll delivery is not judged: the address in it is this transmitter's own, minted from
-    /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> rather than proposed from
-    /// outside, and nothing arrives from the receiver to judge.
+    /// Poll delivery is not judged: the address in it is this transmitter's own, minted by
+    /// <see cref="PollEndpointLocator"/> rather than proposed from outside, and nothing arrives from the
+    /// receiver to judge.
     ///
     /// Every method is named and an unnamed one throws, though nothing can reach that arm as the code
     /// stands: <see cref="ResolveDelivery"/> answers null for a method this transmitter does not serve,

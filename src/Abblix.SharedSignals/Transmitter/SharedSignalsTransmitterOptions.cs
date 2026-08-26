@@ -47,11 +47,23 @@ public sealed record SharedSignalsTransmitterOptions
     public bool AllowMultipleStreamsPerReceiver { get; init; }
 
     /// <summary>
-    /// Derives the transmitter-supplied poll endpoint URL for a stream
-    /// (SSF 1.0 Section 6.1.2). Null means this transmitter does not offer poll delivery: a
-    /// create that asks for poll - or omits delivery, which Section 8.1.1.1 reads as poll - is
-    /// then refused with "400 Bad Request".
+    /// Where the outside world reaches this transmitter's poll endpoint for a stream
+    /// (SSF 1.0 Section 6.1.2). Unset takes the address the poll route was mapped on, so a host that
+    /// maps the transmitter's endpoints offers poll delivery without naming anything.
     /// </summary>
+    /// <remarks>
+    /// Set it when the poll address is not this deployment's advertised prefix plus the poll route on the
+    /// issuer's authority - a separate host name for delivery, say, or a path the route shape cannot
+    /// express. A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
+    /// mapping declares, so the poll address follows it along with the five management addresses. It wins
+    /// over the mapped address wherever both exist.
+    /// <para>
+    /// It is also how a host that maps its own routes - on some other web framework, or by hand - offers
+    /// poll at all, since nothing else then knows the address. With neither source the transmitter offers
+    /// no poll delivery: the configuration document omits the method, and a create asking for poll, or
+    /// omitting delivery, which Section 8.1.1.1 reads as poll, is refused with "400 Bad Request".
+    /// </para>
+    /// </remarks>
     public Func<string, Uri>? PollEndpointFactory { get; init; }
 
     /// <summary>

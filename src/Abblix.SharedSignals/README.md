@@ -42,6 +42,12 @@ builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
 });
 ```
 
+`PollEndpointFactory` is in that snippet because this package maps no routes: it says where poll delivery
+is served, and without it a stream cannot be created with poll delivery at all. A host using
+`Abblix.SharedSignals.MinimalAPI` leaves it out - the mapping declares the address, following the advertised
+prefix - and sets it only for an address that prefix cannot describe, such as delivery on a separate host
+name.
+
 Two things the configuration document says about that deployment come from defaults rather than from the
 snippet above, and both are worth knowing before it goes anywhere real.
 

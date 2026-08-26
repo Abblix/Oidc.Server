@@ -12,7 +12,7 @@ There are two Minimal API packages in this family, and the line between them is 
 - **Push delivery intake** - "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalAPI](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalAPI), which a push-based receiver installs alongside this one: the dependency chain here reaches the core library but not the core's adapter.
 - **Back-Channel Logout** - one token, delivered once, from a provider the relying party already knows. Also there.
 
-Push and poll are the pair worth understanding, because both are core delivery specifications (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which document defines the protocol but whether a stream is part of the addressing: the push intake just accepts a token, while the poll endpoint below serves one stream's queue and its URL is built per stream from your `PollEndpointFactory`. The specification says how to carry an event; the stream says to whom - and that second half is what this package is.
+Push and poll are the pair worth understanding, because both are core delivery specifications (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which document defines the protocol but whether a stream is part of the addressing: the push intake just accepts a token, while the poll endpoint below serves one stream's queue and is addressed per stream. The specification says how to carry an event; the stream says to whom - and that second half is what this package is.
 
 The split is kept for what it buys the other side: a relying party that wants only Back-Channel Logout takes the core adapter alone, and never sees this package's surface.
 
@@ -32,7 +32,6 @@ builder.Services
     {
         Issuer = "https://tr.example.com",
         EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
-        PollEndpointFactory = streamId => new Uri($"https://tr.example.com/ssf/poll/{streamId}"),
         JwksUri = new Uri("https://tr.example.com/.well-known/jwks.json"),
     });
 
@@ -71,7 +70,7 @@ What one call maps, relative to the prefix:
 | `/verify` | POST | verification request, Section 8.1.4 |
 | `/poll/{streamId}` | POST | poll delivery, RFC 8936 |
 
-The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address is the one exception: it travels per stream and comes from your `PollEndpointFactory`, so keep that factory aligned with the advertised prefix.
+The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address travels per stream rather than in the document, and it comes from the same prefix, so a stream's `endpoint_url` leads back to the route serving it wherever you map the prefix. A proxy that rewrites paths needs nothing extra: what the mapping declares is `AdvertisedPrefix`, so the poll address follows it along with the five above. `PollEndpointFactory` is for the address that prefix cannot describe - delivery on a separate host name, say - and it wins.
 
 ## Receiver
 

@@ -122,6 +122,34 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         group.MapPost(Routes.Verify, RequestVerificationAsync).RequiresScope(SsfScopes.Manage);
         group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync).RequiresScope(SsfScopes.Read);
 
+        // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
+        // and a receiver polls it for as long as the stream lives, so an address that does not lead back
+        // to this route is a 404 arriving long after the create that succeeded. Single-sourced from the
+        // route above for the same reason the configuration document is single-sourced from the five it
+        // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
+        //
+        // The identifier is escaped so that one an operator spelled out survives into the URL whole, and
+        // the escaped text is handed over as a PathString rather than as a string. The distinction is the
+        // whole of it: PathString's implicit conversion FROM a string decodes - it runs the text back
+        // through UrlDecoder, keeping only %2F - so passing the interpolated string would undo the
+        // escaping one call later, and a '?' would reach Uri as a query delimiter. The address would then
+        // be that of a DIFFERENT stream, well-formed and served: "alerts?eu" minting the poll endpoint of
+        // "alerts". Composing by hand avoids the decode and loses the other thing Add does, which is to
+        // trim a duplicated separator - a prefix ending in '/' would mint "/ssf//poll/{id}", which this
+        // route does not match.
+        //
+        // Escaping is not the same as being addressable. An identifier carrying a path separator arrives
+        // whole, the route matches it, and the handler receives the still-encoded "a%2Fb" - so the lookup
+        // misses and the refusal comes from the store rather than from routing. That is issue 465, and
+        // knowing which of the two answers it is decides where the fix goes.
+        var transmitter = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
+        var pollAuthority = AuthorityOf(transmitter);
+        var pollPrefix = AdvertisedPrefixOf(endpointOptions);
+        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
+            streamId => new Uri(
+                pollAuthority,
+                pollPrefix.Add(new PathString($"{Routes.Poll}/{Uri.EscapeDataString(streamId)}")).Value!));
+
         return group;
     }
 
@@ -152,16 +180,31 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
 
         WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
-        var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
-            ? endpointOptions.AdvertisedPrefix
-            : endpointOptions.ManagementPrefix;
+        var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
         return endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
-            (SharedSignalsTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
+            (SharedSignalsTransmitterOptions current, PollEndpointLocator pollEndpoints) =>
+                Results.Json(ConfigurationDocumentOf(current, pollEndpoints, advertisedPrefix)));
     }
+
+    /// <summary>
+    /// The prefix the outside world reaches this deployment on: the advertised one where a proxy rewrites
+    /// paths, the mapped one otherwise.
+    /// </summary>
+    private static PathString AdvertisedPrefixOf(SharedSignalsEndpointOptions endpointOptions)
+        => endpointOptions.AdvertisedPrefix.HasValue
+            ? endpointOptions.AdvertisedPrefix
+            : endpointOptions.ManagementPrefix;
+
+    /// <summary>
+    /// The authority every endpoint this deployment publishes lives on - the issuer's, which is what a
+    /// receiver holding nothing else already has.
+    /// </summary>
+    private static Uri AuthorityOf(SharedSignalsTransmitterOptions options)
+        => new(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
 
     /// <summary>
     /// The one scheme description the CAEP Interoperability Profile names.
@@ -366,13 +409,14 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     private static TransmitterConfiguration ConfigurationDocumentOf(
         SharedSignalsTransmitterOptions options,
+        PollEndpointLocator pollEndpoints,
         PathString prefix)
     {
-        var authority = new Uri(new Uri(options.Issuer, UriKind.Absolute).GetLeftPart(UriPartial.Authority));
+        var authority = AuthorityOf(options);
         Uri EndpointOf(string route) => new(authority, prefix.Add(route).Value!);
 
         var deliveryMethods = new List<string> { PushDeliveryMethod.MethodUri };
-        if (options.PollEndpointFactory is not null)
+        if (pollEndpoints.IsOffered)
         {
             deliveryMethods.Add(PollDeliveryMethod.MethodUri);
         }
