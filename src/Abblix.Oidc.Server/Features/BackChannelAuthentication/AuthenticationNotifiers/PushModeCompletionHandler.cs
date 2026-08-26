@@ -60,8 +60,11 @@ public partial class PushModeCompletionHandler(
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The authentication request is removed from storage after successful delivery, because a push client
-    /// never polls: one left behind is an authenticated grant nobody reads until it expires.
+    /// The authentication request is removed from storage after successful delivery. Not hygiene: push
+    /// never writes back, so a record left behind is the PRE-completion one - Pending, carrying what the
+    /// client asked for rather than what the end user approved, and carrying the session - and a host that
+    /// finds it can complete it again. Removing it is what stops that on the path where the tokens did
+    /// arrive.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
