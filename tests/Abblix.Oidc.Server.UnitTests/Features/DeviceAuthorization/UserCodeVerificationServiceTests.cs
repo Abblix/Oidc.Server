@@ -55,6 +55,11 @@ public class UserCodeVerificationServiceTests
             .ReturnsAsync((string code) =>
                 code == CanonicalUserCode ? (DeviceCode, request) : null);
 
+        // See the note in BuildService: the decision reads the record again before writing it.
+        storage
+            .Setup(s => s.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
+
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
             .Setup(r => r.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
@@ -212,6 +217,13 @@ public class UserCodeVerificationServiceTests
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
             .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
 
+        // The decision is applied to the record as it stands at the write, so a fixture that answers the
+        // user-code lookup and not this one is describing a record consumed in between - which is its own
+        // row rather than the arrangement these tests want.
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
+
         logs = new CapturingLogger<UserCodeVerificationService>();
         return new UserCodeVerificationService(
             logs,
@@ -220,6 +232,59 @@ public class UserCodeVerificationServiceTests
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
             new FakeTimeProvider(Now));
+    }
+
+    /// <summary>
+    /// A decision taken on a record that was consumed while the decision was being taken does not write
+    /// that record back.
+    /// </summary>
+    /// <remarks>
+    /// Approval reads the record, checks its status, and writes it back. Between those, a poll can redeem
+    /// the device code and remove it - and the write then RESTORES an authorized record carrying its
+    /// grant. A later poll finds it, and a second full token set is issued for one device code. The
+    /// authorization-code path has a net for this, the reuse decorator inspecting IssuedTokens on the
+    /// claimed grant; the device path has none, so nothing downstream catches it.
+    /// <para>
+    /// The record is reported gone at the moment of the re-read rather than by racing two callers, so the
+    /// row measures the ordering the code guarantees rather than one a scheduler happened to produce.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADecisionOnARecordConsumedMeanwhile_IsNotWrittenBack(bool approving)
+    {
+        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+
+        // Consumed in between: the device code was redeemed and removed while the decision was taken.
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((DeviceAuthorizationRequest?)null);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        var decided = approving
+            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(CanonicalUserCode);
+
+        Assert.False(decided);
+        storage.Verify(
+            store => store.UpdateAsync(It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     private static OidcOptions DeviceOptions() => new()

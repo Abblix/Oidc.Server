@@ -106,10 +106,17 @@ public partial class UserCodeVerificationService(
             return false;
         }
 
-        request.Status = DeviceAuthorizationStatus.Authorized;
-        request.AuthorizedGrant = authorizedGrant;
-
-        await storage.UpdateAsync(deviceCode, request, remaining);
+        if (!await TryDecideAsync(
+                deviceCode,
+                remaining,
+                current =>
+                {
+                    current.Status = DeviceAuthorizationStatus.Authorized;
+                    current.AuthorizedGrant = authorizedGrant;
+                }))
+        {
+            return false;
+        }
 
         // The requested entries were handed to the host on ValidUserCode, and whether they reach the
         // grant is its decision: only its verification page knows whether it displayed them, and a
@@ -146,9 +153,43 @@ public partial class UserCodeVerificationService(
         if (remaining <= TimeSpan.Zero)
             return false;
 
-        request.Status = DeviceAuthorizationStatus.Denied;
+        return await TryDecideAsync(
+            deviceCode, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+    }
 
-        await storage.UpdateAsync(deviceCode, request, remaining);
+    /// <summary>
+    /// Applies a decision to the record as it stands NOW, refusing when it has moved on since the user
+    /// code was looked up.
+    /// </summary>
+    /// <remarks>
+    /// Everything between the lookup and the write is the window, and the record can be consumed inside
+    /// it: a poll redeems the device code and removes it, and a write of the record read earlier RESTORES
+    /// an authorized record carrying its grant. A later poll finds that, and a second full token set is
+    /// issued for one device code - with nothing downstream to catch it, since the net the
+    /// authorization-code path has is the reuse decorator inspecting the claimed grant, and the device
+    /// path has no equivalent.
+    /// <para>
+    /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
+    /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
+    /// Closing it needs a compare-and-swap the entity storage does not expose.
+    /// </para>
+    /// </remarks>
+    /// <param name="deviceCode">The record to decide on.</param>
+    /// <param name="remaining">The lifetime left, applied as the cache TTL so the code cannot be extended.</param>
+    /// <param name="decide">Applies the decision to the freshly read record.</param>
+    private async Task<bool> TryDecideAsync(
+        string deviceCode,
+        TimeSpan remaining,
+        Action<DeviceAuthorizationRequest> decide)
+    {
+        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
+        if (current is not { Status: DeviceAuthorizationStatus.Pending })
+        {
+            return false;
+        }
+
+        decide(current);
+        await storage.UpdateAsync(deviceCode, current, remaining);
         return true;
     }
 }
