@@ -97,8 +97,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// The quietest of the set, and the reason it is worth saying out loud. Nothing is refused and nothing
     /// is logged at delivery: the dispatcher matches no stream, answers zero, and a receiver that is doing
     /// exactly what Section 2.4.4 tells it to do waits forever on a stream that reads as healthy on both
-    /// sides. There is no error on the wire and nothing in the stream status to distinguish it from a quiet
-    /// period.
+    /// sides. What IS on the wire is the configuration document, which publishes
+    /// <c>"default_subjects": "NONE"</c> (SSF 1.0 Section 7.1) - so the fact is discoverable, by a receiver
+    /// that fetched the document and read a member the profile never told it to act on.
     /// <para>
     /// A warning rather than a refusal, and the default is not flipped, because the two readings are both
     /// defensible: covering nothing until a subject is named is what keeps a misconfigured stream from
@@ -116,6 +117,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             + "2.4.4 tells a receiver to \"assume that all subjects are implicitly included in a Stream, "
             + "without any Add Subject method invocations\", so a conformant receiver adds none and "
             + "receives nothing, silently. Set DefaultSubjectsMode to All, or keep None knowing that this "
-            + "transmitter expects its receivers to name their subjects.")]
+            + "transmitter expects its receivers to name their subjects. Setting it reaches only streams "
+            + "created afterwards: a stream takes its mode at creation, so any stream already stored keeps "
+            + "covering nothing and must be deleted and created again - and this warning goes quiet as "
+            + "soon as the option changes, whether or not those streams were dealt with.")]
     private static partial void LogNoSubjectsIncludedByDefault(ILogger logger);
 }

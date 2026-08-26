@@ -123,9 +123,10 @@ public class EventDispatcherTests
     /// The pair is what a conformant receiver meets. The CAEP Interoperability Profile 1.0 Section 2.4.4
     /// tells it to "assume that all subjects are implicitly included in a Stream, without any Add Subject
     /// method invocations", so it adds none - and against a transmitter whose new streams cover nothing it
-    /// receives nothing, with no error on either side. Two rows rather than one because the row that
-    /// matters is the one that answers ZERO: a suite asserting only that <c>All</c> delivers would go on
-    /// passing if <c>None</c> quietly started delivering too.
+    /// receives nothing, with no error on either side. What each row uniquely holds is the EMPTY list on
+    /// its own side, measured rather than asserted: narrowing <c>None</c> to also cover a stream with no
+    /// added subjects kills this row alone out of the suite, and widening <c>All</c> to require a
+    /// non-empty removed list kills the other alone.
     /// </remarks>
     [Theory]
     [InlineData(StreamSubjectsMode.All, 1)]

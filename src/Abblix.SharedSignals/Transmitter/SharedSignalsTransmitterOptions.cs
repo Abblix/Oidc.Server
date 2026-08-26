@@ -44,6 +44,12 @@ public sealed record SharedSignalsTransmitterOptions
     /// conformant receiver adds none - and against a transmitter covering nothing by default it receives
     /// nothing, with no error on either side to say why. The profile binds only the receiver, so the
     /// default is left where it is and said out loud at startup instead.
+    /// <para>
+    /// Changing it reaches only streams created afterwards. A stream takes its mode at creation, as
+    /// <see cref="StreamSubjectsMode"/> says, so a deployment that has already stored streams under
+    /// <see cref="StreamSubjectsMode.None"/> has to delete and recreate them - and the startup warning
+    /// stops the moment this option changes, whether or not that was done.
+    /// </para>
     /// </remarks>
     public StreamSubjectsMode DefaultSubjectsMode { get; init; } = StreamSubjectsMode.None;
 

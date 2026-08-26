@@ -126,8 +126,8 @@ public sealed class CaepProfileMetadataTests
     }
 
     /// <summary>
-    /// A transmitter whose new streams cover nothing is told so, because a receiver following the profile
-    /// will never populate one and neither side will say why.
+    /// A transmitter whose new streams would cover nothing is told so, because a receiver following the
+    /// profile will never populate one.
     /// </summary>
     /// <remarks>
     /// Section 2.4.4 tells the receiver to "assume that all subjects are implicitly included in a Stream,
@@ -135,9 +135,14 @@ public sealed class CaepProfileMetadataTests
     /// is not a clause a deployment violates - which is exactly why the default is left alone and the
     /// consequence is said out loud instead. The failure it prevents is the quietest kind: the dispatcher
     /// matches no stream, answers zero, and the receiver waits on a stream that reads as healthy.
+    /// <para>
+    /// The check reads the OPTION, which is what the name says: a declared stream set carries its own
+    /// <c>SubjectsMode</c> and this cannot see it, so a configured stream at <c>None</c> is warned about
+    /// by nothing.
+    /// </para>
     /// </remarks>
     [Fact]
-    public async Task ATransmitterWhoseStreamsCoverNoSubject_IsWarnedAtStartup()
+    public async Task ATransmitterWhoseNewStreamsWouldCoverNoSubject_IsWarnedAtStartup()
     {
         var recorder = new RecordingProvider();
 
@@ -266,9 +271,10 @@ public sealed class CaepProfileMetadataTests
                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
         builder.Services.AddSharedSignalsTransmitter(options);
 
-        // Scope checking is the third thing the startup check looks at, so a fixture asserting NO warning
-        // has to be inside the profile on that count too - otherwise it is asserting the absence of two
-        // warnings while a third fires, which is a criterion that stops meaning what its name says.
+        // Scope checking is one of the things the startup check looks at, so a fixture asserting NO
+        // warning has to be inside the profile on that count too - otherwise it is asserting the absence
+        // of the warnings it means while another fires, which is a criterion that stops meaning what its
+        // name says. No count, because the list grows and a count in a comment does not.
         if (checksScopes)
         {
             builder.Services.AddSingleton(new SharedSignalsEndpointOptions
