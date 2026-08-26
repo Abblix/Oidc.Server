@@ -65,7 +65,9 @@ public partial class PushModeCompletionHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">How long the request remains in storage if token generation fails.</param>
+    /// <param name="expiresIn">Unused here. Push removes the request on every outcome that ends the
+    /// flow, so there is no remaining lifetime to set; the parameter exists because the base class hands
+    /// it to every mode and poll and ping do use it.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -158,10 +160,18 @@ public partial class PushModeCompletionHandler(
                 else
                 {
                     // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
-                    // retries them. What is kept is the authenticated REQUEST, and the only thing that can
-                    // turn it back into tokens is a host reading storage and calling CompleteAsync again,
-                    // which is why it is retained rather than removed: removing it would take that
-                    // possibility away too. Left alone it expires on its own.
+                    // retries them.
+                    //
+                    // What survives in storage is the record as it stood BEFORE the completion, because
+                    // push never writes back: the status and the narrowed grant were set on the in-memory
+                    // object, and only the poll and ping paths persist that with UpdateAsync. So the
+                    // stored record still reads Pending, still carries what the client originally asked
+                    // for rather than what the end user approved, and carries no session.
+                    //
+                    // It is left alone rather than removed so a host can see that the request existed and
+                    // decide what to do, and it expires on its own. What it is NOT is a grant that can be
+                    // completed again from storage - anything rebuilt from it would replay the request,
+                    // not the approval.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 
