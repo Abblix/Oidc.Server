@@ -72,16 +72,32 @@ public class SecurityEventTokenBuilderTests
     }
 
     /// <summary>
-    /// Left unset, several statements are built, because that is what RFC 8417 Section 2 allows and this
-    /// package speaks whatever profile the deployment does.
+    /// An identifier that is not one is judged as an argument, not as a second statement.
     /// </summary>
     /// <remarks>
-    /// The explicit boundary of the change. Refusing the second statement outright turns five red rather
-    /// than this one - four of them pre-existing, including the fixture that rebuilds RFC 8417's own
-    /// two-statement figure - so this row is not what stands between the change and that mistake. It is
-    /// what says the permission is intended, in one place a reader can find, rather than inferred from a
-    /// fixture about something else.
+    /// Both guards would fire on this call and the wrong one used to answer: a caller whose event-type
+    /// variable came back null was told the token already holds another event, and sent to construct the
+    /// builder without the declaration - which swaps the message and does not fix the call. The collection
+    /// refuses the same input on its own terms whenever the declaration is unset, so the two paths
+    /// disagreed about what the fault was.
     /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AnIdentifierThatIsNotOne_IsRefusedAsAnArgument(string? eventType)
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        // ThrowsAny, because null gives ArgumentNullException and empty gives ArgumentException, and which
+        // of the two arrives is not what this row is about.
+        var refusal = Assert.ThrowsAny<ArgumentException>(() => builder.WithEvent(eventType!));
+
+        Assert.Equal("eventType", refusal.ParamName);
+    }
+
     /// <summary>
     /// The same identifier twice is still RFC 8417 Section 2.2's rule, not the profile's, even on a token
     /// carrying one statement.
@@ -106,6 +122,16 @@ public class SecurityEventTokenBuilderTests
         Assert.Contains("2.2", refusal.Message);
     }
 
+    /// <summary>
+    /// Left unset, several statements are built, because that is what RFC 8417 Section 2 allows and this
+    /// package speaks whatever profile the deployment does.
+    /// </summary>
+    /// <remarks>
+    /// The explicit boundary of the change rather than the barrier: refusing the second statement outright
+    /// turns several other rows red too, including the fixture that rebuilds RFC 8417's own two-statement
+    /// figure. What this row adds is a place a reader can find the permission stated, rather than having
+    /// to infer it from a fixture about something else.
+    /// </remarks>
     [Fact]
     public void WithoutTheDeclaration_SeveralStatementsAreBuilt()
     {

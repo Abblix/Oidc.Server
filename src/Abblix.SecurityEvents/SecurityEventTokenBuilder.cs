@@ -260,6 +260,13 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// A second statement was added to a token declared to carry one.</exception>
     private SecurityEventTokenBuilder AddStatement(string eventType, JsonObject? payload)
     {
+        // Judged before anything else, because an identifier that is not one is not a second statement:
+        // without this the profile guard answers a null or empty argument with "this token already holds
+        // another event", which names the wrong rule and offers a remedy that does not fix the call. The
+        // collection refuses the same input on its own terms, and this only moves the refusal in front of
+        // a guard that would otherwise reach it first.
+        ArgumentException.ThrowIfNullOrEmpty(eventType);
+
         // Read once and consumed by both the decision and the message, so the two cannot disagree about
         // which statement is already there.
         var present = _events.Count > 0 ? _events.First().Key : null;
