@@ -467,13 +467,17 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// The push half of the same misconfiguration, which had no test while the one below carried its
-    /// name: push REMOVES the request rather than marking it Denied.
+    /// The push half of the same misconfiguration: push REMOVES the request rather than marking it Denied.
     /// </summary>
     /// <remarks>
-    /// A push client never comes to the token endpoint, so a status it will never read is an orphan
-    /// sitting in storage until it expires. Removing is the only outcome that leaves nothing behind, and
-    /// the difference from ping is the whole reason push overrides the refusal.
+    /// The configuration check has TWO clauses - no endpoint, or no token - and a test can only hold the
+    /// one its fixture leaves out. <c>WhenNotConfiguredForDelivery_RemovesTheRequest</c> below drops the
+    /// token; this one drops the endpoint. Delete either and a build that checks only the surviving clause
+    /// still passes, which is the whole reason both exist.
+    ///
+    /// The outcome they share: a push client never comes to the token endpoint, so a status it will never
+    /// read is an orphan sitting in storage until it expires. Removing leaves nothing behind, and that
+    /// difference from ping is why push overrides the refusal.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_MissingEndpoint_RemovesRequest()
@@ -516,9 +520,8 @@ public class AuthenticationCompletionHandlerTests
     /// configuration error and marks the request Denied.
     /// </summary>
     /// <remarks>
-    /// Ping, not push, which the handler this builds has always been - the name said otherwise for long
-    /// enough that push's own missing-endpoint path had no test at all. Push removes instead of denying,
-    /// and the test below it is that one.
+    /// Ping, not push, which the handler this builds has always been; the name said otherwise. Push
+    /// removes instead of denying, and the test below it is push's endpoint clause.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
@@ -535,7 +538,7 @@ public class AuthenticationCompletionHandlerTests
 
         var clientInfo = new ClientInfo(ClientId)
         {
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
         };
 
         _storage.Setup(s => s.UpdateAsync(AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
