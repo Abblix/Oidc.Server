@@ -34,7 +34,7 @@ public class DeviceAuthorizationStorage(
     {
         // Persist the absolute expiry so a regularly-polling client cannot extend the code: the token
         // endpoint derives the remaining cache TTL from this fixed instant instead of resetting the full
-        // lifetime on every poll (RFC 8628 §3.2)
+        // lifetime on every poll (RFC 8628 section 3.2)
         request.ExpiresAt = timeProvider.GetUtcNow() + expiresIn;
 
         var cacheOptions = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn };
@@ -78,7 +78,7 @@ public class DeviceAuthorizationStorage(
     public Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
     {
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
-        // record's fixed ExpiresAt (RFC 8628 §3.2) and gates on expiry first, so polling cannot extend the
+        // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
         // code and the TTL here is always positive - no second clock read that could race the expiry boundary
         return cache.SetAsync(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
@@ -116,15 +116,26 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
-    /// which implements a lock-based protocol ensuring exactly one thread successfully removes the value
-    /// even in concurrent scenarios. After successful removal, cleans up the user code mapping.
+    /// which admits at most one caller through its lock-token protocol, and serializes redemptions of one
+    /// device code in-process, which closes the one way a removal loses its winner to a competitor.
+    /// What that does NOT give is a winner for every removal - the code can be consumed with nobody told
+    /// they took it, and that needs neither a second caller nor a second node. The extension's own remarks
+    /// carry the condition and name the store primitive that closes it. After a successful removal, cleans
+    /// up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
     /// <returns>
-    /// A task that completes when the operation finishes, containing true if the request was successfully
-    /// removed by this thread; false if another thread won the race or the device code didn't exist.
+    /// A task that completes when the operation finishes, containing true when this caller removed the
+    /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
+    /// won or it was never there": the code can be consumed and the caller still told false, when the lock
+    /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
+    /// <para>
+    /// They cannot cover the cleanup below them, which is this method's own call: if removing the user-code
+    /// index throws, the device code is already consumed and the caller gets the exception instead of true,
+    /// so no tokens are issued for a code that can never be presented again. Tracked as issue 453.
+    /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
     {
