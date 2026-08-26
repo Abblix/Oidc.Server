@@ -33,6 +33,11 @@ builder.Services
         Issuer = "https://tr.example.com",
         EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
         JwksUri = new Uri("https://tr.example.com/.well-known/jwks.json"),
+
+        // A receiver following the CAEP Interoperability Profile adds no subjects, so a transmitter
+        // targeting that profile covers them all. Leave it out and new streams cover nothing until a
+        // subject is named - which the startup log says, because neither side would.
+        DefaultSubjectsMode = StreamSubjectsMode.All,
     });
 
 var app = builder.Build();

@@ -55,5 +55,8 @@ public static class LogEvents
 
         /// <summary>No scope is checked on the management API, which the CAEP profile requires.</summary>
         public const int ScopeCheckingDisabled = Base + 11;
+
+        /// <summary>A new stream covers no subject, while a conformant receiver adds none.</summary>
+        public const int NoSubjectsIncludedByDefault = Base + 12;
     }
 }

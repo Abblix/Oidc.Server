@@ -37,6 +37,22 @@ public sealed record SharedSignalsTransmitterOptions
     /// default is <see cref="StreamSubjectsMode.None"/>: nothing flows until the receiver names
     /// its subjects, so a misconfigured stream leaks nothing.
     /// </summary>
+    /// <remarks>
+    /// A deployment targeting the CAEP Interoperability Profile 1.0 sets this to
+    /// <see cref="StreamSubjectsMode.All"/>. Its Section 2.4.4 tells a receiver to "assume that all
+    /// subjects are implicitly included in a Stream, without any Add Subject method invocations", so a
+    /// conformant receiver adds none - and against a transmitter covering nothing by default it receives
+    /// nothing, with no error on either side to say why. The profile binds only the receiver, so the
+    /// default is left where it is and said out loud at startup instead.
+    /// <para>
+    /// Changing it reaches only streams created afterwards, because a stream takes its mode at creation -
+    /// which is what keeps a later change from silently re-scoping what a receiver already has. What is
+    /// left behind therefore depends on the store: the in-memory default keeps nothing across the restart
+    /// the change requires, a configured stream set writes the declared mode over every stream on the next
+    /// reconcile, and a store outliving the process keeps its streams at the mode they were created with.
+    /// The startup warning stops the moment this option changes, in all three.
+    /// </para>
+    /// </remarks>
     public StreamSubjectsMode DefaultSubjectsMode { get; init; } = StreamSubjectsMode.None;
 
     /// <summary>
