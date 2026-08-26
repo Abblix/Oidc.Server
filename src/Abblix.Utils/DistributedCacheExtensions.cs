@@ -99,8 +99,10 @@ public static class DistributedCacheExtensions
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
 	/// lock token survives (last-write-wins) will return the value. Other threads detect the lock mismatch
-	/// and return null. This ensures exactly one thread retrieves the value, even though individual cache
-	/// operations are not atomic.
+	/// and return null. So where one process touches the key, exactly one caller retrieves the value, even
+	/// though the individual cache operations are not atomic - and across processes, at most one. The
+	/// difference, and what to do about it, is under <see cref="TryRemoveAsync"/>, which this delegates to
+	/// and which carries the guarantee.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> Locks auto-expire after the specified timeout (default 5 seconds)
@@ -163,7 +165,8 @@ public static class DistributedCacheExtensions
 	/// <para>
 	/// <strong>How it provides atomicity:</strong> In a race between multiple threads, only the thread whose
 	/// lock token survives (last-write-wins) will return true. Other threads detect the lock mismatch
-	/// and return false. This ensures exactly one thread successfully removes the value.
+	/// and return false. What that leaves is spelled out below, because it is not the same answer on one
+	/// node as on several.
 	/// </para>
 	/// <para>
 	/// <strong>Use Case:</strong> This method is useful when you need to atomically remove a value without

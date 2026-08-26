@@ -70,7 +70,8 @@ public class AuthorizationCodeService(
 	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode)
 	{
 		// removeOnRetrieval: true performs an atomic get-and-remove, so two concurrent redemptions
-		// of the same code cannot both observe the grant - exactly one wins the claim; every other
+		// of the same code cannot both observe the grant - in one process exactly one wins the claim,
+		// across processes at most one and never two; every other
 		// caller finds the code already gone and is rejected.
 		var grant = await storage.GetAsync<AuthorizedGrant>(
 			keyFactory.AuthorizedGrantKey(authorizationCode), removeOnRetrieval: true);
