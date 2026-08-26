@@ -13,9 +13,9 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Utils.UnitTests;
 
 /// <summary>
-/// Covers what <see cref="DistributedCacheExtensions.TryRemoveAsync"/> guarantees: at most one caller ever
-/// removes the value, and a caller is told it took the value only when its own lock token was still there
-/// afterwards.
+/// Covers what <see cref="DistributedCacheExtensions.TryRemoveAsync"/> decides: a caller is told it took
+/// the value only when its own lock token is still in the store at the end of the protocol, and at most
+/// one caller passes that check.
 /// </summary>
 /// <remarks>
 /// Serializing callers on a key stops one of them overwriting another's token, which is one of the three

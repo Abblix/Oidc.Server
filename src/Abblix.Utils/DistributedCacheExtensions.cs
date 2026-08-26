@@ -87,10 +87,10 @@ public static class DistributedCacheExtensions
 
 	/// <summary>
 	/// Reads a value and then removes it under a lock, for a cache with no native primitive of its own.
-	/// This is NOT the equivalent of Redis GETDEL: the bytes returned are the ones read BEFORE the lock,
-	/// so if anything writes the key between the read and the removal, this caller destroys that write and
-	/// is handed the earlier value. With nothing writing the key, exactly one caller is handed it. Read
-	/// the remarks before relying on it.
+	/// This is NOT the equivalent of Redis GETDEL. The bytes returned are the ones read BEFORE the lock,
+	/// so anything writing the key in between is destroyed by this caller while it is handed the earlier
+	/// value - and that is only one of the ways the two differ. AT MOST one caller is handed the value
+	/// when nothing writes the key, and none may be. Read the remarks before relying on it.
 	/// </summary>
 	/// <remarks>
 	/// <para><strong>Atomicity Protocol:</strong></para>
@@ -185,19 +185,29 @@ public static class DistributedCacheExtensions
 	/// not the request data itself.
 	/// </para>
 	/// <para>
-	/// <strong>AT MOST one caller removes the value, and the lock-token protocol is what gives that</strong>
-	/// - not the in-process gate. Measured: eight callers on one key over two hundred rounds produce no
-	/// round with two winners either with the gate or without it.
+	/// <strong>What the protocol decides:</strong> a caller is told it took the value only when the
+	/// protocol runs to the end AND finds its own lock token still in the store. Everything below follows
+	/// from that one sentence, which is why it is stated instead of a list of what cannot happen.
 	/// </para>
 	/// <para>
-	/// <strong>What the gate buys is that a removal HAS a winner.</strong> In the same measurement it took
-	/// the rounds with NO winner from eleven to zero. That is liveness rather than exclusivity, and it is
-	/// worth knowing before moving the gate or dropping it: single use does not depend on it, and the
-	/// defect it closes does.
+	/// <strong>At most one caller passes that check</strong>, and the lock token is what decides it, not
+	/// the in-process gate: eight callers on one key over two hundred rounds produce no round with two
+	/// winners either with the gate or without it. Passing the check is not the same as being handed the
+	/// value, though - <see cref="TryGetAndRemoveAsync"/> hands back what it read BEFORE the protocol, so
+	/// where something writes the key in between, two callers can pass and be handed the same bytes. That
+	/// is issue 454, and this class does not close it.
 	/// </para>
 	/// <para>
-	/// <strong>What it does NOT guarantee is that a removal has a winner.</strong> A caller is told it took
-	/// the value only when the protocol runs to the end AND finds its own lock token still in the store.
+	/// <strong>A removal may have NO winner, and the gate closes only one way of reaching that.</strong>
+	/// In the same measurement it took the no-winner rounds from eleven to zero, which is the
+	/// competitor-overwrite way. The other two survive it, so a single caller on a single node still
+	/// reaches a no-winner removal - <c>TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue</c>
+	/// and <c>TryRemoveAsync_TheStoreFaultsAfterTheRemoval_TheValueIsGoneAndNobodyIsTold</c> are those two.
+	/// Worth knowing before moving the gate or dropping it: what would come back is a loss that needs a
+	/// competitor, not a loss of single use.
+	/// </para>
+	/// <para>
+	/// <strong>The three ways the check is not passed.</strong>
 	/// State it that way round rather than listing the ways to lose, because that list is not closable:
 	/// the token can be overwritten, which needs a competitor and is what the serialization prevents here;
 	/// it can EXPIRE, which needs only time; and the two store calls that follow the removal can fail, in
