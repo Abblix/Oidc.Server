@@ -99,8 +99,10 @@ public sealed class CaepProfileMetadataTests
     }
 
     /// <summary>
-    /// The control for both warnings. One that fires on every deployment is not a check, and one that
-    /// fires on the DEFAULT would fire on every deployment that configures nothing.
+    /// The control for the warnings that can be silenced by configuring something. One that fires on
+    /// every deployment regardless is not a check - and the subjects-mode warning DOES fire on the
+    /// shipped default, deliberately, which is why the arrange block below has to move that option to
+    /// stay green here.
     /// </summary>
     /// <remarks>
     /// Scoped to what this check looks at, and no count is given: the list grows, and a fixture that fires

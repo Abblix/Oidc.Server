@@ -45,10 +45,12 @@ public sealed record SharedSignalsTransmitterOptions
     /// nothing, with no error on either side to say why. The profile binds only the receiver, so the
     /// default is left where it is and said out loud at startup instead.
     /// <para>
-    /// Changing it reaches only streams created afterwards. A stream takes its mode at creation, as
-    /// <see cref="StreamSubjectsMode"/> says, so a deployment that has already stored streams under
-    /// <see cref="StreamSubjectsMode.None"/> has to delete and recreate them - and the startup warning
-    /// stops the moment this option changes, whether or not that was done.
+    /// Changing it reaches only streams created afterwards, because a stream takes its mode at creation -
+    /// which is what keeps a later change from silently re-scoping what a receiver already has. What is
+    /// left behind therefore depends on the store: the in-memory default keeps nothing across the restart
+    /// the change requires, a configured stream set writes the declared mode over every stream on the next
+    /// reconcile, and a store outliving the process keeps its streams at the mode they were created with.
+    /// The startup warning stops the moment this option changes, in all three.
     /// </para>
     /// </remarks>
     public StreamSubjectsMode DefaultSubjectsMode { get; init; } = StreamSubjectsMode.None;
