@@ -92,9 +92,16 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         //
         // Those six are OUR reading, not the profile's, and they go the stricter way: everything that
         // CHANGES a stream requires ssf.manage, because refusing a caller who should have been allowed
-        // is recoverable and the reverse is not. Poll is the exception and takes ssf.read: it delivers a
-        // receiver its own events rather than managing anything, and a caller who may read a stream's
-        // configuration may certainly read what that stream carries.
+        // is recoverable and the reverse is not.
+        //
+        // Poll is the exception and takes ssf.read, at a price worth naming. It is not a pure read: a
+        // poll acknowledges, and IEventOutbox.AcknowledgeAsync removes what was acknowledged -
+        // RFC 8936 Section 2.2's acknowledge-only poll is that half by itself. So a token carrying only
+        // ssf.read can empty its own queue. The alternative is worse: requiring ssf.manage for poll makes
+        // every polling receiver hold the scope that also lets it delete streams, which is the whole
+        // split gone. What bounds the damage is ownership - the handler looks the stream up BY the
+        // caller's identity, so nobody acknowledges anybody else's events - and what does not bound it is
+        // the scope, which is why this is said out loud rather than left to the reader.
         group.AddEndpointFilter(EnforceScopeAsync);
 
         group.MapPost(Routes.Stream, CreateStreamAsync).RequiresScope(SsfScopes.Manage);
@@ -440,9 +447,17 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// Refuses a request whose token was not granted the scope its route requires.
     /// </summary>
     /// <remarks>
-    /// Does nothing at all unless the host set
+    /// Returns immediately unless the host set
     /// <see cref="SharedSignalsEndpointOptions.GrantedScopesSelector"/>, because without it this package
-    /// has no way to learn what was granted and guessing would refuse every caller.
+    /// has no way to learn what was granted and guessing would refuse every caller. That check is FIRST
+    /// deliberately: the clauses after it call host-supplied delegates, and a deployment that never
+    /// opted in should not pay for a check that cannot fire.
+    /// <para>
+    /// With it set, <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/> is asked here and again
+    /// in the handler. Twice rather than once, because the two answers are wanted at two different
+    /// moments and threading the first through would put this package's state into the request; both
+    /// calls are on the enforcing path only.
+    /// </para>
     /// <para>
     /// RFC 6750 Section 3.1 names the answer: <c>insufficient_scope</c>, "The request requires higher
     /// privileges than provided by the access token", with 403. The <c>scope</c> attribute is the one
@@ -461,8 +476,8 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // that carried no token at all - which RFC 6750 Section 3.1 forbids, and which sends a receiver
         // whose token merely expired to fetch a scope it already has. Pass it through and let the
         // handler emit the bare 401.
-        if (options.ReceiverIdSelector(http) is null ||
-            options.GrantedScopesSelector is not { } selector ||
+        if (options.GrantedScopesSelector is not { } selector ||
+            options.ReceiverIdSelector(http) is null ||
             http.GetEndpoint()?.Metadata.GetMetadata<RequiredScope>() is not { } required ||
             SsfScopes.Satisfies(selector(http), required.Scope))
         {

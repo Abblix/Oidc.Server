@@ -59,8 +59,14 @@ public sealed class ScopeEnforcementTests
 
     /// <summary>
     /// Poll delivers a receiver its own events. The profile assigns it no scope, and this library reads
-    /// it as <c>ssf.read</c> - so a read-only receiver can collect what its stream carries.
+    /// it as <c>ssf.read</c>.
     /// </summary>
+    /// <remarks>
+    /// Which is a deliberate exception rather than a pure read: a poll acknowledges, and that releases
+    /// the transmitter from retaining the acknowledged events, so this scope can empty its own queue.
+    /// The route comment gives the reasoning; the row is here because the alternative - requiring
+    /// <c>ssf.manage</c> to poll - would make every receiver hold the scope that deletes streams.
+    /// </remarks>
     [Fact]
     public async Task AReadScopedCaller_MayPoll()
     {
