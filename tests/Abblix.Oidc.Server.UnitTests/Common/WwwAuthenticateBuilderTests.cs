@@ -75,6 +75,51 @@ public class WwwAuthenticateBuilderTests
             WwwAuthenticateBuilder.BuildDPoPChallenge(missingAuthentication, Realm, DPoPAlgs));
     }
 
+    /// <summary>
+    /// RFC 9449 Section 7.1, Figure 15, verbatim: "HTTP 401 Response to a Protected Resource Request
+    /// without Authentication" prints <c>WWW-Authenticate: DPoP algs="ES256 PS256"</c>.
+    /// </summary>
+    /// <remarks>
+    /// The point of the figure is the SEPARATOR. With no realm, <c>algs</c> is the challenge's first
+    /// parameter and follows the scheme with a space; a comma there is not a challenge under RFC 9110's
+    /// grammar, and a parser reads the scheme as parameterless and then chokes on the rest. Every other
+    /// row in this class passes a non-empty realm, so none of them can see it.
+    /// </remarks>
+    [Fact]
+    public void BuildDPoPChallenge_WithoutRealm_MatchesTheSpecificationFigure()
+        => Assert.Equal(
+            "DPoP algs=\"ES256 PS256\"",
+            WwwAuthenticateBuilder.BuildDPoPChallenge(
+                new MissingAuthenticationError("No access token provided"),
+                realm: null,
+                ["ES256", "PS256"]));
+
+    /// <summary>
+    /// An <c>algs</c> value carrying a quotation mark has to be escaped like any other parameter, or it
+    /// ends the quoted string early and the rest of the header is read as something else.
+    /// </summary>
+    /// <remarks>
+    /// The parameter is an unconstrained sequence on a public method of a published package, so what a
+    /// caller puts in it is not this library's choice.
+    /// </remarks>
+    [Fact]
+    public void BuildDPoPChallenge_AlgsCarryingSpecials_AreEscaped()
+        => Assert.Equal(
+            "DPoP realm=\"r\", algs=\"a\\\"b\"",
+            WwwAuthenticateBuilder.BuildDPoPChallenge(
+                new MissingAuthenticationError("No access token provided"), "r", ["a\"b"]));
+
+    /// <summary>
+    /// No algorithms leaves the parameter out rather than emitting <c>algs=""</c>, which advertises a
+    /// scheme that accepts nothing.
+    /// </summary>
+    [Fact]
+    public void BuildDPoPChallenge_NoAlgs_OmitsTheParameter()
+        => Assert.Equal(
+            "DPoP realm=\"r\"",
+            WwwAuthenticateBuilder.BuildDPoPChallenge(
+                new MissingAuthenticationError("No access token provided"), "r", []));
+
     [Fact]
     public void BuildBasicChallenge_WithRealm_EmitsRealmOnly()
     {

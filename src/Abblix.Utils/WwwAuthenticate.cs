@@ -32,7 +32,7 @@ public static class WwwAuthenticate
     /// yet has nothing to correct, and naming an error would describe a failure that did not happen.
     /// </remarks>
     public static string Challenge(string scheme, string? realm = null)
-        => Build(scheme, realm, null, null);
+        => Challenge(scheme, ("realm", realm));
 
     /// <summary>
     /// A challenge naming why the credentials that WERE presented did not suffice.
@@ -42,16 +42,25 @@ public static class WwwAuthenticate
     /// <param name="error">The error code, from whatever vocabulary the scheme defines.</param>
     /// <param name="errorDescription">Human-readable detail, omitted when null or empty.</param>
     public static string Challenge(string scheme, string? realm, string error, string? errorDescription)
-        => Build(scheme, realm, error, errorDescription);
+        => Challenge(scheme, ("realm", realm), ("error", error), ("error_description", errorDescription));
 
-    private static string Build(string scheme, string? realm, string? error, string? errorDescription)
+    /// <summary>
+    /// A challenge carrying whatever parameters the scheme defines, in the order given.
+    /// </summary>
+    /// <remarks>
+    /// Every scheme-specific parameter goes through here rather than being appended to the result, so
+    /// that one place decides the delimiter and the escaping. Appending by hand loses both: the first
+    /// parameter follows the scheme with a SPACE and the rest with a comma - RFC 9449 Section 7.1 Figure
+    /// 15 prints <c>DPoP algs="ES256 PS256"</c>, a challenge whose only parameter is its own - and a
+    /// value carrying a quotation mark has to be escaped or it ends the string early.
+    /// </remarks>
+    public static string Challenge(string scheme, params (string Name, string? Value)[] parameters)
     {
         var builder = new StringBuilder(scheme);
         var first = true;
 
-        Append("realm", realm);
-        Append("error", error);
-        Append("error_description", errorDescription);
+        foreach (var (name, value) in parameters)
+            Append(name, value);
 
         return builder.ToString();
 

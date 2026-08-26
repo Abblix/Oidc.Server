@@ -25,9 +25,16 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// What a receiver is told when a Stream Management request names nobody.
 /// </summary>
 /// <remarks>
-/// The CAEP Interoperability Profile 1.0 Section 2.7.2 requires errors "as per Section 3.1 of [RFC6750]",
-/// and a bare 401 with an empty body satisfies neither the profile nor a receiver: it carries no challenge
-/// naming a scheme, so a client library has nothing to retry with and nothing to log.
+/// A bare 401 with an empty body carries no challenge naming a scheme, so a client library has nothing to
+/// retry with and nothing to log.
+/// <para>
+/// The CAEP Interoperability Profile Section 2.7.2 does require errors "as per Section 3.1 of [RFC6750]",
+/// but that MUST hangs on a condition this case does not meet: "If the access token is not sufficient for
+/// the requested action". Here no token was presented at all - this package never sees one - so the
+/// answer comes from RFC 6750 Section 3.1 directly, which covers a request that "lacks any authentication
+/// information" and says the challenge stays bare. The profile's clause is what governs the SCOPE split,
+/// which is a different change.
+/// </para>
 /// </remarks>
 public sealed class ManagementRefusalTests
 {
@@ -35,8 +42,10 @@ public sealed class ManagementRefusalTests
     private const string SomeEvent = "https://tenant.example.com/events/membership-changed";
 
     /// <summary>
-    /// Every route on the management surface refuses the same way, because they refuse for the same
-    /// reason. Driving all of them rather than one keeps a route that grows its own refusal visible.
+    /// Every route under this prefix refuses the same way, because they refuse for the same reason.
+    /// Driving all ELEVEN rather than a sample keeps a route that grows its own refusal visible - poll is
+    /// the one that is delivery rather than management, and leaving it out let a revert of that one site
+    /// alone survive the whole suite.
     /// </summary>
     /// <remarks>
     /// Only reached with a body that binds. A malformed one is refused by the framework as 400 before any
@@ -54,6 +63,7 @@ public sealed class ManagementRefusalTests
     [InlineData("POST", "/ssf/subjects:add")]
     [InlineData("POST", "/ssf/subjects:remove")]
     [InlineData("POST", "/ssf/verify")]
+    [InlineData("POST", "/ssf/poll/stream-1")]
     public async Task AnUnidentifiedCaller_GetsAChallengeRatherThanABare401(string method, string route)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
