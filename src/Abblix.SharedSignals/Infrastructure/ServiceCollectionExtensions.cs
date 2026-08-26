@@ -72,6 +72,10 @@ public static class ServiceCollectionExtensions
                 serviceProvider => serviceProvider
                     .GetRequiredService<SharedSignalsTransmitterOptions>().Issuer)));
 
+        // A singleton because the address is declared once, at startup, by whatever maps the poll
+        // route, and read afterwards by everything that mints a stream.
+        services.TryAddSingleton<PollEndpointLocator>();
+
         services.TryAddSingleton<StreamManagementService>();
         services.TryAddSingleton<PollEndpointHandler>();
 

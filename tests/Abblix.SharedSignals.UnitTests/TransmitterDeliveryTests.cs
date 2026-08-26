@@ -408,7 +408,8 @@ public class TransmitterDeliveryTests
         var options = new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" };
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer);
-        var service = new StreamManagementService(store, outbox, dispatcher, options, PolicyFor(options));
+        var service = new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options));
 
         Assert.True(await service.ChangeStreamStatusAsync(
             "receiver-a", "s-1", StreamStatuses.Disabled, "maintenance",
@@ -439,4 +440,10 @@ public class TransmitterDeliveryTests
     private static ReceiverAddressPolicy PolicyFor(SharedSignalsTransmitterOptions options)
         => new(options, (_, _) => Task.FromResult<System.Net.IPAddress[]>(
             [System.Net.IPAddress.Parse("93.184.216.34")]));
+    /// <summary>
+    /// The poll address, taken from the options the way the container would. This fixture names none, so
+    /// the service it builds offers no poll delivery - which is what these rows are about, since they
+    /// exercise push.
+    /// </summary>
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
 }

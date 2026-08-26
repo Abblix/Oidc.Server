@@ -37,10 +37,15 @@ public class ConfigurationHostStoresTests
         PollEndpointFactory = streamId => new Uri($"https://tr.example.com/ssf/poll/{streamId}"),
     };
 
+    /// <summary>A transmitter offering no poll delivery at all: no factory, and no mapped route.</summary>
+    private static SharedSignalsTransmitterOptions BareOptions => new() { Issuer = "https://tr.example.com" };
+
+    private static PollEndpointLocator PollEndpoints => new(TransmitterOptions);
+
     [Fact]
     public async Task ConfiguredStreams_MaterializeAsTheDynamicCreateWould()
     {
-        var store = new ConfigurationStreamStore(TransmitterOptions,
+        var store = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
         [
             new ConfiguredStream
             {
@@ -72,7 +77,7 @@ public class ConfigurationHostStoresTests
     [Fact]
     public async Task ConfiguredStreams_AcceptEphemeralMutation_TheVerificationThrottleNeedsIt()
     {
-        var store = new ConfigurationStreamStore(TransmitterOptions,
+        var store = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" }],
             new InMemoryStreamStore());
 
@@ -106,7 +111,7 @@ public class ConfigurationHostStoresTests
         ConfiguredStream[] declared =
             [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main", SubjectsMode = StreamSubjectsMode.None }];
 
-        var first = new ConfigurationStreamStore(TransmitterOptions, declared, shared);
+        var first = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints, declared, shared);
         var stream = await first.FindAsync("kezio", "kezio-main", cancellationToken);
         Assert.True(await first.UpdateAsync(
             stream! with
@@ -118,7 +123,7 @@ public class ConfigurationHostStoresTests
             cancellationToken));
 
         // A second instance over the same backing store: a restart, or the replica beside it.
-        var second = new ConfigurationStreamStore(TransmitterOptions, declared, shared);
+        var second = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints, declared, shared);
         var reconciled = await second.FindAsync("kezio", "kezio-main", cancellationToken);
 
         Assert.NotNull(reconciled);
@@ -139,8 +144,7 @@ public class ConfigurationHostStoresTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var shared = new InMemoryStreamStore();
 
-        var before = new ConfigurationStreamStore(
-            TransmitterOptions,
+        var before = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [new ConfiguredStream
             {
                 ReceiverId = "kezio",
@@ -154,8 +158,7 @@ public class ConfigurationHostStoresTests
             stream! with { Status = StreamStatuses.Paused }, cancellationToken));
 
         // The operator edits the file and the deployment restarts.
-        var after = new ConfigurationStreamStore(
-            TransmitterOptions,
+        var after = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [new ConfiguredStream
             {
                 ReceiverId = "kezio",
@@ -183,8 +186,7 @@ public class ConfigurationHostStoresTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var shared = new InMemoryStreamStore();
 
-        var before = new ConfigurationStreamStore(
-            TransmitterOptions,
+        var before = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [
                 new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" },
                 new ConfiguredStream { ReceiverId = "departed", StreamId = "departed-main" },
@@ -192,8 +194,7 @@ public class ConfigurationHostStoresTests
             shared);
         Assert.Equal(2, (await before.ListAllAsync(cancellationToken)).Count);
 
-        var after = new ConfigurationStreamStore(
-            TransmitterOptions,
+        var after = new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [new ConfiguredStream { ReceiverId = "kezio", StreamId = "kezio-main" }],
             shared);
 
@@ -220,8 +221,7 @@ public class ConfigurationHostStoresTests
         var missingReceiver = (ConfiguredStream)System.Runtime.CompilerServices
             .RuntimeHelpers.GetUninitializedObject(typeof(ConfiguredStream));
 
-        var refusal = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
-            TransmitterOptions, [missingReceiver], new InMemoryStreamStore()));
+        var refusal = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(TransmitterOptions, PollEndpoints, [missingReceiver], new InMemoryStreamStore()));
 
         Assert.Contains(nameof(ConfiguredStream.ReceiverId), refusal.Message);
         Assert.Contains("position 0", refusal.Message);
@@ -232,8 +232,7 @@ public class ConfigurationHostStoresTests
     {
         // A duplicate declaration and an undeliverable stream are operator mistakes; surfacing
         // them at construction beats a stream that silently cannot flow.
-        var duplicate = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
-            TransmitterOptions,
+        var duplicate = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(TransmitterOptions, PollEndpoints,
             [
                 new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" },
                 new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" },
@@ -241,7 +240,8 @@ public class ConfigurationHostStoresTests
         Assert.Contains("more than once", duplicate.Message);
 
         var undeliverable = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
-            new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
+            BareOptions,
+            new PollEndpointLocator(BareOptions),
             [new ConfiguredStream { ReceiverId = "kezio", StreamId = "s-1" }],
             new InMemoryStreamStore()));
         Assert.Contains(nameof(ConfiguredStream.PushEndpointUrl), undeliverable.Message);

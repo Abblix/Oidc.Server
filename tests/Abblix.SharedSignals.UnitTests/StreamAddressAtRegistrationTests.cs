@@ -272,7 +272,8 @@ public class StreamAddressAtRegistrationTests
             options,
             resolve ?? ((_, _) => Task.FromResult<IPAddress[]>([IPAddress.Parse("93.184.216.34")])));
 
-        return new StreamManagementService(store, outbox, dispatcher, options, policy, clock);
+        return new StreamManagementService(
+            store, outbox, dispatcher, options, policy, PollEndpointsOf(options), clock);
     }
 
     private sealed class NeverSigner : ISecurityEventTokenSigner
@@ -280,4 +281,10 @@ public class StreamAddressAtRegistrationTests
         public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
             => Task.FromResult("signed");
     }
+    /// <summary>
+    /// The poll address, taken from the options the way the container would. These fixtures name it
+    /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
+    /// endpoints instead has it declared by the mapping, which is covered end to end.
+    /// </summary>
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
 }

@@ -103,12 +103,12 @@ public sealed class CaepProfileMetadataTests
     /// fires on the DEFAULT would fire on every deployment that configures nothing.
     /// </summary>
     /// <remarks>
-    /// Scoped to the two metadata members this change is about. A fixture carrying both is not thereby
-    /// conformant overall - this one supplies no poll endpoint, and the profile's Section 2.3.8.1 requires
-    /// a transmitter to accept a Create Stream naming poll, which Section 2.4.5.1 makes the default.
+    /// Scoped to the three things this check looks at. A fixture that fires none of them is not thereby
+    /// conformant overall: the check speaks about what a host configured, and the profile has requirements
+    /// no configuration can be wrong about.
     /// </remarks>
     [Fact]
-    public async Task AHostCarryingBothMembers_IsNotWarnedAboutEither()
+    public async Task AHostInsideTheProfileOnAllThree_IsNotWarned()
     {
         var recorder = new RecordingProvider();
 
