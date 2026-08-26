@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
@@ -117,7 +118,8 @@ public sealed class CaepProfileMetadataTests
                 JwksUri = new Uri($"{Issuer}/jwks"),
                 AuthorizationSchemes = [SchemeOf(SchemeUrns.OAuth2)],
             },
-            recorder);
+            recorder,
+            checksScopes: true);
 
         Assert.Empty(recorder.Warnings);
     }
@@ -153,7 +155,8 @@ public sealed class CaepProfileMetadataTests
                 JwksUri = new Uri($"{Issuer}/jwks"),
                 AuthorizationSchemes = [],
             },
-            recorder);
+            recorder,
+            checksScopes: true);
 
         var metadata = await ReadDocumentAsync(host, cancellationToken);
 
@@ -185,6 +188,28 @@ public sealed class CaepProfileMetadataTests
         Assert.Contains(recorder.Warnings, message => message.Contains(SchemeUrns.OAuth2));
     }
 
+    /// <summary>
+    /// The third thing this deployment can be outside the profile on, and the only one invisible from
+    /// outside: the configuration document says the management API is OAuth-protected while the
+    /// transmitter checks no scope at all.
+    /// </summary>
+    /// <remarks>
+    /// Section 2.7.2 makes verifying a token's sufficiency a MUST. A host that never set
+    /// <c>GrantedScopesSelector</c> has that switched off wholesale, and a receiver cannot tell -
+    /// nothing it fetches differs. So the only place it can be said is the startup log.
+    /// </remarks>
+    [Fact]
+    public async Task AHostThatChecksNoScope_IsWarnedAtStartup()
+    {
+        var recorder = new RecordingProvider();
+
+        await using var host = await StartAsync(
+            BaseOptions() with { JwksUri = new Uri($"{Issuer}/jwks") },
+            recorder);
+
+        Assert.Contains(recorder.Warnings, message => message.Contains("GrantedScopesSelector"));
+    }
+
     private static SharedSignalsTransmitterOptions BaseOptions() => new()
     {
         Issuer = Issuer,
@@ -200,7 +225,9 @@ public sealed class CaepProfileMetadataTests
     private static bool IsOAuth(JsonObject scheme) => SpecUrnOf(scheme) == SchemeUrns.OAuth2;
 
     private static async Task<WebApplication> StartAsync(
-        SharedSignalsTransmitterOptions options, ILoggerProvider? recorder = null)
+        SharedSignalsTransmitterOptions options,
+        ILoggerProvider? recorder = null,
+        bool checksScopes = false)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -215,6 +242,17 @@ public sealed class CaepProfileMetadataTests
             o.SigningKeySource = _ => Task.FromResult<JsonWebKey>(
                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
         builder.Services.AddSharedSignalsTransmitter(options);
+
+        // Scope checking is the third thing the startup check looks at, so a fixture asserting NO warning
+        // has to be inside the profile on that count too - otherwise it is asserting the absence of two
+        // warnings while a third fires, which is a criterion that stops meaning what its name says.
+        if (checksScopes)
+        {
+            builder.Services.AddSingleton(new SharedSignalsEndpointOptions
+            {
+                GrantedScopesSelector = _ => [SsfScopes.Manage],
+            });
+        }
 
         var app = builder.Build();
         // Maps the well-known configuration document too, which is where the profile check runs.

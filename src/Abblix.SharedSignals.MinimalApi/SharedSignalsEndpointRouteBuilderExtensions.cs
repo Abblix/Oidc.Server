@@ -202,6 +202,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // needing to know what.
         if (options.AuthorizationSchemes is { Count: > 0 } schemes && !schemes.Any(IsOAuth))
             LogOAuthSchemeNotAdvertised(logger, schemes.Count);
+
+        if ((services.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions)
+            .GrantedScopesSelector is null)
+            LogScopeCheckingDisabled(logger);
     }
 
     private static bool IsOAuth(JsonObject scheme)
@@ -402,14 +406,15 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// what RFC 6750 Section 3.1 describes as a request that "lacks any authentication information", and
     /// for which it says the resource server "SHOULD NOT include an error code or other error
     /// information". A caller that presented nothing has nothing to correct. It is not the only refusal
-    /// on this surface: a caller that IS identified but lacks the scope gets 403 from the filter above,
-    /// and that ordering is deliberate.
+    /// on this surface: a caller that IS identified but lacks the scope gets 403 from
+    /// <see cref="EnforceScopeAsync"/>, which runs first, and that ordering is deliberate.
     /// <para>
     /// That section defines three codes and this method answers none of them. <c>invalid_token</c>
     /// belongs to whoever validates the token, which is the host: this package never sees one, it reads
     /// whatever identity the host's authentication left behind, through
     /// <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/>. <c>insufficient_scope</c> IS
-    /// emitted here, by the filter above, once the host supplies the granted scopes.
+    /// emitted by this package, from <see cref="EnforceScopeAsync"/>, once the host supplies the granted
+    /// scopes.
     /// </para>
     /// <para>
     /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
@@ -457,13 +462,13 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// Returns immediately unless the host set
     /// <see cref="SharedSignalsEndpointOptions.GrantedScopesSelector"/>, because without it this package
     /// has no way to learn what was granted and guessing would refuse every caller. That check is FIRST
-    /// deliberately: the clauses after it call host-supplied delegates, and a deployment that never
+    /// deliberately: the clause after it calls a host-supplied delegate, and a deployment that never
     /// opted in should not pay for a check that cannot fire.
     /// <para>
     /// With it set, <see cref="SharedSignalsEndpointOptions.ReceiverIdSelector"/> is asked here and again
     /// in the handler. Twice rather than once, because the two answers are wanted at two different
-    /// moments and threading the first through would put this package's state into the request; both
-    /// calls are on the enforcing path only.
+    /// moments and threading the first through would put this package's state into the request. The
+    /// handler's call happens on every request either way; only the extra one here is gated.
     /// </para>
     /// <para>
     /// RFC 6750 Section 3.1 names the answer: <c>insufficient_scope</c>, "The request requires higher

@@ -62,4 +62,30 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             + "{{\"spec_urn\": \"urn:ietf:rfc:6749\"}}. Add it, or leave "
             + "SharedSignalsTransmitterOptions.AuthorizationSchemes unset to advertise it alone.")]
     private static partial void LogOAuthSchemeNotAdvertised(ILogger logger, int SchemeCount);
+
+    /// <summary>
+    /// The management API checks no scope, because the host supplied no way to read the granted ones.
+    /// </summary>
+    /// <remarks>
+    /// The sharpest of the three, because the other two are visible in the document a receiver fetches
+    /// while this one is not. The configuration metadata advertises OAuth 2.0 by default, so a receiver
+    /// is told the Stream Management API is OAuth-protected; with no selector, every token that gets past
+    /// the host's own authentication may do everything, and nothing anywhere says so. That is the whole
+    /// of Section 2.7.2's sufficiency MUST switched off.
+    /// <para>
+    /// A warning rather than a refusal for the same reason as the others: a deployment authorizing by
+    /// something this package cannot read is working and outside the profile, which is its choice to
+    /// make - but not one it should make without noticing.
+    /// </para>
+    /// </remarks>
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.ScopeCheckingDisabled,
+        Level = LogLevel.Warning,
+        Message = "No scope is checked on the Stream Management API: "
+            + "SharedSignalsEndpointOptions.GrantedScopesSelector is unset, so this transmitter cannot "
+            + "read what a caller's token was granted and every authenticated caller may do everything. "
+            + "The CAEP Interoperability Profile 1.0 Section 2.7.2 requires the transmitter to verify "
+            + "that the token is sufficient for the requested action, and Section 2.7.3 defines "
+            + "ssf.read and ssf.manage as what sufficient means.")]
+    private static partial void LogScopeCheckingDisabled(ILogger logger);
 }
