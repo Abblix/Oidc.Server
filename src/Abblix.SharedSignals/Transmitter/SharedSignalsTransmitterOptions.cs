@@ -69,9 +69,10 @@ public sealed record SharedSignalsTransmitterOptions
     public TimeSpan? MinVerificationInterval { get; init; }
 
     /// <summary>
-    /// Where this transmitter publishes the JWK Set its SETs verify against, advertised as
-    /// "jwks_uri" (SSF 1.0 Section 7.1); null publishes no key location, leaving key
-    /// distribution to some out-of-band agreement.
+    /// Where this transmitter publishes the JWK Set its SETs verify against, advertised as "jwks_uri"
+    /// (SSF 1.0 Section 7.1). Required in practice AND on paper: that section says "This value MUST be
+    /// specified if the Transmitter intends to generate signed JWTs", and this transmitter signs every
+    /// event it sends. Left null, no receiver can obtain a key and the deployment is told so at startup.
     /// </summary>
     public Uri? JwksUri { get; init; }
 
@@ -80,6 +81,21 @@ public sealed record SharedSignalsTransmitterOptions
     /// (SSF 1.0 Section 7.1.1), kept as raw JSON because their shape is scheme-specific and
     /// authorization itself is the host's, not this package's.
     /// </summary>
+    /// <remarks>
+    /// Three settings, and the first of them makes an assertion on the deployment's behalf.
+    /// <list type="bullet">
+    ///   <item>Left unset, the document advertises OAuth 2.0 - the value the CAEP Interoperability
+    ///   Profile 1.0 Section 2.3.7 requires and Section 2.4.3 requires receivers to use. That is a claim
+    ///   about how this deployment authorizes its Stream Management API, made by this package because the
+    ///   profile demands it and most deployments do exactly that. A deployment authorizing by something
+    ///   else must not leave it unset.</item>
+    ///   <item>Set to a list, the member is that list verbatim. The host owns it, including whether the
+    ///   OAuth entry is in it, and is told once at startup if it is not.</item>
+    ///   <item>Set to an EMPTY list, the member is omitted entirely. That is how a deployment says it
+    ///   advertises no scheme at all, and nothing warns about it, because it is a decision rather than an
+    ///   oversight.</item>
+    /// </list>
+    /// </remarks>
     public IReadOnlyList<JsonObject>? AuthorizationSchemes { get; init; }
 
     /// <summary>

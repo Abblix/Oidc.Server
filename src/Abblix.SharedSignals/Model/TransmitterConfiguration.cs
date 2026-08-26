@@ -111,8 +111,26 @@ public sealed record TransmitterConfiguration
         /// <summary>The supported authorization scheme descriptions.</summary>
         public const string AuthorizationSchemes = "authorization_schemes";
 
+        /// <summary>The member naming which specification an authorization scheme follows.</summary>
+        public const string SpecUrn = "spec_urn";
+
         /// <summary>The default subject behavior of newly created streams.</summary>
         public const string DefaultSubjects = "default_subjects";
+    }
+
+    /// <summary>
+    /// The values an authorization scheme's "spec_urn" member may carry.
+    /// </summary>
+    public static class AuthorizationSchemeUrns
+    {
+        /// <summary>
+        /// OAuth 2.0. The CAEP Interoperability Profile 1.0 draft 01 requires the advertised schemes to
+        /// include this one (Section 2.3.7) and requires a receiver to use OAuth 2.0 for Stream
+        /// Management API requests (Section 2.4.3), so the two halves agree on it. The draft is named
+        /// because draft 00 numbers Section 2.4 differently and has no 2.4.3; Section 2.3.7 is identical
+        /// in both.
+        /// </summary>
+        public const string OAuth2 = "urn:ietf:rfc:6749";
     }
 
     /// <summary>
@@ -162,8 +180,9 @@ public sealed record TransmitterConfiguration
 
     /// <summary>
     /// The transmitter's JSON Web Key Set document with the signing keys a receiver validates
-    /// signatures against; required in practice for a transmitter issuing signed JWTs, and when
-    /// present the URL must use HTTP over TLS (SSF 1.0 Section 7.1).
+    /// signatures against. SSF 1.0 Section 7.1 marks the member OPTIONAL and then requires it of any
+    /// transmitter that signs: "This value MUST be specified if the Transmitter intends to generate
+    /// signed JWTs." When present the URL must use HTTP over TLS.
     /// </summary>
     [JsonPropertyName(ParameterNames.JwksUri)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

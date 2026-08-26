@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Text.Json.Nodes;
 
 namespace Abblix.SharedSignals.MinimalApi;
 
@@ -30,7 +32,7 @@ namespace Abblix.SharedSignals.MinimalApi;
 /// <c>MapPushDeliveryEndpoint</c> from <c>Abblix.SecurityEvents.MinimalApi</c>.
 /// </para>
 /// </summary>
-public static class SharedSignalsEndpointRouteBuilderExtensions
+public static partial class SharedSignalsEndpointRouteBuilderExtensions
 {
     /// <summary>
     /// The route segments of the management surface, single-sourced because the configuration
@@ -122,6 +124,8 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         var endpointOptions = EndpointOptionsOf(endpoints);
         var options = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
+
+        WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
         var advertisedPrefix = endpointOptions.AdvertisedPrefix.HasValue
             ? endpointOptions.AdvertisedPrefix
             : endpointOptions.ManagementPrefix;
@@ -132,6 +136,53 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SharedSignalsTransmitterOptions current) => Results.Json(ConfigurationDocumentOf(current, advertisedPrefix)));
     }
+
+    /// <summary>
+    /// The one scheme description the CAEP Interoperability Profile names.
+    /// </summary>
+    private static JsonObject OAuthAuthorizationScheme() => new()
+    {
+        [TransmitterConfiguration.ParameterNames.SpecUrn] =
+            TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2,
+    };
+
+    /// <summary>
+    /// Says once, at startup, when the document is missing something the CAEP Interoperability Profile
+    /// 1.0 requires and the host looks unaware of it. Neither case refuses the host, and the two are not
+    /// equally optional elsewhere: SSF 1.0 requires jwks_uri of any transmitter that signs, which this one
+    /// always does, while it attaches no condition to authorization_schemes.
+    /// </summary>
+    /// <remarks>
+    /// It does NOT announce every profile-rejected document, and one configuration is deliberately left
+    /// silent: an EMPTY <see cref="SharedSignalsTransmitterOptions.AuthorizationSchemes"/> omits the
+    /// member, which Section 2.3.7 rejects, and says nothing - because the host wrote that empty list on
+    /// purpose and a warning it cannot act on is one it learns to ignore. A conformance run failing 2.3.7
+    /// against a clean startup log is therefore possible, and this is the configuration that does it.
+    /// </remarks>
+    private static void WarnIfOutsideTheCaepProfile(
+        IServiceProvider services, SharedSignalsTransmitterOptions options)
+    {
+        var logger = services.GetService<ILoggerFactory>()
+            ?.CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
+
+        if (logger is null)
+            return;
+
+        if (options.JwksUri is null)
+            LogNoJwksUriAdvertised(logger);
+
+        // Only a host-supplied list can be short: the default IS the required entry. Asked positively -
+        // does some scheme name OAuth 2.0 - so a list can carry anything else it likes without the check
+        // needing to know what.
+        if (options.AuthorizationSchemes is { Count: > 0 } schemes && !schemes.Any(IsOAuth))
+            LogOAuthSchemeNotAdvertised(logger, schemes.Count);
+    }
+
+    private static bool IsOAuth(JsonObject scheme)
+        => scheme.TryGetPropertyValue(TransmitterConfiguration.ParameterNames.SpecUrn, out var urn)
+           && urn is JsonValue value
+           && value.TryGetValue<string>(out var specUrn)
+           && specUrn == TransmitterConfiguration.AuthorizationSchemeUrns.OAuth2;
 
     private static SharedSignalsEndpointOptions EndpointOptionsOf(IEndpointRouteBuilder endpoints)
         => endpoints.ServiceProvider.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions;
@@ -303,7 +354,16 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
             AddSubjectEndpoint = EndpointOf(Routes.AddSubject),
             RemoveSubjectEndpoint = EndpointOf(Routes.RemoveSubject),
             VerificationEndpoint = EndpointOf(Routes.Verify),
-            AuthorizationSchemes = options.AuthorizationSchemes,
+            AuthorizationSchemes = options.AuthorizationSchemes switch
+            {
+                null => [OAuthAuthorizationScheme()],
+
+                // The host said "advertise none" explicitly. Publishing an empty array would advertise a
+                // member with no schemes in it, which says less than omitting it.
+                { Count: 0 } => null,
+
+                var supplied => supplied,
+            },
             DefaultSubjects = options.DefaultSubjectsValue,
         };
     }
