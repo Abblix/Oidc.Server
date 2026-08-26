@@ -36,7 +36,7 @@ public partial class PingModeCompletionHandler(
     private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
-    /// Handles ping mode token delivery by storing tokens and sending a notification to the client.
+    /// Handles ping mode delivery by storing the authenticated request and sending a notification to the client.
     /// The client will poll the token endpoint after receiving the notification.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
