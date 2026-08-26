@@ -467,17 +467,16 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// The push half of the same misconfiguration: push REMOVES the request rather than marking it Denied.
+    /// Push REMOVES a misconfigured request rather than marking it Denied, and this holds the ENDPOINT
+    /// clause of the check.
     /// </summary>
     /// <remarks>
-    /// The configuration check has TWO clauses - no endpoint, or no token - and a test can only hold the
-    /// one its fixture leaves out. <c>WhenNotConfiguredForDelivery_RemovesTheRequest</c> below drops the
-    /// token; this one drops the endpoint. Delete either and a build that checks only the surviving clause
-    /// still passes, which is the whole reason both exist.
+    /// The guard is two clauses, so it takes two fixtures: this one supplies the token and omits the
+    /// endpoint, <c>PushMode_MissingToken_RemovesRequest</c> does the reverse. Blinding either clause
+    /// kills exactly one of them.
     ///
-    /// The outcome they share: a push client never comes to the token endpoint, so a status it will never
-    /// read is an orphan sitting in storage until it expires. Removing leaves nothing behind, and that
-    /// difference from ping is why push overrides the refusal.
+    /// Why removal: a push client never comes to the token endpoint, so a status it will never read is an
+    /// orphan sitting in storage until it expires.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_MissingEndpoint_RemovesRequest()
@@ -516,12 +515,52 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// The other clause: the endpoint is registered and the token is not, which push must also refuse.
+    /// </summary>
+    /// <remarks>
+    /// Without this, blinding the token half of the guard kills only a PING test - push would carry a
+    /// divergent check that drops the token and ship green.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_MissingToken_RemovesRequest()
+    {
+        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+            ClientNotificationEndpoint = new Uri("https://client.example/ciba"),
+            ClientNotificationToken = null,
+        };
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+        };
+
+        _storage.Setup(s => s.TryRemoveAsync(AuthReqId)).ReturnsAsync(request);
+
+        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+
+        _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
+
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _notificationService.Verify(
+            s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// Verifies that when the client notification endpoint is missing, PING mode treats it as a
     /// configuration error and marks the request Denied.
     /// </summary>
     /// <remarks>
     /// Ping, not push, which the handler this builds has always been; the name said otherwise. Push
-    /// removes instead of denying, and the test below it is push's endpoint clause.
+    /// removes instead of denying: the two tests above are its clauses.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
