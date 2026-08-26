@@ -26,10 +26,26 @@ DOC_LINE = re.compile(r"^\s*///")
 SUMMARY_OPEN = re.compile(r"<summary\b")
 
 
+def repository_root() -> pathlib.Path:
+    located = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+    return pathlib.Path(located.stdout.strip())
+
+
 def tracked_sources() -> list[pathlib.Path]:
+    """Every tracked ``.cs`` file in the working tree, from wherever this is run.
+
+    Two separate defaults are relative to the CURRENT directory here, and each needs its own flag.
+    ``:(top)`` anchors the PATTERN: without it the same command run from ``src/`` matches 1249 files
+    instead of 1762, and run from ``.github/scripts/`` matches none at all - an all-clear over a sweep
+    that read nothing, which is the one shape this family of checks exists to refuse. ``--full-name``
+    anchors the OUTPUT, without which the paths come back relative to the caller and cannot be read from
+    anywhere else. Anchoring one and not the other still moves the reach.
+    """
+    root = repository_root()
     listed = subprocess.run(
-        ["git", "ls-files", "*.cs"], capture_output=True, text=True, check=True)
-    return [pathlib.Path(line) for line in listed.stdout.splitlines() if line]
+        ["git", "ls-files", "--full-name", ":(top)*.cs"], capture_output=True, text=True, check=True)
+    return [root / line for line in listed.stdout.splitlines() if line]
 
 
 def split_blocks(path: pathlib.Path) -> list[tuple[int, int]]:
@@ -93,6 +109,9 @@ def main() -> int:
         print(f"\n{failures} split doc comment(s). Move each block to sit directly above its own member.")
         return 1
 
+    # The count is the only thing that distinguishes a clean sweep from a sweep that read a fraction of
+    # the tree, and the two print the same nothing otherwise.
+    print(f"{len(paths)} source(s) read; no split doc comments.")
     return 0
 
 
