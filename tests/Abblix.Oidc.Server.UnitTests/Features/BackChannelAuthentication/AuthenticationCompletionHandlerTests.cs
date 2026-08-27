@@ -56,7 +56,8 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Arranges what the STORED record reads, which is what the completion guard consults.
+    /// Arranges what the STORED record reads, which is what the completion guard consults. A null
+    /// status arranges NO record at all, which is a different thing from a record reading anything.
     /// </summary>
     /// <remarks>
     /// A DISTINCT object from the one handed to the handler, deliberately. A caller may set Status on
@@ -64,15 +65,22 @@ public class AuthenticationCompletionHandlerTests
     /// stored one indistinguishable - and a guard reading the caller's would pass every row here while
     /// refusing those hosts on their first completion.
     /// </remarks>
-    private void StoredRecordReads(BackChannelAuthenticationStatus status)
+    private void StoredRecordReads(BackChannelAuthenticationStatus? status)
     {
+        if (status is not { } present)
+        {
+            _storage.Setup(s => s.TryGetAsync(It.IsAny<string>()))
+                .ReturnsAsync((BackChannelAuthenticationRequest?)null);
+            return;
+        }
+
         var stored = new BackChannelAuthenticationRequest(
             new AuthorizedGrant(
                 new AuthSession(UserId, "stored_session", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
             DateTimeOffset.UnixEpoch.AddHours(1))
         {
-            Status = status,
+            Status = present,
         };
 
         _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
@@ -445,7 +453,14 @@ public class AuthenticationCompletionHandlerTests
                 BackchannelTokenDeliveryModes.Push))
             .ReturnsAsync(false);
 
-        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+        // What the store was HANDED, read at the moment of the call. Moq matches the argument by
+        // reference, so reading request.Status afterwards reports where the field ended up rather than
+        // what was persisted - and a push that writes after delivering instead of before would satisfy
+        // that reading while the store received a record still marked Pending.
+        BackChannelAuthenticationStatus? statusAtWrite = null;
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Callback(() => statusAtWrite = request.Status)
+            .Returns(Task.CompletedTask);
 
         var handler = CreatePushModeHandler();
 
@@ -461,7 +476,7 @@ public class AuthenticationCompletionHandlerTests
         // The record survives, and it survives Authenticated. Both halves matter: the first is what lets
         // a host see the request existed, the second is what stops the same host completing it again.
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
-        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, statusAtWrite);
     }
 
     /// <summary>
@@ -1059,12 +1074,20 @@ public class AuthenticationCompletionHandlerTests
                 .Any(parameter => parameter.ParameterType == typeof(IAuthorizationDetailsPolicy));
     }
     /// <summary>
-    /// A completion of a request that is not pending refuses, and touches neither storage nor delivery.
+    /// A completion refuses unless the store holds a PENDING record for the identifier, and touches
+    /// neither storage nor delivery when it refuses.
     /// </summary>
     /// <remarks>
     /// One authentication, one completion. The end user answered once, so a second full token set is
     /// wrong whatever it contains - which is why this refuses rather than replaying the narrowed grant:
     /// replaying would make the second set correctly scoped and no less of a second set.
+    /// <para>
+    /// A null case, because a record that is GONE is not a lesser case of one that is spent and is not a
+    /// value of the status enum at all: a poll can have redeemed and removed it, its lifetime can have
+    /// run out, push's own refusal path removes it. Without this row a guard asking whether the status is
+    /// something other than Pending passes every one of those straight through, mints, and writes the
+    /// record back into existence - and the two shapes are indistinguishable over the enum alone.
+    /// </para>
     /// <para>
     /// A row per mode, because the guard lives in the base and what must NOT run is each mode's own
     /// delivery. Loud rather than silent: nothing on this seam returns a value, so a host that was
@@ -1075,8 +1098,9 @@ public class AuthenticationCompletionHandlerTests
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Authenticated)]
     [InlineData(BackChannelAuthenticationStatus.Denied)]
-    public async Task CompleteAuthenticationAsync_PollMode_WhenNotPending_Refuses(
-        BackChannelAuthenticationStatus already)
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
     {
         var request = CreateRequest(UserId, null);
         StoredRecordReads(already);
@@ -1122,12 +1146,13 @@ public class AuthenticationCompletionHandlerTests
         _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
     }
 
-    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenNotPending_Refuses"/>
+    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses"/>
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Authenticated)]
     [InlineData(BackChannelAuthenticationStatus.Denied)]
-    public async Task CompleteAuthenticationAsync_PingMode_WhenNotPending_Refuses(
-        BackChannelAuthenticationStatus already)
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PingMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
     {
         var request = CreateRequest(UserId, null);
         StoredRecordReads(already);
@@ -1145,12 +1170,13 @@ public class AuthenticationCompletionHandlerTests
         _notificationService.VerifyNoOtherCalls();
     }
 
-    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenNotPending_Refuses"/>
+    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses"/>
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Authenticated)]
     [InlineData(BackChannelAuthenticationStatus.Denied)]
-    public async Task CompleteAuthenticationAsync_PushMode_WhenNotPending_Refuses(
-        BackChannelAuthenticationStatus already)
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
     {
         var request = CreateRequest(UserId, null);
         StoredRecordReads(already);
