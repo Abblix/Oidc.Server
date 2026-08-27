@@ -23,11 +23,17 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
+/// Neither is complete on its own terms. The claim reads the value before it takes the claim, so two
+/// callers can be handed the same grant on ONE node, which is issue 454; and the write-back is what the
+/// second defence rests on, so a first redemption that ends without issuing tokens leaves nothing for it
+/// to catch. Both are open, and the refusal this class returns is the same string either way.
+/// <para>
 /// This class decorates the standard token request processing flow with additional security measures
 /// to ensure the integrity of the authorization process. It detects when an authorization code,
 /// which should only be used once, is attempted to be used multiple times. In such cases, it revokes any
 /// tokens previously issued with that code and denies the request, effectively mitigating potential
 /// security risks associated with code reuse.
+/// </para>
 /// </remarks>
 /// <param name="processor">The underlying token request processor to be enhanced.</param>
 /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
@@ -52,19 +58,22 @@ public class AuthorizationCodeReusePreventingDecorator(
             return await processor.ProcessAsync(request);
         }
 
-        // Atomically claim the code by removing it (get-and-remove). This happens AFTER the grant
+        // Claim the code by removing it. Not atomically, whatever the store's method names suggest: the
+        // extension assembles the protocol from separate Get, Set and Remove calls, and says so. This
+        // happens AFTER the grant
         // validators have already checked client binding and PKCE, so a failed validation never
         // reaches here and never burns the code - but two concurrent redemptions of a valid code
         // now contend for a single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
-        // The code did not come back. What can reach this: a competitor claimed it between validation
-        // and here, the entry's lifetime lapsed in that same window, or a claim expired mid-protocol -
-        // the last two needing no second request at all. What cannot: ordinary sequential reuse, which
-        // does NOT arrive gone, because the grant is written back at the key and comes back carrying its
-        // issued tokens - the next branch is where that is caught. Nor a store call that failed after the
-        // removal, which raises rather than answering. The refusal below is the right one for every case
-        // that does arrive, and a diagnosis for none.
+        // The code did not come back. The claim answers with the grant only when this caller ran the
+        // protocol to the end with its own claim still in the store, so everything short of that arrives
+        // here as one outcome - and there is no listing the ways, which is what the sibling comments this
+        // branch rewrote were each short of. It reaches a single caller with no competitor as readily as
+        // a contended one: a first request refused for scope or resource never writes the grant back, so
+        // the client's next attempt with that code finds nothing.
+        //
+        // The refusal below is the right answer for whatever arrived, and a diagnosis for none of it.
         // Whichever of them it was, this redemption loses - reject without issuing a second set.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {

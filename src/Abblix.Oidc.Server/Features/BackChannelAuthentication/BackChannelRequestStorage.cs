@@ -84,9 +84,11 @@ public class BackChannelRequestStorage(
 
 	/// <summary>
 	/// Retrieves and removes a backchannel authentication request from storage, through the store's claim
-	/// protocol and under one hold of its per-key gate. The claim is what keeps two polls from both coming
-	/// back with the same grant; the gate is what keeps a contended key from ending with NEITHER of them
-	/// told they took it. The returns block below says what is still open.
+	/// protocol. The claim is what keeps two polls from both being told they took the same request; the
+	/// per-key gate around the removal is what keeps a contended key from ending with NEITHER of them
+	/// told. The VALUE, though, is read before the gate is taken, so a write landing between that read
+	/// and the removal is destroyed and the earlier bytes handed back - issue 454. The returns block below
+	/// says what else is still open.
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>

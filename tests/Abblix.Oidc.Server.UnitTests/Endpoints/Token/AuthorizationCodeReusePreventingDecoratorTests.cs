@@ -63,11 +63,10 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         };
 
     /// <summary>
-    /// When the code does not come back - a competitor claimed it between validation and the claim, the
-    /// entry's lifetime lapsed in that window, or a claim expired mid-protocol on a single caller - the
-    /// decorator rejects with invalid_grant and never invokes the inner processor, so no second set of
-    /// tokens is issued. Ordinary sequential reuse does not reach this branch: the next one catches it, on
-    /// the tokens the claimed grant already carries.
+    /// When the code does not come back, the decorator rejects with invalid_grant and never invokes the
+    /// inner processor, so no second set of tokens is issued. What this row pins is that outcome, not a
+    /// reason for it: the claim answers only when this caller ran the protocol to the end with its own
+    /// claim still in the store, and everything short of that arrives the same way.
     /// </summary>
     [Fact]
     public async Task UnclaimableCode_IsRejected_WithoutIssuingTokens()
