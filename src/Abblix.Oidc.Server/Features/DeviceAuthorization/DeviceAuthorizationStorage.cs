@@ -92,12 +92,31 @@ public partial class DeviceAuthorizationStorage(
     /// <inheritdoc />
     public async Task RemoveAsync(string deviceCode)
     {
+        // The secondary index is best-effort here for the same reason it is in TryRemoveAsync: it is not
+        // what the caller asked for. The token endpoint calls this from its expired and denied arms and
+        // then returns a grant error, so a store that refuses this write would turn that error into a
+        // server fault - the client gets a 500 where it should be told the code expired.
+        //
+        // Less costly than the same failure in TryRemoveAsync, and worth saying so: nothing has been
+        // consumed here, so the request is still live and the client's next poll gets the same answer.
+        // The shape is identical though, and leaving one arm best-effort and the other not is how a
+        // class comes back.
         var request = await TryGetByDeviceCodeAsync(deviceCode);
         if (request != null)
         {
-            await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode));
+            var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode);
+            try
+            {
+                await cache.RemoveAsync(userCodeKey);
+            }
+            catch (Exception exception)
+            {
+                LogUserCodeIndexNotRemoved(exception, userCodeKey);
+            }
         }
 
+        // Not guarded. This one IS what the caller asked for, and a failure means the request is still
+        // there - swallowing it would report a removal that did not happen.
         await cache.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
     }
 

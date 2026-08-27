@@ -12,11 +12,11 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -96,6 +96,7 @@ public class DeviceAuthorizationStorageTests
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
     }
+
     /// <summary>
     /// A failure to remove the SECONDARY index does not take the caller's answer away. The device code was
     /// consumed by this caller, which is the fact the caller asked about.
@@ -132,8 +133,13 @@ public class DeviceAuthorizationStorageTests
 
         // Swallowed, not hidden. Nothing else records that the index is dangling, so an operator who
         // never sees this line has no way to learn the store refused a write at all.
+        //
+        // The EVENT ID as well as the text: an operator's filter is built on the id, so a renumbering
+        // that broke it would leave a row asserting only on a message green.
         var entry = Assert.Single(log.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Equal(
+            LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemoved, entry.EventId.Id);
         Assert.Contains(UserCodeKey, entry.Message);
     }
 
@@ -171,6 +177,52 @@ public class DeviceAuthorizationStorageTests
         Assert.False(await storage.TryRemoveAsync(DeviceCode, UserCode));
 
         Assert.NotNull(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The same arm one over: RemoveAsync's index cleanup does not take the caller's outcome away
+    /// either, and its PRIMARY removal still does.
+    /// </summary>
+    /// <remarks>
+    /// The token endpoint calls this from its expired and denied arms and then answers with a grant
+    /// error, so a store refusing the index write would turn that answer into a server fault. Cheaper
+    /// than the same failure in TryRemoveAsync - nothing has been consumed, so the client's next poll
+    /// gets the same answer - but the same shape, and one arm guarded while the other is not is how a
+    /// class comes back.
+    /// </remarks>
+    [Fact]
+    public async Task RemoveAsync_WhenTheIndexCleanupFails_StillRemovesTheRequest()
+    {
+        var failing = new FailOnRemove(RealCache(), UserCodeKey);
+        var log = new RecordingLoggerFactory();
+        var storage = StorageOver(failing, log);
+
+        _serializer
+            .Setup(s => s.Deserialize<DeviceAuthorizationRequest>(It.IsAny<byte[]>()))
+            .Returns(NewRequest(_now.AddMinutes(5)));
+
+        await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
+
+        await storage.RemoveAsync(DeviceCode);
+
+        Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
+        Assert.Equal(1, failing.Attempts);
+        Assert.Single(log.Entries);
+    }
+
+    /// <summary>
+    /// And the PRIMARY removal is not swallowed: a caller told nothing would believe the request is
+    /// gone when it is still there.
+    /// </summary>
+    [Fact]
+    public async Task RemoveAsync_WhenThePrimaryRemovalFails_Raises()
+    {
+        var failing = new FailOnRemove(RealCache(), RequestKey);
+        var storage = StorageOver(failing);
+
+        await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(DeviceCode));
     }
 
     private static IDistributedCache RealCache()
