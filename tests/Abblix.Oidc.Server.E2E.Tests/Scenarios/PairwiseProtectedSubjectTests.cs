@@ -200,12 +200,6 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
-    /// Builds an isolated host that enables pairwise identifiers, keeps the service tokens as signed JWS (so the test
-    /// can decode <c>sub</c>) and registers a pairwise client alongside the pre-seeded ones. The reversible pairwise
-    /// seal is keyed by the pairwise salt, so no service encryption key is needed. The shared default host stays
-    /// untouched.
-    /// </summary>
-    /// <summary>
     /// RFC 7662 Section 5 offers two ways to keep an introspection response from disclosing a user to an
     /// unintended party. Withholding the identifier is the one it calls simplest; the other is to "transmit
     /// user identifiers as opaque service-specific strings, potentially returning different identifiers to
@@ -237,6 +231,12 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
     }
 
 
+    /// <summary>
+    /// Builds an isolated host that enables pairwise identifiers, keeps the service tokens as signed JWS (so the test
+    /// can decode <c>sub</c>) and registers a pairwise client alongside the pre-seeded ones. The reversible pairwise
+    /// seal is keyed by the pairwise salt, so no service encryption key is needed. The shared default host stays
+    /// untouched.
+    /// </summary>
     private WebApplicationFactory<Program> CreateHost()
     {
         var secret = new ClientSecret

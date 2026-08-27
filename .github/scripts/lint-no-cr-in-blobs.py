@@ -22,12 +22,12 @@ output - and both disagreed with reality on two committed PDFs, which are stored
 harmlessly. A check that flags files nobody can fix teaches people to wave it away, and that
 habit is what greets the true positive.
 
-WHERE THIS FILE COMES FROM. The copy under Abblix/Infrastructure at
-scripts/hooks/lint-no-cr-in-blobs.py is the one to edit; every other repository carries its
-own copy of it. pre-commit can pull a hook straight from another repository, but Oidc.Server
-is public and a contributor cloning it cannot reach a private hooks repository - and one
-repository guarded differently from the rest is worse than uniform copies. Change the
-canonical file, then copy it over the others in the same pass.
+WHERE THIS FILE COMES FROM. It is a copy. The canonical one lives in the workspace's shared
+hooks directory, and every repository carries its own copy of it. pre-commit can pull a hook
+straight from another repository, but this one is public and a contributor cloning it cannot
+reach a hooks repository they have no access to - and one repository guarded differently from
+the rest is worse than uniform copies. Change the canonical file, then copy it over the others
+in the same pass.
 
 A path may still declare a genuine need for CR by being marked `binary` or `-text` in
 .gitattributes. That is a FORM someone states deliberately, not a filename added to a list here.

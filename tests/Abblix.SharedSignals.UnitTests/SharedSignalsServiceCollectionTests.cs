@@ -41,10 +41,6 @@ public class SharedSignalsServiceCollectionTests
         PollEndpointFactory = streamId => new Uri($"https://tr.example.com/ssf/poll/{streamId}"),
     };
 
-    /// <summary>
-    /// The Security Events core plus the two deployment-knowledge seams a real host wires with
-    /// keys - faked here, because these tests measure wiring, not cryptography.
-    /// </summary>
     /// <summary>A signer that keeps what it was handed, so a test can read what was minted.</summary>
     private sealed class RecordingSigner : ISecurityEventTokenSigner
     {
@@ -128,6 +124,10 @@ public class SharedSignalsServiceCollectionTests
         Assert.Equal(stream.Configuration.Issuer, minted.Issuer);
     }
 
+    /// <summary>
+    /// The Security Events core plus the two deployment-knowledge seams a real host wires with
+    /// keys - faked here, because these tests measure wiring, not cryptography.
+    /// </summary>
     private static IServiceCollection SecurityEventsBase()
     {
         var services = new ServiceCollection();
