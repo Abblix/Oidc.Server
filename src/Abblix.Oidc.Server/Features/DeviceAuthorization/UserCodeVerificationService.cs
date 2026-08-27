@@ -162,16 +162,22 @@ public partial class UserCodeVerificationService(
     /// code was looked up.
     /// </summary>
     /// <remarks>
-    /// Everything between the lookup and the write is the window, and the record can be consumed inside
-    /// it: a poll redeems the device code and removes it, and a write of the record read earlier RESTORES
-    /// an authorized record carrying its grant. A later poll finds that, and a second full token set is
-    /// issued for one device code - with nothing downstream to catch it, since the net the
-    /// authorization-code path has is the reuse decorator inspecting the claimed grant, and the device
-    /// path has no equivalent.
+    /// Everything between the lookup and the write is a window, and a write of the record read earlier
+    /// RESTORES it - so a later poll finds an authorized record for a code that was already exchanged,
+    /// and a second full token set is issued for one device code. Nothing downstream catches it: the net
+    /// the authorization-code path has is the reuse decorator inspecting the claimed grant, and the
+    /// device path has no equivalent.
+    /// <para>
+    /// It takes TWO decisions, and that is the precondition the hazard is easy to state without. While
+    /// the record reads Pending no poll removes it: every removing arm of the token endpoint needs it to
+    /// be Authorized, Denied or expired first, and the expired arm issues nothing. So the sequence needs
+    /// another decision to move the record off Pending before a poll can consume it - which is exactly
+    /// the clause a guard written only against a REMOVED record would miss.
+    /// </para>
     /// <para>
     /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
     /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
-    /// Closing it needs a compare-and-swap the entity storage does not expose.
+    /// Closing it needs a compare-and-swap the entity storage does not expose, which is issue 194.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The record to decide on.</param>

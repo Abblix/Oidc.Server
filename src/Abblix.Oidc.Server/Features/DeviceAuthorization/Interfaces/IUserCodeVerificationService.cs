@@ -36,7 +36,11 @@ public interface IUserCodeVerificationService
     /// starting point rather than the final word - the token endpoint narrows them against the token
     /// request (RFC 8707 §2.2) and adds the certificate and proof-key confirmations.</param>
     /// <returns>
-    /// A task that returns true if the approval was successful; false if the code is invalid or expired.
+    /// True when this call is the one that recorded the approval. False otherwise, and otherwise is
+    /// wider than a bad code: the stored record must still be pending when the decision is written,
+    /// so a denial or another approval landing first answers false too, as does a request whose
+    /// lifetime ran out and one whose grant carries a type the request never asked for. The decision
+    /// is not applied in any of those cases, and nothing about the record changes.
     /// </returns>
     /// <remarks>
     /// <c>authorization_details</c> are the host's to carry. The requested entries arrive on
@@ -66,7 +70,10 @@ public interface IUserCodeVerificationService
     /// </summary>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <returns>
-    /// A task that returns true if the denial was successful; false if the code is invalid or expired.
+    /// True when this call is the one that recorded the denial. False otherwise, on the same condition
+    /// as <see cref="ApproveAsync"/>: the stored record must still be pending when the decision is
+    /// written, so a decision that landed first answers false, as does a request whose lifetime ran
+    /// out. Nothing about the record changes in those cases.
     /// </returns>
     Task<bool> DenyAsync(string userCode);
 }
