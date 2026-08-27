@@ -14,7 +14,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates CIBA-related metadata (OpenID Connect Client-Initiated Backchannel Authentication 1.0 §4):
+/// Validates CIBA-related metadata (OpenID Connect Client-Initiated Backchannel Authentication 1.0, section 4):
 /// the consistency between <c>backchannel_token_delivery_mode</c> and
 /// <c>backchannel_client_notification_endpoint</c>, and that
 /// <c>backchannel_authentication_request_signing_alg</c> is on the server's supported list.
@@ -68,9 +68,19 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     "The specified token delivery mode is not supported");
         }
 
-        // CIBA Core 1.0 §4: the notification endpoint MUST be an HTTPS URL (communication with it
-        // MUST use TLS). Only ping/push reach here with an endpoint set - poll-with-endpoint and the
-        // missing-endpoint cases are already rejected above.
+        // CIBA Core 1.0 section 4, describing backchannel_client_notification_endpoint as registration
+        // metadata: "It MUST be an HTTPS URL." That is the whole of what section 4 says about it, and it
+        // is also the whole of what is checkable at registration - the registered value is all there is
+        // here.
+        //
+        // The TLS half belongs to section 9, which restates the HTTPS rule and adds "Communication with
+        // the Client Notification Endpoint MUST utilize TLS". PingModeValidator and PushModeValidator
+        // quote section 9 because they run when the endpoint is about to be called; this runs when it is
+        // being registered, and nothing has called anything yet. Attributing the TLS clause to section 4
+        // sends a reader to a section that does not contain it.
+        //
+        // Only ping/push reach here with an endpoint set - poll-with-endpoint and the missing-endpoint
+        // cases are already rejected above.
         var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
         if (notificationEndpoint != null && notificationEndpoint.Scheme != Uri.UriSchemeHttps)
         {
