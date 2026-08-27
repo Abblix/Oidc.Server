@@ -13,13 +13,22 @@ copy stops anybody looking. A grep run by hand evaporates with the session.
 WHY THE NAMES ARE HASHED, WHICH IS THE WHOLE DESIGN. A checker that carries the list in plain text
 publishes exactly what it exists to keep out, and its own source file becomes the first hit - which is
 how this file failed on its first real run, before anything else did. So it stores salted digests and
-hashes each candidate word from the text. The comparison is exact, the list discloses nothing, and there
-is no allow-list to erode: `IAuthenticationService` is not a match because it is a different word, and
-the same holds for every collision nobody has thought of.
+hashes each candidate word from the text. The comparison is exact and there is no allow-list to erode:
+a collision fails to match because it is a different WORD, not because somebody excused it.
 
-What that costs is the refusal naming the word. It names the FILE and the LINE, which is what somebody
-acts on, and prints the line so the reader sees which word it is - the reader is looking at a private
-name they should not have written, so they know it when they see it.
+What the digests do NOT do is keep the names secret. The salt is published here, and a short product name
+falls to a dictionary in seconds either way - measured, four of five recovered from a plain wordlist. The
+protection is against WRITING the name into this repository, and against a search engine indexing the
+list; it is not against somebody who wants the names.
+
+What that costs is the refusal naming the word. It names the FILE and the LINE and prints the line, which
+is what somebody acts on - and the reader is looking at a name they should not have written, so they know
+it when they see it.
+
+WHAT IT CANNOT SEE, said plainly because a checker whose limits are unstated reads as complete. A name
+fused into a longer identifier - a camel-cased compound - is a different word and passes. So is any
+separator spelling of a multi-word name. Both need a person, and both have been found by hand in this
+repository after this checker reported it clean.
 
 ADDING A NAME. Run this file with `--add <Name>` and it prints the digest line to paste into DIGESTS. Do
 that from a machine where writing the name in a shell is acceptable; nothing about the name reaches the
@@ -43,19 +52,27 @@ import sys
 #: is against WRITING the name, not against somebody determined to recover it.
 SALT = b"Abblix.Oidc.Server private product names, v1:"
 
-#: Salted SHA-256 of each private sibling product's name, lower-cased. Generate with `--add <Name>`.
+#: Salted SHA-256 of each private sibling product's name, exactly as written. Generate with
+#: `--add <Name>`, which refuses anything that is not a single identifier - a name with a space, a dot
+#: or a hyphen would mint a digest no word can ever equal, and read as protection.
 DIGESTS = {
-    "59b3d8a6262b3c29bc274012168e4baa6419288edd1931800fefdc3d8cc93320",
-    "8655940c39ab7ae1bdeb460795700986a6e072648b8f08637699f1a43bcbc0a9",
-    "ad2cb77c00b49edbd57270bfa6479248bcdaa43a55ba09211df39d2ec586a2f2",
-    "f7443d0c8d5fc137cdd0684129aa609180101aa15ba120856752f210e90a6081",
-    "b89bed19afb3c336e3c8a5ecdd1d20b42724a9150d45780f0e201f0e9f720eb3",
+    "29aa89c64fa39f517d16bda3a052d28898fdaa222844a619b0c81dab3e748348",
+    "e3085a1c4b62b7c4d434e2b30ded69f3b323561429ba9bbd1e6e80d21a0f38d4",
+    "f2b58b9c90167a74394e8396a52b318dd0c11c25c16a511b8366a76e4fe6e0a3",
+    "fafcfcfa9e2de6d268c091095a90bf46529f74d8990ca08eb9ccf165b76685af",
+    "eeda7feb83cb764e90fbca753100d26b24c41a71bfe5c3ec000819321f7f7041",
+    "1e17ab51fe03ef59f573dc0d1293333b94e8c9b42e909422f4daa084ef18c5bc",
 }
 
-#: A word for this purpose is a run of letters and digits. Splitting on anything else is what makes a
-#: longer identifier a different word: the surrounding characters are part of it, so it hashes to
-#: something else and cannot match. That is the narrowing, and it needs no list.
-WORD = re.compile(r"[A-Za-z0-9]+")
+#: A word is a whole IDENTIFIER, and its case is part of it. Both halves are load-bearing, and the first
+#: version of this file had neither right. The boundary makes `IAuthenticationService` a different word -
+#: it is one token, not a prefix plus a name. The case makes `authenticationService`, ASP.NET Core's
+#: canonical parameter name, a different word too, which a case-folding compare refused in a repository
+#: whose whole subject is authentication - and the refusal's only advice was to misname a framework
+#: parameter.
+#:
+#: Underscore counts as an identifier character, so `_authenticationService` is one token as well.
+WORD = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9]*(?![A-Za-z0-9_])")
 
 #: Extensions worth reading. Binary content is excluded by suffix rather than by sniffing, because a
 #: sniffer that guesses wrong flags a file nobody can fix.
@@ -63,7 +80,8 @@ SUFFIXES = {".cs", ".md", ".props", ".targets", ".yml", ".yaml", ".json", ".txt"
 
 
 def digest(word: str) -> str:
-    return hashlib.sha256(SALT + word.lower().encode("utf-8")).hexdigest()
+    """The digest of one word, CASE INCLUDED. See WORD for why the case is not folded away."""
+    return hashlib.sha256(SALT + word.encode("utf-8")).hexdigest()
 
 
 def repository_root() -> pathlib.Path:
@@ -93,7 +111,15 @@ def tracked_sources() -> list[pathlib.Path]:
 
 def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--add":
-        print(f'    "{digest(sys.argv[2])}",')
+        name = sys.argv[2]
+        if WORD.fullmatch(name) is None:
+            print(
+                f"{name!r} is not a single identifier, so no word of any text can equal it and the "
+                "digest would be inert. Add each identifier form separately.",
+                file=sys.stderr)
+            return 2
+
+        print(f'    "{digest(name)}",')
         return 0
 
     named = [pathlib.Path(a) for a in sys.argv[1:]]
