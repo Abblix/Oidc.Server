@@ -50,7 +50,7 @@ public interface IDeviceAuthorizationStorage
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="request">The updated device authorization request.</param>
     /// <param name="expiresIn">The remaining lifetime to apply as the cache TTL. The caller derives it from
-    /// the request's fixed expiry (RFC 8628 §3.2) so that repeated polling cannot extend the code.</param>
+    /// the request's fixed expiry (RFC 8628 section 3.2) so that repeated polling cannot extend the code.</param>
     /// <returns>A task that completes when the request is updated.</returns>
     Task UpdateAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn);
 
@@ -62,13 +62,21 @@ public interface IDeviceAuthorizationStorage
     Task RemoveAsync(string deviceCode);
 
     /// <summary>
-    /// Atomically attempts to remove a device authorization request by its device code.
-    /// This operation is thread-safe and returns whether the removal was successful.
+    /// Claims a device authorization request by its device code, deciding presence and removing it in one
+    /// protocol, so that a caller told it removed the request is the only caller that can be told so. It
+    /// narrows that window rather than closing it; the returns block below says what a false covers.
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
     /// <returns>
-    /// A task that returns true if the request was found and removed; false otherwise.
+    /// A task that returns true when this caller removed the request AND still held its own claim
+    /// afterwards. False otherwise, which is wider than "somebody else got it": it also covers the
+    /// request not being there and a claim that expired while a store call was in flight - the second
+    /// on one caller with nobody to lose to, and its outcome is the request gone with nobody able to be
+    /// told they took it. An operator told a second REQUEST was the cause goes looking for one, and the
+    /// expiry case is exactly the one that never produces a second request. A failure of the second store call,
+    /// which removes the user-code index, raises rather than answering: the device code is already
+    /// consumed and the caller is handed the exception.
     /// </returns>
     Task<bool> TryRemoveAsync(string deviceCode, string userCode);
 }

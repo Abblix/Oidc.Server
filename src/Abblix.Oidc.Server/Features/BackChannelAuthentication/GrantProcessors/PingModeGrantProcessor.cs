@@ -32,10 +32,15 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
     public OidcError? ValidateTokenEndpointAccess() => null;
 
     /// <summary>
-    /// Atomically removes the authentication request from storage and returns its authorized grant.
-    /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a second retrieval
-    /// - or a concurrent one that lost the race - finds nothing and is rejected with
-    /// <c>invalid_grant</c> rather than re-issuing tokens.
+    /// Removes the authentication request from storage under the store's per-key gate and returns its
+    /// authorized grant.
+    /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a retrieval that
+    /// does not come back with the request is rejected with <c>invalid_grant</c> rather than re-issuing
+    /// tokens. Which is the right answer to give the caller, and not a diagnosis: the request comes back
+    /// only when this caller ran the protocol to the end with its own claim still in the store, and
+    /// every way short of that is one answer.
+    /// A store call that fails after the removal produces neither - it raises, and the caller is handed
+    /// an exception instead of a result.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
