@@ -83,7 +83,7 @@ public class PushedAuthorizationResponseFormatterTests
 
     /// <summary>
     /// Regression guard: PAR error responses must not redirect to a login page. Following
-    /// the redirect lands programmatic OAuth clients on the user-facing auth-app HTML and
+    /// the redirect lands programmatic OAuth clients on a sign-in page's HTML and
     /// breaks RFC 9126 conformance - the bug this formatter was rewritten to fix.
     /// </summary>
     [Fact]

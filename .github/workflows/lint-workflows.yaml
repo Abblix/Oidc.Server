@@ -36,7 +36,7 @@ jobs:
 
       # --only-binary :all: skips arbitrary setup-script execution at install
       # time (closes Sonar S8541). --require-hashes + pinned requirements file
-      # locks both the resolved version and the artifact bytes — a malicious
+      # locks both the resolved version and the artifact bytes - a malicious
       # PyPI release with the same version cannot pass the hash check (closes
       # Sonar S8544).
         timeout-minutes: 3
@@ -90,6 +90,12 @@ jobs:
       # It runs in CI as well as pre-commit because the hook only exists in a clone where somebody
       # ran `pre-commit install`: a web-UI edit, a bot, or --no-verify walks straight past it, and the
       # thing being guarded is permanent the moment it is pushed.
+      # The self-test runs FIRST and gates the scan. A checker reporting zero over a tree it never read,
+      # or with a pattern that stopped matching, prints the same clean line as a working one - so the
+      # instrument is driven in both directions on a sentinel before its silence is believed.
+      - name: Prove the checker can report a find
+        run: python .github/scripts/lint-no-private-product-names.py --self-test
+        timeout-minutes: 3
       - name: Check for private product names
         run: python .github/scripts/lint-no-private-product-names.py
         timeout-minutes: 3
