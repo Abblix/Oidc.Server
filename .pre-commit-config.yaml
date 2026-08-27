@@ -7,9 +7,9 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended, and not a safety net: CI re-runs actionlint and the inline-secrets
-# check, and nothing else here - the carriage-return and doc-comment hooks run in this clone or
-# nowhere):
+# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs actionlint and
+# the inline-secrets check; EVERY OTHER hook here runs in this clone or nowhere. Said as the condition
+# rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
 #   git commit --no-verify
 #
 # Rules and rationale: the workspace's GitHub Actions security checklist.
