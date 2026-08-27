@@ -78,20 +78,25 @@ public abstract partial class AuthenticationCompletionHandler(
         // Stated as what must be TRUE rather than as the ways it can fail. A record that is gone is not
         // a lesser case of one that is spent: a poll can have redeemed and removed it, and completing on
         // top of that mints against a record nobody can check and writes it back into existence.
+        //
+        // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
+        // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
+        // deciding, or push's own refusal path removed it after a configuration fault, where nothing was
+        // answered at all. Naming one of them would send an operator who just fixed a client
+        // registration looking for a second completion that never happened.
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is not { Status: BackChannelAuthenticationStatus.Pending })
         {
-            LogAlreadyCompleted(authenticationRequestId, stored?.Status.ToString() ?? "gone");
+            LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
 
             throw new InvalidOperationException(
-                $"The authentication request cannot be completed: the stored record "
+                "The authentication request cannot be completed: the stored record "
                 + (stored is null
-                    ? "is gone, so it was answered and consumed already"
+                    ? "is not there"
                     : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
-                + ". Completing it would deliver a second answer for one authentication - in push mode a "
-                + "second set of tokens, and in every mode a grant carrying what the client asked for "
-                + "rather than what the end user approved. Recovering from a failed delivery means asking "
-                + "the end user again.");
+                + ". Only a pending request can be answered, and this one has been answered, refused or "
+                + "has expired. Recovering from a failed delivery means asking the end user again rather "
+                + "than completing the same request twice.");
         }
 
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0

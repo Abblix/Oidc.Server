@@ -8,10 +8,9 @@ announced. The mark sits INSIDE the first line, so most diffs render as the line
 as nothing at all, and the check written in the same minute parses the result with the same forgiving
 codec that hid it.
 
-WHY IT IS WORTH A GUARD RATHER THAN A SENTENCE. This is written down in two places already and it
-still happened twice in one afternoon, on two different branches. A rule that has to fire while
-somebody is concentrating on something else is not a rule, it is a hope; the refusal is the part that
-works.
+WHY IT IS WORTH A GUARD RATHER THAN A SENTENCE. The rule is written down and still gets missed,
+because it has to fire while somebody is concentrating on something else. A refusal needs nobody's
+attention.
 
 THE CRITERION IS THE MARK NOT CHANGING, not the mark being absent. Files here legitimately carry one
 and files here legitimately do not, and either is somebody's decision. What nobody decides is that a
@@ -52,6 +51,7 @@ def mark(content: bytes | None) -> str:
 
 def main(paths: list[str]) -> int:
     offenders = []
+    compared = 0
     for path in paths:
         before = blob('HEAD', path)
 
@@ -64,13 +64,15 @@ def main(paths: list[str]) -> int:
         if after is None:
             continue
 
+        compared += 1
+
         if before.startswith(BOM) != after.startswith(BOM):
             offenders.append((path, mark(before), mark(after)))
 
     if not offenders:
         # A silence has to mean something was read. The count is the only thing separating a clean run
         # from a run over no files at all, and the two print the same nothing otherwise.
-        print(f'{len(paths)} path(s) checked; no byte-order mark changed.')
+        print(f"{compared} of {len(paths)} path(s) compared; no byte-order mark changed. The rest are new here, so no earlier form contradicts them.")
         return 0
 
     print('A byte-order mark changed in text staged for commit.\n', file=sys.stderr)

@@ -401,10 +401,10 @@ public class AuthenticationCompletionHandlerTests
     /// that what is left reads Authenticated, so nobody can complete it a second time.
     /// </summary>
     /// <remarks>
-    /// It is still not the authenticated REQUEST. Only the status is persisted; the narrowed grant was
-    /// set on the in-memory object and stays there, so the record carries what the client asked for.
-    /// That is deliberate: persisting the grant would let a second completion replay the approval, which
-    /// is a correctly-scoped second token set for one authentication.
+    /// It is the whole record, written the way poll and ping write theirs: the storage serializes the
+    /// object it is handed, so the grant the host completed with goes down with the status. What stops a
+    /// second completion is not anything the record omits - it is the base handler reading this status
+    /// back out of storage and refusing everything that is not Pending.
     ///
     /// Nor does keeping it save any tokens: the ones just minted are dropped with the lambda that made
     /// them, and nothing retries. It is kept so a host can see the request existed.
@@ -1092,6 +1092,36 @@ public class AuthenticationCompletionHandlerTests
         _storage.VerifyNoOtherCalls();
     }
 
+    /// <summary>
+    /// The decision comes from STORAGE, not from the caller's copy: a request handed in already marked
+    /// Authenticated completes, because the stored record is the one that is pending.
+    /// </summary>
+    /// <remarks>
+    /// This is the row that tells the guard's two possible shapes apart, and without it they are
+    /// indistinguishable here: deleting the guard and pointing it at the caller's field turn exactly the
+    /// same refusal rows red. It is also the documented host pattern - the implementation guide has the
+    /// host set Status on its own copy before calling - so a guard reading that field refuses every
+    /// conforming host on its FIRST completion, and is advisory besides, since whether it fires is up to
+    /// the caller it exists to constrain.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheCallerMarkedItsOwnCopy_TheStoredRecordDecides()
+    {
+        var request = CreateRequest(UserId, null);
+
+        // What the documented host pattern does before calling.
+        request.Status = BackChannelAuthenticationStatus.Authenticated;
+
+        StoredRecordReads(BackChannelAuthenticationStatus.Pending);
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+
+        var handler = CreatePollModeHandler();
+
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
+
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
+    }
+
     /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenNotPending_Refuses"/>
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Authenticated)]
@@ -1148,9 +1178,9 @@ public class AuthenticationCompletionHandlerTests
     /// The order is the assertion: written after delivery instead, it would never happen on the failure
     /// path, which is the only path where the record survives to be completed again.
     /// <para>
-    /// The status alone, not the narrowed grant. Persisting the grant would make a second completion
-    /// replay the approval, which is a correctly-scoped second token set for one authentication - the
-    /// symptom fixed and the disease kept.
+    /// The whole record goes down, grant included - the storage serializes what it is handed. The row
+    /// asserts the ORDER rather than the contents, because the order is what the fix is: a write after
+    /// the delivery would never run on the failure path, which is the only path where a record survives.
     /// </para>
     /// </remarks>
     [Fact]

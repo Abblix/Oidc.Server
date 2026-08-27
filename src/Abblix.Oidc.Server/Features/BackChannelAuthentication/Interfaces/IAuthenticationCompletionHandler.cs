@@ -29,9 +29,6 @@ public interface IAuthenticationCompletionHandler
     /// <param name="request">The authentication request carrying the grant the end user approved. Its
     /// own Status is not read: whether this request may still be answered is decided from the STORED
     /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
-    /// <exception cref="InvalidOperationException">The stored record is not pending - it was already
-    /// answered, or a poll has redeemed and removed it. Completing again would deliver a second answer
-    /// for one authentication; recovering from a failed delivery means asking the end user.</exception>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
@@ -42,6 +39,9 @@ public interface IAuthenticationCompletionHandler
     ///   <item>Delegates to the mode-specific implementation for token delivery</item>
     /// </list>
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The stored record is not pending - it was already
+    /// answered, refused or expired. Completing it would deliver a second answer
+    /// for one authentication; recovering from a failed delivery means asking the end user.</exception>
     Task CompleteAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,

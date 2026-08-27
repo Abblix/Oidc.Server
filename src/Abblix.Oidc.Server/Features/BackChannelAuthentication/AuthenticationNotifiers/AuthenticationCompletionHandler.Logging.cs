@@ -41,11 +41,18 @@ partial class AuthenticationCompletionHandler
     /// Logged as well as thrown. The throw reaches the host writing the recovery; the log reaches the
     /// operator reading a live system, who sees the attempt whether or not the host caught it.
     /// </summary>
+    /// <remarks>
+    /// It reports the state it found and nothing about the cause. Absence in particular has more causes
+    /// than this seam can tell apart, and the operator most likely to read this line is one who has just
+    /// fixed a client registration - a message asserting a second completion would send them hunting for
+    /// one that never happened. <c>Status</c> is null exactly when the record is not there, which is a
+    /// value the field's own domain does not have to carry.
+    /// </remarks>
     [LoggerMessage(
-        EventId = LogEvents.Device.AuthenticationCompletionHandler.AlreadyCompleted,
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.NotPendingOnCompletion,
         Level = LogLevel.Error,
-        Message = "auth_req_id {AuthReqId} was completed again, and refused: its status is {Status} " +
-                  "rather than Pending. A completion after a failed delivery is not a retry of that " +
-                  "delivery - it mints a second set of tokens for one authentication.")]
-    private partial void LogAlreadyCompleted(string AuthReqId, string Status);
+        Message = "auth_req_id {AuthReqId} was refused at completion: the stored record reads {Status}, " +
+                  "or is absent when that is null, and only a pending request can be answered. It has " +
+                  "been answered, refused or has expired; recovering means asking the end user again.")]
+    private partial void LogNotPendingOnCompletion(string AuthReqId, string? Status);
 }
