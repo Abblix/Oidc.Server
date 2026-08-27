@@ -196,7 +196,14 @@ public sealed partial class EventDispatcher(
         // across receivers is exactly the unintended-disclosure shape Section 4.1.8 warns about.
         var jwtId = Guid.NewGuid().ToString("N");
 
-        var builder = new SecurityEventTokenBuilder(clock)
+        // Declared rather than merely true, and no test can hold it: a descriptor carries one event type,
+        // a single required string, so nothing here can add a second statement and the constraint has no
+        // input that makes it speak. What it buys is the day somebody widens this method - the widening
+        // fails here instead of reaching a receiver as a SET the CAEP Interoperability Profile forbids,
+        // whose Section 2.8.1 requires the "events" claim to contain only one event. The same reasoning
+        // as the unreachable arm in StreamManagementService.AddressRefusalOf, and said out loud for the
+        // same reason: an unreachable guard nobody explained reads as one nobody finished.
+        var builder = new SecurityEventTokenBuilder(clock) { SingleEventStatement = true }
             .WithIssuer(_issuer)
             .WithJwtId(jwtId)
             .WithAudience([.. stream.Configuration.Audiences])

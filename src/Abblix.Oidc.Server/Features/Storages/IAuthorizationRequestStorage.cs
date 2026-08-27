@@ -35,14 +35,23 @@ public interface IAuthorizationRequestStorage
 	/// Asynchronously retrieves an authorization request using a previously stored unique identifier.
 	/// This method facilitates the retrieval of authorization requests for further processing or validation.
 	/// The shouldRemove parameter controls whether the request is deleted from storage upon retrieval,
-	/// ensuring it cannot be retrieved again, which is essential for one-time use scenarios like authorization codes.
+	/// which is what narrows the window in which it is retrieved twice. RFC 9126 puts the MUST on the
+	/// client - "the client MUST only use a request_uri value once" (Section 4, Authorization Request) -
+	/// and asks the authorization server for no more than a SHOULD, twice: Section 4 hedges it with a MAY
+	/// for a user reloading their user agent, and Section 7.3 states it plainly, "the authorization
+	/// server SHOULD make the request URIs one-time use". Consuming it here is therefore this library's
+	/// choice, taken on the specification's recommendation rather than on its requirement. Narrows rather
+	/// than closes: the returns block says what a null covers.
 	/// </summary>
 	/// <param name="requestUri">The unique identifier of the authorization request, typically a URI,
 	/// used to locate the request in storage.</param>
-	/// <param name="shouldRemove">Specifies whether the request should be removed from storage on retrieval.
-	/// This is useful for one-time use scenarios, ensuring that an authorization request cannot be reused.</param>
+	/// <param name="shouldRemove">Specifies whether the request should be removed from storage on
+	/// retrieval, for the one-time use scenarios where a second retrieval must not succeed.</param>
 	/// <returns>A <see cref="Task"/> that, when completed successfully, yields
 	/// the <see cref="Model.AuthorizationRequest"/> associated with the specified identifier,
-	/// or null if no such request exists or if it has expired.</returns>
+	/// or null. With <paramref name="shouldRemove"/> set, null is wider than "no such request": it also
+	/// covers the entry having expired, another caller having removed it, and a claim that expired
+	/// mid-protocol on a single caller with nobody to lose to. A store call that fails after the removal
+	/// raises instead of answering.</returns>
 	Task<Model.AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false);
 }

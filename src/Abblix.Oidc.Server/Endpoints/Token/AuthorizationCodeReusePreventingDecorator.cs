@@ -17,15 +17,23 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Enhances token processing by revoking tokens associated with previously used authorization codes,
-/// preventing authorization code reuse in compliance with OAuth 2.0 security best practices.
+/// Refuses a second redemption of an authorization code, and revokes the tokens the first one issued, in
+/// compliance with OAuth 2.0 security best practices. Two defences, split by WHEN the repeat arrives
+/// rather than by where: the claim refuses one arriving beside the first, and the issued tokens written
+/// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
+/// Neither is complete on its own terms. The claim reads the value before it takes the claim, so two
+/// callers can be handed the same grant on ONE node, which is issue 454; and the write-back is what the
+/// second defence rests on, so a first redemption that ends without issuing tokens leaves nothing for it
+/// to catch. Both are open, and the refusal this class returns is the same string either way.
+/// <para>
 /// This class decorates the standard token request processing flow with additional security measures
 /// to ensure the integrity of the authorization process. It detects when an authorization code,
 /// which should only be used once, is attempted to be used multiple times. In such cases, it revokes any
 /// tokens previously issued with that code and denies the request, effectively mitigating potential
 /// security risks associated with code reuse.
+/// </para>
 /// </remarks>
 /// <param name="processor">The underlying token request processor to be enhanced.</param>
 /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
@@ -50,14 +58,23 @@ public class AuthorizationCodeReusePreventingDecorator(
             return await processor.ProcessAsync(request);
         }
 
-        // Atomically claim the code by removing it (get-and-remove). This happens AFTER the grant
+        // Claim the code by removing it. Not atomically, whatever the store's method names suggest: the
+        // extension assembles the protocol from separate Get, Set and Remove calls, and says so. This
+        // happens AFTER the grant
         // validators have already checked client binding and PKCE, so a failed validation never
         // reaches here and never burns the code - but two concurrent redemptions of a valid code
         // now contend for a single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(code);
 
-        // The code is gone: a concurrent request already claimed it, or it was already consumed.
-        // Either way this redemption loses - reject without issuing a second set of tokens.
+        // The code did not come back. The claim answers with the grant only when this caller ran the
+        // protocol to the end with its own claim still in the store, so everything short of that arrives
+        // here as one outcome - and there is no listing the ways, which is what the sibling comments this
+        // branch rewrote were each short of. It reaches a single caller with no competitor as readily as
+        // a contended one: a first request refused for scope or resource never writes the grant back, so
+        // the client's next attempt with that code finds nothing.
+        //
+        // The refusal below is the right answer for whatever arrived, and a diagnosis for none of it.
+        // Whichever of them it was, this redemption loses - reject without issuing a second set.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {
             return new OidcError(
@@ -66,7 +83,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         }
 
         // The claimed grant carries tokens from a prior successful redemption - a sequential reuse.
-        // Revoke those tokens (OAuth 2.0 Security BCP §4.13) and reject.
+        // Revoke those tokens (OAuth 2.0 Security BCP section 4.13) and reject.
         if (claimedGrant.IssuedTokens is { Length: > 0 } issuedTokens)
         {
             foreach (var (jwtId, expiresAt) in issuedTokens)

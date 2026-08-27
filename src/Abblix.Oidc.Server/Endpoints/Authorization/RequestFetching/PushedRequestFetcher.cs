@@ -56,7 +56,7 @@ public class PushedRequestFetcher(
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            // Do not consume the request_uri here. RFC 9126 §7.3 says request_uri SHOULD be
+            // Do not consume the request_uri here. RFC 9126 section 7.3 says request_uri SHOULD be
             // one-time-use, and the natural moment to consume is at authorization-code
             // issuance - not at the first /authorize fetch. Consuming on fetch makes any
             // multi-step UI flow brittle: page refresh during login, back-button after
@@ -83,7 +83,7 @@ public class PushedRequestFetcher(
             return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
         }
 
-        // RFC 9126 §6: the per-client require_pushed_authorization_requests metadata makes PAR the
+        // RFC 9126 section 6: the per-client require_pushed_authorization_requests metadata makes PAR the
         // only way for this client to start an authorization flow, independent of the server-wide
         // flag. A code-only/high-assurance profile (FAPI 2.0) imposes the same requirement on the
         // client even when neither the server-wide flag nor the per-client metadata is set - the

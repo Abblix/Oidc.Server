@@ -1,4 +1,4 @@
-# Pre-commit hooks for GitHub Actions workflow safety.
+# Pre-commit hooks: workflow safety, committed-text hygiene and C# documentation.
 #
 # One-time setup per clone:
 #   pip install pre-commit
@@ -7,10 +7,12 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended; CI re-runs the same checks):
+# Bypass once (NOT recommended, and not a safety net: CI re-runs actionlint and the inline-secrets
+# check, and nothing else here - the carriage-return and doc-comment hooks run in this clone or
+# nowhere):
 #   git commit --no-verify
 #
-# Rules and rationale: ../Docs/wiki/github-actions-security-checklist.md
+# Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
   - repo: https://github.com/rhysd/actionlint
@@ -28,6 +30,19 @@ repos:
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
         pass_filenames: false
+      - id: take-once-consumers
+        name: "Refuse an unreviewed consumer of the take-once protocol"
+        entry: python .github/scripts/lint-take-once-consumers.py
+        language: python
+        pass_filenames: false
+        # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
+        # check, or the list is edited by whoever is not looking at what it holds.
+        files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
+      - id: no-split-doc-comments
+        name: "Block a doc comment that documents two members"
+        entry: python .github/scripts/lint-no-split-doc-comments.py
+        language: python
+        types: [c#]
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py
