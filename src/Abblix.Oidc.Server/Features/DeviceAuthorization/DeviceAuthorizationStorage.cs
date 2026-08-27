@@ -153,15 +153,18 @@ public partial class DeviceAuthorizationStorage(
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
-    /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
+    /// <param name="userCode">The user code of THAT request, used to find its secondary index entry.
+    /// Nothing here checks the two belong together - this method never reads the record - so a caller
+    /// passing a code from a different request removes that other request's index entry instead, leaving
+    /// a live request findable only by its device code.</param>
     /// <returns>
     /// A task that completes when the operation finishes, containing true when this caller removed the
     /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
     /// won or it was never there": the code can be consumed and the caller still told false, when the lock
     /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
     /// <para>
-    /// The cleanup below them cannot change that answer either way. Removing the user-code index is a
-    /// different question from whether this caller took the code, so a store that refuses it is logged
+    /// The index cleanup that runs after the claim cannot change that answer either way. Removing the
+    /// user-code index is a different question from whether this caller took the code, so a refusal is logged
     /// and the true stands: the entry left behind points at a request that no longer exists and carries
     /// its own expiry.
     /// </para>
@@ -185,14 +188,18 @@ public partial class DeviceAuthorizationStorage(
         //
         // Swallowed, not hidden. Nothing else in the system reports a dangling index, so without this line
         // an operator has no way to learn the store refused a write at all.
-        var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(userCode);
+        var deviceCodeKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
         try
         {
-            await cache.RemoveAsync(userCodeKey);
+            await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
         }
         catch (Exception exception)
         {
-            LogUserCodeIndexNotRemovedAfterClaim(exception, userCodeKey);
+            // The DEVICE code key, not the user-code one. This method never reads the record, so it
+            // cannot establish that the user code it was handed belongs to the request it just claimed -
+            // and on the public interface a host may hand it a live one. The device code carries no such
+            // doubt: this line is reached only because the claim removed it.
+            LogUserCodeIndexNotRemovedAfterClaim(exception, deviceCodeKey);
         }
 
         return true;

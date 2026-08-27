@@ -16,19 +16,30 @@ partial class DeviceAuthorizationStorage
     /// The index survived a CLAIM: the device code is consumed and its caller was told so.
     /// </summary>
     /// <remarks>
-    /// The key is named because it is what an operator would search for or delete. It EMBEDS the user
-    /// code - the factory builds it by interpolation - so this line writes the code in full. That is
-    /// acceptable HERE and only here: the claim has already removed the request, so the code cannot be
-    /// verified or redeemed by the time this runs. Warning rather than error, because the caller was
-    /// answered and nothing downstream is waiting.
+    /// It names the DEVICE code key and not the user-code one, which is the opposite of the sibling
+    /// below, and the difference is where each method gets the code from. There the user code is read
+    /// out of the stored record, so it belongs to the request being removed. Here it arrives as a
+    /// PARAMETER and nothing checks the two belong together - <c>TryRemoveAsync</c> never reads the
+    /// record - so on the public interface a host can hand this method a live code belonging to some
+    /// other request, and the key that embeds it would be written to a log in full while it is still
+    /// redeemable. The device code carries no such doubt: this line is only reached because the claim
+    /// removed it.
+    /// <para>
+    /// The entry cannot be named exactly as a result. That costs less than it looks: the action this
+    /// line asks for is never "delete that key" - the entry expires on its own - it is "the store
+    /// refused a write". Warning rather than error, because the caller was answered and nothing
+    /// downstream is waiting.
+    /// </para>
     /// </remarks>
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim,
         Level = LogLevel.Warning,
-        Message = "The device code was claimed and removed, but its user-code index at {UserCodeKey} " +
-                  "could not be. The entry now points at a request that is gone, and it expires on its " +
-                  "own; the caller was told it took the code, which it did.")]
-    private partial void LogUserCodeIndexNotRemovedAfterClaim(Exception exception, string UserCodeKey);
+        Message = "The device code at {DeviceCodeKey} was claimed and removed, but the store refused to " +
+                  "remove its user-code index entry. That entry now points at a request that is gone " +
+                  "and expires on its own; the caller was told it took the code, which it did. The " +
+                  "entry is not named here because this method cannot establish that the user code it " +
+                  "was handed is the spent one.")]
+    private partial void LogUserCodeIndexNotRemovedAfterClaim(Exception exception, string DeviceCodeKey);
 
     /// <summary>
     /// The index survived a DISCARD, where nothing was consumed and the request is still being removed.
@@ -51,8 +62,8 @@ partial class DeviceAuthorizationStorage
         Level = LogLevel.Warning,
         Message = "A device authorization request is being discarded, and its user-code index at " +
                   "{UserCodeKey} could not be removed. Nothing was issued and no caller was told it took " +
-                  "the code. Removing the request runs next and is NOT guarded, so a store refusing writes " +
-                  "fails there too and the caller sees THAT fault rather than this line; the index entry " +
-                  "expires on its own either way.")]
+                  "the code. Removing the request itself runs next and is NOT guarded, so whether the " +
+                  "caller sees a fault or a grant error depends on whether that write is refused too; " +
+                  "the index entry expires on its own either way.")]
     private partial void LogUserCodeIndexNotRemovedBeforeDiscard(Exception exception, string UserCodeKey);
 }

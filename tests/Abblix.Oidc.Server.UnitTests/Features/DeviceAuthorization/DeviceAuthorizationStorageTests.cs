@@ -140,7 +140,15 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Equal(
             LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim, entry.EventId.Id);
-        Assert.Contains(UserCodeKey, entry.Message);
+
+        // The DEVICE code key, and the user code NOWHERE in the line. TryRemoveAsync never reads the
+        // record, so it cannot establish that the user code it was handed is the spent one - and on the
+        // public interface a host can hand it a live code belonging to another request. Asserting the
+        // absence as well as the presence, because a message that named both would satisfy a check for
+        // the device code alone.
+        Assert.Contains(RequestKey, entry.Message);
+        Assert.DoesNotContain(UserCodeKey, entry.Message);
+        Assert.DoesNotContain(UserCode, entry.Message);
     }
 
     /// <summary>
