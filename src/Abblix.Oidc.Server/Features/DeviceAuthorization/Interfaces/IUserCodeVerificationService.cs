@@ -44,8 +44,7 @@ public interface IUserCodeVerificationService
     /// <para>
     /// A true is not a guarantee that nothing landed in between. The re-read and the write are two
     /// store calls, and the store exposes no conditional write, so two concurrent approvals can each
-    /// be told true and the later write wins. The window is a store round trip wide rather than the
-    /// whole verification page, which is what this narrows and does not close.
+    /// be told true and the later write wins. That window is one store round trip wide.
     /// </para>
     /// </returns>
     /// <remarks>
@@ -57,10 +56,10 @@ public interface IUserCodeVerificationService
     /// <para>
     /// Approving with entries on the record and none on the grant is therefore allowed and logged at
     /// warning level. RFC 9396 section 7 is satisfied either way, since its MUST is to return what the
-    /// resource owner GRANTED and nothing granted is nothing to return. section 9 of that document is the
-    /// one that matters here: it makes the
-    /// details reaching the resource server the point of having them, and a token carrying none leaves
-    /// it nothing to enforce, which is worth seeing in a log rather than discovering at the resource
+    /// resource owner GRANTED and nothing granted is nothing to return. What matters here is section 9 of
+    /// that document: it makes the details reaching the resource server the point of having them, and a
+    /// token carrying none leaves it nothing to enforce, which is worth seeing in a log rather than
+    /// discovering at the resource
     /// server.
     /// </para>
     /// <para>
@@ -76,9 +75,9 @@ public interface IUserCodeVerificationService
     /// </summary>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <returns>
-    /// True when this call is the one that recorded the denial. False otherwise: the stored record is
-    /// re-read and must still be pending, so a decision that landed first answers false, as does a
-    /// request whose lifetime ran out. Nothing about the record changes in those cases, and a true
+    /// True when this call is the one that recorded the denial. False otherwise, and otherwise is wider
+    /// than a bad code: the stored record is re-read and must still be pending, so a decision that
+    /// landed first answers false, as does a request whose lifetime ran out. Nothing about the record changes in those cases, and a true
     /// carries the same narrowed-not-closed window <see cref="ApproveAsync"/> describes.
     /// </returns>
     Task<bool> DenyAsync(string userCode);

@@ -204,9 +204,10 @@ public class UserCodeVerificationServiceTests
     /// <remarks>
     /// The whole of this change is which object the decision lands on, and nothing measured it: every
     /// other fixture answers both lookups with ONE instance, so deciding the stale record and deciding
-    /// the fresh one are the same call. A mutant that writes the user-code record back leaves the suite
-    /// green while silently discarding approvals - it writes a record still reading Pending, answers
-    /// true, and the device polls authorization_pending for ever.
+    /// the fresh one are the same call. Two mutants live in that blind spot and both leave the suite
+    /// green: deciding the stale record writes back one still reading Pending, so the device polls
+    /// authorization_pending for ever; deciding the fresh one and WRITING the stale one loses the
+    /// approval just as quietly. Only the identity assertion below sees the second.
     /// <para>
     /// So the two lookups return DISTINCT pending objects here, which is what production does anyway:
     /// the storage deserializes on every call.
