@@ -197,6 +197,69 @@ public class UserCodeVerificationServiceTests
                 AuthorizationDetails = authorizationDetails,
             });
 
+    /// <summary>
+    /// The decision is applied to the record read from the DEVICE-CODE lookup, and that record is what
+    /// is written back.
+    /// </summary>
+    /// <remarks>
+    /// The whole of this change is which object the decision lands on, and nothing measured it: every
+    /// other fixture answers both lookups with ONE instance, so deciding the stale record and deciding
+    /// the fresh one are the same call. A mutant that writes the user-code record back leaves the suite
+    /// green while silently discarding approvals - it writes a record still reading Pending, answers
+    /// true, and the device polls authorization_pending for ever.
+    /// <para>
+    /// So the two lookups return DISTINCT pending objects here, which is what production does anyway:
+    /// the storage deserializes on every call.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ApproveAsync_AppliesTheDecision_ToTheRecordItReadForTheWrite()
+    {
+        var fromUserCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, fromUserCode) : null);
+
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? fromDeviceCode : null);
+
+        DeviceAuthorizationRequest? written = null;
+        storage
+            .Setup(store => store.UpdateAsync(
+                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
+            .Callback<string, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
+            .Returns(Task.CompletedTask);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        Assert.True(await service.ApproveAsync(CanonicalUserCode, GrantWith(null)));
+
+        // The object identity is the assertion. Both records carry the same fields, so comparing values
+        // would pass on either one.
+        Assert.Same(fromDeviceCode, written);
+        Assert.Equal(DeviceAuthorizationStatus.Authorized, fromDeviceCode.Status);
+
+        // And the stale one was left alone, which is what a caller reading it back would rely on.
+        Assert.Equal(DeviceAuthorizationStatus.Pending, fromUserCode.Status);
+    }
+
     private static UserCodeVerificationService BuildService(
         JsonArray? requestedDetails,
         out CapturingLogger<UserCodeVerificationService> logs)

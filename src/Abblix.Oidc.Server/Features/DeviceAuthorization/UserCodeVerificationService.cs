@@ -88,7 +88,7 @@ public partial class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
-        // An approval landing after the code's fixed lifetime (RFC 8628 §3.2) cannot be redeemed, so treat
+        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
         // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
         var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
@@ -147,7 +147,7 @@ public partial class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
-        // A denial after the code's fixed lifetime (RFC 8628 §3.2) is moot - the code is already unusable, so
+        // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
         // treat it as a no-op rather than writing a record with a non-positive cache TTL.
         var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
@@ -169,10 +169,11 @@ public partial class UserCodeVerificationService(
     /// device path has no equivalent.
     /// <para>
     /// It takes TWO decisions, and that is the precondition the hazard is easy to state without. While
-    /// the record reads Pending no poll removes it: every removing arm of the token endpoint needs it to
-    /// be Authorized, Denied or expired first, and the expired arm issues nothing. So the sequence needs
-    /// another decision to move the record off Pending before a poll can consume it - which is exactly
-    /// the clause a guard written only against a REMOVED record would miss.
+    /// the record reads Pending no poll CONSUMES it: the only arm that issues anything needs it to read
+    /// Authorized first. A poll does remove a pending record once its lifetime is over, and that arm
+    /// issues nothing, so it cannot produce the second token set. The sequence therefore needs another
+    /// decision to move the record off Pending - which is exactly the clause a guard written only
+    /// against a REMOVED record would miss.
     /// </para>
     /// <para>
     /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
