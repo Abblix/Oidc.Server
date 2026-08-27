@@ -13,6 +13,10 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -46,6 +50,7 @@ public class DeviceAuthorizationStorageTests
         _serializer.Setup(s => s.Serialize(It.IsAny<string>())).Returns([4, 5, 6]);
 
         _storage = new DeviceAuthorizationStorage(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
             _cache.Object,
             _serializer.Object,
             keyFactory.Object,
@@ -90,5 +95,136 @@ public class DeviceAuthorizationStorageTests
 
         Assert.NotNull(captured);
         Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
+    }
+    /// <summary>
+    /// A failure to remove the SECONDARY index does not take the caller's answer away. The device code was
+    /// consumed by this caller, which is the fact the caller asked about.
+    /// </summary>
+    /// <remarks>
+    /// The removal that matters has already happened when the index cleanup runs, so an exception from it
+    /// leaves the code gone AND the caller unanswered: the token endpoint calls this inside a `when`
+    /// clause, so the fault propagates as a server error instead of a grant error. No tokens are issued
+    /// for a code that can never be presented again, and the end user's approval is lost.
+    /// <para>
+    /// The entry left behind is harmless on its own - it points at a request key that no longer exists,
+    /// and it carries its own expiry - so the whole of the damage was in the answer.
+    /// </para>
+    /// <para>
+    /// Driven against a real cache rather than a mocked one, because what must succeed first is the
+    /// take-once protocol itself: several store calls whose interleaving is the thing under test one layer
+    /// down. A mock arranged to return true would assert against a protocol that never ran.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task TryRemoveAsync_WhenTheIndexCleanupFails_StillTellsTheCallerItTookTheCode()
+    {
+        var failing = new FailOnRemove(RealCache(), UserCodeKey);
+        var log = new RecordingLoggerFactory();
+        var storage = StorageOver(failing, log);
+
+        await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
+
+        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+
+        // And the code really is gone, which is what makes the answer true rather than merely reassuring.
+        Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
+        Assert.Equal(1, failing.Attempts);
+
+        // Swallowed, not hidden. Nothing else records that the index is dangling, so an operator who
+        // never sees this line has no way to learn the store refused a write at all.
+        var entry = Assert.Single(log.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains(UserCodeKey, entry.Message);
+    }
+
+    /// <summary>
+    /// The control, in the same shape: with nothing failing, the index is removed and the answer is the
+    /// same. Without it, a method that swallowed everything would satisfy the row above.
+    /// </summary>
+    [Fact]
+    public async Task TryRemoveAsync_RemovesTheIndex_AndTellsTheCallerItTookTheCode()
+    {
+        var cache = RealCache();
+        var storage = StorageOver(cache);
+
+        await cache.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
+        await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
+
+        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+
+        Assert.Null(await cache.GetAsync(RequestKey, TestContext.Current.CancellationToken));
+        Assert.Null(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// The other control: a code that was NOT taken is answered false, and the index is left alone - the
+    /// caller did not consume anything, so tidying after somebody else is not this call's business.
+    /// </summary>
+    [Fact]
+    public async Task TryRemoveAsync_WhenTheCodeIsGone_LeavesTheIndexAlone()
+    {
+        var cache = RealCache();
+        var storage = StorageOver(cache);
+
+        await cache.SetAsync(UserCodeKey, [4, 5, 6], new(), TestContext.Current.CancellationToken);
+
+        Assert.False(await storage.TryRemoveAsync(DeviceCode, UserCode));
+
+        Assert.NotNull(await cache.GetAsync(UserCodeKey, TestContext.Current.CancellationToken));
+    }
+
+    private static IDistributedCache RealCache()
+        => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+
+    private DeviceAuthorizationStorage StorageOver(
+        IDistributedCache cache, RecordingLoggerFactory? log = null)
+    {
+        var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+
+        return new DeviceAuthorizationStorage(
+            (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
+            cache,
+            _serializer.Object,
+            keyFactory.Object,
+            new FakeTimeProvider(_now));
+    }
+
+    /// <summary>
+    /// A cache that fails one key's removal and passes everything else through, so the row above measures
+    /// the composition rather than a mocked answer.
+    /// </summary>
+    private sealed class FailOnRemove(IDistributedCache inner, string failingKey) : IDistributedCache
+    {
+        public int Attempts { get; private set; }
+
+        public Task RemoveAsync(string key, CancellationToken token = default)
+        {
+            if (key != failingKey)
+                return inner.RemoveAsync(key, token);
+
+            Attempts++;
+            throw new InvalidOperationException("the store is unavailable");
+        }
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+            => inner.GetAsync(key, token);
+
+        public Task SetAsync(
+            string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task RefreshAsync(string key, CancellationToken token = default)
+            => inner.RefreshAsync(key, token);
+
+        public byte[]? Get(string key) => inner.Get(key);
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+            => inner.Set(key, value, options);
+
+        public void Remove(string key) => inner.Remove(key);
+
+        public void Refresh(string key) => inner.Refresh(key);
     }
 }

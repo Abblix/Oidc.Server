@@ -616,6 +616,22 @@ internal static class LogEvents
 
             public const int AuthorizedRecordCarriesNoGrant = Continued;
         }
+
+        /// <summary>
+        /// <c>Features/DeviceAuthorization/DeviceAuthorizationStorage.cs</c> - the store's own reports
+        /// about what it could not tidy (sub-range 7110-7119).
+        /// </summary>
+        /// <remarks>
+        /// Placed in the range's continuation rather than beside the other storage ids, because the
+        /// windows below 7100 are packed and moving any of them would change ids a deployment may
+        /// already alert on.
+        /// </remarks>
+        public static class DeviceAuthorizationStorage
+        {
+            private const int Base = 7110;
+
+            public const int UserCodeIndexNotRemoved = Base;
+        }
     }
 
     /// <summary>

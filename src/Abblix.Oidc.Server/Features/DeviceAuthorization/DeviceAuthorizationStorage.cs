@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
@@ -19,11 +20,13 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// Stores requests by device_code (for client polling) with a secondary index by user_code (for user verification).
 /// Uses atomic distributed cache operations to prevent race conditions in token issuance.
 /// </summary>
+/// <param name="logger">Records a secondary-index entry left behind, which nothing else reports.</param>
 /// <param name="cache">The distributed cache backend used for atomic operations.</param>
 /// <param name="serializer">The serializer for converting objects to/from binary format.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 /// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
-public class DeviceAuthorizationStorage(
+public partial class DeviceAuthorizationStorage(
+    ILogger<DeviceAuthorizationStorage> logger,
     IDistributedCache cache,
     IBinarySerializer serializer,
     IEntityStorageKeyFactory keyFactory,
@@ -132,9 +135,10 @@ public class DeviceAuthorizationStorage(
     /// won or it was never there": the code can be consumed and the caller still told false, when the lock
     /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
     /// <para>
-    /// They cannot cover the cleanup below them, which is this method's own call: if removing the user-code
-    /// index throws, the device code is already consumed and the caller gets the exception instead of true,
-    /// so no tokens are issued for a code that can never be presented again. Tracked as issue 453.
+    /// The cleanup below them cannot change that answer either way. Removing the user-code index is a
+    /// different question from whether this caller took the code, so a store that refuses it is logged
+    /// and the true stands: the entry left behind points at a request that no longer exists and carries
+    /// its own expiry.
     /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
@@ -143,7 +147,29 @@ public class DeviceAuthorizationStorage(
         if (!removed)
             return false;
 
-        await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
+        // The device code is consumed at this point, and that is the fact the caller asked about. Tidying
+        // the secondary index is a different question, so a store that refuses it does not get to take the
+        // answer away: the token endpoint calls this inside a `when` clause, where an exception becomes a
+        // server fault rather than a grant error - no tokens for a code that can never be presented again,
+        // and the end user's approval lost with it.
+        //
+        // The entry left behind is harmless on its own: it points at a request key that no longer exists,
+        // and it carries its own expiry. Removing it FIRST instead would make the fault retryable, at the
+        // cost of a window in which the user code resolves to nothing while the device code is still live
+        // - a worse trade, because that window is on the path that succeeds.
+        //
+        // Swallowed, not hidden. Nothing else in the system reports a dangling index, so without this line
+        // an operator has no way to learn the store refused a write at all.
+        var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(userCode);
+        try
+        {
+            await cache.RemoveAsync(userCodeKey);
+        }
+        catch (Exception exception)
+        {
+            LogUserCodeIndexNotRemoved(exception, userCodeKey);
+        }
+
         return true;
     }
 }
