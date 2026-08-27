@@ -74,9 +74,12 @@ public interface IDeviceAuthorizationStorage
     /// request not being there and a claim that expired while a store call was in flight - the second
     /// on one caller with nobody to lose to, and its outcome is the request gone with nobody able to be
     /// told they took it. An operator told a second REQUEST was the cause goes looking for one, and the
-    /// expiry case is exactly the one that never produces a second request. A failure of the second store call,
-    /// which removes the user-code index, raises rather than answering: the device code is already
-    /// consumed and the caller is handed the exception.
+    /// expiry case is exactly the one that never produces a second request.
+    /// <para>
+    /// Removing the secondary user-code index is not part of that answer. It runs after the claim has
+    /// already decided, so a store that refuses it is logged and the answer stands: the entry left behind
+    /// points at a request that is gone and expires on its own.
+    /// </para>
     /// </returns>
     Task<bool> TryRemoveAsync(string deviceCode, string userCode);
 }

@@ -139,7 +139,7 @@ public class DeviceAuthorizationStorageTests
         var entry = Assert.Single(log.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Equal(
-            LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemoved, entry.EventId.Id);
+            LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim, entry.EventId.Id);
         Assert.Contains(UserCodeKey, entry.Message);
     }
 
@@ -185,10 +185,13 @@ public class DeviceAuthorizationStorageTests
     /// </summary>
     /// <remarks>
     /// The token endpoint calls this from its expired and denied arms and then answers with a grant
-    /// error, so a store refusing the index write would turn that answer into a server fault. Cheaper
-    /// than the same failure in TryRemoveAsync - nothing has been consumed, so the client's next poll
-    /// gets the same answer - but the same shape, and one arm guarded while the other is not is how a
-    /// class comes back.
+    /// error, so a store refusing the index write would turn that answer into a server fault. Nothing was
+    /// consumed and nobody was told they took anything, which is what makes this the cheaper of the two
+    /// failures - not that the request survives, since it is removed on the very next line.
+    /// <para>
+    /// The order is the other way round from TryRemoveAsync, and that is why the two carry different log
+    /// events: there the request is already gone when the index cleanup runs, here it is not.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task RemoveAsync_WhenTheIndexCleanupFails_StillRemovesTheRequest()
@@ -208,6 +211,43 @@ public class DeviceAuthorizationStorageTests
         Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
         Assert.Equal(1, failing.Attempts);
         Assert.Single(log.Entries);
+    }
+
+    /// <summary>
+    /// The discard path reports under its OWN event, because what an operator must do differs.
+    /// </summary>
+    /// <remarks>
+    /// Its sibling says the code was claimed and the caller was told it took it. Neither is true
+    /// here - nothing was issued, nobody was told anything, and the request is removed on the next
+    /// line - so borrowing that message would send somebody looking for an issuance that never
+    /// happened. The row asserts the ID rather than the wording, because the id is what a filter is
+    /// built on and what a renumbering would silently break.
+    /// </remarks>
+    [Fact]
+    public async Task RemoveAsync_WhenTheIndexCleanupFails_ReportsUnderTheDiscardEvent()
+    {
+        var failing = new FailOnRemove(RealCache(), UserCodeKey);
+        var log = new RecordingLoggerFactory();
+        var storage = StorageOver(failing, log);
+
+        _serializer
+            .Setup(s => s.Deserialize<DeviceAuthorizationRequest>(It.IsAny<byte[]>()))
+            .Returns(NewRequest(_now.AddMinutes(5)));
+
+        await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
+
+        await storage.RemoveAsync(DeviceCode);
+
+        var entry = Assert.Single(log.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Equal(
+            LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedBeforeDiscard,
+            entry.EventId.Id);
+        Assert.Contains(UserCodeKey, entry.Message);
+
+        // And it really is the discard path: the request is gone by the time this returns, even
+        // though the log fired while it was still there.
+        Assert.Null(await failing.GetAsync(RequestKey, TestContext.Current.CancellationToken));
     }
 
     /// <summary>

@@ -96,12 +96,13 @@ public partial class DeviceAuthorizationStorage(
         // The secondary index is best-effort here for the same reason it is in TryRemoveAsync: it is not
         // what the caller asked for. The token endpoint calls this from its expired and denied arms and
         // then returns a grant error, so a store that refuses this write would turn that error into a
-        // server fault - the client gets a 500 where it should be told the code expired.
+        // server fault - the client gets a 500 where it should be told the code expired or was denied.
         //
-        // Less costly than the same failure in TryRemoveAsync, and worth saying so: nothing has been
-        // consumed here, so the request is still live and the client's next poll gets the same answer.
-        // The shape is identical though, and leaving one arm best-effort and the other not is how a
-        // class comes back.
+        // The two arms are NOT the same shape, and the difference is the order. There the claim has
+        // already removed the request, so the index is all that is left; here the request is removed
+        // AFTER this, so a refusal at this line leaves both keys in place and the removal still runs.
+        // What they share is the reason for guarding: the index is never the caller's question, and its
+        // store deciding otherwise must not become the caller's answer.
         var request = await TryGetByDeviceCodeAsync(deviceCode);
         if (request != null)
         {
@@ -112,12 +113,15 @@ public partial class DeviceAuthorizationStorage(
             }
             catch (Exception exception)
             {
-                LogUserCodeIndexNotRemoved(exception, userCodeKey);
+                LogUserCodeIndexNotRemovedBeforeDiscard(exception, userCodeKey);
             }
         }
 
-        // Not guarded. This one IS what the caller asked for, and a failure means the request is still
-        // there - swallowing it would report a removal that did not happen.
+        // Not guarded, and the reason is not symmetry with the arm above. Removing the request is the
+        // whole of what this method is for, so a store that refuses it has not done the thing asked;
+        // reporting otherwise would leave a live record behind a call that looked like it worked. The
+        // caller does see a fault where it expected a grant error, which is the cost, and it is a cost
+        // over a record that is expired or denied rather than one carrying an approval.
         await cache.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
     }
 
@@ -188,7 +192,7 @@ public partial class DeviceAuthorizationStorage(
         }
         catch (Exception exception)
         {
-            LogUserCodeIndexNotRemoved(exception, userCodeKey);
+            LogUserCodeIndexNotRemovedAfterClaim(exception, userCodeKey);
         }
 
         return true;

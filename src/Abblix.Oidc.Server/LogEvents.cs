@@ -632,7 +632,8 @@ internal static class LogEvents
         {
             private const int Base = 7110;
 
-            public const int UserCodeIndexNotRemoved = Base;
+            public const int UserCodeIndexNotRemovedAfterClaim = Base;
+            public const int UserCodeIndexNotRemovedBeforeDiscard = Base + 1;
         }
     }
 
