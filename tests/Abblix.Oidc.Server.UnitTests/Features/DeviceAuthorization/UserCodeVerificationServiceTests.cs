@@ -197,6 +197,70 @@ public class UserCodeVerificationServiceTests
                 AuthorizationDetails = authorizationDetails,
             });
 
+    /// <summary>
+    /// The decision is applied to the record read from the DEVICE-CODE lookup, and that record is what
+    /// is written back.
+    /// </summary>
+    /// <remarks>
+    /// The whole of this change is which object the decision lands on, and nothing measured it: every
+    /// other fixture answers both lookups with ONE instance, so deciding the stale record and deciding
+    /// the fresh one are the same call. Two mutants live in that blind spot and both leave the suite
+    /// green: deciding the stale record writes back one still reading Pending, so the device polls
+    /// authorization_pending for ever; deciding the fresh one and WRITING the stale one loses the
+    /// approval just as quietly. Only the identity assertion below sees the second.
+    /// <para>
+    /// So the two lookups return DISTINCT pending objects here, which is what production does anyway:
+    /// the storage deserializes on every call.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ApproveAsync_AppliesTheDecision_ToTheRecordItReadForTheWrite()
+    {
+        var fromUserCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, fromUserCode) : null);
+
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? fromDeviceCode : null);
+
+        DeviceAuthorizationRequest? written = null;
+        storage
+            .Setup(store => store.UpdateAsync(
+                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
+            .Callback<string, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
+            .Returns(Task.CompletedTask);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        Assert.True(await service.ApproveAsync(CanonicalUserCode, GrantWith(null)));
+
+        // The object identity is the assertion. Both records carry the same fields, so comparing values
+        // would pass on either one.
+        Assert.Same(fromDeviceCode, written);
+        Assert.Equal(DeviceAuthorizationStatus.Authorized, fromDeviceCode.Status);
+
+        // And the stale one was left alone, which is what a caller reading it back would rely on.
+        Assert.Equal(DeviceAuthorizationStatus.Pending, fromUserCode.Status);
+    }
+
     private static UserCodeVerificationService BuildService(
         JsonArray? requestedDetails,
         out CapturingLogger<UserCodeVerificationService> logs)
@@ -212,6 +276,13 @@ public class UserCodeVerificationServiceTests
             .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
             .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
 
+        // The decision is applied to the record as it stands at the write, so a fixture that answers the
+        // user-code lookup and not this one is describing a record consumed in between - which is its own
+        // row rather than the arrangement these tests want.
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
+
         logs = new CapturingLogger<UserCodeVerificationService>();
         return new UserCodeVerificationService(
             logs,
@@ -220,6 +291,85 @@ public class UserCodeVerificationServiceTests
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
             new FakeTimeProvider(Now));
+    }
+
+    /// <summary>
+    /// A decision taken on a record that stopped being pending while the decision was being taken does
+    /// not write that record back.
+    /// </summary>
+    /// <remarks>
+    /// Approval reads the record, checks its status, and writes it back. Between those the record can
+    /// move, in two ways, and the guard covers a record that is no longer pending rather than either of
+    /// them by name.
+    /// <para>
+    /// A poll can redeem the device code and REMOVE it, and the write then restores an authorized record
+    /// carrying its grant. A later poll finds it, and a second full token set is issued for one device
+    /// code. The authorization-code path has a net for this, the reuse decorator inspecting IssuedTokens
+    /// on the claimed grant; the device path has none, so nothing downstream catches it.
+    /// </para>
+    /// <para>
+    /// Or another decision can land FIRST, leaving the record present and decided. Writing over it
+    /// reverses somebody's answer: an approval overwriting a denial hands the device the tokens the end
+    /// user refused. This half is the one with no removal in it, so a guard written for the first would
+    /// pass every row of the first and none of this.
+    /// </para>
+    /// <para>
+    /// What the re-read finds is arranged at the moment of the re-read rather than by racing two callers,
+    /// so the rows measure the ordering the code guarantees rather than one a scheduler happened to
+    /// produce. Where the record survives, the re-read returns a DISTINCT object, which is what makes
+    /// "wrote the stale one" a different outcome from "wrote the fresh one" instead of the same.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, null)]
+    [InlineData(true, DeviceAuthorizationStatus.Denied)]
+    [InlineData(true, DeviceAuthorizationStatus.Authorized)]
+    [InlineData(false, DeviceAuthorizationStatus.Authorized)]
+    [InlineData(false, DeviceAuthorizationStatus.Denied)]
+    public async Task ADecisionOnARecordNoLongerPending_IsNotWrittenBack(
+        bool approving, DeviceAuthorizationStatus? advancedTo)
+    {
+        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
+
+        // What the re-read finds. Null is the record consumed and gone; a status is another decision
+        // having landed first, on a record that is still there.
+        var current = advancedTo is null
+            ? null
+            : new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+            {
+                ExpiresAt = Now.AddMinutes(5),
+                Status = advancedTo.Value,
+            };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync(current);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        var decided = approving
+            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(CanonicalUserCode);
+
+        Assert.False(decided);
+        storage.Verify(
+            store => store.UpdateAsync(It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     private static OidcOptions DeviceOptions() => new()
