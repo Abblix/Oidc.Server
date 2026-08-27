@@ -19,11 +19,11 @@
 
        MinVerMinimumMajorMinor pins the develop branch's next-target line ahead of releases:
        even before tagging v2.3.0 the dev builds publish as 2.3.0-dev.0.<height>, so
-       AuthenticationService can float Abblix.* on 2.3.0-dev.* immediately. Bump this when
+       a downstream consumer can float Abblix.* on 2.3.0-dev.* immediately. Bump this when
        the next-target moves (2.3 -> 2.4).
 
        MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so
-       the floating range AuthSvc consumes (2.3.0-dev.*) is unambiguous. Tagged releases
+       the floating range those consumers use (2.3.0-dev.*) is unambiguous. Tagged releases
        drop the suffix automatically (v2.3.0 -> 2.3.0). -->
   <PropertyGroup>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
