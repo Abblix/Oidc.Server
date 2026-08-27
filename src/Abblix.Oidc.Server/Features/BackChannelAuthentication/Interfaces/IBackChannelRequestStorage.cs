@@ -50,14 +50,18 @@ public interface IBackChannelRequestStorage
 		TimeSpan expiresIn);
 
 	/// <summary>
-	/// Atomically retrieves and removes a backchannel authentication request from storage.
-	/// This operation prevents race conditions where multiple concurrent requests could retrieve the same
-	/// authentication request before it's removed (poll mode double-retrieval vulnerability).
+	/// Claims a backchannel authentication request, retrieving and removing it in one protocol, so that a
+	/// caller told it took the request is the only caller that can be told so. It narrows the window in
+	/// which two polls both retrieve one request rather than closing it; the returns block below says
+	/// what the claim covers and what it does not.
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
-	/// A task that returns the authentication request if it existed and was successfully removed;
-	/// otherwise, null if the request was not found or already removed.
+	/// A task that returns the authentication request when this caller removed it and still held its own
+	/// claim afterwards. Null otherwise, which covers the request not being there, another caller having
+	/// taken it, and a claim that expired mid-protocol - the last on one caller with nobody to lose to,
+	/// and its outcome is the request gone with nobody able to be told they took it. A store call that
+	/// fails after the removal raises instead of answering.
 	/// </returns>
 	Task<BackChannelAuthenticationRequest?> TryRemoveAsync(string authenticationRequestId);
 }

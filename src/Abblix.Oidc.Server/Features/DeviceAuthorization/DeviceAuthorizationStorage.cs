@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <summary>
 /// Implements storage for device authorization requests as defined in RFC 8628.
 /// Stores requests by device_code (for client polling) with a secondary index by user_code (for user verification).
-/// Uses atomic distributed cache operations to prevent race conditions in token issuance.
+/// Redemption of a device code goes through the cache's claim protocol, which narrows the window in which
+/// two token requests both claim one code rather than closing it.
 /// </summary>
 /// <param name="logger">Records a secondary-index entry left behind, which nothing else reports.</param>
 /// <param name="cache">The distributed cache backend used for atomic operations.</param>
@@ -121,9 +122,8 @@ public partial class DeviceAuthorizationStorage(
     }
 
     /// <summary>
-    /// Atomically attempts to remove a device authorization request by device code.
-    /// Uses lock-based atomic removal protocol to prevent race conditions where multiple threads
-    /// attempt to remove the same device code concurrently.
+    /// Claims a device authorization request by device code, deciding presence and removing it in one
+    /// protocol, so that a caller told it removed the request is the only caller that can be told so.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -133,8 +133,10 @@ public partial class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Use Case:</strong> This method is used in the Device Authorization Grant flow (RFC 8628)
-    /// when exchanging an authorized device code for tokens. The atomic removal ensures that concurrent
-    /// token requests cannot both claim the same device code.
+    /// when exchanging an authorized device code for tokens. The claim keeps two token requests from both
+    /// being told they took one device code, however many processes are polling; what it does not stop is
+    /// a record RESTORED after the claim by an ungated write, which the next poll then claims in its turn.
+    /// That needs no second process and is issue 459. The Atomicity note below says what the claim reaches.
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>

@@ -8,6 +8,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -25,6 +26,124 @@ public class SecurityEventTokenBuilderTests
         .WithIssuer("https://issuer.example.com")
         .WithJwtId("id-1")
         .WithEvent("https://example.com/events/test");
+
+    /// <summary>
+    /// A token declared to carry one event statement refuses the second, at the call that adds it.
+    /// </summary>
+    /// <remarks>
+    /// The CAEP Interoperability Profile 1.0 says "The 'events' claim of the SET MUST contain only one
+    /// event", which is tighter than RFC 8417 Section 2 - and a host minting SETs outside the SSF
+    /// dispatch path had nothing to hold it to. The message names the statement already there, because
+    /// "you already have one" without saying which is the least useful thing a builder can answer.
+    /// </remarks>
+    [Fact]
+    public void ASecondStatementOnASingleEventToken_IsRefusedWhereItIsAdded()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => builder.WithEvent("https://example.com/events/second"));
+
+        Assert.Contains("https://example.com/events/first", refusal.Message);
+        Assert.Contains("https://example.com/events/second", refusal.Message);
+    }
+
+    /// <summary>
+    /// The typed overload is the same door, so it is refused the same way.
+    /// </summary>
+    /// <remarks>
+    /// Its own row because the two overloads reach the collection independently: the typed one serializes
+    /// first and then adds, so a guard placed on the untyped one alone would leave the door a host using
+    /// the profile's own payload types walks through.
+    /// </remarks>
+    [Fact]
+    public void ASecondStatementThroughTheTypedOverload_IsRefusedToo()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        Assert.Throws<InvalidOperationException>(
+            () => builder.WithEvent("https://example.com/events/second", new StubPayload()));
+    }
+
+    /// <summary>
+    /// An identifier that is not one is judged as an argument, not as a second statement.
+    /// </summary>
+    /// <remarks>
+    /// Both guards would fire on this call and the wrong one used to answer: a caller whose event-type
+    /// variable came back null was told the token already holds another event, and sent to construct the
+    /// builder without the declaration - which swaps the message and does not fix the call. The collection
+    /// refuses the same input on its own terms whenever the declaration is unset, so the two paths
+    /// disagreed about what the fault was.
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AnIdentifierThatIsNotOne_IsRefusedAsAnArgument(string? eventType)
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        // ThrowsAny, because null gives ArgumentNullException and empty gives ArgumentException, and which
+        // of the two arrives is not what this row is about.
+        var refusal = Assert.ThrowsAny<ArgumentException>(() => builder.WithEvent(eventType!));
+
+        Assert.Equal("eventType", refusal.ParamName);
+    }
+
+    /// <summary>
+    /// The same identifier twice is still RFC 8417 Section 2.2's rule, not the profile's, even on a token
+    /// carrying one statement.
+    /// </summary>
+    /// <remarks>
+    /// Two guards stand over one call and both would fire, so which answers decides what an operator is
+    /// told. Saying "this token carries one event" about a caller repeating one identifier points at a
+    /// profile that has nothing to say about saying the same thing twice, and hides the rule that does.
+    /// </remarks>
+    [Fact]
+    public void TheSameIdentifierTwiceOnASingleEventToken_IsTheDuplicateRule()
+    {
+        var builder = new SecurityEventTokenBuilder { SingleEventStatement = true }
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first");
+
+        var refusal = Assert.Throws<ArgumentException>(
+            () => builder.WithEvent("https://example.com/events/first"));
+
+        Assert.Contains("already present", refusal.Message);
+        Assert.Contains("2.2", refusal.Message);
+    }
+
+    /// <summary>
+    /// Left unset, several statements are built, because that is what RFC 8417 Section 2 allows and this
+    /// package speaks whatever profile the deployment does.
+    /// </summary>
+    /// <remarks>
+    /// The explicit boundary of the change rather than the barrier: refusing the second statement outright
+    /// turns several other rows red too, including the fixture that rebuilds RFC 8417's own two-statement
+    /// figure. What this row adds is a place a reader can find the permission stated, rather than having
+    /// to infer it from a fixture about something else.
+    /// </remarks>
+    [Fact]
+    public void WithoutTheDeclaration_SeveralStatementsAreBuilt()
+    {
+        var token = new SecurityEventTokenBuilder()
+            .WithIssuer("https://issuer.example.com")
+            .WithJwtId("id-1")
+            .WithEvent("https://example.com/events/first")
+            .WithEvent("https://example.com/events/second")
+            .Build();
+
+        Assert.Equal(2, token.Events!.Count);
+    }
 
     [Fact]
     public void Build_WithoutIssuer_Fails()
@@ -304,4 +423,7 @@ public class SecurityEventTokenBuilderTests
             return Task.FromResult(Result);
         }
     }
+
+    /// <summary>A payload of no particular vocabulary, for exercising the typed overload.</summary>
+    private sealed record StubPayload : IEventPayload;
 }
