@@ -14,7 +14,8 @@ namespace Abblix.Utils.UnitTests;
 
 /// <summary>
 /// Tests for <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
-/// Verifies the atomic get-and-remove protocol prevents race conditions in concurrent scenarios.
+/// Verifies the get-and-remove protocol admits one claimer at a time, which narrows the window in which
+/// two callers both take one value rather than closing it.
 /// </summary>
 public class DistributedCacheExtensionsTests
 {
