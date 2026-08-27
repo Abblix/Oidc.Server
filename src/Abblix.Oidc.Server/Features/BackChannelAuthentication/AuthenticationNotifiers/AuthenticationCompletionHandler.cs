@@ -41,18 +41,26 @@ public abstract partial class AuthenticationCompletionHandler(
     /// to the mode-specific delivery implementation.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
-    /// <param name="request">The authentication request to mark as authenticated.</param>
+    /// <param name="request">The authentication request carrying the grant the end user approved. Its
+    /// own Status is not read: whether this request may still be answered is decided from the STORED
+    /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid.</param>
     /// <returns>A task representing the asynchronous authentication completion operation.</returns>
     /// <remarks>
     /// This method:
-    /// <list type="number">
+    /// <list type="bullet">
+    ///   <item>Refuses unless the STORED record reads Pending</item>
+    ///   <item>Refuses an answer from somebody other than the end user the request named, by denying or
+    ///   removing according to the mode</item>
     ///   <item>Sets the request status to Authenticated</item>
     ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
     /// </list>
     /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier. The full statement of the condition, and why it is stated that way rather than as a
+    /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,

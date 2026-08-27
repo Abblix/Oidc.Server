@@ -1200,13 +1200,20 @@ public class AuthenticationCompletionHandlerTests
     /// leaves a record no second completion can use.
     /// </summary>
     /// <remarks>
-    /// This is the write that makes "completed once" a stored fact for the one mode that stored nothing.
-    /// The order is the assertion: written after delivery instead, it would never happen on the failure
-    /// path, which is the only path where the record survives to be completed again.
+    /// This is the write that makes "completed once" a stored fact for the one mode that stored nothing,
+    /// and the order is what this row asserts. The property is that no token set exists over a record
+    /// still reading Pending: writing first makes it hold whatever runs afterwards, while any placement
+    /// after the mint leaves a fault or a crash in between able to strand tokens over a completable
+    /// record.
+    /// <para>
+    /// Not "otherwise it would never run on the failure path" - measured, a write inside the
+    /// delivery-failed branch runs there and leaves the failing-delivery row green. The span this row
+    /// covers is the one between the mint and the write, which nothing else can see.
+    /// </para>
     /// <para>
     /// The whole record goes down, grant included - the storage serializes what it is handed. The row
-    /// asserts the ORDER rather than the contents, because the order is what the fix is: a write after
-    /// the delivery would never run on the failure path, which is the only path where a record survives.
+    /// asserts the ORDER rather than the contents, because the contents are pinned where they matter, by
+    /// the failing-delivery row's capture of what the store was handed.
     /// </para>
     /// </remarks>
     [Fact]

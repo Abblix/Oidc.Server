@@ -39,9 +39,18 @@ public interface IAuthenticationCompletionHandler
     ///   <item>Delegates to the mode-specific implementation for token delivery</item>
     /// </list>
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The stored record is not pending - it was already
-    /// answered, refused or expired. Completing it would deliver a second answer
-    /// for one authentication; recovering from a failed delivery means asking the end user.</exception>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier. Stated as what must be true rather than as a list of causes, because the causes are
+    /// more numerous than they look and this seam cannot tell them apart: the request may have been
+    /// answered, refused or expired, its record may have been redeemed and removed by a poll, removed by
+    /// push's own refusal path after a configuration fault where nothing was answered at all, evicted,
+    /// or never stored. A host that persists the status itself before calling lands here too, on its
+    /// FIRST completion and with nothing over-granted.
+    /// <para>
+    /// Completing a request that is not pending would deliver a second answer for one authentication.
+    /// Recovering from a failed delivery therefore means asking the end user again, not repeating the
+    /// call.
+    /// </para></exception>
     Task CompleteAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,

@@ -116,9 +116,15 @@ public partial class PushModeCompletionHandler(
             return;
         }
 
-        // Persisted BEFORE minting, and this is the only write push makes. The order is the whole point:
-        // written after delivery it would never happen on the failure path, which is the one path where
-        // the record survives to be completed again.
+        // Persisted BEFORE minting, and this is the only write push makes. The property the order buys
+        // is that no token set can exist over a record still reading Pending, and writing first makes it
+        // hold whatever runs afterwards. Any placement after the mint leaves a window instead: a fault, a
+        // crash or a cancellation between minting and the write leaves a full token set alive over a
+        // record the base handler would still complete - the hole this closes, reopened narrower.
+        //
+        // Not "otherwise it would never happen on the failure path". A write inside the delivery-failed
+        // branch runs on that path perfectly well and the failing-delivery row stays green; it is the
+        // span before it that stops being covered.
         //
         // The whole record, the same way poll and ping write theirs: the storage serializes the object it
         // is handed, so the grant the host completed with goes down with the status. What stops a second
