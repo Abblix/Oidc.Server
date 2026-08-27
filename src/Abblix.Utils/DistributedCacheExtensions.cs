@@ -299,9 +299,15 @@ public static class DistributedCacheExtensions
 	/// a poll bumping its next-poll instant, on the key <see cref="TryGetAndRemoveAsync"/> redeems. The
 	/// device authorization request is written the same way, by a poll's next-poll bump, and REMOVED
 	/// outside the gate on the key <see cref="TryRemoveAsync"/> redeems - by a second poll taking the
-	/// expired or the denied arm, which is where the removal half of the sentence above gets its site.
-	/// A user's approval or denial writes that key too, but only while the record is still pending, and a
-	/// hold is entered only once it is authorized.
+	/// EXPIRED arm, which is where the removal half of the sentence above gets its site. That arm is
+	/// evaluated before the authorized one, so a poll arriving after the lifetime ran out removes the
+	/// record ungated while another poll holds it.
+	/// <para>
+	/// The denied arm removes it too and cannot reach this: a hold is entered only on an authorized
+	/// record, and nothing moves a record from authorized to denied - approval and denial both refuse
+	/// anything that is not pending. Naming it here would offer an operator a second explanation for a
+	/// value lost under a hold, and only one of the two can produce it.
+	/// </para>
 	/// </para>
 	/// <para>
 	/// So the value returned is the value at the key when this caller got IN, which is a narrower window

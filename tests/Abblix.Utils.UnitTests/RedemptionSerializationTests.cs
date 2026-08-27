@@ -556,7 +556,7 @@ public class RedemptionSerializationTests
 		/// <summary>
 		/// How long a caller that should be held OUT is given to prove otherwise. Short, because this one
 		/// is spent on every passing run, and it is a fail-early assertion rather than the proof - see
-		/// <see cref="ParkedReachedAsync"/>.
+		/// <see cref="ResumesBefore"/>.
 		/// </summary>
 		private static readonly TimeSpan SettleWindow = TimeSpan.FromMilliseconds(250);
 
@@ -617,9 +617,13 @@ public class RedemptionSerializationTests
 		/// not run it yet" - are then the same reading, and the row fails in milliseconds under load
 		/// having measured nothing.
 		/// <para>
-		/// The timeout is what keeps the instrument's own failure a DIFFERENT outcome from the property
-		/// being false: a <see cref="TimeoutException"/> says the caller never arrived, where a failed
-		/// assertion would say the gate admitted the wrong number.
+		/// The timeout bounds the wait so a row that will never be satisfied ends in seconds rather than
+		/// hanging the suite. It does NOT separate the instrument's failure from the property being
+		/// false, and assuming it does sends whoever reads a red run to the harness: for a row whose
+		/// property is "this caller DOES get in", a broken gate produces exactly this timeout. Measured -
+		/// keying the gate by a constant instead of by the key makes the different-keys row die with a
+		/// <see cref="TimeoutException"/> rather than an assertion. What tells the two apart is
+		/// <see cref="ResumesBefore"/>, which reports a COUNT, so read that before blaming the harness.
 		/// </para>
 		/// </remarks>
 		public Task WaitUntilEnteredAsync(int callers)
@@ -648,12 +652,14 @@ public class RedemptionSerializationTests
 		/// the second caller was seen within about fifteen milliseconds - so the margin is an order of
 		/// magnitude, and widening it costs only time on a passing run.
 		/// <para>
-		/// It is not on its own what carries these rows, and that took a measurement to establish rather
-		/// than an argument. Neutralising it left a build with the read hoisted back out of the gate
-		/// entirely green, because the plain wait cannot tell an early entry from a late one. What
-		/// discriminates is <see cref="ResumesBefore"/> beside it, which asks how many callers had been
-		/// released when this one got in: a held-out caller records at least one, and a hoisted read
-		/// records zero. That is a fact rather than a moment, so it needs no window at all.
+		/// It is not on its own what carries these rows. Neutralising it USED to leave a build with the
+		/// read hoisted back out of the gate entirely green, because a plain wait cannot tell an early
+		/// entry from a late one - that was measured before <see cref="ResumesBefore"/> existed, and it
+		/// is no longer true: with both in place, neutralising the window and hoisting the read turns the
+		/// row red on the count rather than on the moment. What discriminates is
+		/// <see cref="ResumesBefore"/> beside it, which asks how many callers had been released when this
+		/// one got in: a held-out caller records at least one, and a hoisted read records zero. That is a
+		/// fact rather than a moment, so it needs no window at all.
 		/// </para>
 		/// </remarks>
 		public async Task<bool> EnteredWithinWindowAsync(int callers)

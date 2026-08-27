@@ -17,7 +17,7 @@ namespace Abblix.Utils.UnitTests;
 /// The two sides MUST behave identically - these tests are the parity contract.
 /// </summary>
 /// <remarks>
-/// BCL's <see cref="Base64Url.DecodeFromChars"/> is strict on the alphabet (rejects standard-base64
+/// BCL's <see cref="Base64Url.DecodeFromChars(System.ReadOnlySpan{char})"/> is strict on the alphabet (rejects standard-base64
 /// <c>+</c> and <c>/</c>) and on length-mod-4-equals-1 inputs, which fixes the main correctness gap
 /// in the legacy <c>HttpServerUtility.UrlTokenDecode</c>. The BCL is permissive on <c>=</c> padding
 /// and on whitespace inside the input - accepting them as compat tolerance. That residual leniency
