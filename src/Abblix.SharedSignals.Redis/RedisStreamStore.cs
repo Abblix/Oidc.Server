@@ -59,12 +59,6 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
     private readonly IDatabase _database = connection.GetDatabase();
 
     /// <summary>
-    /// Joins receiver and stream into the hash field. Both parts are escaped before the separator
-    /// joins them: the receiver id is whatever the host's authentication produced and may contain
-    /// anything, and a composite key that trusts its inputs' alphabet is ambiguous the day one input
-    /// widens - <c>("a|b", "c")</c> and <c>("a", "b|c")</c> address one field unescaped.
-    /// </summary>
-    /// <summary>
     /// The exact text a stored stream carries when its version is <paramref name="version"/>.
     /// </summary>
     /// <remarks>
@@ -90,6 +84,12 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
     /// </remarks>
     private const string AnyVersionMarker = "\"version\":\"";
 
+    /// <summary>
+    /// Joins receiver and stream into the hash field. Both parts are escaped before the separator
+    /// joins them: the receiver id is whatever the host's authentication produced and may contain
+    /// anything, and a composite key that trusts its inputs' alphabet is ambiguous the day one input
+    /// widens - <c>("a|b", "c")</c> and <c>("a", "b|c")</c> address one field unescaped.
+    /// </summary>
     private static RedisValue FieldOf(string receiverId, string streamId)
         => $"{Uri.EscapeDataString(receiverId)}|{Uri.EscapeDataString(streamId)}";
 
