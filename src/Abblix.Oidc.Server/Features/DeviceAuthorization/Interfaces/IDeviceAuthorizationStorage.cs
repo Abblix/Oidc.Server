@@ -58,7 +58,12 @@ public interface IDeviceAuthorizationStorage
     /// Removes a device authorization request from storage using its device code.
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
-    /// <returns>A task that completes when the request is removed from storage.</returns>
+    /// <returns>
+    /// A task that completes when the request is removed. Tidying the secondary user-code index is
+    /// best-effort and is logged rather than raised: it is not what the caller asked for, and a store
+    /// deciding otherwise must not become a fault where a grant error belongs. Removing the request
+    /// itself is not guarded - that IS what was asked, so a refusal there raises.
+    /// </returns>
     Task RemoveAsync(string deviceCode);
 
     /// <summary>

@@ -51,6 +51,8 @@ partial class DeviceAuthorizationStorage
         Level = LogLevel.Warning,
         Message = "A device authorization request is being discarded, and its user-code index at " +
                   "{UserCodeKey} could not be removed. Nothing was issued and no caller was told it took " +
-                  "the code; the request itself is removed next, and the entry expires on its own.")]
+                  "the code. Removing the request runs next and is NOT guarded, so a store refusing writes " +
+                  "fails there too and the caller sees THAT fault rather than this line; the index entry " +
+                  "expires on its own either way.")]
     private partial void LogUserCodeIndexNotRemovedBeforeDiscard(Exception exception, string UserCodeKey);
 }
