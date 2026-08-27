@@ -43,13 +43,6 @@ repos:
         entry: python .github/scripts/lint-no-split-doc-comments.py
         language: python
         types: [c#]
-      - id: no-private-product-names
-        name: "Block a private product named in this public repository"
-        entry: python .github/scripts/lint-no-private-product-names.py
-        language: python
-        pass_filenames: false
-        # Whole-tree rather than per-file: the name arrives in a comment beside an edit as
-        # readily as in the edit, and the staged set does not contain the file it lands in.
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py

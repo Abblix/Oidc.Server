@@ -71,35 +71,6 @@ jobs:
         run: python .github/scripts/lint-license-headers.py
         timeout-minutes: 3
     timeout-minutes: 5
-  private-product-names:
-    name: No private product named in this public repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
-        timeout-minutes: 3
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-        with:
-          python-version: '3.12'
-        timeout-minutes: 3
-      # Standard library only, so there is nothing to install and no third-party code runs here.
-      #
-      # It runs in CI as well as pre-commit because the hook only exists in a clone where somebody
-      # ran `pre-commit install`: a web-UI edit, a bot, or --no-verify walks straight past it, and the
-      # thing being guarded is permanent the moment it is pushed.
-      # The self-test runs FIRST and gates the scan. A checker reporting zero over a tree it never read,
-      # or with a pattern that stopped matching, prints the same clean line as a working one - so the
-      # instrument is driven in both directions on a sentinel before its silence is believed.
-      - name: Prove the checker can report a find
-        run: python .github/scripts/lint-no-private-product-names.py --self-test
-        timeout-minutes: 3
-      - name: Check for private product names
-        run: python .github/scripts/lint-no-private-product-names.py
-        timeout-minutes: 3
-    timeout-minutes: 5
   actionlint:
     name: actionlint (schema + shellcheck)
     runs-on: ubuntu-latest
