@@ -63,8 +63,8 @@ public partial class PushModeCompletionHandler(
     /// The status transition is persisted before the tokens are minted, and the request is removed after
     /// a delivery that succeeded. Neither is hygiene. The write is what leaves a record no second
     /// completion can use on the one path where a record survives, and the removal is what leaves none at
-    /// all on the path where the tokens did arrive. The grant itself is still not persisted: the record
-    /// says the request was spent, not what it was spent on.
+    /// all on the path where the tokens did arrive. The write is the same one poll and ping make, so it
+    /// carries the whole record including the grant the host completed with.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
@@ -120,10 +120,11 @@ public partial class PushModeCompletionHandler(
         // written after delivery it would never happen on the failure path, which is the one path where
         // the record survives to be completed again.
         //
-        // The status alone, deliberately, not the narrowed grant the host completed with. Persisting the
-        // grant would let a second completion replay the approval, which is a correctly-scoped second
-        // token set for one authentication - the symptom fixed and the disease kept. What the record has
-        // to carry is that it was spent, and the base handler refuses everything that is not Pending.
+        // The whole record, the same way poll and ping write theirs: the storage serializes the object it
+        // is handed, so the grant the host completed with goes down with the status. What stops a second
+        // completion is not anything the record omits - it is the base handler reading this status back
+        // and refusing everything that is not Pending. A record that carried the status alone would be
+        // just as unusable and harder to explain.
         //
         // On the delivery path this write is undone moments later by the removal below. That is a wasted
         // round trip on the successful case in exchange for the guarantee on the failing one, which is
@@ -181,15 +182,14 @@ public partial class PushModeCompletionHandler(
                     // retries them.
                     //
                     // What survives in storage reads Authenticated, written above before anything was
-                    // minted, and still carries what the client ASKED for rather than what the end user
-                    // approved - the narrowed grant was set on the in-memory object and is not persisted.
-                    // The status is what matters: the base handler completes only a Pending request, so
-                    // this record cannot be handed back for a second completion.
+                    // minted, and carries the grant the end user actually approved along with the
+                    // session naming them. Before that write it was the PRE-completion record - Pending,
+                    // carrying what the client asked for - and it had everything CompleteAsync needed
+                    // except any sign it had been used, which is what made handing it back an over-grant
+                    // rather than a retry.
                     //
-                    // It carries a session too - the one the device handler returned at initiation,
-                    // naming the end user - because AuthorizedGrant takes it as a non-nullable member.
-                    // Before the write above, that made the leftover a live over-grant rather than a
-                    // record: everything CompleteAsync needed was in it except any sign it had been used.
+                    // The status is what closes that: the base handler reads it from storage and
+                    // completes only a Pending request.
                     //
                     // It is kept rather than removed so a host can see the request existed, and it expires
                     // on its own. The correct recovery is to ask the end user again, which is what the

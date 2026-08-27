@@ -34,10 +34,9 @@ partial class PushModeCompletionHandler
         EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,
         Level = LogLevel.Warning,
         Message = "CIBA push delivery failed for auth_req_id: {AuthReqId}. The tokens were minted and " +
-                  "are gone - nothing retries them. What is left in storage reads Authenticated and " +
-                  "still carries what the client asked for rather than what the end user approved, so " +
-                  "it cannot be completed again: recovering means asking the end user, not resending " +
-                  "from this record. It expires on its own.")]
+                  "are gone - nothing retries them. What is left in storage reads Authenticated, so it " +
+                  "cannot be completed again: recovering means asking the end user, not resending from " +
+                  "this record. It expires on its own.")]
     private partial void LogPushDeliveryFailed(string AuthReqId);
 
     /// <summary>

@@ -69,8 +69,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///             authenticationTime: DateTimeOffset.UtcNow,
 ///             identityProvider: "local");
 ///
-///         // Update request with authenticated status
-///         storedRequest.Status = BackChannelAuthenticationStatus.Authenticated;
+///         // Carry the end user's answer on the grant. Setting Status here is harmless and not required:
+///         // the completion handler reads the STORED status to decide whether this request may still be
+///         // answered, and sets Authenticated itself when it may.
 ///         storedRequest.AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context);
 ///
 ///         // Notify completion - automatically selects and delegates to the appropriate

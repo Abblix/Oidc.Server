@@ -48,6 +48,36 @@ public class AuthenticationCompletionHandlerTests
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
     private readonly TimeSpan _expiresIn = TimeSpan.FromMinutes(5);
 
+    public AuthenticationCompletionHandlerTests()
+    {
+        // Every row completes a request the store holds as Pending, because that is what a record
+        // awaiting an answer reads. A row about refusing a spent one overrides this.
+        StoredRecordReads(BackChannelAuthenticationStatus.Pending);
+    }
+
+    /// <summary>
+    /// Arranges what the STORED record reads, which is what the completion guard consults.
+    /// </summary>
+    /// <remarks>
+    /// A DISTINCT object from the one handed to the handler, deliberately. The documented host pattern
+    /// has the caller set Status on its own copy before calling, so a fixture returning that same
+    /// instance would make the two indistinguishable - and a guard reading the caller's field instead of
+    /// the store would pass every row while refusing every conforming host.
+    /// </remarks>
+    private void StoredRecordReads(BackChannelAuthenticationStatus status)
+    {
+        var stored = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "stored_session", DateTimeOffset.UnixEpoch, "test"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UnixEpoch.AddHours(1))
+        {
+            Status = status,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
+    }
+
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null);
 
@@ -1049,13 +1079,16 @@ public class AuthenticationCompletionHandlerTests
         BackChannelAuthenticationStatus already)
     {
         var request = CreateRequest(UserId, null);
-        request.Status = already;
+        StoredRecordReads(already);
 
         var handler = CreatePollModeHandler();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn));
 
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
         _storage.VerifyNoOtherCalls();
     }
 
@@ -1067,7 +1100,7 @@ public class AuthenticationCompletionHandlerTests
         BackChannelAuthenticationStatus already)
     {
         var request = CreateRequest(UserId, null);
-        request.Status = already;
+        StoredRecordReads(already);
         request.ClientNotificationEndpoint = _notificationEndpoint;
 
         var handler = CreatePingModeHandler();
@@ -1075,6 +1108,9 @@ public class AuthenticationCompletionHandlerTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.CompleteAuthenticationAsync(AuthReqId, request, PingClient(), _expiresIn));
 
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
         _storage.VerifyNoOtherCalls();
         _notificationService.VerifyNoOtherCalls();
     }
@@ -1087,7 +1123,7 @@ public class AuthenticationCompletionHandlerTests
         BackChannelAuthenticationStatus already)
     {
         var request = CreateRequest(UserId, null);
-        request.Status = already;
+        StoredRecordReads(already);
         request.ClientNotificationEndpoint = _notificationEndpoint;
 
         var handler = CreatePushModeHandler();
@@ -1095,6 +1131,9 @@ public class AuthenticationCompletionHandlerTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
 
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
         _storage.VerifyNoOtherCalls();
         _notificationService.VerifyNoOtherCalls();
         _tokenRequestProcessor.VerifyNoOtherCalls();

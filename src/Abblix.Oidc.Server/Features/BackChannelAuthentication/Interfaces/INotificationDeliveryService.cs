@@ -46,11 +46,10 @@ public interface INotificationDeliveryService
     /// <c>true</c> if the client endpoint accepted the notification (2xx response); <c>false</c> if
     /// delivery failed (non-success status or transport error).
     /// <para>
-    /// On <c>false</c> push keeps the stored record, and that is not a saved grant. The authenticated,
-    /// narrowed grant lives on the in-memory object and is dropped with it; what storage holds is the
-    /// PRE-completion record - Pending, carrying what the client asked for rather than what the end user
-    /// approved. It is kept so a host can see the request existed, not so delivery can be resumed, and a
-    /// host that completes it again delivers entries the end user refused. See issue 451.
+    /// On <c>false</c> push keeps the stored record, and it is not a resumable delivery. The tokens were
+    /// minted and are gone; nothing retries them. The record reads Authenticated, written before the
+    /// mint, so completing the request again is refused - the recovery is to ask the end user, not to
+    /// resend from what is left.
     /// </para>
     /// </returns>
     Task<bool> SendAsync(

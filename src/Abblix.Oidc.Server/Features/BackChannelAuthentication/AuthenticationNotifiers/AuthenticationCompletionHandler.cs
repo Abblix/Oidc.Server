@@ -59,30 +59,39 @@ public abstract partial class AuthenticationCompletionHandler(
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
-        // One authentication, one completion. The end user answered once, so a second full token set is
-        // wrong whatever it contains - which is why this refuses rather than replaying the narrowed
-        // grant. Replaying would make the second set correctly scoped and no less of a second set.
+        // One authentication, one completion. The end user answered once, so a second delivery of that
+        // answer is wrong whatever it carries - which is why this refuses rather than replaying the
+        // narrowed grant. Replaying would make the second attempt correctly scoped and no less of a
+        // second attempt.
         //
-        // Loud rather than silent, and that is a behaviour change a host could be relying on: nothing on
-        // this seam returns a value, so a refusal a caller cannot detect is the one shape that reads as
-        // acceptance. The exception reaches the code writing the recovery, which is where the choice
-        // between re-completing and asking the end user again is actually made.
+        // Read from STORAGE, not from the request the caller handed in. The documented host pattern sets
+        // Status on its own copy before calling here, so a guard reading that field would refuse a
+        // conforming host on its FIRST completion - and, worse, would be advisory: whether the refusal
+        // fires would be up to the caller it is meant to constrain. The stored record is the one thing
+        // this seam owns.
         //
-        // Push is what makes this reachable at all. Poll and ping persist Authenticated before they
-        // deliver, so their records already answer this; push stored nothing until
+        // Push is what makes a second completion reachable at all. Poll and ping persist Authenticated
+        // before they deliver, so a repeat already found a spent record; push stored nothing until
         // PushModeCompletionHandler was given the same write, and until then a failed delivery left a
         // record that still read Pending and still carried what the CLIENT asked for.
-        if (request.Status != BackChannelAuthenticationStatus.Pending)
+        //
+        // Stated as what must be TRUE rather than as the ways it can fail. A record that is gone is not
+        // a lesser case of one that is spent: a poll can have redeemed and removed it, and completing on
+        // top of that mints against a record nobody can check and writes it back into existence.
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        if (stored is not { Status: BackChannelAuthenticationStatus.Pending })
         {
-            LogAlreadyCompleted(authenticationRequestId, request.Status.ToString());
+            LogAlreadyCompleted(authenticationRequestId, stored?.Status.ToString() ?? "gone");
 
             throw new InvalidOperationException(
-                $"The authentication request has already been completed. Its "
-                + $"{nameof(request.Status)} is {request.Status}, and only "
-                + $"{BackChannelAuthenticationStatus.Pending} can be completed. Recovering from a failed "
-                + $"delivery by completing again would issue a second set of tokens for one "
-                + $"authentication, carrying what the client asked for rather than what the end user "
-                + $"approved.");
+                $"The authentication request cannot be completed: the stored record "
+                + (stored is null
+                    ? "is gone, so it was answered and consumed already"
+                    : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
+                + ". Completing it would deliver a second answer for one authentication - in push mode a "
+                + "second set of tokens, and in every mode a grant carrying what the client asked for "
+                + "rather than what the end user approved. Recovering from a failed delivery means asking "
+                + "the end user again.");
         }
 
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
