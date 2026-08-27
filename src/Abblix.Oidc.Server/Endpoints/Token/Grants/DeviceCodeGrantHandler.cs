@@ -53,7 +53,7 @@ public partial class DeviceCodeGrantHandler(
         ClientInfo clientInfo,
     CancellationToken cancellationToken)
     {
-        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.DeviceCode.HasValue())
         {
@@ -67,7 +67,7 @@ public partial class DeviceCodeGrantHandler(
         var pollingInterval = deviceAuthOptions.PollingInterval;
 
         // A single clock read shared by the expiry gate and the remaining-lifetime passed to UpdateAsync, so
-        // the two never disagree and the refreshed cache TTL is guaranteed positive (RFC 8628 §3.2).
+        // the two never disagree and the refreshed cache TTL is guaranteed positive (RFC 8628 section 3.2).
         var now = timeProvider.GetUtcNow();
 
         switch (deviceRequest)
@@ -80,19 +80,24 @@ public partial class DeviceCodeGrantHandler(
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:
                 return new OidcError(ErrorCodes.InvalidGrant, "The device code was issued to another client");
 
-            // Code has reached its fixed RFC 8628 §3.2 lifetime - reject and clean up rather than letting a
+            // Code has reached its fixed RFC 8628 section 3.2 lifetime - reject and clean up rather than letting a
             // polling client keep it alive by resetting the cache TTL
             case { } when now >= deviceRequest.ExpiresAt:
                 await storage.RemoveAsync(request.DeviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
-            // User has authorized the device - atomically claim the authorization
+            // User has authorized the device - claim the authorization
             case { Status: DeviceAuthorizationStatus.Authorized }
                 when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
 
-                // Atomic get-and-remove, so two concurrent polls cannot both retrieve the authorized
-                // grant and both be issued tokens. RFC 8628 states no such rule anywhere - exchanging a
-                // device code once is this library's decision, and this arm is where it is enforced.
+                // Removed through the store's claim protocol, which is what keeps two polls from both
+                // being told they took the authorized grant, however many processes are polling. The
+                // grant itself was read before the switch, outside any of it, so what stays open is a
+                // record restored by an ungated write after the claim - issue 459, on one node.
+                // A refusal below is not a diagnosis: a competitor produces it, and so does a
+                // claim that expired mid-protocol with nobody to lose to. RFC 8628 requires no such
+                // single exchange of a device code anywhere; that is this library's decision, and this
+                // arm is where it is enforced.
 
                 return new OidcError(
                     ErrorCodes.ExpiredToken,
@@ -128,7 +133,7 @@ public partial class DeviceCodeGrantHandler(
 
                 // And what the type comparison above structurally cannot see: an entry of a type the
                 // request DID ask for, carrying content it did not - a raised amount, a widened set of
-                // accounts. RFC 9396 §6.1 leaves that to the type's own validator, so this asks it.
+                // accounts. RFC 9396 section 6.1 leaves that to the type's own validator, so this asks it.
                 // On a copy: the question must not rewrite its own subject.
                 if (await authorizationDetailsPolicy.RefuseAsync(
                         authorizedGrant, clientInfo, cancellationToken) is { } refusal)
