@@ -123,7 +123,7 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds with ping mode and a notification endpoint.
-    /// Per CIBA Core 1.0 section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
+    /// Per CIBA Core 1.0 Section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
     /// delivery mode is set to ping or push".
     /// </summary>
     [Fact]
@@ -143,8 +143,8 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies error when the notification endpoint is not an HTTPS URL.
-    /// CIBA Core 1.0 section 4, on the registration metadata: "It MUST be an HTTPS URL." The TLS clause
-    /// that usually travels with it is section 9 and is not a property of the registered value, so
+    /// CIBA Core 1.0 Section 4, on the registration metadata: "It MUST be an HTTPS URL." The TLS clause
+    /// that usually travels with it is Section 9 and is not a property of the registered value, so
     /// nothing here can check it.
     /// </summary>
     [Theory]
@@ -185,7 +185,7 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds with push mode and a notification endpoint.
-    /// Per CIBA Core 1.0 section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
+    /// Per CIBA Core 1.0 Section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
     /// delivery mode is set to ping or push".
     /// </summary>
     [Fact]

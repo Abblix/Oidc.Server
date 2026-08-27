@@ -14,7 +14,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates CIBA-related metadata (OpenID Connect Client-Initiated Backchannel Authentication 1.0, section 4):
+/// Validates CIBA-related metadata (OpenID Connect Client-Initiated Backchannel Authentication 1.0, Section 4):
 /// the consistency between <c>backchannel_token_delivery_mode</c> and
 /// <c>backchannel_client_notification_endpoint</c>, and that
 /// <c>backchannel_authentication_request_signing_alg</c> is on the server's supported list.
@@ -68,16 +68,20 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     "The specified token delivery mode is not supported");
         }
 
-        // CIBA Core 1.0 section 4, describing backchannel_client_notification_endpoint as registration
-        // metadata: "It MUST be an HTTPS URL." That is the whole of what section 4 says about it, and it
-        // is also the whole of what is checkable at registration - the registered value is all there is
-        // here.
+        // CIBA Core 1.0 Section 4, describing backchannel_client_notification_endpoint as registration
+        // metadata: "It MUST be an HTTPS URL." That is the clause this line enforces, and Section 4 is
+        // where it is written for a registration request.
         //
-        // The TLS half belongs to section 9, which restates the HTTPS rule and adds "Communication with
-        // the Client Notification Endpoint MUST utilize TLS". PingModeValidator and PushModeValidator
-        // quote section 9 because they run when the endpoint is about to be called; this runs when it is
-        // being registered, and nothing has called anything yet. Attributing the TLS clause to section 4
-        // sends a reader to a section that does not contain it.
+        // The TLS half is NOT in Section 4. It is Section 9, which restates the HTTPS rule and adds
+        // "Communication with the Client Notification Endpoint MUST utilize TLS" - a property of the
+        // transport a host establishes when it calls the endpoint, so nothing about the registered value
+        // can decide it. PingModeValidator and PushModeValidator quote Section 9 and say the same of it.
+        //
+        // Section 4 says more about this parameter than the one clause, and the rest is not implemented
+        // here: under pairwise subject types it requires the endpoint to be listed in the document a
+        // sector_identifier_uri points at. SubjectTypeValidator, in this same pipeline, already fetches
+        // that document for redirect_uris and does not check this one - a gap rather than a decision,
+        // tracked as issue 480.
         //
         // Only ping/push reach here with an endpoint set - poll-with-endpoint and the missing-endpoint
         // cases are already rejected above.
