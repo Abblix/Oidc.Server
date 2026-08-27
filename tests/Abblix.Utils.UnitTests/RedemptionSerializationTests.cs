@@ -461,18 +461,22 @@ public class RedemptionSerializationTests
 
 		var a = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		await cache.WaitUntilEnteredAsync(2);
-		Assert.True(
-			cache.ResumesBefore(2) >= 1,
-			$"caller 2 entered after {cache.ResumesBefore(2)} releases, so it was never held out");
+
+		// EXACTLY one, not at least one, and it is the HOLDER's release rather than anything about a:
+		// a is started after the holder answered, so nothing held it out. A threshold here would read as
+		// a claim that it was, and would pass whatever the gate did.
+		Assert.Equal(1, cache.ResumesBefore(2));
+
 		var b = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
 		Assert.False(await cache.EnteredWithinWindowAsync(3));
 
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(a));
 		await cache.WaitUntilEnteredAsync(3);
-		Assert.True(
-			cache.ResumesBefore(3) >= 1,
-			$"caller 3 entered after {cache.ResumesBefore(3)} releases, so it was never held out");
+
+		// b is the one held out, and it got in after BOTH releases - the holder's and a's. Two is the
+		// fact; a threshold of one would still pass if b had slipped in beside a.
+		Assert.Equal(2, cache.ResumesBefore(3));
 		cache.ResumeNext();
 		Assert.False(await AnsweredAsync(b));
 	}
@@ -566,8 +570,14 @@ public class RedemptionSerializationTests
 		/// How many callers have entered the gated read since this double was made. MONOTONIC, and that
 		/// is the point: the parked QUEUE shrinks when a caller is resumed, so a wait phrased against its
 		/// depth is satisfied by a caller that arrived before the resume as readily as by one admitted
-		/// after it - which is exactly the difference these rows exist to see. A caller cannot enter
-		/// twice, so a cumulative count admits only new arrivals.
+		/// after it - which is exactly the difference these rows exist to see.
+		/// <para>
+		/// It counts ENTRIES, not callers, and the two part company: a take-once against a key whose value
+		/// is still there reads the gated key TWICE, once for the value and once inside the removal
+		/// protocol, so one caller advances this by two. Every row below drives the take-once against a
+		/// key that is already empty, which is why their numbers read as caller counts. A row that does
+		/// not - the obvious next one to write - has to count reads instead.
+		/// </para>
 		/// </summary>
 		private int _entered;
 
