@@ -64,11 +64,11 @@ public abstract partial class AuthenticationCompletionHandler(
         // narrowed grant. Replaying would make the second attempt correctly scoped and no less of a
         // second attempt.
         //
-        // Read from STORAGE, not from the request the caller handed in. The documented host pattern sets
-        // Status on its own copy before calling here, so a guard reading that field would refuse a
-        // conforming host on its FIRST completion - and, worse, would be advisory: whether the refusal
-        // fires would be up to the caller it is meant to constrain. The stored record is the one thing
-        // this seam owns.
+        // Read from STORAGE, not from the request the caller handed in. A host is free to set Status on
+        // its own copy - some do, and the end-to-end fixture here is one of them - so a guard reading
+        // that field would refuse those on their FIRST completion, and would be advisory besides:
+        // whether the refusal fires would be the choice of the caller it exists to constrain. The
+        // stored record is the one thing this seam owns.
         //
         // Push is what makes a second completion reachable at all. Poll and ping persist Authenticated
         // before they deliver, so a repeat already found a spent record; push stored nothing until
@@ -94,9 +94,8 @@ public abstract partial class AuthenticationCompletionHandler(
                 + (stored is null
                     ? "is not there"
                     : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
-                + ". Only a pending request can be answered, and this one has been answered, refused or "
-                + "has expired. Recovering from a failed delivery means asking the end user again rather "
-                + "than completing the same request twice.");
+                + ". Only a pending request can be answered. Recovering from a failed delivery means "
+                + "asking the end user again rather than completing the same request twice.");
         }
 
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0

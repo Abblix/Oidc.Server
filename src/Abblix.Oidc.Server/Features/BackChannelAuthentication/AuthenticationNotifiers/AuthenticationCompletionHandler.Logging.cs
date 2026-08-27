@@ -51,8 +51,9 @@ partial class AuthenticationCompletionHandler
     [LoggerMessage(
         EventId = LogEvents.Device.AuthenticationCompletionHandler.NotPendingOnCompletion,
         Level = LogLevel.Error,
-        Message = "auth_req_id {AuthReqId} was refused at completion: the stored record reads {Status}, " +
-                  "or is absent when that is null, and only a pending request can be answered. It has " +
-                  "been answered, refused or has expired; recovering means asking the end user again.")]
+        Message = "auth_req_id {AuthReqId} was refused at completion. The stored record reads {Status}, " +
+                  "and a null there means no record was found at all - it may have been answered, " +
+                  "refused, expired, evicted, or never have existed. Only a pending request can be " +
+                  "answered; recovering means asking the end user again.")]
     private partial void LogNotPendingOnCompletion(string AuthReqId, string? Status);
 }

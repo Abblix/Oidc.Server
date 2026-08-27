@@ -59,10 +59,10 @@ public class AuthenticationCompletionHandlerTests
     /// Arranges what the STORED record reads, which is what the completion guard consults.
     /// </summary>
     /// <remarks>
-    /// A DISTINCT object from the one handed to the handler, deliberately. The documented host pattern
-    /// has the caller set Status on its own copy before calling, so a fixture returning that same
-    /// instance would make the two indistinguishable - and a guard reading the caller's field instead of
-    /// the store would pass every row while refusing every conforming host.
+    /// A DISTINCT object from the one handed to the handler, deliberately. A caller may set Status on
+    /// its own copy, so a fixture returning that same instance would make the caller's field and the
+    /// stored one indistinguishable - and a guard reading the caller's would pass every row here while
+    /// refusing those hosts on their first completion.
     /// </remarks>
     private void StoredRecordReads(BackChannelAuthenticationStatus status)
     {
@@ -1099,17 +1099,17 @@ public class AuthenticationCompletionHandlerTests
     /// <remarks>
     /// This is the row that tells the guard's two possible shapes apart, and without it they are
     /// indistinguishable here: deleting the guard and pointing it at the caller's field turn exactly the
-    /// same refusal rows red. It is also the documented host pattern - the implementation guide has the
-    /// host set Status on its own copy before calling - so a guard reading that field refuses every
-    /// conforming host on its FIRST completion, and is advisory besides, since whether it fires is up to
-    /// the caller it exists to constrain.
+    /// same refusal rows red. And it is a shape hosts really take - the end-to-end fixture in this
+    /// repository sets Status on its own copy before calling - so a guard reading that field refuses
+    /// them on their FIRST completion, and is advisory besides, since whether it fires is up to the
+    /// caller it exists to constrain.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_WhenTheCallerMarkedItsOwnCopy_TheStoredRecordDecides()
     {
         var request = CreateRequest(UserId, null);
 
-        // What the documented host pattern does before calling.
+        // What a host may do to its own copy before calling, and what must not decide anything.
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
         StoredRecordReads(BackChannelAuthenticationStatus.Pending);
@@ -1191,9 +1191,21 @@ public class AuthenticationCompletionHandlerTests
 
         var order = new List<string>();
 
+        // The status AT THE MOMENT of the write, not afterwards. Moq matches the argument by reference
+        // and the row holds that same reference, so every assertion made after the call reads whatever
+        // the object ended up as - which is Authenticated whether the assignment ran before the delivery
+        // or after it. Hoisting the assignment past HandleDeliveryAsync leaves both suites green without
+        // this capture, while push hands the store a record still reading Pending: the defect this
+        // change exists to close, written back verbatim.
+        BackChannelAuthenticationStatus? statusAtWrite = null;
+
         _storage
             .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
-            .Callback(() => order.Add("persisted"))
+            .Callback(() =>
+            {
+                order.Add("persisted");
+                statusAtWrite = request.Status;
+            })
             .Returns(Task.CompletedTask);
 
         _tokenRequestProcessor
@@ -1218,7 +1230,11 @@ public class AuthenticationCompletionHandlerTests
         await handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(["persisted", "minted", "delivered"], order);
-        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+
+        // What was WRITTEN, which is the property every sentence about this change rests on. Asserting
+        // request.Status here instead would pass on a record persisted as Pending.
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, statusAtWrite);
+
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }
