@@ -36,8 +36,9 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
     /// authorized grant.
     /// Because the auth_req_id can be used only once (CIBA Core 1.0 Section 10.1.1), a retrieval that
     /// does not come back with the request is rejected with <c>invalid_grant</c> rather than re-issuing
-    /// tokens. Which is the right answer to give the caller, and not a diagnosis: a second retrieval
-    /// produces it, and so does a claim that expired mid-protocol on a single caller with no competitor.
+    /// tokens. Which is the right answer to give the caller, and not a diagnosis: the request comes back
+    /// only when this caller ran the protocol to the end with its own claim still in the store, and
+    /// every way short of that is one answer.
     /// A store call that fails after the removal produces neither - it raises, and the caller is handed
     /// an exception instead of a result.
     /// </summary>

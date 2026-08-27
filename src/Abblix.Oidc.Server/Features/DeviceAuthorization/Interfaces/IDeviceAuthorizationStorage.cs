@@ -73,8 +73,8 @@ public interface IDeviceAuthorizationStorage
     /// afterwards. False otherwise, which is wider than "somebody else got it": it also covers the
     /// request not being there and a claim that expired while a store call was in flight - the second
     /// on one caller with nobody to lose to, and its outcome is the request gone with nobody able to be
-    /// told they took it. An operator told a second request was the cause goes looking for a second node,
-    /// and that case is exactly the one which never produces one. A failure of the second store call,
+    /// told they took it. An operator told a second REQUEST was the cause goes looking for one, and the
+    /// expiry case is exactly the one that never produces a second request. A failure of the second store call,
     /// which removes the user-code index, raises rather than answering: the device code is already
     /// consumed and the caller is handed the exception.
     /// </returns>

@@ -111,8 +111,10 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Use Case:</strong> This method is used in the Device Authorization Grant flow (RFC 8628)
-    /// when exchanging an authorized device code for tokens. Two token requests both claiming one device
-    /// code needs a second process; the Atomicity note below says what the claim reaches.
+    /// when exchanging an authorized device code for tokens. The claim keeps two token requests from both
+    /// being told they took one device code, however many processes are polling; what it does not stop is
+    /// a record RESTORED after the claim by an ungated write, which the next poll then claims in its turn.
+    /// That needs no second process and is issue 459. The Atomicity note below says what the claim reaches.
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>

@@ -24,11 +24,16 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
 /// <summary>
 /// Verifies the authorization-code reuse defense in <see cref="AuthorizationCodeReusePreventingDecorator"/>.
-/// The decorator claims the code before delegating to the inner processor, so a second redemption of the
-/// same code is refused, and one that got past the claim on another node is caught by the issued tokens
-/// written back at the key (RFC 6749 section 4.1.2, OAuth 2.0 Security BCP section 4.13). Within one
-/// process the claim is what refuses; across processes it is the write-back, and issue 435 is the gap
-/// between them.
+/// The decorator claims the code before delegating to the inner processor, and reads back the tokens
+/// written at that key (RFC 6749 section 4.1.2, OAuth 2.0 Security BCP section 4.13). The two split by
+/// WHEN the repeat arrives, not by where it comes from: the claim refuses one arriving beside the first,
+/// the write-back catches one arriving after it, and both hold however many processes are running - the
+/// claim's last-write-wins token check admits at most one caller wherever the callers are.
+/// <para>
+/// What a second process costs is a winner rather than exclusivity, which is issue 435; and the claim is
+/// not by itself enough within one process either, which is issue 454. Rows for both live beside the
+/// implementation they belong to.
+/// </para>
 /// </summary>
 public class AuthorizationCodeReusePreventingDecoratorTests
 {

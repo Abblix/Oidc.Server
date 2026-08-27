@@ -90,9 +90,11 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized }
                 when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
 
-                // Removed under the store's per-key gate, which narrows the window in which two polls
-                // both act on the authorized grant - the grant itself was read before the switch, outside
-                // any gate. A refusal below is not a diagnosis: a competitor produces it, and so does a
+                // Removed through the store's claim protocol, which is what keeps two polls from both
+                // being told they took the authorized grant, however many processes are polling. The
+                // grant itself was read before the switch, outside any of it, so what stays open is a
+                // record restored by an ungated write after the claim - issue 459, on one node.
+                // A refusal below is not a diagnosis: a competitor produces it, and so does a
                 // claim that expired mid-protocol with nobody to lose to. RFC 8628 requires no such
                 // single exchange of a device code anywhere; that is this library's decision, and this
                 // arm is where it is enforced.

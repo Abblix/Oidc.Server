@@ -18,8 +18,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
 /// Refuses a second redemption of an authorization code, and revokes the tokens the first one issued, in
-/// compliance with OAuth 2.0 security best practices. It claims the code to refuse a repeat within this
-/// process, and reads back the tokens written at the key to catch one that got past the claim elsewhere.
+/// compliance with OAuth 2.0 security best practices. Two defences, split by WHEN the repeat arrives
+/// rather than by where: the claim refuses one arriving beside the first, and the issued tokens written
+/// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
 /// This class decorates the standard token request processing flow with additional security measures

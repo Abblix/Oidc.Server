@@ -31,21 +31,24 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     public OidcError? ValidateTokenEndpointAccess() => null;
 
     /// <summary>
-    /// Removes the authentication request from storage under the store's per-key gate and returns its
+    /// Removes the authentication request from storage through the store's claim protocol and returns its
     /// authorized grant.
     /// A removal that does not come back with the request is answered <c>invalid_grant</c> rather than
-    /// re-issuing tokens. That is the right answer and not a diagnosis: a competitor produces it, and so
-    /// does a claim that expired mid-protocol, on one caller with nobody to lose to. A store fault after
-    /// the removal is a third outcome rather than a third cause - it raises past this method.
+    /// re-issuing tokens. That is the right answer and not a diagnosis: the request comes back only when
+    /// this caller ran the protocol to the end with its own claim still in the store, and every way short
+    /// of that is one answer. A store fault after the removal is not among them at all - it raises past
+    /// this method.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        // Removed under the store's per-key gate, which NARROWS the window in which two polls both come
-        // back with the grant - the duplicate token issuance this exists to stop. Narrows rather than
-        // closes: the value is read before the claim is taken, so a write landing in between is destroyed
-        // and the earlier bytes handed out. Null does not say WHY - see the storage contract.
+        // Removed through the store's claim protocol, which is what keeps two polls from both coming back
+        // with the grant - the duplicate token issuance this exists to stop, and it holds however many
+        // processes are polling. The per-key gate around it buys something else: a contended key that
+        // would otherwise end with NEITHER poll told it took the request. Neither closes the window in
+        // which a write lands between the read and the removal. Null does not say WHY - see the storage
+        // contract.
         var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
 
         if (removedRequest == null)
