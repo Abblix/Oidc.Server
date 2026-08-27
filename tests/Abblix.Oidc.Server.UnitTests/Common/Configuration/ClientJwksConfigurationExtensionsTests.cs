@@ -376,7 +376,7 @@ public class ClientJwksConfigurationExtensionsTests
             .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
             .Build();
 
-        // Step 1: same as Program.cs line 98 - configuration.Get<Settings>()
+        // Step 1, as a host's startup does it: bind the whole settings object in one call.
         var settings = config.Get<SettingsLike>();
         Assert.NotNull(settings);
         Assert.Single(settings.Clients);
@@ -390,7 +390,8 @@ public class ClientJwksConfigurationExtensionsTests
         Assert.NotNull(settings.Clients[0].Jwks);
         Assert.Empty(settings.Clients[0].Jwks!.Keys);
 
-        // Step 2: same as Program.cs line 99
+        // Step 2, the line a host must add: the binder cannot fill the polymorphic key entries,
+        // so the collection is re-bound from the same section.
         settings.Clients = settings.Clients.WithJwksFromConfiguration(config.GetSection("Clients"));
 
         // After WithJwksFromConfiguration, Keys must be populated from the JSON.

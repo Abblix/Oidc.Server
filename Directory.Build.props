@@ -21,11 +21,15 @@
        that will carry it, so dev builds publish under that line from the first commit and a
        downstream consumer can float on it immediately. Bump it when the next target moves.
 
-       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", which is
-       what makes that floating range unambiguous. A tagged release drops the suffix by itself.
+       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
+       range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
+       tagged release drops the suffix by itself.
 
-       No version number is written here on purpose: the property below is the one place it
-       lives, and a number repeated in prose beside it goes stale without anything noticing. -->
+       No version number is written in this comment on purpose: a number repeated in prose beside
+       the property it describes goes stale without anything noticing. It is NOT the only place
+       the line is written down - .github/workflows/publish-dev-builds.yml states it in prose and
+       emits it into the run summary - so bumping the property means editing that file in the same
+       change. -->
   <PropertyGroup>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>

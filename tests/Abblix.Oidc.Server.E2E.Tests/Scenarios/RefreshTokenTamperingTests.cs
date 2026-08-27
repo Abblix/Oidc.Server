@@ -32,9 +32,10 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
 {
     /// <summary>
-    /// alg-stripping: rewrite the header 'alg' to 'none' and drop the signature. This library's
-    /// validator requires signed tokens (its default options), so the downgraded token is rejected
-    /// at the JWT gate and the grant fails with invalid_grant.
+    /// alg-stripping: rewrite the header 'alg' to 'none' and drop the signature.
+    /// The library validates it through IAuthServiceJwtValidator with ValidationOptions.Default,
+    /// which carries RequireValidSignedTokens, so the downgraded token is rejected at the JWT
+    /// gate and the grant fails with invalid_grant.
     /// </summary>
     [Fact]
     public async Task AlgStrippedToNone_RefreshToken_IsRejected()
