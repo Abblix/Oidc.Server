@@ -37,7 +37,8 @@ public class ClientTypeTests
     /// <summary>
     /// Every method other than <c>none</c> yields a confidential client, and that includes methods the
     /// library does not recognise. Hosts register their own
-    /// <see cref="ClientAuthentication.IClientAuthenticator"/> implementations, so narrowing this to an
+    /// <see cref="Abblix.Oidc.Server.Features.ClientAuthentication.IClientAuthenticator"/>
+    /// implementations, so narrowing this to an
     /// enumeration of the built-in methods would silently reclassify every host-added method as public
     /// and hand its clients the relaxations reserved for credential-less ones.
     /// </summary>

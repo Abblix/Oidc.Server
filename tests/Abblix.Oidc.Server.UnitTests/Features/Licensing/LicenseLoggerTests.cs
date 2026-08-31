@@ -204,7 +204,7 @@ public class LicenseLoggerTests
     /// </summary>
     /// <remarks>
     /// With zero period, nextAllowedTime = utcNow + 0 = utcNow.
-    /// Second call checks if nextAllowedTime (utcNow) < utcNow, which is false.
+    /// Second call checks if nextAllowedTime (utcNow) &lt; utcNow, which is false.
     /// Therefore, zero period still requires time to advance (even by 1 tick).
     /// </remarks>
     [Fact]
