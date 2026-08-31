@@ -48,6 +48,44 @@ public class AuthenticationCompletionHandlerTests
     private readonly Mock<ITokenRequestProcessor> _tokenRequestProcessor = new(MockBehavior.Strict);
     private readonly TimeSpan _expiresIn = TimeSpan.FromMinutes(5);
 
+    public AuthenticationCompletionHandlerTests()
+    {
+        // Every row completes a request the store holds as Pending, because that is what a record
+        // awaiting an answer reads. A row about refusing a spent one overrides this.
+        StoredRecordReads(BackChannelAuthenticationStatus.Pending);
+    }
+
+    /// <summary>
+    /// Arranges what the STORED record reads, which is what the completion guard consults. A null
+    /// status arranges NO record at all, which is a different thing from a record reading anything.
+    /// </summary>
+    /// <remarks>
+    /// A DISTINCT object from the one handed to the handler, deliberately. A caller may set Status on
+    /// its own copy, so a fixture returning that same instance would make the caller's field and the
+    /// stored one indistinguishable - and a guard reading the caller's would pass every row here while
+    /// refusing those hosts on their first completion.
+    /// </remarks>
+    private void StoredRecordReads(BackChannelAuthenticationStatus? status)
+    {
+        if (status is not { } present)
+        {
+            _storage.Setup(s => s.TryGetAsync(It.IsAny<string>()))
+                .ReturnsAsync((BackChannelAuthenticationRequest?)null);
+            return;
+        }
+
+        var stored = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                new AuthSession(UserId, "stored_session", DateTimeOffset.UnixEpoch, "test"),
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            DateTimeOffset.UnixEpoch.AddHours(1))
+        {
+            Status = present,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(It.IsAny<string>())).ReturnsAsync(stored);
+    }
+
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), null);
 
@@ -89,7 +127,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
@@ -135,7 +173,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
             ClientNotificationToken = null,
         };
@@ -172,7 +210,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = null,
         };
@@ -209,7 +247,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
             ClientNotificationToken = NotificationToken,
         };
@@ -246,7 +284,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
         };
 
         var clientInfo = new ClientInfo(ClientId)
@@ -277,7 +315,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
@@ -316,7 +354,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
@@ -343,6 +381,8 @@ public class AuthenticationCompletionHandlerTests
                 BackchannelTokenDeliveryModes.Push))
             .ReturnsAsync(true);
 
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId))
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
@@ -356,21 +396,27 @@ public class AuthenticationCompletionHandlerTests
         _notificationService.Verify(
             s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
             Times.Once);
+
+        // Written before the mint and removed after the delivery. The write is a round trip this path
+        // does not need, and it is what the failing path depends on - the two cannot be told apart until
+        // the delivery has already been attempted.
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
-        _storage.Verify(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()), Times.Never);
     }
 
     /// <summary>
-    /// Verifies that when push delivery fails, the stored record is left alone rather than removed.
+    /// Verifies that when push delivery fails, the record is left in storage rather than removed - and
+    /// that what is left reads Authenticated, so a LATER completion of the same request is refused - the
+    /// guard reads the STORED status, not the caller's copy.
     /// </summary>
     /// <remarks>
-    /// It is not the authenticated request. Push never writes back - the status and the narrowed grant
-    /// were set on the in-memory object - so what stays is the PRE-completion record: Pending, carrying
-    /// what the client asked for, and carrying the session from initiation.
+    /// It is the whole record, written the way poll and ping write theirs: the storage serializes the
+    /// object it is handed, so the grant the host completed with goes down with the status. What stops a
+    /// second completion is not anything the record omits - it is the base handler reading this status
+    /// back out of storage and refusing everything that is not Pending.
     ///
     /// Nor does keeping it save any tokens: the ones just minted are dropped with the lambda that made
-    /// them, and nothing retries. It is kept so a host can see the request existed, and because a host can
-    /// complete it again - which is a hazard rather than a recovery, and is issue 451.
+    /// them, and nothing retries. It is kept so a host can see the request existed.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_DeliveryFails_RetainsRequest()
@@ -381,7 +427,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), fixedTime.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
@@ -408,6 +454,17 @@ public class AuthenticationCompletionHandlerTests
                 BackchannelTokenDeliveryModes.Push))
             .ReturnsAsync(false);
 
+        // What the store was HANDED, read at the moment of the call. Moq matches the argument by
+        // reference, so reading request.Status afterwards reports where the field ended up rather than
+        // what was persisted. The mutation this capture catches is hoisting the BASE handler's status
+        // assignment past HandleDeliveryAsync, which turns this row red on statusAtWrite - measured.
+        // Moving push's own write later cannot produce a Pending record at all: the assignment has
+        // already run by the time the base handler calls into delivery.
+        BackChannelAuthenticationStatus? statusAtWrite = null;
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Callback(() => statusAtWrite = request.Status)
+            .Returns(Task.CompletedTask);
+
         var handler = CreatePushModeHandler();
 
         // Act
@@ -418,6 +475,11 @@ public class AuthenticationCompletionHandlerTests
             s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
             Times.Once);
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
+
+        // The record survives, and it survives Authenticated. Both halves matter: the first is what lets
+        // a host see the request existed, the second is what stops the same host completing it again.
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, statusAtWrite);
     }
 
     /// <summary>
@@ -433,7 +495,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
             ClientNotificationToken = NotificationToken,
         };
@@ -447,6 +509,8 @@ public class AuthenticationCompletionHandlerTests
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
+
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
 
         _storage.Setup(s => s.TryRemoveAsync(AuthReqId))
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
@@ -486,7 +550,7 @@ public class AuthenticationCompletionHandlerTests
         var request = new BackChannelAuthenticationRequest(
             new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
             ClientNotificationToken = NotificationToken,
         };
@@ -529,7 +593,7 @@ public class AuthenticationCompletionHandlerTests
         var request = new BackChannelAuthenticationRequest(
             new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = new Uri("https://client.example/ciba"),
             ClientNotificationToken = null,
         };
@@ -570,7 +634,7 @@ public class AuthenticationCompletionHandlerTests
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            Status = BackChannelAuthenticationStatus.Authenticated,
+            Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
             ClientNotificationToken = NotificationToken,
         };
@@ -1011,5 +1075,207 @@ public class AuthenticationCompletionHandlerTests
                 .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .SelectMany(constructor => constructor.GetParameters())
                 .Any(parameter => parameter.ParameterType == typeof(IAuthorizationDetailsPolicy));
+    }
+    /// <summary>
+    /// A completion refuses unless the store holds a PENDING record for the identifier, and touches
+    /// neither storage nor delivery when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// One authentication, one completion. The end user answered once, so a second full token set is
+    /// wrong whatever it contains - which is why this refuses rather than replaying the narrowed grant:
+    /// replaying would make the second set correctly scoped and no less of a second set.
+    /// <para>
+    /// A null case, because a record that is GONE is not a lesser case of one that is spent and is not a
+    /// value of the status enum at all: a poll can have redeemed and removed it, its lifetime can have
+    /// run out, push's own refusal path removes it. Without this row a guard asking whether the status is
+    /// something other than Pending passes every one of those straight through, mints, and writes the
+    /// record back into existence - and the two shapes are indistinguishable over the enum alone.
+    /// </para>
+    /// <para>
+    /// A row per mode, because the guard lives in the base and what must NOT run is each mode's own
+    /// delivery. Loud rather than silent: nothing on this seam returns a value, so a host that was
+    /// relying on the old behaviour learns about it from an exception rather than from a token set the
+    /// end user refused.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(BackChannelAuthenticationStatus.Authenticated)]
+    [InlineData(BackChannelAuthenticationStatus.Denied)]
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
+    {
+        var request = CreateRequest(UserId, null);
+        StoredRecordReads(already);
+
+        var handler = CreatePollModeHandler();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn));
+
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        _storage.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// The decision comes from STORAGE, not from the caller's copy: a request handed in already marked
+    /// Authenticated completes, because the stored record is the one that is pending.
+    /// </summary>
+    /// <remarks>
+    /// This is the row that tells the guard's two possible shapes apart, and without it they are
+    /// indistinguishable here: deleting the guard and pointing it at the caller's field turn exactly the
+    /// same refusal rows red. And it is a shape hosts really take - the end-to-end fixture in this
+    /// repository sets Status on its own copy before calling - so a guard reading that field refuses
+    /// them on their FIRST completion, and is advisory besides, since whether it fires is up to the
+    /// caller it exists to constrain.
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheCallerMarkedItsOwnCopy_TheStoredRecordDecides()
+    {
+        var request = CreateRequest(UserId, null);
+
+        // What a host may do to its own copy before calling, and what must not decide anything.
+        request.Status = BackChannelAuthenticationStatus.Authenticated;
+
+        StoredRecordReads(BackChannelAuthenticationStatus.Pending);
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+
+        var handler = CreatePollModeHandler();
+
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
+
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Once);
+    }
+
+    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses"/>
+    [Theory]
+    [InlineData(BackChannelAuthenticationStatus.Authenticated)]
+    [InlineData(BackChannelAuthenticationStatus.Denied)]
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PingMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
+    {
+        var request = CreateRequest(UserId, null);
+        StoredRecordReads(already);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+
+        var handler = CreatePingModeHandler();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PingClient(), _expiresIn));
+
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        _storage.VerifyNoOtherCalls();
+        _notificationService.VerifyNoOtherCalls();
+    }
+
+    /// <inheritdoc cref="CompleteAuthenticationAsync_PollMode_WhenTheStoreHasNoPendingRecord_Refuses"/>
+    [Theory]
+    [InlineData(BackChannelAuthenticationStatus.Authenticated)]
+    [InlineData(BackChannelAuthenticationStatus.Denied)]
+    [InlineData(null)]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheStoreHasNoPendingRecord_Refuses(
+        BackChannelAuthenticationStatus? already)
+    {
+        var request = CreateRequest(UserId, null);
+        StoredRecordReads(already);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+
+        var handler = CreatePushModeHandler();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+
+        // It read the stored record and did nothing else: the guard consults storage, and refusing
+        // costs no write.
+        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        _storage.VerifyNoOtherCalls();
+        _notificationService.VerifyNoOtherCalls();
+        _tokenRequestProcessor.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A push completion persists the status transition BEFORE it mints, so a delivery that then fails
+    /// leaves a record no second completion can use.
+    /// </summary>
+    /// <remarks>
+    /// This is the write that makes "completed once" a stored fact for the one mode that stored nothing,
+    /// and the order is what this row asserts. The property is that no token set exists over a record
+    /// still reading Pending: writing first makes it hold whatever runs afterwards, while any placement
+    /// after the mint leaves a fault or a crash in between able to strand tokens over a completable
+    /// record.
+    /// <para>
+    /// Not "otherwise it would never run on the failure path" - measured, a write inside the
+    /// delivery-failed branch runs there and leaves the failing-delivery row green. What this row covers
+    /// is the SPAN between the mint and the write, which no other row is about; moving the write into
+    /// that branch kills this row and the delivered-tokens row with it, so the mutation is not this
+    /// row's alone even though the span is.
+    /// </para>
+    /// <para>
+    /// The whole record goes down, grant included - the storage serializes what it is handed. The row
+    /// asserts the ORDER rather than the contents, because the contents are pinned where they matter, by
+    /// the failing-delivery row's capture of what the store was handed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_PersistsTheTransitionBeforeMinting()
+    {
+        var request = CreateRequest(UserId, null);
+        request.ClientNotificationEndpoint = _notificationEndpoint;
+
+        var order = new List<string>();
+
+        // The status AT THE MOMENT of the write, not afterwards. Moq matches the argument by reference
+        // and the row holds that same reference, so every assertion made after the call reads whatever
+        // the object ended up as - which is Authenticated whether the assignment ran before the delivery
+        // or after it. Without this capture THIS row goes green under the hoist while push hands the
+        // store a record still reading Pending - the defect this change exists to close, written back
+        // verbatim. The SUITE does not go green under it: measured, hoisting the assignment kills three
+        // rows, and one of them is the ping denial row, which holds no capture at all - Moq re-evaluates
+        // its predicate matcher at Verify time against the same reference the hoist has since flipped.
+        // A red ping row under that mutation is the mutation, not a defect in ping.
+        BackChannelAuthenticationStatus? statusAtWrite = null;
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Callback(() =>
+            {
+                order.Add("persisted");
+                statusAtWrite = request.Status;
+            })
+            .Returns(Task.CompletedTask);
+
+        _tokenRequestProcessor
+            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .Callback(() => order.Add("minted"))
+            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(
+                new TokenIssued(
+                    new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt"),
+                    TokenTypes.Bearer,
+                    TimeSpan.FromHours(1),
+                    new Uri("urn:ietf:params:oauth:token-type:access_token"))));
+
+        _notificationService
+            .Setup(s => s.SendAsync(
+                _notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(),
+                BackchannelTokenDeliveryModes.Push))
+            .Callback(() => order.Add("delivered"))
+            .ReturnsAsync(false);
+
+        var handler = CreatePushModeHandler();
+
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(["persisted", "minted", "delivered"], order);
+
+        // What was WRITTEN, which is the property every sentence about this change rests on. Asserting
+        // request.Status here instead would pass on a record persisted as Pending.
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, statusAtWrite);
+
+        _storage.Verify(s => s.TryRemoveAsync(It.IsAny<string>()), Times.Never);
     }
 }

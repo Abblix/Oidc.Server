@@ -226,9 +226,9 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.True(payload["expires_in"]!.GetValue<int>() > 0);
 
         // And the request is gone. That removal is this library's choice rather than a requirement -
-        // CIBA Core 1.0 section 10.3.1 says nothing about what the OP keeps - and the reason is that push
-        // never writes back: a record left behind is the PRE-completion one, which a host can complete
-        // again, delivering what the end user did not approve.
+        // CIBA Core 1.0 section 10.3.1 says nothing about what the OP keeps - and the reason is that
+        // this client is finished with it: the tokens are delivered and it will never come to the token
+        // endpoint. A record kept here would be an orphan waiting out its expiry.
         //
         // Both arms of the delivery branch are already pinned by AuthenticationCompletionHandlerTests,
         // through a mock's call count. What this line adds is the same fact at the level a client sees,

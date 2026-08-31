@@ -59,7 +59,7 @@ public class LogEventUniquenessTests
     [Fact]
     public void TheWalkFindsEveryDeclaredEvent()
     {
-        Assert.Equal(149, EventIds().Count);
+        Assert.Equal(150, EventIds().Count);
     }
 
     private static IReadOnlyList<(int Id, string Name)> EventIds()
