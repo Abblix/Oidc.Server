@@ -48,8 +48,10 @@ public interface INotificationDeliveryService
     /// <para>
     /// On <c>false</c> push keeps the stored record, and it is not a resumable delivery. The tokens were
     /// minted and are gone; nothing retries them. The record reads Authenticated, written before the
-    /// mint, so completing the request again is refused - the recovery is to ask the end user, not to
-    /// resend from what is left.
+    /// mint, so a LATER completion of the same request is refused - the recovery is to ask the end user,
+    /// not to resend from what is left. Later, not concurrent: the refusal reads the stored status and
+    /// acts on it, with no claim protocol between the two, so two completions running side by side can
+    /// both read Pending.
     /// </para>
     /// </returns>
     Task<bool> SendAsync(

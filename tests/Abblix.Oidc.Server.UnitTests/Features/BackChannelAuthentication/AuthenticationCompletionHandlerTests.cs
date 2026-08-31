@@ -406,7 +406,9 @@ public class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// Verifies that when push delivery fails, the record is left in storage rather than removed - and
-    /// that what is left reads Authenticated, so nobody can complete it a second time.
+    /// that what is left reads Authenticated, so a LATER completion of the same request is refused. Later,
+    /// not concurrent: the guard reads the stored status and acts on it, and nothing claims the record
+    /// between the two.
     /// </summary>
     /// <remarks>
     /// It is the whole record, written the way poll and ping write theirs: the storage serializes the
@@ -1209,8 +1211,10 @@ public class AuthenticationCompletionHandlerTests
     /// record.
     /// <para>
     /// Not "otherwise it would never run on the failure path" - measured, a write inside the
-    /// delivery-failed branch runs there and leaves the failing-delivery row green. The span this row
-    /// covers is the one between the mint and the write, which nothing else can see.
+    /// delivery-failed branch runs there and leaves the failing-delivery row green. What this row covers
+    /// is the SPAN between the mint and the write, which no other row is about; moving the write into
+    /// that branch kills this row and the delivered-tokens row with it, so the mutation is not this
+    /// row's alone even though the span is.
     /// </para>
     /// <para>
     /// The whole record goes down, grant included - the storage serializes what it is handed. The row

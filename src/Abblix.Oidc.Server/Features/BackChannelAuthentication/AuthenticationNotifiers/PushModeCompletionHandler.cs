@@ -61,9 +61,10 @@ public partial class PushModeCompletionHandler(
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
     /// The status transition is persisted before the tokens are minted, and the request is removed after
-    /// a delivery that succeeded. Neither is hygiene. The write is what leaves a record no second
-    /// completion can use on the one path where a record survives, and the removal is what leaves none at
-    /// all on the path where the tokens did arrive. The write is the same one poll and ping make, so it
+    /// a delivery that succeeded. The WRITE is the protection: it leaves a record a sequential retry is
+    /// refused by, on the one path where a record survives. The removal is hygiene now that the write
+    /// exists - what it would otherwise leave is an Authenticated orphan that the completion handler and
+    /// the token endpoint both already refuse, waiting out its expiry. The write is the same one poll and ping make, so it
     /// carries the whole record including the grant the host completed with.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
