@@ -14,9 +14,8 @@ namespace Abblix.Jwt.Vault.UnitTests;
 
 /// <summary>
 /// Test double for <see cref="HttpMessageHandler"/>: records the request it received and returns the canned
-/// response the supplied responder builds, so the Vault clients in this suite - the Transit custodian, the
-/// key-value store, the login client and the token source - are exercised against Vault's wire shapes without
-/// a live server.
+/// response the supplied responder builds, so the Vault clients in this suite are exercised against Vault's
+/// wire shapes without a live server.
 /// </summary>
 internal sealed class StubHttpMessageHandler(
     Func<HttpRequestMessage, string, HttpResponseMessage> responder) : HttpMessageHandler
