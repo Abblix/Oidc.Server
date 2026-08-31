@@ -337,8 +337,8 @@ public class ClientJwksConfigurationExtensionsTests
     /// <c>Jwks is not null</c> guard then skipped the bind-from-config work and clients
     /// ended up with zero signing keys at runtime, producing
     /// <c>"no signing keys configured for issuer"</c> for every <c>private_key_jwt</c>
-    /// client_assertion. Caught against AuthSvc 2026-05-14 while running the OIDF
-    /// Conformance FAPI 2.0 PAR test against prod (auth-service v365).
+    /// client_assertion. Caught by a downstream consumer running the OpenID Foundation's
+    /// FAPI 2.0 conformance suite, on a settings shape its own configuration uses.
     /// </summary>
     public sealed class SettingsLike
     {
@@ -376,7 +376,7 @@ public class ClientJwksConfigurationExtensionsTests
             .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
             .Build();
 
-        // Step 1: same as Program.cs line 98 - configuration.Get<Settings>()
+        // Step 1, as a host's startup does it: bind the whole settings object in one call.
         var settings = config.Get<SettingsLike>();
         Assert.NotNull(settings);
         Assert.Single(settings.Clients);
@@ -390,7 +390,8 @@ public class ClientJwksConfigurationExtensionsTests
         Assert.NotNull(settings.Clients[0].Jwks);
         Assert.Empty(settings.Clients[0].Jwks!.Keys);
 
-        // Step 2: same as Program.cs line 99
+        // Step 2, the line a host must add: the binder cannot fill the polymorphic key entries,
+        // so the collection is re-bound from the same section.
         settings.Clients = settings.Clients.WithJwksFromConfiguration(config.GetSection("Clients"));
 
         // After WithJwksFromConfiguration, Keys must be populated from the JSON.
@@ -405,12 +406,12 @@ public class ClientJwksConfigurationExtensionsTests
     }
 
     /// <summary>
-    /// Reproduces the AuthSvc prod configuration shape: top-level "Clients" array, lowercase
+    /// Reproduces a downstream consumer's configuration shape: top-level "Clients" array, lowercase
     /// "keys" inside "Jwks", actual base64url RSA modulus from oidf-fapi2-test. Sanity-check that
     /// the binding produces a non-empty Jwks for this exact layout before chasing config issues elsewhere.
     /// </summary>
     [Fact]
-    public void AuthSvcShape_BindsLowercaseKeysWithRealRsaModulus()
+    public void ConsumerSettingsShape_BindsLowercaseKeysWithRealRsaModulus()
     {
         const string json = """
             {

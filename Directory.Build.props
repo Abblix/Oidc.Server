@@ -14,17 +14,22 @@
   </PropertyGroup>
 
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
-       from git tags. The latest tag (e.g. v2.2) sets the base; commits since the tag bump
-       the patch and append the height + pre-release suffix.
+       from git tags. The latest tag sets the base; commits since it bump the patch and
+       append the height and the pre-release suffix.
 
-       MinVerMinimumMajorMinor pins the develop branch's next-target line ahead of releases:
-       even before tagging v2.3.0 the dev builds publish as 2.3.0-dev.0.<height>, so
-       AuthenticationService can float Abblix.* on 2.3.0-dev.* immediately. Bump this when
-       the next-target moves (2.3 -> 2.4).
+       MinVerMinimumMajorMinor pins the develop branch's NEXT-target line ahead of the release
+       that will carry it, so dev builds publish under that line from the first commit and a
+       downstream consumer can float on it immediately. Bump it when the next target moves.
 
-       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so
-       the floating range AuthSvc consumes (2.3.0-dev.*) is unambiguous. Tagged releases
-       drop the suffix automatically (v2.3.0 -> 2.3.0). -->
+       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
+       range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
+       tagged release drops the suffix by itself.
+
+       No version number is written in this comment on purpose: a number repeated in prose beside
+       the property it describes goes stale without anything noticing. It is NOT the only place
+       the line is written down - .github/workflows/publish-dev-builds.yml states it in prose and
+       emits it into the run summary - so bumping the property means editing that file in the same
+       change. -->
   <PropertyGroup>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
