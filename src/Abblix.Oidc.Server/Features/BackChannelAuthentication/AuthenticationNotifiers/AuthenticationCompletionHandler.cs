@@ -41,24 +41,71 @@ public abstract partial class AuthenticationCompletionHandler(
     /// to the mode-specific delivery implementation.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
-    /// <param name="request">The authentication request to mark as authenticated.</param>
+    /// <param name="request">The authentication request carrying the grant the end user approved. Its
+    /// own Status is not read: whether this request may still be answered is decided from the STORED
+    /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid.</param>
     /// <returns>A task representing the asynchronous authentication completion operation.</returns>
     /// <remarks>
     /// This method:
-    /// <list type="number">
+    /// <list type="bullet">
+    ///   <item>Refuses unless the STORED record reads Pending</item>
+    ///   <item>Refuses an answer from somebody other than the end user the request named, by denying or
+    ///   removing according to the mode</item>
     ///   <item>Sets the request status to Authenticated</item>
     ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
     /// </list>
     /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier. The full statement of the condition, and why it is stated that way rather than as a
+    /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
+        // One authentication, one completion. The end user answered once, so a second delivery of that
+        // answer is wrong whatever it carries - which is why this refuses rather than replaying the
+        // narrowed grant. Replaying would make the second attempt correctly scoped and no less of a
+        // second attempt.
+        //
+        // Read from STORAGE, not from the request the caller handed in. A host is free to set Status on
+        // its own copy - some do, and the end-to-end fixture here is one of them - so a guard reading
+        // that field would refuse those on their FIRST completion, and would be advisory besides:
+        // whether the refusal fires would be the choice of the caller it exists to constrain. The
+        // stored record is the one thing this seam owns.
+        //
+        // Push is what makes a second completion reachable at all. Poll and ping persist Authenticated
+        // before they deliver, so a repeat already found a spent record; push stored nothing until
+        // PushModeCompletionHandler was given the same write, and until then a failed delivery left a
+        // record that still read Pending and still carried what the CLIENT asked for.
+        //
+        // Stated as what must be TRUE rather than as the ways it can fail. A record that is gone is not
+        // a lesser case of one that is spent: a poll can have redeemed and removed it, and completing on
+        // top of that mints against a record nobody can check and writes it back into existence.
+        //
+        // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
+        // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
+        // deciding, or push's own refusal path removed it after a configuration fault, where nothing was
+        // answered at all. Naming one of them would send an operator who just fixed a client
+        // registration looking for a second completion that never happened.
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        if (stored is not { Status: BackChannelAuthenticationStatus.Pending })
+        {
+            LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
+
+            throw new InvalidOperationException(
+                "The authentication request cannot be completed: the stored record "
+                + (stored is null
+                    ? "is not there"
+                    : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
+                + ". Only a pending request can be answered. Recovering from a failed delivery means "
+                + "asking the end user again rather than completing the same request twice.");
+        }
+
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
         // Section 3.1.2.2: the server "MUST NOT reply with an ID Token or Access Token for a different user,
         // even if they have an active session with the Authorization Server". The end user authenticated out
