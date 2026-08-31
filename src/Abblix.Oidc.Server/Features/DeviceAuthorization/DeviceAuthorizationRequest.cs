@@ -54,10 +54,9 @@ public record DeviceAuthorizationRequest(
     /// </para>
     /// <para>
     /// Only one of the two boundaries is held. Relaxing THIS one to <c>&gt;=</c> turns two rows red, both
-    /// driving a decision at exactly <c>ExpiresAt</c>. Relaxing the handler's leaves every suite green,
-    /// so a maintainer who reads this as the single place, and edits
-    /// <see cref="Endpoints.Token.Grants.DeviceCodeGrantHandler"/> to match, splits the token endpoint's
-    /// verdict from the verification endpoint's in silence. That gap is on the handler, not here.
+    /// driving a decision at exactly <c>ExpiresAt</c>. Relaxing
+    /// <see cref="Endpoints.Token.Grants.DeviceCodeGrantHandler"/>'s leaves every suite green. That gap
+    /// is on the handler, not here.
     /// </para>
     /// <para>
     /// It hands back the remaining time because the callers that act on the record need it: a decision
