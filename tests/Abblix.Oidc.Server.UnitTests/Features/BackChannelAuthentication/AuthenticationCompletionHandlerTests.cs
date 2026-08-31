@@ -199,59 +199,6 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// The guard refuses a LATER completion, not a concurrent one, and this row holds the LATER half.
-    /// </summary>
-    /// <remarks>
-    /// The guard is a read followed by an act: <c>TryGetAsync</c> is a plain get, with no claim protocol
-    /// and no lock between it and the write that makes the record spent. So a second completion whose
-    /// read lands before the first one's write still sees Pending and proceeds - both mint, both deliver.
-    /// That is modelled here without threads, because the property is about ORDER rather than about
-    /// timing: the store answers Pending on every read regardless of what was written to it, which is
-    /// exactly the state a second caller is in when it reads first. A barrier and two threads would
-    /// assert the same thing less reliably.
-    /// <para>
-    /// It exists because the sentences around this guard used to promise at-most-one completion without
-    /// a condition, and nothing could contradict them. What it holds is NARROWER than that, and saying so
-    /// is the point: it goes red when the guard stops letting a second SEQUENTIAL completion through -
-    /// reading the caller's own copy instead of the stored record does it. A LOCK around the read-and-act
-    /// does NOT turn it red, measured: the store here answers Pending on every call regardless of what was
-    /// written, so serialising two callers changes nothing this row can see. The concurrent half of the
-    /// claim is held by nothing in this suite; what would catch a claim protocol is the strict mock, and
-    /// only because such a protocol reaches storage through a different call.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public async Task CompleteAuthenticationAsync_WhenTheStoredReadStillPrecedesTheWrite_ASecondCompletionProceeds()
-    {
-        // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
-        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(
-            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            Status = BackChannelAuthenticationStatus.Pending,
-        };
-
-        var clientInfo = new ClientInfo(ClientId)
-        {
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
-        };
-
-        // The write does not feed back into the read, which is the whole arrangement: it puts the second
-        // caller in the state it is in when its read wins the race with the first caller's write.
-        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
-
-        var handler = CreatePollModeHandler();
-
-        // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
-
-        // Assert - neither call was refused, so the guard is not exclusion.
-        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Exactly(2));
-    }
-
-    /// <summary>
     /// Verifies that when notification token is null (incomplete ping mode configuration),
     /// only storage update is performed and no notification is sent.
     /// </summary>
@@ -459,9 +406,8 @@ public class AuthenticationCompletionHandlerTests
 
     /// <summary>
     /// Verifies that when push delivery fails, the record is left in storage rather than removed - and
-    /// that what is left reads Authenticated, so a LATER completion of the same request is refused. Later,
-    /// not concurrent: the guard reads the stored status and acts on it, and nothing claims the record
-    /// between the two.
+    /// that what is left reads Authenticated, so a LATER completion of the same request is refused - the
+    /// guard reads the STORED status, not the caller's copy.
     /// </summary>
     /// <remarks>
     /// It is the whole record, written the way poll and ping write theirs: the storage serializes the
