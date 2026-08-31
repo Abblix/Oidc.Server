@@ -455,8 +455,10 @@ public class AuthenticationCompletionHandlerTests
 
         // What the store was HANDED, read at the moment of the call. Moq matches the argument by
         // reference, so reading request.Status afterwards reports where the field ended up rather than
-        // what was persisted - and a push that writes after delivering instead of before would satisfy
-        // that reading while the store received a record still marked Pending.
+        // what was persisted. The mutation this capture catches is hoisting the BASE handler's status
+        // assignment past HandleDeliveryAsync, which turns this row red on statusAtWrite - measured.
+        // Moving push's own write later cannot produce a Pending record at all: the assignment has
+        // already run by the time the base handler calls into delivery.
         BackChannelAuthenticationStatus? statusAtWrite = null;
         _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
             .Callback(() => statusAtWrite = request.Status)
@@ -1227,9 +1229,12 @@ public class AuthenticationCompletionHandlerTests
         // The status AT THE MOMENT of the write, not afterwards. Moq matches the argument by reference
         // and the row holds that same reference, so every assertion made after the call reads whatever
         // the object ended up as - which is Authenticated whether the assignment ran before the delivery
-        // or after it. Hoisting the assignment past HandleDeliveryAsync leaves both suites green without
-        // this capture, while push hands the store a record still reading Pending: the defect this
-        // change exists to close, written back verbatim.
+        // or after it. Without this capture THIS row goes green under the hoist while push hands the
+        // store a record still reading Pending - the defect this change exists to close, written back
+        // verbatim. The SUITE does not go green under it: measured, hoisting the assignment kills three
+        // rows, and one of them is the ping denial row, which holds no capture at all - Moq re-evaluates
+        // its predicate matcher at Verify time against the same reference the hoist has since flipped.
+        // A red ping row under that mutation is the mutation, not a defect in ping.
         BackChannelAuthenticationStatus? statusAtWrite = null;
 
         _storage
