@@ -71,8 +71,12 @@ public class AuthorizationCodeService(
 	{
 		// removeOnRetrieval: true claims the code, and every caller that finds it gone is rejected.
 		// What the claim does NOT give: a removal can end with nobody holding the grant, when the claim
-		// expires mid-protocol; and two callers can both hold it, because the value is read before the
-		// claim is taken and the reuse decorator writes the grant back at this same key. Issue 454.
+		// expires mid-protocol. Two callers both holding it needs a second node, because within one
+		// process the read and the removal are one hold of the per-key gate. The reuse decorator writes
+		// the grant back at the same key WITHOUT that gate, and what keeps it out of the window is
+		// ordering rather than exclusion: it writes only after its own take has returned, so a redeemer
+		// entering afterwards reads either nothing or a grant already carrying issued tokens, and the
+		// second is the arm that revokes and rejects. Issue 435.
 		var grant = await storage.GetAsync<AuthorizedGrant>(
 			keyFactory.AuthorizedGrantKey(authorizationCode), removeOnRetrieval: true);
 

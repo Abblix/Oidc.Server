@@ -425,10 +425,11 @@ public class AuthorizationCodeServiceTests
 
     /// <summary>
     /// Verifies that RemoveAuthorizationCodeAsync performs an atomic get-and-remove
-    /// (removeOnRetrieval: true) and returns the claimed grant. The atomic claim is what enforces
-    /// single-use against two concurrent redemptions of the same code. Here nothing competes, nothing
-    /// expires and nothing writes the grant back, so this caller wins - which is what the test measures,
-    /// and is narrower than what the claim gives in general. See issue 454.
+    /// (removeOnRetrieval: true) and returns the claimed grant. The claim is what enforces single-use
+    /// against two redemptions of the same code. Here nothing competes and nothing expires, so this caller
+    /// wins - which is what the test measures, and is narrower than what the claim gives in general: a
+    /// claim expiring mid-protocol loses the grant to nobody, and a second NODE reopens the window in
+    /// which two callers are handed it. See issue 435.
     /// </summary>
     [Fact]
     public async Task RemoveAuthorizationCodeAsync_ShouldGetAndRemoveAtomically()
