@@ -1,0 +1,30 @@
+<Project>
+
+  <!-- Chain to the repository-wide props. MSBuild stops searching upward at the FIRST
+       Directory.Build.props it finds, so without this import every project under tests/ would
+       silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer. Measured, and the
+       analyzer is not demoted but ABSENT: without the import its PackageReference is gone from
+       the project, so no Sonar rule fires under tests/ at any severity and the build is green
+       because nothing looked. Take that measurement on a RESTORING build; one that skips the restore
+       keeps the analyzer in stale assets and shows a mere demotion, which is what an earlier
+       version of this comment claimed. Three of the four losses were driven and each one moves:
+       TreatWarningsAsErrors true to false, MinVerMinimumMajorMinor to empty with its package
+       reference gone, and the Sonar reference from three occurrences to none. The fourth, the
+       NuGet audit pins, restates the SDK's own defaults today, so NuGetAuditMode reads the same
+       with the import and without it and nothing here can show it doing any work. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
+
+  <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation
+       file. Without this, a cref naming a member that exists nowhere compiles clean, so a comment
+       pointing at a deleted or renamed member reads as a live pointer and the explanation behind
+       it is unreachable. CS1591 is suppressed because documentation is not wanted on test members;
+       only the resolution is.
+
+       This lives here rather than in each project so a test project added later inherits it. A
+       per-project copy is an enumeration, and a new project escapes an enumeration silently. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

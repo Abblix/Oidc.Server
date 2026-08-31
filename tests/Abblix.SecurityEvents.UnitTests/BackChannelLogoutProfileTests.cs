@@ -28,7 +28,7 @@ namespace Abblix.SecurityEvents.UnitTests;
 /// its own, without one line of the security-event package changing.
 /// </summary>
 /// <remarks>
-/// Driven through <see cref="ServiceCollectionExtensions.AddBackChannelLogoutReceiver"/> on
+/// Driven through <see cref="Infrastructure.ServiceCollectionExtensions.AddBackChannelLogoutReceiver"/> on
 /// purpose. A suite that composed the same profile itself would prove the composite can be
 /// reshaped and say nothing about whether the shipped registration reshapes it that way, which is
 /// the only question a host's token depends on.
