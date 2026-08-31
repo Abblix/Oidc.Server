@@ -7,9 +7,9 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended, and not a safety net: CI re-runs actionlint and the inline-secrets
-# check, and nothing else here - the carriage-return and doc-comment hooks run in this clone or
-# nowhere):
+# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs actionlint and
+# the inline-secrets check; EVERY OTHER hook here runs in this clone or nowhere. Said as the condition
+# rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
 #   git commit --no-verify
 #
 # Rules and rationale: the workspace's GitHub Actions security checklist.
@@ -51,4 +51,11 @@ repos:
         # re-deriving it in the hook. Two earlier attempts to decide it locally - a NUL-byte
         # heuristic, then git's own diff output - both flagged committed PDFs that carry CR
         # harmlessly, and a check that fires on files nobody can fix gets waved away.
+        types: [text]
+      - id: no-bom-change
+        name: "Block a byte-order mark appearing or disappearing"
+        entry: python .github/scripts/lint-no-bom-change.py
+        language: python
+        # Same delegation as above: pre-commit's identify library decides what is text, rather than
+        # this hook re-deriving it and disagreeing with its neighbour on the same file.
         types: [text]

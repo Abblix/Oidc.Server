@@ -26,7 +26,9 @@ public interface IAuthenticationCompletionHandler
     /// the client's configured delivery mode.
     /// </summary>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
-    /// <param name="request">The authentication request with Authenticated status and authorized grant.</param>
+    /// <param name="request">The authentication request carrying the grant the end user approved. Its
+    /// own Status is not read: whether this request may still be answered is decided from the STORED
+    /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
@@ -37,6 +39,18 @@ public interface IAuthenticationCompletionHandler
     ///   <item>Delegates to the mode-specific implementation for token delivery</item>
     /// </list>
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier. Stated as what must be true rather than as a list of causes, because the causes are
+    /// more numerous than they look and this seam cannot tell them apart: the request may have been
+    /// answered, refused or expired, its record may have been redeemed and removed by a poll, removed by
+    /// push's own refusal path after a configuration fault where nothing was answered at all, evicted,
+    /// or never stored. A host that persists the status itself before calling lands here too, on its
+    /// FIRST completion and with nothing over-granted.
+    /// <para>
+    /// Completing a request that is not pending would deliver a second answer for one authentication.
+    /// Recovering from a failed delivery therefore means asking the end user again, not repeating the
+    /// call.
+    /// </para></exception>
     Task CompleteAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,

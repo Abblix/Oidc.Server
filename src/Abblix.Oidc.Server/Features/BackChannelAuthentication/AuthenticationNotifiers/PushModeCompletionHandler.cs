@@ -60,19 +60,19 @@ public partial class PushModeCompletionHandler(
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
-    /// The authentication request is removed from storage after successful delivery. Not hygiene: push
-    /// never writes back, so a record left behind is the PRE-completion one - Pending, carrying what the
-    /// client asked for rather than what the end user approved, and carrying the session - and a host that
-    /// finds it can complete it again. Removing it is what stops that on the path where the tokens did
-    /// arrive.
+    /// The status transition is persisted before the tokens are minted, and the request is removed after
+    /// a delivery that succeeded. The WRITE is the protection: it leaves a record a sequential retry is
+    /// refused by, on the one path where a record survives. The removal is hygiene now that the write
+    /// exists - what it would otherwise leave is an Authenticated orphan that the completion handler and
+    /// the token endpoint both already refuse, waiting out its expiry. The write is the same one poll and ping make, so it
+    /// carries the whole record including the grant the host completed with.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
-    /// <param name="expiresIn">Has no effect here. Push either removes the request or leaves it exactly
-    /// as it was - it never writes a new lifetime - so on the one outcome that keeps the record, a failed
-    /// delivery, what expires is the lifetime set when the request was stored. The parameter exists
-    /// because the base class hands it to every mode, and poll and ping do use it.</param>
+    /// <param name="expiresIn">The lifetime applied when the status transition is persisted, which is
+    /// what a record surviving a failed delivery then expires on. Push writes once and only for that,
+    /// so a delivery that succeeds removes the record long before the lifetime matters.</param>
     protected override async Task HandleDeliveryAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
@@ -116,6 +116,27 @@ public partial class PushModeCompletionHandler(
             await RefuseAsync(authenticationRequestId, request, expiresIn);
             return;
         }
+
+        // Persisted BEFORE minting, and this is the only write push makes. The property the order buys
+        // is that no token set can exist over a record still reading Pending, and writing first makes it
+        // hold whatever runs afterwards. Any placement after the mint leaves a window instead: a fault, a
+        // crash or a cancellation between minting and the write leaves a full token set alive over a
+        // record the base handler would still complete - the hole this closes, reopened narrower.
+        //
+        // Not "otherwise it would never happen on the failure path". A write inside the delivery-failed
+        // branch runs on that path perfectly well and the failing-delivery row stays green; it is the
+        // span before it that stops being covered.
+        //
+        // The whole record, the same way poll and ping write theirs: the storage serializes the object it
+        // is handed, so the grant the host completed with goes down with the status. What stops a second
+        // completion is not anything the record omits - it is the base handler reading this status back
+        // and refusing everything that is not Pending. A record that carried the status alone would be
+        // just as unusable and harder to explain.
+        //
+        // On the delivery path this write is undone moments later by the removal below. That is a wasted
+        // round trip on the successful case in exchange for the guarantee on the failing one, which is
+        // the case that mints tokens nobody asked for.
+        await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
 
         LogGeneratingTokens(authenticationRequestId);
 
@@ -167,21 +188,19 @@ public partial class PushModeCompletionHandler(
                     // Delivery failed, and the tokens just minted are dropped with this lambda - nothing
                     // retries them.
                     //
-                    // What survives in storage is the record as it stood BEFORE the completion, because
-                    // push never writes back: the status and the narrowed grant were set on the in-memory
-                    // object, and only the poll and ping paths persist that with UpdateAsync. So it still
-                    // reads Pending and still carries what the client ASKED for rather than what the end
-                    // user approved.
+                    // What survives in storage reads Authenticated, written above before anything was
+                    // minted, and carries the grant the end user actually approved along with the
+                    // session naming them. Before that write it was the PRE-completion record - Pending,
+                    // carrying what the client asked for - and it had everything CompleteAsync needed
+                    // except any sign it had been used, which is what made handing it back an over-grant
+                    // rather than a retry.
                     //
-                    // It does carry a session - the one the device handler returned at initiation, naming
-                    // the end user - because AuthorizedGrant takes it as a non-nullable member and the
-                    // request was stored with it. That is what makes the leftover dangerous rather than
-                    // inert: it has everything CompleteAsync needs, so a host that reads it back and
-                    // completes it again succeeds, mints, and delivers the entries the end user refused.
+                    // The status is what closes that: the base handler reads it from storage and
+                    // completes only a Pending request.
                     //
                     // It is kept rather than removed so a host can see the request existed, and it expires
-                    // on its own. Anything a host rebuilds from it replays what was asked for, and nothing
-                    // here refuses that.
+                    // on its own. The correct recovery is to ask the end user again, which is what the
+                    // refusal now makes the only one available.
                     LogPushDeliveryFailed(authenticationRequestId);
                 }
 
