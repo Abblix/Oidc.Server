@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 /// fixed absolute expiry (RFC 8628 Section 3.2): StoreAsync seeds ExpiresAt, and UpdateAsync applies the
 /// caller-supplied remaining lifetime as the refreshed cache TTL so polling cannot extend the code
 /// indefinitely. And the user-code index cleanup is best-effort on both paths: a store that refuses it is
-/// logged rather than raised, and the claim path's warning names only the key this method can prove spent.
+/// logged rather than raised, and the claim path's MESSAGE names only the key this method can prove spent -
+/// the store's own fault rides beside it and is not bounded by that choice.
 /// </summary>
 public class DeviceAuthorizationStorageTests
 {
@@ -146,7 +147,7 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(
             LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim, entry.EventId.Id);
 
-        // The DEVICE code key, and the user code NOWHERE in the line. TryRemoveAsync never reads the
+        // The DEVICE code key, and the user code NOWHERE in the MESSAGE. TryRemoveAsync never reads the
         // record, so it cannot establish that the user code it was handed is the spent one - and on the
         // public interface a host can hand it a live code belonging to another request. Asserting the
         // absence as well as the presence, because a message that named both would satisfy a check for
@@ -154,6 +155,14 @@ public class DeviceAuthorizationStorageTests
         Assert.Contains(RequestKey, entry.Message);
         Assert.DoesNotContain(UserCodeKey, entry.Message);
         Assert.DoesNotContain(UserCode, entry.Message);
+
+        // And the RECORD is wider than the message: the store's fault rides the exception channel, which
+        // a sink renders too. The double names the key it failed on the way a real client does, so this
+        // pair says what the method actually bounds - its own text - rather than asserting an absence
+        // over a record only half of which it was ever shown. Without the second assertion the first is
+        // green over a line that does contain the code.
+        Assert.NotNull(entry.Exception);
+        Assert.Contains(UserCodeKey, entry.Exception!.Message);
     }
 
     /// <summary>
@@ -310,7 +319,11 @@ public class DeviceAuthorizationStorageTests
                 return inner.RemoveAsync(key, token);
 
             Attempts++;
-            throw new InvalidOperationException("the store is unavailable");
+
+            // Named the way a real client names it: StackExchange.Redis reports "No connection is
+            // active/available to service this operation: DEL <key>". A double whose fault carries no
+            // key makes every assertion about what a log record does NOT contain pass by construction.
+            throw new InvalidOperationException($"the store is unavailable: DEL {key}");
         }
 
         public Task<byte[]?> GetAsync(string key, CancellationToken token = default)

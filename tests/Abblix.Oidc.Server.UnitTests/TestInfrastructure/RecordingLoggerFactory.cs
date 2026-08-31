@@ -13,7 +13,13 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 /// <summary>What a single log write carried.</summary>
-internal sealed record LogRecord(LogLevel Level, EventId EventId, string Message);
+/// <remarks>
+/// The EXCEPTION is kept as well as the formatted message, because they are two channels and a sink
+/// renders both. A recorder that kept only the message made every assertion about what a log line does
+/// NOT contain blind to whatever the exception carried - and a store's own fault routinely quotes the
+/// key it failed on.
+/// </remarks>
+internal sealed record LogRecord(LogLevel Level, EventId EventId, string Message, Exception? Exception = null);
 
 /// <summary>
 /// A factory whose loggers keep what was written, so a test can assert on the record itself.
@@ -50,6 +56,6 @@ internal sealed class RecordingLoggerFactory : ILoggerFactory
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception)));
+            => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception), exception));
     }
 }

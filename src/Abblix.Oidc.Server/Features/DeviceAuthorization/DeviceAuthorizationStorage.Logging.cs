@@ -21,9 +21,18 @@ partial class DeviceAuthorizationStorage
     /// out of the stored record, so it belongs to the request being removed. Here it arrives as a
     /// PARAMETER and nothing checks the two belong together - <c>TryRemoveAsync</c> never reads the
     /// record - so on the public interface a host can hand this method a live code belonging to some
-    /// other request, and the key that embeds it would be written to a log in full while it is still
-    /// redeemable. The device code carries no such doubt: this line is only reached because the claim
-    /// removed it.
+    /// other request, and the key that embeds it would be written into THIS MESSAGE in full while it is
+    /// still redeemable. The device code carries no such doubt: this line is only reached because the
+    /// claim removed it.
+    /// <para>
+    /// That bounds the message, not the log RECORD. The store's own fault travels beside it on the
+    /// exception channel, and a store routinely quotes the key it failed on - a Redis client's refusal
+    /// reads "No connection is active/available to service this operation: DEL &lt;key&gt;". It is passed
+    /// through on purpose: an operator who cannot see why the write was refused cannot act on the line
+    /// at all, and a library cannot sanitise a fault it did not author - redacting the key it happens to
+    /// know is a list, and the next store formats it differently. A host that must keep user codes out
+    /// of its logs entirely does that at the sink, where it owns both channels.
+    /// </para>
     /// <para>
     /// The entry cannot be named exactly as a result. That costs less than it looks: the action this
     /// line asks for is never "delete that key" - the entry expires on its own - it is "the store
