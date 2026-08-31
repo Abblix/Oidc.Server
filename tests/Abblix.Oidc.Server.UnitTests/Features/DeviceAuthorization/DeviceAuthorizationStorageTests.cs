@@ -166,19 +166,18 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// The same behaviour with the failure double OUT of the path: a plain cache, nothing arranged to
-    /// throw, the index removed and the answer still true.
+    /// The success path, and the only row that observes the index entry actually GONE once the claim
+    /// succeeded.
     /// </summary>
     /// <remarks>
-    /// What it does NOT do is hold a property the failing row leaves open, and saying so is the point.
-    /// Measured, not reasoned: a build whose cleanup removes nothing kills both rows, because the failing
-    /// row's own <c>Assert.Single</c> over the log needs a real attempt at the key to produce the
-    /// exception it asserts on; and a build whose success path answers false kills both, because both
-    /// assert the answer. No mutation found so far turns this row red alone.
+    /// Measured rather than argued: guarding the index removal on the index being ABSENT kills this row
+    /// and nothing else in the suite, on the <c>Assert.Null</c> over the user-code key that no other row
+    /// makes.
     /// <para>
-    /// It earns its place as the one row that runs the take-once protocol against an UNDECORATED cache.
-    /// Every other row here reaches the store through <see cref="FailOnRemove"/>, and a double that
-    /// misbehaved would be invisible to a suite that only ever looks through it.
+    /// The failing row cannot cover that, and the reason is structural rather than incidental: it
+    /// observes an ATTEMPT, through a double that throws before anything is deleted. No change to the
+    /// source can stop the deletion without also stopping the attempt, which is why a cleanup removing
+    /// nothing, or a success path answering false, kills both rows rather than one.
     /// </para>
     /// </remarks>
     [Fact]
