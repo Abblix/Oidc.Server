@@ -292,7 +292,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             return Unauthenticated(http);
         }
 
-        return streamId is null
+        // Same reading of "named" as the two refusal routes below, so the three do not disagree
+        // about one word. Here an unnamed stream is an ANSWER rather than an error, so
+        // "?stream_id=" lists every stream instead of looking one up under the empty name and
+        // reporting it missing.
+        return string.IsNullOrEmpty(streamId)
             ? Render(await service.ListStreamsAsync(receiverId, cancellationToken))
             : Render(await service.GetStreamAsync(receiverId, streamId, cancellationToken));
     }
@@ -327,9 +331,12 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         }
 
         // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
-        // without it there is nothing to delete.
-        return streamId is null
-            ? Results.BadRequest()
+        // without it there is nothing to delete. The condition asks whether a stream was
+        // NAMED, not whether the parameter was absent: "?stream_id=" is present and names
+        // nothing, and RFC 6750 Section 3.1 puts an unusable value in the same
+        // invalid_request bucket as a missing one.
+        return string.IsNullOrEmpty(streamId)
+            ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.DeleteStreamAsync(receiverId, streamId, cancellationToken));
     }
 
@@ -345,9 +352,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         }
 
         // The status read has no list fallback: "stream_id" is its REQUIRED parameter
-        // (SSF 1.0 Section 8.1.2.1).
-        return streamId is null
-            ? Results.BadRequest()
+        // (SSF 1.0 Section 8.1.2.1). Named rather than merely present, for the reason the
+        // delete route states.
+        return string.IsNullOrEmpty(streamId)
+            ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.GetStreamStatusAsync(receiverId, streamId, cancellationToken));
     }
 
@@ -450,6 +458,43 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
+    /// A required parameter names nothing, so the request cannot be acted on. That covers a parameter
+    /// left out and one sent empty alike, and RFC 6750 Section 3.1 puts both in the same bucket:
+    /// <c>invalid_request</c> is "The request is missing a required parameter, includes an unsupported
+    /// parameter or parameter value ... The resource server SHOULD respond with the HTTP 400 (Bad
+    /// Request) status code."
+    /// </summary>
+    /// <remarks>
+    /// The header is a MAY here, unlike the 401 below. Section 3 makes <c>WWW-Authenticate</c> mandatory
+    /// when the request "does not include authentication credentials or does not contain an access token
+    /// that enables access", and adds that a server "MAY include it in response to other conditions as
+    /// well". This is one of those others: the receiver was identified and its token is not in question,
+    /// only a protocol parameter names nothing. The header carries it anyway, because that is where Section
+    /// 3.1's vocabulary lives and it is what the 401 and 403 on these same routes already use, so a
+    /// receiver has one place to read a refusal from.
+    /// <para>
+    /// This answers only where the parameter is REQUIRED. <see cref="GetStreamsAsync"/> takes the same
+    /// query parameter and lists every stream when it names nothing, so an unnamed stream there is an
+    /// answer rather than an error. Both routes read "named" the same way; they differ in what it means.
+    /// </para>
+    /// </remarks>
+    private static IResult MissingRequiredParameter(HttpContext http, string parameterName)
+    {
+        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        return new ChallengeResult(
+            StatusCodes.Status400BadRequest,
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "invalid_request"),
+                // Says the parameter NAMES NOTHING rather than that it is missing, because the empty
+                // value reaches here too and the receiver sent it - a developer told the parameter is
+                // missing goes looking for where their client drops it, and it does not drop it.
+                ("error_description",
+                    $"The required parameter {parameterName} names nothing.")));
+    }
+
+    /// <summary>
     /// The answer to a management request that named no receiver: 401 with a bare Bearer challenge.
     /// </summary>
     /// <remarks>
@@ -468,10 +513,8 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// scopes.
     /// </para>
     /// <para>
-    /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
-    /// its <c>stream_id</c> is answered with a bare <c>Results.BadRequest()</c> by
-    /// <see cref="DeleteStreamAsync"/> and <see cref="GetStatusAsync"/>. That is a separate gap from
-    /// this one and is not closed by this method.
+    /// The third, <c>invalid_request</c> with 400, is also decided here rather than by the host, and is
+    /// emitted by <see cref="MissingRequiredParameter"/>.
     /// </para>
     /// <para>
     /// The realm is the transmitter's issuer, which is the one name a receiver already holds for this
@@ -563,10 +606,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// A status and one <c>WWW-Authenticate</c> line, with no body: 401 with a bare challenge when
-    /// nobody was identified, 403 naming <c>insufficient_scope</c> when somebody was and their token is
-    /// too narrow. Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header
-    /// is the whole point.
+    /// A status and one <c>WWW-Authenticate</c> line, with no body. The status is the caller's, not
+    /// this type's: any refusal whose explanation belongs in the challenge rather than in a payload
+    /// builds one of these, and the callers in this file are what say which statuses those are.
+    /// Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header is the
+    /// whole point.
     /// </summary>
     private sealed class ChallengeResult(int statusCode, string challenge) : IResult
     {
