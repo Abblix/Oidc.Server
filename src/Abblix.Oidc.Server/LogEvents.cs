@@ -598,7 +598,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/Token/Grants/DeviceCodeGrantHandler.cs</c> - what the token endpoint refuses when
-        /// the stored record is not one a token can be issued from (sub-ranges 7083-7084 and 7100-7119).
+        /// the stored record is not one a token can be issued from (sub-ranges 7083-7084 and 7100-7109).
         /// </summary>
         /// <remarks>
         /// Two windows rather than one, because 7083-7084 is all the original range had left: 7085-7099
@@ -616,6 +616,25 @@ internal static class LogEvents
             private const int Continued = 7100;
 
             public const int AuthorizedRecordCarriesNoGrant = Continued;
+        }
+
+        /// <summary>
+        /// <c>Features/DeviceAuthorization/DeviceAuthorizationStorage.cs</c> - the store's own reports
+        /// about what it could not tidy (sub-range 7110-7119).
+        /// </summary>
+        /// <remarks>
+        /// Placed in the range's continuation rather than beside the other device-authorization windows,
+        /// because those are packed and moving any of them would change ids a deployment may already
+        /// alert on. Taking 7110-7119 narrows the neighbour above from 7100-7119 to 7100-7109, and that
+        /// narrowing is written there in the same change: this file is the whole allocation record, and
+        /// the uniqueness test only catches ids that collide outright, never two windows that overlap.
+        /// </remarks>
+        public static class DeviceAuthorizationStorage
+        {
+            private const int Base = 7110;
+
+            public const int UserCodeIndexNotRemovedAfterClaim = Base;
+            public const int UserCodeIndexNotRemovedBeforeDiscard = Base + 1;
         }
     }
 
