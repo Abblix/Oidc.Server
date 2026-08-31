@@ -23,10 +23,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
-/// Neither is complete on its own terms. The claim reads the value before it takes the claim, so two
-/// callers can be handed the same grant on ONE node, which is issue 454; and the write-back is what the
-/// second defence rests on, so a first redemption that ends without issuing tokens leaves nothing for it
-/// to catch. Both are open, and the refusal this class returns is the same string either way.
+/// Neither is complete on its own terms. The claim reads the value under the same hold of the gate that
+/// removes it, so on ONE node two callers cannot be handed the same grant; across processes the gate
+/// holds nothing and both can be, which is issue 435. And the write-back is what the second defence
+/// rests on, so a first redemption that ends without issuing tokens leaves nothing for it to catch. The
+/// refusal this class returns is the same string either way.
 /// <para>
 /// This class decorates the standard token request processing flow with additional security measures
 /// to ensure the integrity of the authorization process. It detects when an authorization code,
