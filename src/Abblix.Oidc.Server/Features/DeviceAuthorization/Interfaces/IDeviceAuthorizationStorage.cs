@@ -58,7 +58,12 @@ public interface IDeviceAuthorizationStorage
     /// Removes a device authorization request from storage using its device code.
     /// </summary>
     /// <param name="deviceCode">The device code identifier.</param>
-    /// <returns>A task that completes when the request is removed from storage.</returns>
+    /// <returns>
+    /// A task that completes when the request is removed. Tidying the secondary user-code index is
+    /// best-effort and is logged rather than raised: it is not what the caller asked for, and a store
+    /// deciding otherwise must not become a fault where a grant error belongs. Removing the request
+    /// itself is not guarded - that IS what was asked, so a refusal there raises.
+    /// </returns>
     Task RemoveAsync(string deviceCode);
 
     /// <summary>
@@ -74,9 +79,13 @@ public interface IDeviceAuthorizationStorage
     /// request not being there and a claim that expired while a store call was in flight - the second
     /// on one caller with nobody to lose to, and its outcome is the request gone with nobody able to be
     /// told they took it. An operator told a second REQUEST was the cause goes looking for one, and the
-    /// expiry case is exactly the one that never produces a second request. A failure of the second store call,
-    /// which removes the user-code index, raises rather than answering: the device code is already
-    /// consumed and the caller is handed the exception.
+    /// expiry case is exactly the one that never produces a second request.
+    /// <para>
+    /// Removing the secondary user-code index is not part of that answer. It runs after the claim has
+    /// already decided, so a store that refuses it is logged and the answer stands. The entry left behind
+    /// expires on its own; what it still resolves to depends on the user code the caller passed, which
+    /// this method never checks against the record it removed.
+    /// </para>
     /// </returns>
     Task<bool> TryRemoveAsync(string deviceCode, string userCode);
 }
