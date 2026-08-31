@@ -28,7 +28,8 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
 /// <summary>
-/// Locks the dual-presence invariant of <see cref="ServiceCollectionExtensions.AddAuthorizationGrant{TImpl}"/>:
+/// Locks the dual-presence invariant of
+/// <see cref="Abblix.Oidc.Server.Endpoints.ServiceCollectionExtensions.AddAuthorizationGrant{TImpl}"/>:
 /// every <see cref="IAuthorizationGrantHandler"/> registered through the helper must also be
 /// observable as <see cref="IGrantTypeInformer"/>, so the discovery endpoint and registration-time
 /// validators that aggregate <see cref="IGrantTypeInformer"/> see the same set the token endpoint
@@ -100,7 +101,7 @@ public class AddAuthorizationGrantTests
     }
 
     /// <summary>
-    /// The dual-registration shares ONE concrete <typeparamref name="TImpl"/> singleton between
+    /// The dual-registration shares ONE concrete <c>TImpl</c> singleton between
     /// both interface aliases - resolving <see cref="IAuthorizationGrantHandler"/> and
     /// <see cref="IGrantTypeInformer"/> returns the same instance, not two separate ones. This
     /// preserves the «handler is constructed once per host» invariant that the previous direct

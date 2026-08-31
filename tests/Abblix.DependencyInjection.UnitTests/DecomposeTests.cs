@@ -15,9 +15,10 @@ namespace Abblix.DependencyInjection.UnitTests;
 
 /// <summary>
 /// Locks the plain live-cursor family API: <see cref="ServiceCollectionExtensions.Compose{TInterface,TComposite}"/>
-/// folds a family into one composite; <see cref="ServiceCollectionExtensions.Decompose{TInterface}"/> returns a
-/// live <see cref="IComposition{TInterface}"/> cursor whose edits reach the composite at resolve with no recompose;
-/// and <see cref="CompositionExtensions"/> adds position-aware sugar. Mixed member lifetimes fail loudly.
+/// folds a family into one composite; <see cref="ServiceCollectionExtensions.Decompose{TInterface}(IServiceCollection)"/>
+/// returns a live <see cref="IComposition{TInterface}"/> cursor whose edits reach the composite at resolve with no
+/// recompose; and the position-aware editing methods sit on that cursor itself, so a call site names only the
+/// anchor type. Mixed member lifetimes fail loudly.
 /// </summary>
 public class DecomposeTests
 {
