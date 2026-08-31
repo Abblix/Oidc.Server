@@ -88,7 +88,7 @@ public partial class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
-        // An approval landing after the code's fixed lifetime (RFC 8628 §3.2) cannot be redeemed, so treat
+        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
         // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
         var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
@@ -106,10 +106,17 @@ public partial class UserCodeVerificationService(
             return false;
         }
 
-        request.Status = DeviceAuthorizationStatus.Authorized;
-        request.AuthorizedGrant = authorizedGrant;
-
-        await storage.UpdateAsync(deviceCode, request, remaining);
+        if (!await TryDecideAsync(
+                deviceCode,
+                remaining,
+                current =>
+                {
+                    current.Status = DeviceAuthorizationStatus.Authorized;
+                    current.AuthorizedGrant = authorizedGrant;
+                }))
+        {
+            return false;
+        }
 
         // The requested entries were handed to the host on ValidUserCode, and whether they reach the
         // grant is its decision: only its verification page knows whether it displayed them, and a
@@ -140,15 +147,56 @@ public partial class UserCodeVerificationService(
         if (request.Status != DeviceAuthorizationStatus.Pending)
             return false;
 
-        // A denial after the code's fixed lifetime (RFC 8628 §3.2) is moot - the code is already unusable, so
+        // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
         // treat it as a no-op rather than writing a record with a non-positive cache TTL.
         var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
             return false;
 
-        request.Status = DeviceAuthorizationStatus.Denied;
+        return await TryDecideAsync(
+            deviceCode, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+    }
 
-        await storage.UpdateAsync(deviceCode, request, remaining);
+    /// <summary>
+    /// Applies a decision to the record as it stands NOW, refusing when it has moved on since the user
+    /// code was looked up.
+    /// </summary>
+    /// <remarks>
+    /// Everything between the lookup and the write is a window, and a write of the record read earlier
+    /// RESTORES it - so a later poll finds an authorized record for a code that was already exchanged,
+    /// and a second full token set is issued for one device code. Nothing downstream catches it: the net
+    /// the authorization-code path has is the reuse decorator inspecting the claimed grant, and the
+    /// device path has no equivalent.
+    /// <para>
+    /// It takes TWO decisions, and that is the precondition the hazard is easy to state without. While
+    /// the record reads Pending no poll CONSUMES it: the only arm that issues anything needs it to read
+    /// Authorized first. A poll does remove a pending record once its lifetime is over, and that arm
+    /// issues nothing, so it cannot produce the second token set. The sequence therefore needs another
+    /// decision to move the record off Pending - which is exactly the clause a guard written only
+    /// against a REMOVED record would miss.
+    /// </para>
+    /// <para>
+    /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
+    /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
+    /// Closing it needs a compare-and-swap the entity storage does not expose, which is issue 194.
+    /// </para>
+    /// </remarks>
+    /// <param name="deviceCode">The record to decide on.</param>
+    /// <param name="remaining">The lifetime left, applied as the cache TTL so the code cannot be extended.</param>
+    /// <param name="decide">Applies the decision to the freshly read record.</param>
+    private async Task<bool> TryDecideAsync(
+        string deviceCode,
+        TimeSpan remaining,
+        Action<DeviceAuthorizationRequest> decide)
+    {
+        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
+        if (current is not { Status: DeviceAuthorizationStatus.Pending })
+        {
+            return false;
+        }
+
+        decide(current);
+        await storage.UpdateAsync(deviceCode, current, remaining);
         return true;
     }
 }

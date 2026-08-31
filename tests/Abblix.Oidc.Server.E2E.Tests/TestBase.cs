@@ -24,9 +24,8 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 
 /// <summary>
 /// Helpers for driving the test OIDC host as a non-interactive RP:
-/// discovery, DCR, PAR, /authorize, /token, and JWT decoding. Mirrors
-/// the shape of the AuthenticationService.ConformanceTests TestBase so
-/// scenario files read the same way.
+/// discovery, DCR, PAR, /authorize, /token, and JWT decoding, so every
+/// scenario file reads the same way.
 /// </summary>
 public abstract class TestBase(TestFactory factory)
 {

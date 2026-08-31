@@ -88,13 +88,16 @@ jobs:
             --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
         timeout-minutes: 5
+      # A RED run only. Nobody opens these after a green one, and the storage they take is shared
+      # across the account: six of them per run, a hundred in three hours, all younger than the
+      # retention window - so the window cannot help, because there is nothing old to expire.
       - name: Upload test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results-${{ matrix.project }}
           path: |
             tests/results/*.trx
             tests/results/**/*.cobertura.xml
-          retention-days: 7
+          retention-days: 3
         timeout-minutes: 3
