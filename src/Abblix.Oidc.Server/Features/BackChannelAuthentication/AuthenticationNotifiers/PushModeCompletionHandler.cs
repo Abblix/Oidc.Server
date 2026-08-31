@@ -146,12 +146,16 @@ public partial class PushModeCompletionHandler(
             AuthenticationRequestId = authenticationRequestId,
         };
 
+        // Says out loud that this is a push delivery, because nothing downstream can tell: poll and ping
+        // reach the token endpoint with the same grant type and the same identifier. It is what turns on
+        // the two bindings CIBA Core 1.0 Section 10.3.1 requires here and nowhere else.
         var validTokenRequest = new ValidTokenRequest(
             tokenRequest,
             request.AuthorizedGrant,
             clientInfo,
             [],
-            []);
+            [],
+            PushDeliveryOf: authenticationRequestId);
 
         var tokenResult = await tokenRequestProcessor.ProcessAsync(validTokenRequest);
 

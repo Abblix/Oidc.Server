@@ -162,13 +162,22 @@ public class TokenRequestProcessor(
 
 		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OpenId))
 		{
+			// The bindings exist only when the caller IS the push path, which is the one place that
+			// knows: poll and ping arrive here with the same grant type and the same identifier, so the
+			// request cannot be asked. The refresh token is read from the response because it was minted
+			// above - the order matters and is why it can be hashed at all.
+			var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
+				? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
+				: null;
+
 			response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				authContext,
 				clientInfo,
 				false,
 				null,
-				accessToken.EncodedJwt);
+				accessToken.EncodedJwt,
+				pushBindings);
 		}
 
 		return response;

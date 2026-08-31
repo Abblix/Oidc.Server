@@ -31,7 +31,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <param name="ClientCertificate">The client X.509 certificate presented at the token endpoint for
 /// mutual-TLS client authentication (RFC 8705), when applicable; otherwise <c>null</c>.</param>
 /// <param name="ProofKeyThumbprint">The RFC 7638 JWK thumbprint of the DPoP proof key bound to the
-/// request (RFC 9449 §6.1), when the client presented a valid DPoP proof; otherwise <c>null</c>.</param>
+/// request (RFC 9449 Section 6.1), when the client presented a valid DPoP proof; otherwise <c>null</c>.
+/// </param>
+/// <param name="PushDeliveryOf">The <c>auth_req_id</c> this request delivers in CIBA push mode, or
+/// <c>null</c> for every other caller. Nothing downstream can infer it: poll and ping redeem at the
+/// token endpoint with the same grant type and the same identifier, so only the push path itself knows,
+/// and CIBA Core 1.0 Section 10.3.1 requires the ID Token's extra bindings there and nowhere else.
+/// </param>
 public record ValidTokenRequest(
     TokenRequest Model,
     AuthorizedGrant AuthorizedGrant,
@@ -39,7 +45,8 @@ public record ValidTokenRequest(
     ScopeDefinition[] Scope,
     ResourceDefinition[] Resources,
     X509Certificate2? ClientCertificate = null,
-    string? ProofKeyThumbprint = null)
+    string? ProofKeyThumbprint = null,
+    string? PushDeliveryOf = null)
 {
     /// <summary>
     /// Builds the validated request from a populated <see cref="TokenValidationContext"/>, taking

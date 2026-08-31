@@ -102,6 +102,134 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// A push delivery binds the ID Token to the request it answers and to the refresh token beside it.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 10.3.1: the OP MUST include the auth_req_id in the ID Token, and the hash
+    /// of the refresh token when one is sent. Without these, a push client that follows its own MUST -
+    /// check that the claim matches the identifier it asked about - rejects every notification.
+    /// <para>
+    /// The identifier goes in VERBATIM. The sentence is phrased about hashes, and the worked example
+    /// beside it carries the plain value, matching the auth_req_id field of the same notification body.
+    /// A digest would leave the client nothing to compare.
+    /// </para>
+    /// <para>
+    /// The refresh hash is asserted against the shared calculator rather than a literal, because that
+    /// calculator is what the client side uses too - a literal would let the two drift apart while both
+    /// stayed green.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateIdentityToken_ForAPushDelivery_BindsTheRequestAndTheRefreshToken()
+    {
+        // Arrange
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo();
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        const string authenticationRequestId = "1c266114-a1be-4252-8ad1-04986c5b9ac1";
+        const string refreshToken = "4bwc0ESC-IAhflf-ACC-vjD-ltc11ne-8gFPfA2Kx16";
+
+        // Act
+        await _service.CreateIdentityTokenAsync(
+            authSession, authContext, clientInfo, true, null, null,
+            new PushDeliveryBindings(authenticationRequestId, refreshToken));
+
+        // Assert
+        Assert.NotNull(capturedToken);
+
+        Assert.Equal(
+            authenticationRequestId,
+            capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]!.GetValue<string>());
+
+        Assert.Equal(
+            HashCalculator.Compute(SigningAlgorithms.RS256, refreshToken),
+            capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Without a refresh token there is no hash to give, and the claim is absent rather than empty.
+    /// </summary>
+    /// <remarks>
+    /// The specification asks for it only "in case a Refresh Token is sent to the Client". An empty or
+    /// invented value would read to a client as a binding it can check, and fail.
+    /// </remarks>
+    [Fact]
+    public async Task CreateIdentityToken_ForAPushDeliveryWithoutARefreshToken_OmitsOnlyThatHash()
+    {
+        // Arrange
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo();
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        // Act
+        await _service.CreateIdentityTokenAsync(
+            authSession, authContext, clientInfo, true, null, null,
+            new PushDeliveryBindings("some-request", RefreshToken: null));
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.NotNull(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+    }
+
+    /// <summary>
+    /// The control, and it is what keeps the two rows above from being a rule about every ID Token: a
+    /// delivery that is not a push carries neither claim.
+    /// </summary>
+    /// <remarks>
+    /// Section 10.3.1 closes its paragraph with "Note that these claims are only required in Push mode",
+    /// and a poll or ping client holds the identifier already - it sent it to get here. Without this row,
+    /// adding the claims unconditionally would leave every other row in this file green.
+    /// </remarks>
+    [Fact]
+    public async Task CreateIdentityToken_WithoutAPushDelivery_CarriesNeitherBinding()
+    {
+        // Arrange
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo();
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        // Act
+        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+
+        // Assert
+        Assert.NotNull(capturedToken);
+        Assert.Null(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+    }
+
+    /// <summary>
     /// Verifies that CreateIdentityTokenAsync generates correct timestamps and issuer.
     /// </summary>
     [Fact]

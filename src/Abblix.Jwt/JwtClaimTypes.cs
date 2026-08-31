@@ -262,6 +262,36 @@ public static class JwtClaimTypes
     public const string AccessTokenHash = IanaClaimTypes.AtHash;
 
     /// <summary>
+    /// The identifier of the backchannel authentication request this ID Token answers, carried so a
+    /// push notification cannot be replayed against a different request.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 10.3.1 phrases this alongside the hashes - "the OP MUST include the hash
+    /// value of the Access Token and the auth_req_id ... using the at_hash and
+    /// urn:openid:params:jwt:claim:auth_req_id claims respectively" - but its own worked example beside
+    /// that sentence carries the identifier VERBATIM, matching the <c>auth_req_id</c> field of the same
+    /// notification body. The example is what a client compares against, and its own requirement is to
+    /// check that this claim MATCHES the identifier it asked about, which a hash would not let it do.
+    /// <para>
+    /// Required in push mode only, which the same paragraph says outright. Poll and ping clients redeem
+    /// at the token endpoint holding the identifier already.
+    /// </para>
+    /// </remarks>
+    public const string AuthenticationRequestId = "urn:openid:params:jwt:claim:auth_req_id";
+
+    /// <summary>
+    /// The hash of the refresh token delivered beside this ID Token, computed the same way
+    /// <see cref="AccessTokenHash"/> is.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 10.3.1: "In case a Refresh Token is sent to the Client, the hash value of
+    /// it MUST also be added to the ID token using the urn:openid:params:jwt:claim:rt_hash claim", and
+    /// the same sentence points at OpenID Connect Core 1.0 Section 3.1.3.6 for the calculation - the one
+    /// <c>at_hash</c> uses. Push mode only, and only when a refresh token is actually sent.
+    /// </remarks>
+    public const string RefreshTokenHash = "urn:openid:params:jwt:claim:rt_hash";
+
+    /// <summary>
     /// The 'iat' (issued at) claim identifies the time at which the JWT was issued.
     /// It is expressed as the number of seconds since the Unix epoch.
     /// This claim can be used to determine the age of the JWT.
