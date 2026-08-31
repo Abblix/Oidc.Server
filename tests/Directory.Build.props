@@ -7,8 +7,11 @@
        the project, so no Sonar rule fires under tests/ at any severity and the build is green
        because nothing looked. Take that measurement on a RESTORING build; one that skips the restore
        keeps the analyzer in stale assets and shows a mere demotion, which is what an earlier
-       version of this comment claimed. The NuGet audit pins go too, though today they restate
-       the SDK's own defaults, so one of the four cannot be shown to change anything. -->
+       version of this comment claimed. Three of the four losses were driven and each one moves:
+       TreatWarningsAsErrors true to false, MinVerMinimumMajorMinor to empty with its package
+       reference gone, and the Sonar reference from three occurrences to none. The fourth, the
+       NuGet audit pins, restates the SDK's own defaults today, so NuGetAuditMode reads the same
+       with the import and without it and nothing here can show it doing any work. -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
 
   <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation
