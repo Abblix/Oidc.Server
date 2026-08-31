@@ -71,6 +71,37 @@ jobs:
         run: python .github/scripts/lint-license-headers.py
         timeout-minutes: 3
     timeout-minutes: 5
+  # A C# check in a workflow named for workflows, for the same reason the licence-header job
+  # above is here: the triggers. This file is the one with no path filter, so a job added here
+  # runs on every pull request rather than only on those that happen to touch .github/.
+  inlined-detail-types:
+    name: The authorization_details types are computed in one place
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+        timeout-minutes: 3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+        timeout-minutes: 3
+      # The check uses only the standard library, so there is nothing to install and no
+      # third-party code runs here.
+      #
+      # The self-test runs FIRST and separately. A clean tree is an answer about the world and
+      # about the instrument at once, and one exit code cannot separate them: a pattern broken
+      # by a later edit would leave this job green for good, because there would be nothing left
+      # to find.
+      - name: Prove the check can report a find
+        run: python .github/scripts/lint-no-inlined-detail-types.py --self-test
+        timeout-minutes: 3
+      - name: Check the computation is not inlined
+        run: python .github/scripts/lint-no-inlined-detail-types.py
+        timeout-minutes: 3
+    timeout-minutes: 5
   actionlint:
     name: actionlint (schema + shellcheck)
     runs-on: ubuntu-latest
