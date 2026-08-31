@@ -166,9 +166,21 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// The control, in the same shape: with nothing failing, the index is removed and the answer is the
-    /// same. Without it, a method that swallowed everything would satisfy the row above.
+    /// The same behaviour with the failure double OUT of the path: a plain cache, nothing arranged to
+    /// throw, the index removed and the answer still true.
     /// </summary>
+    /// <remarks>
+    /// What it does NOT do is hold a property the failing row leaves open, and saying so is the point.
+    /// Measured, not reasoned: a build whose cleanup removes nothing kills both rows, because the failing
+    /// row's own <c>Assert.Single</c> over the log needs a real attempt at the key to produce the
+    /// exception it asserts on; and a build whose success path answers false kills both, because both
+    /// assert the answer. No mutation found so far turns this row red alone.
+    /// <para>
+    /// It earns its place as the one row that runs the take-once protocol against an UNDECORATED cache.
+    /// Every other row here reaches the store through <see cref="FailOnRemove"/>, and a double that
+    /// misbehaved would be invisible to a suite that only ever looks through it.
+    /// </para>
+    /// </remarks>
     [Fact]
     public async Task TryRemoveAsync_RemovesTheIndex_AndTellsTheCallerItTookTheCode()
     {
