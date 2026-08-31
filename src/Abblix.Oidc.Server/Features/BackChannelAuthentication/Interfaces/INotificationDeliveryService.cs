@@ -49,9 +49,11 @@ public interface INotificationDeliveryService
     /// On <c>false</c> push keeps the stored record, and it is not a resumable delivery. The tokens were
     /// minted and are gone; nothing retries them. The record reads Authenticated, written before the
     /// mint, so a LATER completion of the same request is refused - the recovery is to ask the end user,
-    /// not to resend from what is left. Later, not concurrent: the refusal reads the stored status and
-    /// acts on it, with no claim protocol between the two, so two completions running side by side can
-    /// both read Pending.
+    /// not to resend from what is left. Later, not concurrent: as this ships, the refusal reads the stored
+    /// status and acts on it with no claim protocol and no lock between the two, so two completions running
+    /// side by side can both read Pending. That second sentence describes the ABSENCE of a mechanism, and
+    /// nothing in the suite holds it - adding exclusion here would make it false without turning a row
+    /// red.
     /// </para>
     /// </returns>
     Task<bool> SendAsync(

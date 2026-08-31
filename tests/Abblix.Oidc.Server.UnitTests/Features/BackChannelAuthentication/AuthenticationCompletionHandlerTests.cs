@@ -199,7 +199,7 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// The guard refuses a LATER completion, not a concurrent one, and this row is what says so.
+    /// The guard refuses a LATER completion, not a concurrent one, and this row holds the LATER half.
     /// </summary>
     /// <remarks>
     /// The guard is a read followed by an act: <c>TryGetAsync</c> is a plain get, with no claim protocol
@@ -211,8 +211,13 @@ public class AuthenticationCompletionHandlerTests
     /// assert the same thing less reliably.
     /// <para>
     /// It exists because the sentences around this guard used to promise at-most-one completion without
-    /// a condition, and nothing could contradict them. This row can: add a claim protocol or a lock and
-    /// it goes red, which is the moment those sentences would need rewriting anyway.
+    /// a condition, and nothing could contradict them. What it holds is NARROWER than that, and saying so
+    /// is the point: it goes red when the guard stops letting a second SEQUENTIAL completion through -
+    /// reading the caller's own copy instead of the stored record does it. A LOCK around the read-and-act
+    /// does NOT turn it red, measured: the store here answers Pending on every call regardless of what was
+    /// written, so serialising two callers changes nothing this row can see. The concurrent half of the
+    /// claim is held by nothing in this suite; what would catch a claim protocol is the strict mock, and
+    /// only because such a protocol reaches storage through a different call.
     /// </para>
     /// </remarks>
     [Fact]
