@@ -65,6 +65,7 @@ KNOWN = {
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/GrantProcessors/PollModeGrantProcessor.cs",
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/Interfaces/IBackChannelRequestStorage.cs",
     "src/Abblix.Oidc.Server/Features/DeviceAuthorization/DeviceAuthorizationStorage.cs",
+    "src/Abblix.Oidc.Server/Features/DeviceAuthorization/DeviceAuthorizationStorage.Logging.cs",
     "src/Abblix.Oidc.Server/Features/DeviceAuthorization/Interfaces/IDeviceAuthorizationStorage.cs",
     "src/Abblix.Oidc.Server/Features/Storages/DistributedCacheStorage.cs",
     "src/Abblix.Oidc.Server/Features/PushedAuthorization/PushedAuthorizationRequestProcessorDecorator.cs",

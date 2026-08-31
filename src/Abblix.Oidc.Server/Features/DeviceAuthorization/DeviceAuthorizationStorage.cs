@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
@@ -20,11 +21,13 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// Redemption of a device code goes through the cache's claim protocol, which narrows the window in which
 /// two token requests both claim one code rather than closing it.
 /// </summary>
+/// <param name="logger">Records a secondary-index entry left behind, which nothing else reports.</param>
 /// <param name="cache">The distributed cache backend used for atomic operations.</param>
 /// <param name="serializer">The serializer for converting objects to/from binary format.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 /// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
-public class DeviceAuthorizationStorage(
+public partial class DeviceAuthorizationStorage(
+    ILogger<DeviceAuthorizationStorage> logger,
     IDistributedCache cache,
     IBinarySerializer serializer,
     IEntityStorageKeyFactory keyFactory,
@@ -90,12 +93,35 @@ public class DeviceAuthorizationStorage(
     /// <inheritdoc />
     public async Task RemoveAsync(string deviceCode)
     {
+        // The secondary index is best-effort here for the same reason it is in TryRemoveAsync: it is not
+        // what the caller asked for. The token endpoint calls this from its expired and denied arms and
+        // then returns a grant error, so a store that refuses this write would turn that error into a
+        // server fault - the client gets a 500 where it should be told the code expired or was denied.
+        //
+        // The two arms are NOT the same shape, and the difference is the order. There the claim has
+        // already removed the request, so the index is all that is left; here the request is removed
+        // AFTER this, so a refusal at this line leaves both keys in place and the removal still runs.
+        // What they share is the reason for guarding: the index is never the caller's question, and its
+        // store deciding otherwise must not become the caller's answer.
         var request = await TryGetByDeviceCodeAsync(deviceCode);
         if (request != null)
         {
-            await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode));
+            var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode);
+            try
+            {
+                await cache.RemoveAsync(userCodeKey);
+            }
+            catch (Exception exception)
+            {
+                LogUserCodeIndexNotRemovedBeforeDiscard(exception, userCodeKey);
+            }
         }
 
+        // Not guarded, and the reason is not symmetry with the arm above. Removing the request is the
+        // whole of what this method is for, so a store that refuses it has not done the thing asked;
+        // reporting otherwise would leave a live record behind a call that looked like it worked. The
+        // caller does see a fault where it expected a grant error, which is the cost, and it is a cost
+        // over a record that is expired or denied rather than one carrying an approval.
         await cache.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
     }
 
@@ -128,16 +154,21 @@ public class DeviceAuthorizationStorage(
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
-    /// <param name="userCode">The user code for cleaning up the secondary index mapping.</param>
+    /// <param name="userCode">The user code of THAT request, used to find its secondary index entry.
+    /// Nothing here checks the two belong together - this method never reads the record - so a caller
+    /// passing a code from a different request removes that other request's index entry instead, leaving
+    /// a live request findable only by its device code.</param>
     /// <returns>
     /// A task that completes when the operation finishes, containing true when this caller removed the
     /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
     /// won or it was never there": the code can be consumed and the caller still told false, when the lock
     /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
     /// <para>
-    /// They cannot cover the cleanup below them, which is this method's own call: if removing the user-code
-    /// index throws, the device code is already consumed and the caller gets the exception instead of true,
-    /// so no tokens are issued for a code that can never be presented again. Tracked as issue 453.
+    /// The index cleanup that runs after the claim cannot change that answer either way. Removing the
+    /// user-code index is a different question from whether this caller took the code, so a refusal is logged
+    /// and the true stands. What the entry left behind still points at is not knowable here - this method
+    /// never reads the record, so the user code it was handed need not belong to the request it removed -
+    /// but that entry carries its own expiry either way.
     /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
@@ -146,7 +177,34 @@ public class DeviceAuthorizationStorage(
         if (!removed)
             return false;
 
-        await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
+        // The device code is consumed at this point, and that is the fact the caller asked about. Tidying
+        // the secondary index is a different question, so a store that refuses it does not get to take the
+        // answer away: the token endpoint calls this inside a `when` clause, where an exception becomes a
+        // server fault rather than a grant error - no tokens for a code that can never be presented again,
+        // and the end user's approval lost with it.
+        //
+        // The entry left behind carries its own expiry, so it goes away unattended. Whether it still
+        // resolves to a live request is not knowable from here, because this method never reads the
+        // record it is removing. Removing the index FIRST instead would make the fault retryable, at the
+        // cost of a window in which the user code resolves to nothing while the device code is still live
+        // - a worse trade, because that window is on the path that succeeds.
+        //
+        // Swallowed, not hidden. Nothing else in the system reports a dangling index, so without this line
+        // an operator has no way to learn the store refused a write at all.
+        var deviceCodeKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
+        try
+        {
+            await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
+        }
+        catch (Exception exception)
+        {
+            // The DEVICE code key, not the user-code one. This method never reads the record, so it
+            // cannot establish that the user code it was handed belongs to the request it just claimed -
+            // and on the public interface a host may hand it a live one. The device code carries no such
+            // doubt: this line is reached only because the claim removed it.
+            LogUserCodeIndexNotRemovedAfterClaim(exception, deviceCodeKey);
+        }
+
         return true;
     }
 }
