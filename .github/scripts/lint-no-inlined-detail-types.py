@@ -14,21 +14,28 @@ project in the next - it would not have caught the duplication it exists to prev
 The set's shape alone is not enough to say WHAT was counted, because the same
 `.Select(x => x.Type).ToHashSet(...)` is written over sequences of other things whose `Type`
 means something else. A regular expression cannot infer a sequence's type, so the file is asked
-the question it can answer: does it call the one conversion that produces these entries. A file
-that never does is not computing this set, whatever shape its projections take.
+a question it can answer: does it name these entries at all - the conversion that produces them,
+or the type itself, which the library also hands out as a typed property. That is a NECESSARY
+condition, not a sufficient one, and it is the honest limit of a text-level check.
 
 The computation lives in `AuthorizationDetailTypes.NamedBy`. Two halves of one comparison in
 two files are what makes this worth a check rather than a habit: a copy that drifts by one
 clause makes them disagree on exactly the inputs nobody wrote a test for, and both stay green.
 
-The canonical member is this check's own control, and every entry in ALLOWED is another. A run
+The canonical member is this check's own control, and every allowance marker is another. A run
 where any control matches nothing REFUSES instead of reporting a clean tree, because a search
 that cannot come back positive says nothing about the world - only about itself.
 
-What it does NOT reach: the projection and the set in two different statements
-(`var names = typed.Select(d => d.Type); var set = names.ToHashSet(...);`), and the same set
-built by a loop rather than a projection. Both are said here rather than left to be discovered,
-because a check whose limits are unwritten gets read as having none.
+What it does NOT reach, said here rather than left to be discovered, because a check whose
+limits are unwritten gets read as having none:
+
+- the projection and the set in two different statements
+  (`var names = typed.Select(d => d.Type); var set = names.ToHashSet(...);`);
+- a set built by a loop, or by `new HashSet<string>(...)`, or by a collection expression;
+- a projection whose lambda body is a conditional expression ending in `.Type`;
+- entries reached in a file that names neither the conversion nor the type.
+
+Each of those is a way to write this computation that a green run says nothing about.
 
     python .github/scripts/lint-no-inlined-detail-types.py             # check the tree
     python .github/scripts/lint-no-inlined-detail-types.py --self-test # prove it can find one
@@ -50,22 +57,29 @@ if hasattr(sys.stdout, "reconfigure"):
 CANONICAL = "src/Abblix.Oidc.Server/Features/RichAuthorizationRequests/AuthorizationDetailTypes.cs"
 CANONICAL_MEMBER = "AuthorizationDetailTypes.NamedBy"
 
-# The one conversion that produces typed entries. Its presence in a file is what says the
-# projections there are over authorization_details entries rather than over something else.
-CONVERSION = "ToTypedArray"
+# What says a file is dealing in authorization_details entries at all. The conversion is one way
+# in; the library also exposes the entries as a typed property, and a file reaching them THAT way
+# names no conversion - a projection there was invisible while this asked only about the
+# conversion. Whole words, because IAuthorizationDetailValidator and AuthorizationDetailsTypes are
+# about something else entirely and must not drag their files in.
+ENTRIES_IN_PLAY = re.compile(r"\b(?:ToTypedArray|AuthorizationDetail|AuthorizationDetails)\b")
 
-# Sites allowed to compute it themselves, each with the reason. This is an allowance rather than
-# an exclusion pattern: a form is permitted at a named place for a stated reason, not a shape
-# quietly dropped everywhere.
+# An allowance lives AT the occurrence, as a comment within the few lines above it, and it must
+# carry a reason after the marker.
 #
-# Each allowance is also a control. A run where an allowed site no longer matches REFUSES rather
-# than passing, because an allowance nobody needs any more is an allowance nobody notices going
-# stale - and the next site that lands there inherits it.
-ALLOWED = {
-    "src/Abblix.Oidc.Server/Endpoints/Authorization/ConsentConstraintEnforcer.cs":
-        "the grant side of the comparison, which REFUSES a typeless entry where the canonical "
-        "member drops it, so its guards run first and it holds the entries afterwards",
-}
+# It was keyed by FILE first, and that wiped out the check's own scenario: both original spellings
+# of the duplication, planted into the allowed file, were waved through - each printed with a
+# reason written for a different line. An allowance has to name the thing it allows, and a file is
+# not a thing. At the site it also moves with the code, and a second inlining ten lines away
+# inherits nothing.
+#
+# Every marker is a control. A marker with no occurrence beneath it REFUSES, because an allowance
+# nobody needs is one nobody notices going stale.
+ALLOWANCE_MARKER = "lint-inlined-detail-types: allowed"
+
+# How far above the occurrence the marker may sit. Wide enough for a comment paragraph, narrow
+# enough that it cannot reach past the statement it belongs to.
+ALLOWANCE_REACH = 8
 
 # The computation is a SET of the types the entries name, and that is what this looks for: a
 # projection of an entry to its Type whose result is turned into a set.
@@ -75,10 +89,7 @@ ALLOWED = {
 # they all convert in one statement and project in the next. It would not have caught the
 # duplication it exists to prevent. The conversion is therefore not in the pattern at all: what
 # makes this computation itself is the set of names, not how the entries were obtained.
-#
-# The window between the projection and the set allows a filter or a cast to sit in between,
-# and stops at a statement end or a block, so a projection and a set belonging to two different
-# expressions are not joined into one finding.
+
 # The lambda parameter, however it is written: bare, parenthesised, explicitly typed,
 # static, or with the index parameter beside it. The capture is what ties the projection to
 # THAT parameter rather than to any Type standing nearby.
@@ -88,8 +99,15 @@ _ENTRY = r"(?:static\s+)?\(?\s*(?:\w+\s+)?(\w+)\s*(?:,\s*\w+\s*)?\)?"
 # through neither.
 _ITS_TYPE = r"\1\s*!?\s*\??\s*\.\s*Type\b"
 
-# ... turned into a set. A filter, a cast or an ordering may sit in between.
-_INTO_A_SET = r"[^;{}]{0,300}?\.\s*ToHashSet\s*\("
+# ... turned into a set. A filter or a cast may sit in between, and the comma is excluded so the
+# window cannot cross from one argument to the next: without that, a projection in one argument
+# and somebody else's set in the next were joined into a finding, and the refusal named a site
+# that computes nothing of the sort.
+#
+# The set constructors here are the ones that say "set" in their name. `new HashSet<string>(...)`,
+# a collection expression and a set built by a loop are all missed, and that is stated in the
+# docstring rather than left to be found.
+_INTO_A_SET = r"[^;{},]{0,300}?\.\s*To(?:Hash|Frozen|Immutable(?:Hash|Sorted))Set\s*\("
 
 # .Select(d => d.Type) ... .ToHashSet(
 METHOD_FORM = re.compile(
@@ -179,9 +197,9 @@ def strip_comments_and_strings(text):
     return "".join(out)
 
 
-def matches_in(text):
+def matches_in(text, already_stripped=False):
     """Every occurrence of the computation, as (line number, which form matched)."""
-    stripped = strip_comments_and_strings(text)
+    stripped = text if already_stripped else strip_comments_and_strings(text)
     found = []
     for name, pattern in FORMS:
         for m in pattern.finditer(stripped):
@@ -189,9 +207,23 @@ def matches_in(text):
     return sorted(found)
 
 
+def allowance_above(lines, line_number):
+    """The reason on the allowance marker over this occurrence, or None.
+
+    Read from the ORIGINAL text rather than the stripped copy, because a marker IS a comment and
+    the stripped copy is where comments have gone.
+    """
+    first = max(0, line_number - 1 - ALLOWANCE_REACH)
+    for raw in lines[first:line_number]:
+        if ALLOWANCE_MARKER in raw:
+            reason = raw.split(ALLOWANCE_MARKER, 1)[1].strip(" -\t\r")
+            return reason or "(no reason given)"
+    return None
+
+
 def scan(root, rels, canonical):
-    """Splits every occurrence into the canonical one and the rest."""
-    canonical_hits, offenders = [], []
+    """Splits every occurrence into the canonical one, the allowed ones and the rest."""
+    canonical_hits, offenders, allowed = [], [], []
     for rel in rels:
         path = os.path.join(root, rel.replace("/", os.sep))
         try:
@@ -203,13 +235,48 @@ def scan(root, rels, canonical):
         # shape its projections take: the same `.Select(x => x.Type).ToHashSet(...)` is written
         # over sequences of other things, where Type means something else entirely. The pattern
         # cannot infer the sequence's type, so this asks the question it CAN answer.
-        if CONVERSION not in strip_comments_and_strings(text):
+        code = strip_comments_and_strings(text)
+        if not ENTRIES_IN_PLAY.search(code):
             continue
 
-        for line, form in matches_in(text):
-            target = canonical_hits if rel.replace(os.sep, "/") == canonical else offenders
-            target.append((rel.replace(os.sep, "/"), line, form))
-    return canonical_hits, offenders
+        lines = text.split("\n")
+        for line, form in matches_in(code, already_stripped=True):
+            rel_posix = rel.replace(os.sep, "/")
+            if rel_posix == canonical:
+                canonical_hits.append((rel_posix, line, form))
+                continue
+
+            reason = allowance_above(lines, line)
+            (allowed if reason else offenders).append((rel_posix, line, form, reason))
+
+    return canonical_hits, offenders, allowed
+
+
+def stale_markers(root, rels, allowed):
+    """Allowance markers with no occurrence beneath them.
+
+    A marker is a control: it says somebody looked at a site and decided. One that allows nothing
+    is a decision about code that is gone, waiting for whatever lands there next.
+    """
+    consumed = {}
+    for rel, line, _, _ in allowed:
+        consumed[rel] = consumed.get(rel, 0) + 1
+
+    stale = []
+    for rel in rels:
+        path = os.path.join(root, rel.replace("/", os.sep))
+        try:
+            with io.open(path, encoding="utf-8", errors="replace", newline="") as fh:
+                lines = fh.read().split("\n")
+        except OSError:
+            continue
+
+        marks = [i + 1 for i, raw in enumerate(lines) if ALLOWANCE_MARKER in raw]
+        rel_posix = rel.replace(os.sep, "/")
+        extra = len(marks) - consumed.get(rel_posix, 0)
+        for line in marks[len(marks) - extra:] if extra > 0 else []:
+            stale.append((rel_posix, line))
+    return stale
 
 
 def tracked_sources(root):
@@ -268,8 +335,17 @@ SELF_TEST_CASES = [
      ".Distinct().ToArray();\n", False),
     ("a validation over the types rather than a set of them",
      CONV + "\nif (typed.All(d => d.Type is { } type && ok(type))) return true;\n", False),
-    ("a projection to something else",
-     CONV + "\nvar k = typed.Where(d => d.Locations is null).ToHashSet();\n", False),
+    # A real projection into a real set, of a real member that is not Type. This is the only row
+    # that pins the pattern to Type: the one that stood here filtered rather than projected, so it
+    # was clean because of `.Locations` and would have stayed clean with the member wildcarded.
+    ("a projection of a different member, into a set",
+     CONV + "\nvar k = typed.Select(d => d.Locations).ToHashSet();\n", False),
+    ("a filter rather than a projection",
+     CONV + "\nvar k = typed.Where(d => d.Type is null).ToHashSet(StringComparer.Ordinal);\n", False),
+    # The binding, as its own row: the same computation in a file that never mentions these
+    # entries is not this computation, and nothing else in the list would notice if it were.
+    ("the shape in a file that never names these entries",
+     "var t = things.Select(d => d.Type).ToHashSet(StringComparer.Ordinal);\n", False),
     ("a Type that is not the projected entry's",
      CONV + "\nvar t = typed.Select(d => other.Type).ToHashSet(StringComparer.Ordinal);\n", False),
 
@@ -305,8 +381,8 @@ def self_test():
             io.open(os.path.join(tmp, rel), "w", encoding="utf-8", newline="").write(body)
             rels.append(rel)
 
-        canonical_hits, found = scan(tmp, rels, canonical_rel)
-        caught = {rel for rel, _, _ in found}
+        canonical_hits, offenders, allowed = scan(tmp, rels, canonical_rel)
+        caught = {rel for rel, _, _, _ in offenders}
 
         for i, (name, _, expected) in enumerate(SELF_TEST_CASES):
             got = f"case{i}.cs" in caught
@@ -324,7 +400,7 @@ def self_test():
               f"expected=found got={'found' if canonical_hits else 'nothing'}")
 
         # And the refusal branch: with the canonical file absent, the control comes back empty.
-        absent_hits, _ = scan(tmp, [r for r in rels if r != canonical_rel], canonical_rel)
+        absent_hits, _, _ = scan(tmp, [r for r in rels if r != canonical_rel], canonical_rel)
         refuses = not absent_hits
         ok &= refuses
         print(f"{'OK    ' if refuses else 'FAILED'} "
@@ -358,7 +434,7 @@ def main():
         capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
 
     rels = tracked_sources(root)
-    canonical_hits, found = scan(root, rels, CANONICAL)
+    canonical_hits, offenders, allowed = scan(root, rels, CANONICAL)
 
     print(f"C# files scanned: {len(rels)}")
 
@@ -367,7 +443,7 @@ def main():
         print(f"REFUSED: the computation was found {len(canonical_hits)} time(s) in {CANONICAL},")
         print("and this check needs exactly one - that occurrence is its only control.")
         print(f"If {CANONICAL_MEMBER} MOVED, update CANONICAL near the top of")
-        print(f"  .github/scripts/lint-no-inlined-detail-types.py")
+        print("  .github/scripts/lint-no-inlined-detail-types.py")
         print("If it was REWRITTEN and no longer reads as this computation, update the patterns")
         print("beside it and prove them with --self-test. If a SECOND occurrence appeared in that")
         print("file, one of them is the duplication this check exists to stop.")
@@ -375,23 +451,21 @@ def main():
 
     print(f"Canonical occurrences in {CANONICAL}: {len(canonical_hits)}")
 
-    allowed_hits = [hit for hit in found if hit[0] in ALLOWED]
-    offenders = [hit for hit in found if hit[0] not in ALLOWED]
-
-    # Every allowance is a control. One that matches nothing is stale, and a stale allowance
-    # covers whatever lands at that path next without anybody deciding to.
-    silent = sorted(set(ALLOWED) - {hit[0] for hit in allowed_hits})
-    if silent:
+    # Every marker is a control. One with nothing beneath it allows nothing today and will allow
+    # whatever lands there tomorrow, without anybody deciding to.
+    stale = stale_markers(root, rels, allowed)
+    if stale:
         print()
-        print(f"REFUSED: {len(silent)} allowance(s) matched nothing:")
-        for rel in silent:
-            print(f"  {rel}")
-        print("An allowance nobody needs is one nobody notices going stale. Remove it, or find")
-        print("out why the site it names stopped being an instance of this computation.")
+        print(f"REFUSED: {len(stale)} allowance marker(s) with no occurrence beneath them:")
+        for rel, line in stale:
+            print(f"  {rel}:{line}")
+        print("An allowance nobody needs is one nobody notices going stale, and the next site to")
+        print("land under it inherits a reason written for something else. Remove the marker, or")
+        print("find out why the code beneath it stopped being an instance of this computation.")
         return 1
 
-    for rel, line, form in allowed_hits:
-        print(f"Allowed: {rel}:{line} ({form}) - {ALLOWED[rel]}")
+    for rel, line, form, reason in allowed:
+        print(f"Allowed: {rel}:{line} ({form}) - {reason}")
 
     if not offenders:
         print("No other site recomputes the types an authorization_details array names.")
@@ -399,13 +473,15 @@ def main():
 
     print()
     print(f"The computation is inlined in {len(offenders)} place(s) outside the canonical member:")
-    for rel, line, form in offenders:
+    for rel, line, form, _ in offenders:
         print(f"  {rel}:{line} ({form})")
     print()
     print(f"Call {CANONICAL_MEMBER} instead. Two halves of one comparison living in two files")
     print("drift by a clause and then disagree on the inputs nobody wrote a test for, while both")
-    print("stay green. If this site genuinely cannot call it, add it to ALLOWED with the reason -")
-    print("an allowance is a decision somebody made, and it carries its own control.")
+    print("stay green. If a site genuinely cannot call it, put a comment directly above it saying")
+    print(f"  {ALLOWANCE_MARKER} - <why this one computes it itself>")
+    print("An allowance is a decision somebody made, it sits where the decision applies, and it")
+    print("carries its own control.")
     return 1
 
 

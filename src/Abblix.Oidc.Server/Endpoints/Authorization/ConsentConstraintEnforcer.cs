@@ -172,6 +172,10 @@ public class ConsentConstraintEnforcer(
             if (escapedTypes.Length > 0)
                 throw Violation(culprit, "authorization_details types", escapedTypes);
 
+            // lint-inlined-detail-types: allowed - the grant side of this comparison REFUSES a
+            // typeless entry where AuthorizationDetailTypes.NamedBy DROPS one, and the two guards
+            // above are that refusal. Calling the shared member here would be equivalent ONLY
+            // because those guards ran first, which is a dependency nothing states - see issue 494.
             return typed.Select(detail => detail.Type!).ToHashSet(StringComparer.Ordinal);
         }
     }
