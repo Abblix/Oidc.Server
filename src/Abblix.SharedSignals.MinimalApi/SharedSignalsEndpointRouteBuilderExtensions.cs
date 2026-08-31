@@ -292,7 +292,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             return Unauthenticated(http);
         }
 
-        return streamId is null
+        // Same reading of "named" as the two refusal routes below, so the three do not disagree
+        // about one word. Here an unnamed stream is an ANSWER rather than an error, so
+        // "?stream_id=" lists every stream instead of looking one up under the empty name and
+        // reporting it missing.
+        return string.IsNullOrEmpty(streamId)
             ? Render(await service.ListStreamsAsync(receiverId, cancellationToken))
             : Render(await service.GetStreamAsync(receiverId, streamId, cancellationToken));
     }
@@ -327,8 +331,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         }
 
         // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
-        // without it there is nothing to delete.
-        return streamId is null
+        // without it there is nothing to delete. The condition asks whether a stream was
+        // NAMED, not whether the parameter was absent: "?stream_id=" is present and names
+        // nothing, and RFC 6750 Section 3.1 puts an unusable value in the same
+        // invalid_request bucket as a missing one.
+        return string.IsNullOrEmpty(streamId)
             ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.DeleteStreamAsync(receiverId, streamId, cancellationToken));
     }
@@ -345,8 +352,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         }
 
         // The status read has no list fallback: "stream_id" is its REQUIRED parameter
-        // (SSF 1.0 Section 8.1.2.1).
-        return streamId is null
+        // (SSF 1.0 Section 8.1.2.1). Named rather than merely present, for the reason the
+        // delete route states.
+        return string.IsNullOrEmpty(streamId)
             ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.GetStreamStatusAsync(receiverId, streamId, cancellationToken));
     }

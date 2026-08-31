@@ -152,10 +152,19 @@ public sealed class ManagementRefusalTests
     /// the constant that builds it: comparing a constant with itself would let a rename pass while every
     /// deployed receiver broke.
     /// </para>
+    /// <para>
+    /// The empty rows are the same defect wearing a second face. A guard asking whether the
+    /// parameter was ABSENT enumerates the ways it can be, and "?stream_id=" is present and names
+    /// nothing - it used to reach the store and come back as a bare 404, an answer about a stream
+    /// rather than about the request. The guard now asks whether a stream was NAMED, so both faces
+    /// fail at once and a third would too.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData("DELETE", "/ssf/stream")]
     [InlineData("GET", "/ssf/status")]
+    [InlineData("DELETE", "/ssf/stream?stream_id=")]
+    [InlineData("GET", "/ssf/status?stream_id=")]
     public async Task AMissingStreamId_IsNamedRatherThanLeftBare(string method, string route)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -193,6 +202,15 @@ public sealed class ManagementRefusalTests
 
         Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(response.Headers.WwwAuthenticate);
+
+        // And the empty value reads the same way here as it does on the refusal routes: not
+        // named. The three routes have to agree about that word, and they differ only in what
+        // an unnamed stream MEANS - an answer here, a refusal there. Without this row the list
+        // route could quietly go on looking one up under the empty name.
+        using var empty = await host.GetTestClient().GetAsync("/ssf/stream?stream_id=", cancellationToken);
+
+        Assert.Equal(response.StatusCode, empty.StatusCode);
+        Assert.Empty(empty.Headers.WwwAuthenticate);
     }
 
     private static async Task<WebApplication> StartAsync(Func<HttpContext, string?>? receiverId = null)
