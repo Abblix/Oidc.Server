@@ -210,9 +210,10 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 9449 §5.2: a registration request carrying <c>dpop_bound_access_tokens=true</c>
-    /// must round-trip into the persisted <see cref="ClientInfo.RequireDPoP"/> flag and be
-    /// echoed on the success response (RFC 7591 §3.2.1) so the client can confirm the binding.
+    /// RFC 9449 Section 5.2: a registration request carrying <c>dpop_bound_access_tokens=true</c>
+    /// must round-trip into the persisted
+    /// <see cref="Abblix.Oidc.Server.Features.ClientInformation.ClientInfo.RequireDPoP"/> flag and be echoed on the success
+    /// response (RFC 7591 Section 3.2.1) so the client can confirm the binding.
     /// </summary>
     [Fact]
     public async Task HandleAsync_DpopBoundAccessTokensTrue_RoundTripsAndEchoes()
