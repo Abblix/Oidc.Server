@@ -47,7 +47,13 @@ public class UserCodeVerificationServiceTests
 
     public UserCodeVerificationServiceTests()
     {
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode);
+        // ExpiresAt is set because it is DateTimeOffset.MinValue otherwise, which is in the past.
+        // These rows are named for canonicalization, and a record that is also expired would let
+        // them go green on the wrong reason once the lifetime is checked.
+        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+        };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
@@ -259,6 +265,63 @@ public class UserCodeVerificationServiceTests
 
         // And the stale one was left alone, which is what a caller reading it back would rely on.
         Assert.Equal(DeviceAuthorizationStatus.Pending, fromUserCode.Status);
+    }
+
+    /// <summary>
+    /// A record past its lifetime is refused, and the refusal counts as a failed attempt.
+    /// </summary>
+    /// <remarks>
+    /// Verification is the step the end user reaches FIRST, and it was the only one of the three
+    /// deciding on <c>Status</c> alone. Its two siblings on the same record both refuse an expired one,
+    /// so the user was shown a consent screen for a code that <c>ApproveAsync</c> would then refuse
+    /// without a reason.
+    /// <para>
+    /// The rate-limit half is the one with teeth. Answering valid ran <c>RecordSuccessAsync</c>, which
+    /// resets the per-code failure counter - so somebody holding one expired-but-pending code could
+    /// clear that bucket at will and the brute-force budget for it never filled. An expired code is as
+    /// dead as a used one and earns the same treatment.
+    /// </para>
+    /// <para>
+    /// The answer is <see cref="InvalidUserCode"/> rather than a new result type because that type's own
+    /// contract already says so: "was not found or has expired". The gap was the implementation, not the
+    /// vocabulary.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Verify_OnAPendingRecordPastItsLifetime_RefusesAndCountsAFailure()
+    {
+        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddSeconds(-1),
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+
+        var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
+        rateLimiter
+            .Setup(limiter => limiter.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((Result<bool, TimeSpan>)true);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            rateLimiter.Object,
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        var result = await service.VerifyAsync(CanonicalUserCode);
+
+        Assert.IsType<InvalidUserCode>(result);
+
+        // Both halves, because a refusal that still reset the counter would satisfy the line above.
+        rateLimiter.Verify(
+            limiter => limiter.RecordFailureAsync(CanonicalUserCode, It.IsAny<string>()), Times.Once);
+        rateLimiter.Verify(
+            limiter => limiter.RecordSuccessAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     private static UserCodeVerificationService BuildService(
