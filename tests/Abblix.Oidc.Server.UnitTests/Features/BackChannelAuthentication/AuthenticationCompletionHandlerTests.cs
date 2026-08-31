@@ -199,6 +199,54 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// The guard refuses a LATER completion, not a concurrent one, and this row is what says so.
+    /// </summary>
+    /// <remarks>
+    /// The guard is a read followed by an act: <c>TryGetAsync</c> is a plain get, with no claim protocol
+    /// and no lock between it and the write that makes the record spent. So a second completion whose
+    /// read lands before the first one's write still sees Pending and proceeds - both mint, both deliver.
+    /// That is modelled here without threads, because the property is about ORDER rather than about
+    /// timing: the store answers Pending on every read regardless of what was written to it, which is
+    /// exactly the state a second caller is in when it reads first. A barrier and two threads would
+    /// assert the same thing less reliably.
+    /// <para>
+    /// It exists because the sentences around this guard used to promise at-most-one completion without
+    /// a condition, and nothing could contradict them. This row can: add a claim protocol or a lock and
+    /// it goes red, which is the moment those sentences would need rewriting anyway.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheStoredReadStillPrecedesTheWrite_ASecondCompletionProceeds()
+    {
+        // Arrange
+        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+        };
+
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+        };
+
+        // The write does not feed back into the read, which is the whole arrangement: it puts the second
+        // caller in the state it is in when its read wins the race with the first caller's write.
+        _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
+
+        var handler = CreatePollModeHandler();
+
+        // Act
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+
+        // Assert - neither call was refused, so the guard is not exclusion.
+        _storage.Verify(s => s.UpdateAsync(AuthReqId, request, _expiresIn), Times.Exactly(2));
+    }
+
+    /// <summary>
     /// Verifies that when notification token is null (incomplete ping mode configuration),
     /// only storage update is performed and no notification is sent.
     /// </summary>
