@@ -860,7 +860,7 @@ public class UriBuilderTests
 
     /// <summary>
     /// Verifies that query parameters with array-like names work correctly.
-    /// Common in API query strings like ?ids[]=1&ids[]=2
+    /// Common in API query strings like ?ids[]=1&amp;ids[]=2
     /// </summary>
     [Fact]
     public void Query_WithArrayLikeNames_BuildsCorrectly()

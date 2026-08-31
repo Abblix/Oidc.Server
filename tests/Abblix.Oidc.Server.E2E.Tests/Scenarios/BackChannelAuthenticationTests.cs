@@ -522,6 +522,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// puts the session and the grant the user actually approved on it, marks it authenticated and hands it
     /// to the completion handler. Nothing in the library drives this - the answer arrives from outside.
     /// </summary>
+    /// <param name="host">The running test host, whose service provider owns the request storage.</param>
+    /// <param name="authenticationRequestId">Identifies the stored request the answer belongs to.</param>
     /// <param name="grantedDetails">
     /// The authorization_details the end user approved, which is how a partial answer is expressed: the
     /// grant's context is what will be issued, and replacing it is the only place that answer exists.

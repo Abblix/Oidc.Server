@@ -1,0 +1,22 @@
+<Project>
+
+  <!-- Chain to the repository-wide props. MSBuild stops searching upward at the FIRST
+       Directory.Build.props it finds, so without this import every project under tests/ would
+       silently lose TreatWarningsAsErrors, the NuGet audit settings, MinVer and the Sonar
+       analyzer - a build that is green because it checks less. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
+
+  <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation
+       file. Without this, a cref naming a member that exists nowhere compiles clean, so a comment
+       pointing at a deleted or renamed member reads as a live pointer and the explanation behind
+       it is unreachable. CS1591 is suppressed because documentation is not wanted on test members;
+       only the resolution is.
+
+       This lives here rather than in each project so a test project added later inherits it. A
+       per-project copy is an enumeration, and a new project escapes an enumeration silently. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

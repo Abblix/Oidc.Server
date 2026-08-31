@@ -371,7 +371,7 @@ public class AuthenticationCompletionHandlerTests
     /// Nor does keeping it save any tokens: the ones just minted are dropped with the lambda that made
     /// them, and nothing retries. It is kept so a host can see the request existed, and because a host can
     /// complete it again - which is a hazard rather than a recovery, and is issue 451.
-    /// </summary>
+    /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_DeliveryFails_RetainsRequest()
     {
