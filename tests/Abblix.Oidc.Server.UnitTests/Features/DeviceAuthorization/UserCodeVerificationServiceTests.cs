@@ -48,8 +48,10 @@ public class UserCodeVerificationServiceTests
     public UserCodeVerificationServiceTests()
     {
         // ExpiresAt is set because it is DateTimeOffset.MinValue otherwise, which is in the past.
-        // These rows are named for canonicalization, and a record that is also expired would let
-        // them go green on the wrong reason once the lifetime is checked.
+        // Measured: leave it unset and all four canonicalization rows go RED once the lifetime is
+        // checked, because verification then answers InvalidUserCode. They are not vacuous - they
+        // measure canonicalization exactly as named - so an expired fixture would break them for a
+        // reason having nothing to do with what they are for.
         var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
@@ -322,6 +324,61 @@ public class UserCodeVerificationServiceTests
             limiter => limiter.RecordFailureAsync(CanonicalUserCode, It.IsAny<string>()), Times.Once);
         rateLimiter.Verify(
             limiter => limiter.RecordSuccessAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The approval and the denial refuse a record past its lifetime, and each holds the predicate's
+    /// boundary on its own.
+    /// </summary>
+    /// <remarks>
+    /// Both guards existed before this change and nothing measured either: deleting them at the base
+    /// left the suite green. Now that one predicate decides all three callers, a single edit moves three
+    /// verdicts, so each caller gets a row rather than trusting the one on verification.
+    /// <para>
+    /// The instant chosen is the expiry itself, because that is the boundary a mutation moves: at
+    /// exactly <c>ExpiresAt</c> the lifetime is over, and relaxing the comparison to <c>&gt;=</c> is
+    /// what these rows exist to turn red.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADecisionOnARecordAtItsExpiry_IsRefused(bool approving)
+    {
+        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now,
+        };
+
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+        storage
+            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .ReturnsAsync((string code) => code == DeviceCode ? expired : null);
+
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        var decided = approving
+            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(CanonicalUserCode);
+
+        Assert.False(decided);
+
+        // The record is untouched, which is the half a bare false does not say: a decision written with
+        // a non-positive cache TTL is what refusing here avoids.
+        Assert.Equal(DeviceAuthorizationStatus.Pending, expired.Status);
+        storage.Verify(
+            store => store.UpdateAsync(
+                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     private static UserCodeVerificationService BuildService(

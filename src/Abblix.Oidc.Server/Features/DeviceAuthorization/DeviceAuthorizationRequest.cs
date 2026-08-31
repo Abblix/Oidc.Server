@@ -43,10 +43,16 @@ public record DeviceAuthorizationRequest(
     /// Whether the fixed lifetime still has time left at <paramref name="now"/>, handing back how much.
     /// </summary>
     /// <remarks>
-    /// The comparison lives here rather than at each caller because it was written out three times and
-    /// the fourth place was the one that forgot it - user code verification, the step the end user
-    /// reaches first, decided on <see cref="Status"/> alone and answered a full result for a record the
-    /// approval would then refuse.
+    /// The comparison sits here because it was being written out at each caller, and one of them
+    /// forgot it: user code verification, the step the end user reaches first, decided on
+    /// <see cref="Status"/> alone and answered a full result for a record the approval would then refuse.
+    /// <para>
+    /// It is NOT yet the only place. <c>DeviceCodeGrantHandler</c> still writes both halves out - the
+    /// verdict as <c>now &gt;= ExpiresAt</c> and the remaining time as <c>ExpiresAt - now</c> - and that
+    /// file is outside this change. The two agree today, and nothing holds them to it: changing the
+    /// boundary here to <c>&gt;=</c> is caught by no test anywhere, so a maintainer who reads this as the
+    /// single place can split the token endpoint's verdict from the verification endpoint's in silence.
+    /// </para>
     /// <para>
     /// It hands back the remaining time because the callers that act on the record need it: a decision
     /// is written with that as the cache TTL, so the code cannot be extended by being decided on.
