@@ -92,8 +92,9 @@ public partial class DeviceCodeGrantHandler(
 
                 // Removed through the store's claim protocol, which is what keeps two polls from both
                 // being told they took the authorized grant, however many processes are polling. The
-                // grant itself was read before the switch, outside any of it, so what stays open is a
-                // record restored by an ungated write after the claim - issue 459, on one node.
+                // grant itself was read before the switch, outside any of it. A decision landing after
+                // the claim re-reads the record and refuses, so what stays open is the window between
+                // that read and its write: issues 194 and 435.
                 // A refusal below is not a diagnosis: a competitor produces it, and so does a
                 // claim that expired mid-protocol with nobody to lose to. RFC 8628 requires no such
                 // single exchange of a device code anywhere; that is this library's decision, and this
