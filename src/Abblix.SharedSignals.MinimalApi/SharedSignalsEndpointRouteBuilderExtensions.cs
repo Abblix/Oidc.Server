@@ -458,22 +458,24 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// A required parameter is absent, so the request cannot be acted on. RFC 6750 Section 3.1:
-    /// <c>invalid_request</c> is "The request is missing a required parameter ... The resource server
-    /// SHOULD respond with the HTTP 400 (Bad Request) status code."
+    /// A required parameter names nothing, so the request cannot be acted on. That covers a parameter
+    /// left out and one sent empty alike, and RFC 6750 Section 3.1 puts both in the same bucket:
+    /// <c>invalid_request</c> is "The request is missing a required parameter, includes an unsupported
+    /// parameter or parameter value ... The resource server SHOULD respond with the HTTP 400 (Bad
+    /// Request) status code."
     /// </summary>
     /// <remarks>
     /// The header is a MAY here, unlike the 401 below. Section 3 makes <c>WWW-Authenticate</c> mandatory
     /// when the request "does not include authentication credentials or does not contain an access token
     /// that enables access", and adds that a server "MAY include it in response to other conditions as
     /// well". This is one of those others: the receiver was identified and its token is not in question,
-    /// only a protocol parameter is missing. The header carries it anyway, because that is where Section
+    /// only a protocol parameter names nothing. The header carries it anyway, because that is where Section
     /// 3.1's vocabulary lives and it is what the 401 and 403 on these same routes already use, so a
     /// receiver has one place to read a refusal from.
     /// <para>
     /// This answers only where the parameter is REQUIRED. <see cref="GetStreamsAsync"/> takes the same
-    /// query parameter and lists every stream when it is absent, so an absent value there is an answer
-    /// rather than an error.
+    /// query parameter and lists every stream when it names nothing, so an unnamed stream there is an
+    /// answer rather than an error. Both routes read "named" the same way; they differ in what it means.
     /// </para>
     /// </remarks>
     private static IResult MissingRequiredParameter(HttpContext http, string parameterName)
@@ -485,7 +487,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
                 BearerScheme,
                 ("realm", issuer),
                 ("error", "invalid_request"),
-                ("error_description", $"The request is missing the required parameter {parameterName}.")));
+                // Says NAMES NO STREAM rather than "is missing", because the empty value reaches here
+                // too and the receiver sent it - a developer told the parameter is missing goes looking
+                // for where their client drops it, and it does not drop it.
+                ("error_description",
+                    $"The required parameter {parameterName} names nothing.")));
     }
 
     /// <summary>

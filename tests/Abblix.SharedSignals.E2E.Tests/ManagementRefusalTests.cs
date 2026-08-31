@@ -26,9 +26,9 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// </summary>
 /// <remarks>
 /// The rows split by who the caller is, because the answer does. When the request names nobody the
-/// refusal is a bare 401 challenge; when it names somebody and omits a required parameter it is a 400
-/// naming that parameter. Both are the same question - can the receiver act on what it was told - and
-/// neither is answered by a status alone.
+/// refusal is a bare 401 challenge; when it names somebody but names no stream in a parameter the
+/// route requires, it is a 400 naming that parameter. Both are the same question - can the receiver
+/// act on what it was told - and neither is answered by a status alone.
 /// <para>
 /// A bare 401 with an empty body carries no challenge naming a scheme, so a client library has nothing to
 /// retry with and nothing to log.
@@ -131,8 +131,8 @@ public sealed class ManagementRefusalTests
     }
 
     /// <summary>
-    /// A request that names somebody and omits a parameter the route REQUIRES. A bare 400 tells the
-    /// receiver that something was wrong and nothing about what.
+    /// A request that names somebody but names no stream in a parameter the route REQUIRES - left out
+    /// or sent empty. A bare 400 tells the receiver that something was wrong and nothing about what.
     /// </summary>
     /// <remarks>
     /// RFC 6750 Section 3.1 has a code for exactly this: <c>invalid_request</c> - "The request is missing
@@ -189,9 +189,17 @@ public sealed class ManagementRefusalTests
 
     /// <summary>
     /// The control, and it is what keeps the row above from becoming a rule about the whole surface: the
-    /// LIST route takes the same query parameter and answers every stream when it is absent. Refusing an
-    /// absent <c>stream_id</c> everywhere would break it, and nothing else in this file would notice.
+    /// LIST route takes the same query parameter and answers every stream when it names none. Refusing an
+    /// unnamed <c>stream_id</c> everywhere would break it.
     /// </summary>
+    /// <remarks>
+    /// This row is not the only thing that would notice, and an earlier version of this summary said it
+    /// was - true when the only refusal shape here was a bare 400, false once the refusal grew a
+    /// challenge header. Measured at head, refusing on this route kills six rows, one of them
+    /// <see cref="AnIdentifiedCaller_IsServed"/> directly above, on its assertion that no challenge
+    /// header comes back. What this row alone holds is the answer's SHAPE: that an unnamed stream here
+    /// is a list rather than a refusal.
+    /// </remarks>
     [Fact]
     public async Task AMissingStreamId_OnTheListRoute_IsNotAnError()
     {
