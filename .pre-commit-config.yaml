@@ -38,6 +38,24 @@ repos:
         # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
         # check, or the list is edited by whoever is not looking at what it holds.
         files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
+      - id: inlined-detail-types-self-test
+
+        name: "Prove the detail-types check can report a find"
+
+        entry: python .github/scripts/lint-no-inlined-detail-types.py --self-test
+
+        language: python
+
+        pass_filenames: false
+
+        # Only when the check itself is edited, which is where its patterns get broken.
+
+        # A tree walk run on a pattern nothing proved answers about the pattern, not the
+
+        # tree. CI runs this unconditionally; a clone without pre-commit runs no hook at all.
+
+        files: ^\.github/scripts/lint-no-inlined-detail-types\.py$
+
       - id: inlined-detail-types
         name: "Keep the authorization_details types computed in one place"
         entry: python .github/scripts/lint-no-inlined-detail-types.py
