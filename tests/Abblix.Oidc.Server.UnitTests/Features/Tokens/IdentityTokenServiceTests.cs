@@ -114,9 +114,11 @@ public class IdentityTokenServiceTests
     /// A digest would leave the client nothing to compare.
     /// </para>
     /// <para>
-    /// The refresh hash is asserted against the shared calculator rather than a literal, because that
-    /// calculator is what the client side uses too - a literal would let the two drift apart while both
-    /// stayed green.
+    /// The refresh hash is asserted against the shared calculator, which pins the algorithm argument, the
+    /// source value and the claim name - the three things this row is for. It does NOT pin the digest:
+    /// a change inside the calculator moves both sides together and this row stays green. A literal
+    /// would catch that and is the stronger assertion against it; the calculator is used here because a
+    /// literal would have to be recomputed by hand for every signing algorithm the row might take.
     /// </para>
     /// </remarks>
     [Fact]
