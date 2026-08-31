@@ -33,11 +33,33 @@ public record DeviceAuthorizationRequest(
     public DateTimeOffset? NextPollAt { get; set; }
 
     /// <summary>
-    /// The absolute time when this device authorization request expires (RFC 8628 §3.2 fixed lifetime).
+    /// The absolute time when this device authorization request expires (RFC 8628 Section 3.2 fixed lifetime).
     /// Seeded by the storage on <c>StoreAsync</c> and used to cap the refreshed cache TTL at the remaining
     /// lifetime, so regular polling cannot extend the code.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Whether the fixed lifetime still has time left at <paramref name="now"/>, handing back how much.
+    /// </summary>
+    /// <remarks>
+    /// The comparison lives here rather than at each caller because it was written out three times and
+    /// the fourth place was the one that forgot it - user code verification, the step the end user
+    /// reaches first, decided on <see cref="Status"/> alone and answered a full result for a record the
+    /// approval would then refuse.
+    /// <para>
+    /// It hands back the remaining time because the callers that act on the record need it: a decision
+    /// is written with that as the cache TTL, so the code cannot be extended by being decided on.
+    /// </para>
+    /// </remarks>
+    /// <param name="now">The instant to judge against, from the caller's own time provider.</param>
+    /// <param name="remaining">How much lifetime is left; zero or negative when there is none.</param>
+    /// <returns><c>true</c> while the request can still be acted on.</returns>
+    public bool HasLifetimeLeft(DateTimeOffset now, out TimeSpan remaining)
+    {
+        remaining = ExpiresAt - now;
+        return remaining > TimeSpan.Zero;
+    }
 
     /// <summary>
     /// Indicates the current status of the device authorization request.
@@ -52,7 +74,7 @@ public record DeviceAuthorizationRequest(
     public AuthorizedGrant? AuthorizedGrant { get; set; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array carried from the original
+    /// RFC 9396 Section 3 Rich Authorization Requests array carried from the original
     /// <c>/device_authorization</c> request. The host's user-verification step reads this
     /// (via <see cref="ValidUserCode"/>) to render structured consent, then threads it into
     /// the <see cref="AuthorizedGrant"/>'s <c>AuthorizationContext</c> when approving;

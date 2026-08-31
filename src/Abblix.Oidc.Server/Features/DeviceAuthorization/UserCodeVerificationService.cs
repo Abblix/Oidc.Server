@@ -70,6 +70,18 @@ public partial class UserCodeVerificationService(
             return new UserCodeAlreadyUsed();
         }
 
+        // A code past its lifetime is as dead as a used one, and the approval that follows this step
+        // refuses it without a reason - so answering valid here shows the user a consent screen for
+        // nothing. It counts as a FAILURE for the same reason the used code does: success resets the
+        // per-code counter, so one expired-but-pending code would otherwise clear that bucket at will
+        // and its brute-force budget would never fill. InvalidUserCode is what its own contract already
+        // promises for this - "not found or has expired".
+        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out _))
+        {
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            return new InvalidUserCode();
+        }
+
         // Valid user code found and pending - record success to reset counters
         await rateLimiter.RecordSuccessAsync(userCode, clientIp);
         return new ValidUserCode(request.ClientId, request.Scope, request.Resources, request.AuthorizationDetails);
@@ -90,8 +102,7 @@ public partial class UserCodeVerificationService(
 
         // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
         // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
-        var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
-        if (remaining <= TimeSpan.Zero)
+        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
             return false;
 
         // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
@@ -149,8 +160,7 @@ public partial class UserCodeVerificationService(
 
         // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
         // treat it as a no-op rather than writing a record with a non-positive cache TTL.
-        var remaining = request.ExpiresAt - timeProvider.GetUtcNow();
-        if (remaining <= TimeSpan.Zero)
+        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
             return false;
 
         return await TryDecideAsync(
