@@ -2,11 +2,13 @@
 
   <!-- Chain to the repository-wide props. MSBuild stops searching upward at the FIRST
        Directory.Build.props it finds, so without this import every project under tests/ would
-       silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer - measured, and the
-       analyzer loses its TEETH rather than merely its registration: with the import, planted
-       commented-out code is error S125 and the build fails; without it, the same plant is a
-       warning and the build succeeds. The NuGet audit pins go with them, though today they
-       restate the SDK's own defaults, so that half of the loss is not observable yet. -->
+       silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer. Measured, and the
+       analyzer is not demoted but ABSENT: without the import its PackageReference is gone from
+       the project, so no Sonar rule fires under tests/ at any severity and the build is green
+       because nothing looked. Take that measurement on a RESTORING build - a --no-restore one
+       keeps the analyzer in stale assets and shows a mere demotion, which is what an earlier
+       version of this comment claimed. The NuGet audit pins go too, though today they restate
+       the SDK's own defaults, so one of the four cannot be shown to change anything. -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
 
   <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation
