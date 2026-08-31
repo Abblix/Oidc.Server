@@ -162,10 +162,13 @@ public class TokenRequestProcessor(
 
 		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OpenId))
 		{
-			// The bindings exist only when the caller IS the push path, which is the one place that
-			// knows: poll and ping arrive here with the same grant type and the same identifier, so the
-			// request cannot be asked. The refresh token is read from the response because it was minted
-			// above - the order matters and is why it can be hashed at all.
+			// The bindings exist only when the caller says it IS the push path. The mode could be read
+			// off clientInfo instead, and is not, so that this method does not have to know CIBA's
+			// delivery rules to serve every other grant type - see PushDeliveryBindings.
+			//
+			// The refresh token is read from the RESPONSE because it was minted above. That order is
+			// load-bearing: assembling these bindings before the branch that mints it silently drops
+			// rt_hash from every push notification that carries one.
 			var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
 				? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
 				: null;

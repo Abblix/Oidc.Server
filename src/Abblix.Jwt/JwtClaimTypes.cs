@@ -287,7 +287,8 @@ public static class JwtClaimTypes
     /// CIBA Core 1.0 Section 10.3.1: "In case a Refresh Token is sent to the Client, the hash value of
     /// it MUST also be added to the ID token using the urn:openid:params:jwt:claim:rt_hash claim", and
     /// the same sentence points at OpenID Connect Core 1.0 Section 3.1.3.6 for the calculation - the one
-    /// <c>at_hash</c> uses. Push mode only, and only when a refresh token is actually sent.
+    /// <c>at_hash</c> uses. Required in push mode only, which is what the paragraph says - it does not
+    /// forbid the claim elsewhere - and only when a refresh token is actually sent.
     /// </remarks>
     public const string RefreshTokenHash = "urn:openid:params:jwt:claim:rt_hash";
 
