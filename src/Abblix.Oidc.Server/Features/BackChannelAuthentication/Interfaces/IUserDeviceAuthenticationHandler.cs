@@ -75,11 +75,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         //
 ///         // Nothing needs to touch Status ON THIS PATH - the denial below is a different one, and it
 ///         // never calls CompleteAsync. A host that does set it on its own copy changes nothing
-///         // either way: completion reads the STORED record to decide whether the request may still be
-///         // answered, and then writes the outcome itself - accepted, or refused for one of several
-///         // reasons this sample does not need to know. How a refusal is RECORDED is the delivery
-///         // mode's business: poll and ping write Denied, push removes the request outright, since a
-///         // client that never comes back cannot read a denial.
+///         // either way: completion reads the STORED record and writes whatever it decides itself.
 ///         var authenticated = storedRequest with
 ///         {
 ///             AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context),
