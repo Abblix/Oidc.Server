@@ -124,6 +124,65 @@ public sealed class ManagementRefusalTests
         Assert.Empty(response.Headers.WwwAuthenticate);
     }
 
+    /// <summary>
+    /// A request that names somebody and omits a parameter the route REQUIRES. A bare 400 tells the
+    /// receiver that something was wrong and nothing about what.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 Section 3.1 has a code for exactly this: <c>invalid_request</c> - "The request is missing
+    /// a required parameter, includes an unsupported parameter or parameter value, repeats the same
+    /// parameter, uses more than one method for including an access token, or is otherwise malformed. The
+    /// resource server SHOULD respond with the HTTP 400 (Bad Request) status code."
+    /// <para>
+    /// The header is a MAY here, not the MUST that governs the unidentified case above. Section 3 makes
+    /// <c>WWW-Authenticate</c> mandatory when the request "does not include authentication credentials or
+    /// does not contain an access token that enables access", and adds that a server "MAY include it in
+    /// response to other conditions as well". This is one of those others - the receiver was identified
+    /// and its token is not in question. It is used anyway because that is where Section 3.1's vocabulary
+    /// lives, and because it is what the 401 and 403 on these same routes already carry.
+    /// </para>
+    /// <para>
+    /// The parameter name is asserted as the LITERAL a receiver reads off the wire rather than through
+    /// the constant that builds it: comparing a constant with itself would let a rename pass while every
+    /// deployed receiver broke.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("DELETE", "/ssf/stream")]
+    [InlineData("GET", "/ssf/status")]
+    public async Task AMissingStreamId_IsNamedRatherThanLeftBare(string method, string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(_ => "receiver-1");
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), route);
+        using var response = await host.GetTestClient().SendAsync(request, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Equal("Bearer", challenge.Scheme);
+        Assert.Contains("error=\"invalid_request\"", challenge.Parameter!);
+        Assert.Contains("stream_id", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The control, and it is what keeps the row above from becoming a rule about the whole surface: the
+    /// LIST route takes the same query parameter and answers every stream when it is absent. Refusing an
+    /// absent <c>stream_id</c> everywhere would break it, and nothing else in this file would notice.
+    /// </summary>
+    [Fact]
+    public async Task AMissingStreamId_OnTheListRoute_IsNotAnError()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(_ => "receiver-1");
+
+        using var response = await host.GetTestClient().GetAsync("/ssf/stream", cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(response.Headers.WwwAuthenticate);
+    }
+
     private static async Task<WebApplication> StartAsync(Func<HttpContext, string?>? receiverId = null)
     {
         var builder = WebApplication.CreateBuilder();
