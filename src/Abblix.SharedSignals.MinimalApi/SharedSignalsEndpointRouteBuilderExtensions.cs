@@ -487,9 +487,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
                 BearerScheme,
                 ("realm", issuer),
                 ("error", "invalid_request"),
-                // Says NAMES NO STREAM rather than "is missing", because the empty value reaches here
-                // too and the receiver sent it - a developer told the parameter is missing goes looking
-                // for where their client drops it, and it does not drop it.
+                // Says the parameter NAMES NOTHING rather than that it is missing, because the empty
+                // value reaches here too and the receiver sent it - a developer told the parameter is
+                // missing goes looking for where their client drops it, and it does not drop it.
                 ("error_description",
                     $"The required parameter {parameterName} names nothing.")));
     }
