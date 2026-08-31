@@ -49,9 +49,14 @@ public record DeviceAuthorizationRequest(
     /// <para>
     /// It is NOT yet the only place. <c>DeviceCodeGrantHandler</c> still writes both halves out - the
     /// verdict as <c>now &gt;= ExpiresAt</c> and the remaining time as <c>ExpiresAt - now</c> - and that
-    /// file is outside this change. The two agree today, and nothing holds them to it: changing the
-    /// boundary here to <c>&gt;=</c> is caught by no test anywhere, so a maintainer who reads this as the
-    /// single place can split the token endpoint's verdict from the verification endpoint's in silence.
+    /// file is outside this change. The two agree today, exactly: this predicate is <c>now &lt; ExpiresAt</c>
+    /// and the handler's expiry arm is its complement.
+    /// </para>
+    /// <para>
+    /// Only one of the two boundaries is held. Relaxing THIS one to <c>&gt;=</c> turns two rows red, both
+    /// driving a decision at exactly <c>ExpiresAt</c>. Relaxing the handler's leaves every suite green,
+    /// so a maintainer who reads this as the single place and edits there splits the token endpoint's
+    /// verdict from the verification endpoint's in silence. That gap is on the handler, not here.
     /// </para>
     /// <para>
     /// It hands back the remaining time because the callers that act on the record need it: a decision
