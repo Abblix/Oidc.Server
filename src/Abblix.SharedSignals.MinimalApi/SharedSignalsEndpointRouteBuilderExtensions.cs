@@ -329,7 +329,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // "The DELETE request MUST include the 'stream_id'" per SSF 1.0 Section 8.1.1.5 -
         // without it there is nothing to delete.
         return streamId is null
-            ? Results.BadRequest()
+            ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.DeleteStreamAsync(receiverId, streamId, cancellationToken));
     }
 
@@ -347,7 +347,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // The status read has no list fallback: "stream_id" is its REQUIRED parameter
         // (SSF 1.0 Section 8.1.2.1).
         return streamId is null
-            ? Results.BadRequest()
+            ? MissingRequiredParameter(http, StreamMemberNames.StreamId)
             : Render(await service.GetStreamStatusAsync(receiverId, streamId, cancellationToken));
     }
 
@@ -450,6 +450,37 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
+    /// A required parameter is absent, so the request cannot be acted on. RFC 6750 Section 3.1:
+    /// <c>invalid_request</c> is "The request is missing a required parameter ... The resource server
+    /// SHOULD respond with the HTTP 400 (Bad Request) status code."
+    /// </summary>
+    /// <remarks>
+    /// The header is a MAY here, unlike the 401 below. Section 3 makes <c>WWW-Authenticate</c> mandatory
+    /// when the request "does not include authentication credentials or does not contain an access token
+    /// that enables access", and adds that a server "MAY include it in response to other conditions as
+    /// well". This is one of those others: the receiver was identified and its token is not in question,
+    /// only a protocol parameter is missing. The header carries it anyway, because that is where Section
+    /// 3.1's vocabulary lives and it is what the 401 and 403 on these same routes already use, so a
+    /// receiver has one place to read a refusal from.
+    /// <para>
+    /// This answers only where the parameter is REQUIRED. <see cref="GetStreamsAsync"/> takes the same
+    /// query parameter and lists every stream when it is absent, so an absent value there is an answer
+    /// rather than an error.
+    /// </para>
+    /// </remarks>
+    private static IResult MissingRequiredParameter(HttpContext http, string parameterName)
+    {
+        var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
+        return new ChallengeResult(
+            StatusCodes.Status400BadRequest,
+            WwwAuthenticate.Challenge(
+                BearerScheme,
+                ("realm", issuer),
+                ("error", "invalid_request"),
+                ("error_description", $"The request is missing the required parameter {parameterName}.")));
+    }
+
+    /// <summary>
     /// The answer to a management request that named no receiver: 401 with a bare Bearer challenge.
     /// </summary>
     /// <remarks>
@@ -468,16 +499,15 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// scopes.
     /// </para>
     /// <para>
-    /// The third, <c>invalid_request</c> with 400, IS decided here and is not emitted: a request missing
-    /// its <c>stream_id</c> is answered with a bare <c>Results.BadRequest()</c> by
-    /// <see cref="DeleteStreamAsync"/> and <see cref="GetStatusAsync"/>. That is a separate gap from
-    /// this one and is not closed by this method.
+    /// The third, <c>invalid_request</c> with 400, is also decided here rather than by the host, and is
+    /// emitted by <see cref="MissingRequiredParameter"/>.
     /// </para>
     /// <para>
     /// The realm is the transmitter's issuer, which is the one name a receiver already holds for this
     /// protection space and the one it used to find these endpoints.
     /// </para>
     /// </remarks>
+
     private static IResult Unauthenticated(HttpContext http)
     {
         var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
