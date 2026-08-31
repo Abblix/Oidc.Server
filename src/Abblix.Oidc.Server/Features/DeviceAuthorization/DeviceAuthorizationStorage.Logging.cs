@@ -52,10 +52,10 @@ partial class DeviceAuthorizationStorage
     /// neither could act on.
     /// <para>
     /// The code it names is dead at both shipped call sites - the record is expired or denied, and such a
-    /// record cannot be carried to an approval: <c>ApproveAsync</c> and <c>DenyAsync</c> refuse anything
-    /// not pending, and <c>ApproveAsync</c> refuses an expired record besides. <c>VerifyAsync</c> reads the
-    /// status alone, so an expired-but-pending record still gets an answer there; it just cannot go
-    /// further than that answer. This method is on the public
+    /// record cannot be carried to a decision: <c>ApproveAsync</c> and <c>DenyAsync</c> refuse anything not
+    /// pending, and each refuses an expired record besides. <c>VerifyAsync</c> reads the status alone, so
+    /// an expired-but-pending record still gets an answer there; it just cannot go further than that
+    /// answer. This method is on the public
     /// interface though, so a host calling it with a live record logs a live code; that is the host's
     /// choice, and it is why the sibling's blanket "the code is spent" does not appear here.
     /// </para>

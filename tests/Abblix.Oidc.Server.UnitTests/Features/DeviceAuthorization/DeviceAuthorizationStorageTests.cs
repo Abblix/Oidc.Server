@@ -104,10 +104,12 @@ public class DeviceAuthorizationStorageTests
     /// consumed by this caller, which is the fact the caller asked about.
     /// </summary>
     /// <remarks>
-    /// The removal that matters has already happened when the index cleanup runs, so an exception from it
-    /// leaves the code gone AND the caller unanswered: the token endpoint calls this inside a `when`
-    /// clause, so the fault propagates as a server error instead of a grant error. No tokens are issued
-    /// for a code that can never be presented again, and the end user's approval is lost.
+    /// The removal that matters has already happened when the index cleanup runs, which is what makes the
+    /// catch the whole of the fix. WITHOUT it, an exception from the cleanup would leave the code gone and
+    /// the caller unanswered: the token endpoint calls this inside a `when` clause, so the fault would
+    /// propagate as a server error instead of a grant error - no tokens for a code that can never be
+    /// presented again, and the end user's approval lost with it. This row is what stands between that
+    /// sentence and the present tense; remove the catch and it goes red.
     /// <para>
     /// The entry left behind carries its own expiry, so it goes away unattended; what it still resolves to
     /// is not knowable from the method, which never reads the record. Either way the whole of the damage
