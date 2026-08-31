@@ -174,10 +174,11 @@ public class DeviceAuthorizationStorageTests
     /// and nothing else in the suite, on the <c>Assert.Null</c> over the user-code key that no other row
     /// makes.
     /// <para>
-    /// The failing row cannot cover that, and the reason is structural rather than incidental: it
-    /// observes an ATTEMPT, through a double that throws before anything is deleted. No change to the
-    /// source can stop the deletion without also stopping the attempt, which is why a cleanup removing
-    /// nothing, or a success path answering false, kills both rows rather than one.
+    /// The failing row does not cover it: under that same mutation it stays GREEN, attempt count and
+    /// all, because it never seeds the user-code key and the guard therefore lets its call through to
+    /// the throwing double. Two other mutations kill both rows - a cleanup that removes nothing, and a
+    /// success path answering false. Which ones do which is measured and written down; why that pattern
+    /// holds in general is not, because the sentence that said so was refuted by the run above it.
     /// </para>
     /// </remarks>
     [Fact]
