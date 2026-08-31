@@ -40,7 +40,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// var statusChange = await longPollingSignaler.WaitForStatusChangeAsync(authReqId, timeout, cancellationToken);
 ///
 /// // 3. Meanwhile: User authenticates on device
-/// // 4. BackChannelDeliveryModeRouter signals change
+/// // 4. AuthenticationCompletionRouter signals change
 /// await longPollingSignaler.NotifyStatusChangeAsync(authReqId, BackChannelAuthenticationStatus.Authenticated);
 ///
 /// // 5. Waiting request wakes up, checks storage, returns tokens

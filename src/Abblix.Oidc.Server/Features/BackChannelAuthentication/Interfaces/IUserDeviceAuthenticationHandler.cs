@@ -35,8 +35,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// <code>
 /// public class MyUserDeviceAuthenticationHandler : IUserDeviceAuthenticationHandler
 /// {
-///     private readonly IBackChannelAuthenticationStorage _storage;
-///     private readonly IBackChannelDeliveryModeRouter _notifier;
+///     private readonly IBackChannelRequestStorage _storage;
+///     private readonly IAuthenticationCompletionHandler _completion;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
 ///
@@ -65,19 +65,24 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // Create authenticated session
 ///         var authSession = new AuthSession(
 ///             userId,
-///             sessionId: _sessionIdGenerator.GenerateSessionId(),
-///             authenticationTime: DateTimeOffset.UtcNow,
-///             identityProvider: "local");
+///             SessionId: _sessionIdGenerator.GenerateSessionId(),
+///             AuthenticationTime: DateTimeOffset.UtcNow,
+///             IdentityProvider: "local");
 ///
-///         // Update request with authenticated status
-///         storedRequest.Status = BackChannelAuthenticationStatus.Authenticated;
-///         storedRequest.AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context);
+///         // AuthorizedGrant is a positional member of the record, so it is init-only: a `with`
+///         // expression is how it is replaced. The copy carries the mutable members - Status,
+///         // NextPollAt, the notification endpoint and token - so nothing has to be restated.
+///         var authenticated = storedRequest with
+///         {
+///             AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context),
+///         };
 ///
-///         // Notify completion - automatically selects and delegates to the appropriate
-///         // mode-specific notifier (PollModeNotifier, PingModeNotifier, or PushModeNotifier)
-///         await _notifier.NotifyAuthenticationCompleteAsync(
+///         // Completion selects the mode-specific handler from the client's registered delivery mode
+///         // (PollModeCompletionHandler, PingModeCompletionHandler or PushModeCompletionHandler) and
+///         // marks the request authenticated itself - the caller does not set the status.
+///         await _completion.CompleteAsync(
 ///             authReqId,
-///             storedRequest,
+///             authenticated,
 ///             TimeSpan.FromMinutes(5));
 ///     }
 ///
