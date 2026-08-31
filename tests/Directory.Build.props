@@ -2,8 +2,11 @@
 
   <!-- Chain to the repository-wide props. MSBuild stops searching upward at the FIRST
        Directory.Build.props it finds, so without this import every project under tests/ would
-       silently lose TreatWarningsAsErrors, the NuGet audit settings, MinVer and the Sonar
-       analyzer - a build that is green because it checks less. -->
+       silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer - measured, and the
+       analyzer loses its TEETH rather than merely its registration: with the import, planted
+       commented-out code is error S125 and the build fails; without it, the same plant is a
+       warning and the build succeeds. The NuGet audit pins go with them, though today they
+       restate the SDK's own defaults, so that half of the loss is not observable yet. -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
 
   <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation
