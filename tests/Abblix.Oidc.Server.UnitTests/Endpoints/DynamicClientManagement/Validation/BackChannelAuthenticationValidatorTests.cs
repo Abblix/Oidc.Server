@@ -123,7 +123,8 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds with ping mode and a notification endpoint.
-    /// Per OIDC CIBA §4, ping mode is a valid delivery mode and requires the endpoint.
+    /// Per CIBA Core 1.0 Section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
+    /// delivery mode is set to ping or push".
     /// </summary>
     [Fact]
     public async Task ValidateAsync_PingModeWithEndpoint_ShouldReturnNull()
@@ -142,7 +143,9 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies error when the notification endpoint is not an HTTPS URL.
-    /// CIBA Core 1.0 §4 states it MUST be an HTTPS URL and communication MUST use TLS.
+    /// CIBA Core 1.0 Section 4, on the registration metadata: "It MUST be an HTTPS URL." The TLS clause
+    /// that usually travels with it is Section 9 and is not a property of the registered value, so
+    /// nothing here can check it.
     /// </summary>
     [Theory]
     [InlineData(BackchannelTokenDeliveryModes.Ping)]
@@ -182,7 +185,8 @@ public class BackChannelAuthenticationValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds with push mode and a notification endpoint.
-    /// Per OIDC CIBA §4, push mode is a valid delivery mode and requires the endpoint.
+    /// Per CIBA Core 1.0 Section 4, backchannel_client_notification_endpoint is "REQUIRED if the token
+    /// delivery mode is set to ping or push".
     /// </summary>
     [Fact]
     public async Task ValidateAsync_PushModeWithEndpoint_ShouldReturnNull()
