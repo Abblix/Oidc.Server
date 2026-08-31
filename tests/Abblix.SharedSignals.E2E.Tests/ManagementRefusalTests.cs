@@ -22,11 +22,17 @@ using Xunit;
 namespace Abblix.SharedSignals.E2E.Tests;
 
 /// <summary>
-/// What a receiver is told when a Stream Management request names nobody.
+/// What a receiver is TOLD when a Stream Management request is refused - whoever it came from.
 /// </summary>
 /// <remarks>
+/// The rows split by who the caller is, because the answer does. When the request names nobody the
+/// refusal is a bare 401 challenge; when it names somebody and omits a required parameter it is a 400
+/// naming that parameter. Both are the same question - can the receiver act on what it was told - and
+/// neither is answered by a status alone.
+/// <para>
 /// A bare 401 with an empty body carries no challenge naming a scheme, so a client library has nothing to
 /// retry with and nothing to log.
+/// </para>
 /// <para>
 /// The CAEP Interoperability Profile Section 2.7.2 does require errors "as per Section 3.1 of [RFC6750]",
 /// but that MUST hangs on a condition this case does not meet: "If the access token is not sufficient for
@@ -164,6 +170,12 @@ public sealed class ManagementRefusalTests
         Assert.Equal("Bearer", challenge.Scheme);
         Assert.Contains("error=\"invalid_request\"", challenge.Parameter!);
         Assert.Contains("stream_id", challenge.Parameter!);
+
+        // The helper builds three attributes and the two above hold only two of them. Without this the
+        // realm can vanish - the issuer resolving to nothing produces a well-formed challenge that simply
+        // omits it - and no row anywhere goes red. The 401 row above asserts the same realm exactly, so
+        // the two refusals agree on who is challenging rather than only on why.
+        Assert.Contains($"realm=\"{Issuer}\"", challenge.Parameter!);
     }
 
     /// <summary>
