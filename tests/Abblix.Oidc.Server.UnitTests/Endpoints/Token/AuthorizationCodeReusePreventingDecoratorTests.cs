@@ -30,9 +30,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// the write-back catches one arriving after it, and both hold however many processes are running - the
 /// claim's last-write-wins token check admits at most one caller wherever the callers are.
 /// <para>
-/// What a second process costs is a winner rather than exclusivity, which is issue 435; and the claim is
-/// not by itself enough within one process either, which is issue 454. Rows for both live beside the
-/// implementation they belong to.
+/// What a second process costs is a winner rather than exclusivity, which is issue 435. Within one
+/// process the claim is enough on its own, because the value is read under the same hold of the gate
+/// that removes it. Rows for both properties live beside the implementation they belong to.
 /// </para>
 /// </summary>
 public class AuthorizationCodeReusePreventingDecoratorTests
