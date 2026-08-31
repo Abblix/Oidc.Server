@@ -507,7 +507,6 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// protection space and the one it used to find these endpoints.
     /// </para>
     /// </remarks>
-
     private static IResult Unauthenticated(HttpContext http)
     {
         var issuer = http.RequestServices.GetService<SharedSignalsTransmitterOptions>()?.Issuer;
