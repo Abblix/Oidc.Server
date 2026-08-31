@@ -592,10 +592,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// A status and one <c>WWW-Authenticate</c> line, with no body: 401 with a bare challenge when
-    /// nobody was identified, 403 naming <c>insufficient_scope</c> when somebody was and their token is
-    /// too narrow. Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header
-    /// is the whole point.
+    /// A status and one <c>WWW-Authenticate</c> line, with no body. The status is the caller's, not
+    /// this type's: any refusal whose explanation belongs in the challenge rather than in a payload
+    /// builds one of these, and the callers in this file are what say which statuses those are.
+    /// Written by hand because <c>Results.Unauthorized()</c> emits no headers, and the header is the
+    /// whole point.
     /// </summary>
     private sealed class ChallengeResult(int statusCode, string challenge) : IResult
     {
