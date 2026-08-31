@@ -82,8 +82,9 @@ public interface IDeviceAuthorizationStorage
     /// expiry case is exactly the one that never produces a second request.
     /// <para>
     /// Removing the secondary user-code index is not part of that answer. It runs after the claim has
-    /// already decided, so a store that refuses it is logged and the answer stands: the entry left behind
-    /// points at a request that is gone and expires on its own.
+    /// already decided, so a store that refuses it is logged and the answer stands. The entry left behind
+    /// expires on its own; what it still resolves to depends on the user code the caller passed, which
+    /// this method never checks against the record it removed.
     /// </para>
     /// </returns>
     Task<bool> TryRemoveAsync(string deviceCode, string userCode);

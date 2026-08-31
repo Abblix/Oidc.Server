@@ -166,8 +166,9 @@ public partial class DeviceAuthorizationStorage(
     /// <para>
     /// The index cleanup that runs after the claim cannot change that answer either way. Removing the
     /// user-code index is a different question from whether this caller took the code, so a refusal is logged
-    /// and the true stands: the entry left behind points at a request that no longer exists and carries
-    /// its own expiry.
+    /// and the true stands. What the entry left behind still points at is not knowable here - this method
+    /// never reads the record, so the user code it was handed need not belong to the request it removed -
+    /// but that entry carries its own expiry either way.
     /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
@@ -182,8 +183,9 @@ public partial class DeviceAuthorizationStorage(
         // server fault rather than a grant error - no tokens for a code that can never be presented again,
         // and the end user's approval lost with it.
         //
-        // The entry left behind is harmless on its own: it points at a request key that no longer exists,
-        // and it carries its own expiry. Removing it FIRST instead would make the fault retryable, at the
+        // The entry left behind carries its own expiry, so it goes away unattended. Whether it still
+        // resolves to a live request is not knowable from here, because this method never reads the
+        // record it is removing. Removing the index FIRST instead would make the fault retryable, at the
         // cost of a window in which the user code resolves to nothing while the device code is still live
         // - a worse trade, because that window is on the path that succeeds.
         //

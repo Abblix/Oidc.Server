@@ -24,9 +24,11 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 
 /// <summary>
-/// Verifies that <see cref="DeviceAuthorizationStorage"/> anchors the device_code lifetime to a fixed
-/// absolute expiry (RFC 8628 §3.2): StoreAsync seeds ExpiresAt, and UpdateAsync applies the caller-supplied
-/// remaining lifetime as the refreshed cache TTL so polling cannot extend the code indefinitely.
+/// Covers <see cref="DeviceAuthorizationStorage"/> on two counts. It anchors the device_code lifetime to a
+/// fixed absolute expiry (RFC 8628 Section 3.2): StoreAsync seeds ExpiresAt, and UpdateAsync applies the
+/// caller-supplied remaining lifetime as the refreshed cache TTL so polling cannot extend the code
+/// indefinitely. And the user-code index cleanup is best-effort on both paths: a store that refuses it is
+/// logged rather than raised, and the claim path's warning names only the key this method can prove spent.
 /// </summary>
 public class DeviceAuthorizationStorageTests
 {
@@ -107,8 +109,9 @@ public class DeviceAuthorizationStorageTests
     /// clause, so the fault propagates as a server error instead of a grant error. No tokens are issued
     /// for a code that can never be presented again, and the end user's approval is lost.
     /// <para>
-    /// The entry left behind is harmless on its own - it points at a request key that no longer exists,
-    /// and it carries its own expiry - so the whole of the damage was in the answer.
+    /// The entry left behind carries its own expiry, so it goes away unattended; what it still resolves to
+    /// is not knowable from the method, which never reads the record. Either way the whole of the damage
+    /// was in the answer.
     /// </para>
     /// <para>
     /// Driven against a real cache rather than a mocked one, because what must succeed first is the

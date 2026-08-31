@@ -35,10 +35,10 @@ partial class DeviceAuthorizationStorage
         EventId = LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim,
         Level = LogLevel.Warning,
         Message = "The device code at {DeviceCodeKey} was claimed and removed, but the store refused to " +
-                  "remove its user-code index entry. That entry now points at a request that is gone " +
-                  "and expires on its own; the caller was told it took the code, which it did. The " +
-                  "entry is not named here because this method cannot establish that the user code it " +
-                  "was handed is the spent one.")]
+                  "remove the user-code index entry it was handed. That entry expires on its own; the " +
+                  "caller was told it took the code, which it did. The entry is not named here because " +
+                  "this method cannot establish that the user code it was handed is the spent one - " +
+                  "which is the same reason nothing here can say what that entry still points at.")]
     private partial void LogUserCodeIndexNotRemovedAfterClaim(Exception exception, string DeviceCodeKey);
 
     /// <summary>
@@ -51,8 +51,11 @@ partial class DeviceAuthorizationStorage
     /// looking for an issuance that never happened. One message true of both sites could only be one that
     /// neither could act on.
     /// <para>
-    /// The code it names is dead at both shipped call sites - the record is expired or denied, and every
-    /// entry point refuses a record that is not pending and unexpired. This method is on the public
+    /// The code it names is dead at both shipped call sites - the record is expired or denied, and such a
+    /// record cannot be carried to an approval: <c>ApproveAsync</c> and <c>DenyAsync</c> refuse anything
+    /// not pending, and <c>ApproveAsync</c> refuses an expired record besides. <c>VerifyAsync</c> reads the
+    /// status alone, so an expired-but-pending record still gets an answer there; it just cannot go
+    /// further than that answer. This method is on the public
     /// interface though, so a host calling it with a live record logs a live code; that is the host's
     /// choice, and it is why the sibling's blanket "the code is spent" does not appear here.
     /// </para>
