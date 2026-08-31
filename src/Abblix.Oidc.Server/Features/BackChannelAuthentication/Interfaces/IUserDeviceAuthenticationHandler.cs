@@ -69,9 +69,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///             AuthenticationTime: DateTimeOffset.UtcNow,
 ///             IdentityProvider: "local");
 ///
-///         // AuthorizedGrant is a positional member of the record, so it is init-only: a `with`
-///         // expression is how it is replaced. The copy carries the mutable members - Status,
-///         // NextPollAt, the notification endpoint and token - so nothing has to be restated.
+///         // Carry the end user's answer on the grant. AuthorizedGrant is a positional member of the
+///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries
+///         // every other member unchanged.
+///         //
+///         // Nothing needs to touch Status: the completion handler decides from the STORED record
+///         // whether this request may still be answered, and sets Authenticated itself when it may. A
+///         // host that does set it on its own copy changes nothing either way.
 ///         var authenticated = storedRequest with
 ///         {
 ///             AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context),
