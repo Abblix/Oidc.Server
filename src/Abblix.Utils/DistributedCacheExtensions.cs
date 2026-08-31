@@ -303,10 +303,13 @@ public static class DistributedCacheExtensions
 	/// evaluated before the authorized one, so a poll arriving after the lifetime ran out removes the
 	/// record ungated while another poll holds it.
 	/// <para>
-	/// The denied arm removes it too and cannot reach this: a hold is entered only on an authorized
-	/// record, and nothing moves a record from authorized to denied - approval and denial both refuse
-	/// anything that is not pending. Naming it here would offer an operator a second explanation for a
-	/// value lost under a hold, and only one of the two can produce it.
+	/// The denied arm removes it too, and it is not named here because it needs a race the expired arm
+	/// does not. A hold is entered only on an AUTHORIZED record, and a denial is applied by a read-then-
+	/// write that refuses anything not reading Pending at the moment it reads. So reaching this arm under
+	/// a hold means a denial whose read landed before the approval's write - the window that service's own
+	/// remarks file as issue 194, which re-reading narrows and does not close. Offering an operator both
+	/// explanations for a value lost under a hold would send them to the likelier-sounding one; the
+	/// expired arm needs no race at all.
 	/// </para>
 	/// </para>
 	/// <para>

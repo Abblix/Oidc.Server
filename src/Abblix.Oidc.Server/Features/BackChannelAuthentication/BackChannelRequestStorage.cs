@@ -87,8 +87,15 @@ public class BackChannelRequestStorage(
 	/// protocol. The claim is what keeps two polls from both being told they took the same request; the
 	/// per-key gate around the removal is what keeps a contended key from ending with NEITHER of them
 	/// told. The value is read under that same hold, so a poll is handed the bytes the removal took rather
-	/// than the ones it read on its way in, and a write landing beside it is either destroyed before the
-	/// read or seen by it. The returns block below says what is still open.
+	/// than the ones it read on its way in.
+	/// <para>
+	/// That is the whole of what the hold buys, and it is narrower than "no write is lost". Only the read
+	/// and the removal are inside it: <see cref="UpdateAsync"/> is a plain set on this key and takes no
+	/// gate, so a write from the CIBA grant handler's next-poll bump can still land after the in-gate read
+	/// and be destroyed by the removal without ever being seen - which that handler's own remarks already
+	/// treat as an ordinary race. Closing THAT needs the writers to take the gate too, not a wider claim
+	/// here.
+	/// </para>
 	/// </summary>
 	/// <param name="authenticationRequestId">The unique identifier of the authentication request to remove.</param>
 	/// <returns>
