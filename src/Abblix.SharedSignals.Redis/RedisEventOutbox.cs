@@ -213,19 +213,25 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
     /// they are joined. Three separate things hold here and it is worth keeping them apart, because
     /// the guard this replaced was justified by the wrong one of them.
     /// <list type="bullet">
-    ///   <item>The CROSSSLOT hazard is closed by the tag never being EMPTY. Redis reads the tag as the
-    ///   text between the first <c>{</c> and the first <c>}</c> after it; an empty tag does not apply
-    ///   and the whole key is hashed instead, which puts a stream's two keys on two slots because they
-    ///   differ by suffix. The tag now opens with the receiver, and both halves are refused when empty,
-    ///   so there is nothing left that can empty it. An identifier opening with <c>}</c> used to, back
-    ///   when the identifier was the whole tag.</item>
-    ///   <item>The composition is one-to-one, which is what the escaping buys: a receiver named "a:b"
-    ///   with a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" - this
-    ///   defect arriving a second time through the key.</item>
-    ///   <item>Escaping also keeps a brace INSIDE either half from cutting the tag short. That one is
-    ///   not about correctness - both keys are built by this expression and would be cut identically,
-    ///   so they stay on one slot - it is about the tag still telling streams apart, and therefore
-    ///   about how they are spread over the cluster.</item>
+    ///   <item><strong>The ESCAPING is what closes CROSSSLOT.</strong> Redis reads the tag as the text
+    ///   between the first <c>{</c> and the first <c>}</c> after it; an empty tag does not apply and the
+    ///   whole key is hashed instead, which puts a stream's two keys on two slots because they differ by
+    ///   suffix. The two positions cost different things, and only one of them costs correctness: a brace
+    ///   at the very START of the tag - which means leading the receiver - leaves the tag empty and sends
+    ///   the two keys to different slots, while one anywhere else merely cuts the tag short, and both
+    ///   keys are cut identically so they stay together. The second is about how streams spread over the
+    ///   cluster; the first breaks every multi-key script for that receiver. Neither identifier is ours
+    ///   to trust: a receiver id is a <c>sub</c> claim or the host's configuration, and nothing anywhere
+    ///   refuses one opening with <c>}</c>.</item>
+    ///   <item><strong>The escaping also makes the composition one-to-one</strong>, since it emits no
+    ///   <c>:</c> either, so the join splits unambiguously at the separator: a receiver named "a:b" with
+    ///   a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" - this defect
+    ///   arriving a second time through the key.</item>
+    ///   <item><strong>The empty-half refusal is ordinary argument checking</strong> and carries no
+    ///   consequence beyond itself: an identifier with nothing in it is not an identifier. It is worth
+    ///   saying because the first version of this remark justified it with a collision the escaping
+    ///   already makes impossible, and a guard defended by a false reason is a guard somebody deletes.
+    ///   </item>
     /// </list>
     /// </remarks>
     private static RedisKey QueueKeyOf(string receiverId, string streamId)

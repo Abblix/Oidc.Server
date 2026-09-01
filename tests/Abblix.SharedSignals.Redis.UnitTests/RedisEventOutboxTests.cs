@@ -286,25 +286,28 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     }
 
     /// <summary>
-    /// An identifier with nothing in it is refused at every entry point.
+    /// A half with nothing in it is refused at every entry point, whichever half it is.
     /// </summary>
     /// <remarks>
-    /// Both halves of the key are required, because an absent one would let a second (receiver, stream)
-    /// pair address the same queue. A brace is no longer among the refusals and its rows are below:
-    /// escaping the two halves is what keeps them out of the tag, so nothing needs to be enumerated.
+    /// Ordinary argument checking rather than a guard with a consequence: an identifier with nothing in
+    /// it is not an identifier. Said plainly because the first version of this row claimed an empty half
+    /// would let a second pair address the same queue, which the escaping already makes impossible - and
+    /// a guard defended by a false reason is a guard somebody deletes.
     /// </remarks>
     [Theory]
-    [InlineData("")]
-    public async Task AnEmptyStreamId_IsRefused(string streamId)
+    [InlineData("", "s-1")]
+    [InlineData("receiver-a", "")]
+    public async Task AnEmptyHalfOfTheKey_IsRefused(string receiverId, string streamId)
     {
         var ct = TestContext.Current.CancellationToken;
         var outbox = NewOutbox();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.PendingAsync(ReceiverId, streamId, null, ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.AcknowledgeAsync(ReceiverId, streamId, ["jti-1"], ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.ClearAsync(ReceiverId, streamId, ct));
+            () => outbox.EnqueueAsync(receiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => outbox.PendingAsync(receiverId, streamId, null, ct));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => outbox.AcknowledgeAsync(receiverId, streamId, ["jti-1"], ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => outbox.ClearAsync(receiverId, streamId, ct));
     }
 
     /// <summary>
@@ -314,7 +317,9 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// <remarks>
     /// It used to be refused, because a raw <c>}</c> ended the tag early or emptied it, and a stream whose
     /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
-    /// that by construction, so the refusal went with the condition it watched.
+    /// that by construction, so the refusal went with the condition it watched. Both halves are driven,
+    /// because the RECEIVER is the half where a leading brace empties the tag rather than merely cutting
+    /// it - and a receiver id is a <c>sub</c> claim or host configuration, refused by nothing.
     /// <para>
     /// The keys are READ BACK FROM THE SERVER rather than composed here, and that is the whole row. A first
     /// version of it built the expected key with the test's own escaping helper and compared that against
@@ -324,21 +329,24 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("}")]
-    [InlineData("}leading")]
-    [InlineData("nested{}braces")]
-    public async Task AStreamIdCarryingABrace_IsServedAndKeepsOneHashTag(string prefix)
+    [InlineData("}", false)]
+    [InlineData("}leading", false)]
+    [InlineData("nested{}braces", false)]
+    [InlineData("}", true)]
+    [InlineData("}leading", true)]
+    public async Task AnIdentifierCarryingABrace_IsServedAndKeepsOneHashTag(string prefix, bool onTheReceiver)
     {
         var ct = TestContext.Current.CancellationToken;
         var outbox = NewOutbox();
 
         // The GUID half is what finds the written keys again without assuming how the brace was spelled.
-        var streamId = prefix + NewStreamId();
-        var marker = streamId[prefix.Length..];
+        var marker = NewStreamId();
+        var streamId = onTheReceiver ? marker : prefix + marker;
+        var receiverId = onTheReceiver ? prefix + ReceiverId : ReceiverId;
 
-        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
+        await outbox.EnqueueAsync(receiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
 
-        Assert.Equal("jti-1", Assert.Single(await outbox.PendingAsync(ReceiverId, streamId, null, ct)).JwtId);
+        Assert.Equal("jti-1", Assert.Single(await outbox.PendingAsync(receiverId, streamId, null, ct)).JwtId);
 
         var written = garnet.Connection.GetServer(garnet.Connection.GetEndPoints()[0])
             .Keys(pattern: $"Abblix.SharedSignals:RedisEventOutbox:*{marker}*")
