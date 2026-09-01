@@ -162,7 +162,7 @@ public partial class LicenseManager
                 // not silently widen what this covers.
                 if (status == LicenseStatus.Active && CarriedThrough(license, next))
                 {
-                    ReportNarrowing(license, next!, utcNow);
+                    ReportNarrowing(license, utcNow);
                     continue;
                 }
 
@@ -411,24 +411,31 @@ public partial class LicenseManager
     }
 
     /// <summary>
-    /// Records that the license taking over grants less than the one in force, and on which day.
+    /// Records that this deployment will be allowed less from the day one of its licenses expires.
     /// </summary>
-    /// <param name="license">The license in force.</param>
-    /// <param name="next">The license that will carry the period through.</param>
+    /// <param name="license">The license whose expiry is the day in question.</param>
     /// <param name="utcNow">The moment the comparison was made at.</param>
     /// <remarks>
     /// The expiring-soon record cannot carry this: a deployment holding a covering successor has nothing
     /// to renew and no interruption to avoid, which is why that record is suppressed here in the first
-    /// place. What remains true is that the merge stops on the day the current license expires - the
-    /// limits in force are the GREATER of the two only while both are active - so a successor with fewer
-    /// clients, a lower issuer limit or a narrower issuer set changes what the deployment may do at an
-    /// instant nobody announced. <see cref="LicenseChecker"/> enforces the issuer set by throwing, so the
-    /// first request for a dropped issuer after the switchover is the notice.
+    /// place. What remains true is that the merge changes on the day this license expires, and a
+    /// deployment may then find its clients cut, its issuer limit cut, or an issuer it has been serving
+    /// refused - at an instant nobody announced. <see cref="LicenseChecker"/> enforces the issuer set by
+    /// throwing, so the first request for a dropped issuer after the switchover is the notice.
+    /// <para>
+    /// Two MERGES are compared, not two licenses, and that is the whole of the method. What a deployment
+    /// may do is the merge of everything active - <see cref="AppendLicense"/> keeps the greater of each
+    /// limit - so comparing this license against the one successor that happens to start first answers a
+    /// question nobody asked: with a third license also covering the day, the pair says the deployment
+    /// loses ninety-nine per cent of its clients while the merge says it doubles them. Scanning at the
+    /// instant after the expiry asks the same machinery what will actually be in force, and gets the
+    /// answer the enforcement will give.
+    /// </para>
     /// <para>
     /// A shorter GRACE PERIOD is deliberately not counted as granting less. It changes nothing on the day
-    /// the successor takes over - only what happens after the successor itself expires - so counting it
-    /// would fire on a renewal that is larger in every way a deployment can feel, and a warning that
-    /// arrives on good news is one an operator learns to skip.
+    /// the merge changes - only what happens after the successor itself expires - so counting it would
+    /// fire on a renewal that is larger in every way a deployment can feel, and a warning that arrives on
+    /// good news is one an operator learns to skip.
     /// </para>
     /// <para>
     /// Warning rather than Error: nothing is wrong, and nothing is wrong on the day either. The
@@ -436,11 +443,21 @@ public partial class LicenseManager
     /// bigger renewal while there is time.
     /// </para>
     /// </remarks>
-    private static void ReportNarrowing(License license, License next, DateTimeOffset utcNow)
+    private void ReportNarrowing(License license, DateTimeOffset utcNow)
     {
-        if (Narrowings(license, next) is not { Count: > 0 } narrowed ||
-            license.ExpiresAt is not { } takesOverAt ||
-            !LicenseLogger.Instance.IsAllowed(new { license, next }, utcNow, TimeSpan.FromDays(1)))
+        if (license.ExpiresAt is not { } takesOverAt)
+            return;
+
+        // One tick past the expiry, because a license is active at both of its endpoints: at the instant
+        // itself this one is still in the merge, and the whole question is what the merge becomes without
+        // it.
+        var inForce = Scan(utcNow).InForce;
+        var afterwards = Scan(takesOverAt.AddTicks(1)).InForce;
+
+        if (inForce is null || afterwards is null ||
+            Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed ||
+            !LicenseLogger.Instance.IsAllowed(
+                new { inForce, afterwards, takesOverAt }, utcNow, TimeSpan.FromDays(1)))
         {
             return;
         }

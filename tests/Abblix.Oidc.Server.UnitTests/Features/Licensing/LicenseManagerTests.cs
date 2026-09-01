@@ -169,8 +169,15 @@ public class LicenseManagerTests
         var record = Assert.Single(records);
         Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
         Assert.Equal(LogLevel.Warning, record.Level);
-        Assert.Contains("500", record.Message, StringComparison.Ordinal);
-        Assert.Contains("5", record.Message, StringComparison.Ordinal);
+
+        // The DIRECTION, not merely both numbers: "500" contains "5", so asserting each in turn passes
+        // on a message that reads 5 -> 500 and announces a renewal that grants more as a loss.
+        Assert.Contains("clients 500 -> 5", record.Message, StringComparison.Ordinal);
+
+        // And the DAY. It is the expiry of the license in force, not the successor's own, and nothing
+        // read it before: swapping the two left every row green.
+        Assert.Contains(
+            utcNow.AddDays(10).ToString("R"), record.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -224,6 +231,142 @@ public class LicenseManagerTests
         var record = Assert.Single(records);
         Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
         Assert.Contains("https://two.example.com", record.Message, StringComparison.Ordinal);
+    }
+
+
+    /// <summary>
+    /// With a third license also covering the day, nothing is announced - because nothing narrows.
+    /// </summary>
+    /// <remarks>
+    /// The case that made the first version of this record false in the actionable direction. It compared
+    /// the license in force against the ONE successor that starts first, while what a deployment may do
+    /// is the merge of everything active: here the merge after the switchover carries a thousand clients,
+    /// and the pair said five hundred became five.
+    /// <para>
+    /// Only the first license that has not started is examined for the SUPPRESSION, which errs toward
+    /// saying something true and unnecessary. The narrowing record cannot borrow that reasoning: its
+    /// error direction is the opposite, and a false one sends an operator to buy capacity they already
+    /// have.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_third_license_covering_the_day_is_counted_too()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10), ClientLimit = 500,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5), ExpiresAt = utcNow.AddDays(400), ClientLimit = 5,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(6), ExpiresAt = utcNow.AddDays(400), ClientLimit = 1000,
+        });
+
+        Assert.Empty(Report(manager, utcNow));
+    }
+
+    /// <summary>
+    /// A second license still active on the day is counted too: what shrinks is what the merge loses.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of the row above, and the one that shows the comparison is not merely "look at more
+    /// licenses": on the day the first license expires, the issuer it contributed is still accepted,
+    /// because another active license carries it. That issuer IS lost later, when the second expires
+    /// too, and the record naming that later day is true - which is why this row filters by the day
+    /// rather than by the issuer's name.
+    /// </remarks>
+    [Fact]
+    public void An_issuer_another_active_license_still_carries_is_not_announced_as_lost()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ValidIssuers = ["https://a.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(400),
+            ValidIssuers = ["https://a.example.com", "https://b.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(800),
+            ValidIssuers = ["https://b.example.com"],
+        });
+
+        var announced = Report(manager, utcNow)
+            .Where(record => record.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess)
+            .ToArray();
+
+        // On the day the FIRST license expires, nothing narrows: the second still carries that issuer.
+        // A record naming a later day is a different and true statement - the issuer really is lost when
+        // the second expires too - so the filter is by day rather than by content.
+        Assert.DoesNotContain(announced, record =>
+            record.Message.Contains(utcNow.AddDays(10).ToString("R"), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The issuer LIMIT narrows too, and says so.
+    /// </summary>
+    /// <remarks>
+    /// One of the three dimensions the record names, and the one nothing measured: deleting its whole
+    /// block left every row green. It matters more than the client count, because the issuer limit is
+    /// what the free tier is made of - a deployment past it is refused every issuer it has seen.
+    /// </remarks>
+    [Fact]
+    public void A_renewal_with_a_lower_issuer_limit_is_announced()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10), IssuerLimit = 9,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5), ExpiresAt = utcNow.AddDays(400), IssuerLimit = 2,
+        });
+
+        var record = Assert.Single(Report(manager, utcNow));
+
+        Assert.Contains("issuers 9 -> 2", record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A successor naming an issuer set where the current license names none says which set it will be.
+    /// </summary>
+    /// <remarks>
+    /// The largest issuer narrowing there is - every issuer accepted becomes a named few - and the branch
+    /// that says so was measured by nothing: returning an empty list from it left every row green. The
+    /// message names the set rather than the issuers lost, because the license that accepted everything
+    /// cannot say what the deployment was actually using.
+    /// </remarks>
+    [Fact]
+    public void A_renewal_naming_an_issuer_set_where_there_was_none_names_the_set()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10) });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ValidIssuers = ["https://only.example.com"],
+        });
+
+        var record = Assert.Single(Report(manager, utcNow));
+
+        Assert.Contains("https://only.example.com", record.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
