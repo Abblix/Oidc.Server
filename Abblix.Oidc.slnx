@@ -38,6 +38,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
     <Project Path="tests/Abblix.DependencyInjection.UnitTests/Abblix.DependencyInjection.UnitTests.csproj" />
+    <Project Path="tests/Abblix.DocSamples/Abblix.DocSamples.csproj" />
     <Project Path="tests/Abblix.Jwt.UnitTests/Abblix.Jwt.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />

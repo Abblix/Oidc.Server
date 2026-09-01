@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <OutputType>Exe</OutputType>
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Configuration" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="xunit.v3.mtp-v2" />
+        <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+        <PackageReference Update="SonarAnalyzer.CSharp">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <!--
+        The point of the project. A sample under Samples/ is ordinary source, so a doc comment naming a
+        type that was renamed away stops the BUILD - which is the only gate here that cannot produce a
+        false positive, and the only one that runs before anybody chooses to execute a test.
+    -->
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" />
+    </ItemGroup>
+
+</Project>
