@@ -80,8 +80,15 @@ public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
     }
 
     /// <summary>
-    /// The poll endpoint of a stream, or null when this transmitter offers no poll delivery.
+    /// The poll endpoint of a stream, or null when there is none for it.
     /// </summary>
+    /// <remarks>
+    /// Null has TWO causes and a caller that can act on them differently should ask
+    /// <see cref="IsOffered"/> which it is: this transmitter serves no poll delivery at all, or it does
+    /// and this stream still has no address - an identifier the route cannot carry, for one. The second
+    /// cause is the reason this summary no longer says "offers no poll delivery": that reading makes the
+    /// branch a caller writes for the second cause look unreachable.
+    /// </remarks>
     /// <param name="streamId">The stream whose queue is served there.</param>
     public Uri? Of(string streamId) => (options.PollEndpointFactory ?? _served)?.Invoke(streamId);
 }

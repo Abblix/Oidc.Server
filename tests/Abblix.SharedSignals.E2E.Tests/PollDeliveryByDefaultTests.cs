@@ -251,6 +251,37 @@ public sealed class PollDeliveryByDefaultTests
 
         Assert.IsType<InvalidOperationException>(refusal);
         Assert.Contains(streamId, refusal.Message, StringComparison.Ordinal);
+
+        // Which of the two refusals fired, and not merely that one did. Both interpolate the stream
+        // identifier, so a row asserting only that could not tell them apart - and the arm that picks
+        // between them could be deleted whole without a single row going red.
+        Assert.Contains("Rename the stream", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The control for the row above: a transmitter that serves no poll delivery at all is refused with
+    /// the OTHER message, and its operator is sent to configure an address rather than to rename a stream.
+    /// </summary>
+    /// <remarks>
+    /// Without this row the arm that chooses between the two messages could be deleted whole and nothing
+    /// would notice, because the surviving message also names the stream.
+    /// </remarks>
+    [Fact]
+    public async Task ADeclaredPollStreamOnATransmitterServingNoPoll_IsRefusedForThatInstead()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        AddTransmitter(builder, BaseOptions(), null);
+        builder.Services.AddSharedSignalsConfiguredStreams(
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]);
+
+        await using var host = builder.Build();
+
+        var refusal = await Record.ExceptionAsync(
+            () => host.StartAsync(TestContext.Current.CancellationToken));
+
+        Assert.IsType<InvalidOperationException>(refusal);
+        Assert.Contains("offers no poll delivery", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -351,6 +382,17 @@ public sealed class PollDeliveryByDefaultTests
         using var response = await host.GetTestClient().SendAsync(request, cancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The status is the half a receiver reads over the wire; the description is the half a host
+        // driving StreamManagementService directly reads, and it used to say the method was
+        // unsupported - on a transmitter whose own configuration document advertises poll.
+        var service = host.Services.GetRequiredService<StreamManagementService>();
+        var refused = await service.UpdateStreamAsync(
+            ReceiverId,
+            new UpdateStreamRequest { StreamId = "alerts/eu", Delivery = new PollDeliveryMethod() },
+            cancellationToken);
+
+        Assert.Contains("no poll address for this stream", refused.Description!, StringComparison.Ordinal);
     }
 
     /// <summary>

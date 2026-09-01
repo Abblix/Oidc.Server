@@ -593,8 +593,17 @@ public sealed class StreamManagementService(
     {
         if (ResolveDelivery(proposed, streamId) is not { } delivery)
         {
+            // Two refusals wearing one answer would send half the readers to the wrong place. A
+            // transmitter that offers poll and still has no address for THIS stream advertises
+            // urn:ietf:rfc:8936 in its configuration document, so telling that receiver the method is
+            // unsupported contradicts what the same host publishes - and sends whoever debugs it to
+            // check the delivery configuration instead of the stream's name.
             return ManagementResult<StreamDeliveryMethod>.BadRequest(
-                "The requested delivery method is not supported by this transmitter.");
+                proposed is PollDeliveryMethod or null && pollEndpoints.IsOffered
+                    ? "This transmitter serves poll delivery, but has no poll address for this stream: "
+                      + "its identifier cannot be carried into one. Name the stream something a URL path "
+                      + "carries unchanged, or ask for push delivery, which needs no address of ours."
+                    : "The requested delivery method is not supported by this transmitter.");
         }
 
         if (AddressRefusalOf(delivery) is { } refusal)
