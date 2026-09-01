@@ -317,9 +317,10 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// <remarks>
     /// It used to be refused, because a raw <c>}</c> ended the tag early or emptied it, and a stream whose
     /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
-    /// that by construction, so the refusal went with the condition it watched. Both halves are driven,
-    /// because the RECEIVER is the half where a leading brace empties the tag rather than merely cutting
-    /// it - and a receiver id is a <c>sub</c> claim or host configuration, refused by nothing.
+    /// that by construction, so the refusal went with the condition it watched. Only <c>}</c> does
+    /// anything at all, and only on the RECEIVER does it empty the tag rather than merely cut it - which
+    /// is why the rows below carry an opening brace as their own control, and why dropping the escaping
+    /// kills the receiver rows and leaves the stream rows green.
     /// <para>
     /// The keys are READ BACK FROM THE SERVER rather than composed here, and that is the whole row. A first
     /// version of it built the expected key with the test's own escaping helper and compared that against
@@ -334,6 +335,8 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     [InlineData("nested{}braces", false)]
     [InlineData("}", true)]
     [InlineData("}leading", true)]
+    [InlineData("{leading", true)]
+    [InlineData("nested{}braces", true)]
     public async Task AnIdentifierCarryingABrace_IsServedAndKeepsOneHashTag(string prefix, bool onTheReceiver)
     {
         var ct = TestContext.Current.CancellationToken;

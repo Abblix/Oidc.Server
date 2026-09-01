@@ -216,17 +216,20 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
     ///   <item><strong>The ESCAPING is what closes CROSSSLOT.</strong> Redis reads the tag as the text
     ///   between the first <c>{</c> and the first <c>}</c> after it; an empty tag does not apply and the
     ///   whole key is hashed instead, which puts a stream's two keys on two slots because they differ by
-    ///   suffix. The two positions cost different things, and only one of them costs correctness: a brace
-    ///   at the very START of the tag - which means leading the receiver - leaves the tag empty and sends
-    ///   the two keys to different slots, while one anywhere else merely cuts the tag short, and both
-    ///   keys are cut identically so they stay together. The second is about how streams spread over the
-    ///   cluster; the first breaks every multi-key script for that receiver. Neither identifier is ours
-    ///   to trust: a receiver id is a <c>sub</c> claim or the host's configuration, and nothing anywhere
-    ///   refuses one opening with <c>}</c>.</item>
-    ///   <item><strong>The escaping also makes the composition one-to-one</strong>, since it emits no
-    ///   <c>:</c> either, so the join splits unambiguously at the separator: a receiver named "a:b" with
-    ///   a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" - this defect
-    ///   arriving a second time through the key.</item>
+    ///   suffix. Only <c>}</c> does anything: an opening brace is ordinary text inside a tag. And its
+    ///   two positions cost different things, of which one costs correctness - a <c>}</c> at the very
+    ///   START of the tag, which means leading the receiver, leaves the tag empty and sends the two keys
+    ///   to different slots, while one anywhere else merely cuts the tag short, and both keys are cut
+    ///   identically so they stay together. The second is about how streams spread over the cluster; the
+    ///   first breaks every multi-key script for that receiver. Neither identifier is ours to trust: a
+    ///   receiver id is a <c>sub</c> claim or the host's configuration, and nothing anywhere refuses one
+    ///   opening with <c>}</c>.</item>
+    ///   <item><strong>The escaping also decides where the join splits</strong>, since it emits no
+    ///   <c>:</c> either: the separator can only be the one this expression put there, so a receiver
+    ///   named "a:b" with a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" -
+    ///   this defect arriving a second time through the key. Not quite one-to-one, which would be a
+    ///   wider claim than holds: an unpaired surrogate escapes to the replacement character's bytes, so
+    ///   two receivers differing only in one of those share a queue.</item>
     ///   <item><strong>The empty-half refusal is ordinary argument checking</strong> and carries no
     ///   consequence beyond itself: an identifier with nothing in it is not an identifier. It is worth
     ///   saying because the first version of this remark justified it with a collision the escaping

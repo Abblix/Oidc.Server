@@ -140,7 +140,8 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     /// </summary>
     /// <remarks>
     /// Both halves are escaped before they are joined, so the separator cannot occur inside either
-    /// and the composition is one-to-one. A plain concatenation is not: a receiver named "a:b" with
+    /// and the join can only split where this expression put the separator. A plain concatenation
+    /// cannot say that: a receiver named "a:b" with
     /// a stream "c" would address the same entry as a receiver "a" with a stream "b:c", and both
     /// halves are operator-chosen strings. That is the defect this key exists to close, arriving a
     /// second time through the key itself.
