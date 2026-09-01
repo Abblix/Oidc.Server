@@ -323,14 +323,14 @@ public class StreamManagementServiceTests
         var harness = CreateHarness();
         var created = await CreatedStreamAsync(harness);
         await harness.Outbox.EnqueueAsync(
-            created.StreamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+            Receiver, created.StreamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
         var deleted = await harness.Service.DeleteStreamAsync(
             Receiver, created.StreamId, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.Empty(await harness.Outbox.PendingAsync(
-            created.StreamId, null, TestContext.Current.CancellationToken));
+            Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
         Assert.Equal(
             HttpStatusCode.NotFound,
             (await harness.Service.DeleteStreamAsync(
@@ -343,7 +343,7 @@ public class StreamManagementServiceTests
         var harness = CreateHarness();
         var created = await CreatedStreamAsync(harness);
         await harness.Outbox.EnqueueAsync(
-            created.StreamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+            Receiver, created.StreamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
         var invalid = await harness.Service.UpdateStreamStatusAsync(
             Receiver,
@@ -360,7 +360,7 @@ public class StreamManagementServiceTests
         Assert.Equal(HttpStatusCode.OK, disabled.StatusCode);
         Assert.Equal(StreamStatuses.Disabled, disabled.Body!.Status);
         Assert.Empty(await harness.Outbox.PendingAsync(
-            created.StreamId, null, TestContext.Current.CancellationToken));
+            Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -471,7 +471,7 @@ public class StreamManagementServiceTests
         var minted = Assert.Single(harness.Signer.Signed);
         Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
         Assert.Single(await harness.Outbox.PendingAsync(
-            created.StreamId, null, TestContext.Current.CancellationToken));
+            Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
 
         var throttled = await harness.Service.RequestVerificationAsync(
             Receiver,

@@ -33,7 +33,7 @@ import sys
 #: Naming the wrapper's own method here is what turns that from a hand-kept list into a measurement, and
 #: it finds both ends at once - the interface declaring it and every caller invoking it. A new wrapper
 #: adds its name here; that is the one manual step, and it is one line rather than a roll of files.
-WRAPPED = ["RemoveAuthorizationCodeAsync"]
+WRAPPED = ["RemoveAuthorizationCodeAsync", "TakeRequestAsync"]
 
 #: Four ways in. The two extension methods by name; the flag that routes a read through the same protocol
 #: one layer up - `IEntityStorage.GetAsync(..., removeOnRetrieval: true)` and
@@ -59,6 +59,7 @@ DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 KNOWN = {
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/BackChannelAuthenticationGrantHandler.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/DeviceCodeGrantHandler.cs",
+    "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionHandler.cs",
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/AuthenticationNotifiers/PushModeCompletionHandler.cs",
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/BackChannelRequestStorage.cs",
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/GrantProcessors/PingModeGrantProcessor.cs",

@@ -22,21 +22,21 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
-/// <param name="statusNotifier">Optional service for notifying long-polling clients of status changes.
-/// Null when long-polling is disabled.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll. Nullable because a deployment may
+/// register none, NOT because long-polling is off: the default registration is unconditional, so this is
+/// normally present even where the setting is disabled - the waiting is what the setting decides, and a
+/// notification nobody waits for is a no-op.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
 {
-    private readonly IBackChannelRequestStorage _storage = storage;
-
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.
-    /// The client will periodically poll the token endpoint to retrieve tokens.
-    /// If long-polling is enabled, also notifies any waiting clients of the status change.
+    /// The client will periodically poll the token endpoint to retrieve tokens, and one already waiting
+    /// on a long poll is woken by the write.
     /// </summary>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
@@ -48,13 +48,8 @@ public partial class PollModeCompletionHandler(
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
-        await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(authenticationRequestId, request, expiresIn);
 
         LogTokensStored(authenticationRequestId);
-
-        if (statusNotifier != null)
-        {
-            await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, request.Status);
-        }
     }
 }
