@@ -423,4 +423,35 @@ public class SubjectTypeConverterTests
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
+    /// <summary>
+    /// Two native clients that publish keys on one host stay in separate sectors.
+    /// </summary>
+    /// <remarks>
+    /// The redirect-URI branch above only considers http(s) URIs, so a native client registering
+    /// <c>com.example.app:/oauth2redirect</c> falls PAST it - and would land on the backchannel URI
+    /// if that branch did not first require that no redirect URI was registered at all. Two
+    /// unrelated apps whose keys sit on one hosting provider would then seal identical pseudonyms
+    /// for the same person, which is exactly the collision the custom-scheme paragraph exists to
+    /// prevent. The existing custom-scheme row cannot see this: it registers no delivery mode, so
+    /// the branch it would have to pass through is never entered.
+    /// </remarks>
+    [Fact]
+    public void Convert_NativeClientsSharingAJwksHost_StayInSeparateSectors()
+    {
+        var converter = CreateConverter();
+
+        var clientA = CreatePairwiseClient(
+            "client-a",
+            redirectUris: [new Uri("com.example.one:/oauth2redirect")],
+            deliveryMode: BackchannelTokenDeliveryModes.Poll,
+            jwksUri: new Uri("https://keys.example.com/a.jwks"));
+
+        var clientB = CreatePairwiseClient(
+            "client-b",
+            redirectUris: [new Uri("app-two://callback")],
+            deliveryMode: BackchannelTokenDeliveryModes.Poll,
+            jwksUri: new Uri("https://keys.example.com/b.jwks"));
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
 }

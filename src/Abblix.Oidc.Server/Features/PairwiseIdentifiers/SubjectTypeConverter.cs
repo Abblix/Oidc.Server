@@ -110,9 +110,13 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// </summary>
     /// <remarks>
     /// When no sector_identifier_uri was provided, the sector is the host component of the registered redirect_uri,
-    /// and for a backchannel client that registered none it is the host of the URI CIBA Core 1.0 Section 4 puts in
-    /// the redirect URI's place - the jwks_uri in poll and ping, the backchannel_client_notification_endpoint in
-    /// push. A client_id fallback would produce identifiers that silently change when the same application is
+    /// and for a backchannel client that registered NO redirect URI at all it is the host of the URI CIBA Core 1.0
+    /// Section 4 puts in the redirect URI's place - the jwks_uri in poll and ping, the
+    /// backchannel_client_notification_endpoint in push. "No redirect URI at all" rather than "no usable one", so
+    /// that the custom-scheme case below keeps the client_id fallback the paragraph promises it: a native client
+    /// registers redirect URIs whose host is meaningless, and letting those fall through to a shared jwks host
+    /// would merge unrelated apps into one sector, which is the collision this whole method exists to prevent.
+    /// A client_id fallback would produce identifiers that silently change when the same application is
     /// re-registered under a new client id, defeating the stability pairwise identifiers give a sector; it affects
     /// only statically configured clients, since DCR-registered pairwise clients always get SectorIdentifier
     /// computed at registration time, and remains the last resort for a client with none of those URIs (e.g. a pure
@@ -131,7 +135,7 @@ public class SubjectTypeConverter : ISubjectTypeConverter
             clientInfo.RedirectUris.FirstOrDefault(redirectUri =>
                 redirectUri.Scheme == Uri.UriSchemeHttp ||
                 redirectUri.Scheme == Uri.UriSchemeHttps)?.Host ??
-            BackchannelSectorUri(clientInfo)?.Host ??
+            (clientInfo.RedirectUris.Length == 0 ? BackchannelSectorUri(clientInfo)?.Host : null) ??
             clientInfo.ClientId;
 
         return Encoding.UTF8.GetBytes(sector);
@@ -144,8 +148,10 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// <remarks>
     /// The same order the registration validator resolves, so a statically configured client and a
     /// dynamically registered one bind to the same sector rather than to whichever path reached them.
-    /// A mode this server does not implement returns null and takes the client_id fallback, which is a
-    /// per-client sector - wrong for nobody, since no such client can authenticate.
+    /// A mode this server does not implement returns null and takes the client_id fallback. Nothing
+    /// refuses such a mode on a statically configured client - the registration validator only sees
+    /// requests that came over the network - so that client authenticates normally through whatever
+    /// other grant it holds, and keeps the per-client sector it had before this method existed.
     /// </remarks>
     private static Uri? BackchannelSectorUri(ClientInfo clientInfo)
         => clientInfo.BackChannelTokenDeliveryMode switch

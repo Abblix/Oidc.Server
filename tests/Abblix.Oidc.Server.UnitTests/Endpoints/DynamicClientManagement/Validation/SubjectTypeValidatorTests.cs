@@ -39,8 +39,8 @@ public class SubjectTypeValidatorTests
     }
 
     /// <summary>
-    /// A pairwise client that registered no redirect URI and no sector identifier URI is refused, not
-    /// crashed on.
+    /// A pairwise client that registered no redirect URI, no sector identifier URI and no backchannel
+    /// delivery mode is refused, not crashed on.
     /// </summary>
     /// <remarks>
     /// The sibling of the redirect URI validator's own null case, and reachable for the same reason from
@@ -553,21 +553,26 @@ public class SubjectTypeValidatorTests
     }
 
     /// <summary>
-    /// A pairwise poll or ping client that registered neither a sector identifier URI nor a jwks_uri
-    /// is refused.
+    /// A pairwise poll or ping client with no sector identifier URI, no redirect URI and no
+    /// jwks_uri is refused.
     /// </summary>
     /// <remarks>
-    /// CIBA Core 1.0 Section 4 requires exactly this pair: "the RP must provide either a
-    /// sector_identifier_uri or a jwks_uri at the registration phase when the
-    /// urn:openid:params:grant-type:ciba grant type is registered", and separately that an OP
-    /// supporting PPIDs "MUST check if a valid jwks_uri is set when the subject_type is pairwise".
-    /// Without one there is no host to derive a sector from, and a client id would make the
-    /// identifiers per-client where the specification makes them per-sector.
+    /// All three absences are load-bearing, and the name says so because the narrower reading is
+    /// what this row actually holds. CIBA Core 1.0 Section 4 asks for more than this - "it MUST
+    /// check if a valid jwks_uri is set when the subject_type is pairwise" is unconditional, so a
+    /// poll client that registered a redirect URI and no jwks_uri is accepted here and should not
+    /// be. That gap is not this change's to close and is recorded rather than implied by a row
+    /// whose name promises it.
+    /// <para>
+    /// What this row does hold: with none of the three, there is no host to derive a sector from,
+    /// and falling back to the client id would make the identifiers per-client where the
+    /// specification makes them per-sector.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData(BackchannelTokenDeliveryModes.Poll)]
     [InlineData(BackchannelTokenDeliveryModes.Ping)]
-    public async Task ValidateAsync_PairwisePollOrPingWithNoJwksUri_ShouldReturnError(string deliveryMode)
+    public async Task ValidateAsync_PairwisePollOrPingWithNoUriAtAll_ShouldReturnError(string deliveryMode)
     {
         // Arrange
         var context = CreateContext(
@@ -616,20 +621,62 @@ public class SubjectTypeValidatorTests
     /// The URI a sector is taken from must be https, the same rule the redirect URI branch applies.
     /// </summary>
     /// <remarks>
-    /// BackChannelAuthenticationValidator enforces the specification's "It MUST be an HTTPS URL" for
-    /// the notification endpoint, but it is registered AFTER this validator, so at this point the value
-    /// has been through no scheme check - and this branch is about to take a sector identity from its
-    /// host.
+    /// Push is the weaker case and poll is the one that matters: for the notification endpoint
+    /// BackChannelAuthenticationValidator enforces the specification's "It MUST be an HTTPS URL"
+    /// as well, just later in the pipeline, whereas for the jwks_uri NOTHING else in the
+    /// registration pipeline checks the scheme at all. Both are driven, so that a reader who
+    /// reorders the validators cannot delete this check on the strength of the duplicate.
     /// </remarks>
-    [Fact]
-    public async Task ValidateAsync_CibaSectorUriOverHttp_ShouldReturnError()
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Push)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    public async Task ValidateAsync_CibaSectorUriOverHttp_ShouldReturnError(string deliveryMode)
     {
         // Arrange
+        var overHttp = new Uri("http://client.example.com/callback");
+        var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
         var context = CreateContext(
             redirectUris: [],
             subjectType: SubjectTypes.Pairwise,
-            deliveryMode: BackchannelTokenDeliveryModes.Push,
-            notificationEndpoint: new Uri("http://notify.example.com/callback"));
+            deliveryMode: deliveryMode,
+            notificationEndpoint: isPush ? overHttp : null,
+            jwksUri: isPush ? null : overHttp);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+        Assert.Null(context.SectorIdentifier);
+    }
+    /// <summary>
+    /// A relative URI where the sector's host would come from is refused, not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// A registration body is attacker-shaped JSON, and <c>[AbsoluteUri]</c> does not reach it: the
+    /// attribute is honoured by the form binder rather than by the JSON deserializer, so "/jwks"
+    /// arrives intact. Every <see cref="Uri"/> member this branch then reads - Scheme, Host - throws
+    /// <see cref="InvalidOperationException"/> on a relative value rather than returning anything, so
+    /// what the client meets is a fault instead of the refusal it should be. The redirect-URI branch
+    /// never had this exposure: it only ever sees values that survived
+    /// <c>RedirectUrisValidator</c>.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Push)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    public async Task ValidateAsync_RelativeCibaSectorUri_IsRefusedRatherThanDereferenced(string deliveryMode)
+    {
+        // Arrange
+        var relative = new Uri("/jwks", UriKind.Relative);
+        var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            deliveryMode: deliveryMode,
+            notificationEndpoint: isPush ? relative : null,
+            jwksUri: isPush ? null : relative);
 
         // Act
         var result = await _validator.ValidateAsync(context);

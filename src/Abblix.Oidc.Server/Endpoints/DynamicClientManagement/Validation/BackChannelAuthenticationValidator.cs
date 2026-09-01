@@ -82,9 +82,10 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // identifier, and where a sector_identifier_uri is registered the endpoint "must be included in
         // the list of URIs pointed to by" it. Poll and ping put the jwks_uri in both of those roles
         // instead, so neither rule reaches a ping registration - which is why they cannot be enforced
-        // beside the HTTPS check, whose arm covers ping and push alike. Neither is implemented anywhere:
-        // SubjectTypeValidator, in this same pipeline, fetches the sector document for redirect_uris
-        // alone. That is a gap rather than a decision, tracked as issue 480.
+        // beside the HTTPS check, whose arm covers ping and push alike. Both ARE implemented, by
+        // SubjectTypeValidator in this same pipeline: it fetches the sector document and checks it for
+        // whichever URI the registered mode names, and takes the sector from that same URI when no
+        // sector_identifier_uri was supplied.
         //
         // The remaining Section 4 rule for this parameter, "REQUIRED if the token delivery mode is set
         // to ping or push", IS implemented - by the switch above, in the words of the refusal it returns.

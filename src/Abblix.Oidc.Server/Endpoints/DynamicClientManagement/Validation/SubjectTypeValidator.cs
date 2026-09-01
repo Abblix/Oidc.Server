@@ -17,10 +17,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates the OIDC Core Section 8 <c>subject_type</c> metadata and computes the pairwise sector
-/// identifier per OIDC Core Section 8.1: when <c>pairwise</c> is requested, either a supplied
-/// <c>sector_identifier_uri</c> (HTTPS, JSON document of redirect URIs) is dereferenced and
-/// cross-checked against the registered <c>redirect_uris</c>, or all redirect URIs must
-/// share a single host. The resolved host is stored on the context for later persistence.
+/// identifier. When <c>pairwise</c> is requested, a supplied <c>sector_identifier_uri</c> (HTTPS) is
+/// dereferenced and every URI the registration is required to have listed there is checked against
+/// its contents; otherwise the host is taken from the registered URIs, which must agree on one.
+/// Which URIs those are depends on the registration: the redirect URIs (OIDC Core Section 8.1), and
+/// for a backchannel client the one CIBA Core 1.0 Section 4 puts in their place - the
+/// <c>jwks_uri</c> in poll and ping, the <c>backchannel_client_notification_endpoint</c> in push.
+/// The resolved host is stored on the context for later persistence.
 /// </summary>
 /// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>
 /// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
@@ -187,14 +190,18 @@ public partial class SubjectTypeValidator(
                 + "push mode. None of these was registered");
         }
 
-        // The scheme is checked here rather than left to BackChannelAuthenticationValidator, which
-        // enforces the same rule for the notification endpoint but is registered AFTER this validator -
-        // so at this point the value has been through no scheme check at all, and this branch is about
-        // to take a sector identity from its host.
-        if (sectorUri.Scheme != Uri.UriSchemeHttps)
+        // Absoluteness is checked rather than assumed, and both halves matter. A registration body
+        // is attacker-shaped JSON: [AbsoluteUri] is honoured by the form binder, not by the JSON
+        // deserializer, so a relative "/jwks" arrives intact and every Uri member below it - Scheme,
+        // Host - throws rather than returning anything. And the scheme is checked HERE because for
+        // poll and ping nothing else ever checks the jwks_uri's: BackChannelAuthenticationValidator
+        // enforces the specification's "It MUST be an HTTPS URL" for the notification endpoint alone,
+        // and is registered after this validator besides. Delete this and https stops being required
+        // of the value a poll client's whole sector is derived from.
+        if (!sectorUri.IsAbsoluteUri || sectorUri.Scheme != Uri.UriSchemeHttps)
         {
             return ErrorFactory.InvalidClientMetadata(
-                "The URI a pairwise sector identifier is taken from must use the https scheme");
+                "The URI a pairwise sector identifier is taken from must be an absolute https URI");
         }
 
         context.SectorIdentifier = sectorUri.Host;
