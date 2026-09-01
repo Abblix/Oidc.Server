@@ -447,11 +447,16 @@ public partial class LicenseManager
 
         foreach (var moment in ChangeMoments(utcNow))
         {
-            if (Scan(moment).InForce is not { } afterwards ||
-                Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed)
-            {
+            // A moment with nothing in force ENDS the search rather than being stepped over. Walking past
+            // it announced a date on the far side of a fall to the free tier, in a sentence promising
+            // that nothing changes before it - while the free tier allows one issuer, so the fall is
+            // strictly worse than whatever was being announced. The expiry and grace records name that
+            // day in their own words, so saying it again here would put two sentences on one event.
+            if (Scan(moment).InForce is not { } afterwards)
+                return;
+
+            if (Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed)
                 continue;
-            }
 
             // Keyed by VALUES, not by the merged licenses: a merge allocates a fresh set for the issuers,
             // and License compares a HashSet member by reference, so a key holding one is new on every
@@ -472,9 +477,15 @@ public partial class LicenseManager
     /// Every future moment at which the merge can change, earliest first.
     /// </summary>
     /// <remarks>
-    /// A license enters the merge at its <c>NotBefore</c> and leaves it one tick after its
-    /// <c>ExpiresAt</c>, since a license is active at both of its endpoints. Those are the only two kinds
-    /// of moment, so a change the merge makes at any other instant does not exist.
+    /// A license enters the merge at its <c>NotBefore</c> and this asks about one tick after its
+    /// <c>ExpiresAt</c>, since a license is active at both of its endpoints.
+    /// <para>
+    /// The end of a GRACE period is a moment the merge really does change at, and it is deliberately not
+    /// here. A license in grace is past its term: the deployment is already told so, at the expiry, by an
+    /// error-level record saying to renew immediately, and the grace is drawn against the next license's
+    /// term rather than granted on top of this one. A record promising capacity until the grace runs out
+    /// would present it as an entitlement, which is the one thing it is not.
+    /// </para>
     /// <para>
     /// An expiry at the maximum representable instant yields no "after": there is no such tick, and
     /// asking for one used to throw out of a license check - a licensing question answered with a server

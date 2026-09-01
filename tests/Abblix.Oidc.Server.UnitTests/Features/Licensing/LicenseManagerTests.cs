@@ -508,6 +508,87 @@ public class LicenseManagerTests
     }
 
     /// <summary>
+    /// The end of a grace period is not announced as a future narrowing.
+    /// </summary>
+    /// <remarks>
+    /// The merge really does change there - two licenses in staggered grace periods drop the client
+    /// limit on a known day - and it is still not this record's subject. A license in grace is past its
+    /// term, and the grace is drawn against the next license rather than granted on top of this one, so
+    /// a record saying "on the tenth you may do less than you may now" would present it as capacity the
+    /// deployment is entitled to until then. What the deployment IS told, at the expiry and at error
+    /// level, is that the license expired and must be renewed immediately - which this row reads, so
+    /// that "no narrowing record" is distinguishable from "no records at all".
+    /// </remarks>
+    [Fact]
+    public void The_end_of_a_grace_period_is_not_announced_as_a_narrowing()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-30),
+            ExpiresAt = utcNow.AddDays(-1),
+            GracePeriod = utcNow.AddDays(10),
+            ClientLimit = 500,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-30),
+            ExpiresAt = utcNow.AddDays(-1),
+            GracePeriod = utcNow.AddDays(30),
+            ClientLimit = 5,
+        });
+
+        var records = Report(manager, utcNow);
+
+        Assert.Contains(
+            records,
+            r => r.EventId.Id == LogEvents.Licensing.LicenseManager.LicenseInGracePeriod);
+
+        Assert.DoesNotContain(
+            records,
+            r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess);
+    }
+
+    /// <summary>
+    /// Nothing is announced past a moment at which no license is in force.
+    /// </summary>
+    /// <remarks>
+    /// The loop used to walk past such a moment and announce a later one, so the record named a date
+    /// forty days after the deployment had already fallen to the free tier - and said "nothing changes
+    /// before that date" over it. The free tier allows one issuer, so that fall is strictly worse than
+    /// the successor being announced, and the expiry record already names its day in its own words.
+    /// <para>
+    /// Newly reachable in the change that introduced this method: its predecessor was only asked inside
+    /// the branch where one license carries through to another, and no lapse can sit between those two.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Nothing_is_announced_past_a_moment_with_no_license_in_force()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10), ClientLimit = 500,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(50), ExpiresAt = utcNow.AddDays(400), ClientLimit = 5,
+        });
+
+        var records = Report(manager, utcNow)
+            .Where(r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess)
+            .ToArray();
+
+        // The control: this arrangement DOES produce records, so an empty result here is about the
+        // narrowing record specifically and not about a reporter that said nothing at all.
+        Assert.NotEmpty(Report(manager, utcNow));
+
+        Assert.Empty(records);
+    }
+
+    /// <summary>
     /// An expiry at the largest representable instant is not a fault.
     /// </summary>
     /// <remarks>
