@@ -88,15 +88,20 @@ public interface IBackChannelLongPollingService
     /// </para>
     /// <list type="bullet">
     ///   <item><strong>Authenticated and Denied through the completion handler</strong> are signalled by
-    ///   <c>PollModeCompletionHandler</c> itself - a host that completes through
-    ///   <see cref="IAuthenticationCompletionHandler"/> needs nothing more.</item>
+    ///   the handler itself, in poll and ping alike - a host that completes through
+    ///   <see cref="IAuthenticationCompletionHandler"/> needs nothing more. Ping is on that list because
+    ///   a ping client polls the token endpoint too, and the long-poll gate does not read the delivery
+    ///   mode; push is not, because its token endpoint refuses the client outright, so no push client is
+    ///   ever a waiter.</item>
     ///   <item><strong>A status the host writes to storage itself</strong> is the host's to signal. The
     ///   denial pattern documented on <see cref="IUserDeviceAuthenticationHandler"/> is exactly this
     ///   case: it updates the stored record directly, so nothing in the library sees the change and a
     ///   waiter sleeps until its own window runs out.</item>
-    ///   <item><strong>Expiry</strong> is signalled by nobody. A request expires by falling out of
-    ///   storage on its lifetime, which is not an event anything observes, so a waiter learns of it by
-    ///   timing out - and that is what the timeout is for.</item>
+    ///   <item><strong>Expiry</strong> is signalled by nobody, and a waiter is NOT told about it: when
+    ///   its window runs out it is answered <c>authorization_pending</c>, and it learns the request
+    ///   expired on the poll after that, from the record being gone. The grant handler does compare the
+    ///   stored expiry against the clock and remove the record, so there is a place a signal could be
+    ///   sent from; nothing sends one today.</item>
     /// </list>
     /// <para>
     /// It's safe to call this even if no requests are waiting - it's a no-op in that case.

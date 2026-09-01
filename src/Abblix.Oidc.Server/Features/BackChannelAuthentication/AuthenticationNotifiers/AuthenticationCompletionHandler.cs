@@ -31,10 +31,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
+/// handler outside this library keeps compiling - a deployment that registered none simply has nobody
+/// to wake.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
-    ISubjectTypeConverter subjectTypeConverter)
+    ISubjectTypeConverter subjectTypeConverter,
+    IBackChannelLongPollingService? statusNotifier = null)
 {
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -272,6 +276,36 @@ public abstract partial class AuthenticationCompletionHandler(
         TimeSpan expiresIn)
     {
         request.Status = BackChannelAuthenticationStatus.Denied;
+        await StoreAsync(authenticationRequestId, request, expiresIn);
+    }
+
+    /// <summary>
+    /// Writes the request and wakes whoever is waiting on it.
+    /// </summary>
+    /// <remarks>
+    /// One place, so that the property the notifier's contract states holds by construction rather than
+    /// by somebody remembering: every transition out of Pending this library performs goes through a
+    /// write, and every write goes through here. A list of call sites is complete only until the next
+    /// handler is added, and that is exactly how ping came to signal nothing while its clients waited.
+    /// <para>
+    /// Whether anybody IS waiting is not this method's question. A mode whose clients never long-poll -
+    /// push, whose token endpoint refuses them outright - wakes nobody, and a deployment with no notifier
+    /// registered skips the call.
+    /// </para>
+    /// </remarks>
+    /// <param name="authenticationRequestId">The authentication request identifier.</param>
+    /// <param name="request">The request whose status has just changed.</param>
+    /// <param name="expiresIn">How long the stored record remains available.</param>
+    protected async Task StoreAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn)
+    {
         await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+
+        if (statusNotifier != null)
+        {
+            await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, request.Status);
+        }
     }
 }

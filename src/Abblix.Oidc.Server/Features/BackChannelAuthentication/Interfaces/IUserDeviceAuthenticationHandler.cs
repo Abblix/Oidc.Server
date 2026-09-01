@@ -39,6 +39,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     private readonly IAuthenticationCompletionHandler _completion;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
+///     private readonly IBackChannelLongPollingService? _longPolling;
 ///
 ///     public async Task&lt;Result&lt;AuthSession, OidcError&gt;&gt; InitiateAuthenticationAsync(
 ///         ValidBackChannelAuthenticationRequest request)
