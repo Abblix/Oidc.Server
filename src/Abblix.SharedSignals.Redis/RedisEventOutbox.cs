@@ -94,6 +94,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
 
     /// <inheritdoc />
     public async Task EnqueueAsync(
+        string receiverId,
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
@@ -104,7 +105,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
 
         await _database.ScriptEvaluateAsync(
             EnqueueScript,
-            [QueueKeyOf(streamId), ItemsKeyOf(streamId)],
+            [QueueKeyOf(receiverId, streamId), ItemsKeyOf(receiverId, streamId)],
             [
                 item.JwtId,
                 JsonSerializer.SerializeToUtf8Bytes(item, SerializerOptions),
@@ -114,6 +115,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<OutboxItem>> PendingAsync(
+        string receiverId,
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
@@ -126,13 +128,13 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
         }
 
         var listed = await _database.ListRangeAsync(
-            QueueKeyOf(streamId), 0, maxCount is { } limit ? limit - 1 : -1);
+            QueueKeyOf(receiverId, streamId), 0, maxCount is { } limit ? limit - 1 : -1);
         if (listed.Length == 0)
         {
             return [];
         }
 
-        var stored = await _database.HashGetAsync(ItemsKeyOf(streamId), listed);
+        var stored = await _database.HashGetAsync(ItemsKeyOf(receiverId, streamId), listed);
 
         var pending = new List<OutboxItem>(listed.Length);
         var unreadable = new List<RedisValue>();
@@ -165,7 +167,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
         if (unreadable.Count > 0)
         {
             await AcknowledgeAsync(
-                streamId, [.. unreadable.Select(value => value.ToString())], cancellationToken);
+                receiverId, streamId, [.. unreadable.Select(value => value.ToString())], cancellationToken);
         }
 
         return pending;
@@ -173,6 +175,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
 
     /// <inheritdoc />
     public async Task AcknowledgeAsync(
+        string receiverId,
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
@@ -187,45 +190,67 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
 
         await _database.ScriptEvaluateAsync(
             AcknowledgeScript,
-            [QueueKeyOf(streamId), ItemsKeyOf(streamId)],
+            [QueueKeyOf(receiverId, streamId), ItemsKeyOf(receiverId, streamId)],
             [.. jwtIds.Select(jwtId => (RedisValue)jwtId)]);
     }
 
     /// <inheritdoc />
-    public async Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
+    public async Task ClearAsync(
+        string receiverId,
+        string streamId,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await _database.KeyDeleteAsync([QueueKeyOf(streamId), ItemsKeyOf(streamId)]);
+        await _database.KeyDeleteAsync(
+            [QueueKeyOf(receiverId, streamId), ItemsKeyOf(receiverId, streamId)]);
     }
 
     /// <summary>
-    /// The stream identifier travels inside a cluster hash tag, which is what keeps both of a
+    /// The stream's identity travels inside a cluster hash tag, which is what keeps both of a
     /// stream's keys on one slot - the ground the multi-key scripts stand on.
     /// </summary>
     /// <remarks>
-    /// The guard lives here rather than on each method so every entry point gets it, and it rejects
-    /// more than emptiness. Redis reads the tag as the text between the first <c>{</c> and the first
-    /// <c>}</c> after it; when that text is EMPTY the tag does not apply and the whole key is hashed
-    /// instead, so the two keys land on different slots and every multi-key call fails CROSSSLOT under
-    /// Cluster. Nested braces are harmless - <c>a{b}c</c> and <c>a}b</c> co-locate - so the check is
-    /// aimed at what actually breaks: an identifier that is empty or opens with the closing brace.
+    /// The identity is the receiver and the identifier together, and both halves are escaped before
+    /// they are joined. Three separate things hold here and it is worth keeping them apart, because
+    /// the guard this replaced was justified by the wrong one of them.
+    /// <list type="bullet">
+    ///   <item><strong>The ESCAPING is what closes CROSSSLOT.</strong> Redis reads the tag as the text
+    ///   between the first <c>{</c> and the first <c>}</c> after it; an empty tag does not apply and the
+    ///   whole key is hashed instead, which puts a stream's two keys on two slots because they differ by
+    ///   suffix. Only <c>}</c> does anything: an opening brace is ordinary text inside a tag. And its
+    ///   two positions cost different things, of which one costs correctness - a <c>}</c> at the very
+    ///   START of the tag, which means leading the receiver, leaves the tag empty and sends the two keys
+    ///   to different slots, while one anywhere else merely cuts the tag short, and both keys are cut
+    ///   identically so they stay together. The second is about how streams spread over the cluster; the
+    ///   first breaks every multi-key script for that receiver. Neither identifier is ours to trust: a
+    ///   receiver id is a <c>sub</c> claim or the host's configuration, and nothing anywhere refuses one
+    ///   opening with <c>}</c>.</item>
+    ///   <item><strong>The escaping also decides where the join splits</strong>, since it emits no
+    ///   <c>:</c> either: the separator can only be the one this expression put there, so a receiver
+    ///   named "a:b" with a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" -
+    ///   this defect arriving a second time through the key. Not quite one-to-one, which would be a
+    ///   wider claim than holds: an unpaired surrogate escapes to the replacement character's bytes, so
+    ///   two receivers differing only in one of those share a queue.</item>
+    ///   <item><strong>The empty-half refusal is ordinary argument checking</strong> and carries no
+    ///   consequence beyond itself: an identifier with nothing in it is not an identifier. It is worth
+    ///   saying because the first version of this remark justified it with a collision the escaping
+    ///   already makes impossible, and a guard defended by a false reason is a guard somebody deletes.
+    ///   </item>
+    /// </list>
     /// </remarks>
-    private static RedisKey QueueKeyOf(string streamId) => KeyOf(streamId, "queue");
+    private static RedisKey QueueKeyOf(string receiverId, string streamId)
+        => KeyOf(receiverId, streamId, "queue");
 
-    private static RedisKey ItemsKeyOf(string streamId) => KeyOf(streamId, "items");
+    private static RedisKey ItemsKeyOf(string receiverId, string streamId)
+        => KeyOf(receiverId, streamId, "items");
 
-    private static RedisKey KeyOf(string streamId, string suffix)
+    private static RedisKey KeyOf(string receiverId, string streamId, string suffix)
     {
+        ArgumentException.ThrowIfNullOrEmpty(receiverId);
         ArgumentException.ThrowIfNullOrEmpty(streamId);
-        if (streamId.StartsWith('}'))
-        {
-            throw new ArgumentException(
-                "A stream identifier may not begin with '}': it would empty the cluster hash tag, "
-                + "and the stream's two keys would then land on different slots.",
-                nameof(streamId));
-        }
 
-        return $"{KeyPrefix}{{{streamId}}}:{suffix}";
+        var tag = $"{Uri.EscapeDataString(receiverId)}:{Uri.EscapeDataString(streamId)}";
+        return $"{KeyPrefix}{{{tag}}}:{suffix}";
     }
 
     private static bool TryDeserialize(RedisValue stored, out OutboxItem item)
