@@ -116,9 +116,11 @@ public class IdentityTokenServiceTests
     /// <para>
     /// The refresh hash is asserted against the shared calculator, which pins the algorithm argument, the
     /// source value and the claim name - the three things this row is for. It does NOT pin the digest:
-    /// a change inside the calculator moves both sides together and this row stays green. A literal
-    /// would catch that and is the stronger assertion against it; the calculator is used here because a
-    /// literal would have to be recomputed by hand for every signing algorithm the row might take.
+    /// both sides are computed by the same code, so a change inside the calculator moves them together
+    /// and this row stays green. That is not a gap. <c>HashCalculatorTests</c> in the Jwt suite holds the
+    /// digest against the literals OpenID Connect Core prints in its own worked examples, which is
+    /// stronger than any value computed here would be - a hand-computed literal agrees with the code
+    /// that produced it, while those agree with the document.
     /// </para>
     /// </remarks>
     [Fact]

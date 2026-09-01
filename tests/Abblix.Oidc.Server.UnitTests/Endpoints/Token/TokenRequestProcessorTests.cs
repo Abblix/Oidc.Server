@@ -301,6 +301,13 @@ public class TokenRequestProcessorTests
     /// The control for the row above: the same scopes and the same refresh token, and the only difference
     /// is that nobody declared a push. Section 10.3.1 requires these claims in push mode, and a poll or
     /// ping client holds the identifier already.
+    /// <para>
+    /// It is not the only thing holding that property, and calling it "the control" without this would
+    /// overstate it. Building the bindings unconditionally turns four rows red: this one and three that
+    /// predate the branch, whose Moq setups name the six-argument call and so bake in a null binding.
+    /// What this row adds is saying the property out loud, where those three hold it as a side effect
+    /// of how they were arranged.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_WithoutAPushDelivery_PassesNoBindings()
