@@ -114,13 +114,10 @@ public class IdentityTokenServiceTests
     /// A digest would leave the client nothing to compare.
     /// </para>
     /// <para>
-    /// The refresh hash is asserted against the shared calculator, which pins the algorithm argument, the
-    /// source value and the claim name - the three things this row is for. It does NOT pin the digest:
-    /// both sides are computed by the same code, so a change inside the calculator moves them together
-    /// and this row stays green. That is not a gap. <c>HashCalculatorTests</c> in the Jwt suite holds the
-    /// digest against the literals OpenID Connect Core prints in its own worked examples, which is
-    /// stronger than any value computed here would be - a hand-computed literal agrees with the code
-    /// that produced it, while those agree with the document.
+    /// All three literals below are the specification's own, taken from the worked example in that same section: the
+    /// identifier, the refresh token, and the hash it prints for that token. So the digest is asserted
+    /// against the DOCUMENT rather than against this implementation - change the calculation and this
+    /// row goes red, where a value recomputed here would have moved with it and stayed green.
     /// </para>
     /// </remarks>
     [Fact]
@@ -142,7 +139,8 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         const string authenticationRequestId = "1c266114-a1be-4252-8ad1-04986c5b9ac1";
-        const string refreshToken = "4bwc0ESC-IAhflf-ACC-vjD-ltc11ne-8gFPfA2Kx16";
+        const string refreshToken = "4bwc0ESC_IAhflf-ACC_vjD_ltc11ne-8gFPfA2Kx16";
+        const string refreshTokenHash = "sHahCuSpXCRg5mkDDvvr4w";
 
         // Act
         await _service.CreateIdentityTokenAsync(
@@ -157,7 +155,7 @@ public class IdentityTokenServiceTests
             capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]!.GetValue<string>());
 
         Assert.Equal(
-            HashCalculator.Compute(SigningAlgorithms.RS256, refreshToken),
+            refreshTokenHash,
             capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]!.GetValue<string>());
     }
 
