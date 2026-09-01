@@ -80,14 +80,15 @@ public sealed class DefaultSecurityEventTokenVerifier(
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
 
-            // An algorithm this receiver does not accept lands on SignatureInvalid with everything
-            // else the core refuses a signature over, and that is not a loss of meaning: RFC 8935
-            // Section 2.4 renders it as invalid_key, "unacceptable to the SET Recipient", which is
-            // what it is. Reading it out of JwtError.InvalidAlgorithm instead would be wrong here -
-            // that category also carries a missing alg, an unregistered one and an unsigned token,
-            // and this seam cannot tell them apart. The description says which happened, and the
-            // core writes it where the branch is known.
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
+
+            // An algorithm this receiver does not accept lands here with everything else the core
+            // refuses a signature over, and that is not a loss of meaning: RFC 8935 Section 2.4 renders
+            // it as invalid_key, "unacceptable to the SET Recipient", which is what it is. Reading it
+            // out of JwtError.InvalidAlgorithm instead would be wrong - that category also carries a
+            // missing alg, an unregistered one and an unsigned token, and this seam cannot tell them
+            // apart. The description says which happened, and the core writes it where the branch is
+            // known.
             _ => SecurityEventTokenErrorCode.SignatureInvalid,
         };
 

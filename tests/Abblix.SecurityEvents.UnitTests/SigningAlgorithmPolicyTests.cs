@@ -283,7 +283,8 @@ public class SigningAlgorithmPolicyTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = KeyFor(SigningAlgorithms.ES256);
 
-        var compact = await SignAsync(BuildPair(key, [SigningAlgorithms.ES256]), cancellationToken);
+        await using var transmitter = BuildPair(key, [SigningAlgorithms.ES256]);
+        var compact = await SignAsync(transmitter, cancellationToken);
         await using var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()

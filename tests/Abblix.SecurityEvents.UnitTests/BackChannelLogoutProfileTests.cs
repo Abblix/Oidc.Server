@@ -268,6 +268,11 @@ public class BackChannelLogoutProfileTests
         // The refusal has to be actionable: the message names the algorithm the provider signed with
         // and the one this receiver would have taken, which is the whole of what the host must change.
         Assert.True(result.TryGetFailure(out var error));
+
+        // The code by name. This row previously asserted only that it was NOT SignatureInvalid, and when
+        // that was deleted it asserted nothing about the code at all - on the one path the ledger records
+        // as the source of a shipped-behaviour regression.
+        Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
         Assert.Contains(algorithm, error.Description, StringComparison.Ordinal);
         Assert.Contains(SigningAlgorithms.RS256, error.Description, StringComparison.Ordinal);
 

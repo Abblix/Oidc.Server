@@ -530,6 +530,47 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// A refusal by the allowlist names the algorithm that was offered and the whole set that would
+    /// have been taken, in a stable order.
+    /// </summary>
+    /// <remarks>
+    /// Asserted in the library that OWNS the string. It was readable only from a downstream suite,
+    /// which is a gate on somebody else's build: dropping the clause from this message killed two rows
+    /// in Abblix.SecurityEvents.UnitTests and none here.
+    /// <para>
+    /// Two algorithms, supplied in the REVERSE of ordinal order, because a set has no order of its own -
+    /// with one element the sort is unobservable and the deterministic-message half of the claim has no
+    /// instrument behind it at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AnAlgorithmOutsideTheAllowlist_IsRefusedNamingTheWholeSetInOrder()
+    {
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, SigningKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            AllowedSigningAlgorithms = new HashSet<string>(StringComparer.Ordinal)
+            {
+                SigningAlgorithms.PS512,
+                SigningAlgorithms.ES256,
+            },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
+        Assert.Contains(SigningAlgorithms.RS256, error.ErrorDescription, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{SigningAlgorithms.ES256}, {SigningAlgorithms.PS512}",
+            error.ErrorDescription,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// RFC 8725 §3.1/§3.3: a signed token (alg != none) must ALWAYS have its signature verified,
     /// even when the caller requests neither <see cref="ValidationOptions.RequireSignedTokens"/> nor
     /// <see cref="ValidationOptions.ValidateIssuerSigningKey"/>. A token signed with one key must not
