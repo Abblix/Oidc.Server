@@ -8,6 +8,7 @@
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
@@ -182,7 +183,10 @@ public class SigningAlgorithmPolicyTests
     /// <para>
     /// The widening half is the row's other case, and it is not decoration: the verifier is SHARED, so a
     /// host receiving Back-Channel Logout from a provider whose clients registered ES256 resolves this
-    /// same one and must name it here. Without that case a default that refused everything would pass.
+    /// same one and must name it here. It is also the only half of THIS theory that reads a configured
+    /// set - the acceptance assertions above it run on the default, so they cannot tell a working
+    /// allowlist from one nothing consults. Other rows in this file hold that too; what none of them
+    /// holds is the pairing, the same token refused on the default and taken after widening.
     /// </para>
     /// </remarks>
     [Theory]
@@ -207,7 +211,8 @@ public class SigningAlgorithmPolicyTests
 
         // Signed by a transmitter that allows this algorithm, so what the row measures is the RECEIVING
         // half alone: the signer's own policy would otherwise refuse before anything reached a verifier.
-        var compact = await SignAsync(BuildPair(key, [algorithm]), cancellationToken);
+        await using var transmitter = BuildPair(key, [algorithm]);
+        var compact = await SignAsync(transmitter, cancellationToken);
 
         var verified = await host.GetRequiredService<ISecurityEventTokenVerifier>()
             .VerifyAsync(compact, cancellationToken: cancellationToken);
@@ -215,7 +220,7 @@ public class SigningAlgorithmPolicyTests
         Assert.Equal(acceptedByDefault, verified.TryGetSuccess(out _));
 
         // And widening admits it, which is the move the documentation tells such a host to make.
-        var widened = BuildPair(key, [algorithm]);
+        await using var widened = BuildPair(key, [algorithm]);
         var accepted = await widened.GetRequiredService<ISecurityEventTokenVerifier>()
             .VerifyAsync(compact, cancellationToken: cancellationToken);
 
@@ -223,13 +228,54 @@ public class SigningAlgorithmPolicyTests
     }
 
     /// <summary>
-    /// The refusal names the algorithm and the way out, rather than reading as a bad signature.
+    /// An algorithm failure that is NOT a policy refusal does not offer the way out of one.
     /// </summary>
     /// <remarks>
-    /// A narrow default is only workable if the host that meets it can tell what happened. An algorithm
-    /// outside the set is a POLICY decision; answering it the way a tampered token is answered sends an
-    /// operator looking for an attacker while the fix is one line of configuration - which is the same
-    /// defect as a key-size refusal arriving as <c>invalid_signature</c>.
+    /// The negative control for the row below, and the reason it exists: the core reports four
+    /// different failures under one category - a missing <c>alg</c>, one outside the RFC 7518
+    /// taxonomy, the allowlist refusal, and an unsigned token where signatures are required - so a
+    /// consumer that reads the category and appends "widen your allowlist" says it to all four.
+    /// Measured before this was fixed: an unsigned Logout Token, the one thing Back-Channel Logout
+    /// 1.0 Section 2.6 makes a MUST NOT, was answered with an instruction to widen a property whose
+    /// setter throws for <c>none</c>. The sentence now lives where the branch is known, so these
+    /// three rows go red the moment anything reconstructs it from the category again.
+    /// </remarks>
+    [Theory]
+    [InlineData("""{"alg":"none","typ":"secevent+jwt"}""", "")]
+    [InlineData("""{"typ":"secevent+jwt"}""", "AAAA")]
+    [InlineData("""{"alg":"RS999","typ":"secevent+jwt"}""", "AAAA")]
+    public async Task AnAlgorithmFailureThatIsNotAPolicyRefusal_DoesNotAdviseWidening(
+        string header,
+        string signature)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var receiver = BuildPair(KeyFor(SigningAlgorithms.RS256), [SigningAlgorithms.RS256]);
+
+        var payload = """{"iss":"https://transmitter.example.com","aud":"https://receiver.example.com"}""";
+        var compact = $"{Base64UrlOf(header)}.{Base64UrlOf(payload)}.{signature}";
+
+        var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
+            .VerifyAsync(compact, cancellationToken: cancellationToken);
+
+        Assert.True(verified.TryGetFailure(out var error));
+        Assert.DoesNotContain("allowed signing algorithms", error.Description, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            nameof(SecurityEventsOptions.AllowedSigningAlgorithms),
+            error.Description,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The refusal names the algorithm that was offered and the one that would have been taken, and
+    /// carries the code a receiver's own policy is reported under.
+    /// </summary>
+    /// <remarks>
+    /// A narrow default is only workable if the host that meets it can tell what happened, and the code
+    /// is not where that lands: <see cref="SecurityEventTokenErrorCode.SignatureInvalid"/> covers a
+    /// policy refusal as well as a bad signature, because neither is healed by refetching keys - the one
+    /// distinction the codes are coarse enough to keep. On the wire that is <c>invalid_key</c>, the
+    /// registry's entry for a key "otherwise unacceptable to the SET Recipient". What separates the two
+    /// is the DESCRIPTION, and this row reads both halves of it.
     /// </remarks>
     [Fact]
     public async Task AnAlgorithmOutsideTheSet_IsRefusedAsAPolicyDecision()
@@ -238,18 +284,21 @@ public class SigningAlgorithmPolicyTests
         var key = KeyFor(SigningAlgorithms.ES256);
 
         var compact = await SignAsync(BuildPair(key, [SigningAlgorithms.ES256]), cancellationToken);
-        var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
+        await using var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
             .VerifyAsync(compact, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetFailure(out var error));
-        Assert.NotEqual(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+
+        // Named, not "anything but SignatureInvalid": a negative assertion is satisfied by every other
+        // member of the enum, so it stayed green while the wire code moved to invalid_request.
+        Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+        Assert.Equal(DeliveryErrorCodes.InvalidKey, DeliveryErrorCodes.FromValidationError(error.Code));
+
+        // Both halves of an actionable refusal: what was offered, and what would have been taken.
         Assert.Contains(SigningAlgorithms.ES256, error.Description, StringComparison.Ordinal);
-        Assert.Contains(
-            nameof(SecurityEventsOptions.AllowedSigningAlgorithms),
-            error.Description,
-            StringComparison.Ordinal);
+        Assert.Contains(SigningAlgorithms.RS256, error.Description, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -335,6 +384,9 @@ public class SigningAlgorithmPolicyTests
 
         Assert.Contains("mismatch", refusal.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string Base64UrlOf(string json)
+        => System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(json));
 
     private static JsonWebKey KeyFor(string algorithm) => algorithm switch
     {

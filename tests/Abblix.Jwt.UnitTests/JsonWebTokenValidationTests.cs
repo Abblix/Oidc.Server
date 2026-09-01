@@ -494,6 +494,42 @@ public class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// An unsigned token is refused for BEING unsigned, even when the caller also supplies an
+    /// allowlist that "none" is missing from.
+    /// </summary>
+    /// <remarks>
+    /// The two refusals share <see cref="JwtError.InvalidAlgorithm"/>, so only the description
+    /// separates them, and the order they are checked in decides which one a caller reads. With the
+    /// allowlist checked first, every caller that states a policy got "not in the allowed signing
+    /// algorithms" for the alg:none downgrade - an answer that invites widening the list to admit an
+    /// unsigned token, which is the one thing a signing policy exists to forbid. No allowlist can
+    /// contain "none" and still be a policy, so that ordering also left this refusal unreachable for
+    /// every such caller: the row above passes either way, because it reads only the category.
+    /// </remarks>
+    [Fact]
+    public async Task UnsignedToken_WithAnAllowlistAlsoSet_IsRefusedForBeingUnsigned()
+    {
+        var token = CreateValidToken();
+        var jwt = await IssueToken(token, signingKey: null);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var parameters = CreateValidationParameters(SigningKey) with
+        {
+            AllowedSigningAlgorithms = new HashSet<string>(StringComparer.Ordinal)
+            {
+                SigningAlgorithms.RS256,
+            },
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
+        Assert.Contains("Unsigned", error.ErrorDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowed signing algorithms", error.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// RFC 8725 §3.1/§3.3: a signed token (alg != none) must ALWAYS have its signature verified,
     /// even when the caller requests neither <see cref="ValidationOptions.RequireSignedTokens"/> nor
     /// <see cref="ValidationOptions.ValidateIssuerSigningKey"/>. A token signed with one key must not

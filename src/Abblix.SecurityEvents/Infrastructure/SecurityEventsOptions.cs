@@ -55,9 +55,10 @@ public sealed class SecurityEventsOptions
     /// does not implement, so naming that would name an algorithm nothing can use.
     /// </para>
     /// <para>
-    /// The refusal such a host meets says which algorithm was rejected and names this property, because
-    /// the alternative is a policy decision arriving as <c>invalid_signature</c> - the same answer a
-    /// tampered token gives, and an operator sent hunting for an attacker.
+    /// The refusal such a host meets names the algorithm that was rejected AND the set that would have
+    /// been accepted, so the way out is readable from the message with no configuration in front of
+    /// you. It arrives as <c>SignatureInvalid</c>, which RFC 8935 Section 2.4 renders on the wire as
+    /// <c>invalid_key</c> - a key "unacceptable to the SET Recipient", which is what this is.
     /// </para>
     /// <para>
     /// What the set cannot contain is <c>none</c>: an unsigned security event is not a weaker signature

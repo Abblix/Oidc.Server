@@ -44,8 +44,17 @@ public enum SecurityEventTokenErrorCode
     UnknownIssuer,
 
     /// <summary>
-    /// The signature does not verify against the issuer's keys.
+    /// The signature does not verify against the issuer's keys, or it was made with an algorithm
+    /// this receiver does not accept.
     /// </summary>
+    /// <remarks>
+    /// One code for two causes because a receiver answers both the same way, and because the wire
+    /// word they share fits both: RFC 8935 Section 2.4 defines <c>invalid_key</c> as a key "invalid
+    /// or otherwise unacceptable to the SET Recipient", and an algorithm outside the accepted set is
+    /// unacceptable in exactly that sense. Which of the two happened is in
+    /// <see cref="SecurityEventTokenValidationError.Description"/>, and a policy refusal's
+    /// description names both the algorithm that was offered and the set that would have been taken.
+    /// </remarks>
     SignatureInvalid,
 
     /// <summary>

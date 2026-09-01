@@ -74,29 +74,23 @@ public sealed class DefaultSecurityEventTokenVerifier(
         }
     }
 
-    private SecurityEventTokenValidationError Translate(JwtValidationError error, bool noKeysResolved)
+    private static SecurityEventTokenValidationError Translate(JwtValidationError error, bool noKeysResolved)
     {
         var code = error.Error switch
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
 
-            // An algorithm this deployment did not allow is a POLICY refusal, and it must not wear the
-            // answer a tampered token gets: an operator meeting invalid_signature goes looking for an
-            // attacker, where the fix is one line of configuration. The core has its own code for it,
-            // so the distinction exists and only needs carrying.
-            JwtError.InvalidAlgorithm => SecurityEventTokenErrorCode.MalformedToken,
-
+            // An algorithm this receiver does not accept lands on SignatureInvalid with everything
+            // else the core refuses a signature over, and that is not a loss of meaning: RFC 8935
+            // Section 2.4 renders it as invalid_key, "unacceptable to the SET Recipient", which is
+            // what it is. Reading it out of JwtError.InvalidAlgorithm instead would be wrong here -
+            // that category also carries a missing alg, an unregistered one and an unsigned token,
+            // and this seam cannot tell them apart. The description says which happened, and the
+            // core writes it where the branch is known.
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
             _ => SecurityEventTokenErrorCode.SignatureInvalid,
         };
 
-        var description = error.Error == JwtError.InvalidAlgorithm
-            ? $"{error.ErrorDescription} This deployment accepts "
-              + $"{string.Join(", ", allowedAlgorithms)}; widen "
-              + $"{nameof(SecurityEventsOptions)}."
-              + $"{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)} to accept another."
-            : error.ErrorDescription;
-
-        return new SecurityEventTokenValidationError(code, description);
+        return new SecurityEventTokenValidationError(code, error.ErrorDescription);
     }
 }

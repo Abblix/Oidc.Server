@@ -265,15 +265,11 @@ public class BackChannelLogoutProfileTests
         if (acceptedByDefault)
             return;
 
-        // The refusal has to be actionable: a policy decision answered the way a tampered token is
-        // answered sends an operator looking for an attacker while the fix is one line of configuration.
+        // The refusal has to be actionable: the message names the algorithm the provider signed with
+        // and the one this receiver would have taken, which is the whole of what the host must change.
         Assert.True(result.TryGetFailure(out var error));
-        Assert.NotEqual(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
         Assert.Contains(algorithm, error.Description, StringComparison.Ordinal);
-        Assert.Contains(
-            nameof(SecurityEventsOptions.AllowedSigningAlgorithms),
-            error.Description,
-            StringComparison.Ordinal);
+        Assert.Contains(SigningAlgorithms.RS256, error.Description, StringComparison.Ordinal);
 
         // And widening admits it, which is what the documentation tells such a host to do.
         var widened = await RealVerifierProfile(key, [algorithm]).ValidateAsync(

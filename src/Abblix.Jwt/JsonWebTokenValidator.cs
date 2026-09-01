@@ -233,24 +233,38 @@ internal class JsonWebTokenValidator(
                 $"Unknown signing algorithm '{algorithm}' (RFC 7515 §5.3 byte-exact comparison).");
         }
 
-        // Optional caller-supplied algorithm whitelist. Enforced before any other
-        // alg-related branching so policy violations get a specific error rather than
-        // routing through the (looser) signer-resolution failure path.
+        // Ahead of the allowlist, because an unsigned token is refused for BEING unsigned rather than
+        // for being absent from a list it can never appear in: any caller whose allowlist is a policy
+        // rejects "none" from it, so leaving this arm behind the list left it unreachable for every
+        // caller that supplies one - and answered the alg:none downgrade with "not in the allowed
+        // signing algorithms", which reads as an invitation to widen the list until it fits.
+        if (algorithm == SigningAlgorithms.None
+            && parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens))
+        {
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed");
+        }
+
+        // Optional caller-supplied algorithm whitelist, checked before the signer is resolved so a
+        // policy violation gets its own error rather than the looser signer-resolution failure.
+        //
+        // The accepted set is named HERE because this is the only place the cause is known:
+        // JwtError.InvalidAlgorithm carries four different failures - a missing alg, one outside
+        // the RFC 7518 taxonomy, this policy refusal, and an unsigned token where signatures are
+        // required - so a caller branching on the category cannot tell which it met. One that
+        // guesses advises widening an allowlist over a token that names no algorithm at all.
         if (parameters.AllowedSigningAlgorithms is { Count: > 0 } whitelist
             && !whitelist.Contains(algorithm))
         {
             return new JwtValidationError(
                 JwtError.InvalidAlgorithm,
-                $"Algorithm '{algorithm}' is not in the allowed signing algorithms.");
+                $"Algorithm '{algorithm}' is not in the allowed signing algorithms, which are "
+                + $"{string.Join(", ", whitelist.Order(StringComparer.Ordinal))}.");
         }
 
         // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
         // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
         return algorithm switch
         {
-            SigningAlgorithms.None when parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens) =>
-                new JwtValidationError(JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed"),
-            
             SigningAlgorithms.None when jwtParts[2].HasValue()
                 => new JwtValidationError(JwtError.MalformedToken, "Unsigned token must have empty signature"),
 
