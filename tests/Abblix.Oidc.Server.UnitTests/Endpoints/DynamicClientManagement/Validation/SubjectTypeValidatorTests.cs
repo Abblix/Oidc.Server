@@ -518,4 +518,125 @@ public class SubjectTypeValidatorTests
         Assert.NotNull(result);
         Assert.Contains(notificationEndpoint.OriginalString, result.ErrorDescription);
     }
+    /// <summary>
+    /// With no sector identifier URI and no redirect URI, the sector is the host of the URI the
+    /// delivery mode names.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 4: the jwks_uri stands in for the redirect URI in poll and ping, the
+    /// backchannel_client_notification_endpoint in push. Ping registers a notification endpoint as
+    /// well and its sector is still the jwks_uri, which is why ping is grouped with poll here and not
+    /// with push - a row that exists to catch the grouping being done by "has a notification endpoint"
+    /// instead of by mode.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Push, "notify.example.com")]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, "keys.example.com")]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, "keys.example.com")]
+    public async Task ValidateAsync_CibaWithNoRedirectUri_TakesTheSectorFromTheModesUri(
+        string deliveryMode, string expectedSector)
+    {
+        // Arrange
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            deliveryMode: deliveryMode,
+            notificationEndpoint: new Uri("https://notify.example.com/callback"),
+            jwksUri: new Uri("https://keys.example.com/jwks"));
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(expectedSector, context.SectorIdentifier);
+    }
+
+    /// <summary>
+    /// A pairwise poll or ping client that registered neither a sector identifier URI nor a jwks_uri
+    /// is refused.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 4 requires exactly this pair: "the RP must provide either a
+    /// sector_identifier_uri or a jwks_uri at the registration phase when the
+    /// urn:openid:params:grant-type:ciba grant type is registered", and separately that an OP
+    /// supporting PPIDs "MUST check if a valid jwks_uri is set when the subject_type is pairwise".
+    /// Without one there is no host to derive a sector from, and a client id would make the
+    /// identifiers per-client where the specification makes them per-sector.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    public async Task ValidateAsync_PairwisePollOrPingWithNoJwksUri_ShouldReturnError(string deliveryMode)
+    {
+        // Arrange
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            deliveryMode: deliveryMode,
+            notificationEndpoint: new Uri("https://notify.example.com/callback"));
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// A registered redirect URI still decides the sector, even for a client that also registered a
+    /// backchannel delivery mode.
+    /// </summary>
+    /// <remarks>
+    /// The order matters beyond correctness: the pairwise pseudonym is sealed with the sector as
+    /// associated data, so moving a client's sector invalidates every identifier already issued to it.
+    /// Putting the CIBA URIs BELOW the redirect URI is what keeps every client that has one where it
+    /// was.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_CibaClientWithARedirectUri_KeepsTheRedirectUriHost()
+    {
+        // Arrange
+        var context = CreateContext(
+            redirectUris: [new Uri("https://app.example.com/callback")],
+            subjectType: SubjectTypes.Pairwise,
+            deliveryMode: BackchannelTokenDeliveryModes.Push,
+            notificationEndpoint: new Uri("https://notify.example.com/callback"));
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal("app.example.com", context.SectorIdentifier);
+    }
+
+    /// <summary>
+    /// The URI a sector is taken from must be https, the same rule the redirect URI branch applies.
+    /// </summary>
+    /// <remarks>
+    /// BackChannelAuthenticationValidator enforces the specification's "It MUST be an HTTPS URL" for
+    /// the notification endpoint, but it is registered AFTER this validator, so at this point the value
+    /// has been through no scheme check - and this branch is about to take a sector identity from its
+    /// host.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_CibaSectorUriOverHttp_ShouldReturnError()
+    {
+        // Arrange
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            deliveryMode: BackchannelTokenDeliveryModes.Push,
+            notificationEndpoint: new Uri("http://notify.example.com/callback"));
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+        Assert.Null(context.SectorIdentifier);
+    }
 }
