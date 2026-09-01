@@ -97,6 +97,13 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///
 ///         storedRequest.Status = BackChannelAuthenticationStatus.Denied;
 ///         await _storage.UpdateAsync(authReqId, storedRequest, TimeSpan.FromMinutes(5));
+///
+///         // Writing the status is not telling anybody. A poll-mode client waiting on a long poll is
+///         // woken by IBackChannelLongPollingService, which nothing in the library calls for a status
+///         // the host wrote itself - so without this the user's refusal answers only when the waiter's
+///         // window runs out. Inject the notifier where the deployment registered one.
+///         if (_longPolling != null)
+///             await _longPolling.NotifyStatusChangeAsync(authReqId, storedRequest.Status);
 ///     }
 /// }
 /// </code>

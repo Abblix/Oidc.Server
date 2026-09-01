@@ -40,8 +40,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// var statusChange = await longPollingSignaler.WaitForStatusChangeAsync(authReqId, timeout, cancellationToken);
 ///
 /// // 3. Meanwhile: User authenticates on device
-/// // 4. PollModeCompletionHandler signals the change - and only it: ping and push never call
-/// //    NotifyStatusChangeAsync, and poll skips it when no notifier is registered
+/// // 4. PollModeCompletionHandler signals the change - approval and refusal alike, and only it: ping
+/// //    and push never call NotifyStatusChangeAsync, and poll skips it when no notifier is registered
 /// await longPollingSignaler.NotifyStatusChangeAsync(authReqId, BackChannelAuthenticationStatus.Authenticated);
 ///
 /// // 5. Waiting request wakes up, checks storage, returns tokens
@@ -82,12 +82,25 @@ public interface IBackChannelLongPollingService
     /// <param name="newStatus">The new authentication status (for logging/diagnostics only).</param>
     /// <returns>A task that completes when all waiting requests have been notified.</returns>
     /// <remarks>
-    /// This should be called whenever authentication status changes from Pending to:
-    /// - Authenticated (user approved)
-    /// - Denied (user rejected)
-    /// - Expired (timeout occurred)
-    ///
+    /// <para>
+    /// Call this whenever a request leaves the Pending state, and note which of those transitions are
+    /// yours to signal rather than the library's.
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><strong>Authenticated and Denied through the completion handler</strong> are signalled by
+    ///   <c>PollModeCompletionHandler</c> itself - a host that completes through
+    ///   <see cref="IAuthenticationCompletionHandler"/> needs nothing more.</item>
+    ///   <item><strong>A status the host writes to storage itself</strong> is the host's to signal. The
+    ///   denial pattern documented on <see cref="IUserDeviceAuthenticationHandler"/> is exactly this
+    ///   case: it updates the stored record directly, so nothing in the library sees the change and a
+    ///   waiter sleeps until its own window runs out.</item>
+    ///   <item><strong>Expiry</strong> is signalled by nobody. A request expires by falling out of
+    ///   storage on its lifetime, which is not an event anything observes, so a waiter learns of it by
+    ///   timing out - and that is what the timeout is for.</item>
+    /// </list>
+    /// <para>
     /// It's safe to call this even if no requests are waiting - it's a no-op in that case.
+    /// </para>
     /// </remarks>
     Task NotifyStatusChangeAsync(
         string authenticationRequestId,

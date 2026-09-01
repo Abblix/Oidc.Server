@@ -52,9 +52,44 @@ public partial class PollModeCompletionHandler(
 
         LogTokensStored(authenticationRequestId);
 
-        if (statusNotifier != null)
-        {
-            await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, request.Status);
-        }
+        await NotifyAsync(authenticationRequestId, request.Status);
+    }
+
+    /// <summary>
+    /// Refuses by denying, as the base class does, and then wakes whoever is waiting.
+    /// </summary>
+    /// <remarks>
+    /// A denial is exactly as final as an approval, and the client learns about both the same way - by
+    /// polling. Without this a request the end user rejected in a second answers only when the waiter's
+    /// own long-poll window runs out, while the identical request they approved answers at once. The
+    /// asymmetry has no reason behind it: this path already knows the status changed and already writes
+    /// it.
+    /// </remarks>
+    protected override async Task RefuseAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn)
+    {
+        await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+
+        await NotifyAsync(authenticationRequestId, request.Status);
+    }
+
+    /// <summary>
+    /// Wakes the waiters of one request, or does nothing when the deployment registered no notifier.
+    /// </summary>
+    /// <remarks>
+    /// One place on purpose, so that a transition added later signals by construction rather than by
+    /// somebody remembering: what the contract promises is that every transition THIS class performs
+    /// reaches the notifier, which a list of call sites cannot keep true.
+    /// </remarks>
+    private async Task NotifyAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationStatus status)
+    {
+        if (statusNotifier == null)
+            return;
+
+        await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, status);
     }
 }
