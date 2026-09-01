@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.DependencyInjection;
@@ -193,6 +194,51 @@ public class InfrastructureIntegrationTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+    }
+
+    /// <summary>
+    /// A validly signed token whose JOSE header is structurally wrong is a MALFORMED token, not a key
+    /// problem.
+    /// </summary>
+    /// <remarks>
+    /// The signature verifies and the algorithm is accepted, so neither thing
+    /// <see cref="SecurityEventTokenErrorCode.SignatureInvalid"/> stands for happened - and on the wire
+    /// that code is <c>invalid_key</c>, which told a transmitter its keys were unacceptable over a
+    /// header it should have been told to fix. <c>crit</c> is checked unconditionally, right after the
+    /// signature, so this is reachable by any transmitter that emits one.
+    /// <para>
+    /// The core reports it as <see cref="JwtError.InvalidHeader"/>, which is what that member's own
+    /// documentation describes - "the crit array is malformed or names an unknown extension" - and the
+    /// mapping here carries the distinction the rest of the way.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AStructurallyBadCriticalHeader_IsRejected_AsMalformedToken()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        await using var host = BuildHost(key, key);
+
+        var built = new SecurityEventTokenBuilder()
+            .WithIssuer(Issuer)
+            .WithJwtId("jti-crit")
+            .WithIssuedAt(Now)
+            .WithAudience(Audience)
+            .WithEvent(MembershipChanged, new JsonObject { ["change"] = "revoked" })
+            .Build();
+
+        // Signed OVER the bad header, so the token is genuine and only its structure is wrong. A header
+        // edited after signing would fail on the signature instead and prove nothing.
+        built.Token.Header.Critical = ["not-a-real-header"];
+
+        var compact = await host.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(built, TestContext.Current.CancellationToken);
+
+        var result = await host.GetRequiredKeyedService<ISecurityEventTokenValidator>("test")
+            .ValidateAsync(compact, ReceiverOptions(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(SecurityEventTokenErrorCode.MalformedToken, error.Code);
+        Assert.Equal(DeliveryErrorCodes.InvalidRequest, DeliveryErrorCodes.FromValidationError(error.Code));
     }
 
     [Fact]

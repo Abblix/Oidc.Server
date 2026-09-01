@@ -418,7 +418,7 @@ internal class JsonWebTokenValidator(
             if (serviceProvider.GetKeyedService<ICriticalHeaderHandler>(crit[i]) is not { } handler)
             {
                 return new JwtValidationError(
-                    JwtError.InvalidToken,
+                    JwtError.InvalidHeader,
                     $"Unknown critical header parameter: {crit[i]}");
             }
 

@@ -80,6 +80,18 @@ public sealed class DefaultSecurityEventTokenVerifier(
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
 
+            // A token whose STRUCTURE the core refuses - a malformed 'crit' header, an unusable 'jwk' -
+            // is a token that does not conform, not a key problem, so it goes to the code whose wire word
+            // is invalid_request rather than the one whose word is invalid_key. Without this a correctly
+            // signed SET with a bad 'crit' told the transmitter its keys were unacceptable.
+            //
+            // Safe HERE and only here, because of the parameters built above: the issuer, audience and
+            // lifetime stages all return the token untouched when their option is not requested, and this
+            // verifier requests none of them - the SET pipeline asks those questions itself, in its own
+            // vocabulary. Adding one of those options to the parameters would put an expired or
+            // wrong-audience token into this arm, where "cannot be parsed" is false of it.
+            JwtError.InvalidHeader => SecurityEventTokenErrorCode.MalformedToken,
+
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
 
             // An algorithm this receiver does not accept lands here with everything else the core

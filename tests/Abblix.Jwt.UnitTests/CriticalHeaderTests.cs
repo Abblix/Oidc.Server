@@ -56,7 +56,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -155,7 +155,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -173,7 +173,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     /// <summary>
@@ -215,7 +215,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
         Assert.Equal(RejectingB64Handler.RejectionReason, error.ErrorDescription);
     }
 
@@ -238,7 +238,7 @@ public class CriticalHeaderTests
         var result = await Validate(sp, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
     }
 
     private static IServiceProvider CreateServiceProvider(Action<IServiceCollection>? configure = null)
@@ -275,7 +275,7 @@ public class CriticalHeaderTests
 
         public Task<JwtValidationError?> HandleAsync(CriticalHeaderContext context, CancellationToken cancellationToken)
             => Task.FromResult<JwtValidationError?>(
-                new JwtValidationError(JwtError.InvalidToken, RejectionReason));
+                new JwtValidationError(JwtError.InvalidHeader, RejectionReason));
     }
 
     private static async Task<string> IssueTokenWithHeader(
