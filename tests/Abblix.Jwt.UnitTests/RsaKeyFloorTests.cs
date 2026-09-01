@@ -5,9 +5,14 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers.Text;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt.Encryption;
+using Abblix.Jwt.Signing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -157,6 +162,142 @@ public class RsaKeyFloorTests
             Algorithm = algorithm,
             EncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
         };
+
+    /// <summary>
+    /// A verification that failed because a candidate key is under the floor SAYS so, naming the key and
+    /// both sizes.
+    /// </summary>
+    /// <remarks>
+    /// The refusal itself is right and stays as it is: an undersized key from a peer is a signature that
+    /// does not check out, and <c>Verify</c> returning false is what says that. What was wrong was the
+    /// silence around it. The case is not a hostile peer but a rotation - a key ring holding one retired
+    /// sub-floor key signs new tokens with the leading key and fails every token signed before the
+    /// upgrade, all of them labelled as tampering, with nothing anywhere naming a size.
+    /// <para>
+    /// Driven through the real signer rather than through the reporting method, because the property is
+    /// that the two arrive together: a test calling the reporter directly would pass over a build where
+    /// nothing calls it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_ACandidateKeyBelowTheFloor_IsNamedInTheLog()
+    {
+        var log = new CapturingLogger();
+        var (token, key) = SignedWithAnRsaKeyOf(1024);
+
+        var error = await SignerWith(log).ValidateAsync(
+            token.Split('.'), HeaderOf(token), Keys(key), TestContext.Current.CancellationToken);
+
+        Assert.Equal(JwtError.InvalidSignature, Assert.IsType<JwtValidationError>(error).Error);
+
+        var warning = Assert.Single(log.Entries);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Contains("1024", warning.Message);
+        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), warning.Message);
+        Assert.Contains(key.KeyId!, warning.Message);
+    }
+
+    /// <summary>
+    /// The control. Without it a reporter that named every failed verification as undersized would pass
+    /// the row above, and every ordinary bad signature would arrive carrying a key-size explanation.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ASignatureThatSimplyDoesNotMatch_SaysNothingAboutSizes()
+    {
+        var log = new CapturingLogger();
+        var (token, _) = SignedWithAnRsaKeyOf(JsonWebKeyExtensions.MinimumRsaKeyBits);
+        var (_, somebodyElse) = SignedWithAnRsaKeyOf(JsonWebKeyExtensions.MinimumRsaKeyBits);
+
+        var error = await SignerWith(log).ValidateAsync(
+            token.Split('.'), HeaderOf(token), Keys(somebodyElse), TestContext.Current.CancellationToken);
+
+        Assert.Equal(JwtError.InvalidSignature, Assert.IsType<JwtValidationError>(error).Error);
+        Assert.Empty(log.Entries);
+    }
+
+    /// <summary>The header the validator is handed, read back from the token itself.</summary>
+    private static JsonWebTokenHeader HeaderOf(string token)
+        => new(JsonNode.Parse(Base64Url.DecodeFromChars(token.Split('.')[0]))!.AsObject());
+
+    /// <summary>
+    /// A signed JWS and the public half of the key that signed it, at whatever size is asked for.
+    /// </summary>
+    /// <remarks>
+    /// Signed through <see cref="RSA"/> directly rather than through this library's signer, which refuses
+    /// an undersized key on the signing side - correctly, and it is the token minted BEFORE such a key
+    /// was retired that this is about.
+    /// </remarks>
+    private static (string Token, RsaJsonWebKey Key) SignedWithAnRsaKeyOf(int bits)
+    {
+        using var rsa = RSA.Create(bits);
+        var parameters = rsa.ExportParameters(false);
+        var key = new RsaJsonWebKey
+        {
+            KeyId = $"retired-{bits}",
+            Usage = PublicKeyUsages.Signature,
+            Algorithm = SigningAlgorithms.RS256,
+            Modulus = parameters.Modulus,
+            Exponent = parameters.Exponent,
+        };
+
+        var header = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(
+            $$"""{"alg":"RS256","typ":"JWT","kid":"{{key.KeyId}}"}"""));
+        var payload = Base64Url.EncodeToString(Encoding.UTF8.GetBytes("""{"sub":"someone"}"""));
+        var signature = rsa.SignData(
+            Encoding.UTF8.GetBytes($"{header}.{payload}"), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        return ($"{header}.{payload}.{Base64Url.EncodeToString(signature)}", key);
+    }
+
+    private static async IAsyncEnumerable<JsonWebKey> Keys(params JsonWebKey[] keys)
+    {
+        foreach (var key in keys)
+        {
+            yield return key;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private static JsonWebTokenSigner SignerWith(CapturingLogger log)
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<ISignatureAlgorithm<RsaJsonWebKey>>(
+            SigningAlgorithms.RS256, (_, _) => new RsaSigner(SigningAlgorithms.RS256));
+
+        return new JsonWebTokenSigner(log, services.BuildServiceProvider(), NoSigning.Instance);
+    }
+
+    /// <summary>The signing seam, which the verify path never reaches.</summary>
+    private sealed class NoSigning : IDataSigner
+    {
+        public static readonly NoSigning Instance = new();
+
+        public bool CanSign(JsonWebKey key) => false;
+
+        public Task<byte[]> SignAsync(
+            JsonWebKey key, string algorithm, byte[] data, CancellationToken cancellationToken)
+            => throw new NotSupportedException("The verify path does not sign.");
+    }
+
+    private sealed class CapturingLogger : ILogger<JsonWebTokenSigner>
+    {
+        private readonly List<(LogLevel Level, string Message)> _entries = [];
+
+        public IReadOnlyList<(LogLevel Level, string Message)> Entries => _entries;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => _entries.Add((logLevel, formatter(state, exception)));
+    }
 
     private static RsaJsonWebKey PublicOnlyKey(int bits)
     {

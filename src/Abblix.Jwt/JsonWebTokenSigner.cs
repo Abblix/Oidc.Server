@@ -177,10 +177,63 @@ internal partial class JsonWebTokenSigner(
         }
 
         if (!candidates.Any(key => VerifySignature(key, algorithm, signingInput, signature)))
+        {
+            // Said here because this is the last place holding the keys. A key below the floor is refused
+            // by its signer without verifying - which is right, and indistinguishable downstream from a
+            // signature that genuinely did not match, since both arrive as InvalidSignature. The case that
+            // makes it sharp is not a hostile peer but a rotation: a key ring holding one retired
+            // sub-floor key signs new tokens with the leading key and fails every token signed before the
+            // upgrade, with the tampering label on it and nothing naming a size.
+            foreach (var (key, bits, floor) in UndersizedKeys(candidates, algorithm))
+            {
+                LogKeyBelowTheFloor(algorithm, key.KeyId, bits, floor);
+            }
+
             return new JwtValidationError(JwtError.InvalidSignature, "Invalid signature");
+        }
 
         return null;
 
+    }
+
+    /// <summary>
+    /// The candidate keys that cannot carry the algorithm's nominal strength, with what each measures and
+    /// what it would have to.
+    /// </summary>
+    /// <remarks>
+    /// The floor is asked of the same constants the signers refuse by, so moving one moves both. What this
+    /// cannot do is ask a signer WHY it returned false: that would be a change to
+    /// <see cref="ISignatureAlgorithm{TKey}.Verify"/>, whose bool is exactly what makes an undersized key
+    /// from a peer a signature that does not check out rather than a fault in the caller. The cost of that
+    /// choice is here rather than hidden: a key type that grows a floor later is reported by nothing until
+    /// it is added below, and the symptom is the silence this method exists to end.
+    /// </remarks>
+    private static IEnumerable<(JsonWebKey Key, int Bits, int Floor)> UndersizedKeys(
+        IEnumerable<JsonWebKey> candidates,
+        string algorithm)
+    {
+        foreach (var key in candidates)
+        {
+            // RSA is measured from the modulus rather than from RSA.KeySize, for the reason
+            // ModulusBitLength gives, and its floor is per key type rather than per algorithm: RFC 7518
+            // states the same 2048 for signing and for key encryption alike.
+            (int Bits, int Floor)? measured = key switch
+            {
+                RsaJsonWebKey rsaKey
+                    => (rsaKey.ModulusBitLength(), JsonWebKeyExtensions.MinimumRsaKeyBits),
+
+                OctetJsonWebKey { KeyValue: { } keyValue }
+                    when JsonWebKeyExtensions.MinimumHmacKeyBits(algorithm) is { } floor
+                    => (keyValue.Length << 3, floor),
+
+                _ => null,
+            };
+
+            if (measured is { } size && size.Bits < size.Floor)
+            {
+                yield return (key, size.Bits, size.Floor);
+            }
+        }
     }
 
     /// <summary>

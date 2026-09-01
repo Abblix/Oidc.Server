@@ -190,6 +190,24 @@ public static class JsonWebKeyExtensions
 	public const int MinimumRsaKeyBits = 2048;
 
 	/// <summary>
+	/// The smallest HMAC key RFC 7518 Section 3.2 permits for <paramref name="algorithm"/>, in bits, or
+	/// <c>null</c> when the algorithm is not one of the HMAC family.
+	/// </summary>
+	/// <remarks>
+	/// "A key of the same size as the hash output" is the rule, so the number is the algorithm's own.
+	/// Null rather than a throw, because the two callers ask different questions: the signer knows it is
+	/// an HMAC algorithm and turns null into its own refusal, while a caller REPORTING on a key needs to
+	/// ask about any algorithm and take "no floor of this family" for an answer.
+	/// </remarks>
+	internal static int? MinimumHmacKeyBits(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.HS256 => 256,
+		SigningAlgorithms.HS384 => 384,
+		SigningAlgorithms.HS512 => 512,
+		_ => null,
+	};
+
+	/// <summary>
 	/// The RFC 7518 section that carries the key-size requirement for <paramref name="algorithm"/>.
 	/// </summary>
 	/// <remarks>
