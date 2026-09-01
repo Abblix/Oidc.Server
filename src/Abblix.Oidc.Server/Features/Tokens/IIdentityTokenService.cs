@@ -41,6 +41,10 @@ public interface IIdentityTokenService
     /// <param name="accessToken">An optional access token provided to include the `at_hash` claim in the identity token,
     /// which is a hash of the token. This parameter is used when the identity token is issued alongside an access token.
     /// </param>
+    /// <param name="pushBindings">The CIBA push notification this token travels in, or
+    /// <see langword="null"/> when it does not. Non-null adds the two bindings Section 10.3.1 requires
+    /// there and nowhere else - the request identifier verbatim, and the refresh token's hash when one
+    /// is sent.</param>
     /// <returns>A task that, upon completion, yields an <see cref="EncodedJsonWebToken"/> that represents the newly
     /// generated identity token, encoded and ready for transmission to the client.</returns>
     /// <remarks>
@@ -53,5 +57,6 @@ public interface IIdentityTokenService
 		ClientInfo clientInfo,
 		bool includeUserClaims,
 		string? authorizationCode,
-		string? accessToken);
+		string? accessToken,
+		PushDeliveryBindings? pushBindings = null);
 }
