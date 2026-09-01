@@ -9,17 +9,23 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the OIDC Core §8 <c>subject_type</c> metadata and computes the pairwise sector
-/// identifier per OIDC Core §8.1: when <c>pairwise</c> is requested, either a supplied
-/// <c>sector_identifier_uri</c> (HTTPS, JSON document of redirect URIs) is dereferenced and
-/// cross-checked against the registered <c>redirect_uris</c>, or all redirect URIs must
-/// share a single host. The resolved host is stored on the context for later persistence.
+/// Validates the OIDC Core Section 8 <c>subject_type</c> metadata and computes the pairwise sector
+/// identifier. When <c>pairwise</c> is requested, a supplied <c>sector_identifier_uri</c> (HTTPS) is
+/// dereferenced and every URI the registration is required to have listed there is checked against
+/// its contents; otherwise the host is taken from the registered redirect URIs, which must agree on
+/// one (OIDC Core Section 8.1). A backchannel client that registered NO redirect URI takes its host
+/// instead from the URI CIBA Core 1.0 Section 4 puts in their place - the <c>jwks_uri</c> in poll and
+/// ping, the <c>backchannel_client_notification_endpoint</c> in push. Registering both is allowed and
+/// they need not agree: the redirect URIs decide, and the backchannel URI is only ever the sector of a
+/// client that has none.
+/// The resolved host is stored on the context for later persistence.
 /// </summary>
 /// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>
 /// <param name="secureHttpFetcher">SSRF-protected fetcher for the sector identifier document.</param>
@@ -57,13 +63,10 @@ public partial class SubjectTypeValidator(
         if (contentResult.TryGetFailure(out var contentError))
             return contentError;
 
-        // A client registering no redirect URIs satisfies the subset check below with nothing to check:
-        // the rule is that everything it registered must appear in the sector document, and it registered
-        // nothing. Passing an empty set says that, where passing null would only ask the question again.
         var error = ValidateSectorIdentifierContent(
             sectorIdentifierUri,
             contentResult.GetSuccess(),
-            context.Request.RedirectUris ?? []);
+            RequiredInSectorDocument(context.Request));
 
         if (error != null)
             return error;
@@ -111,12 +114,50 @@ public partial class SubjectTypeValidator(
     }
 
     /// <summary>
+    /// The URIs this registration must have listed in its sector identifier document.
+    /// </summary>
+    /// <remarks>
+    /// OIDC Core Section 8.1 puts the redirect URIs there. CIBA Core 1.0 Section 4 adds two more and
+    /// says which one by delivery mode: "In CIBA Poll and Ping modes the jwks_uri is used in place of
+    /// the redirect_uri. In CIBA Push mode the backchannel_client_notification_endpoint is used in
+    /// place of the redirect_uri", and the sector document "can contain jwks_uris and
+    /// backchannel_client_notification_endpoints as well as redirect_uri".
+    /// <para>
+    /// Each entry is conditional on the mode that names it, so a registration with no delivery mode
+    /// contributes exactly what it did before this existed. A URI the client did not register
+    /// contributes nothing - the subset check asks whether what was REGISTERED appears in the
+    /// document, so an absent value has nothing to be missing.
+    /// </para>
+    /// </remarks>
+    private static IEnumerable<Uri> RequiredInSectorDocument(ClientRegistrationRequest request)
+    {
+        // A client registering no redirect URIs satisfies the subset check with nothing to check: the
+        // rule is that everything it registered must appear in the sector document, and it registered
+        // nothing. Yielding nothing says that, where a null would only ask the question again.
+        foreach (var redirectUri in request.RedirectUris ?? [])
+            yield return redirectUri;
+
+        switch (request.BackChannelTokenDeliveryMode)
+        {
+            case BackchannelTokenDeliveryModes.Push
+                when request.BackChannelClientNotificationEndpoint is {} notificationEndpoint:
+                yield return notificationEndpoint;
+                break;
+
+            case BackchannelTokenDeliveryModes.Poll or BackchannelTokenDeliveryModes.Ping
+                when request.JwksUri is {} jwksUri:
+                yield return jwksUri;
+                break;
+        }
+    }
+
+    /// <summary>
     /// Validates the content fetched from sector identifier URI.
     /// </summary>
     private OidcError? ValidateSectorIdentifierContent(
         Uri sectorIdentifierUri,
         Uri[] sectorIdentifierContent,
-        IEnumerable<Uri> redirectUris)
+        IEnumerable<Uri> requiredUris)
     {
         if (sectorIdentifierContent.Any(uri => !IsHttpsUri(uri)))
         {
@@ -124,20 +165,23 @@ public partial class SubjectTypeValidator(
                 "Every URI in the sector identifier document must be an absolute https URI");
         }
 
-        // OIDC Core §8.1 / OIDC Registration §5: the values of the registered redirect_uris MUST be
-        // included in the elements of the sector identifier document - the subset check goes from the
-        // registration towards the document, not the other way around. The document is intentionally
-        // shareable across several clients of the same sector, so it may list URIs this client did not
-        // register. The inverted check (document minus registration) both rejected such legitimate
-        // shared documents and let a client register a redirect URI absent from the document - i.e.
-        // claim a sector it does not belong to, breaking pairwise subject isolation.
-        var missingUris = redirectUris.Except(sectorIdentifierContent).ToArray();
+        // OIDC Core Section 8.1 / OIDC Registration Section 5: the registered values MUST be included in the elements
+        // of the sector identifier document - the subset check goes from the registration towards the
+        // document, not the other way around. The document is intentionally shareable across several
+        // clients of the same sector, so it may list URIs this client did not register. The inverted
+        // check (document minus registration) both rejected such legitimate shared documents and let a
+        // client register a URI absent from the document - i.e. claim a sector it does not belong to,
+        // breaking pairwise subject isolation.
+        var missingUris = requiredUris.Except(sectorIdentifierContent).ToArray();
         if (missingUris.Length > 0)
         {
             LogSectorIdentifierMissingUris(sectorIdentifierUri, missingUris);
 
+            // The missing values are named individually. A message saying "redirect URIs" to a client
+            // whose notification endpoint was the omission sends its author to the wrong metadata.
             return ErrorFactory.InvalidClientMetadata(
-                $"One or more registered redirect URIs are not listed in the document fetched from the {Parameters.SectorIdentifierUri}");
+                $"These registered URIs are not listed in the document fetched from the "
+                + $"{Parameters.SectorIdentifierUri}: {string.Join(", ", (object[])missingUris)}");
         }
 
         return null;
@@ -149,19 +193,74 @@ public partial class SubjectTypeValidator(
     private static OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var redirectUris = context.Request.RedirectUris;
+        if (redirectUris is { Length: > 0 })
+            return ValidateFromRedirectUris(context, redirectUris);
 
-        // Without a redirect URI there is no host, and the host is what a pairwise identifier is derived
-        // from when no sector identifier URI was registered - so this combination cannot be honoured and
-        // is refused rather than worked around. It is reachable: a client asking only for a grant type
-        // that needs no redirection registers none, which the redirect URI validator correctly permits,
-        // and it arrives here with the list absent or empty.
-        if (redirectUris is not { Length: > 0 })
+        // A client asking only for a grant type that needs no redirection registers no redirect URI,
+        // which the redirect URI validator correctly permits, so it arrives here with the list absent
+        // or empty. CIBA Core 1.0 Section 4 says where its host comes from instead: "In CIBA Poll and
+        // Ping modes the jwks_uri is used in place of the redirect_uri. In CIBA Push mode the
+        // backchannel_client_notification_endpoint is used in place of the redirect_uri."
+        var sectorUri = SectorUriForDeliveryMode(context.Request);
+        if (sectorUri == null)
         {
             return ErrorFactory.InvalidClientMetadata(
-                "The client specified pairwise subject type without a sector identifier URI, which needs "
-                + "a redirect URI to take the host from, and none was registered");
+                "The client specified pairwise subject type without a sector identifier URI, so the host "
+                + "is taken from a registered URI: a redirect URI, or for a backchannel client the "
+                + "jwks_uri in poll and ping modes and the backchannel_client_notification_endpoint in "
+                + "push mode. None of these was registered");
         }
 
+        // Absoluteness is checked rather than assumed, and both halves matter. A registration body
+        // is attacker-shaped JSON: [AbsoluteUri] is honoured by the form binder, not by the JSON
+        // deserializer, so a relative "/jwks" arrives intact and every Uri member below it - Scheme,
+        // Host - throws rather than returning anything. And the scheme is checked HERE because for
+        // poll and ping nothing else ever checks the jwks_uri's: BackChannelAuthenticationValidator
+        // enforces the specification's "It MUST be an HTTPS URL" for the notification endpoint alone,
+        // and is registered after this validator besides. Delete this and https stops being required
+        // of the value a poll client's whole sector is derived from.
+        //
+        // Through the same predicate as the other two arms, so that one edit moves all three: the
+        // three sites of this class were fixed separately and drifted apart in exactly the way a
+        // shared predicate prevents.
+        if (!IsHttpsUri(sectorUri))
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                "The URI a pairwise sector identifier is taken from must be an absolute https URI");
+        }
+
+        context.SectorIdentifier = sectorUri.Host;
+        return null;
+    }
+
+    /// <summary>
+    /// The URI whose host is the sector for a backchannel client that registered no redirect URI,
+    /// or <c>null</c> when the registration names none.
+    /// </summary>
+    /// <remarks>
+    /// A registration with no delivery mode yields null here and is refused, which is what this method
+    /// did before it could answer anything else. The absent-mode arm returns null rather than throwing
+    /// because an absent mode is a valid non-backchannel registration, not an unhandled case.
+    /// </remarks>
+    private static Uri? SectorUriForDeliveryMode(ClientRegistrationRequest request)
+        => request.BackChannelTokenDeliveryMode switch
+        {
+            BackchannelTokenDeliveryModes.Push => request.BackChannelClientNotificationEndpoint,
+
+            // Ping registers a notification endpoint too, and its sector is still the jwks_uri: Section 4
+            // groups ping with poll for this, and only push with the notification endpoint.
+            BackchannelTokenDeliveryModes.Poll or BackchannelTokenDeliveryModes.Ping => request.JwksUri,
+
+            _ => null,
+        };
+
+    /// <summary>
+    /// Takes the sector from the registered redirect URIs, which must be https and share one host.
+    /// </summary>
+    private static OidcError? ValidateFromRedirectUris(
+        ClientRegistrationValidationContext context,
+        Uri[] redirectUris)
+    {
         if (redirectUris.Any(uri => !IsHttpsUri(uri)))
         {
             return ErrorFactory.InvalidClientMetadata(
