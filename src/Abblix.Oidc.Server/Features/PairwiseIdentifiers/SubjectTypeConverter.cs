@@ -109,12 +109,14 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// The sector the pseudonym is bound to (OIDC Core Section 8.1), as associated-data bytes.
     /// </summary>
     /// <remarks>
-    /// When no sector_identifier_uri was provided, the sector is the host component of the registered redirect_uri.
-    /// A client_id fallback would produce identifiers that silently change when the same application is
+    /// When no sector_identifier_uri was provided, the sector is the host component of the registered redirect_uri,
+    /// and for a backchannel client that registered none it is the host of the URI CIBA Core 1.0 Section 4 puts in
+    /// the redirect URI's place - the jwks_uri in poll and ping, the backchannel_client_notification_endpoint in
+    /// push. A client_id fallback would produce identifiers that silently change when the same application is
     /// re-registered under a new client id, defeating the stability pairwise identifiers give a sector; it affects
     /// only statically configured clients, since DCR-registered pairwise clients always get SectorIdentifier
-    /// computed at registration time, and remains the last resort for clients with no redirect URIs at all (e.g.
-    /// pure client_credentials configurations). The host is meaningful only for http(s) redirect URIs - the web
+    /// computed at registration time, and remains the last resort for a client with none of those URIs (e.g. a pure
+    /// client_credentials configuration). The host is meaningful only for http(s) redirect URIs - the web
     /// clients Core Section 8.1 had in mind. Native custom-scheme redirects (RFC 8252 Section 7.1) must not reach
     /// the host branch: the single-slash form (com.example.app:/oauth2redirect) parses with an EMPTY host, and the
     /// authority form (app-one://callback) puts an arbitrary path-like segment into Host - either way unrelated
@@ -129,8 +131,27 @@ public class SubjectTypeConverter : ISubjectTypeConverter
             clientInfo.RedirectUris.FirstOrDefault(redirectUri =>
                 redirectUri.Scheme == Uri.UriSchemeHttp ||
                 redirectUri.Scheme == Uri.UriSchemeHttps)?.Host ??
+            BackchannelSectorUri(clientInfo)?.Host ??
             clientInfo.ClientId;
 
         return Encoding.UTF8.GetBytes(sector);
     }
+
+    /// <summary>
+    /// The URI whose host is the sector for a backchannel client that registered no redirect URI, or
+    /// <c>null</c> when this client is not one.
+    /// </summary>
+    /// <remarks>
+    /// The same order the registration validator resolves, so a statically configured client and a
+    /// dynamically registered one bind to the same sector rather than to whichever path reached them.
+    /// A mode this server does not implement returns null and takes the client_id fallback, which is a
+    /// per-client sector - wrong for nobody, since no such client can authenticate.
+    /// </remarks>
+    private static Uri? BackchannelSectorUri(ClientInfo clientInfo)
+        => clientInfo.BackChannelTokenDeliveryMode switch
+        {
+            BackchannelTokenDeliveryModes.Push => clientInfo.BackChannelClientNotificationEndpoint,
+            BackchannelTokenDeliveryModes.Poll or BackchannelTokenDeliveryModes.Ping => clientInfo.JwksUri,
+            _ => null,
+        };
 }

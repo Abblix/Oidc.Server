@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.PairwiseIdentifiers;
 
 /// <summary>
 /// Unit tests for <see cref="SubjectTypeConverter"/> verifying pairwise subject derivation per
-/// OIDC Core §8.1, in particular the sector identifier fallback chain for statically configured
+/// OIDC Core Section 8.1, in particular the sector identifier fallback chain for statically configured
 /// clients without an explicit sector identifier.
 /// </summary>
 public class SubjectTypeConverterTests
@@ -31,15 +31,21 @@ public class SubjectTypeConverterTests
     private static ClientInfo CreatePairwiseClient(
         string clientId,
         string? sectorIdentifier = null,
-        Uri[]? redirectUris = null) => new(clientId)
+        Uri[]? redirectUris = null,
+        string? deliveryMode = null,
+        Uri? notificationEndpoint = null,
+        Uri? jwksUri = null) => new(clientId)
     {
         SubjectType = SubjectTypes.Pairwise,
         SectorIdentifier = sectorIdentifier,
         RedirectUris = redirectUris ?? [],
+        BackChannelTokenDeliveryMode = deliveryMode,
+        BackChannelClientNotificationEndpoint = notificationEndpoint,
+        JwksUri = jwksUri,
     };
 
     /// <summary>
-    /// OIDC Core §8.1: without an explicit sector identifier the sector is the host component of
+    /// OIDC Core Section 8.1: without an explicit sector identifier the sector is the host component of
     /// the registered redirect_uri - two statically configured clients of the same sector must
     /// derive the same pairwise subject. The previous client_id fallback broke exactly this.
     /// </summary>
@@ -70,11 +76,11 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// Custom-scheme redirect URIs of native clients (RFC 8252 §7.1) carry no meaningful host:
+    /// Custom-scheme redirect URIs of native clients (RFC 8252 Section 7.1) carry no meaningful host:
     /// the single-slash form parses with an empty Host, and the authority form puts an arbitrary
     /// path-like segment there - either would merge unrelated clients into one shared sector,
     /// giving them identical pairwise subjects and defeating the isolation pairwise subject
-    /// types exist to provide (OIDC Core §8.1). The client_id fallback applies instead.
+    /// types exist to provide (OIDC Core Section 8.1). The client_id fallback applies instead.
     /// </summary>
     [Theory]
     [InlineData("com.example.one:/oauth2redirect", "com.example.two:/oauth2redirect")]
@@ -104,7 +110,7 @@ public class SubjectTypeConverterTests
 
     /// <summary>
     /// A pairwise subject is stable: the same (subject, sector) always seals to the same value, so a client sees a
-    /// consistent identifier for the user across logins - the core stability guarantee of OIDC Core §8.1.
+    /// consistent identifier for the user across logins - the core stability guarantee of OIDC Core Section 8.1.
     /// </summary>
     [Fact]
     public void Convert_SameSubjectAndClient_IsDeterministic()
@@ -135,7 +141,7 @@ public class SubjectTypeConverterTests
     /// <summary>
     /// Sector, not client id, determines the identifier: two distinct clients sharing an explicit sector_identifier
     /// seal the same subject to the same value, so a sector's back-ends see one consistent identifier (OIDC Core
-    /// §8.1).
+    /// Section 8.1).
     /// </summary>
     [Fact]
     public void Convert_SameExplicitSectorIdentifier_DifferentClients_ProduceSameSubject()
@@ -180,7 +186,7 @@ public class SubjectTypeConverterTests
 
     /// <summary>
     /// A public client's subject is not transformed: Convert returns it unchanged, so the client sees the real
-    /// subject (OIDC Core §8, the public subject type).
+    /// subject (OIDC Core Section 8, the public subject type).
     /// </summary>
     [Fact]
     public void Convert_PublicClient_ReturnsSubjectUnchanged()
@@ -313,5 +319,108 @@ public class SubjectTypeConverterTests
         var pairwise = converter.Convert(subject, client);
 
         Assert.Equal(expectedLength, pairwise.Length);
+    }
+    /// <summary>
+    /// Two backchannel clients of one sector that registered no redirect URI still derive the same
+    /// pairwise subject, taking the host from the URI their delivery mode names.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 4 puts the jwks_uri in the redirect URI's place for poll and ping, and the
+    /// backchannel_client_notification_endpoint for push. Without this the client_id fallback was
+    /// reached, making identifiers per-client where the specification makes them per-sector - which is
+    /// the whole point of a sector, so two genuinely-one-deployment clients could not recognise a user
+    /// as the same person.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Push)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    public void Convert_BackchannelClientsOfOneSector_DeriveTheSameSubject(string deliveryMode)
+    {
+        var converter = CreateConverter();
+        var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
+
+        ClientInfo Client(string clientId, string path) => CreatePairwiseClient(
+            clientId,
+            deliveryMode: deliveryMode,
+            notificationEndpoint: isPush ? new Uri($"https://one.example.com/{path}") : null,
+            jwksUri: isPush ? null : new Uri($"https://one.example.com/{path}"));
+
+        Assert.Equal(
+            converter.Convert(Subject, Client("client-a", "a")),
+            converter.Convert(Subject, Client("client-b", "b")));
+    }
+
+    /// <summary>
+    /// A ping client's sector is its jwks_uri, not its notification endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Ping registers both, so grouping it by "has a notification endpoint" instead of by the mode the
+    /// specification names is the plausible mistake, and it is invisible to every test where the two
+    /// hosts agree. These two clients share a jwks_uri host and differ on the notification endpoint, so
+    /// only the correct grouping makes them one sector.
+    /// </remarks>
+    [Fact]
+    public void Convert_PingClient_TakesTheSectorFromTheJwksUriNotTheNotificationEndpoint()
+    {
+        var converter = CreateConverter();
+
+        var clientA = CreatePairwiseClient(
+            "client-a",
+            deliveryMode: BackchannelTokenDeliveryModes.Ping,
+            notificationEndpoint: new Uri("https://notify-a.example.com/cb"),
+            jwksUri: new Uri("https://keys.example.com/a.jwks"));
+
+        var clientB = CreatePairwiseClient(
+            "client-b",
+            deliveryMode: BackchannelTokenDeliveryModes.Ping,
+            notificationEndpoint: new Uri("https://notify-b.example.com/cb"),
+            jwksUri: new Uri("https://keys.example.com/b.jwks"));
+
+        Assert.Equal(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
+    /// A registered redirect URI still decides the sector for a client that also has a delivery mode.
+    /// </summary>
+    /// <remarks>
+    /// The order is what keeps every already-issued pseudonym openable: the sector is the seal's
+    /// associated data, so a client whose sector moves loses every identifier it ever handed out. Only
+    /// clients that had NO redirect URI - and whose sector was therefore the client id - change here.
+    /// </remarks>
+    [Fact]
+    public void Convert_BackchannelClientWithARedirectUri_KeepsTheRedirectUriSector()
+    {
+        var converter = CreateConverter();
+
+        var backchannel = CreatePairwiseClient(
+            "client-a",
+            redirectUris: [new Uri("https://app.example.com/cb")],
+            deliveryMode: BackchannelTokenDeliveryModes.Push,
+            notificationEndpoint: new Uri("https://notify.example.com/cb"));
+
+        var plain = CreatePairwiseClient("client-b", redirectUris: [new Uri("https://app.example.com/cb")]);
+
+        Assert.Equal(converter.Convert(Subject, backchannel), converter.Convert(Subject, plain));
+    }
+
+    /// <summary>
+    /// With no delivery mode the client id is still the last resort, and two such clients stay apart.
+    /// </summary>
+    /// <remarks>
+    /// This is what stops the new fallback from widening: a client that registered a jwks_uri without
+    /// any backchannel mode is an ordinary client publishing its keys, and merging two of them into one
+    /// sector would seal identical pseudonyms for unrelated parties.
+    /// </remarks>
+    [Fact]
+    public void Convert_NoDeliveryMode_StillFallsBackToTheClientId()
+    {
+        var converter = CreateConverter();
+        var jwksUri = new Uri("https://keys.example.com/jwks");
+
+        var clientA = CreatePairwiseClient("client-a", jwksUri: jwksUri);
+        var clientB = CreatePairwiseClient("client-b", jwksUri: jwksUri);
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
 }
