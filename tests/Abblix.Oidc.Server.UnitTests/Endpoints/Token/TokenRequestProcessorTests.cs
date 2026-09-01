@@ -226,6 +226,142 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A push delivery's ID Token is built with the refresh token that was just minted, not without one.
+    /// </summary>
+    /// <remarks>
+    /// The ORDER is the thing under test. The refresh token is minted a few lines above the ID Token and
+    /// read out of the response, so assembling the bindings anywhere earlier hands the token service a
+    /// null refresh token - and CIBA Core 1.0 Section 10.3.1 requires the hash of it in push mode
+    /// whenever one is sent. Hoisting that assembly above the mint compiles, and without this row the
+    /// whole solution stays green while every push notification carrying a refresh token silently drops
+    /// the claim.
+    /// <para>
+    /// Asserted on what the token service RECEIVES rather than on what comes back, because the claim is
+    /// written inside that service and a response-level assertion would pass on a binding built from
+    /// nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ForAPushDelivery_BindsTheRefreshTokenThatWasJustMinted()
+    {
+        // Arrange
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var request = CreateValidTokenRequest(scopes) with { PushDeliveryOf = "the-auth-req-id" };
+        var accessToken = CreateAccessToken();
+        var refreshToken = CreateRefreshToken();
+        var idToken = CreateIdToken();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                It.IsAny<AuthSession>(),
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                null))
+            .ReturnsAsync(refreshToken);
+
+        PushDeliveryBindings? captured = null;
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo,
+                false,
+                null,
+                accessToken.EncodedJwt,
+                It.IsAny<PushDeliveryBindings?>()))
+            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+                PushDeliveryBindings? bindings) => captured = bindings)
+            .ReturnsAsync(idToken);
+
+        // Act
+        await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.NotNull(captured);
+        Assert.Equal("the-auth-req-id", captured!.AuthenticationRequestId);
+        Assert.Equal(refreshToken.EncodedJwt, captured.RefreshToken);
+    }
+
+    /// <summary>
+    /// Without a push delivery the token service is handed no bindings at all.
+    /// </summary>
+    /// <remarks>
+    /// The control for the row above: the same scopes and the same refresh token, and the only difference
+    /// is that nobody declared a push. Section 10.3.1 requires these claims in push mode, and a poll or
+    /// ping client holds the identifier already.
+    /// <para>
+    /// It is not the only thing holding that property, and calling it "the control" without this would
+    /// overstate it. Building the bindings unconditionally turns four rows red: this one and three that
+    /// predate the branch, whose Moq setups name the six-argument call and so bake in a null binding.
+    /// What this row adds is saying the property out loud, where those three hold it as a side effect
+    /// of how they were arranged.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_WithoutAPushDelivery_PassesNoBindings()
+    {
+        // Arrange
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var request = CreateValidTokenRequest(scopes);
+        var accessToken = CreateAccessToken();
+        var refreshToken = CreateRefreshToken();
+        var idToken = CreateIdToken();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo))
+            .ReturnsAsync(accessToken);
+
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                It.IsAny<AuthSession>(),
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                null))
+            .ReturnsAsync(refreshToken);
+
+        var captured = new PushDeliveryBindings("not-set", null);
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo,
+                false,
+                null,
+                accessToken.EncodedJwt,
+                It.IsAny<PushDeliveryBindings?>()))
+            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+                PushDeliveryBindings? bindings) => captured = bindings!)
+            .ReturnsAsync(idToken);
+
+        // Act
+        await _processor.ProcessAsync(request);
+
+        // Assert. Seeded with a non-null value first, so "nothing was passed" cannot be confused with
+        // "the callback never ran".
+        Assert.Null(captured);
+    }
+
+    /// <summary>
     /// Verifies both ID token and refresh token are created with both scopes.
     /// Tests complete OIDC flow with offline access.
     /// </summary>

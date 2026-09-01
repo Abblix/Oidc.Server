@@ -162,13 +162,25 @@ public class TokenRequestProcessor(
 
 		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OpenId))
 		{
+			// The bindings exist only when the caller says it IS the push path. The mode could be read
+			// off clientInfo instead, and is not, so that this method does not have to know CIBA's
+			// delivery rules to serve every other grant type - see PushDeliveryBindings.
+			//
+			// The refresh token is read from the RESPONSE because it was minted above. That order is
+			// load-bearing: assembling these bindings before the branch that mints it silently drops
+			// rt_hash from every push notification that carries one.
+			var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
+				? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
+				: null;
+
 			response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
 				request.AuthorizedGrant.AuthSession,
 				authContext,
 				clientInfo,
 				false,
 				null,
-				accessToken.EncodedJwt);
+				accessToken.EncodedJwt,
+				pushBindings);
 		}
 
 		return response;

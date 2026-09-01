@@ -225,6 +225,20 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         Assert.Equal(TokenTypes.Bearer, payload["token_type"]!.GetValue<string>());
         Assert.True(payload["expires_in"]!.GetValue<int>() > 0);
 
+        // The binding CIBA Core 1.0 Section 10.3.1 requires in push mode, asserted where a client reads
+        // it. Without it the three parts of this body - the identifier, the access token and the ID
+        // Token - sit beside each other with nothing tying the first to the last, and a client following
+        // its own MUST to check that this claim matches the identifier it asked about cannot accept the
+        // notification at all.
+        //
+        // Read out of the delivered ID Token rather than out of storage, because storage would prove
+        // only that the value was known. Asserted as the literal claim name a client reads off the wire,
+        // for the reason the refusal tests give: comparing a constant with itself lets a rename pass.
+        var idToken = DecodeJwtPayload(payload["id_token"]!.GetValue<string>());
+        Assert.Equal(
+            authRequestId,
+            idToken["urn:openid:params:jwt:claim:auth_req_id"]!.GetValue<string>());
+
         // And the request is gone. That removal is this library's choice rather than a requirement -
         // CIBA Core 1.0 section 10.3.1 says nothing about what the OP keeps - and the reason is that
         // this client is finished with it: the tokens are delivered and it will never come to the token
