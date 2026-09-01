@@ -63,6 +63,20 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// authorization to it. The well-known endpoint is deliberately mapped OUTSIDE the group:
     /// discovery must answer before any receiver has credentials, so the group's authorization
     /// does not cover it.
+    /// <para>
+    /// A route the HOST adds to this group is not scope-checked, and that is worth knowing before
+    /// adding one. The scope filter on the group runs for it - the response carries this group's
+    /// headers, so it plainly did - but the filter judges a route by the requirement the route
+    /// declares, and only the routes mapped here declare one. A route with none is let through. So a
+    /// host route beside them is admitted for any caller the host's own authorization admits, in a
+    /// deployment where every neighbouring route answers 403 to that same caller.
+    /// </para>
+    /// <para>
+    /// The scope requirement is deliberately not something a host can declare: making it so would put
+    /// the metadata type and the vocabulary of this package's scopes into its public surface, for a
+    /// need nobody has stated. A host that wants its route scoped attaches its own authorization to
+    /// that route - which it is already doing for the group - rather than borrowing ours.
+    /// </para>
     /// </remarks>
     /// <param name="endpoints">The route builder.</param>
     public static RouteGroupBuilder MapSharedSignalsTransmitterEndpoints(this IEndpointRouteBuilder endpoints)
