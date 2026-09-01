@@ -131,6 +131,185 @@ public class LicenseManagerTests
         // Verify log contains a warning about the nearing expiration of the license
     }
 
+
+    /// <summary>
+    /// A renewal that carries the period through and grants LESS says so, naming what shrinks and the day.
+    /// </summary>
+    /// <remarks>
+    /// The expiring-soon record is suppressed for a covering successor, correctly - there is nothing to
+    /// renew and no interruption to avoid - and that suppression is what left this silent. The merge keeps
+    /// the greater of each limit only while both licenses are active; on the day the current one expires it
+    /// stops, and the deployment may do less than it did the day before, at an instant nobody announced.
+    /// <para>
+    /// Both dimensions are driven because they narrow differently: a limit shrinks by number, and the
+    /// issuer set shrinks by refusing something it used to accept - which the checker enforces by throwing,
+    /// so the first request for a dropped issuer after the switchover is the notice an operator gets.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_renewal_granting_fewer_clients_is_announced_with_the_day_it_takes_over()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ClientLimit = 500,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ClientLimit = 5,
+        });
+
+        var records = Report(manager, utcNow);
+
+        var record = Assert.Single(records);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.Contains("500", record.Message, StringComparison.Ordinal);
+        Assert.Contains("5", record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A renewal naming a limit where the license in force names none is a narrowing too.
+    /// </summary>
+    /// <remarks>
+    /// Absence means UNBOUNDED, so this is the largest narrowing there is and the easiest to write a
+    /// comparison that misses: a plain "successor is smaller than current" reads both sides as numbers and
+    /// says nothing when one of them is not there. Measured - without this row, restricting the comparison
+    /// to two present limits killed nothing.
+    /// </remarks>
+    [Fact]
+    public void A_renewal_naming_a_limit_where_there_was_none_is_announced()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10) });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ClientLimit = 5,
+        });
+
+        var record = Assert.Single(Report(manager, utcNow));
+
+        Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
+        Assert.Contains("unbounded", record.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_renewal_dropping_an_issuer_names_the_issuer()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ValidIssuers = ["https://one.example.com", "https://two.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ValidIssuers = ["https://one.example.com"],
+        });
+
+        var records = Report(manager, utcNow);
+
+        var record = Assert.Single(records);
+        Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
+        Assert.Contains("https://two.example.com", record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The controls: a renewal that grants MORE says nothing, and neither does one whose only difference
+    /// is a shorter grace period.
+    /// </summary>
+    /// <remarks>
+    /// Without the first, a reporter that announced every covering successor would pass the rows above -
+    /// and every renewal would arrive with a warning nobody can act on. The second is the deliberate
+    /// exclusion: a grace period changes nothing on the day the successor takes over, only what happens
+    /// after the successor itself expires, so counting it would fire on a renewal that is larger in every
+    /// way a deployment can feel.
+    /// </remarks>
+    [Fact]
+    public void A_renewal_granting_more_says_nothing()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ClientLimit = 5,
+            GracePeriod = utcNow.AddDays(40),
+            ValidIssuers = ["https://one.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ClientLimit = 500,
+            GracePeriod = utcNow.AddDays(401),
+            ValidIssuers = ["https://one.example.com", "https://two.example.com"],
+        });
+
+        Assert.Empty(Report(manager, utcNow));
+    }
+
+    [Fact]
+    public void A_renewal_whose_only_narrowing_is_the_grace_period_says_nothing()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ClientLimit = 500,
+            GracePeriod = utcNow.AddDays(90),
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ClientLimit = 500,
+            GracePeriod = utcNow.AddDays(401),
+        });
+
+        Assert.Empty(Report(manager, utcNow));
+    }
+
+    /// <summary>
+    /// Reports the loaded licenses into a recorder, and hands back what was written.
+    /// </summary>
+    /// <remarks>
+    /// The throttle window is process-wide and a day long, so a run that did not clear it would find the
+    /// decision already taken in silence by whichever test got there first.
+    /// </remarks>
+    private static IReadOnlyList<LogRecord> Report(LicenseManager manager, DateTimeOffset utcNow)
+    {
+        TestLicense.ClearLogThrottle();
+
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            manager.ReportLoadedLicenses(utcNow);
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        return records.Entries;
+    }
+
     #region Thread Safety Tests
 
     /// <summary>

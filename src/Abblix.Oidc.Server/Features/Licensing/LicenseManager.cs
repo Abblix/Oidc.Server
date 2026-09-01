@@ -151,9 +151,10 @@ public partial class LicenseManager
                 // to avoid service interruption" is untrue of a deployment that will not be interrupted,
                 // and the operator who acts on the record has nothing to do.
                 //
-                // What is NOT judged is what the successor is WORTH. One with fewer clients or a narrower
-                // issuer set carries the period and still changes what the deployment may do, and that is
-                // a different sentence - saying it through "renew promptly" would be untrue the other way.
+                // What the successor is WORTH is a different sentence, and it gets its own record. One
+                // with fewer clients or a narrower issuer set carries the period and still changes what
+                // the deployment may do, on a day nobody announced - and saying that through "renew
+                // promptly" would be untrue the other way, since there is nothing to renew.
                 //
                 // Only the expiring-soon status is suppressed. The arithmetic already excludes the others,
                 // since a license in its grace period has expired and nothing can start after now and
@@ -161,6 +162,7 @@ public partial class LicenseManager
                 // not silently widen what this covers.
                 if (status == LicenseStatus.Active && CarriedThrough(license, next))
                 {
+                    ReportNarrowing(license, next!, utcNow);
                     continue;
                 }
 
@@ -406,6 +408,95 @@ public partial class LicenseManager
             return false;
 
         return starts <= expiresAt && (next.ExpiresAt is not { } ends || expiresAt < ends);
+    }
+
+    /// <summary>
+    /// Records that the license taking over grants less than the one in force, and on which day.
+    /// </summary>
+    /// <param name="license">The license in force.</param>
+    /// <param name="next">The license that will carry the period through.</param>
+    /// <param name="utcNow">The moment the comparison was made at.</param>
+    /// <remarks>
+    /// The expiring-soon record cannot carry this: a deployment holding a covering successor has nothing
+    /// to renew and no interruption to avoid, which is why that record is suppressed here in the first
+    /// place. What remains true is that the merge stops on the day the current license expires - the
+    /// limits in force are the GREATER of the two only while both are active - so a successor with fewer
+    /// clients, a lower issuer limit or a narrower issuer set changes what the deployment may do at an
+    /// instant nobody announced. <see cref="LicenseChecker"/> enforces the issuer set by throwing, so the
+    /// first request for a dropped issuer after the switchover is the notice.
+    /// <para>
+    /// A shorter GRACE PERIOD is deliberately not counted as granting less. It changes nothing on the day
+    /// the successor takes over - only what happens after the successor itself expires - so counting it
+    /// would fire on a renewal that is larger in every way a deployment can feel, and a warning that
+    /// arrives on good news is one an operator learns to skip.
+    /// </para>
+    /// <para>
+    /// Warning rather than Error: nothing is wrong, and nothing is wrong on the day either. The
+    /// deployment simply may do less than it may now, and an operator who reads this early can ask for a
+    /// bigger renewal while there is time.
+    /// </para>
+    /// </remarks>
+    private static void ReportNarrowing(License license, License next, DateTimeOffset utcNow)
+    {
+        if (Narrowings(license, next) is not { Count: > 0 } narrowed ||
+            license.ExpiresAt is not { } takesOverAt ||
+            !LicenseLogger.Instance.IsAllowed(new { license, next }, utcNow, TimeSpan.FromDays(1)))
+        {
+            return;
+        }
+
+        LogRenewalGrantsLess(LicenseLogger.Instance, takesOverAt, string.Join("; ", narrowed));
+    }
+
+    /// <summary>
+    /// The ways the successor grants less than the license in force, in words an operator can act on.
+    /// </summary>
+    /// <remarks>
+    /// Absence means UNBOUNDED on all three, which is what makes each comparison asymmetric: a successor
+    /// naming a limit where the current license names none is a narrowing, while the reverse is a
+    /// widening and says nothing. The issuer set is the one where "narrower" is not a number - a
+    /// successor is narrower when it refuses an issuer the current license allows, so a set that merely
+    /// adds issuers is not reported.
+    /// </remarks>
+    private static IReadOnlyList<string> Narrowings(License license, License next)
+    {
+        var narrowed = new List<string>();
+
+        if (Narrows(license.ClientLimit, next.ClientLimit))
+            narrowed.Add($"clients {Describe(license.ClientLimit)} -> {Describe(next.ClientLimit)}");
+
+        if (Narrows(license.IssuerLimit, next.IssuerLimit))
+            narrowed.Add($"issuers {Describe(license.IssuerLimit)} -> {Describe(next.IssuerLimit)}");
+
+        if (DroppedIssuers(license.ValidIssuers, next.ValidIssuers) is { Count: > 0 } dropped)
+            narrowed.Add($"issuers no longer accepted: {string.Join(", ", dropped)}");
+
+        return narrowed;
+
+        static bool Narrows(int? current, int? successor)
+            => successor is { } limit && (current is not { } currentLimit || limit < currentLimit);
+
+        static string Describe(int? limit) => limit?.ToString() ?? "unbounded";
+    }
+
+    /// <summary>
+    /// The issuers the current license accepts and the successor does not.
+    /// </summary>
+    /// <remarks>
+    /// An empty or absent set accepts every issuer, so a successor naming any set at all drops whatever
+    /// the deployment has been using - which cannot be listed, since the license does not say what that
+    /// was. The set itself is named instead, because that is the actionable half: an operator comparing
+    /// it against their own issuers can see the gap, where a count could not.
+    /// </remarks>
+    private static IReadOnlyList<string> DroppedIssuers(HashSet<string>? current, HashSet<string>? successor)
+    {
+        if (successor is not { Count: > 0 })
+            return [];
+
+        if (current is not { Count: > 0 })
+            return [$"only {string.Join(", ", successor)} from then on"];
+
+        return current.Except(successor, StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>
