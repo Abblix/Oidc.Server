@@ -65,13 +65,19 @@ public class SubjectTypeValidatorTests
     private ClientRegistrationValidationContext CreateContext(
         Uri[] redirectUris,
         string? subjectType = SubjectTypes.Public,
-        Uri? sectorIdentifierUri = null)
+        Uri? sectorIdentifierUri = null,
+        string? deliveryMode = null,
+        Uri? notificationEndpoint = null,
+        Uri? jwksUri = null)
     {
         var request = new ClientRegistrationRequest
         {
             RedirectUris = redirectUris,
             SubjectType = subjectType,
-            SectorIdentifierUri = sectorIdentifierUri
+            SectorIdentifierUri = sectorIdentifierUri,
+            BackChannelTokenDeliveryMode = deliveryMode,
+            BackChannelClientNotificationEndpoint = notificationEndpoint,
+            JwksUri = jwksUri
         };
 
         return new ClientRegistrationValidationContext(request);
@@ -388,5 +394,128 @@ public class SubjectTypeValidatorTests
 
         // Assert
         Assert.Equal("sector.example.com", context.SectorIdentifier);
+    }
+    /// <summary>
+    /// A CIBA client's sector document must list the URI its delivery mode uses in place of the
+    /// redirect URI, and each mode names a different one.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 Section 4: "In CIBA Poll and Ping modes the jwks_uri is used in place of the
+    /// redirect_uri. In CIBA Push mode the backchannel_client_notification_endpoint is used in place
+    /// of the redirect_uri", and the document "can contain jwks_uris and
+    /// backchannel_client_notification_endpoints as well as redirect_uri". The membership check is
+    /// what stops a client claiming a sector it does not belong to, so an unchecked URI is a client
+    /// receiving identifiers computed from somebody else's host.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Push, true, false)]
+    [InlineData(BackchannelTokenDeliveryModes.Push, false, true)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, true, false)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, false, true)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, true, false)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, false, true)]
+    public async Task ValidateAsync_CibaSectorDocument_MustListTheUriTheModeNames(
+        string deliveryMode, bool listedInDocument, bool expectError)
+    {
+        // Arrange
+        var sectorUri = new Uri("https://sector.example.com/sector.json");
+        var modeUri = new Uri($"https://client.example.com/{deliveryMode}");
+
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(Result<Uri[], OidcError>.Success(
+                listedInDocument ? [modeUri] : [new Uri("https://client.example.com/something-else")]));
+
+        var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri,
+            deliveryMode: deliveryMode,
+            notificationEndpoint: isPush ? modeUri : null,
+            jwksUri: isPush ? null : modeUri);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        if (expectError)
+        {
+            Assert.NotNull(result);
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+        }
+        else
+        {
+            Assert.Null(result);
+            Assert.Equal("sector.example.com", context.SectorIdentifier);
+        }
+    }
+
+    /// <summary>
+    /// A registration with no delivery mode is not asked for either CIBA URI, even when it has them.
+    /// </summary>
+    /// <remarks>
+    /// The requirement is written per mode, so making it unconditional would refuse a plain pairwise
+    /// client that happens to publish a jwks_uri - which OIDC Core has never required to be listed.
+    /// This row is what stops the two arms above from widening into every registration.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_PairwiseWithNoDeliveryMode_DoesNotRequireTheCibaUris()
+    {
+        // Arrange
+        var sectorUri = new Uri("https://sector.example.com/sector.json");
+        var redirectUri = new Uri("https://client.example.com/callback");
+
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(Result<Uri[], OidcError>.Success([redirectUri]));
+
+        var context = CreateContext(
+            redirectUris: [redirectUri],
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri,
+            deliveryMode: null,
+            notificationEndpoint: new Uri("https://client.example.com/notify"),
+            jwksUri: new Uri("https://client.example.com/jwks"));
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal("sector.example.com", context.SectorIdentifier);
+    }
+
+    /// <summary>
+    /// The refusal names the URI that was missing, rather than calling everything a redirect URI.
+    /// </summary>
+    /// <remarks>
+    /// A message saying "redirect URIs" to a client whose notification endpoint was the omission sends
+    /// its author to the wrong piece of metadata, and the sector document is edited by a person.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_MissingNotificationEndpoint_NamesItInTheMessage()
+    {
+        // Arrange
+        var sectorUri = new Uri("https://sector.example.com/sector.json");
+        var notificationEndpoint = new Uri("https://client.example.com/notify");
+
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(Result<Uri[], OidcError>.Success([]));
+
+        var context = CreateContext(
+            redirectUris: [],
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri,
+            deliveryMode: BackchannelTokenDeliveryModes.Push,
+            notificationEndpoint: notificationEndpoint);
+
+        // Act
+        var result = await _validator.ValidateAsync(context);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Contains(notificationEndpoint.OriginalString, result.ErrorDescription);
     }
 }
