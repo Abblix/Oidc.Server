@@ -220,9 +220,8 @@ public partial class SubjectTypeValidator(
         // and is registered after this validator besides. Delete this and https stops being required
         // of the value a poll client's whole sector is derived from.
         //
-        // Through the same predicate as the other two arms, so that one edit moves all three: the
-        // three sites of this class were fixed separately and drifted apart in exactly the way a
-        // shared predicate prevents.
+        // Through the same predicate as every other arm here, so that one edit moves them together:
+        // written out separately they drifted apart in exactly the way a shared predicate prevents.
         if (!IsHttpsUri(sectorUri))
         {
             return ErrorFactory.InvalidClientMetadata(

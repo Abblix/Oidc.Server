@@ -124,6 +124,46 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A relative <c>jwks_uri</c> is refused at registration rather than stored.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 Section 2 makes this member a URL, and the server FETCHES it: what a relative one buys a
+    /// registrant today is a client whose keys can never be loaded, so every <c>private_key_jwt</c>
+    /// assertion it presents fails as "no signing key matched" - a message that names neither the client
+    /// metadata nor the moment the mistake was made. It cannot fault at fetch time either: an absent
+    /// base address makes the HTTP client refuse the request before the outbound policy handler runs, and
+    /// the fetcher catches everything and answers with an empty key set. Refusing it here is the only
+    /// place the registrant is still on the line to be told.
+    /// <para>
+    /// Driven through the endpoint rather than against the validator alone, because the gap this closes
+    /// was a validator that existed and was never REACHED - a unit row over the same class would have
+    /// passed the whole time it was open.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_relative_jwks_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("keys-from-nowhere");
+        metadata[RequestMembers.JwksUri] = "/.well-known/jwks.json";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        var error = body["error"];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.GetValue<string>());
+    }
+
+    /// <summary>
     /// The registration response carries only what this server knows. A member the core does not model is
     /// kept for an extension to read, and keeping it must not turn the endpoint into a mirror for whatever
     /// JSON a stranger posts at it.

@@ -330,16 +330,16 @@ public class BackChannelAuthenticationValidatorTests
         // Assert
         Assert.Null(result);
     }
+
     /// <summary>
     /// A relative notification endpoint is refused, not faulted on.
     /// </summary>
     /// <remarks>
-    /// The third site of one class, after a sector identifier document's entries and the registered
-    /// redirect URIs: <see cref="Uri.Scheme"/>
+    /// One instance of a class that arrives at every validator reading a URI member: <see cref="Uri.Scheme"/>
     /// raises on a relative URI rather than returning anything, so a scheme comparison alone turns a
     /// registration that should be refused into a server fault. <c>[AbsoluteUri]</c> sits on the member
-    /// and does not help - the form binder honours it and the JSON deserializer does not - which is
-    /// exactly why the same shape kept arriving at different validators.
+    /// and does not help - the form binder honours it and the JSON deserializer does not - which is why
+    /// each site states absoluteness itself rather than relying on the model.
     /// </remarks>
     [Theory]
     [InlineData(BackchannelTokenDeliveryModes.Ping)]

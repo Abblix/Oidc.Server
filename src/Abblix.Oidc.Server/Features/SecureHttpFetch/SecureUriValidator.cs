@@ -73,11 +73,12 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// <inheritdoc />
     public string? Validate(Uri uri)
     {
-        // A relative URI reaches here from a registration nobody guarded: jwks_uri is accepted with no
-        // scheme or absoluteness check anywhere in the registration pipeline, stored on the client, and
-        // handed over when its keys are fetched. Every member read below raises on it rather than
-        // returning, so the refusal this method exists to give became a fault at key-fetch time - the
-        // same class as the three sites fixed in the registration pipeline, arriving one layer later.
+        // Nothing inside this library can reach here with a relative URI, and this is not that guard: an
+        // HTTP client with no base address refuses one before the outbound handler is entered, and every
+        // registration site that stores an address now checks absoluteness itself. What this line defends
+        // is the PUBLIC method - a host resolving ISecureUriValidator and asking it about an address of
+        // its own - where the alternative is an InvalidOperationException out of a member read below,
+        // which is a fault in place of the verdict this method exists to give.
         if (!uri.IsAbsoluteUri)
             return "A relative URI names no destination, so nothing about it can be judged.";
 
