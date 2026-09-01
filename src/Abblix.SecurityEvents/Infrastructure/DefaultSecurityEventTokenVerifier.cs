@@ -25,9 +25,13 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// </remarks>
 /// <param name="validator">The JWT core's validator.</param>
 /// <param name="keyResolver">The receiver's key trust.</param>
+/// <param name="allowedAlgorithms">What this deployment will accept a signature under. Stated rather
+/// than inherited: without it the accepted set is whatever the validator happens to permit, which is a
+/// policy nobody wrote and nobody can read off the configuration.</param>
 public sealed class DefaultSecurityEventTokenVerifier(
     IJsonWebTokenValidator validator,
-    IIssuerKeyResolver keyResolver) : ISecurityEventTokenVerifier
+    IIssuerKeyResolver keyResolver,
+    IReadOnlySet<string> allowedAlgorithms) : ISecurityEventTokenVerifier
 {
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
@@ -43,6 +47,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
         var parameters = new ValidationParameters
         {
             Options = ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey,
+            AllowedSigningAlgorithms = allowedAlgorithms,
             ResolveIssuerSigningKeys = ResolveBuffered,
         };
 
