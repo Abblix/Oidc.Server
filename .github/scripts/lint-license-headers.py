@@ -39,9 +39,6 @@ OPEN_PACKAGES = frozenset((
     'Abblix.SecurityEvents.CAEP',
     'Abblix.SecurityEvents.RISC',
     'Abblix.SecurityEvents.MinimalApi',
-    'Abblix.SharedSignals',
-    'Abblix.SharedSignals.Redis',
-    'Abblix.SharedSignals.MinimalApi',
 ))
 
 # A test project is named after what it exercises, so stripping the suffix yields the
