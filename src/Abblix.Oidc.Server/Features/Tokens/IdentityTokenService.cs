@@ -56,6 +56,9 @@ internal class IdentityTokenService(
 	/// <param name="authorizationCode">Authorization code to generate `c_hash`, validating the code's integrity.
 	/// </param>
 	/// <param name="accessToken">Access token to generate `at_hash`, ensuring the token's integrity.</param>
+	/// <param name="pushBindings">The CIBA push notification this token travels in, or <c>null</c> when it
+	/// does not. Non-null adds the two bindings Section 10.3.1 requires in push mode: the request
+	/// identifier verbatim, and the refresh token's hash when one is sent.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the identity token.
 	/// </returns>
 	/// <remarks>
@@ -69,7 +72,8 @@ internal class IdentityTokenService(
 		ClientInfo clientInfo,
 		bool includeUserClaims,
 		string? authorizationCode,
-		string? accessToken)
+		string? accessToken,
+		PushDeliveryBindings? pushBindings = null)
 	{
 		var scope = authContext.Scope;
 		if (!includeUserClaims && !clientInfo.ForceUserClaimsInIdentityToken)
@@ -134,7 +138,8 @@ internal class IdentityTokenService(
 			identityToken,
 			clientInfo.IdentityTokenSignedResponseAlgorithm,
 			authorizationCode,
-			accessToken);
+			accessToken,
+			pushBindings);
 
 		var jwt = await jwtFormatter.FormatAsync(
 			identityToken,
@@ -153,7 +158,8 @@ internal class IdentityTokenService(
 		JsonWebToken identityToken,
 		string signingAlgorithm,
 		string? authorizationCode,
-		string? accessToken)
+		string? accessToken,
+		PushDeliveryBindings? pushBindings)
 	{
 		// OIDC Core 1.0 section 3.3.2.11 (c_hash) and section 3.1.3.6 (at_hash): both are the left-most
 		// half of the value's digest, taken with the hash JWA pairs with this token's own signing 'alg'.
@@ -161,6 +167,20 @@ internal class IdentityTokenService(
 		// sides must agree on is not something to write twice.
 		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.CodeHash, authorizationCode);
 		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.AccessTokenHash, accessToken);
+
+		if (pushBindings is null)
+			return;
+
+		// CIBA Core 1.0 Section 10.3.1, push mode only. The identifier goes in VERBATIM despite the
+		// sentence being phrased about hashes: the worked example beside it carries the plain value, and
+		// the client's own requirement is to check this claim MATCHES the identifier it asked about,
+		// which it could not do against a digest.
+		identityToken.Payload[JwtClaimTypes.AuthenticationRequestId] = pushBindings.AuthenticationRequestId;
+
+		// The refresh token's hash is a hash, by the same recipe as at_hash, and only when one is sent -
+		// "In case a Refresh Token is sent to the Client".
+		AddHashClaim(
+			identityToken, signingAlgorithm, JwtClaimTypes.RefreshTokenHash, pushBindings.RefreshToken);
 	}
 
 	private static void AddHashClaim(

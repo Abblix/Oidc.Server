@@ -109,28 +109,86 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// The sector the pseudonym is bound to (OIDC Core Section 8.1), as associated-data bytes.
     /// </summary>
     /// <remarks>
-    /// When no sector_identifier_uri was provided, the sector is the host component of the registered redirect_uri.
+    /// When no sector_identifier_uri was provided, the sector is the host component of the registered redirect_uri,
+    /// and for a backchannel client that registered NO redirect URI at all it is the host of the URI CIBA Core 1.0
+    /// Section 4 puts in the redirect URI's place - the jwks_uri in poll and ping, the
+    /// backchannel_client_notification_endpoint in push. "No redirect URI at all" rather than "no usable one", so
+    /// that the custom-scheme case below keeps the client_id fallback the paragraph promises it: a native client
+    /// registers redirect URIs whose host is meaningless, and letting those fall through to a shared jwks host
+    /// would merge unrelated apps into one sector, which is the collision this whole method exists to prevent.
     /// A client_id fallback would produce identifiers that silently change when the same application is
     /// re-registered under a new client id, defeating the stability pairwise identifiers give a sector; it affects
     /// only statically configured clients, since DCR-registered pairwise clients always get SectorIdentifier
-    /// computed at registration time, and remains the last resort for clients with no redirect URIs at all (e.g.
-    /// pure client_credentials configurations). The host is meaningful only for http(s) redirect URIs - the web
+    /// computed at registration time, and remains the last resort for a client with none of those URIs (e.g. a pure
+    /// client_credentials configuration). The host is meaningful only for http(s) redirect URIs - the web
     /// clients Core Section 8.1 had in mind. Native custom-scheme redirects (RFC 8252 Section 7.1) must not reach
     /// the host branch: the single-slash form (com.example.app:/oauth2redirect) parses with an EMPTY host, and the
     /// authority form (app-one://callback) puts an arbitrary path-like segment into Host - either way unrelated
     /// clients would silently share one sector and seal identical pseudonyms for the same user, defeating the
     /// isolation this subject type exists to provide. Such clients keep per-client isolation via the client_id
     /// fallback.
+    /// <para>
+    /// The backchannel URI is held to the same test, by the same predicate, because a sector is a sector
+    /// whichever URI it came from: a jwks_uri spelled com.example.one:/keys parses as an absolute URI with an
+    /// EMPTY host, and an empty host is not null, so the client_id fallback below never fires and every such
+    /// client shares one sector. An http(s) URI cannot arrive that way - Uri refuses to construct http:/keys at
+    /// all - so one predicate covers both the empty host and the relative URI, which would otherwise throw on
+    /// Scheme rather than fall through to anything.
+    /// </para>
     /// </remarks>
     private static byte[] Sector(ClientInfo clientInfo)
     {
         var sector =
             clientInfo.SectorIdentifier ??
-            clientInfo.RedirectUris.FirstOrDefault(redirectUri =>
-                redirectUri.Scheme == Uri.UriSchemeHttp ||
-                redirectUri.Scheme == Uri.UriSchemeHttps)?.Host ??
+            clientInfo.RedirectUris.FirstOrDefault(IsWebUri)?.Host ??
+            BackchannelSectorHost(clientInfo) ??
             clientInfo.ClientId;
 
         return Encoding.UTF8.GetBytes(sector);
     }
+
+    /// <summary>
+    /// Whether a URI's host names a sector at all: the web clients OIDC Core Section 8.1 had in mind, and
+    /// nothing else.
+    /// </summary>
+    private static bool IsWebUri(Uri uri)
+        => uri.IsAbsoluteUri && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// The sector host a backchannel client takes from the URI CIBA Core 1.0 Section 4 puts in the redirect
+    /// URI's place. Present only for a client that registered no redirect URI at all and whose mode names an
+    /// absolute http(s) URI; <c>null</c> in every other case, whatever makes it one.
+    /// </summary>
+    private static string? BackchannelSectorHost(ClientInfo clientInfo)
+        => clientInfo.RedirectUris.Length == 0 &&
+           BackchannelSectorUri(clientInfo) is { } sectorUri &&
+           IsWebUri(sectorUri)
+            ? sectorUri.Host
+            : null;
+
+    /// <summary>
+    /// The URI CIBA Core 1.0 Section 4 puts in the redirect URI's place for this client's delivery mode,
+    /// or <c>null</c> when the mode names none.
+    /// </summary>
+    /// <remarks>
+    /// Naming a URI is not the same as having a sector from it: whether its host is used is the caller's
+    /// question, and <see cref="BackchannelSectorHost"/> answers it. Reading this summary as "the sector"
+    /// is what sends somebody debugging a client keyed on its client id into the switch below rather than
+    /// into the filter above.
+    /// <para>
+    /// The same order the registration validator resolves, so a statically configured client and a
+    /// dynamically registered one bind to the same sector rather than to whichever path reached them. A
+    /// mode this server does not implement returns null here. Nothing refuses such a mode on a statically
+    /// configured client - the registration validator only sees requests that came over the network - so
+    /// that client authenticates normally through whatever other grant it holds, and keeps the per-client
+    /// sector it had before this method existed.
+    /// </para>
+    /// </remarks>
+    private static Uri? BackchannelSectorUri(ClientInfo clientInfo)
+        => clientInfo.BackChannelTokenDeliveryMode switch
+        {
+            BackchannelTokenDeliveryModes.Push => clientInfo.BackChannelClientNotificationEndpoint,
+            BackchannelTokenDeliveryModes.Poll or BackchannelTokenDeliveryModes.Ping => clientInfo.JwksUri,
+            _ => null,
+        };
 }
