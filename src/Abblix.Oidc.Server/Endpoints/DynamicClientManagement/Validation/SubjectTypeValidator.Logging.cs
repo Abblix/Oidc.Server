@@ -16,6 +16,6 @@ partial class SubjectTypeValidator
     [LoggerMessage(
         EventId = LogEvents.DynamicClientManagement.SubjectTypeValidator.SectorIdentifierMissingUris,
         Level = LogLevel.Warning,
-        Message = "The following registered redirect URIs are missing from the document at {SectorIdentifierUri}: {@MissingUris}")]
+        Message = "The following registered URIs are missing from the document at {SectorIdentifierUri}: {@MissingUris}")]
     private partial void LogSectorIdentifierMissingUris(Sanitized SectorIdentifierUri, Uri[] MissingUris);
 }

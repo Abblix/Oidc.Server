@@ -13,9 +13,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// A registration request whose metadata has passed all validators, paired with the
-/// resolved <c>sector_identifier</c> derived either from <c>sector_identifier_uri</c>
-/// or from the registered redirect URIs (used for pairwise PPID computation per
-/// OIDC Core §8.1).
+/// resolved <c>sector_identifier</c> - derived from <c>sector_identifier_uri</c>, from the
+/// registered redirect URIs, or for a backchannel client that registered none from the URI its
+/// delivery mode names (used for pairwise PPID computation per OIDC Core Section 8.1 and
+/// CIBA Core 1.0 Section 4).
 /// </summary>
 /// <param name="Model">The validated registration request.</param>
 /// <param name="SectorIdentifier">The host portion to use as the pairwise sector identifier,
