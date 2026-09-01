@@ -95,11 +95,10 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // Absoluteness first, because Scheme raises on a relative URI rather than returning anything:
         // a registration body carrying "/cb" here faulted the endpoint instead of being refused. The
         // [AbsoluteUri] on the member does not help - the form binder honours it and the JSON
-        // deserializer does not - and this is the third site of that one class, after the jwks_uri and
-        // the redirect URIs.
+        // deserializer does not - and this is the third site of that one class, after the entries of a
+        // sector identifier document and the registered redirect URIs, both in SubjectTypeValidator.
         var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
-        if (notificationEndpoint is { IsAbsoluteUri: false } ||
-            (notificationEndpoint != null && notificationEndpoint.Scheme != Uri.UriSchemeHttps))
+        if (notificationEndpoint is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,

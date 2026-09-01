@@ -73,6 +73,14 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// <inheritdoc />
     public string? Validate(Uri uri)
     {
+        // A relative URI reaches here from a registration nobody guarded: jwks_uri is accepted with no
+        // scheme or absoluteness check anywhere in the registration pipeline, stored on the client, and
+        // handed over when its keys are fetched. Every member read below raises on it rather than
+        // returning, so the refusal this method exists to give became a fault at key-fetch time - the
+        // same class as the three sites fixed in the registration pipeline, arriving one layer later.
+        if (!uri.IsAbsoluteUri)
+            return "A relative URI names no destination, so nothing about it can be judged.";
+
         // A named destination is the one way past everything below, and it is checked first so that it also
         // lifts the scheme restriction: reaching a service inside the network means plain HTTP, and a
         // permission unable to say so would permit nothing.

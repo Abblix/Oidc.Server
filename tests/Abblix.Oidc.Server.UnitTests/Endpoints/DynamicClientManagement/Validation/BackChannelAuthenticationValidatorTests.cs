@@ -334,7 +334,8 @@ public class BackChannelAuthenticationValidatorTests
     /// A relative notification endpoint is refused, not faulted on.
     /// </summary>
     /// <remarks>
-    /// The third site of one class, after the jwks_uri and the redirect URIs: <see cref="Uri.Scheme"/>
+    /// The third site of one class, after a sector identifier document's entries and the registered
+    /// redirect URIs: <see cref="Uri.Scheme"/>
     /// raises on a relative URI rather than returning anything, so a scheme comparison alone turns a
     /// registration that should be refused into a server fault. <c>[AbsoluteUri]</c> sits on the member
     /// and does not help - the form binder honours it and the JSON deserializer does not - which is

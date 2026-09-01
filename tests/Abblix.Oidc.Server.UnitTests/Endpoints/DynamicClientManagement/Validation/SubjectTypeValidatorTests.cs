@@ -433,30 +433,65 @@ public class SubjectTypeValidatorTests
         Assert.Null(await _validator.ValidateAsync(context));
         Assert.Equal("app.example.com", context.SectorIdentifier);
     }
+
     /// <summary>
-    /// A relative URI in the FETCHED sector identifier document is refused, not dereferenced.
+    /// A relative URI in the FETCHED sector identifier document is refused for BEING relative, not for
+    /// something else that happens to answer the same code.
     /// </summary>
     /// <remarks>
-    /// The sharper of the two arms, and the one nothing measured: those entries come from a document at
-    /// an address the client chose, so they are third-party JSON arriving at the same expression that
-    /// throws on a relative value. The redirect-URI arm at least sees values a validator upstream may
-    /// have looked at; this one sees whatever the fetch returned.
+    /// The first version of this row served a document containing only the relative entry, so the subset
+    /// check refused it for not listing the registered redirect URI - the same error code, from a
+    /// different arm. Deleting the scheme check outright left the row green. The registered URI is in the
+    /// document now, so the subset check passes and only the scheme arm can answer, and the message is
+    /// asserted rather than the code.
+    /// <para>
+    /// The sharper of the two arms: those entries come from a document at an address the client chose,
+    /// so they are third-party JSON arriving at the expression that throws on a relative value.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_ARelativeUriInTheSectorDocument_IsRefusedRatherThanFaulting()
     {
         var sectorUri = new Uri("https://sector.example.com/uris.json");
+        var registered = new Uri("https://app.example.com/cb");
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(new[] { new Uri("/cb", UriKind.Relative) });
+            .ReturnsAsync(new[] { registered, new Uri("/cb", UriKind.Relative) });
 
         var context = CreateContext(
-            redirectUris: [new Uri("https://app.example.com/cb")],
+            redirectUris: [registered],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
         var result = await _validator.ValidateAsync(context);
 
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+        var error = Assert.IsType<OidcError>(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+        Assert.Contains("sector identifier document", error.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The control: a document whose entries are all absolute https URIs still registers.
+    /// </summary>
+    /// <remarks>
+    /// Without it, an arm refusing every document would pass the row above and no pairwise client with a
+    /// sector identifier URI could register at all.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_ASectorDocumentOfAbsoluteHttpsUris_Registers()
+    {
+        var sectorUri = new Uri("https://sector.example.com/uris.json");
+        var registered = new Uri("https://app.example.com/cb");
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(new[] { registered });
+
+        var context = CreateContext(
+            redirectUris: [registered],
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri);
+
+        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Equal("sector.example.com", context.SectorIdentifier);
     }
 }

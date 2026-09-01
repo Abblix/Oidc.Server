@@ -205,8 +205,10 @@ internal partial class JsonWebTokenSigner(
     /// cannot do is ask a signer WHY it returned false: that would be a change to
     /// <see cref="ISignatureAlgorithm{TKey}.Verify"/>, whose bool is exactly what makes an undersized key
     /// from a peer a signature that does not check out rather than a fault in the caller. The cost of that
-    /// choice is here rather than hidden: a key type that grows a floor later is reported by nothing until
-    /// it is added below, and the symptom is the silence this method exists to end.
+    /// choice is here rather than hidden, and it now has TWO axes: a key type that grows a floor later is
+    /// reported by nothing until it is added below, and so is an algorithm missing from the list the RSA
+    /// arm gates on. Both symptoms are the silence this method exists to end, which is why the algorithm
+    /// list is pinned against the one the refusal itself cites rather than kept by hand.
     /// </remarks>
     private static IEnumerable<(JsonWebKey Key, int Bits, int Floor)> UndersizedKeys(
         IEnumerable<JsonWebKey> candidates,

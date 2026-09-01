@@ -165,4 +165,23 @@ public class SecureUriValidatorTests
         var empty = new SecureHttpFetchOptions { AllowedDestinations = [] };
         Assert.NotNull(CreateValidator(empty).Validate(new Uri("http://localhost:5002/api")));
     }
+    /// <summary>
+    /// A relative URI is refused rather than faulted on.
+    /// </summary>
+    /// <remarks>
+    /// The fourth site of a class whose first three were in the registration pipeline: <c>jwks_uri</c> is
+    /// accepted there with no absoluteness or scheme check anywhere, stored on the client, and handed
+    /// over when its keys are fetched. Every <see cref="Uri"/> member this method reads raises on a
+    /// relative value rather than returning, so the refusal it exists to give arrived as a fault - and
+    /// one layer later than the registration that admitted it, which is what made it hard to see from
+    /// the pipeline.
+    /// </remarks>
+    [Fact]
+    public void Validate_ARelativeUri_IsRefusedRatherThanFaulting()
+    {
+        var refusal = CreateValidator(SecureDefaults).Validate(new Uri("/keys", UriKind.Relative));
+
+        Assert.NotNull(refusal);
+        Assert.Contains("relative", refusal, StringComparison.OrdinalIgnoreCase);
+    }
 }

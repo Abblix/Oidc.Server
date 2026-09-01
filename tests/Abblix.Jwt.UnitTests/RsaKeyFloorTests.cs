@@ -369,6 +369,41 @@ public class RsaKeyFloorTests
         Assert.Contains("256", warning.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The algorithms the report gates on are the algorithms the refusal cites a section for - the same
+    /// nine, kept together rather than by hand.
+    /// </summary>
+    /// <remarks>
+    /// Two copies of one list, and nothing made them agree: narrowing the report's list to RS256 alone
+    /// left the whole suite green, so a peer minting PS256 with a retired 1024-bit key would be refused
+    /// by the signer and reported by nothing - the exact silence the report exists to end, restored for
+    /// five of the six RSA signing algorithms.
+    /// <para>
+    /// Written as an agreement between the two rather than as a list of nine, because a row enumerating
+    /// them is a third copy.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.RS384)]
+    [InlineData(SigningAlgorithms.RS512)]
+    [InlineData(SigningAlgorithms.PS256)]
+    [InlineData(SigningAlgorithms.PS384)]
+    [InlineData(SigningAlgorithms.PS512)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+    [InlineData(SigningAlgorithms.ES256)]
+    [InlineData(SigningAlgorithms.HS256)]
+    [InlineData(SigningAlgorithms.None)]
+    public void MinimumRsaKeyBitsFor_AgreesWithTheSectionTheRefusalCites(string algorithm)
+    {
+        var hasSection = JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm).StartsWith(
+            "per RFC 7518", StringComparison.Ordinal);
+
+        Assert.Equal(hasSection, JsonWebKeyExtensions.MinimumRsaKeyBitsFor(algorithm).HasValue);
+    }
+
     private static RsaJsonWebKey PublicOnlyKey(int bits)
     {
         using var rsa = RSA.Create(bits);
