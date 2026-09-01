@@ -319,8 +319,9 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
     /// that by construction, so the refusal went with the condition it watched. Only <c>}</c> does
     /// anything at all, and only on the RECEIVER does it empty the tag rather than merely cut it - which
-    /// is why the rows below carry an opening brace as their own control, and why dropping the escaping
-    /// kills the receiver rows and leaves the stream rows green.
+    /// is why the rows below carry an opening brace as their own control. Dropping the escaping from the
+    /// receiver half kills the two rows whose brace is a CLOSING one; the opening-brace row survives, and
+    /// that is the control doing its work rather than a gap.
     /// <para>
     /// The keys are READ BACK FROM THE SERVER rather than composed here, and that is the whole row. A first
     /// version of it built the expected key with the test's own escaping helper and compared that against

@@ -283,20 +283,22 @@ public abstract partial class AuthenticationCompletionHandler(
     /// Writes the request and wakes whoever is waiting on it.
     /// </summary>
     /// <remarks>
-    /// One place, so that a handler cannot write a status without waking whoever waits on it. That is
-    /// enforced rather than asked for: no derived handler holds an
-    /// <see cref="IBackChannelRequestStorage"/> of its own, and the constructor parameter cannot be used
-    /// in a derived body either - the compiler refuses to capture a parameter that was passed to the
-    /// base. So this method and <see cref="TakeRequestAsync"/> are the only ways out, and the previous shape,
-    /// where each handler had its own storage field, is how ping came to signal nothing while its
-    /// clients waited and how push kept writing past this method afterwards.
+    /// One place, so that a handler cannot write a status without waking whoever waits on it. No derived
+    /// handler holds an <see cref="IBackChannelRequestStorage"/> of its own any more, which is what makes
+    /// this the only write path today - and NOT something the compiler enforces: a field initialised from
+    /// a primary-constructor parameter captures nothing, so one line takes that door back. What holds it
+    /// shut is <c>NoCompletionHandlerKeepsItsOwnStorage</c> in the unit tests, which reads the TYPES
+    /// rather than the call sites and so covers a handler that does not exist yet. The previous shape,
+    /// where each handler had its own storage field, is how ping came to signal nothing while its clients
+    /// waited and how push kept writing past this method afterwards.
     /// <para>
-    /// A transition made by REMOVING the request rather than writing it goes through
-    /// <see cref="TakeRequestAsync"/> and wakes nobody, deliberately. There are several: push refuses that
-    /// way, because a denied request its client can never read is an orphan; the grant handler removes a
-    /// request whose stored expiry has passed and answers expired_token; and a redemption removes the
-    /// request it just answered. A waiter woken by any of those would read a record that is gone, which
-    /// is what its own timeout already handles.
+    /// A transition made by REMOVING the request rather than writing it wakes nobody, deliberately, and
+    /// only push makes one from here - through <see cref="TakeRequestAsync"/>, because a denied request
+    /// its client can never read is an orphan. Two more removals live outside this class entirely: the
+    /// grant handler drops a request whose stored expiry has passed and answers expired_token, and a
+    /// redemption drops the request it just answered. Neither passes through here, so a signal added to
+    /// this class would not fire for them. A waiter woken by any of the three would read a record that is
+    /// gone, which is what its own timeout already handles.
     /// </para>
     /// <para>
     /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
