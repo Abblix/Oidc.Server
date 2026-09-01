@@ -10,8 +10,10 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
@@ -26,6 +28,12 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </remarks>
 public class JwksUriValidatorTests
 {
+    private static JwksUriValidator CreateValidator(SecureHttpFetchOptions options)
+        => new(new SecureUriValidator(Options.Create(options)));
+
+    // Secure defaults: https-only, private networks blocked.
+    private static SecureHttpFetchOptions SecureDefaults => new();
+
     private static ClientRegistrationValidationContext Context(Uri? jwksUri)
         => new(new ClientRegistrationRequest
         {
@@ -35,15 +43,15 @@ public class JwksUriValidatorTests
 
     [Fact]
     public async Task ValidateAsync_WithNoJwksUri_ReturnsNull()
-        => Assert.Null(await new JwksUriValidator().ValidateAsync(Context(null)));
+        => Assert.Null(await CreateValidator(SecureDefaults).ValidateAsync(Context(null)));
 
     [Fact]
     public async Task ValidateAsync_WithAnAbsoluteUri_ReturnsNull()
-        => Assert.Null(await new JwksUriValidator()
+        => Assert.Null(await CreateValidator(SecureDefaults)
             .ValidateAsync(Context(new Uri("https://client.example.com/.well-known/jwks.json"))));
 
     /// <summary>
-    /// Everything that is not an absolute https URL is refused, including the two shapes that read as
+    /// Everything the fetch policy refuses is refused here, including the two shapes that read as
     /// absolute to a check that only asks <see cref="Uri.IsAbsoluteUri"/>.
     /// </summary>
     /// <remarks>
@@ -57,13 +65,14 @@ public class JwksUriValidatorTests
     [Theory]
     [InlineData("/.well-known/jwks.json", UriKind.Relative)]
     [InlineData("http://client.example.com/.well-known/jwks.json", UriKind.Absolute)]
+    [InlineData("https://localhost/.well-known/jwks.json", UriKind.Absolute)]
     [InlineData("client.example.com:8080/.well-known/jwks.json", UriKind.Absolute)]
     [InlineData("www.example.com:443/jwks", UriKind.Absolute)]
-    public async Task ValidateAsync_WithAnythingOtherThanAnAbsoluteHttpsUrl_ReturnsInvalidClientMetadata(
+    public async Task ValidateAsync_WithAValueThePolicyRefuses_ReturnsInvalidClientMetadata(
         string uri,
         UriKind kind)
     {
-        var result = await new JwksUriValidator().ValidateAsync(Context(new Uri(uri, kind)));
+        var result = await CreateValidator(SecureDefaults).ValidateAsync(Context(new Uri(uri, kind)));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -77,8 +86,37 @@ public class JwksUriValidatorTests
     }
 
     /// <summary>
+    /// A destination the deployment named is accepted over plain HTTP, because the policy says so.
+    /// </summary>
+    /// <remarks>
+    /// The row that a hard-coded <c>https</c> would fail. <c>AllowedDestinations</c> exists to name a
+    /// service inside the deployment's own network, which is reached over HTTP, and the policy checks it
+    /// FIRST so that it lifts the scheme restriction. The same address registers as a
+    /// <c>backchannel_logout_uri</c>, so refusing it here would make the two fetched endpoints disagree
+    /// about one address - measured before this row existed: 201 for one member, 400 for the other.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_WithANamedDestinationOverHttp_ReturnsNull()
+    {
+        var options = new SecureHttpFetchOptions
+        {
+            AllowedDestinations = [new Uri("http://keys.internal:8080/jwks")],
+        };
+
+        var result = await CreateValidator(options)
+            .ValidateAsync(Context(new Uri("http://keys.internal:8080/jwks")));
+
+        Assert.Null(result);
+
+        // The control: the same address is refused under the defaults, so what this row measures is the
+        // named destination and not a policy that permits everything.
+        Assert.NotNull(await CreateValidator(SecureDefaults)
+            .ValidateAsync(Context(new Uri("http://keys.internal:8080/jwks"))));
+    }
+
+    /// <summary>
     /// The control on the rows above: the two <c>host:port</c> values really do reach the validator as
-    /// ABSOLUTE URIs, so their refusal comes from the scheme check and not from relativeness.
+    /// ABSOLUTE URIs, so their refusal comes from the policy and not from relativeness.
     /// </summary>
     [Theory]
     [InlineData("client.example.com:8080/.well-known/jwks.json")]

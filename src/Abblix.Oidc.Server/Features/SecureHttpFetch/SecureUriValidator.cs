@@ -74,10 +74,11 @@ public partial class SecureUriValidator : ISecureUriValidator
     public string? Validate(Uri uri)
     {
         // Nothing inside this library can reach here with a relative URI, and this is not that guard: an
-        // HTTP client with no base address refuses one before the outbound handler is entered, and every
-        // registration site that stores an address checks absoluteness itself - a property that had a
-        // hole in it until RedirectUrisValidator stopped asking the question only of clients whose grant
-        // types need a redirect URI. What this line defends
+        // HTTP client with no base address refuses one before the outbound handler is entered, and no
+        // registration stores a relative address - which is held by a row over every URI member the
+        // model carries rather than by this sentence, because the claim was false twice while it read
+        // as settled: once for a client whose grant types need no redirect URI, and once for six members
+        // that had no validator at all. What this line defends
         // is the PUBLIC method - a host resolving ISecureUriValidator and asking it about an address of
         // its own - where the alternative is an InvalidOperationException out of a member read below,
         // which is a fault in place of the verdict this method exists to give.

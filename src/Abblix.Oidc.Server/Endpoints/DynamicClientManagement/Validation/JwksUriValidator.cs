@@ -7,13 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates that a registered <c>jwks_uri</c> is an absolute https URL: RFC 7591 Section 2 makes the
-/// member a URL, and this server fetches it to load the client's keys.
+/// Validates that a registered <c>jwks_uri</c> names a destination this deployment is allowed to fetch
+/// from: RFC 7591 Section 2 makes the member a URL, and this server fetches it to load the client's keys.
 /// </summary>
 /// <remarks>
 /// A value the fetch cannot resolve registers happily and produces a client whose keys can never be
@@ -22,32 +23,40 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// say more, since the fetcher answers every failure with an empty key set. Registration is the last
 /// point at which the caller is still on the line to be told.
 /// <para>
-/// BOTH halves, because absoluteness alone is not the property. A dot is legal in a URI scheme, so
+/// Absoluteness is asked HERE and everything else is asked of the POLICY, which is what
+/// <see cref="BackChannelLogoutUriValidator"/> does with the other address this server fetches. The
+/// split matters because absoluteness alone is not the property: a dot is legal in a URI scheme, so
 /// <c>client.example.com:8080/jwks</c> - the way people write a host and a port - parses as an ABSOLUTE
-/// URI whose scheme is the host name and whose <see cref="Uri.Host"/> is empty. It names no destination
-/// and it is the mistake a registrant actually makes, so a check that reads only
-/// <see cref="Uri.IsAbsoluteUri"/> admits exactly the value this validator exists to refuse.
+/// URI whose scheme is the host name and whose <see cref="Uri.Host"/> is empty, and every member the
+/// policy reads below would then be read off a value that names nowhere.
 /// </para>
 /// <para>
-/// The scheme is decided here rather than left to the fetch because it is a fact about the TEXT: it
-/// needs no name resolution and cannot go stale, unlike the loopback and private-network verdicts, which
-/// belong to <c>SsrfValidatingHttpMessageHandler</c> and are taken against an address re-resolved
-/// immediately before the request.
+/// The scheme is NOT decided here, and a literal <c>https</c> would be wrong: <see cref="SecureHttpFetchOptions.AllowedDestinations"/>
+/// names an address the deployment reaches inside its own network, over plain HTTP, and the policy lifts
+/// the scheme restriction for exactly those. Refusing them at registration while the fetch allows them
+/// would make one fetched endpoint disagree with the other about the same address.
 /// </para>
 /// </remarks>
-public class JwksUriValidator : SyncClientRegistrationContextValidator
+/// <param name="uriValidator">The shared SSRF URI policy used by the outbound HTTP handler.</param>
+public class JwksUriValidator(ISecureUriValidator uriValidator) : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Returns an <c>invalid_client_metadata</c> error when <c>jwks_uri</c> is relative or is not https;
-    /// <c>null</c> when it is absent or an absolute https URL.
+    /// Returns an <c>invalid_client_metadata</c> error when <c>jwks_uri</c> is relative or violates the
+    /// fetch policy; <c>null</c> when it is absent or compliant.
     /// </summary>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var uri = context.Request.JwksUri;
-        if (uri is null || uri is { IsAbsoluteUri: true, Scheme: "https" })
+        if (uri is null)
             return null;
 
-        return ErrorFactory.InvalidClientMetadata(
-            $"The {Parameters.JwksUri} must be an absolute https URI");
+        if (!uri.IsAbsoluteUri)
+            return ErrorFactory.InvalidClientMetadata($"The {Parameters.JwksUri} is not an absolute URI");
+
+        var rejection = uriValidator.Validate(uri);
+        if (rejection != null)
+            return ErrorFactory.InvalidClientMetadata($"The {Parameters.JwksUri} is not allowed: {rejection}");
+
+        return null;
     }
 }

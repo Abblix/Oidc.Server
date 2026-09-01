@@ -96,8 +96,16 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                     case ApplicationTypes.Native:
                         break;
 
+                    // A REFUSAL, not a throw. The [AllowedValues] attribute on the member is not
+                    // enforced against a JSON body - the same gap the nullability annotation has above -
+                    // so this arm is reachable by anybody who posts a registration, and a throw here
+                    // leaves the request as a server fault rather than as an answer the caller can act
+                    // on. It became reachable for a whole class of clients when these checks stopped
+                    // being gated on the grant types.
                     default:
-                        throw new UnexpectedTypeException(nameof(applicationType), applicationType.GetType());
+                        return ErrorFactory.InvalidClientMetadata(
+                            $"'{Parameters.ApplicationType}' names no application type this server "
+                            + $"knows: it must be '{ApplicationTypes.Web}' or '{ApplicationTypes.Native}'");
                 }
             }
         }

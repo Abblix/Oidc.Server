@@ -124,6 +124,102 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// An application type this server does not know is refused, not thrown on.
+    /// </summary>
+    /// <remarks>
+    /// <c>[AllowedValues]</c> on the model is not enforced against a JSON body - the same gap the
+    /// nullability annotation has, which this validator already carries a comment about - so an
+    /// arbitrary string reaches the per-application-type switch. Its <c>default</c> used to throw, which
+    /// is right for a value that cannot occur and wrong for one any caller can post: the registration
+    /// left the pipeline as a server fault rather than a refusal.
+    /// <para>
+    /// A CIBA-only client, because that is the class the redirect-URI checks reached for the first time
+    /// when they stopped being gated on the grant types - a body that answered 201 before then met the
+    /// throw. Clients WITH redirect grants met it all along.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_unknown_application_type_is_refused_rather_than_thrown_on()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("an-application-type-nobody-defined");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.ApplicationType] = "service";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, body["error"]!.GetValue<string>());
+
+        // The member by name: an operator reading "invalid_client_metadata" over a body carrying thirty
+        // members has nothing to act on otherwise.
+        Assert.Contains(
+            RequestMembers.ApplicationType,
+            body["error_description"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// No URI member accepts a relative value.
+    /// </summary>
+    /// <remarks>
+    /// The wider of the two detectors, over every URI member a registration can carry. Absoluteness is
+    /// the rule they all share; the scheme is not, so it is the other theory's subject and only for the
+    /// members whose scheme the fetch policy decides.
+    /// <para>
+    /// Six of these had no validator at all until the sweep that produced this row, and one of them was
+    /// a live defect rather than an omission: a relative <c>frontchannel_logout_uri</c> registered
+    /// happily and reached <c>new UriBuilder(uri)</c> at logout, which throws on a relative URI.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(RequestMembers.JwksUri, false)]
+    [InlineData(RequestMembers.InitiateLoginUri, false)]
+    [InlineData(RequestMembers.BackChannelLogoutUri, false)]
+    [InlineData(RequestMembers.FrontChannelLogoutUri, false)]
+    [InlineData(RequestMembers.LogoUri, false)]
+    [InlineData(RequestMembers.ClientUri, false)]
+    [InlineData(RequestMembers.PolicyUri, false)]
+    [InlineData(RequestMembers.TosUri, false)]
+    [InlineData(RequestMembers.RedirectUris, true)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris, true)]
+    [InlineData(RequestMembers.RequestUris, true)]
+    public async Task No_uri_member_accepts_a_relative_value(string member, bool isArray)
+    {
+        const string Relative = "/somewhere";
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"relative-{member}");
+        metadata[member] = isArray ? new JsonArray(Relative) : Relative;
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same metadata WITHOUT the member registers, so the refusal is about the value.
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint,
+            NewClientMetadata($"relative-control-{member}"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
     /// No URI member accepts a host and a port with no scheme.
     /// </summary>
     /// <remarks>
@@ -136,6 +232,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     /// <para>
     /// Driven through the endpoint per member, because what has to hold is that SOMETHING refuses, and
     /// which validator does is not this row's business.
+    /// </para>
+    /// <para>
+    /// Only the members whose scheme is decided - by the fetch policy, or by the specification for a
+    /// redirect URI. The rest are checked for absoluteness alone, and a host with a port IS absolute, so
+    /// listing them here would assert a rule nothing in the library holds.
     /// </para>
     /// </remarks>
     [Theory]
