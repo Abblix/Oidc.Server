@@ -162,7 +162,6 @@ public partial class LicenseManager
                 // not silently widen what this covers.
                 if (status == LicenseStatus.Active && CarriedThrough(license, next))
                 {
-                    ReportNarrowing(license, utcNow);
                     continue;
                 }
 
@@ -179,6 +178,8 @@ public partial class LicenseManager
         // With nothing in force the message is exactly true: the server is on the free tier, which allows
         // one issuer, and a deployment serving more than one then refuses every issuer it has seen,
         // including the first, until it restarts under a valid license.
+        ReportNextNarrowing(utcNow);
+
         if (result is null && expired is not null)
         {
             foreach (var license in expired)
@@ -411,31 +412,27 @@ public partial class LicenseManager
     }
 
     /// <summary>
-    /// Records that this deployment will be allowed less from the day one of its licenses expires.
+    /// Records the next moment this deployment will be allowed less than it is now, and what it loses.
     /// </summary>
-    /// <param name="license">The license whose expiry is the day in question.</param>
-    /// <param name="utcNow">The moment the comparison was made at.</param>
+    /// <param name="utcNow">The moment the comparison starts from.</param>
     /// <remarks>
-    /// The expiring-soon record cannot carry this: a deployment holding a covering successor has nothing
-    /// to renew and no interruption to avoid, which is why that record is suppressed here in the first
-    /// place. What remains true is that the merge changes on the day this license expires, and a
-    /// deployment may then find its clients cut, its issuer limit cut, or an issuer it has been serving
-    /// refused - at an instant nobody announced. <see cref="LicenseChecker"/> enforces the issuer set by
-    /// throwing, so the first request for a dropped issuer after the switchover is the notice.
+    /// Asked once per pass rather than per license, because the subject is the DEPLOYMENT rather than any
+    /// one license. What a deployment may do is the merge of everything active, so the question is when
+    /// that merge next becomes smaller - and the answer is not always an expiry: a successor whose issuer
+    /// set is narrower restricts the deployment the day it STARTS, because merging a license that names
+    /// issuers with one that names none yields the named set. Anchoring the record on an expiry named a
+    /// day five days after the restriction began, which is worse than silence.
     /// <para>
-    /// Two MERGES are compared, not two licenses, and that is the whole of the method. What a deployment
-    /// may do is the merge of everything active - <see cref="AppendLicense"/> keeps the greater of each
-    /// limit - so comparing this license against the one successor that happens to start first answers a
-    /// question nobody asked: with a third license also covering the day, the pair says the deployment
-    /// loses ninety-nine per cent of its clients while the merge says it doubles them. Scanning at the
-    /// instant after the expiry asks the same machinery what will actually be in force, and gets the
-    /// answer the enforcement will give.
+    /// Both sides are read from <see cref="Scan"/>, which is what <see cref="TryGetCurrentLicenseLimit"/>
+    /// installs, so the comparison is between two answers the enforcement will actually give. The moments
+    /// examined are every future start and every future expiry, in order, and the FIRST loss is the one
+    /// announced: an operator can only act on the next one, and a second record about a later date buries
+    /// it.
     /// </para>
     /// <para>
-    /// A shorter GRACE PERIOD is deliberately not counted as granting less. It changes nothing on the day
-    /// the merge changes - only what happens after the successor itself expires - so counting it would
-    /// fire on a renewal that is larger in every way a deployment can feel, and a warning that arrives on
-    /// good news is one an operator learns to skip.
+    /// A moment at which nothing is in force is skipped rather than announced: that is a lapse to the
+    /// free tier, which the expiry and grace records already carry in their own words, and announcing it
+    /// here as a narrowing would put two different sentences on one event.
     /// </para>
     /// <para>
     /// Warning rather than Error: nothing is wrong, and nothing is wrong on the day either. The
@@ -443,27 +440,63 @@ public partial class LicenseManager
     /// bigger renewal while there is time.
     /// </para>
     /// </remarks>
-    private void ReportNarrowing(License license, DateTimeOffset utcNow)
+    private void ReportNextNarrowing(DateTimeOffset utcNow)
     {
-        if (license.ExpiresAt is not { } takesOverAt)
+        if (Scan(utcNow).InForce is not { } inForce)
             return;
 
-        // One tick past the expiry, because a license is active at both of its endpoints: at the instant
-        // itself this one is still in the merge, and the whole question is what the merge becomes without
-        // it.
-        var inForce = Scan(utcNow).InForce;
-        var afterwards = Scan(takesOverAt.AddTicks(1)).InForce;
-
-        if (inForce is null || afterwards is null ||
-            Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed ||
-            !LicenseLogger.Instance.IsAllowed(
-                new { inForce, afterwards, takesOverAt }, utcNow, TimeSpan.FromDays(1)))
+        foreach (var moment in ChangeMoments(utcNow))
         {
+            if (Scan(moment).InForce is not { } afterwards ||
+                Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed)
+            {
+                continue;
+            }
+
+            // Keyed by VALUES, not by the merged licenses: a merge allocates a fresh set for the issuers,
+            // and License compares a HashSet member by reference, so a key holding one is new on every
+            // scan and the window never closes. That matters per request rather than per day, because a
+            // merge carrying a grace-period license reads as expired and makes every license consult
+            // rescan.
+            if (LicenseLogger.Instance.IsAllowed(
+                    new { moment, narrowed = string.Join("|", narrowed) }, utcNow, TimeSpan.FromDays(1)))
+            {
+                LogRenewalGrantsLess(LicenseLogger.Instance, moment, string.Join("; ", narrowed));
+            }
+
             return;
         }
-
-        LogRenewalGrantsLess(LicenseLogger.Instance, takesOverAt, string.Join("; ", narrowed));
     }
+
+    /// <summary>
+    /// Every future moment at which the merge can change, earliest first.
+    /// </summary>
+    /// <remarks>
+    /// A license enters the merge at its <c>NotBefore</c> and leaves it one tick after its
+    /// <c>ExpiresAt</c>, since a license is active at both of its endpoints. Those are the only two kinds
+    /// of moment, so a change the merge makes at any other instant does not exist.
+    /// <para>
+    /// An expiry at the maximum representable instant yields no "after": there is no such tick, and
+    /// asking for one used to throw out of a license check - a licensing question answered with a server
+    /// fault. Nothing follows it either, so skipping it loses no moment.
+    /// </para>
+    /// </remarks>
+    private IEnumerable<DateTimeOffset> ChangeMoments(DateTimeOffset utcNow)
+    {
+        var moments = new SortedSet<DateTimeOffset>();
+
+        foreach (var license in _licenses)
+        {
+            if (license.NotBefore is { } starts && utcNow < starts)
+                moments.Add(starts);
+
+            if (license.ExpiresAt is { } ends && utcNow < ends && ends < DateTimeOffset.MaxValue)
+                moments.Add(ends.AddTicks(1));
+        }
+
+        return moments;
+    }
+
 
     /// <summary>
     /// The ways the successor grants less than the license in force, in words an operator can act on.

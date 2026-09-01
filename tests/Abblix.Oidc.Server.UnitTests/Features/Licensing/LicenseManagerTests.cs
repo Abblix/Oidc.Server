@@ -367,6 +367,169 @@ public class LicenseManagerTests
         var record = Assert.Single(Report(manager, utcNow));
 
         Assert.Contains("https://only.example.com", record.Message, StringComparison.Ordinal);
+
+        // The day the successor STARTS, not the day the current licence expires. Merging a licence that
+        // names issuers with one that names none yields the named set, so the restriction begins five
+        // days before the expiry - and a record naming the expiry would have an operator serving other
+        // issuers for those five days while the checker throws on every one of them.
+        Assert.Contains(utcNow.AddDays(5).ToString("R"), record.Message, StringComparison.Ordinal);
+    }
+
+
+    /// <summary>
+    /// A loss that happens BEFORE the next expiry is announced on its own day.
+    /// </summary>
+    /// <remarks>
+    /// The first version read the "before" side at the current moment and the "after" side at an expiry a
+    /// month away, so everything that happened in between was attributed to the expiry: this arrangement
+    /// produced a warning naming a day on which the enforcement answers the same limit on both sides,
+    /// while the real drop had happened five days earlier. Both sides are read at the moment under
+    /// examination now.
+    /// </remarks>
+    [Fact]
+    public void A_loss_before_the_next_expiry_is_announced_on_its_own_day()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10), ClientLimit = 500,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(5), ClientLimit = 1000,
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(6), ExpiresAt = utcNow.AddDays(400), ClientLimit = 500,
+        });
+
+        var record = Assert.Single(
+            Report(manager, utcNow),
+            r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess);
+
+        // Day 5 plus a tick is when the thousand-client licence leaves the merge. Day 10 is when the
+        // other one does, and by then nothing changes.
+        Assert.Contains(utcNow.AddDays(5).ToString("R"), record.Message, StringComparison.Ordinal);
+        Assert.Contains("clients 1000 -> 500", record.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A right the deployment does not hold today is not announced as a loss today.
+    /// </summary>
+    /// <remarks>
+    /// The comparison is against what is in force NOW, and that is the whole shape of the record: an
+    /// issuer granted on day six and withdrawn on day ten is not something an operator can act on today,
+    /// because today they do not have it. The pass runs again, and from day six the withdrawal is a loss
+    /// against the then-current merge and is announced there.
+    /// <para>
+    /// This row exists because the opposite expectation is the easy one to write - a reviewer's probe
+    /// compared day ten against day ten plus a tick and read the difference as silence. Against the
+    /// neighbouring moment almost everything is a loss; against today, only what the deployment actually
+    /// gives up.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_right_not_held_today_is_not_announced_as_a_loss_today()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ValidIssuers = ["https://a.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(5),
+            ExpiresAt = utcNow.AddDays(400),
+            ValidIssuers = ["https://a.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(6),
+            ExpiresAt = utcNow.AddDays(10),
+            ValidIssuers = ["https://x.example.com"],
+        });
+
+        Assert.DoesNotContain(
+            Report(manager, utcNow),
+            r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess);
+    }
+
+    /// <summary>
+    /// The record is throttled, so a deployment consulting its licences per request gets one a day.
+    /// </summary>
+    /// <remarks>
+    /// The key has to be built from VALUES. A merge allocates a fresh set for the issuers and
+    /// <see cref="License"/> compares that member by reference, so a key holding merged licences is a new
+    /// value on every scan and the window never closes - twenty warnings in twenty consults, measured,
+    /// against a control of one. And the path runs per request: a merge carrying a grace-period licence
+    /// reads as expired, so every consult rescans.
+    /// </remarks>
+    [Fact]
+    public void The_record_is_throttled_across_repeated_consults()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(10),
+            ValidIssuers = ["https://a.example.com", "https://b.example.com"],
+        });
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1),
+            ExpiresAt = utcNow.AddDays(400),
+            ValidIssuers = ["https://a.example.com"],
+        });
+
+        TestLicense.ClearLogThrottle();
+        var records = new RecordingLoggerFactory();
+        LicenseLogger.Instance.Init(records);
+        try
+        {
+            for (var consult = 0; consult < 20; consult++)
+            {
+                manager.ReportLoadedLicenses(utcNow);
+            }
+        }
+        finally
+        {
+            LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
+        }
+
+        var announced = records.Entries
+            .Count(r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess);
+
+        Assert.Equal(1, announced);
+    }
+
+    /// <summary>
+    /// An expiry at the largest representable instant is not a fault.
+    /// </summary>
+    /// <remarks>
+    /// There is no tick after it, and asking for one threw out of a licence check - a licensing question
+    /// answered with a server fault. Nothing follows that instant either, so it is simply not a moment
+    /// the merge can change at.
+    /// </remarks>
+    [Fact]
+    public void A_maximal_expiry_with_a_perpetual_successor_does_not_fault()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = utcNow.AddDays(-1), ExpiresAt = DateTimeOffset.MaxValue, ClientLimit = 500,
+        });
+        manager.AddLicense(new License { NotBefore = utcNow.AddDays(5), ClientLimit = 5 });
+
+        // Through the reporting entry, not through TryGetCurrentLicenseLimit: with an expiry that far
+        // away the cached licence is never stale, so that method returns before it scans anything and
+        // the row would pass over a build that still throws.
+        Assert.Null(Record.Exception(() => manager.ReportLoadedLicenses(utcNow)));
     }
 
     /// <summary>
