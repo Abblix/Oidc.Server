@@ -41,7 +41,6 @@ public partial class PushModeCompletionHandler(
     : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
-    private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
     /// Removes the request rather than denying it, because a push client never polls.
@@ -56,7 +55,7 @@ public partial class PushModeCompletionHandler(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
-        => _storage.TryRemoveAsync(authenticationRequestId);
+        => TakeRequestAsync(authenticationRequestId);
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
@@ -180,7 +179,7 @@ public partial class PushModeCompletionHandler(
                     // with the request: it has the tokens and will never come to the token endpoint.
                     // CIBA Core 1.0 does not require this - section 10.3.1 says nothing about what the OP
                     // keeps - so it is a choice, made because the alternative is an orphan.
-                    await _storage.TryRemoveAsync(authenticationRequestId);
+                    await TakeRequestAsync(authenticationRequestId);
                     LogTokensDelivered(authenticationRequestId);
                 }
                 else
@@ -213,7 +212,7 @@ public partial class PushModeCompletionHandler(
                 // No tokens were minted, so there is nothing a second attempt could deliver and nothing
                 // for a host to complete again. Removed rather than marked denied, because a push client
                 // never polls and would never read the mark. Not a requirement of CIBA Core 1.0.
-                await _storage.TryRemoveAsync(authenticationRequestId);
+                await TakeRequestAsync(authenticationRequestId);
 
                 return null;
             });

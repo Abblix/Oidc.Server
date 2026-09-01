@@ -85,9 +85,9 @@ public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
     /// <remarks>
     /// Null has TWO causes and a caller that can act on them differently should ask
     /// <see cref="IsOffered"/> which it is: this transmitter serves no poll delivery at all, or it does
-    /// and this stream still has no address - an identifier the route cannot carry, for one. The second
-    /// cause is the reason this summary no longer says "offers no poll delivery": that reading makes the
-    /// branch a caller writes for the second cause look unreachable.
+    /// and this stream still has no address - an identifier the route cannot carry, for one. Reading
+    /// null as the first cause alone makes the branch written for the second look unreachable, which is
+    /// why the summary above names neither.
     /// </remarks>
     /// <param name="streamId">The stream whose queue is served there.</param>
     public Uri? Of(string streamId) => (options.PollEndpointFactory ?? _served)?.Invoke(streamId);

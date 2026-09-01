@@ -263,8 +263,9 @@ public sealed class PollDeliveryByDefaultTests
     /// the OTHER message, and its operator is sent to configure an address rather than to rename a stream.
     /// </summary>
     /// <remarks>
-    /// Without this row the arm that chooses between the two messages could be deleted whole and nothing
-    /// would notice, because the surviving message also names the stream.
+    /// This row holds the collapse in the other direction. Deleting the arm whole is caught by the
+    /// assertion twelve lines above; making that arm unconditional - so every operator is told to rename
+    /// their stream - is caught here and nowhere else.
     /// </remarks>
     [Fact]
     public async Task ADeclaredPollStreamOnATransmitterServingNoPoll_IsRefusedForThatInstead()
@@ -497,6 +498,11 @@ public sealed class PollDeliveryByDefaultTests
         var result = await service.CreateStreamAsync(ReceiverId, new CreateStreamRequest(), cancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+
+        // Which refusal, and not merely that one came. Both arms answer 400, so a row asserting the
+        // status alone leaves the condition choosing between them free to be deleted.
+        Assert.Contains(
+            "not supported by this transmitter", result.Description!, StringComparison.Ordinal);
     }
 
     private static async Task<Uri> PollEndpointOfNewStreamAsync(

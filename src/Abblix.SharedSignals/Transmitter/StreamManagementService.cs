@@ -593,11 +593,14 @@ public sealed class StreamManagementService(
     {
         if (ResolveDelivery(proposed, streamId) is not { } delivery)
         {
-            // Two refusals wearing one answer would send half the readers to the wrong place. A
-            // transmitter that offers poll and still has no address for THIS stream advertises
-            // urn:ietf:rfc:8936 in its configuration document, so telling that receiver the method is
-            // unsupported contradicts what the same host publishes - and sends whoever debugs it to
-            // check the delivery configuration instead of the stream's name.
+            // Two refusals wearing one answer send half the readers to the wrong place. A transmitter
+            // that offers poll and still has no address for THIS stream advertises urn:ietf:rfc:8936 in
+            // its configuration document, so calling the method unsupported contradicts what the same
+            // host publishes.
+            //
+            // Who reads this at all: not the receiver. Render writes the status and drops the
+            // description, and nothing here logs it - so over HTTP the two refusals are one 400 either
+            // way, and this text reaches only a host driving this service directly.
             return ManagementResult<StreamDeliveryMethod>.BadRequest(
                 proposed is PollDeliveryMethod or null && pollEndpoints.IsOffered
                     ? "This transmitter serves poll delivery, but has no poll address for this stream: "

@@ -283,20 +283,25 @@ public abstract partial class AuthenticationCompletionHandler(
     /// Writes the request and wakes whoever is waiting on it.
     /// </summary>
     /// <remarks>
-    /// One place, so that the property the notifier's contract states holds by construction rather than
-    /// by somebody remembering: every WRITE of a new status by a completion handler goes through here,
-    /// in all three modes. A list of call sites is complete only until the next handler is added, and
-    /// that is exactly how ping came to signal nothing while its clients waited.
+    /// One place, so that a handler cannot write a status without waking whoever waits on it. That is
+    /// enforced rather than asked for: no derived handler holds an
+    /// <see cref="IBackChannelRequestStorage"/> of its own, and the constructor parameter cannot be used
+    /// in a derived body either - the compiler refuses to capture a parameter that was passed to the
+    /// base. So this method and <see cref="TakeRequestAsync"/> are the only ways out, and the previous shape,
+    /// where each handler had its own storage field, is how ping came to signal nothing while its
+    /// clients waited and how push kept writing past this method afterwards.
     /// <para>
-    /// Two things are deliberately outside that sentence. A transition made by REMOVING the request
-    /// rather than writing it - which is how push refuses, since a denied request its client can never
-    /// read is an orphan - reaches nothing here, and needs nothing: a push client is refused at the token
-    /// endpoint outright, so it is never a waiter. And an expiry is not performed by anybody at all; the
-    /// record falls out of storage on its lifetime.
+    /// A transition made by REMOVING the request rather than writing it goes through
+    /// <see cref="TakeRequestAsync"/> and wakes nobody, deliberately. There are several: push refuses that
+    /// way, because a denied request its client can never read is an orphan; the grant handler removes a
+    /// request whose stored expiry has passed and answers expired_token; and a redemption removes the
+    /// request it just answered. A waiter woken by any of those would read a record that is gone, which
+    /// is what its own timeout already handles.
     /// </para>
     /// <para>
     /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
-    /// nobody, because nothing hands push a notifier; a deployment that registered none skips the call.
+    /// nobody, because nothing hands push a notifier: its constructor has no such parameter, so no
+    /// container configuration can supply one. A deployment that registered no notifier skips the call.
     /// </para>
     /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
@@ -314,4 +319,21 @@ public abstract partial class AuthenticationCompletionHandler(
             await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, request.Status);
         }
     }
+
+    /// <summary>
+    /// Takes the request away, for a mode that answers by removing it rather than by writing a status.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="StoreAsync"/> so that a derived handler needs no storage of its own, which is
+    /// what keeps the write path from having a second door. Nobody is woken: a waiter reading a record
+    /// that has just gone learns nothing its own timeout does not already tell it.
+    /// </remarks>
+    /// <param name="authenticationRequestId">The request to take away.</param>
+    /// <returns>The request, when this caller took it - which means the protocol ran to the end and this
+    /// caller's own claim was still in the store; otherwise null. A null covers the record not being
+    /// there, somebody else having taken it, and a claim that expired mid-protocol, which happens to a
+    /// single caller with nobody to lose to. A store fault after the removal raises rather than
+    /// returning null.</returns>
+    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(string authenticationRequestId)
+        => storage.TryRemoveAsync(authenticationRequestId);
 }
