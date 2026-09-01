@@ -31,7 +31,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 public sealed class DefaultSecurityEventTokenVerifier(
     IJsonWebTokenValidator validator,
     IIssuerKeyResolver keyResolver,
-    IReadOnlySet<string> allowedAlgorithms) : ISecurityEventTokenVerifier
+    string[] allowedAlgorithms) : ISecurityEventTokenVerifier
 {
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
@@ -47,7 +47,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
         var parameters = new ValidationParameters
         {
             Options = ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey,
-            AllowedSigningAlgorithms = allowedAlgorithms,
+            AllowedSigningAlgorithms = allowedAlgorithms.ToHashSet(StringComparer.Ordinal),
             ResolveIssuerSigningKeys = ResolveBuffered,
         };
 

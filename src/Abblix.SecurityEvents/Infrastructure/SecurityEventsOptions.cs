@@ -34,37 +34,59 @@ public sealed class SecurityEventsOptions
     public Func<CancellationToken, Task<JsonWebKey>>? SigningKeySource { get; set; }
 
     /// <summary>
-    /// The signature algorithms this deployment will sign a security event token with and accept one
-    /// under. RS256 alone by default, which is what the CAEP Interoperability Profile 1.0 Section 2.6
-    /// requires.
+    /// The signature algorithms this deployment will sign a security event token with, and accept one
+    /// under.
     /// </summary>
     /// <remarks>
     /// One set for both directions on purpose. A deployment that widens what it accepts and not what it
-    /// emits, or the reverse, has two policies to keep in step and no place that says they disagree; and
-    /// a receiver is entitled to expect that what a transmitter accepts is what it is willing to produce.
+    /// emits, or the reverse, has two policies to keep in step and no place that says they disagree.
     /// <para>
-    /// Stated rather than inherited. Before this, the transmitter signed with whatever the configured key
-    /// declared and the receiver accepted whatever the validator's default permitted, so neither side
-    /// said what it was willing to use and the two could differ without anybody noticing.
+    /// The DEFAULT is every algorithm this library implements, not the RS256 the CAEP Interoperability
+    /// Profile 1.0 draft 01 Section 2.6 requires, and the difference is deliberate. This verifier is
+    /// shared: <c>AddBackChannelLogoutReceiver</c> resolves the same one, and an OIDC Logout Token is
+    /// signed with whatever the client registered as its <c>id_token_signed_response_alg</c> - ES256 and
+    /// PS256 are conformant and common there, and its producer is somebody else's provider, so a
+    /// receiver has nothing to "keep in step" with. Defaulting to the profile's single algorithm would
+    /// have refused every such token on upgrade, measured against the previous release.
     /// </para>
     /// <para>
-    /// The profile's requirement is under discussion upstream and the FAPI 2.0 set is the likely
-    /// direction, which is why this is a set a deployment can widen rather than a constant. Of that set
-    /// this library can sign and verify PS256 and ES256; EdDSA it cannot, so widening to it would name an
-    /// algorithm nothing here implements. What the set cannot contain is <c>none</c>: an unsigned
-    /// security event is not a weaker
-    /// signature but the absence of one, and a set that could hold it would make the receiver's
+    /// So a deployment that must be CAEP-conformant NARROWS this to RS256 deliberately, which is a line
+    /// it can point at, rather than inheriting it from a default that also governs a protocol the
+    /// profile says nothing about. Of the FAPI 2.0 direction this library offers PS256 and ES256; EdDSA
+    /// it does not implement, so naming it here would name an algorithm nothing can use.
+    /// </para>
+    /// <para>
+    /// What the set cannot contain is <c>none</c>: an unsigned security event is not a weaker signature
+    /// but the absence of one, and a set that could hold it would make the receiver's
     /// <c>RequireSignedTokens</c> the only thing standing between a deployment and an unauthenticated
     /// event.
     /// </para>
+    /// <para>
+    /// NULL means the default, and the default is deliberately not the property's initial value: the
+    /// configuration binder reads whatever is there, ADDS the configured entries and writes the result
+    /// back, so a deployment narrowing the list to ES256 would get ES256 alongside everything the
+    /// default carried and would believe it had excluded the rest. Measured on both a set and an array -
+    /// the binder unions either. With nothing there, what it writes back is exactly what was configured.
+    /// <see cref="DefaultSigningAlgorithms"/> is public so a host can still read what null means.
+    /// </para>
+    /// <para>
+    /// The value is copied on assignment, because a caller holding the array it passed could otherwise
+    /// add <c>none</c> to it afterwards, and an invariant a caller can break after assignment is not one.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The set is empty, or contains <c>none</c>.</exception>
-    public IReadOnlySet<string> AllowedSigningAlgorithms
+    public string[]? AllowedSigningAlgorithms
     {
         get => _allowedSigningAlgorithms;
         set
         {
-            if (value is not { Count: > 0 })
+            if (value is null)
+            {
+                _allowedSigningAlgorithms = null;
+                return;
+            }
+
+            if (value.Length == 0)
             {
                 throw new ArgumentException(
                     "A deployment that allows no signature algorithm can neither emit a security event "
@@ -72,7 +94,7 @@ public sealed class SecurityEventsOptions
                     nameof(AllowedSigningAlgorithms));
             }
 
-            if (value.Contains(SigningAlgorithms.None))
+            if (Array.Exists(value, algorithm => algorithm == SigningAlgorithms.None))
             {
                 throw new ArgumentException(
                     $"'{SigningAlgorithms.None}' is not a signature algorithm and cannot be allowed here: "
@@ -81,12 +103,27 @@ public sealed class SecurityEventsOptions
                     nameof(AllowedSigningAlgorithms));
             }
 
-            _allowedSigningAlgorithms = value;
+            _allowedSigningAlgorithms = [.. value];
         }
     }
 
-    private IReadOnlySet<string> _allowedSigningAlgorithms =
-        new HashSet<string>(StringComparer.Ordinal) { SigningAlgorithms.RS256 };
+    private string[]? _allowedSigningAlgorithms;
+
+    /// <summary>
+    /// What <see cref="AllowedSigningAlgorithms"/> means when a host has set nothing: every signature
+    /// algorithm this library implements.
+    /// </summary>
+    public static IReadOnlyList<string> DefaultSigningAlgorithms { get; } =
+    [
+        SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
+        SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512,
+        SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512,
+    ];
+
+    /// <summary>
+    /// The algorithms in force: what the host set, or the default when it set nothing.
+    /// </summary>
+    internal string[] EffectiveSigningAlgorithms => _allowedSigningAlgorithms ?? [.. DefaultSigningAlgorithms];
 
 
 }

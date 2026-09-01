@@ -248,14 +248,15 @@ public sealed class ScopeEnforcementTests
     /// </summary>
     /// <remarks>
     /// This pins a documented gap rather than a wanted behaviour, which is the only honest way to leave
-    /// it: the filter runs for such a route - the response carries the group's own headers, so it plainly
-    /// did - and then judges it by the requirement it declares, which is none, so it is let through. The
-    /// fail-open branch is deliberate, because refusing a route with no metadata would refuse exactly
-    /// this one.
+    /// it: the filter judges a route by the requirement it declares, which for a host route is none, so
+    /// it is let through. The fail-open branch is deliberate, because refusing a route with no metadata
+    /// would refuse exactly this one.
     /// <para>
-    /// The comparison is the whole row. Asserting the host route's 200 alone would pass on a deployment
-    /// where scope checking is off entirely; the neighbouring 403 for the same caller is what says the
-    /// filter was live and still admitted it.
+    /// The comparison is the whole row, and it is careful about what it proves. Asserting the host
+    /// route's 200 alone would pass on a deployment where scope checking is off entirely; the
+    /// neighbouring 403 for the SAME caller on the SAME host is what says the checking is on and the
+    /// host's route was admitted anyway. What no assertion here can show is the filter executing on that
+    /// particular route - an admitted request leaves no trace of it, which is the whole point.
     /// </para>
     /// </remarks>
     [Fact]
@@ -272,9 +273,6 @@ public sealed class ScopeEnforcementTests
 
         using var admitted = await client.GetAsync("/ssf/host-added", cancellationToken);
         Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
-
-        // The group's filters really did run on it: this header is theirs.
-        Assert.Equal("no-store", admitted.Headers.CacheControl?.ToString());
     }
 
     private static async Task<WebApplication> StartAsync(

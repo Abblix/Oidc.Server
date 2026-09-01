@@ -26,7 +26,7 @@ namespace Abblix.SecurityEvents.Infrastructure;
 public sealed class DefaultSecurityEventTokenSigner(
     IJsonWebTokenCreator creator,
     Func<CancellationToken, Task<JsonWebKey>> signingKeySource,
-    IReadOnlySet<string> allowedAlgorithms) : ISecurityEventTokenSigner
+    string[] allowedAlgorithms) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     /// <exception cref="InvalidOperationException">The key names no algorithm, or one this deployment
@@ -40,20 +40,21 @@ public sealed class DefaultSecurityEventTokenSigner(
         // an event stating nothing about who issued it. A key whose algorithm this deployment did not
         // allow is the same failure with a name on it: the host configured a policy and a key that
         // disagree, and the honest moment to say so is before a receiver has to.
+        // The same value the core will resolve, computed here so it can be judged before anything is
+        // signed. The core's rule after its own two refusals - a header and a key naming different
+        // algorithms, and a header saying "none" with a key present - is exactly this expression, so
+        // nothing is written back: doing so would agree with the core at the cost of making both of
+        // those refusals unreachable, and neither of them is ours to remove.
         if ((signingKey.Algorithm ?? token.Token.Header.Algorithm) is not { } algorithm ||
-            !allowedAlgorithms.Contains(algorithm))
+            !Array.Exists(allowedAlgorithms, allowed => allowed == algorithm))
         {
             throw new InvalidOperationException(
-                $"A security event token cannot be signed with '{signingKey.Algorithm ?? "no algorithm"}': "
-                + $"this deployment allows {string.Join(", ", allowedAlgorithms)}. Configure a signing key "
+                $"A security event token cannot be signed with "
+                + $"'{signingKey.Algorithm ?? token.Token.Header.Algorithm ?? "no algorithm"}': this "
+                + $"deployment allows {string.Join(", ", allowedAlgorithms)}. Configure a signing key "
                 + $"declaring one of those, or widen "
                 + $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)}.");
         }
-
-        // Written into the header so the core cannot resolve anything else: its rule prefers the key's
-        // algorithm and falls back to the header's, and agreeing with both is what keeps the judgement
-        // above and the signature below from being about different algorithms.
-        token.Token.Header.Algorithm = algorithm;
 
         return await creator.IssueAsync(token.Token, signingKey);
     }

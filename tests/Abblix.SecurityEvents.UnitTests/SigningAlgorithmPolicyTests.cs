@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -156,7 +157,7 @@ public class SigningAlgorithmPolicyTests
         => Assert.Throws<ArgumentException>(
             () => new SecurityEventsOptions
             {
-                AllowedSigningAlgorithms = new HashSet<string>(algorithms, StringComparer.Ordinal),
+                AllowedSigningAlgorithms = algorithms,
             });
 
     [Fact]
@@ -164,8 +165,127 @@ public class SigningAlgorithmPolicyTests
         => Assert.Throws<ArgumentException>(
             () => new SecurityEventsOptions
             {
-                AllowedSigningAlgorithms = new HashSet<string>(StringComparer.Ordinal),
+                AllowedSigningAlgorithms = [],
             });
+
+
+    /// <summary>
+    /// The default accepts every algorithm this library implements, not the profile's single one.
+    /// </summary>
+    /// <remarks>
+    /// The verifier is SHARED: a host that only receives OIDC Back-Channel Logout tokens resolves this
+    /// same one, and a Logout Token is signed with whatever the client registered as its
+    /// <c>id_token_signed_response_alg</c> - so defaulting to the CAEP profile's RS256 refused every
+    /// ES256 and PS256 logout that validated the release before. Measured against the parent commit, not
+    /// reasoned about.
+    /// <para>
+    /// A deployment that must be CAEP-conformant narrows the set deliberately, which is a line it can
+    /// point at. Inheriting that narrowing from a default which also governs a protocol the profile says
+    /// nothing about is what this row refuses.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.PS256)]
+    [InlineData(SigningAlgorithms.ES256)]
+    public async Task TheDefaultSet_AcceptsWhatTheLibraryImplements(string algorithm)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = KeyFor(algorithm);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(key));
+        services.AddSecurityEvents(options =>
+        {
+            options.SigningKeySource = _ => Task.FromResult(key);
+            options.Events.Register<SomethingHappened>(SomeEvent);
+        });
+
+        await using var pair = services.BuildServiceProvider();
+
+        var compact = await SignAsync(pair, cancellationToken);
+        var verified = await pair.GetRequiredService<ISecurityEventTokenVerifier>()
+            .VerifyAsync(compact, cancellationToken: cancellationToken);
+
+        Assert.True(verified.TryGetSuccess(out _), $"{algorithm} was refused by the default set.");
+    }
+
+    /// <summary>
+    /// The set is copied on assignment, so a caller cannot add <c>none</c> to it afterwards.
+    /// </summary>
+    /// <remarks>
+    /// An invariant a caller can break after assignment is not one, and the refusal in the setter is the
+    /// only thing keeping an unsigned event out.
+    /// </remarks>
+    [Fact]
+    public void TheAllowlist_IsCopiedFromTheCaller()
+    {
+        var caller = new[] { SigningAlgorithms.RS256, SigningAlgorithms.None };
+        var options = new SecurityEventsOptions { AllowedSigningAlgorithms = [SigningAlgorithms.RS256] };
+
+        caller[1] = SigningAlgorithms.None;
+
+        Assert.DoesNotContain(SigningAlgorithms.None, options.AllowedSigningAlgorithms!);
+    }
+
+    /// <summary>
+    /// A host binding the set from configuration REPLACES it rather than adding to it.
+    /// </summary>
+    /// <remarks>
+    /// The reason the property is an array. The collection binder reads a set, adds the configured
+    /// values and writes it back, so a deployment narrowing the list to ES256 would get ES256 AND
+    /// whatever the default carried - and would believe it had excluded the rest. An array is replaced
+    /// wholesale, which is what "narrow" has to mean.
+    /// </remarks>
+    [Fact]
+    public void TheAllowlist_BoundFromConfiguration_ReplacesTheDefault()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AllowedSigningAlgorithms:0"] = SigningAlgorithms.ES256,
+            })
+            .Build();
+
+        var options = new SecurityEventsOptions();
+        configuration.Bind(options);
+
+        Assert.Equal([SigningAlgorithms.ES256], options.AllowedSigningAlgorithms!);
+        Assert.Equal([SigningAlgorithms.ES256], options.EffectiveSigningAlgorithms);
+    }
+
+    /// <summary>
+    /// The core's own refusals are still reachable: a header and a key naming different algorithms is a
+    /// mismatch, not something this signer quietly resolves.
+    /// </summary>
+    /// <remarks>
+    /// The first version of this change wrote the resolved algorithm into the header, which agreed with
+    /// the core at the cost of making two of its refusals unreachable - and it changed no algorithm,
+    /// since the value written was the one the core would have computed. Nothing measured it either way.
+    /// </remarks>
+    [Fact]
+    public async Task AHeaderAndAKeyNamingDifferentAlgorithms_IsStillRefusedByTheCore()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = KeyFor(SigningAlgorithms.RS256);
+        var pair = BuildPair(key, [SigningAlgorithms.RS256]);
+
+        var token = new SecurityEventTokenBuilder()
+            .WithIssuer(Issuer)
+            .WithAudience(Audience)
+            .WithJwtId("evt-1")
+            .WithIssuedAt(DateTimeOffset.FromUnixTimeSeconds(1754040000))
+            .WithEvent(SomeEvent, new SomethingHappened())
+            .Build();
+
+        token.Token.Header.Algorithm = SigningAlgorithms.PS256;
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pair.GetRequiredService<ISecurityEventTokenSigner>().SignAsync(token, cancellationToken));
+
+        Assert.Contains("mismatch", refusal.Message, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static JsonWebKey KeyFor(string algorithm) => algorithm switch
     {
@@ -182,7 +302,7 @@ public class SigningAlgorithmPolicyTests
         services.AddSecurityEvents(options =>
         {
             options.SigningKeySource = _ => Task.FromResult(key);
-            options.AllowedSigningAlgorithms = new HashSet<string>(allowed, StringComparer.Ordinal);
+            options.AllowedSigningAlgorithms = allowed;
             options.Events.Register<SomethingHappened>(SomeEvent);
         });
 
