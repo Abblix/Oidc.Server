@@ -99,7 +99,7 @@ Abblix.SharedSignals.Redis is the outbox implementation for [Abblix.SharedSignal
 
 ## License
 
-Abblix.SharedSignals.Redis is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
+See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
