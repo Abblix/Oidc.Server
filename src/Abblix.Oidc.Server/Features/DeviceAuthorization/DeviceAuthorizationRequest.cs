@@ -33,11 +33,44 @@ public record DeviceAuthorizationRequest(
     public DateTimeOffset? NextPollAt { get; set; }
 
     /// <summary>
-    /// The absolute time when this device authorization request expires (RFC 8628 §3.2 fixed lifetime).
+    /// The absolute time when this device authorization request expires (RFC 8628 Section 3.2 fixed lifetime).
     /// Seeded by the storage on <c>StoreAsync</c> and used to cap the refreshed cache TTL at the remaining
     /// lifetime, so regular polling cannot extend the code.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Whether the fixed lifetime still has time left at <paramref name="now"/>, handing back how much.
+    /// </summary>
+    /// <remarks>
+    /// The comparison sits here because it was being written out at each caller, and one of them
+    /// forgot it: user code verification, the step the end user reaches first, decided on
+    /// <see cref="Status"/> alone and answered a full result for a record the approval would then refuse.
+    /// <para>
+    /// It is NOT yet the only place. <c>DeviceCodeGrantHandler</c> still writes both halves out - the
+    /// verdict as <c>now &gt;= ExpiresAt</c> and the remaining time as <c>ExpiresAt - now</c> - and that
+    /// file is outside this change. The two agree today, exactly: this predicate is <c>now &lt; ExpiresAt</c>
+    /// and the handler's expiry arm is its complement.
+    /// </para>
+    /// <para>
+    /// Only one of the two boundaries is held. Relaxing THIS one to <c>&gt;=</c> turns two rows red, both
+    /// driving a decision at exactly <c>ExpiresAt</c>. Relaxing
+    /// <see cref="Endpoints.Token.Grants.DeviceCodeGrantHandler"/>'s leaves every suite green. That gap
+    /// is on the handler, not here.
+    /// </para>
+    /// <para>
+    /// It hands back the remaining time because the callers that act on the record need it: a decision
+    /// is written with that as the cache TTL, so the code cannot be extended by being decided on.
+    /// </para>
+    /// </remarks>
+    /// <param name="now">The instant to judge against, from the caller's own time provider.</param>
+    /// <param name="remaining">How much lifetime is left; zero or negative when there is none.</param>
+    /// <returns><c>true</c> while the request can still be acted on.</returns>
+    public bool HasLifetimeLeft(DateTimeOffset now, out TimeSpan remaining)
+    {
+        remaining = ExpiresAt - now;
+        return remaining > TimeSpan.Zero;
+    }
 
     /// <summary>
     /// Indicates the current status of the device authorization request.
@@ -52,7 +85,7 @@ public record DeviceAuthorizationRequest(
     public AuthorizedGrant? AuthorizedGrant { get; set; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array carried from the original
+    /// RFC 9396 Section 3 Rich Authorization Requests array carried from the original
     /// <c>/device_authorization</c> request. The host's user-verification step reads this
     /// (via <see cref="ValidUserCode"/>) to render structured consent, then threads it into
     /// the <see cref="AuthorizedGrant"/>'s <c>AuthorizationContext</c> when approving;

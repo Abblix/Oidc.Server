@@ -73,17 +73,16 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries
 ///         // every other member unchanged.
 ///         //
-///         // Nothing needs to touch Status: the completion handler decides from the STORED record
-///         // whether this request may still be answered, and sets Authenticated itself when it may. A
-///         // host that does set it on its own copy changes nothing either way.
+///         // Nothing needs to touch Status ON THIS PATH - the denial below is a different one, and it
+///         // never calls CompleteAsync. A host that does set it on its own copy changes nothing
+///         // either way: completion reads the STORED record and writes whatever it decides itself.
 ///         var authenticated = storedRequest with
 ///         {
 ///             AuthorizedGrant = new AuthorizedGrant(authSession, storedRequest.AuthorizedGrant.Context),
 ///         };
 ///
 ///         // Completion selects the mode-specific handler from the client's registered delivery mode
-///         // (PollModeCompletionHandler, PingModeCompletionHandler or PushModeCompletionHandler) and
-///         // marks the request authenticated itself - the caller does not set the status.
+///         // (PollModeCompletionHandler, PingModeCompletionHandler or PushModeCompletionHandler).
 ///         await _completion.CompleteAsync(
 ///             authReqId,
 ///             authenticated,
