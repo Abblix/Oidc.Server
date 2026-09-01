@@ -54,7 +54,8 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
 
         if (released.Count > 0)
         {
-            await outbox.AcknowledgeAsync(stream.StreamId, released, cancellationToken);
+            await outbox.AcknowledgeAsync(
+                stream.ReceiverId, stream.StreamId, released, cancellationToken);
         }
 
         // Zero asks for nothing: the acknowledge-only poll (RFC 8936 Section 2.2). The "sets"
@@ -68,7 +69,7 @@ public sealed class PollEndpointHandler(IEventOutbox outbox)
         }
 
         IReadOnlyList<OutboxItem> pending =
-            await outbox.PendingAsync(stream.StreamId, null, cancellationToken);
+            await outbox.PendingAsync(stream.ReceiverId, stream.StreamId, null, cancellationToken);
         if (stream.Status != StreamStatuses.Enabled)
         {
             pending = [.. pending.Where(item => item.IsStatusAnnouncement)];

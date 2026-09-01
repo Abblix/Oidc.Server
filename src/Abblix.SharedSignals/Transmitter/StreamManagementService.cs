@@ -269,7 +269,7 @@ public sealed class StreamManagementService(
             return NoSuchStream<object>(streamId);
         }
 
-        await outbox.ClearAsync(streamId, cancellationToken);
+        await outbox.ClearAsync(receiverId, streamId, cancellationToken);
         return ManagementResult<object>.NoContent();
     }
 
@@ -323,7 +323,7 @@ public sealed class StreamManagementService(
 
         if (request.Status == StreamStatuses.Disabled)
         {
-            await outbox.ClearAsync(updated.StreamId, cancellationToken);
+            await outbox.ClearAsync(updated.ReceiverId, updated.StreamId, cancellationToken);
         }
 
         return ManagementResult<StreamStatus>.Ok(StatusOf(updated));
@@ -550,7 +550,7 @@ public sealed class StreamManagementService(
         {
             // "will not hold any events" (Section 8.1.2.1) - and dropped before the
             // announcement is enqueued, so the announcement survives the drop.
-            await outbox.ClearAsync(stream.StreamId, cancellationToken);
+            await outbox.ClearAsync(stream.ReceiverId, stream.StreamId, cancellationToken);
         }
 
         await dispatcher.DispatchToStreamAsync(

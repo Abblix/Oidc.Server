@@ -137,7 +137,7 @@ public class PushDeliverySchedulerTests
 
         await provider.GetRequiredService<IStreamStore>().TryCreateAsync(NewPushStream(), cancellationToken);
         await provider.GetRequiredService<IEventOutbox>()
-            .EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+            .EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
 
         // The same singleton the scheduler resolves, which is what makes this the other instance
         // rather than a second lock nobody consults.
@@ -158,7 +158,7 @@ public class PushDeliverySchedulerTests
 
             Assert.Equal(0, origin.Requests);
             Assert.Single(await provider.GetRequiredService<IEventOutbox>()
-                .PendingAsync("s-1", null, cancellationToken));
+                .PendingAsync("receiver-a", "s-1", null, cancellationToken));
 
             await claim.DisposeAsync();
 
@@ -198,7 +198,7 @@ public class PushDeliverySchedulerTests
 
         await provider.GetRequiredService<IStreamStore>().TryCreateAsync(NewPushStream(), cancellationToken);
         await provider.GetRequiredService<IEventOutbox>()
-            .EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+            .EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
 
         var scheduler = provider.GetServices<IHostedService>().OfType<PushDeliveryScheduler>().Single();
         await scheduler.StartAsync(cancellationToken);
@@ -262,7 +262,7 @@ public class PushDeliverySchedulerTests
 
         await provider.GetRequiredService<IStreamStore>().TryCreateAsync(stream, cancellationToken);
         await provider.GetRequiredService<IEventOutbox>()
-            .EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+            .EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
 
         // Nobody calls the sender: the hosted service the registration wired is the only thing that
         // can, and the clock is what makes it.
@@ -327,7 +327,7 @@ public class PushDeliverySchedulerTests
             // of a pass that ran and found nothing to send.
             Assert.Equal(0, silent.Requests);
             Assert.Single(await driven.GetRequiredService<IEventOutbox>()
-                .PendingAsync("s-1", null, cancellationToken));
+                .PendingAsync("receiver-a", "s-1", null, cancellationToken));
         }
 
         // The control, wired identically save for where the interval is set.
@@ -377,7 +377,7 @@ public class PushDeliverySchedulerTests
     {
         await provider.GetRequiredService<IStreamStore>().TryCreateAsync(NewPushStream(), cancellationToken);
         await provider.GetRequiredService<IEventOutbox>()
-            .EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+            .EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
 
         if (provider.GetServices<IHostedService>().OfType<PushDeliveryScheduler>().SingleOrDefault()
             is not { } scheduler)

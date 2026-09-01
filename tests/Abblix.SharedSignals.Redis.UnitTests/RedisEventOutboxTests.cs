@@ -29,6 +29,13 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// </summary>
     private static string NewStreamId() => $"s-{Guid.NewGuid():N}";
 
+    /// <summary>
+    /// The receiver these streams belong to. One value throughout: what these tests exercise is the
+    /// queue behind a stream, and the pair being the key has its own row rather than riding along
+    /// silently in every other.
+    /// </summary>
+    private const string ReceiverId = "receiver-a";
+
     private static readonly RedisOutboxOptions Options = new();
 
     private RedisEventOutbox NewOutbox() => new(garnet.Connection, Options);
@@ -39,16 +46,16 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = NewOutbox();
         var streamId = NewStreamId();
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-2", "b.b.b"), TestContext.Current.CancellationToken);
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-3", "c.c.c"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-2", "b.b.b"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-3", "c.c.c"), TestContext.Current.CancellationToken);
 
         Assert.Equal(
             ["jti-1", "jti-2"],
-            (await outbox.PendingAsync(streamId, 2, TestContext.Current.CancellationToken))
+            (await outbox.PendingAsync(ReceiverId, streamId, 2, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
-        Assert.Equal(3, (await outbox.PendingAsync(streamId, null, TestContext.Current.CancellationToken)).Count);
-        Assert.Empty(await outbox.PendingAsync(streamId, 0, TestContext.Current.CancellationToken));
+        Assert.Equal(3, (await outbox.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken)).Count);
+        Assert.Empty(await outbox.PendingAsync(ReceiverId, streamId, 0, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -57,23 +64,23 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = NewOutbox();
         var streamId = NewStreamId();
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
         await outbox.EnqueueAsync(
-            streamId,
+            ReceiverId, streamId,
             new OutboxItem("jti-2", "b.b.b", IsStatusAnnouncement: true),
             TestContext.Current.CancellationToken);
 
-        await outbox.AcknowledgeAsync(streamId, ["jti-1"], TestContext.Current.CancellationToken);
+        await outbox.AcknowledgeAsync(ReceiverId, streamId, ["jti-1"], TestContext.Current.CancellationToken);
 
         var remaining = Assert.Single(
-            await outbox.PendingAsync(streamId, null, TestContext.Current.CancellationToken));
+            await outbox.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken));
         Assert.Equal("jti-2", remaining.JwtId);
         // The announcement flag is part of the item, and delivery filtering depends on it
         // surviving the round trip.
         Assert.True(remaining.IsStatusAnnouncement);
 
-        await outbox.ClearAsync(streamId, TestContext.Current.CancellationToken);
-        Assert.Empty(await outbox.PendingAsync(streamId, null, TestContext.Current.CancellationToken));
+        await outbox.ClearAsync(ReceiverId, streamId, TestContext.Current.CancellationToken);
+        Assert.Empty(await outbox.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -94,11 +101,11 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         async Task EnqueueAsync(RedisEventOutbox outbox, string jwtId, string compactToken)
             => await outbox.EnqueueAsync(
-                streamId, new OutboxItem(jwtId, compactToken), TestContext.Current.CancellationToken);
+                ReceiverId, streamId, new OutboxItem(jwtId, compactToken), TestContext.Current.CancellationToken);
 
         async Task AcknowledgeAsync(RedisEventOutbox outbox, string ownPrefix)
             => await outbox.AcknowledgeAsync(
-                streamId,
+                ReceiverId, streamId,
                 [.. Enumerable.Range(0, 50).Select(i => $"{ownPrefix}-{i}")],
                 TestContext.Current.CancellationToken);
 
@@ -106,14 +113,14 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
             Enumerable.Range(0, 50).Select(i => EnqueueAsync(first, $"a-{i}", "a.a.a"))
             .Concat(Enumerable.Range(0, 50).Select(i => EnqueueAsync(second, $"b-{i}", "b.b.b"))));
 
-        var pending = await first.PendingAsync(streamId, null, TestContext.Current.CancellationToken);
+        var pending = await first.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken);
         Assert.Equal(100, pending.Count);
         Assert.Equal(100, pending.Select(item => item.JwtId).Distinct().Count());
 
         // Concurrent acknowledgements from both instances: each removes exactly its own half.
         await Task.WhenAll(AcknowledgeAsync(first, "a"), AcknowledgeAsync(second, "b"));
 
-        Assert.Empty(await first.PendingAsync(streamId, null, TestContext.Current.CancellationToken));
+        Assert.Empty(await first.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -145,10 +152,10 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         var streamId = NewStreamId();
         await outbox.EnqueueAsync(
-            streamId, new OutboxItem("jti-di", "x.y.z"), TestContext.Current.CancellationToken);
+            ReceiverId, streamId, new OutboxItem("jti-di", "x.y.z"), TestContext.Current.CancellationToken);
         Assert.Equal(
             "jti-di",
-            Assert.Single(await outbox.PendingAsync(streamId, null, TestContext.Current.CancellationToken)).JwtId);
+            Assert.Single(await outbox.PendingAsync(ReceiverId, streamId, null, TestContext.Current.CancellationToken)).JwtId);
     }
 
     /// <summary>
@@ -174,7 +181,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
             $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:queue", "not a list");
 
         await Assert.ThrowsAsync<RedisServerException>(
-            () => outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), ct));
+            () => outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct));
     }
 
     /// <summary>
@@ -197,17 +204,17 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var streamId = NewStreamId();
         var itemsKey = $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items";
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), ct);
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-broken", "b.b.b"), ct);
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-3", "c.c.c"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-broken", "b.b.b"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-3", "c.c.c"), ct);
         await garnet.Connection.GetDatabase().HashSetAsync(itemsKey, "jti-broken", planted);
 
-        var pending = await outbox.PendingAsync(streamId, null, ct);
+        var pending = await outbox.PendingAsync(ReceiverId, streamId, null, ct);
         Assert.Equal(["jti-1", "jti-3"], pending.Select(item => item.JwtId));
 
         // And it is gone rather than skipped forever: the next pass sees a queue of exactly the
         // healthy items, so the broken one costs no work and no space from here on.
-        Assert.Equal(2, (await outbox.PendingAsync(streamId, null, ct)).Count);
+        Assert.Equal(2, (await outbox.PendingAsync(ReceiverId, streamId, null, ct)).Count);
         Assert.Equal(
             2,
             await garnet.Connection.GetDatabase().ListLengthAsync(
@@ -228,7 +235,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var queueKey = (RedisKey)$"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:queue";
         var itemsKey = (RedisKey)$"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items";
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
 
         var database = garnet.Connection.GetDatabase();
         Assert.NotNull(await database.KeyTimeToLiveAsync(queueKey));
@@ -237,7 +244,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         // Wind it down, then enqueue again: the expiry measures inactivity, so a stream still
         // receiving events must never reach it.
         await database.KeyExpireAsync(queueKey, TimeSpan.FromSeconds(5));
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-2", "b.b.b"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-2", "b.b.b"), ct);
 
         Assert.True(await database.KeyTimeToLiveAsync(queueKey) > TimeSpan.FromMinutes(30));
     }
@@ -258,15 +265,15 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = NewOutbox();
         var streamId = NewStreamId();
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("same", "first"), ct);
-        await outbox.EnqueueAsync(streamId, new OutboxItem("same", "second"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("same", "first"), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("same", "second"), ct);
 
-        var item = Assert.Single(await outbox.PendingAsync(streamId, null, ct));
+        var item = Assert.Single(await outbox.PendingAsync(ReceiverId, streamId, null, ct));
         Assert.Equal("second", item.CompactToken);
 
         // One acknowledgement is enough, because there is one listing.
-        await outbox.AcknowledgeAsync(streamId, ["same"], ct);
-        Assert.Empty(await outbox.PendingAsync(streamId, null, ct));
+        await outbox.AcknowledgeAsync(ReceiverId, streamId, ["same"], ct);
+        Assert.Empty(await outbox.PendingAsync(ReceiverId, streamId, null, ct));
     }
 
     /// <summary>
@@ -289,10 +296,10 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = NewOutbox();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a"), ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.PendingAsync(streamId, null, ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.AcknowledgeAsync(streamId, ["jti-1"], ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => outbox.ClearAsync(streamId, ct));
+            () => outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => outbox.PendingAsync(ReceiverId, streamId, null, ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => outbox.AcknowledgeAsync(ReceiverId, streamId, ["jti-1"], ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => outbox.ClearAsync(ReceiverId, streamId, ct));
     }
 
     /// <summary>
@@ -308,7 +315,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = NewOutbox();
         var streamId = NewStreamId();
 
-        await outbox.EnqueueAsync(streamId, new OutboxItem("jti-1", "a.a.a", true), ct);
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a", true), ct);
 
         var raw = (await garnet.Connection.GetDatabase().HashGetAsync(
             $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items", "jti-1")).ToString();
@@ -325,20 +332,30 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     private sealed class NeverCalledOutbox : IEventOutbox
     {
         public Task EnqueueAsync(
-            string streamId, OutboxItem item, CancellationToken cancellationToken = default)
+            string receiverId,
+            string streamId,
+            OutboxItem item,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<IReadOnlyList<OutboxItem>> PendingAsync(
-            string streamId, int? maxCount = null, CancellationToken cancellationToken = default)
+            string receiverId,
+            string streamId,
+            int? maxCount = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task AcknowledgeAsync(
+            string receiverId,
             string streamId,
             IReadOnlyCollection<string> jwtIds,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
+        public Task ClearAsync(
+            string receiverId,
+            string streamId,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 }

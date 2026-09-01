@@ -59,7 +59,7 @@ public sealed class CaepInteropProfileDispatchTests
         // the event type and the member too, so a row asserting those alone passes when a CAEP payload
         // falls through to the wrong arm.
         Assert.Contains("not a non-empty object", refusal.Message);
-        Assert.Empty(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed class CaepInteropProfileDispatchTests
         // falls through to "a payload of type '' cannot be read" - a sentence naming a type that is not
         // there, for an event that simply carries nothing.
         Assert.Contains("not a non-empty object", refusal.Message);
-        Assert.Empty(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -199,7 +199,7 @@ public sealed class CaepInteropProfileDispatchTests
             Cancellation);
 
         Assert.Equal(1, reached);
-        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ public sealed class CaepInteropProfileDispatchTests
             Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
 
         Assert.Equal(1, reached);
-        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ public sealed class CaepInteropProfileDispatchTests
             Descriptor(CaepEventTypes.SessionEstablished, new SessionEstablishedPayload()), Cancellation);
 
         Assert.Equal(1, reached);
-        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -261,7 +261,7 @@ public sealed class CaepInteropProfileDispatchTests
             asStatusAnnouncement: false,
             cancellationToken: Cancellation);
 
-        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>
@@ -303,7 +303,7 @@ public sealed class CaepInteropProfileDispatchTests
         if (populated)
         {
             Assert.Equal(1, await dispatcher.DispatchAsync(descriptor, Cancellation));
-            Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+            Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
         }
         else
         {
@@ -354,7 +354,7 @@ public sealed class CaepInteropProfileDispatchTests
             Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
 
         Assert.Equal(1, reached);
-        Assert.Single(await outbox.PendingAsync("s-1", null, Cancellation));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
     }
 
     /// <summary>

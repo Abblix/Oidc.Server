@@ -109,7 +109,8 @@ public sealed partial class PushDeliverySender(
                 $"Refusing to deliver stream '{stream.StreamId}' to '{push.EndpointUrl}': {rejection}.");
         }
 
-        IEnumerable<OutboxItem> pending = await outbox.PendingAsync(stream.StreamId, null, cancellationToken);
+        IEnumerable<OutboxItem> pending = await outbox.PendingAsync(
+            stream.ReceiverId, stream.StreamId, null, cancellationToken);
         if (stream.Status != StreamStatuses.Enabled)
         {
             pending = pending.Where(item => item.IsStatusAnnouncement);
@@ -153,7 +154,8 @@ public sealed partial class PushDeliverySender(
 
                     firstRefusal ??= verdict ?? Unexplained;
 
-                    await outbox.AcknowledgeAsync(stream.StreamId, [item.JwtId], cancellationToken);
+                    await outbox.AcknowledgeAsync(
+                        stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
                     rejected++;
                     continue;
                 }
@@ -163,7 +165,8 @@ public sealed partial class PushDeliverySender(
                     break;
                 }
 
-                await outbox.AcknowledgeAsync(stream.StreamId, [item.JwtId], cancellationToken);
+                await outbox.AcknowledgeAsync(
+                    stream.ReceiverId, stream.StreamId, [item.JwtId], cancellationToken);
                 delivered++;
             }
         }

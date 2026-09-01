@@ -105,7 +105,7 @@ public class EventDispatcherTests
             Descriptor(subject), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, reached);
-        var item = Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        var item = Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         Assert.Equal($"signed.{item.JwtId}", item.CompactToken);
 
         var minted = Assert.Single(signer.Signed);
@@ -144,7 +144,7 @@ public class EventDispatcherTests
         Assert.Equal(expected, reached);
         Assert.Equal(
             expected,
-            (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken)).Count);
+            (await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken)).Count);
     }
 
     [Fact]
@@ -165,10 +165,10 @@ public class EventDispatcherTests
         // Of the four, only the paused stream takes the event: pausing HOLDS events for later
         // (SSF 1.0 Section 8.1.2.1), and the hold is the outbox nobody drains.
         Assert.Equal(1, reached);
-        Assert.Empty(await outbox.PendingAsync("other-type", null, TestContext.Current.CancellationToken));
-        Assert.Empty(await outbox.PendingAsync("other-subject", null, TestContext.Current.CancellationToken));
-        Assert.Empty(await outbox.PendingAsync("disabled", null, TestContext.Current.CancellationToken));
-        Assert.Single(await outbox.PendingAsync("paused", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "other-type", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "other-subject", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "disabled", null, TestContext.Current.CancellationToken));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "paused", null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class EventDispatcherTests
         Assert.Equal(0, await dispatcher.DispatchAsync(
             Descriptor(removed), TestContext.Current.CancellationToken));
 
-        Assert.Single(await outbox.PendingAsync("s-all", null, TestContext.Current.CancellationToken));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-all", null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class EventDispatcherTests
 
         Assert.Equal(0, await dispatcher.DispatchAsync(
             Descriptor(subject), TestContext.Current.CancellationToken));
-        Assert.Empty(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         Assert.Empty(signer.Signed);
     }
 
@@ -221,7 +221,7 @@ public class EventDispatcherTests
             },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         var minted = Assert.Single(signer.Signed);
         Assert.Equal("s-1", Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
     }

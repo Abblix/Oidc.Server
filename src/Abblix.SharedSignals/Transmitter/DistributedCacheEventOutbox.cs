@@ -13,7 +13,8 @@ namespace Abblix.SharedSignals.Transmitter;
 
 /// <summary>
 /// The outbox over the host's <see cref="IDistributedCache"/>: one entry per stream holding the
-/// queue, so pending events survive a process restart when the store behind the cache does. The
+/// queue, so pending events survive a process restart when the store behind the cache does. A
+/// stream here is the receiver and the identifier together, as everywhere else. The
 /// tier is deliberate, and it is our decision rather than a permission the specification grants:
 /// SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is PAUSED, and
 /// requires transmission for an enabled one. Treating the whole queue as cache-tier follows the
@@ -22,7 +23,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </summary>
 /// <remarks>
 /// <see cref="IDistributedCache"/> reads and writes whole values with no compare-and-set, so queue
-/// mutations are serialized through an in-process gate per stream. That gate excludes this
+/// mutations are serialized through an in-process gate per stream, taken under the same composed
+/// key the entry lives under - so the gate and the entry cannot disagree about which stream is
+/// being guarded. That gate excludes this
 /// instance's threads from each other and reaches no further, which makes this implementation
 /// correct for a SINGLE transmitter instance and only that: two instances mutating one stream's
 /// queue read the same value, each writes its own edit over the whole entry, and the later write
@@ -46,20 +49,23 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
 
     /// <inheritdoc />
     public async Task EnqueueAsync(
+        string receiverId,
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(receiverId);
         ArgumentException.ThrowIfNullOrEmpty(streamId);
         ArgumentNullException.ThrowIfNull(item);
 
-        var gate = GateOf(streamId);
+        var key = KeyOf(receiverId, streamId);
+        var gate = GateOf(key);
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var queue = await ReadQueueAsync(streamId, cancellationToken);
+            var queue = await ReadQueueAsync(key, cancellationToken);
             queue.Add(item);
-            await WriteQueueAsync(streamId, queue, cancellationToken);
+            await WriteQueueAsync(key, queue, cancellationToken);
         }
         finally
         {
@@ -69,11 +75,12 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<OutboxItem>> PendingAsync(
+        string receiverId,
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
     {
-        var queue = await ReadQueueAsync(streamId, cancellationToken);
+        var queue = await ReadQueueAsync(KeyOf(receiverId, streamId), cancellationToken);
 
         return maxCount is { } limit && queue.Count > limit
             ? queue.GetRange(0, limit)
@@ -82,6 +89,7 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
 
     /// <inheritdoc />
     public async Task AcknowledgeAsync(
+        string receiverId,
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
@@ -94,14 +102,15 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
         }
 
         var acknowledged = new HashSet<string>(jwtIds, StringComparer.Ordinal);
-        var gate = GateOf(streamId);
+        var key = KeyOf(receiverId, streamId);
+        var gate = GateOf(key);
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var queue = await ReadQueueAsync(streamId, cancellationToken);
+            var queue = await ReadQueueAsync(key, cancellationToken);
             if (queue.RemoveAll(item => acknowledged.Contains(item.JwtId)) > 0)
             {
-                await WriteQueueAsync(streamId, queue, cancellationToken);
+                await WriteQueueAsync(key, queue, cancellationToken);
             }
         }
         finally
@@ -111,8 +120,11 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
     }
 
     /// <inheritdoc />
-    public async Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
-        => await cache.RemoveAsync(CacheKeyPrefix + streamId, cancellationToken);
+    public async Task ClearAsync(
+        string receiverId,
+        string streamId,
+        CancellationToken cancellationToken = default)
+        => await cache.RemoveAsync(KeyOf(receiverId, streamId), cancellationToken);
 
     /// <inheritdoc />
     public void Dispose()
@@ -123,25 +135,37 @@ public sealed class DistributedCacheEventOutbox(IDistributedCache cache) : IEven
         }
     }
 
-    private SemaphoreSlim GateOf(string streamId)
-        => _gates.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
+    /// <summary>
+    /// The cache entry a stream's queue lives under, composed from the pair that identifies it.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are escaped before they are joined, so the separator cannot occur inside either
+    /// and the composition is one-to-one. A plain concatenation is not: a receiver named "a:b" with
+    /// a stream "c" would address the same entry as a receiver "a" with a stream "b:c", and both
+    /// halves are operator-chosen strings. That is the defect this key exists to close, arriving a
+    /// second time through the key itself.
+    /// </remarks>
+    private static string KeyOf(string receiverId, string streamId)
+        => CacheKeyPrefix + Uri.EscapeDataString(receiverId) + ":" + Uri.EscapeDataString(streamId);
 
-    private async Task<List<OutboxItem>> ReadQueueAsync(string streamId, CancellationToken cancellationToken)
+    private SemaphoreSlim GateOf(string key)
+        => _gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+
+    private async Task<List<OutboxItem>> ReadQueueAsync(string key, CancellationToken cancellationToken)
     {
-        var stored = await cache.GetAsync(CacheKeyPrefix + streamId, cancellationToken);
+        var stored = await cache.GetAsync(key, cancellationToken);
         return stored is null
             ? []
             : JsonSerializer.Deserialize<List<OutboxItem>>(stored)
               ?? throw new InvalidOperationException(
-                  $"The outbox entry of stream '{streamId}' deserialized to null.");
+                  $"The outbox entry at '{key}' deserialized to null.");
     }
 
     private async Task WriteQueueAsync(
-        string streamId,
+        string key,
         List<OutboxItem> queue,
         CancellationToken cancellationToken)
     {
-        var key = CacheKeyPrefix + streamId;
         if (queue.Count == 0)
         {
             // An empty queue is the same fact as no entry, and no entry keeps an abandoned
