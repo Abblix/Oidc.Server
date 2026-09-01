@@ -19,10 +19,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates the OIDC Core Section 8 <c>subject_type</c> metadata and computes the pairwise sector
 /// identifier. When <c>pairwise</c> is requested, a supplied <c>sector_identifier_uri</c> (HTTPS) is
 /// dereferenced and every URI the registration is required to have listed there is checked against
-/// its contents; otherwise the host is taken from the registered URIs, which must agree on one.
-/// Which URIs those are depends on the registration: the redirect URIs (OIDC Core Section 8.1), and
-/// for a backchannel client the one CIBA Core 1.0 Section 4 puts in their place - the
-/// <c>jwks_uri</c> in poll and ping, the <c>backchannel_client_notification_endpoint</c> in push.
+/// its contents; otherwise the host is taken from the registered redirect URIs, which must agree on
+/// one (OIDC Core Section 8.1). A backchannel client that registered NO redirect URI takes its host
+/// instead from the URI CIBA Core 1.0 Section 4 puts in their place - the <c>jwks_uri</c> in poll and
+/// ping, the <c>backchannel_client_notification_endpoint</c> in push. Registering both is allowed and
+/// they need not agree: the redirect URIs decide, and the backchannel URI is only ever the sector of a
+/// client that has none.
 /// The resolved host is stored on the context for later persistence.
 /// </summary>
 /// <param name="logger">Logger used for warnings about sector-identifier mismatches.</param>

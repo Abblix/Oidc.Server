@@ -454,4 +454,58 @@ public class SubjectTypeConverterTests
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
+    /// <summary>
+    /// Two backchannel clients whose keys sit on one host, named by a scheme that is not the web's, stay in
+    /// separate sectors.
+    /// </summary>
+    /// <remarks>
+    /// The host branch is filtered to http(s) for a reason that reads as being about redirect URIs and is
+    /// not: a URI spelled <c>com.example.one:/keys</c> is absolute, and its Host is the EMPTY STRING rather
+    /// than null - so a chain that reaches for the client id when the host is missing never gets there, and
+    /// every client naming such a URI shares the one empty sector. Measured, not reasoned: before the
+    /// filter reached this arm these two clients sealed the identical pseudonym for one user. The row above
+    /// cannot see it, because it comes in through the redirect URIs.
+    /// </remarks>
+    [Fact]
+    public void Convert_BackchannelClientsWithNonWebKeyUris_StayInSeparateSectors()
+    {
+        var converter = CreateConverter();
+
+        var clientA = CreatePairwiseClient(
+            "client-a",
+            deliveryMode: BackchannelTokenDeliveryModes.Poll,
+            jwksUri: new Uri("com.example.one:/keys"));
+
+        var clientB = CreatePairwiseClient(
+            "client-b",
+            deliveryMode: BackchannelTokenDeliveryModes.Poll,
+            jwksUri: new Uri("com.example.two:/keys"));
+
+        Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
+    /// A statically configured client whose key URI is relative still gets an identifier, rather than
+    /// faulting on every token it is issued.
+    /// </summary>
+    /// <remarks>
+    /// The registration validator refuses this shape, and it only ever sees requests that came over the
+    /// network - a client written into configuration reaches the converter unrefused. <see cref="Uri.Host"/>
+    /// throws on a relative URI rather than returning anything, so the fault would land on token issuance,
+    /// far from the file that caused it.
+    /// </remarks>
+    [Fact]
+    public void Convert_BackchannelClientWithARelativeKeyUri_FallsBackRatherThanFaulting()
+    {
+        var converter = CreateConverter();
+
+        var client = CreatePairwiseClient(
+            "client-a",
+            deliveryMode: BackchannelTokenDeliveryModes.Poll,
+            jwksUri: new Uri("/jwks", UriKind.Relative));
+
+        var withNoKeyUri = CreatePairwiseClient("client-a");
+
+        Assert.Equal(converter.Convert(Subject, withNoKeyUri), converter.Convert(Subject, client));
+    }
 }

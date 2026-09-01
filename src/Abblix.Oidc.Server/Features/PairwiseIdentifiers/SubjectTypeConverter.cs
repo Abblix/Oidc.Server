@@ -127,19 +127,44 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// clients would silently share one sector and seal identical pseudonyms for the same user, defeating the
     /// isolation this subject type exists to provide. Such clients keep per-client isolation via the client_id
     /// fallback.
+    /// <para>
+    /// The backchannel URI is held to the same test, by the same predicate, because a sector is a sector
+    /// whichever URI it came from: a jwks_uri spelled com.example.one:/keys parses as an absolute URI with an
+    /// EMPTY host, and an empty host is not null, so the client_id fallback below never fires and every such
+    /// client shares one sector. An http(s) URI cannot arrive that way - Uri refuses to construct http:/keys at
+    /// all - so one predicate covers both the empty host and the relative URI, which would otherwise throw on
+    /// Scheme rather than fall through to anything.
+    /// </para>
     /// </remarks>
     private static byte[] Sector(ClientInfo clientInfo)
     {
         var sector =
             clientInfo.SectorIdentifier ??
-            clientInfo.RedirectUris.FirstOrDefault(redirectUri =>
-                redirectUri.Scheme == Uri.UriSchemeHttp ||
-                redirectUri.Scheme == Uri.UriSchemeHttps)?.Host ??
-            (clientInfo.RedirectUris.Length == 0 ? BackchannelSectorUri(clientInfo)?.Host : null) ??
+            clientInfo.RedirectUris.FirstOrDefault(IsWebUri)?.Host ??
+            BackchannelSectorHost(clientInfo) ??
             clientInfo.ClientId;
 
         return Encoding.UTF8.GetBytes(sector);
     }
+
+    /// <summary>
+    /// Whether a URI's host names a sector at all: the web clients OIDC Core Section 8.1 had in mind, and
+    /// nothing else.
+    /// </summary>
+    private static bool IsWebUri(Uri uri)
+        => uri.IsAbsoluteUri && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// The sector a backchannel client takes from the URI CIBA Core 1.0 Section 4 puts in the redirect URI's
+    /// place, or <c>null</c> when this client is not one, registered a redirect URI, or named a URI whose host
+    /// names nothing.
+    /// </summary>
+    private static string? BackchannelSectorHost(ClientInfo clientInfo)
+        => clientInfo.RedirectUris.Length == 0 &&
+           BackchannelSectorUri(clientInfo) is { } sectorUri &&
+           IsWebUri(sectorUri)
+            ? sectorUri.Host
+            : null;
 
     /// <summary>
     /// The URI whose host is the sector for a backchannel client that registered no redirect URI, or
