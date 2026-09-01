@@ -389,4 +389,48 @@ public class SubjectTypeValidatorTests
         // Assert
         Assert.Equal("sector.example.com", context.SectorIdentifier);
     }
+    /// <summary>
+    /// A relative URI where a sector host would come from is refused, not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Uri.Scheme"/> throws on a relative URI rather than returning anything, so a scheme
+    /// comparison alone turns a registration that should be refused into a server fault. Nothing upstream
+    /// can be relied on to have looked: <c>RedirectUrisValidator</c> enters its absoluteness loop only for
+    /// the grant types that cannot answer without a redirect URI, so a CIBA-only registration walks past
+    /// it, and <c>[AbsoluteUri]</c> is honoured by the form binder rather than by the JSON deserializer.
+    /// <para>
+    /// The sector identifier document is the second arm and the sharper one: its entries come from an
+    /// address the client chose, so they are third-party JSON reaching the same expression.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_ARelativeRedirectUri_IsRefusedRatherThanFaulting()
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri("/cb", UriKind.Relative)],
+            subjectType: SubjectTypes.Pairwise);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+        Assert.Null(context.SectorIdentifier);
+    }
+
+    /// <summary>
+    /// The control: an absolute https redirect URI still yields its host as the sector.
+    /// </summary>
+    /// <remarks>
+    /// Without it a validator that refused every redirect URI would pass the row above, and every
+    /// pairwise web client would stop registering.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_AnAbsoluteHttpsRedirectUri_StillGivesItsHost()
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri("https://app.example.com/cb")],
+            subjectType: SubjectTypes.Pairwise);
+
+        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Equal("app.example.com", context.SectorIdentifier);
+    }
 }

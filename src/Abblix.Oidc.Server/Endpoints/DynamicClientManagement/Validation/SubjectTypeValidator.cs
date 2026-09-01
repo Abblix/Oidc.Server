@@ -73,6 +73,24 @@ public partial class SubjectTypeValidator(
     }
 
     /// <summary>
+    /// Whether a URI can have a sector host taken from it at all.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, because the first one throws without the second: <see cref="Uri.Scheme"/> raises
+    /// <see cref="InvalidOperationException"/> on a relative URI rather than returning anything, so a
+    /// scheme comparison on its own turns a registration that should be refused into a server fault.
+    /// <para>
+    /// Nothing upstream can be relied on to have looked. <c>RedirectUrisValidator</c> enters its
+    /// absoluteness loop only for the grant types that cannot answer without a redirect URI, so a
+    /// CIBA-only registration walks past it with the list untouched; and the entries of a sector
+    /// identifier document come from an address the client chose, so they are third-party JSON arriving
+    /// at the same expression. <c>[AbsoluteUri]</c> is honoured by the form binder rather than by the
+    /// JSON deserializer, so a registration body carries a relative value through intact.
+    /// </para>
+    /// </remarks>
+    private static bool IsHttpsUri(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttps;
+
+    /// <summary>
     /// Validates that sector identifier URI has correct format (absolute URI with HTTPS scheme).
     /// </summary>
     private static OidcError? ValidateSectorIdentifierUriFormat(Uri sectorIdentifierUri)
@@ -100,9 +118,10 @@ public partial class SubjectTypeValidator(
         Uri[] sectorIdentifierContent,
         IEnumerable<Uri> redirectUris)
     {
-        if (sectorIdentifierContent.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
+        if (sectorIdentifierContent.Any(uri => !IsHttpsUri(uri)))
         {
-            return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
+            return ErrorFactory.InvalidClientMetadata(
+                "Every URI in the sector identifier document must be an absolute https URI");
         }
 
         // OIDC Core §8.1 / OIDC Registration §5: the values of the registered redirect_uris MUST be
@@ -143,9 +162,10 @@ public partial class SubjectTypeValidator(
                 + "a redirect URI to take the host from, and none was registered");
         }
 
-        if (redirectUris.Any(uri => uri.Scheme != Uri.UriSchemeHttps))
+        if (redirectUris.Any(uri => !IsHttpsUri(uri)))
         {
-            return ErrorFactory.InvalidClientMetadata("All schemes in the redirect URIs must be https");
+            return ErrorFactory.InvalidClientMetadata(
+                "Every redirect URI must be an absolute https URI to take a sector host from");
         }
 
         var hosts = redirectUris.Select(uri => uri.Host).Distinct().ToArray();
