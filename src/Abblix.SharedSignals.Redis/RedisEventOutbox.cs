@@ -210,14 +210,23 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
     /// </summary>
     /// <remarks>
     /// The identity is the receiver and the identifier together, and both halves are escaped before
-    /// they are joined. That buys two things at once. The composition is one-to-one, so a receiver
-    /// named "a:b" with a stream "c" cannot address the same queue as a receiver "a" with a stream
-    /// "b:c" - which would be this defect arriving a second time through the key. And escaping
-    /// removes every brace from the tag's content, so the CROSSSLOT hazard is closed by
-    /// construction rather than by a check: Redis reads the tag as the text between the first
-    /// <c>{</c> and the first <c>}</c> after it, an EMPTY tag does not apply and the whole key is
-    /// hashed instead, and an identifier opening with <c>}</c> is exactly what used to empty it.
-    /// Escaped, it cannot - and both halves being non-empty, neither can the tag be.
+    /// they are joined. Three separate things hold here and it is worth keeping them apart, because
+    /// the guard this replaced was justified by the wrong one of them.
+    /// <list type="bullet">
+    ///   <item>The CROSSSLOT hazard is closed by the tag never being EMPTY. Redis reads the tag as the
+    ///   text between the first <c>{</c> and the first <c>}</c> after it; an empty tag does not apply
+    ///   and the whole key is hashed instead, which puts a stream's two keys on two slots because they
+    ///   differ by suffix. The tag now opens with the receiver, and both halves are refused when empty,
+    ///   so there is nothing left that can empty it. An identifier opening with <c>}</c> used to, back
+    ///   when the identifier was the whole tag.</item>
+    ///   <item>The composition is one-to-one, which is what the escaping buys: a receiver named "a:b"
+    ///   with a stream "c" cannot address the queue of a receiver "a" with a stream "b:c" - this
+    ///   defect arriving a second time through the key.</item>
+    ///   <item>Escaping also keeps a brace INSIDE either half from cutting the tag short. That one is
+    ///   not about correctness - both keys are built by this expression and would be cut identically,
+    ///   so they stay on one slot - it is about the tag still telling streams apart, and therefore
+    ///   about how they are spread over the cluster.</item>
+    /// </list>
     /// </remarks>
     private static RedisKey QueueKeyOf(string receiverId, string streamId)
         => KeyOf(receiverId, streamId, "queue");

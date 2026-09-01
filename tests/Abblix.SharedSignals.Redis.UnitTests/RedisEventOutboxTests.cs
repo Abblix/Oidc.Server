@@ -40,6 +40,15 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
     private RedisEventOutbox NewOutbox() => new(garnet.Connection, Options);
 
+    /// <summary>
+    /// The key the outbox stores under, spelled out here rather than taken from the implementation: a
+    /// test composing the key by calling the code under test pins nothing, and this shape survives a
+    /// rolling deploy where the two ends are two code versions.
+    /// </summary>
+    private static string StoredKeyOf(string streamId, string suffix, string receiverId = ReceiverId)
+        => "Abblix.SharedSignals:RedisEventOutbox:"
+           + $"{{{Uri.EscapeDataString(receiverId)}:{Uri.EscapeDataString(streamId)}}}:{suffix}";
+
     [Fact]
     public async Task Enqueue_KeepsOrder_AndPendingHonorsTheLimit()
     {
@@ -178,7 +187,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         // The queue key holds a string, so the append against it cannot succeed.
         await garnet.Connection.GetDatabase().StringSetAsync(
-            $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:queue", "not a list");
+            StoredKeyOf(streamId, "queue"), "not a list");
 
         await Assert.ThrowsAsync<RedisServerException>(
             () => outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct));
@@ -202,7 +211,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var ct = TestContext.Current.CancellationToken;
         var outbox = NewOutbox();
         var streamId = NewStreamId();
-        var itemsKey = $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items";
+        var itemsKey = StoredKeyOf(streamId, "items");
 
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-broken", "b.b.b"), ct);
@@ -218,7 +227,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         Assert.Equal(
             2,
             await garnet.Connection.GetDatabase().ListLengthAsync(
-                $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:queue"));
+                StoredKeyOf(streamId, "queue")));
     }
 
     /// <summary>
@@ -232,8 +241,8 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var outbox = new RedisEventOutbox(
             garnet.Connection, new RedisOutboxOptions { Retention = TimeSpan.FromHours(1) });
         var streamId = NewStreamId();
-        var queueKey = (RedisKey)$"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:queue";
-        var itemsKey = (RedisKey)$"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items";
+        var queueKey = (RedisKey)StoredKeyOf(streamId, "queue");
+        var itemsKey = (RedisKey)StoredKeyOf(streamId, "items");
 
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
 
@@ -277,20 +286,16 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     }
 
     /// <summary>
-    /// A stream identifier that would empty the cluster hash tag is refused at every entry point.
+    /// An identifier with nothing in it is refused at every entry point.
     /// </summary>
     /// <remarks>
-    /// Redis reads the tag between the first brace and the first closing one after it. When that text
-    /// is empty the tag does not apply and the whole key is hashed, so a stream's two keys land on
-    /// different slots and every multi-key call fails CROSSSLOT under Cluster. Nested braces are
-    /// harmless and stay allowed. The built-in dispatcher mints GUIDs, but the store interface is
-    /// public and a host's identifiers are its own.
+    /// Both halves of the key are required, because an absent one would let a second (receiver, stream)
+    /// pair address the same queue. A brace is no longer among the refusals and its rows are below:
+    /// escaping the two halves is what keeps them out of the tag, so nothing needs to be enumerated.
     /// </remarks>
     [Theory]
     [InlineData("")]
-    [InlineData("}")]
-    [InlineData("}leading")]
-    public async Task AStreamIdBreakingTheHashTag_IsRefused(string streamId)
+    public async Task AnEmptyStreamId_IsRefused(string streamId)
     {
         var ct = TestContext.Current.CancellationToken;
         var outbox = NewOutbox();
@@ -301,6 +306,108 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         await Assert.ThrowsAsync<ArgumentException>(() => outbox.AcknowledgeAsync(ReceiverId, streamId, ["jti-1"], ct));
         await Assert.ThrowsAsync<ArgumentException>(() => outbox.ClearAsync(ReceiverId, streamId, ct));
     }
+
+    /// <summary>
+    /// An identifier carrying a brace is served, and the keys the outbox actually wrote still share one
+    /// cluster hash tag.
+    /// </summary>
+    /// <remarks>
+    /// It used to be refused, because a raw <c>}</c> ended the tag early or emptied it, and a stream whose
+    /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
+    /// that by construction, so the refusal went with the condition it watched.
+    /// <para>
+    /// The keys are READ BACK FROM THE SERVER rather than composed here, and that is the whole row. A first
+    /// version of it built the expected key with the test's own escaping helper and compared that against
+    /// itself: dropping the escaping from the outbox killed nothing at all, because both sides moved
+    /// together. Every other row in this file plants at a composed key and so does notice, but only for an
+    /// identifier that escaping CHANGES - and the receiver and the GUID stream ids escape to themselves.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("}")]
+    [InlineData("}leading")]
+    [InlineData("nested{}braces")]
+    public async Task AStreamIdCarryingABrace_IsServedAndKeepsOneHashTag(string prefix)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var outbox = NewOutbox();
+
+        // The GUID half is what finds the written keys again without assuming how the brace was spelled.
+        var streamId = prefix + NewStreamId();
+        var marker = streamId[prefix.Length..];
+
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
+
+        Assert.Equal("jti-1", Assert.Single(await outbox.PendingAsync(ReceiverId, streamId, null, ct)).JwtId);
+
+        var written = garnet.Connection.GetServer(garnet.Connection.GetEndPoints()[0])
+            .Keys(pattern: $"Abblix.SharedSignals:RedisEventOutbox:*{marker}*")
+            .Select(key => (string)key!)
+            .ToArray();
+
+        Assert.Equal(2, written.Length);
+        Assert.Equal(TagOf(written[0]), TagOf(written[1]));
+
+        // Non-emptiness is the assertion that matters: an empty tag does not apply, and Redis then
+        // hashes the whole key, which puts these two on different slots because they differ by suffix.
+        Assert.NotEmpty(TagOf(written[0]));
+        Assert.DoesNotContain('}', TagOf(written[0]));
+    }
+
+    /// <summary>
+    /// Two pairs whose halves join to the same text keep separate queues.
+    /// </summary>
+    /// <remarks>
+    /// This is what the escaping buys, and nothing else in this file measures it: without it the key of
+    /// receiver "a:b" stream "c" is the key of receiver "a" stream "b:c", which is the defect this
+    /// branch fixed arriving a second time through the key that fixed it. The other rows cannot see it
+    /// because a receiver named <c>receiver-a</c> and a GUID stream escape to themselves.
+    /// </remarks>
+    [Fact]
+    public async Task TwoPairsThatJoinAlike_DoNotShareAQueue()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var outbox = NewOutbox();
+        var marker = NewStreamId();
+
+        await outbox.EnqueueAsync($"{marker}a:b", "c", new OutboxItem("for-the-first", "a.a.a"), ct);
+        await outbox.EnqueueAsync($"{marker}a", "b:c", new OutboxItem("for-the-second", "b.b.b"), ct);
+
+        Assert.Equal(
+            "for-the-first",
+            Assert.Single(await outbox.PendingAsync($"{marker}a:b", "c", null, ct)).JwtId);
+        Assert.Equal(
+            "for-the-second",
+            Assert.Single(await outbox.PendingAsync($"{marker}a", "b:c", null, ct)).JwtId);
+    }
+
+    /// <summary>
+    /// Two receivers that named their streams alike do not share a queue.
+    /// </summary>
+    /// <remarks>
+    /// The defect was in the KEY, and each implementation composes its own, so the shared store test
+    /// cannot speak for this one. What makes it sharp here is the acknowledgement: sharing a queue does
+    /// not merely mix events, it lets either receiver acknowledge the other's and never see them again.
+    /// </remarks>
+    [Fact]
+    public async Task TwoReceiversSharingAStreamName_DoNotShareAQueue()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var outbox = NewOutbox();
+        var streamId = NewStreamId();
+
+        await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("for-a", "a.a.a"), ct);
+        await outbox.EnqueueAsync("receiver-b", streamId, new OutboxItem("for-b", "b.b.b"), ct);
+
+        await outbox.AcknowledgeAsync(ReceiverId, streamId, ["for-a"], ct);
+
+        Assert.Empty(await outbox.PendingAsync(ReceiverId, streamId, null, ct));
+        Assert.Equal("for-b", Assert.Single(await outbox.PendingAsync("receiver-b", streamId, null, ct)).JwtId);
+    }
+
+    /// <summary>The text Redis hashes a key by: what stands between the first brace and the next.</summary>
+    private static string TagOf(string key)
+        => key[(key.IndexOf('{') + 1)..key.IndexOf('}')];
 
     /// <summary>
     /// The stored shape does not follow C# member names. Redis holds these items across a rolling
@@ -318,7 +425,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a", true), ct);
 
         var raw = (await garnet.Connection.GetDatabase().HashGetAsync(
-            $"Abblix.SharedSignals:RedisEventOutbox:{{{streamId}}}:items", "jti-1")).ToString();
+            StoredKeyOf(streamId, "items"), "jti-1")).ToString();
 
         Assert.Contains("\"jti\":\"jti-1\"", raw, StringComparison.Ordinal);
         Assert.Contains("\"token\":\"a.a.a\"", raw, StringComparison.Ordinal);

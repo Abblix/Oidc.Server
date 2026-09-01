@@ -28,7 +28,7 @@ builder.Services
     .AddSharedSignalsRedisOutbox();
 ```
 
-The queue and item keys of one stream share a cluster hash tag, so the outbox works unchanged under Redis Cluster. A stream identifier that would empty that tag - an empty one, or one opening with `}` - is refused, because its two keys would land on different slots and every multi-key call would fail; nested braces are fine.
+The queue and item keys of one stream share a cluster hash tag, so the outbox works unchanged under Redis Cluster. The receiver and the stream are both escaped before they are joined into that tag, which keeps braces out of it whatever an identifier is called, so no identifier is refused for its spelling - only an empty receiver or stream, which would let a second pair address the same queue.
 
 A queue expires after `RedisOutboxOptions.Retention` without a new event, seven days by default. The clock measures inactivity, so a stream still receiving events never reaches it, and only the queue of a departed receiver is reclaimed. Losing Redis loses pending events - the tier is deliberate, and it is a decision rather than a permission: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is **paused**, and requires transmission for an enabled one. Neither delivery RFC requires durable queues, so the queue belongs beside caches, the tier that earns no backups.
 
