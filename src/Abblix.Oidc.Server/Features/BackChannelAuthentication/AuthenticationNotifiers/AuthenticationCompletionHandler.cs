@@ -284,13 +284,19 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </summary>
     /// <remarks>
     /// One place, so that the property the notifier's contract states holds by construction rather than
-    /// by somebody remembering: every transition out of Pending this library performs goes through a
-    /// write, and every write goes through here. A list of call sites is complete only until the next
-    /// handler is added, and that is exactly how ping came to signal nothing while its clients waited.
+    /// by somebody remembering: every WRITE of a new status by a completion handler goes through here,
+    /// in all three modes. A list of call sites is complete only until the next handler is added, and
+    /// that is exactly how ping came to signal nothing while its clients waited.
     /// <para>
-    /// Whether anybody IS waiting is not this method's question. A mode whose clients never long-poll -
-    /// push, whose token endpoint refuses them outright - wakes nobody, and a deployment with no notifier
-    /// registered skips the call.
+    /// Two things are deliberately outside that sentence. A transition made by REMOVING the request
+    /// rather than writing it - which is how push refuses, since a denied request its client can never
+    /// read is an orphan - reaches nothing here, and needs nothing: a push client is refused at the token
+    /// endpoint outright, so it is never a waiter. And an expiry is not performed by anybody at all; the
+    /// record falls out of storage on its lifetime.
+    /// </para>
+    /// <para>
+    /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
+    /// nobody, because nothing hands push a notifier; a deployment that registered none skips the call.
     /// </para>
     /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>

@@ -136,7 +136,7 @@ public partial class PushModeCompletionHandler(
         // On the delivery path this write is undone moments later by the removal below. That is a wasted
         // round trip on the successful case in exchange for the guarantee on the failing one, which is
         // the case that mints tokens nobody asked for.
-        await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(authenticationRequestId, request, expiresIn);
 
         LogGeneratingTokens(authenticationRequestId);
 
