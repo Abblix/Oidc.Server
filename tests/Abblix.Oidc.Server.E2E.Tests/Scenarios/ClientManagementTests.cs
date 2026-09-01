@@ -124,6 +124,41 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A redirect URI is checked for shape whatever the client's grant types are.
+    /// </summary>
+    /// <remarks>
+    /// The per-URI checks used to sit behind the same gate as the "you must register one" check, which
+    /// asks whether any requested grant type NEEDS a redirect URI. A CIBA-only client needs none, so its
+    /// list was stored unread: measured, <c>"redirect_uris": ["/cb"]</c> registered 201 and the value
+    /// came back in the response. The two questions are different - whether a redirect URI is REQUIRED
+    /// depends on the grant types, whether a registered one is VALID does not.
+    /// </remarks>
+    [Fact]
+    public async Task A_redirect_uri_is_checked_even_for_a_client_that_needs_none()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("ciba-only-with-a-relative-callback");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.RedirectUris] = new JsonArray("/cb");
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        var error = body["error"];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
+    }
+
+    /// <summary>
     /// A relative <c>jwks_uri</c> is refused at registration rather than stored.
     /// </summary>
     /// <remarks>
@@ -161,6 +196,14 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var error = body["error"];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.GetValue<string>());
+
+        // The MEMBER, not just the code: twenty-odd validators answer invalid_client_metadata, so the
+        // code alone stays green when some other one refuses for some other reason, and what proves this
+        // validator ran would live only in a mutation outside the suite.
+        var description = body["error_description"];
+        Assert.NotNull(description);
+        Assert.Contains(
+            RequestMembers.JwksUri, description.GetValue<string>(), StringComparison.Ordinal);
     }
 
     /// <summary>

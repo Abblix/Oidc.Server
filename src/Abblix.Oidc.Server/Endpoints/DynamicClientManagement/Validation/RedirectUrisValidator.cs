@@ -38,21 +38,28 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
     {
         var request = context.Request;
 
-        if (request.GrantTypes.Intersect(RequiringRedirectUri, StringComparer.Ordinal).Any())
+        // Two different questions, and only the first one depends on the grant types. Whether a redirect
+        // URI is REQUIRED is asked of a client that cannot deliver a response without one; whether a
+        // registered one is VALID is asked of every client that registered any. Behind one gate, a
+        // CIBA-only registration carrying "/cb" was stored unread and echoed back to the caller.
+        // Absent, explicitly null, and empty are one answer: the client registered no redirect URI for a
+        // grant type that cannot deliver a response without one. The property is declared non-nullable,
+        // but a registration body is attacker-shaped JSON and the deserializer honours neither the
+        // annotation nor a member initialiser against an explicit null, so the null is real, and reading
+        // Length on it turned a rejected registration into an unhandled exception. The error code is the
+        // one this validator already returns for the empty case: RFC 7591 section 3.2.2 defines
+        // invalid_redirect_uri as "The value of one or more redirection URIs is invalid", which names bad
+        // values rather than absent ones, so answering absence with it is this library's choice and not
+        // something the document requires.
+        if (request.RedirectUris is not { Length: > 0 }
+            && request.GrantTypes.Intersect(RequiringRedirectUri, StringComparer.Ordinal).Any())
         {
-            // Absent, explicitly null, and empty are one answer: the client registered no redirect URI for
-            // a grant type that cannot deliver a response without one. The property is declared
-            // non-nullable, but a registration body is attacker-shaped JSON and the deserializer honours
-            // neither the annotation nor a member initialiser against an explicit null, so the null is
-            // real, and reading Length on it turned a rejected registration into an unhandled exception.
-            // The error code is the one this validator already returns for the empty case: RFC 7591
-            // section 3.2.2 defines invalid_redirect_uri as "The value of one or more redirection URIs is
-            // invalid", which names bad values rather than absent ones, so answering absence with it is
-            // this library's choice and not something the document requires.
-            if (request.RedirectUris is not { Length: > 0 })
-                return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} is required");
+            return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} is required");
+        }
 
-            foreach (var uri in request.RedirectUris)
+        if (request.RedirectUris is { Length: > 0 } redirectUris)
+        {
+            foreach (var uri in redirectUris)
             {
                 if (uri is not { IsAbsoluteUri: true })
                     return ErrorFactory.InvalidRedirectUri(
