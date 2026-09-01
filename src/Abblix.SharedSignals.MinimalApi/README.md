@@ -110,7 +110,7 @@ Abblix.SharedSignals.MinimalAPI maps the routes of [Abblix.SharedSignals](https:
 
 ## License
 
-Abblix.SharedSignals.MinimalAPI is licensed under the [Apache License 2.0](https://github.com/Abblix/Oidc.Server/blob/master/LICENSES/Apache-2.0.txt).
+See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
