@@ -132,8 +132,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var transmitter = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var pollAuthority = AuthorityOf(transmitter);
         var pollPrefix = AdvertisedPrefixOf(endpointOptions);
+        var pollLogger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
         endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
-            streamId => PollEndpointOf(pollAuthority, pollPrefix, streamId));
+            streamId => PollEndpointOf(pollLogger, pollAuthority, pollPrefix, streamId));
 
         return group;
     }
@@ -220,43 +222,57 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// so refusing them would cost an operator names that work.
     /// </para>
     /// <para>
-    /// Both sides of the comparison are strings on purpose. Comparing PathStrings would run the expected
-    /// side through the decoder as well, and an identifier spelled "%2E%2E" then reads as ".." and is
-    /// refused although the host serves it.
+    /// The expected side is built with the <see cref="PathString"/> CONSTRUCTOR, which stores the text as
+    /// it is. Only the implicit conversion FROM a string decodes, and that is what the left side uses on
+    /// purpose - it is how the ASP.NET decoder gets applied to the minted path. Writing the expected side
+    /// the idiomatic way instead, <c>prefix.Add($"...")</c>, compiles identically and decodes it too, and
+    /// then an identifier spelled <c>%2E%2E</c> reads as <c>..</c> and is refused although this host
+    /// serves it. Dropping the two <c>.Value</c>s and comparing the PathStrings changes nothing today,
+    /// so the constructor is the token to keep, not the comparison.
     /// </para>
     /// <para>
-    /// The refusal lands at startup rather than on a poll, and it takes two things to get there: a
-    /// declared poll stream is materialized when <see cref="ConfigurationStreamStore"/> is constructed,
-    /// which is where it asks for this address, and the delivery scheduler takes that store as a hosted
-    /// service, so the host builds it while starting rather than on the first request to arrive.
-    /// A dynamically created stream is named by a GUID and cannot reach the refusal. A host that
-    /// names its own address through
-    /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> never reaches this code, which is
-    /// right: what an identifier has to survive there is that host's routing, not this one's.
+    /// Answering null rather than throwing, because both callers can act on it and neither wants a
+    /// fault. A DECLARED stream is materialized when <see cref="ConfigurationStreamStore"/> is
+    /// constructed - the delivery scheduler takes that store as a hosted service, so the host builds it
+    /// while starting - and that store turns the null into a refusal at startup. A RECEIVER asking to
+    /// move an existing stream to poll delivery reaches the same code through the management API, which
+    /// is how a declared PUSH stream named something unaddressable gets here at request time: it is
+    /// admitted at startup, quite rightly, since a push stream needs no address of ours, and then
+    /// CAEP 2.3.8.1 obliges this transmitter to entertain a switch to poll. There the null becomes the
+    /// refusal the management service already returns for a delivery method it cannot serve, which is
+    /// something the receiver can read.
+    /// </para>
+    /// <para>
+    /// A dynamically created stream is named by a GUID and never fails the round trip. A host that names
+    /// its own address through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/> never
+    /// reaches this code, which is right: what an identifier has to survive there is that host's
+    /// routing, not this one's.
     /// </para>
     /// </remarks>
+    /// <param name="logger">Where the reason goes, since the value is only a null.</param>
     /// <param name="authority">The transmitter's authority, as its issuer states it.</param>
     /// <param name="prefix">The prefix the outside world reaches the endpoints through.</param>
     /// <param name="streamId">The stream whose queue is served there.</param>
-    /// <exception cref="InvalidOperationException">The identifier does not survive a round trip through
-    /// one path segment, so the address minted for it leads nowhere.</exception>
-    private static Uri PollEndpointOf(Uri authority, PathString prefix, string streamId)
+    private static Uri? PollEndpointOf(ILogger logger, Uri authority, PathString prefix, string streamId)
     {
         var route = prefix.Add(new PathString($"{Routes.Poll}/{Uri.EscapeDataString(streamId)}"));
         var address = new Uri(authority, route.Value!);
 
         PathString delivered = address.AbsolutePath;
-        if (delivered.Value != prefix.Add(new PathString($"{Routes.Poll}/{streamId}")).Value)
+        if (delivered.Value == prefix.Add(new PathString($"{Routes.Poll}/{streamId}")).Value)
         {
-            throw new InvalidOperationException(
-                $"The stream identifier '{streamId}' does not survive a round trip through one path "
-                + $"segment: a poll request to <{address}> reaches this transmitter naming something "
-                + "else, or nothing at all, so the address is one no receiver could use. Name the stream "
-                + "something that comes back unchanged, or give it push delivery, which needs no address "
-                + "of ours.");
+            return address;
         }
 
-        return address;
+        logger.LogWarning(
+            "No poll address can be composed for the stream identifier {StreamId}: a request to "
+            + "{Address} reaches this transmitter naming something else, or nothing at all. Name the "
+            + "stream something a URL path carries unchanged, or give it push delivery, which needs no "
+            + "address of ours.",
+            streamId,
+            address);
+
+        return null;
     }
 
     /// <summary>

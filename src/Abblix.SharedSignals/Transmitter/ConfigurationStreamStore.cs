@@ -309,6 +309,20 @@ public sealed class ConfigurationStreamStore : IStreamStore
         {
             delivery = new PollDeliveryMethod(pollEndpoint);
         }
+        else if (pollEndpoints.IsOffered)
+        {
+            // Poll delivery exists here and this stream still got no address, which leaves the
+            // identifier: whoever mints the address could not carry this one into it and said so on the
+            // way past. Separated from the case below because the two are fixed differently - one by
+            // configuring an address for the transmitter, this one by renaming the stream - and a single
+            // message would send the operator to the wrong half.
+            throw new InvalidOperationException(
+                $"The stream '{declared.StreamId}' is declared with poll delivery and this transmitter "
+                + "offers it, but no poll address could be composed for that identifier. The refusal "
+                + "names the reason where the address is minted; the usual one is an identifier a URL "
+                + $"path cannot carry unchanged. Rename the stream, or set "
+                + $"{nameof(ConfiguredStream.PushEndpointUrl)} so it is delivered to rather than polled.");
+        }
         else
         {
             throw new InvalidOperationException(

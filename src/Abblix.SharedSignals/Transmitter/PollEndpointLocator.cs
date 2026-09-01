@@ -39,7 +39,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// one.</param>
 public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
 {
-    private Func<string, Uri>? _served;
+    private Func<string, Uri?>? _served;
 
     /// <summary>
     /// Whether this transmitter offers poll delivery at all - what "delivery_methods_supported"
@@ -56,12 +56,16 @@ public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
     /// created. It is not the host's call to make: a host naming its own address uses
     /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>, which this never overrides.
     /// </remarks>
-    /// <param name="pollEndpointOf">Derives the mapped address of a stream's poll endpoint.</param>
+    /// <param name="pollEndpointOf">Derives the mapped address of a stream's poll endpoint, or answers
+    /// null when this stream has none - an identifier the route cannot carry, for one. A null is a
+    /// refusal a caller can act on: a create or update asking for poll delivery is answered with an
+    /// error, and a declared stream is refused at startup by
+    /// <see cref="ConfigurationStreamStore"/>.</param>
     /// <exception cref="InvalidOperationException">The endpoint was already mapped. A stream's poll
     /// address is stored in its configuration, so a second mapping would leave every stream created
     /// before it pointing at the first - and which streams those are depends on when each call ran.
     /// </exception>
-    public void ServedAt(Func<string, Uri> pollEndpointOf)
+    public void ServedAt(Func<string, Uri?> pollEndpointOf)
     {
         ArgumentNullException.ThrowIfNull(pollEndpointOf);
 

@@ -257,10 +257,11 @@ public sealed class PollDeliveryByDefaultTests
     /// An identifier that merely LOOKS like a dot segment is accepted, and its address answers.
     /// </summary>
     /// <remarks>
-    /// The row that decides HOW the check compares. Both sides of the comparison have to be plain
-    /// strings: running the expected side through <see cref="PathString"/> would decode it too, and
-    /// <c>%2E%2E</c> would read as <c>..</c> and be refused although this host serves it. The refusal
-    /// rows above cannot see that, because they are refused either way.
+    /// The row that decides HOW the expected side is built. It has to be the <c>PathString</c>
+    /// CONSTRUCTOR, which keeps the text as it is; the idiomatic <c>prefix.Add($"...")</c> compiles
+    /// identically and runs the identifier through the decoder as well, and then <c>%2E%2E</c> reads as
+    /// <c>..</c> and is refused although this host serves it. The refusal rows above cannot see that,
+    /// because they are refused either way.
     /// </remarks>
     [Fact]
     public async Task ADeclaredIdentifierThatOnlyLooksLikeADotSegment_IsServed()
@@ -308,6 +309,48 @@ public sealed class PollDeliveryByDefaultTests
             .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
 
         Assert.Equal("alerts/eu", Assert.Single(streams!).StreamId);
+    }
+
+    /// <summary>
+    /// A receiver moving an unaddressable PUSH stream to poll delivery is refused, not faulted at.
+    /// </summary>
+    /// <remarks>
+    /// The row above admits such a stream on purpose - a push stream needs no address of ours - and that
+    /// is exactly what makes this reachable: CAEP Interoperability Profile 1.0 Section 2.3.8.1 obliges a
+    /// transmitter to entertain a request naming either delivery method, so the receiver may ask for the
+    /// one address this identifier cannot have. The first version of this branch threw there, out of a
+    /// Minimal API endpoint, turning an authenticated and specification-permitted request into a server
+    /// fault. Both verbs are driven because the management API offers both.
+    /// </remarks>
+    [Theory]
+    [InlineData("PATCH")]
+    [InlineData("PUT")]
+    public async Task AReceiverMovingAnUnaddressableStreamToPoll_IsRefused(string verb)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+            [
+                new ConfiguredStream
+                {
+                    ReceiverId = ReceiverId,
+                    StreamId = "alerts/eu",
+                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                },
+            ]));
+
+        using var request = new HttpRequestMessage(new HttpMethod(verb), "/ssf/stream")
+        {
+            Content = JsonContent.Create(new UpdateStreamRequest
+            {
+                StreamId = "alerts/eu",
+                Delivery = new PollDeliveryMethod(),
+            }),
+        };
+
+        using var response = await host.GetTestClient().SendAsync(request, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /// <summary>
