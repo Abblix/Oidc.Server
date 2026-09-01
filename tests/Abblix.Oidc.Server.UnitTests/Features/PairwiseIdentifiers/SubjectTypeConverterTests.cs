@@ -320,6 +320,7 @@ public class SubjectTypeConverterTests
 
         Assert.Equal(expectedLength, pairwise.Length);
     }
+
     /// <summary>
     /// Two backchannel clients of one sector that registered no redirect URI still derive the same
     /// pairwise subject, taking the host from the URI their delivery mode names.
@@ -423,6 +424,7 @@ public class SubjectTypeConverterTests
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
+
     /// <summary>
     /// Two native clients that publish keys on one host stay in separate sectors.
     /// </summary>
@@ -454,6 +456,7 @@ public class SubjectTypeConverterTests
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
     }
+
     /// <summary>
     /// Two backchannel clients whose keys sit on one host, named by a scheme that is not the web's, stay in
     /// separate sectors.
@@ -482,6 +485,26 @@ public class SubjectTypeConverterTests
             jwksUri: new Uri("com.example.two:/keys"));
 
         Assert.NotEqual(converter.Convert(Subject, clientA), converter.Convert(Subject, clientB));
+    }
+
+    /// <summary>
+    /// The same for a relative REDIRECT URI, which is the arm that carried this exposure first.
+    /// </summary>
+    /// <remarks>
+    /// The redirect arm gained its absoluteness guard by sharing the predicate rather than by being
+    /// fixed, so nothing recorded the change: a statically configured client with <c>/cb</c> faulted on
+    /// every token before and falls back to the client id now. A shared predicate is pinned at one arm
+    /// and diverges at the other by a deliberate edit, which is exactly what this row refuses.
+    /// </remarks>
+    [Fact]
+    public void Convert_ClientWithARelativeRedirectUri_FallsBackRatherThanFaulting()
+    {
+        var converter = CreateConverter();
+
+        var client = CreatePairwiseClient("client-a", redirectUris: [new Uri("/cb", UriKind.Relative)]);
+        var withNoRedirectUri = CreatePairwiseClient("client-a");
+
+        Assert.Equal(converter.Convert(Subject, withNoRedirectUri), converter.Convert(Subject, client));
     }
 
     /// <summary>

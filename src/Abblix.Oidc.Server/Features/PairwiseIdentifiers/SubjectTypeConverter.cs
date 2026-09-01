@@ -155,9 +155,9 @@ public class SubjectTypeConverter : ISubjectTypeConverter
         => uri.IsAbsoluteUri && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     /// <summary>
-    /// The sector a backchannel client takes from the URI CIBA Core 1.0 Section 4 puts in the redirect URI's
-    /// place, or <c>null</c> when this client is not one, registered a redirect URI, or named a URI whose host
-    /// names nothing.
+    /// The sector host a backchannel client takes from the URI CIBA Core 1.0 Section 4 puts in the redirect
+    /// URI's place. Present only for a client that registered no redirect URI at all and whose mode names an
+    /// absolute http(s) URI; <c>null</c> in every other case, whatever makes it one.
     /// </summary>
     private static string? BackchannelSectorHost(ClientInfo clientInfo)
         => clientInfo.RedirectUris.Length == 0 &&
@@ -167,16 +167,22 @@ public class SubjectTypeConverter : ISubjectTypeConverter
             : null;
 
     /// <summary>
-    /// The URI whose host is the sector for a backchannel client that registered no redirect URI, or
-    /// <c>null</c> when this client is not one.
+    /// The URI CIBA Core 1.0 Section 4 puts in the redirect URI's place for this client's delivery mode,
+    /// or <c>null</c> when the mode names none.
     /// </summary>
     /// <remarks>
+    /// Naming a URI is not the same as having a sector from it: whether its host is used is the caller's
+    /// question, and <see cref="BackchannelSectorHost"/> answers it. Reading this summary as "the sector"
+    /// is what sends somebody debugging a client keyed on its client id into the switch below rather than
+    /// into the filter above.
+    /// <para>
     /// The same order the registration validator resolves, so a statically configured client and a
-    /// dynamically registered one bind to the same sector rather than to whichever path reached them.
-    /// A mode this server does not implement returns null and takes the client_id fallback. Nothing
-    /// refuses such a mode on a statically configured client - the registration validator only sees
-    /// requests that came over the network - so that client authenticates normally through whatever
-    /// other grant it holds, and keeps the per-client sector it had before this method existed.
+    /// dynamically registered one bind to the same sector rather than to whichever path reached them. A
+    /// mode this server does not implement returns null here. Nothing refuses such a mode on a statically
+    /// configured client - the registration validator only sees requests that came over the network - so
+    /// that client authenticates normally through whatever other grant it holds, and keeps the per-client
+    /// sector it had before this method existed.
+    /// </para>
     /// </remarks>
     private static Uri? BackchannelSectorUri(ClientInfo clientInfo)
         => clientInfo.BackChannelTokenDeliveryMode switch
