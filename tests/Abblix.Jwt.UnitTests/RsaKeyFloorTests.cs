@@ -299,6 +299,76 @@ public class RsaKeyFloorTests
             => _entries.Add((logLevel, formatter(state, exception)));
     }
 
+
+    /// <summary>
+    /// The report is silent about a key whose ALGORITHM has no size requirement, however small the key is.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7518 states the 2048 four times, once per family, and Section 3.4 - ECDSA - states none at
+    /// all. An RSA key stays a candidate for an algorithm it does not contradict, because a key that
+    /// declares no <c>alg</c> is deliberately not filtered out, so an ungated report speaks for every
+    /// failed verification an RSA key was near.
+    /// <para>
+    /// The HS256 row is why this is a defect rather than an inaccuracy: taking an issuer's RSA public key
+    /// and signing with an HMAC algorithm is the textbook algorithm-confusion probe, and the message this
+    /// would attach to that burst told the operator it was a retired key rather than an attack.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256)]
+    [InlineData(SigningAlgorithms.HS256)]
+    public async Task ValidateAsync_AnAlgorithmWithNoRsaFloor_SaysNothingAboutSizes(string algorithm)
+    {
+        var log = new CapturingLogger();
+        var (token, key) = SignedWithAnRsaKeyOf(1024);
+        key.Algorithm = null;
+
+        var header = new JsonWebTokenHeader(new JsonObject
+        {
+            { "alg", algorithm },
+            { "typ", "JWT" },
+        });
+
+        await SignerWith(log).ValidateAsync(
+            token.Split('.'), header, Keys(key), TestContext.Current.CancellationToken);
+
+        Assert.Empty(log.Entries);
+    }
+
+    /// <summary>
+    /// An undersized HMAC secret is named, which is the half the shared floor was extracted for.
+    /// </summary>
+    /// <remarks>
+    /// Moving the HMAC minimum out of <c>HmacSigner</c> so the signer and the report read one source is
+    /// the point of that extraction, and nothing measured the report's side of it: an arm that could
+    /// never fire left the whole suite green.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_AnUndersizedHmacSecret_IsNamedInTheLog()
+    {
+        var log = new CapturingLogger();
+        var key = new OctetJsonWebKey
+        {
+            KeyId = "shared-short",
+            Usage = PublicKeyUsages.Signature,
+            Algorithm = SigningAlgorithms.HS256,
+            KeyValue = new byte[16],
+        };
+
+        var header = new JsonWebTokenHeader(new JsonObject
+        {
+            { "alg", SigningAlgorithms.HS256 },
+            { "kid", key.KeyId },
+        });
+
+        await SignerWith(log).ValidateAsync(
+            ["e30", "e30", "AAAA"], header, Keys(key), TestContext.Current.CancellationToken);
+
+        var warning = Assert.Single(log.Entries);
+        Assert.Contains("128", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("256", warning.Message, StringComparison.Ordinal);
+    }
+
     private static RsaJsonWebKey PublicOnlyKey(int bits)
     {
         using var rsa = RSA.Create(bits);

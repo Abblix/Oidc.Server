@@ -9,6 +9,7 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -328,5 +329,26 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.Null(result);
+    }
+    /// <summary>
+    /// A relative notification endpoint is refused, not faulted on.
+    /// </summary>
+    /// <remarks>
+    /// The third site of one class, after the jwks_uri and the redirect URIs: <see cref="Uri.Scheme"/>
+    /// raises on a relative URI rather than returning anything, so a scheme comparison alone turns a
+    /// registration that should be refused into a server fault. <c>[AbsoluteUri]</c> sits on the member
+    /// and does not help - the form binder honours it and the JSON deserializer does not - which is
+    /// exactly why the same shape kept arriving at different validators.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    [InlineData(BackchannelTokenDeliveryModes.Push)]
+    public async Task ValidateAsync_ARelativeNotificationEndpoint_IsRefusedRatherThanFaulting(string mode)
+    {
+        var context = CreateContext(mode, new Uri("/cb", UriKind.Relative));
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<OidcError>(result).Error);
     }
 }

@@ -433,4 +433,30 @@ public class SubjectTypeValidatorTests
         Assert.Null(await _validator.ValidateAsync(context));
         Assert.Equal("app.example.com", context.SectorIdentifier);
     }
+    /// <summary>
+    /// A relative URI in the FETCHED sector identifier document is refused, not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// The sharper of the two arms, and the one nothing measured: those entries come from a document at
+    /// an address the client chose, so they are third-party JSON arriving at the same expression that
+    /// throws on a relative value. The redirect-URI arm at least sees values a validator upstream may
+    /// have looked at; this one sees whatever the fetch returned.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_ARelativeUriInTheSectorDocument_IsRefusedRatherThanFaulting()
+    {
+        var sectorUri = new Uri("https://sector.example.com/uris.json");
+        _secureHttpFetcher
+            .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
+            .ReturnsAsync(new[] { new Uri("/cb", UriKind.Relative) });
+
+        var context = CreateContext(
+            redirectUris: [new Uri("https://app.example.com/cb")],
+            subjectType: SubjectTypes.Pairwise,
+            sectorIdentifierUri: sectorUri);
+
+        var result = await _validator.ValidateAsync(context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+    }
 }

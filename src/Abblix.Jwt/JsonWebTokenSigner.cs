@@ -214,13 +214,23 @@ internal partial class JsonWebTokenSigner(
     {
         foreach (var key in candidates)
         {
+            // Both arms are gated on the ALGORITHM having a floor, and that gating is the whole of it.
+            // RFC 7518 states the 2048 four times, once per family, and Section 3.4 - ECDSA - states no
+            // size requirement at all; an RSA key stays a candidate for any algorithm it does not
+            // contradict, because a key declaring no "alg" is deliberately not filtered out. Ungated,
+            // this reported "alg='ES256' requires 2048 (RFC 7518)" - a requirement that document does not
+            // make - and said it of a key that failed for having no signer registered rather than for its
+            // size. The shape that turned that from wrong into dangerous is an algorithm-confusion probe:
+            // take the issuer's RSA public key, sign with HS256, and the log tells the operator the burst
+            // is a retired key rather than an attack.
+            //
             // RSA is measured from the modulus rather than from RSA.KeySize, for the reason
-            // ModulusBitLength gives, and its floor is per key type rather than per algorithm: RFC 7518
-            // states the same 2048 for signing and for key encryption alike.
+            // ModulusBitLength gives.
             (int Bits, int Floor)? measured = key switch
             {
                 RsaJsonWebKey rsaKey
-                    => (rsaKey.ModulusBitLength(), JsonWebKeyExtensions.MinimumRsaKeyBits),
+                    when JsonWebKeyExtensions.MinimumRsaKeyBitsFor(algorithm) is { } floor
+                    => (rsaKey.ModulusBitLength(), floor),
 
                 OctetJsonWebKey { KeyValue: { } keyValue }
                     when JsonWebKeyExtensions.MinimumHmacKeyBits(algorithm) is { } floor

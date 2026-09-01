@@ -92,12 +92,18 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // A poll request carrying NO endpoint reaches this line: the switch rejects poll WITH one and
         // ping or push WITHOUT one, which leaves poll-with-nothing to fall through. That is what the null
         // check below is for.
+        // Absoluteness first, because Scheme raises on a relative URI rather than returning anything:
+        // a registration body carrying "/cb" here faulted the endpoint instead of being refused. The
+        // [AbsoluteUri] on the member does not help - the form binder honours it and the JSON
+        // deserializer does not - and this is the third site of that one class, after the jwks_uri and
+        // the redirect URIs.
         var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
-        if (notificationEndpoint != null && notificationEndpoint.Scheme != Uri.UriSchemeHttps)
+        if (notificationEndpoint is { IsAbsoluteUri: false } ||
+            (notificationEndpoint != null && notificationEndpoint.Scheme != Uri.UriSchemeHttps))
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The backchannel_client_notification_endpoint must use the HTTPS scheme");
+                "The backchannel_client_notification_endpoint must be an absolute URI using the HTTPS scheme");
         }
 
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;

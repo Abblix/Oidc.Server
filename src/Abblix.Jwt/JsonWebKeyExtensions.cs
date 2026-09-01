@@ -199,6 +199,15 @@ public static class JsonWebKeyExtensions
 	/// an HMAC algorithm and turns null into its own refusal, while a caller REPORTING on a key needs to
 	/// ask about any algorithm and take "no floor of this family" for an answer.
 	/// </remarks>
+	internal static int? MinimumRsaKeyBitsFor(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 or
+			SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 or
+			EncryptionAlgorithms.KeyManagement.Rsa1_5 or EncryptionAlgorithms.KeyManagement.RsaOaep or
+			EncryptionAlgorithms.KeyManagement.RsaOaep256 => MinimumRsaKeyBits,
+		_ => null,
+	};
+
 	internal static int? MinimumHmacKeyBits(string algorithm) => algorithm switch
 	{
 		SigningAlgorithms.HS256 => 256,
