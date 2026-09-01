@@ -124,6 +124,53 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// No URI member accepts a host and a port with no scheme.
+    /// </summary>
+    /// <remarks>
+    /// The detector for a whole class rather than a row for one member. A dot is legal in a URI scheme,
+    /// so <c>client.example.com:8080/x</c> parses as an ABSOLUTE Uri whose Scheme is the host name and
+    /// whose Host is the empty string - nothing throws, nothing is malformed, and it names no
+    /// destination. A validator written with <c>IsAbsoluteUri</c> as its whole test admits it, which is
+    /// how it got into this codebase once already; a validator written with the shared https predicate
+    /// refuses it. This row is what makes the NEXT one fail rather than the one after that.
+    /// <para>
+    /// Driven through the endpoint per member, because what has to hold is that SOMETHING refuses, and
+    /// which validator does is not this row's business.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(RequestMembers.JwksUri, false)]
+    [InlineData(RequestMembers.InitiateLoginUri, false)]
+    [InlineData(RequestMembers.BackChannelLogoutUri, false)]
+    [InlineData(RequestMembers.RedirectUris, true)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris, true)]
+    public async Task No_uri_member_accepts_a_host_and_port_with_no_scheme(string member, bool isArray)
+    {
+        const string HostAndPort = "client.example.com:8080/callback";
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"host-and-port-in-{member}");
+        metadata[member] = isArray ? new JsonArray(HostAndPort) : HostAndPort;
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same metadata WITHOUT the member registers, so a refusal here is about the
+        // value and not about a body this endpoint would have refused anyway.
+        var control = NewClientMetadata($"control-for-{member}");
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint, control, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
     /// A redirect URI is checked for shape whatever the client's grant types are.
     /// </summary>
     /// <remarks>
