@@ -41,19 +41,23 @@ public sealed class SecurityEventsOptions
     /// One set for both directions on purpose. A deployment that widens what it accepts and not what it
     /// emits, or the reverse, has two policies to keep in step and no place that says they disagree.
     /// <para>
-    /// The DEFAULT is every algorithm this library implements, not the RS256 the CAEP Interoperability
-    /// Profile 1.0 draft 01 Section 2.6 requires, and the difference is deliberate. This verifier is
-    /// shared: <c>AddBackChannelLogoutReceiver</c> resolves the same one, and an OIDC Logout Token is
-    /// signed with whatever the client registered as its <c>id_token_signed_response_alg</c> - ES256 and
-    /// PS256 are conformant and common there, and its producer is somebody else's provider, so a
-    /// receiver has nothing to "keep in step" with. Defaulting to the profile's single algorithm would
-    /// have refused every such token on upgrade, measured against the previous release.
+    /// The DEFAULT is RS256 alone, which two specifications independently arrive at: the CAEP
+    /// Interoperability Profile 1.0 draft 01 Section 2.6 requires it of security events, and OpenID
+    /// Back-Channel Logout 1.0 Section 2.6 names it as the default for a Logout Token. It is also what
+    /// this server's own logout tokens carry unless a client registered otherwise, so the two ends of a
+    /// deployment that uses only our own pieces agree without anybody configuring anything.
     /// </para>
     /// <para>
-    /// So a deployment that must be CAEP-conformant NARROWS this to RS256 deliberately, which is a line
-    /// it can point at, rather than inheriting it from a default that also governs a protocol the
-    /// profile says nothing about. Of the FAPI 2.0 direction this library offers PS256 and ES256; EdDSA
-    /// it does not implement, so naming it here would name an algorithm nothing can use.
+    /// WIDENING is the host's move, and the host that has to make it is the one that already knows why:
+    /// this verifier is shared, so <c>AddBackChannelLogoutReceiver</c> resolves the same one, and a
+    /// deployment whose clients registered ES256 or PS256 as their <c>id_token_signed_response_alg</c>
+    /// must name those here. Of the FAPI 2.0 direction this library offers PS256 and ES256; EdDSA it
+    /// does not implement, so naming that would name an algorithm nothing can use.
+    /// </para>
+    /// <para>
+    /// The refusal such a host meets says which algorithm was rejected and names this property, because
+    /// the alternative is a policy decision arriving as <c>invalid_signature</c> - the same answer a
+    /// tampered token gives, and an operator sent hunting for an attacker.
     /// </para>
     /// <para>
     /// What the set cannot contain is <c>none</c>: an unsigned security event is not a weaker signature
@@ -70,14 +74,17 @@ public sealed class SecurityEventsOptions
     /// <see cref="DefaultSigningAlgorithms"/> is public so a host can still read what null means.
     /// </para>
     /// <para>
-    /// The value is copied on assignment, because a caller holding the array it passed could otherwise
-    /// add <c>none</c> to it afterwards, and an invariant a caller can break after assignment is not one.
+    /// The value is copied in BOTH directions, and one direction alone is worth nothing: a caller holding
+    /// the array it passed could add <c>none</c> to it afterwards, and a caller reading the property back
+    /// could write into what it got. Both reach the resolved signer, which asks the array live - measured,
+    /// a write through the getter made it sign PS256 under an RS256-only policy. An invariant a caller can
+    /// break after assignment is not one, in either direction.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The set is empty, or contains <c>none</c>.</exception>
     public string[]? AllowedSigningAlgorithms
     {
-        get => _allowedSigningAlgorithms;
+        get => _allowedSigningAlgorithms is { } algorithms ? [.. algorithms] : null;
         set
         {
             if (value is null)
@@ -110,15 +117,9 @@ public sealed class SecurityEventsOptions
     private string[]? _allowedSigningAlgorithms;
 
     /// <summary>
-    /// What <see cref="AllowedSigningAlgorithms"/> means when a host has set nothing: every signature
-    /// algorithm this library implements.
+    /// What <see cref="AllowedSigningAlgorithms"/> means when a host has set nothing: RS256 alone.
     /// </summary>
-    public static IReadOnlyList<string> DefaultSigningAlgorithms { get; } =
-    [
-        SigningAlgorithms.RS256, SigningAlgorithms.RS384, SigningAlgorithms.RS512,
-        SigningAlgorithms.PS256, SigningAlgorithms.PS384, SigningAlgorithms.PS512,
-        SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512,
-    ];
+    public static IReadOnlyList<string> DefaultSigningAlgorithms { get; } = [SigningAlgorithms.RS256];
 
     /// <summary>
     /// The algorithms in force: what the host set, or the default when it set nothing.

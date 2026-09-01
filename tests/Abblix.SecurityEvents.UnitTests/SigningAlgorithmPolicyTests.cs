@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Infrastructure;
+using Abblix.SecurityEvents.Validation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -170,25 +171,25 @@ public class SigningAlgorithmPolicyTests
 
 
     /// <summary>
-    /// The default accepts every algorithm this library implements, not the profile's single one.
+    /// The default is RS256 alone, and a host that needs another algorithm widens it.
     /// </summary>
     /// <remarks>
-    /// The verifier is SHARED: a host that only receives OIDC Back-Channel Logout tokens resolves this
-    /// same one, and a Logout Token is signed with whatever the client registered as its
-    /// <c>id_token_signed_response_alg</c> - so defaulting to the CAEP profile's RS256 refused every
-    /// ES256 and PS256 logout that validated the release before. Measured against the parent commit, not
-    /// reasoned about.
+    /// Two specifications arrive at RS256 independently - the CAEP Interoperability Profile requires it
+    /// of security events, and Back-Channel Logout 1.0 names it as the default for a Logout Token - and
+    /// this server's own logout tokens carry it unless a client registered otherwise. So the two ends of
+    /// a deployment using our own pieces agree with nobody configuring anything, which is what makes the
+    /// narrow default the safe one rather than the awkward one.
     /// <para>
-    /// A deployment that must be CAEP-conformant narrows the set deliberately, which is a line it can
-    /// point at. Inheriting that narrowing from a default which also governs a protocol the profile says
-    /// nothing about is what this row refuses.
+    /// The widening half is the row's other case, and it is not decoration: the verifier is SHARED, so a
+    /// host receiving Back-Channel Logout from a provider whose clients registered ES256 resolves this
+    /// same one and must name it here. Without that case a default that refused everything would pass.
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(SigningAlgorithms.RS256)]
-    [InlineData(SigningAlgorithms.PS256)]
-    [InlineData(SigningAlgorithms.ES256)]
-    public async Task TheDefaultSet_AcceptsWhatTheLibraryImplements(string algorithm)
+    [InlineData(SigningAlgorithms.RS256, true)]
+    [InlineData(SigningAlgorithms.PS256, false)]
+    [InlineData(SigningAlgorithms.ES256, false)]
+    public async Task TheDefaultSet_IsRS256Alone(string algorithm, bool acceptedByDefault)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = KeyFor(algorithm);
@@ -202,13 +203,53 @@ public class SigningAlgorithmPolicyTests
             options.Events.Register<SomethingHappened>(SomeEvent);
         });
 
-        await using var pair = services.BuildServiceProvider();
+        await using var host = services.BuildServiceProvider();
 
-        var compact = await SignAsync(pair, cancellationToken);
-        var verified = await pair.GetRequiredService<ISecurityEventTokenVerifier>()
+        // Signed by a transmitter that allows this algorithm, so what the row measures is the RECEIVING
+        // half alone: the signer's own policy would otherwise refuse before anything reached a verifier.
+        var compact = await SignAsync(BuildPair(key, [algorithm]), cancellationToken);
+
+        var verified = await host.GetRequiredService<ISecurityEventTokenVerifier>()
             .VerifyAsync(compact, cancellationToken: cancellationToken);
 
-        Assert.True(verified.TryGetSuccess(out _), $"{algorithm} was refused by the default set.");
+        Assert.Equal(acceptedByDefault, verified.TryGetSuccess(out _));
+
+        // And widening admits it, which is the move the documentation tells such a host to make.
+        var widened = BuildPair(key, [algorithm]);
+        var accepted = await widened.GetRequiredService<ISecurityEventTokenVerifier>()
+            .VerifyAsync(compact, cancellationToken: cancellationToken);
+
+        Assert.True(accepted.TryGetSuccess(out _), $"{algorithm} was refused after widening.");
+    }
+
+    /// <summary>
+    /// The refusal names the algorithm and the way out, rather than reading as a bad signature.
+    /// </summary>
+    /// <remarks>
+    /// A narrow default is only workable if the host that meets it can tell what happened. An algorithm
+    /// outside the set is a POLICY decision; answering it the way a tampered token is answered sends an
+    /// operator looking for an attacker while the fix is one line of configuration - which is the same
+    /// defect as a key-size refusal arriving as <c>invalid_signature</c>.
+    /// </remarks>
+    [Fact]
+    public async Task AnAlgorithmOutsideTheSet_IsRefusedAsAPolicyDecision()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = KeyFor(SigningAlgorithms.ES256);
+
+        var compact = await SignAsync(BuildPair(key, [SigningAlgorithms.ES256]), cancellationToken);
+        var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
+
+        var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
+            .VerifyAsync(compact, cancellationToken: cancellationToken);
+
+        Assert.True(verified.TryGetFailure(out var error));
+        Assert.NotEqual(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+        Assert.Contains(SigningAlgorithms.ES256, error.Description, StringComparison.Ordinal);
+        Assert.Contains(
+            nameof(SecurityEventsOptions.AllowedSigningAlgorithms),
+            error.Description,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -221,22 +262,30 @@ public class SigningAlgorithmPolicyTests
     [Fact]
     public void TheAllowlist_IsCopiedFromTheCaller()
     {
-        var caller = new[] { SigningAlgorithms.RS256, SigningAlgorithms.None };
-        var options = new SecurityEventsOptions { AllowedSigningAlgorithms = [SigningAlgorithms.RS256] };
+        // The caller's own array goes IN, which the first version of this row forgot to do - it built
+        // one and assigned a different literal, so deleting the copy left every test green.
+        var caller = new[] { SigningAlgorithms.RS256 };
+        var options = new SecurityEventsOptions { AllowedSigningAlgorithms = caller };
 
-        caller[1] = SigningAlgorithms.None;
+        caller[0] = SigningAlgorithms.None;
 
-        Assert.DoesNotContain(SigningAlgorithms.None, options.AllowedSigningAlgorithms!);
+        Assert.DoesNotContain(SigningAlgorithms.None, options.EffectiveSigningAlgorithms);
+
+        // And the way out, which the inbound copy alone leaves open: what the getter hands back is a copy
+        // too, so writing into it does not reach the signer.
+        options.AllowedSigningAlgorithms![0] = SigningAlgorithms.None;
+
+        Assert.DoesNotContain(SigningAlgorithms.None, options.EffectiveSigningAlgorithms);
     }
 
     /// <summary>
     /// A host binding the set from configuration REPLACES it rather than adding to it.
     /// </summary>
     /// <remarks>
-    /// The reason the property is an array. The collection binder reads a set, adds the configured
-    /// values and writes it back, so a deployment narrowing the list to ES256 would get ES256 AND
-    /// whatever the default carried - and would believe it had excluded the rest. An array is replaced
-    /// wholesale, which is what "narrow" has to mean.
+    /// What carries this is that the default lives OUTSIDE the property, not that the property is an
+    /// array: the binder reads whatever is there, adds the configured values and writes the result back,
+    /// and it unions an array exactly as it unions a set - measured on both. With nothing there, what it
+    /// writes back is exactly what was configured, which is what "narrow" has to mean.
     /// </remarks>
     [Fact]
     public void TheAllowlist_BoundFromConfiguration_ReplacesTheDefault()

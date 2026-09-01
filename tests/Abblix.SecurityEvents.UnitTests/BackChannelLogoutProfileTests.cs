@@ -228,4 +228,125 @@ public class BackChannelLogoutProfileTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(SecurityEventTokenErrorCode.Custom, error.Code);
     }
+    /// <summary>
+    /// The signature algorithm policy reaches a Logout Token, because the verifier is shared - so the
+    /// default admits RS256 and refuses ES256 until a host widens it.
+    /// </summary>
+    /// <remarks>
+    /// Every other row in this class substitutes an accepting verifier, which is right for what they
+    /// measure and is exactly why none of them can see this: the policy lives in the real one. Driven
+    /// through the whole profile with a REAL key and a real signature, because the claim is about what a
+    /// deployment meets, not about what a step does when asked directly.
+    /// <para>
+    /// RS256 is the case that must keep working without anybody configuring anything, and it is not a
+    /// coincidence: Back-Channel Logout 1.0 Section 2.6 names RS256 as the default for a Logout Token,
+    /// this server's own logout tokens carry it unless a client registered otherwise, and the security
+    /// event default is the same value. ES256 is the case that must be REFUSED and must say why - a host
+    /// whose provider signs that way widens the set, and the refusal is the only place it learns to.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, true)]
+    [InlineData(SigningAlgorithms.ES256, false)]
+    public async Task TheAlgorithmPolicy_ReachesALogoutToken(string algorithm, bool acceptedByDefault)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        JsonWebKey key = algorithm == SigningAlgorithms.ES256
+            ? JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            : JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm);
+
+        var compact = await SignedLogoutTokenAsync(key, algorithm, cancellationToken);
+
+        var result = await RealVerifierProfile(key).ValidateAsync(
+            compact, ReceiverOptions(), cancellationToken);
+
+        Assert.Equal(acceptedByDefault, result.TryGetSuccess(out _));
+
+        if (acceptedByDefault)
+            return;
+
+        // The refusal has to be actionable: a policy decision answered the way a tampered token is
+        // answered sends an operator looking for an attacker while the fix is one line of configuration.
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.NotEqual(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
+        Assert.Contains(algorithm, error.Description, StringComparison.Ordinal);
+        Assert.Contains(
+            nameof(SecurityEventsOptions.AllowedSigningAlgorithms),
+            error.Description,
+            StringComparison.Ordinal);
+
+        // And widening admits it, which is what the documentation tells such a host to do.
+        var widened = await RealVerifierProfile(key, [algorithm]).ValidateAsync(
+            compact, ReceiverOptions(), cancellationToken);
+
+        Assert.True(widened.TryGetSuccess(out _), $"{algorithm} was refused after widening.");
+    }
+
+    /// <summary>
+    /// A Logout Token signed for real, the way a provider emits one.
+    /// </summary>
+    private static async Task<string> SignedLogoutTokenAsync(
+        JsonWebKey key, string algorithm, CancellationToken cancellationToken)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddSecurityEvents(options =>
+        {
+            options.SigningKeySource = _ => Task.FromResult(key);
+            options.AllowedSigningAlgorithms = [algorithm];
+        });
+
+        await using var transmitter = services.BuildServiceProvider();
+
+        var built = new SecurityEventTokenBuilder(new FakeTimeProvider(Now))
+            .WithIssuer(Issuer)
+            .WithAudience(ClientId)
+            .WithJwtId("jti-1")
+            .WithSubject("user_456")
+            .WithClaim(IanaClaimTypes.Sid, "session_789")
+            .WithEvent(LogoutTokenClaims.BackChannelLogoutEvent)
+            .Build();
+
+        built.Token.Header.Type = JsonWebTokenTypes.LogoutToken;
+        built.Token.Payload.ExpiresAt = Now + TimeSpan.FromMinutes(5);
+
+        return await transmitter.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(built, cancellationToken);
+    }
+
+    /// <summary>
+    /// The logout profile with the REAL verifier, and the algorithm set a host would have.
+    /// </summary>
+    private static ISecurityEventTokenValidator RealVerifierProfile(
+        JsonWebKey key, string[]? allowedAlgorithms = null)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        services.AddSingleton<IIssuerKeyResolver>(new SingleKeyResolver(key));
+        services.AddSecurityEvents(options => options.AllowedSigningAlgorithms = allowedAlgorithms);
+
+        services.AddBackChannelLogoutReceiver(new BackChannelLogoutValidationOptions
+        {
+            ExpectedAudience = ClientId,
+            ExpectedIssuers = [Issuer],
+        });
+
+        return services.BuildServiceProvider()
+            .GetRequiredKeyedService<ISecurityEventTokenValidator>(ValidationProfileKeys.LogoutToken);
+    }
+
+    private sealed class SingleKeyResolver(JsonWebKey key) : IIssuerKeyResolver
+    {
+        public async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
+            string issuer,
+            string? keyId = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return key;
+        }
+    }
 }

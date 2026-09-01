@@ -74,15 +74,29 @@ public sealed class DefaultSecurityEventTokenVerifier(
         }
     }
 
-    private static SecurityEventTokenValidationError Translate(JwtValidationError error, bool noKeysResolved)
+    private SecurityEventTokenValidationError Translate(JwtValidationError error, bool noKeysResolved)
     {
         var code = error.Error switch
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
+
+            // An algorithm this deployment did not allow is a POLICY refusal, and it must not wear the
+            // answer a tampered token gets: an operator meeting invalid_signature goes looking for an
+            // attacker, where the fix is one line of configuration. The core has its own code for it,
+            // so the distinction exists and only needs carrying.
+            JwtError.InvalidAlgorithm => SecurityEventTokenErrorCode.MalformedToken,
+
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
             _ => SecurityEventTokenErrorCode.SignatureInvalid,
         };
 
-        return new SecurityEventTokenValidationError(code, error.ErrorDescription);
+        var description = error.Error == JwtError.InvalidAlgorithm
+            ? $"{error.ErrorDescription} This deployment accepts "
+              + $"{string.Join(", ", allowedAlgorithms)}; widen "
+              + $"{nameof(SecurityEventsOptions)}."
+              + $"{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)} to accept another."
+            : error.ErrorDescription;
+
+        return new SecurityEventTokenValidationError(code, description);
     }
 }
