@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Reflection;
 using System.Xml.Linq;
 
 namespace Abblix.DocSamples;
@@ -42,9 +41,14 @@ public sealed record DocSample(string Member, int Index, string Copy)
 /// look bigger than it was: the first could not see a one-line <c>&lt;code&gt;...&lt;/code&gt;</c> or a
 /// tag carrying an attribute, and the second parsed every run of <c>///</c> lines including those inside
 /// a block comment, which compiles silently and threw here. The compiler has already answered both
-/// questions by the time these files exist - they contain doc comments and nothing else - so the count
-/// they give is a fact about the samples rather than about a parser. It differs: 18 blocks against the
-/// 16 the last parser found.
+/// questions by the time these files exist - they contain doc comments and nothing else - so what they
+/// record is a fact about the samples rather than about a parser.
+/// </para>
+/// <para>
+/// It does NOT follow that every difference from a parser's count is the parser's fault. The raw tag
+/// count here is 18 against the sources' 16, and that gap is this reader's - see
+/// <see cref="BlockCount"/> - not the old parser's. Two true observations about the parsers carried a
+/// third that was never measured.
 /// </para>
 /// </remarks>
 public static class DocSampleReader
@@ -94,10 +98,56 @@ public static class DocSampleReader
     }
 
     /// <summary>
-    /// How many code blocks the compiler recorded across every documented library.
+    /// How many DISTINCT code samples the compiler recorded across every documented library.
     /// </summary>
+    /// <remarks>
+    /// Not the raw tag count, because Roslyn copies a primary-constructor type's whole doc comment onto
+    /// both <c>T:</c> and <c>M:...#ctor</c>, so one sample on such a type is recorded twice. Counting
+    /// tags made the total 18 where the sources hold 16, and reading that gap as a parser defect pointed
+    /// at the wrong site entirely: the earlier parser's 16 was right about this, and the duplication is
+    /// the reader's.
+    /// <para>
+    /// A constructor's blocks are dropped only when they are IDENTICAL to its declaring type's, which is
+    /// what the copy produces. Two members that genuinely carry the same sample are a different thing
+    /// and both still count.
+    /// </para>
+    /// </remarks>
     public static int BlockCount()
-        => Documents().Sum(document => document.Descendants("code").Count());
+    {
+        var blocks = Documents()
+            .SelectMany(document => document.Descendants("member"))
+            .Select(member => (
+                Name: (string?)member.Attribute("name") ?? string.Empty,
+                Texts: member.Descendants("code").Select(code => code.Value).ToArray()))
+            .Where(member => member.Texts.Length > 0)
+            .ToArray();
+
+        var byName = blocks.ToLookup(member => member.Name);
+
+        return blocks
+            .Where(member => !IsCopyOfItsType(member.Name, member.Texts, byName))
+            .Sum(member => member.Texts.Length);
+    }
+
+    /// <summary>
+    /// Whether this member is a primary constructor carrying its declaring type's doc comment verbatim.
+    /// </summary>
+    private static bool IsCopyOfItsType(
+        string name, string[] texts, ILookup<string, (string Name, string[] Texts)> byName)
+    {
+        const string ConstructorMarker = ".#ctor";
+
+        if (!name.StartsWith("M:", StringComparison.Ordinal))
+            return false;
+
+        var marker = name.IndexOf(ConstructorMarker, StringComparison.Ordinal);
+        if (marker < 0)
+            return false;
+
+        var declaringType = "T:" + name[2..marker];
+
+        return byName[declaringType].Any(type => type.Texts.SequenceEqual(texts, StringComparer.Ordinal));
+    }
 
     /// <summary>
     /// A block's text as lines, with the leading and trailing blank ones dropped.

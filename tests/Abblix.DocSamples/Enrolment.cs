@@ -48,7 +48,30 @@ public static class Enrolment
     ];
 
     /// <summary>
-    /// How many code blocks the compiler recorded that nothing here compiles.
+    /// How many projects under <c>src/</c> this project references, and therefore how many
+    /// documentation files must sit beside the tests.
+    /// </summary>
+    /// <remarks>
+    /// Asserted for equality rather than as a floor, and bumped by hand when a project is added, which
+    /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor let nine of the
+    /// eighteen references vanish with every row green, because those nine carry no sample today - so
+    /// the narrowing would have surfaced on the day somebody added one.
+    /// <para>
+    /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
+    /// and that is a hole rather than a tidiness: they emit documentation and ship inside the Mvc and
+    /// MinimalApi packages, so a sample written into either is invisible here. Referencing them was
+    /// tried and refused by the runtime - a generator assembly needs the compiler's own assemblies to
+    /// enumerate its types, which are not copied to a test output, so the stub row throws
+    /// <c>ReflectionTypeLoadException</c>. Carrying just their documentation would mean copying an XML
+    /// file out of another project's <c>bin</c> by path, which pins a framework name and a build order.
+    /// Named here rather than left to be discovered, because a cap nobody wrote down reads afterwards
+    /// as coverage.
+    /// </para>
+    /// </remarks>
+    public const int Libraries = 16;
+
+    /// <summary>
+    /// How many distinct code samples the compiler recorded that nothing here compiles.
     /// </summary>
     /// <remarks>
     /// A number rather than a list, because the list is what the enrolment above is for. It is meant to
@@ -61,5 +84,5 @@ public static class Enrolment
     /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
-    public const int Unenrolled = 14;
+    public const int Unenrolled = 12;
 }

@@ -115,7 +115,11 @@ public class DocSampleTests
 
         var enrolled = Enrolment.Compiled.Select(sample => sample.Copy).ToHashSet(StringComparer.Ordinal);
 
-        Assert.DoesNotContain(files, file => !enrolled.Contains(file!));
+        var orphans = files.Where(file => !enrolled.Contains(file!)).ToArray();
+
+        // Named, not merely counted: a bare "filter matched in collection" sends the reader to find the
+        // file by hand, and every other row in this file explains itself.
+        Assert.True(orphans.Length == 0, $"under Samples/ but enrolled by nothing: {string.Join(", ", orphans)}");
     }
 
     /// <summary>
@@ -140,7 +144,7 @@ public class DocSampleTests
         // library's file would do the same more quietly, which is the shape every narrowing here has
         // taken so far.
         var documents = DocSampleReader.Documents();
-        Assert.True(documents.Count >= 7, $"only {documents.Count} documentation file(s) beside the tests");
+        Assert.Equal(Enrolment.Libraries, documents.Count);
 
         var total = DocSampleReader.BlockCount();
         Assert.True(total > Enrolment.Compiled.Count, $"the documents carry {total} code block(s)");
@@ -159,8 +163,11 @@ public class DocSampleTests
     /// <para>
     /// Every Abblix assembly sitting BESIDE this one, which is what actually ships together. Two earlier
     /// versions were narrower and both looked complete: one type's assembly covered a third of the
-    /// surface, and <c>GetReferencedAssemblies</c> covered five of seven, because that is the reference
-    /// table the compiler EMITTED - trimmed to assemblies whose types the test code happens to touch.
+    /// surface, and <c>GetReferencedAssemblies</c> covered five of the seven then referenced, because
+    /// that is the reference table the compiler EMITTED - trimmed to assemblies whose types the test
+    /// code happens to touch. Sixteen are referenced now, which is <see cref="Enrolment.Libraries"/>
+    /// and is what the assertion below reads; the five-of-seven is the historical measurement, not the
+    /// current shape.
     /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
     /// shipped packages, and a stub named after a type in either passed.
     /// </para>
@@ -192,10 +199,15 @@ public class DocSampleTests
 
         // Controls, because every way this row has been weak was a SILENT narrowing of what it compares
         // against. An empty stub set passes the assertion below and measures nothing; so would a shipped
-        // set that lost a library, which is what both earlier versions did. The count is asserted rather
-        // than the names alone, so losing one is a failure rather than a quieter pass.
+        // set that lost a library, which is what both earlier versions did.
+        //
+        // An EQUALITY, not a floor. A floor of seven read as a control and was not one: measured, nine
+        // of the eighteen references could be dropped with every row here still green, because the nine
+        // carry no sample TODAY - so the narrowing would surface on the day somebody added one, which is
+        // the day it must not. Adding a project under src/ means bumping this number, which is the same
+        // deliberate moment the unenrolled count is built around.
         Assert.NotEmpty(stubs);
-        Assert.True(libraries.Length >= 7, $"only {libraries.Length} Abblix libraries sit beside the tests");
+        Assert.Equal(Enrolment.Libraries, libraries.Length);
         Assert.Contains(nameof(CustodianHeldKeys), shipped);
         Assert.Contains(nameof(AuthSession), shipped);
 
