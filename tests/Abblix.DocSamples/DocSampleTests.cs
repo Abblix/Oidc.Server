@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Xunit;
 
 namespace Abblix.DocSamples;
@@ -116,19 +118,31 @@ public class DocSampleTests
     }
 
     /// <summary>
-    /// No stub written to make a sample compile shadows a name the library ships.
+    /// No stub written to make a sample compile shadows a name any referenced library ships.
     /// </summary>
     /// <remarks>
     /// The weak seam of the whole gate. A sample calls into the integrator's own half - a notification
     /// service, a helper - and that half has to be stubbed here or nothing compiles. A stub that happens
-    /// to carry the name of something the library really ships would satisfy the compiler while hiding
-    /// the very rename this exists to catch, and the build would stay green through it.
+    /// to carry the name of something a library really ships would satisfy the compiler while hiding the
+    /// very rename this exists to catch, and the build would stay green through it.
+    /// <para>
+    /// EVERY referenced library, taken from what this assembly references rather than from a type that
+    /// happened to be at hand. Reading one assembly covered a third of the surface: <c>CustodianHeldKeys</c>
+    /// ships from Abblix.Jwt and is used by two of the four copies, and a stub of that name passed.
+    /// </para>
+    /// <para>
+    /// And every type, not only the exported ones - an internal name a sample reaches through
+    /// <c>InternalsVisibleTo</c> is shadowed just as quietly.
+    /// </para>
     /// </remarks>
     [Fact]
     public void NoStubShadowsATypeTheLibraryShips()
     {
-        var shipped = typeof(Abblix.Oidc.Server.Features.UserAuthentication.AuthSession).Assembly
-            .GetExportedTypes()
+        var shipped = typeof(DocSampleTests).Assembly
+            .GetReferencedAssemblies()
+            .Where(reference => reference.Name?.StartsWith("Abblix.", StringComparison.Ordinal) == true)
+            .Select(Assembly.Load)
+            .SelectMany(assembly => assembly.GetTypes())
             .Select(type => type.Name)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -138,8 +152,12 @@ public class DocSampleTests
             .Select(type => type.Name)
             .ToArray();
 
-        // The control again: an empty stub set passes the assertion below and measures nothing.
+        // Three controls. An empty stub set passes the assertion below and measures nothing, and a
+        // shipped set that lost a library would do the same - which is exactly how this row was weak
+        // before, reading one assembly out of three.
         Assert.NotEmpty(stubs);
+        Assert.Contains(nameof(CustodianHeldKeys), shipped);
+        Assert.Contains(nameof(AuthSession), shipped);
 
         Assert.DoesNotContain(stubs, shipped.Contains);
     }
