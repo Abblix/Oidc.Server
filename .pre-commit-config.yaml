@@ -48,10 +48,11 @@ repos:
         name: "Refuse a build XML file that does not parse"
         entry: python .github/scripts/lint-msbuild-xml.py
         language: python
-        # The XML extensions tracked here, which today is every XML file in the repository - checked,
-        # not assumed. It is still a list, so a .runsettings or an app.config arriving later would
-        # sit outside it; selecting on content rather than on extension is the general answer, and
-        # this is the cheap one.
+        # The XML the BUILD reads, by extension. Not every XML file tracked here: the .DotSettings
+        # documents are Rider's and break nothing, and an earlier version of this sentence claimed
+        # otherwise because it was checked with a search over *.xml, which could not have seen them.
+        # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
+        # content is the general answer, and this is the cheap one.
         files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
       - id: no-split-doc-comments
         name: "Block a doc comment that documents two members"

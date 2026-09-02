@@ -142,11 +142,7 @@ jobs:
           # Stated as what must be PRESENT - the dev identifier this workflow's own builds carry -
           # rather than as a list of the ways a tagged version can arrive here. The line itself is
           # read from the property the rest of the repository reads, so this step cannot hold a
-          # second opinion about it. Requiring the line is also what separates a real release from a
-          # name this step MISREAD: the extraction takes the trailing version-shaped run, so a
-          # pre-release identifier gaining a third part turns 2.4.0-dev.0.0.478 into 0.0.478, which
-          # is version-shaped, carries no dev identifier, and would otherwise be refused for a
-          # release tag that is not on the commit at all.
+          # second opinion about which line is being built.
           if [ ! -f Directory.Build.props ]; then
             echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
             exit 1
@@ -192,9 +188,11 @@ jobs:
           # is on this repository's line and has lost the dev identifier with the rest. Stripping
           # leading id segments instead keeps the whole version in every one of those names. Driven.
           #
-          # It assumes no package id here begins with a digit, which none does: one that did would be
-          # taken as the start of the version, and the line check below would refuse it - refusing, but
-          # for a cause that is not there, so this is the sentence to revisit if an id ever changes.
+          # It assumes no SEGMENT of a package id begins with a digit, which none here does. A segment
+          # that did would be taken as the start of the version, and what follows is usually a refusal
+          # naming a cause that is not there - but not always: an id segment shaped like a version can
+          # carry a dev identifier of its own and publish a release. Driven, on a contrived name. So
+          # this is the sentence to revisit if an id ever gains a digit-leading segment.
           VERSION=""
           REST=$BASE
           while [ -n "$REST" ]; do

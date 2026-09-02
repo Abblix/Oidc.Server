@@ -61,8 +61,14 @@ def double_hyphen_comment(path: str) -> bool:
     except OSError:
         return False
     # CDATA first: a literal "<!--" inside one is not a comment, and pointing the author at a comment
-    # that is legal is a detector crying wolf on a file it cannot help with. Driven on both.
-    outside = "".join(part.split("]]>", 1)[-1] for part in text.split("<![CDATA["))
+    # that is legal is a detector crying wolf on a file it cannot help with.
+    #
+    # The head is kept whole. It precedes every CDATA by construction, so dropping up to a "]]>" in
+    # it discards real text - and a stray "]]>" is ordinary in a file that did not parse, which is
+    # the only kind of file this runs on. Driven both ways: a comment before a mistyped opener, and
+    # a file with no CDATA at all and a stray "]]>" after the comment.
+    parts = text.split("<![CDATA[")
+    outside = parts[0] + "".join(part.split("]]>", 1)[-1] for part in parts[1:])
     return any("--" in chunk.split("-->", 1)[0] for chunk in outside.split("<!--")[1:])
 
 
