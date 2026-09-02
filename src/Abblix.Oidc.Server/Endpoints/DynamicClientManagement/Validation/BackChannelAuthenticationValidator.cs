@@ -43,7 +43,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 BackChannelClientNotificationEndpoint: not null,
             }:
                 return new OidcError(
-                    ErrorCodes.InvalidRequest,
+                    ErrorCodes.InvalidClientMetadata,
                     "Notification endpoint is invalid if the token delivery mode is set to poll");
 
             case {
@@ -53,7 +53,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 BackChannelClientNotificationEndpoint: null,
             }:
                 return new OidcError(
-                    ErrorCodes.InvalidRequest,
+                    ErrorCodes.InvalidClientMetadata,
                     "Notification endpoint is required if the token delivery mode is set to ping or push");
 
             // "not null and" is load-bearing since the null-mode exit moved below this switch: null is
@@ -66,14 +66,14 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     BackchannelTokenDeliveryModes.Push),
             }:
                 return new OidcError(
-                    ErrorCodes.InvalidRequest,
+                    ErrorCodes.InvalidClientMetadata,
                     "The specified token delivery mode is not supported");
         }
 
         // The VALUE, asked after the mode is settled and before a registration that names no mode can
-        // leave. It used to sit inside the switch behind a first case returning for a null delivery
-        // mode, so a registration naming the endpoint and no mode walked past unchecked and the
-        // address was stored - measured, 201 Created over plain HTTP.
+        // leave. It used to sit AFTER the switch, whose first case returned for a null delivery mode, so
+        // a registration naming the endpoint and no mode walked past unchecked and the address was
+        // stored - measured, 201 Created over plain HTTP.
         // Nothing else covers the member: StoredUriValidator asks absoluteness only, and
         // SubjectTypeValidator's arm needs a pairwise subject type.
         //
@@ -118,10 +118,13 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         //
         // Still ahead of the null-mode exit below, which is what the first paragraph is about.
         //
-        // invalid_client_metadata rather than invalid_request, because that is what a registration
-        // refusal is and what the same member already gets from StoredUriValidator when it is relative.
-        // One member answering with two codes told an integrator that two different kinds of thing had
-        // gone wrong.
+        // invalid_client_metadata, like every other refusal this validator writes. RFC 7591 defines no
+        // invalid_request for registration at all - it gives invalid_client_metadata both for a field
+        // whose value is wrong and for a request that is internally inconsistent, which is the two kinds
+        // of thing decided here - and it is what the same member already gets from StoredUriValidator
+        // when the address is relative. Changing this refusal alone left the poll and ping ones, about
+        // that same member, still answering invalid_request, so the two-codes-for-one-field problem
+        // outlived the fix written for it.
         if (context.Request.BackChannelClientNotificationEndpoint
             is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
         {
@@ -139,7 +142,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
             !jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))
         {
             return new OidcError(
-                ErrorCodes.InvalidRequest,
+                ErrorCodes.InvalidClientMetadata,
                 "The specified signing algorithm is not supported");
         }
 

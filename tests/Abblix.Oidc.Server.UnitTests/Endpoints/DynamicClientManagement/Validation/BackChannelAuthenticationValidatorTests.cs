@@ -101,7 +101,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -119,7 +119,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -181,7 +181,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -266,7 +266,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -351,7 +351,9 @@ public class BackChannelAuthenticationValidatorTests
         var result = await _validator.ValidateAsync(context);
 
         // The same code the relative case gets from StoredUriValidator ahead of this one in the
-        // pipeline, so the member answers with one code however it is wrong.
+        // pipeline. Every refusal this validator writes carries it, which is what makes the member
+        // answer with one code however it is wrong - changing only the scheme refusal left the poll
+        // and ping ones, about the same member, still saying invalid_request.
         Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
     }
 
@@ -375,6 +377,11 @@ public class BackChannelAuthenticationValidatorTests
     [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
     [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
     [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
+    // The ORDER, which nothing held: with the scheme check back above the mode arms this row reads
+    // "HTTPS scheme" instead, and every other row in both suites stays green. A poll client naming
+    // a plain-HTTP endpoint has two things wrong with it, and which one it is told about is the
+    // whole point of where the check sits.
+    [InlineData(BackchannelTokenDeliveryModes.Poll, "http://client.example/cb", null, "is invalid if")]
     [InlineData(BackchannelTokenDeliveryModes.Ping, "http://client.example/cb", null, "HTTPS scheme")]
     [InlineData(BackchannelTokenDeliveryModes.Poll, null, "NOPE", "signing algorithm is not supported")]
     public async Task ValidateAsync_EachRefusal_SaysWhichThingIsWrong(
@@ -421,8 +428,9 @@ public class BackChannelAuthenticationValidatorTests
     /// <remarks>
     /// The null-mode exit moved BELOW the switch so the endpoint check could see a registration that
     /// names no mode. That put null in reach of the unsupported-mode arm, which asks for a mode that is
-    /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null" for this
-    /// row, and removing it turns this row red rather than some distant one.
+    /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null", and
+    /// removing it turns fourteen rows red, twelve of them in another file: this is the one that says
+    /// WHY in a sentence, rather than the only one that speaks.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode()
