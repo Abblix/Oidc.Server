@@ -80,16 +80,18 @@ public sealed class DefaultSecurityEventTokenVerifier(
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
 
-            // A token whose STRUCTURE the core refuses - a malformed 'crit' header, an unusable 'jwk' -
-            // is a token that does not conform, not a key problem, so it goes to the code whose wire word
-            // is invalid_request rather than the one whose word is invalid_key. Without this a correctly
-            // signed SET with a bad 'crit' told the transmitter its keys were unacceptable.
+            // A token whose STRUCTURE the core refuses is a token that does not conform, not a key
+            // problem, so it goes to the code whose wire word is invalid_request rather than the one
+            // whose word is invalid_key. Without this a correctly signed SET with a bad 'crit' told the
+            // transmitter its keys were unacceptable.
             //
-            // Safe HERE and only here, because of the parameters built above: the issuer, audience and
-            // lifetime stages all return the token untouched when their option is not requested, and this
-            // verifier requests none of them - the SET pipeline asks those questions itself, in its own
-            // vocabulary. Adding one of those options to the parameters would put an expired or
-            // wrong-audience token into this arm, where "cannot be parsed" is false of it.
+            // What reaches this arm is 'crit' and nothing else, and that is a fact about the parameters
+            // built above rather than about the category. InvalidHeader has three producers: the two
+            // 'jwk' ones run only under UseEmbeddedVerificationKey, the JWE one only with a non-null
+            // ResolveTokenDecryptionKeys, and this verifier sets neither. So the question to ask before
+            // adding an option here is which InvalidHeader producer that option switches on - not
+            // whether a lifetime or audience verdict could arrive, which it cannot: those stages report
+            // InvalidToken at every one of their refusal sites and InvalidHeader at none.
             JwtError.InvalidHeader => SecurityEventTokenErrorCode.MalformedToken,
 
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
