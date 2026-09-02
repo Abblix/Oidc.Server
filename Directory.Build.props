@@ -43,7 +43,10 @@
        that the number after dev.0 counts from the ROOT COMMIT rather than from the last release.
 
        It is the FIRST-PARENT distance, which is checkable at any commit rather than quotable:
-       height + 1 == git rev-list --count --first-parent HEAD, exactly, at every commit measured.
+       the height plus one is the number of commits on the first-parent chain from HEAD, exactly,
+       at every commit measured. (The command is git rev-list counting first parents only; it
+       cannot be written out here, because an XML comment may not contain a double hyphen and a
+       props file that does breaks every project that imports it.)
        So it is not the count of everything reachable - the two differ by every commit that came
        in on the side of a merge, which here is over two hundred. Written as the relationship
        rather than as numbers on purpose: a height quoted in a comment is stale on the next push,
