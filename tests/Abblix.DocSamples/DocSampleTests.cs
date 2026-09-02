@@ -242,15 +242,9 @@ public class DocSampleTests
         // against. An empty stub set passes the assertion below and measures nothing; so would a shipped
         // set that lost a library, which is what both earlier versions did.
         //
-        // An EQUALITY, not a floor. A floor of seven read as a control and was not one: measured, nine
-        // of the SIXTEEN references could be dropped with every row here still green, because those
-        // nine carry no sample today. And it would never surface later either - a library whose
-        // documentation has left the output is invisible to the count, so a sample added there is not
-        // seen at all. The equality is the guard, and the reason is on Enrolment.Libraries rather than
-        // repeated here - a paraphrase is how the last correction ended up needing two sites.
-        //
-        // Adding a project under src/ means bumping this number, which is the same
-        // deliberate moment the unenrolled count is built around.
+        // The count is over the assemblies sitting beside the test output, not over the documentation
+        // files they carry. Why it is an equality rather than a floor, and when the number is bumped:
+        // Enrolment.Libraries says it once.
         Assert.NotEmpty(stubs);
         Assert.Equal(Enrolment.Libraries, libraries.Length);
         Assert.Contains(nameof(CustodianHeldKeys), shipped);
