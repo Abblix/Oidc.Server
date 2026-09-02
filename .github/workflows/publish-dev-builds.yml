@@ -140,27 +140,43 @@ jobs:
           # feed would then hold a binary nobody approved, with nothing to show the difference.
           #
           # Stated as what must be PRESENT - the dev identifier this workflow's own builds carry -
-          # rather than as a list of the ways a tagged version can arrive here.
-          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
+          # rather than as a list of the ways a tagged version can arrive here. The line itself is
+          # read from the property the rest of the repository reads, so this step cannot hold a
+          # second opinion about it. Requiring the line is also what separates a real release from a
+          # name this step MISREAD: the extraction takes the trailing version-shaped run, so a
+          # pre-release identifier gaining a third part turns 2.4.0-dev.0.0.478 into 0.0.478, which
+          # is version-shaped, carries no dev identifier, and would otherwise be refused for a
+          # release tag that is not on the commit at all.
+          EXPECTED=$(sed -n 's:.*<MinVerMinimumMajorMinor>\([0-9][0-9]*\.[0-9][0-9]*\)</MinVerMinimumMajorMinor>.*:\1:p' Directory.Build.props)
+          if [ -z "$EXPECTED" ]; then
+            echo "Could not read MinVerMinimumMajorMinor out of Directory.Build.props - there is nothing to check the built version against." >&2
+            exit 1
+          fi
+
+          # find is allowed to fail rather than end the step: a missing nupkg/ and an empty one are
+          # the same situation for whoever reads the log, and under set -e the missing directory
+          # would stop the run at find, with its message and none of the arm's.
+          rc=0
+          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
+          [ "$rc" -eq 0 ] || PKG=""
           VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
           case "$VERSION" in
-            [0-9]*.[0-9]*.[0-9]*-dev.*) echo "Dev build $VERSION - publishing." ;;
-            [0-9]*.[0-9]*.[0-9]*)
+            "")
+              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+              exit 1
+              ;;
+            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*)
               echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
               echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
               exit 1
               ;;
-            "")
-              # With no package there is no version, no tag and no release workflow involved, so this
-              # arm says that rather than borrowing a sentence about a release that is not there.
-              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
-              exit 1
-              ;;
             *)
-              # Anything that is not a version at all: the name did not parse, so nothing here can
-              # say why. Saying "a release tag is on this commit" of it would name a cause that is
-              # not there - the arm above owns that sentence and requires the version shape first.
-              echo "Refusing to publish: could not read a version out of the package name, got '$VERSION'." >&2
+              # Not on the line this repository builds, and the two ways that happens cannot be told
+              # apart from here - so the message names both rather than picking the one that reads
+              # better.
+              echo "Refusing to publish: read '$VERSION' out of '$PKG', which is not on the $EXPECTED line this repository builds." >&2
+              echo "Either the package name was misread, or the version line moved and this workflow was not told." >&2
               exit 1
               ;;
           esac

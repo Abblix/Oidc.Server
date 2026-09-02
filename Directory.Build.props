@@ -54,10 +54,10 @@
 
        Setting MinVerTagPrefix alone would not help and does not leave the rest alone: seven older
        tags ARE three-part (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1), and v2.0.1
-       is reachable from master - measured, master's version moved from 2.4.0-dev.0.53 to
-       2.4.0-dev.0.15 with the prefix set. Moving a published number BACKWARDS is the direction
-       that collides silently. The two four-part tags are not part of that risk: measured, MinVer
-       does not read a four-part tag either.
+       is reachable from master - measured, setting the prefix shortens master's height from the
+       whole first-parent distance to the distance since v2.0.1, so its published number moves
+       BACKWARDS, which is the direction that collides silently. The two four-part tags are not
+       part of that risk: measured, MinVer does not read a four-part tag either.
 
        The run summary derives all three parts of the version it prints rather than re-asserting a
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
