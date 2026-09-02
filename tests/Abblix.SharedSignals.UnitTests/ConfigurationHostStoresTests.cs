@@ -258,25 +258,23 @@ public class ConfigurationHostStoresTests
 
         using (var before = new DistributedCacheEventOutbox(sharedCache))
         {
-            await before.EnqueueAsync(
-                "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
-            await before.EnqueueAsync(
-                "s-1", new OutboxItem("jti-2", "b.b.b"), TestContext.Current.CancellationToken);
+            await before.EnqueueAsync("tenant", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+            await before.EnqueueAsync("tenant", "s-1", new OutboxItem("jti-2", "b.b.b"), TestContext.Current.CancellationToken);
         }
 
         using var after = new DistributedCacheEventOutbox(sharedCache);
         Assert.Equal(
             ["jti-1", "jti-2"],
-            (await after.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
+            (await after.PendingAsync("tenant", "s-1", null, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
 
-        await after.AcknowledgeAsync("s-1", ["jti-1"], TestContext.Current.CancellationToken);
+        await after.AcknowledgeAsync("tenant", "s-1", ["jti-1"], TestContext.Current.CancellationToken);
         var remaining = Assert.Single(
-            await after.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+            await after.PendingAsync("tenant", "s-1", null, TestContext.Current.CancellationToken));
         Assert.Equal("jti-2", remaining.JwtId);
 
-        await after.ClearAsync("s-1", TestContext.Current.CancellationToken);
-        Assert.Empty(await after.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        await after.ClearAsync("tenant", "s-1", TestContext.Current.CancellationToken);
+        Assert.Empty(await after.PendingAsync("tenant", "s-1", null, TestContext.Current.CancellationToken));
     }
 
     [Fact]

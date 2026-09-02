@@ -231,6 +231,7 @@ public sealed partial class EventDispatcher(
 
         var compactToken = await builder.SignAsync(signer, cancellationToken);
         await outbox.EnqueueAsync(
+            stream.ReceiverId,
             stream.StreamId,
             new OutboxItem(jwtId, compactToken, asStatusAnnouncement),
             cancellationToken);

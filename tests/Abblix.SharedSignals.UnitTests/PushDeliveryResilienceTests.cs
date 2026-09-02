@@ -58,7 +58,7 @@ public class PushDeliveryResilienceTests
         await using var provider = services.BuildServiceProvider();
 
         var outbox = provider.GetRequiredService<IEventOutbox>();
-        await outbox.EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
         var sender = provider.GetRequiredService<PushDeliverySender>();
         var stream = new StreamState
