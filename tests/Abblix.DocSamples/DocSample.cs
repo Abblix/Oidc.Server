@@ -103,8 +103,8 @@ public static class DocSampleReader
             .SelectMany(metadata => (metadata.Value ?? string.Empty).Split(
                 ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             // Distinct, so the COUNT cannot be satisfied by a repeat standing in for an omission:
-            // sixteen names with one twice and one missing passes every other row, and two projects
-            // in different directories sharing a file name would produce exactly that.
+            // measured, sixteen names with one twice and one missing passed every row before this,
+            // and turns the count red at fifteen after it.
             .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();

@@ -93,8 +93,8 @@ public static class Enrolment
     /// deleted item group (no attribute at all), and the group placed above the references it reads
     /// (the attribute present with an empty value). Only the third is literally empty, which an
     /// earlier version of this sentence claimed of all three. Measured: renaming the key alone left
-    /// all four rows green. The version before it threw when its input was missing, which is a worse design
-    /// with a better failure.
+    /// all four rows green. The version before it threw when its input was missing, which is a worse
+    /// design with a better failure.
     /// </para>
     /// </remarks>
     public const int References = 16;
