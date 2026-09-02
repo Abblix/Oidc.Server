@@ -55,6 +55,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     /// <summary>The JSON member every refusal in this suite reads its code out of.</summary>
     private const string ErrorMember = "error";
 
+    /// <summary>The JSON member carrying the human-readable half of a refusal.</summary>
+    private const string DescriptionMember = "error_description";
+
     private const string VendorTier = "x_vendor_tier";
 
     // The member every size test pads with: named once so the boundary cases and the oversized cases
@@ -171,7 +174,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // members has nothing to act on otherwise.
         Assert.Contains(
             RequestMembers.ApplicationType,
-            body["error_description"]!.GetValue<string>(),
+            body[DescriptionMember]!.GetValue<string>(),
             StringComparison.Ordinal);
     }
 
@@ -252,7 +255,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // pair, which it does not: no member name contains it and it contains none, so a plain
         // Contains would catch the same plant.
         var body = await ReadJsonAsync(response);
-        var description = body["error_description"]!.GetValue<string>();
+        var description = body[DescriptionMember]!.GetValue<string>();
         Assert.True(
             Regex.IsMatch(
                 description,
@@ -350,7 +353,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
         // The unit theory is what catches it, by asking the validator directly.
         var body = await ReadJsonAsync(response);
-        var description = body["error_description"]!.GetValue<string>();
+        var description = body[DescriptionMember]!.GetValue<string>();
         Assert.True(
             Regex.IsMatch(
                 description,
@@ -489,7 +492,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // The MEMBER, not just the code: twenty-odd validators answer invalid_client_metadata, so the
         // code alone stays green when some other one refuses for some other reason, and what proves this
         // validator ran would live only in a mutation outside the suite.
-        var description = body["error_description"];
+        var description = body[DescriptionMember];
         Assert.NotNull(description);
         Assert.Contains(
             RequestMembers.JwksUri, description.GetValue<string>(), StringComparison.Ordinal);
