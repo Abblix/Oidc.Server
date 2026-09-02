@@ -52,6 +52,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
     // Named once: the same member is written into a request and looked for in a response and in an
     // extension's view, and those three have to agree.
+    /// <summary>The JSON member every refusal in this suite reads its code out of.</summary>
+    private const string ErrorMember = "error";
+
     private const string VendorTier = "x_vendor_tier";
 
     // The member every size test pads with: named once so the boundary cases and the oversized cases
@@ -122,7 +125,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        var error = body["error"];
+        var error = body[ErrorMember];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
     }
@@ -162,7 +165,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
 
         // The member by name: an operator reading "invalid_client_metadata" over a body carrying thirty
         // members has nothing to act on otherwise.
@@ -329,7 +332,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var body = await ReadJsonAsync(response);
         var description = body["error_description"]!.GetValue<string>();
         Assert.True(
-            Regex.IsMatch(description, $@"(?<!\w){Regex.Escape(member)}(?!\w)"),
+            Regex.IsMatch(
+                description,
+                $@"(?<!\w){Regex.Escape(member)}(?!\w)",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(1)),
             $"the refusal does not name {member}: {description}");
     }
 
@@ -415,7 +422,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        var error = body["error"];
+        var error = body[ErrorMember];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
     }
@@ -455,7 +462,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        var error = body["error"];
+        var error = body[ErrorMember];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.GetValue<string>());
 
