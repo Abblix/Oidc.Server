@@ -32,10 +32,18 @@
        that workflow still carries is a worked EXAMPLE in its header comment, which a bump should
        follow but which no consumer ever reads.
 
-       Also worth knowing when the line moves: MinVerMinimumMajorMinor only LIFTS a version below
-       it. Once a v2.4 tag is reachable and this still says 2.4, MinVer's patch auto-increment
-       takes over and dev builds become 2.4.1-dev.*, not 2.4.0-dev.*. The summary derives the whole
-       three-part number for that reason. -->
+       Also worth knowing when the line moves: this property is not merely a floor here, it is the
+       whole source of the number. MinVer reads no tag in this repository - the tags are two-part
+       and v-prefixed (v2.3), MinVerTagPrefix is set nowhere so the prefix is never stripped, and
+       they sit on master rather than on develop. Measured, MinVer reports "No commit found with a
+       valid SemVer 2.0 version" and then lifts its 0.0.0 default to this line. So the height is
+       counted from the root commit, and moving this property is the only thing that moves the
+       version dev builds publish under.
+
+       The run summary derives all three parts of the version rather than re-asserting a zero
+       patch. That is right whatever the tags do: NuGet floats only the release label, so a range
+       written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build, and deriving costs
+       nothing. -->
   <PropertyGroup>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>

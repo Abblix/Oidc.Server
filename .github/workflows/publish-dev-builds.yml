@@ -2,20 +2,27 @@ name: Publish dev build to GitHub Packages
 
 # Triggered on every push to develop and to any release/* branch, so a release branch
 # can be integration-tested against downstream consumers without cherry-picking its
-# fixes back to develop first. MinVer (configured in Directory.Build.props) computes the
-# package version from git tags + commit height; this workflow just packs and pushes the
-# resulting .nupkg files to nuget.pkg.github.com/Abblix.
+# fixes back to develop first. MinVer (configured in Directory.Build.props) computes the package
+# version; this workflow just packs and pushes the resulting .nupkg files to
+# nuget.pkg.github.com/Abblix.
 #
 # Directory.Build.props' MinVerMinimumMajorMinor is the ONE place that decides the line; the numbers
 # below are an illustration of it and nothing reads them. The run summary derives its range from the
 # version actually built, so these examples can mislead a READER of this file - which is why they are
 # kept current - but they are no longer what reaches a consumer.
 #
-# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   pre-tag develop, 5 commits since v2.3  ->  2.4.0-dev.0.5
-#   after v2.4 is tagged, 5 more commits   ->  2.4.1-dev.0.5   (the minimum only LIFTS a version)
-#   tagged v2.4.0-beta1                    ->  2.4.0-beta1
-#   tagged v2.4.0                          ->  2.4.0
+# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0), and
+# these are MEASURED rather than modelled - see the note below about tags:
+#   develop at commit height 469           ->  2.4.0-dev.0.469
+#   a release, version supplied by hand    ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
+#
+# MinVer reads NO tag in this repository, which is worth knowing before reasoning about what it
+# will produce. The tags are two-part and v-prefixed (v2.3), MinVerTagPrefix is set nowhere, so
+# none of them parses as a version; and they live on master, not on the branch this workflow
+# builds. So the height is counted from the ROOT COMMIT, and the whole version comes from
+# MinVerMinimumMajorMinor lifting a 0.0.0 default. Run against this worktree, MinVer says so in as
+# many words: "No commit found with a valid SemVer 2.0 version", then "Bumping version to
+# 2.4.0-dev.0.472 to satisfy minimum major minor 2.4".
 #
 # Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
 # consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
@@ -147,17 +154,36 @@ jobs:
           # And once the case is corrected the name is still the wrong key: Abblix.OIDC.Server is a
           # PREFIX of Abblix.OIDC.Server.MVC, so head -1 over the family can hand back a file whose
           # remainder is "MVC.2.4.0-dev.0.469" - a version string with a package fragment inside it.
+          # (The casing is unpredictable in general: PackageId also uppercases API, CAEP and RISC.)
           #
           # A version has a shape, so take the trailing three-part number and let the name be
           # whatever it is. sort makes the pick deterministic rather than dependent on directory
           # order.
-          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | head -1)
+          # sed -n 1p rather than head -1: head closes the pipe after one line, so a long enough
+          # listing gives sort a SIGPIPE, pipefail turns that into 141, and set -e kills the step
+          # with no summary written. Driven at 20000 files to see it. sed reads to the end.
+          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
           if [ -n "$PKG" ]; then
             VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
+
+            # The extraction is greedy, so it takes the LAST version-shaped tail. That is right for
+            # every name here, digits in the name included, and it stops being right if the
+            # pre-release ever gains a third identifier - MinVerDefaultPreReleaseIdentifiers of
+            # "dev.0.0" would make 2.4.0-dev.0.0.469 extract as 0.0.469. Anchoring from the left
+            # instead just moves the hazard onto names containing digits, so the answer is not a
+            # cleverer pattern but a CHECK on what came out: anything that is not a version stops
+            # the summary and says why, rather than printing a range nobody can resolve.
+            case "$VERSION" in
+              [0-9]*.[0-9]*.[0-9]*) ;;
+              *)
+                echo "Could not read a version out of $PKG - got '$VERSION'." >&2
+                exit 1
+                ;;
+            esac
             {
               echo "## Dev build published"
               echo ""
-              echo "Version: \`$VERSION\` (derived by MinVer from git tags + height)"
+              echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
               echo ""
               echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
               echo ""
