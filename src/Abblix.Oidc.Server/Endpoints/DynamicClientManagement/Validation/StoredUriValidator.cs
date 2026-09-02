@@ -77,19 +77,32 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
         => uri is { IsAbsoluteUri: false } ? Relative(name) : null;
 
     /// <summary>
-    /// An array member: an absent or empty list passes, any element that is not an absolute URI is
-    /// refused.
+    /// An array member: every element answered by the rule above, plus the one rule an element has and a
+    /// member does not.
     /// </summary>
     /// <remarks>
-    /// A null ELEMENT answers differently from a null member - it was sent, and it names nothing - and
-    /// the pattern form is also what keeps this from dereferencing it. A registration body is
-    /// attacker-shaped JSON and the deserializer honours no annotation against an explicit null, so
-    /// <c>[null]</c> is reachable and once faulted the endpoint.
+    /// A null ELEMENT is refused where a null MEMBER passes. The member was never sent and absence is
+    /// not a bad address; the element was sent and names nothing. Written out rather than folded into
+    /// the single-value rule, because that difference is the whole reason the two are separate methods -
+    /// and because a registration body is attacker-shaped JSON where the deserializer honours no
+    /// annotation against an explicit null, so <c>[null]</c> is reachable and once faulted the endpoint.
     /// </remarks>
     private static OidcError? Validate(string name, Uri[]? uris)
-        => uris is { Length: > 0 } && Array.Exists(uris, uri => uri is not { IsAbsoluteUri: true })
-            ? Relative(name)
-            : null;
+    {
+        if (uris is null)
+            return null;
+
+        foreach (var uri in uris)
+        {
+            if (uri is null)
+                return Relative(name);
+
+            if (Validate(name, uri) is { } error)
+                return error;
+        }
+
+        return null;
+    }
 
     private static OidcError Relative(string member)
         => ErrorFactory.InvalidClientMetadata($"The {member} is not an absolute URI");
