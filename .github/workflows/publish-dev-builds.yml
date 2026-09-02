@@ -163,7 +163,9 @@ jobs:
           # here and in a project's context there: a property conditioned on $(Configuration) reads
           # empty standalone and 2.4 under Release. Driven. Today's is unconditional, so this changes
           # nothing and costs one flag - and the case it forecloses is a good build refused for a
-          # cause that is not there, which is this step's whole subject.
+          # cause that is not there, which is this step's whole subject. It closes ONE dimension of
+          # standing alone, not the difference: driven, a property conditioned on $(TargetFramework)
+          # still reads empty here and 2.4 once that is supplied too.
           #
           # MSBuild's stderr is NOT discarded: -getProperty puts the value alone on stdout, so an
           # error or a warning cannot reach EXPECTED, and throwing it away would leave this step
@@ -183,58 +185,52 @@ jobs:
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
           [ "$rc" -eq 0 ] || PKG=""
           BASE=$(basename "$PKG" .nupkg)
-          VERSION=$(printf '%s' "$BASE" | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
 
-          # The dev identifier is read off the WHOLE NAME and the line off the extracted version, and
-          # both are needed: the extraction takes the trailing version-shaped run, so a pre-release
-          # identifier with a third part hands back a fragment. 2.4.0-dev.0.0.478 extracts as 0.0.478,
-          # which is off the line; 2.4.0-dev.2.4.478 extracts as 2.4.478, which is ON it and has lost
-          # the dev identifier with the rest. Driven, both of them. Checking only the shape passed the
-          # first to the release arm and checking only the line passed the second, so each is refused
-          # for what it is - a name this step could not read - rather than for a release tag that is
-          # not on the commit.
+          # The version is the FIRST version-shaped suffix, not the last. Taking the last is what made
+          # the earlier readings wrong: a pre-release identifier with a third part hands back a
+          # fragment - 2.4.0-dev.0.0.478 came out as 0.0.478, and 2.4.0-dev.2.4.478 as 2.4.478, which
+          # is on this repository's line and has lost the dev identifier with the rest. Stripping
+          # leading id segments instead keeps the whole version in every one of those names. Driven.
+          #
+          # It assumes no package id here begins with a digit, which none does: one that did would be
+          # taken as the start of the version, and the line check below would refuse it - refusing, but
+          # for a cause that is not there, so this is the sentence to revisit if an id ever changes.
+          VERSION=""
+          REST=$BASE
+          while [ -n "$REST" ]; do
+            case "$REST" in
+              [0-9]*.[0-9]*.[0-9]*) VERSION=$REST; break ;;
+            esac
+            case "$REST" in
+              *.*) REST=${REST#*.} ;;
+              *) REST="" ;;
+            esac
+          done
+
           if [ -z "$VERSION" ]; then
-            echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+            if [ -z "$PKG" ]; then
+              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+            else
+              echo "Refusing to publish: no version could be read out of '$PKG'." >&2
+            fi
             exit 1
           fi
 
-          case "$BASE" in
-            *-dev.*)
-              case "$VERSION" in
-                "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
-                *-dev.*)
-                  # Read as a dev version, just not this repository's line. That is the version line
-                  # having moved, or the name having been misread into another line's shape, and the
-                  # two cannot be told apart from here.
-                  echo "Refusing to publish $VERSION: it is a dev build off the $EXPECTED line this repository builds." >&2
-                  echo "Either the version line moved and this workflow was not told, or the name was misread." >&2
-                  exit 1
-                  ;;
-                *)
-                  # The name carries the dev identifier and the version read out of it does not, so
-                  # the extraction lost it, which is a misread.
-                  echo "Refusing to publish: '$BASE' names a dev build, but the version read out of it is '$VERSION'." >&2
-                  echo "The name was misread, so nothing here can say what this package holds." >&2
-                  exit 1
-                  ;;
-              esac
+          # Both halves, on the version alone now that it arrives whole: the dev identifier this
+          # workflow's own builds carry, and the line this repository builds.
+          case "$VERSION" in
+            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*)
+              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              exit 1
               ;;
             *)
-              case "$VERSION" in
-                "$EXPECTED".*)
-                  echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
-                  echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
-                  exit 1
-                  ;;
-                *)
-                  # Neither a dev name nor a version on this repository's line, and the two ways that
-                  # happens cannot be told apart from here - so the message names both rather than
-                  # picking the one that reads better.
-                  echo "Refusing to publish: read '$VERSION' out of '$PKG', which is not on the $EXPECTED line this repository builds." >&2
-                  echo "Either the package name was misread, or the version line moved and this workflow was not told." >&2
-                  exit 1
-                  ;;
-              esac
+              # On neither count: the version line may have moved, or the name may not be one this
+              # step can read. The two cannot be told apart from here, so the message names both.
+              echo "Refusing to publish $VERSION: it is not on the $EXPECTED line this repository builds." >&2
+              echo "Either the version line moved and this workflow was not told, or '$PKG' is not a name this step can read." >&2
+              exit 1
               ;;
           esac
 

@@ -60,7 +60,10 @@ def double_hyphen_comment(path: str) -> bool:
         text = read_text(path)
     except OSError:
         return False
-    return any("--" in chunk.split("-->", 1)[0] for chunk in text.split("<!--")[1:])
+    # CDATA first: a literal "<!--" inside one is not a comment, and pointing the author at a comment
+    # that is legal is a detector crying wolf on a file it cannot help with. Driven on both.
+    outside = "".join(part.split("]]>", 1)[-1] for part in text.split("<![CDATA["))
+    return any("--" in chunk.split("-->", 1)[0] for chunk in outside.split("<!--")[1:])
 
 
 def main(paths: list[str]) -> int:

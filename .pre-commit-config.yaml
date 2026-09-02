@@ -45,12 +45,13 @@ repos:
         # check, or the list is edited by whoever is not looking at what it holds.
         files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
       - id: msbuild-xml-parses
-        name: "Refuse an MSBuild file that does not parse as XML"
+        name: "Refuse a build XML file that does not parse"
         entry: python .github/scripts/lint-msbuild-xml.py
         language: python
-        # Every XML tracked here, rather than the extensions that came to mind: a solution file, a
-        # nuget.config and the coverage settings break on the identical double hyphen, and the file
-        # nobody thought to name is the one that would ship broken.
+        # The XML extensions tracked here, which today is every XML file in the repository - checked,
+        # not assumed. It is still a list, so a .runsettings or an app.config arriving later would
+        # sit outside it; selecting on content rather than on extension is the general answer, and
+        # this is the cheap one.
         files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
       - id: no-split-doc-comments
         name: "Block a doc comment that documents two members"
