@@ -302,6 +302,7 @@ public static class DistributedCacheExtensions
 	/// EXPIRED arm, which is where the removal half of the sentence above gets its site. That arm is
 	/// evaluated before the authorized one, so a poll arriving after the lifetime ran out removes the
 	/// record ungated while another poll holds it.
+	/// </para>
 	/// <para>
 	/// The denied arm removes it too, and it is not named here because it needs a race the expired arm
 	/// does not. A hold is entered only on an AUTHORIZED record, and a denial is applied by a read-then-
@@ -310,7 +311,6 @@ public static class DistributedCacheExtensions
 	/// remarks file as issue 194, which re-reading narrows and does not close. Offering an operator both
 	/// explanations for a value lost under a hold would send them to the likelier-sounding one; the
 	/// expired arm needs no race at all.
-	/// </para>
 	/// </para>
 	/// <para>
 	/// So the value returned is the value at the key when this caller got IN, which is a narrower window

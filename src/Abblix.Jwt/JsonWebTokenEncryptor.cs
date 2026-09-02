@@ -209,7 +209,7 @@ internal class JsonWebTokenEncryptor(
             // JWS extension would silently make the same name acceptable on a JWE envelope, where
             // it means something else and where the handler was never written to run.
             return new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.InvalidHeader,
                 $"Unknown critical header parameter in JWE header: {crit[0]}");
         }
 

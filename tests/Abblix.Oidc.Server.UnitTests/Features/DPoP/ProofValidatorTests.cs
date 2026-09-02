@@ -160,15 +160,35 @@ public class ProofValidatorTests
         Assert.Equal(ProofErrorReasons.InvalidAlgorithm, error.Reason);
     }
 
+    /// <summary>
+    /// A header refusal that came from the JWT CORE is reported as a header problem, not as a key one.
+    /// </summary>
+    /// <remarks>
+    /// The core reports an unusable <c>jwk</c>, a malformed <c>crit</c> and a missing required header
+    /// under one category and cannot say which a consumer met, so a mapping to <c>invalid_jwk</c> was a
+    /// claim this seam is not entitled to make: measured, a proof whose <c>jwk</c> was perfectly good
+    /// and whose <c>crit</c> named an unhandled extension was answered "invalid_jwk" with a description
+    /// about <c>crit</c> beside it, in one line. The description still names the actual cause, because
+    /// the core writes it where the branch is known.
+    /// <para>
+    /// <c>invalid_jwk</c> survives for the case this validator establishes ITSELF - private key material
+    /// in the <c>jwk</c> - which is the row below.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public async Task ValidateAsync_HeaderMissingJwk_ReturnsInvalidJwk()
+    public async Task ValidateAsync_HeaderMissingJwk_ReturnsInvalidHeader()
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { IncludeJwk = false }.Build();
 
         var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidHeader, error.Reason);
+
+        // The specific cause is on Detail, and this is the only reader of it - the library puts it in no
+        // response and no log, because the core writes that sentence by quoting the token. A host gets
+        // it the same way this row does, off the ProofError its own call returned.
+        Assert.Contains("jwk", error.Detail ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

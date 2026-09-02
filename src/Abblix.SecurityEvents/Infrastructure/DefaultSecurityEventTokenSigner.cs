@@ -17,18 +17,44 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// <remarks>
 /// The key source is asked per signing rather than once, so key rotation on the host's side takes
 /// effect on the next token instead of the next restart. The signing algorithm follows the key,
-/// as the core derives it, which keeps the "alg" header and the key material from disagreeing.
+/// and this signer writes it into the header rather than letting the core derive it, so that what
+/// was judged against the allowlist is what the token is signed with.
 /// </remarks>
 /// <param name="creator">The JWT core's token creator.</param>
 /// <param name="signingKeySource">Supplies the private key each signing uses.</param>
+/// <param name="allowedAlgorithms">What this deployment will sign with.</param>
 public sealed class DefaultSecurityEventTokenSigner(
     IJsonWebTokenCreator creator,
-    Func<CancellationToken, Task<JsonWebKey>> signingKeySource) : ISecurityEventTokenSigner
+    Func<CancellationToken, Task<JsonWebKey>> signingKeySource,
+    string[] allowedAlgorithms) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
+    /// <exception cref="InvalidOperationException">The key names no algorithm, or one this deployment
+    /// does not allow.</exception>
     public async Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
     {
         var signingKey = await signingKeySource(cancellationToken);
+
+        // Refused here rather than left to the key, because the core's rule for a key that names no
+        // algorithm and a header that names none either is to fall through to "none" - which would emit
+        // an event stating nothing about who issued it. A key whose algorithm this deployment did not
+        // allow is the same failure with a name on it: the host configured a policy and a key that
+        // disagree, and the honest moment to say so is before a receiver has to.
+        // The same value the core will resolve, computed here so it can be judged before anything is
+        // signed. The core's rule after its own two refusals - a header and a key naming different
+        // algorithms, and a header saying "none" with a key present - is exactly this expression, so
+        // nothing is written back: doing so would agree with the core at the cost of making both of
+        // those refusals unreachable, and neither of them is ours to remove.
+        if ((signingKey.Algorithm ?? token.Token.Header.Algorithm) is not { } algorithm ||
+            !Array.Exists(allowedAlgorithms, allowed => allowed == algorithm))
+        {
+            throw new InvalidOperationException(
+                $"A security event token cannot be signed with "
+                + $"'{signingKey.Algorithm ?? token.Token.Header.Algorithm ?? "no algorithm"}': this "
+                + $"deployment allows {string.Join(", ", allowedAlgorithms)}. Configure a signing key "
+                + $"declaring one of those, or widen "
+                + $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)}.");
+        }
 
         return await creator.IssueAsync(token.Token, signingKey);
     }

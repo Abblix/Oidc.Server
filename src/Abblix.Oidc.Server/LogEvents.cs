@@ -659,7 +659,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Features/Licensing/LicenseManager.cs</c> - license lifecycle events
-        /// (expiring soon, grace period, expired) (sub-range 8020-8039).
+        /// (expiring soon, grace period, expired, a renewal granting less) (sub-range 8020-8039).
         /// </summary>
         public static class LicenseManager
         {
@@ -668,6 +668,7 @@ internal static class LogEvents
             public const int LicenseExpiringSoon = Base + 1;
             public const int LicenseInGracePeriod = Base + 2;
             public const int LicenseExpired = Base + 3;
+            public const int RenewalGrantsLess = Base + 4;
         }
     }
 
