@@ -107,7 +107,7 @@ public class WwwAuthenticateTests
     [InlineData("keeps obs-text é", "keeps obs-text é")]
 
     // Every END of every emitted range, because a row in the middle of a range says nothing about
-    // where it stops: measured, each bound could be moved by one with all 311 rows green, so the
+    // where it stops: measured, each bound could be moved by one with all 313 rows green, so the
     // builder could go back to replacing a legal character - the defect this theory exists to close,
     // one character along - or start emitting a forbidden one.
     //

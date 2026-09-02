@@ -94,9 +94,17 @@ public static class WwwAuthenticate
             // every byte of a multi-byte character lands inside that range. Under Latin-1, U+0080 to
             // U+00FF go out as themselves, which IS obs-text - measured, not assumed - and only a
             // character above U+00FF is substituted, by a best-fit mapping that yields a letter as
-            // readily as a question mark. Either way nothing emitted here can become CR, LF or DQUOTE,
-            // which is the property that matters; a surrogate pair passes the condition whole, though
-            // what reaches the wire is the encoder's business rather than this method's.
+            // readily as a question mark. A surrogate pair passes the condition whole; what reaches the
+            // wire is the encoder's business rather than this method's.
+            //
+            // CR and LF cannot arrive that way under any of them - swept, no code point best-fits onto
+            // either. DQUOTE CAN: Latin-1 maps six characters (U+02BA, U+030E, the three curly quotes
+            // and U+FF02) onto 0x22, so a host that configures a lossy response-header encoder can have
+            // one of them close the quoted-string this method carefully escaped. That is not a defect
+            // here - refusing obs-text to pre-empt it would break the grammar this whole loop follows,
+            // and it is the host's encoder that manufactures the byte - but it is the reason the safety
+            // sentence stops at CR and LF. An earlier draft said "nothing can become CR, LF or DQUOTE",
+            // which was true of a surrogate half and false once promoted to everything emitted.
             //
             // Anything else is replaced rather than emitted, because it has no place in the grammar and
             // CR or LF would end the header field outright. The comment here used to say such a value
