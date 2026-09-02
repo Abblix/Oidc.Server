@@ -43,10 +43,10 @@ public static class Enrolment
     /// FALL: every sample enrolled takes one off it, and a sample added to the library puts one on, which
     /// is the moment somebody has to decide.
     /// <para>
-    /// The two CIBA samples are the ones a rename actually rotted, and they are deliberately not here
-    /// yet: both are being edited on another branch, and enrolling a sample whose text is in flight
-    /// guarantees a red build on the day that branch lands rather than on the day somebody breaks
-    /// something.
+    /// The two CIBA samples are the ones a rename actually rotted, and they are the next to enrol. They
+    /// were deferred while their text was in flight on another branch; that branch has since landed, so
+    /// the reason is spent and what remains is the work of making each sample compilable - the ambient
+    /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
     public const int Unenrolled = 12;

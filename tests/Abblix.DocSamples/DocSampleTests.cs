@@ -171,9 +171,11 @@ public class DocSampleTests
     /// doc comment against a file no compiler ever read.
     /// <para>
     /// Named from the WHOLE relative path with the separators flattened, not from the file name: two of
-    /// the four enrolled samples live in files called <c>ServiceCollectionExtensions.cs</c>, so a name
-    /// taken from the file alone collides, and the collision does not fail - it silently compares one
-    /// sample against the other's copy and passes whenever they happen to share a line.
+    /// the four enrolled samples live in files called <c>ServiceCollectionExtensions.cs</c> at the same
+    /// index, so a name taken from the file alone gives them one copy between them and one of the two is
+    /// then compared against the other's text. Measured under the rejected scheme, that fails loudly
+    /// rather than passing - which is luck, not design: it holds only while the two samples differ, and
+    /// the naming is what makes the question not arise.
     /// </para>
     /// </remarks>
     private static string CopyOf(string repositoryRoot, DocSample sample) => Path.Combine(

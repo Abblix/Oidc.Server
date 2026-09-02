@@ -6,7 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
+using System.Xml.Linq;
 using System.Text.RegularExpressions;
 
 namespace Abblix.DocSamples;
@@ -61,42 +61,78 @@ public static partial class DocSampleReader
     /// Every code block in a source file, in the order they appear.
     /// </summary>
     /// <remarks>
+    /// Read with an XML parser rather than by looking for the tag's text, because the tag has more forms
+    /// than a reader remembers: <c>&lt;code&gt;</c> opened and closed on ONE line, and
+    /// <c>&lt;code language="csharp"&gt;</c> with an attribute, are both ordinary C# and were both
+    /// invisible to a scan that tested for the literal string and treated each marker as owning its
+    /// line. A sample written either way could be added to the library without moving the uncompiled
+    /// count, which is the one thing that count exists to prevent.
+    /// <para>
     /// Counted rather than matched by content, so an enrolment cannot silently follow the wrong block
     /// when one is added above it - the count moves, the index names a different sample, and the drift
     /// test says so rather than comparing something else quietly.
+    /// </para>
+    /// <para>
+    /// A run of doc-comment lines is one fragment and is wrapped in a root element before parsing, since
+    /// a doc comment has several top-level tags and no root of its own. A fragment that will not parse
+    /// is not silently skipped - the compiler already refuses it, because this repository builds the
+    /// documentation file with warnings as errors, so reaching a malformed one here means the parser and
+    /// the compiler disagree and that is worth the exception.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<IReadOnlyList<string>> BlocksIn(IReadOnlyList<string> sourceLines)
     {
         var blocks = new List<IReadOnlyList<string>>();
-        List<string>? current = null;
+
+        foreach (var fragment in DocCommentFragments(sourceLines))
+        {
+            var root = XElement.Parse($"<doc>{fragment}</doc>", LoadOptions.PreserveWhitespace);
+
+            foreach (var code in root.Descendants("code"))
+            {
+                blocks.Add(code.Value
+                    .ReplaceLineEndings("\n")
+                    .Split('\n')
+                    .Select(line => line.TrimEnd())
+                    .SkipWhile(string.IsNullOrWhiteSpace)
+                    .Reverse()
+                    .SkipWhile(string.IsNullOrWhiteSpace)
+                    .Reverse()
+                    .ToArray());
+            }
+        }
+
+        return blocks;
+    }
+
+    /// <summary>
+    /// Each unbroken run of doc-comment lines, joined back into one piece of XML.
+    /// </summary>
+    /// <remarks>
+    /// Per RUN rather than per file, so a tag left open in one member's comment cannot swallow the next
+    /// member's - which is the failure mode of treating the whole file as one document.
+    /// </remarks>
+    private static IEnumerable<string> DocCommentFragments(IReadOnlyList<string> sourceLines)
+    {
+        var current = new List<string>();
 
         foreach (var line in sourceLines)
         {
             var text = Uncomment(line);
             if (text is null)
-                continue;
-
-            if (text.Contains("<code>", StringComparison.Ordinal))
             {
-                current = [];
+                if (current.Count > 0)
+                    yield return string.Join(Environment.NewLine, current);
+
+                current.Clear();
                 continue;
             }
 
-            if (text.Contains("</code>", StringComparison.Ordinal))
-            {
-                if (current is not null)
-                    blocks.Add(current);
-
-                current = null;
-                continue;
-            }
-
-            // CDATA is how a sample carrying generics avoids escaping every angle bracket; the markers
-            // are the comment's, never the sample's.
-            current?.Add(WebUtility.HtmlDecode(text.Replace("<![CDATA[", "").Replace("]]>", "")));
+            current.Add(text);
         }
 
-        return blocks;
+        if (current.Count > 0)
+            yield return string.Join(Environment.NewLine, current);
     }
 
     /// <summary>
