@@ -59,10 +59,15 @@ jobs:
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
-          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the
-          # X.Y release input to a full X.Y.0 SemVer for the build/pack override. The tag
-          # and GitHub Release keep the X.Y form; NuGet normalizes X.Y to X.Y.0 anyway, so
-          # the published package version is identical. A -prerelease suffix is preserved.
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the X.Y
+          # release input to a full X.Y.0 SemVer. The TAG and the GitHub Release now use that
+          # expanded form too, where they used to keep X.Y.
+          #
+          # They kept it because NuGet normalizes X.Y to X.Y.0 and the published package version
+          # is identical either way - true, and it left MinVer unable to read its own tags: it
+          # parses a tag as SemVer, and "2.3" is not one, so every release tag was ignored and
+          # dev versions came from MinVerMinimumMajorMinor lifting a 0.0.0 default with the height
+          # counted from the root commit. A -prerelease suffix is preserved as given.
           CORE="${VERSION%%-*}"
           PRERELEASE=""
           [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
@@ -246,6 +251,7 @@ jobs:
       contents: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
       PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
     outputs:
       is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
@@ -283,44 +289,44 @@ jobs:
         env:
           INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
         run: |
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            if [ "$(git cat-file -t "v$VERSION")" = "tag" ]; then
-              echo "Tag v$VERSION exists and is annotated - using it"
+          if git rev-parse "v$VERSION_FULL" >/dev/null 2>&1; then
+            if [ "$(git cat-file -t "v$VERSION_FULL")" = "tag" ]; then
+              echo "Tag v$VERSION_FULL exists and is annotated - using it"
             else
-              echo "Error: tag v$VERSION is lightweight (not annotated/signed)."
+              echo "Error: tag v$VERSION_FULL is lightweight (not annotated/signed)."
               echo "Stable releases require an annotated, GPG-signed tag carrying the release notes."
-              echo "Recreate it: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              echo "Recreate it: git tag -a v$VERSION_FULL -F RELEASE_NOTES_v$VERSION_FULL.md -s && git push origin v$VERSION_FULL"
               exit 1
             fi
           else
             if [ "$INPUT_PRE_RELEASE" != "true" ]; then
-              echo "Error: no tag v$VERSION found."
+              echo "Error: no tag v$VERSION_FULL found."
               echo "A stable release must be tagged (annotated + GPG-signed) before this workflow runs."
-              echo "Create it on the release branch: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              echo "Create it on the release branch: git tag -a v$VERSION_FULL -F RELEASE_NOTES_v$VERSION_FULL.md -s && git push origin v$VERSION_FULL"
               exit 1
             fi
-            echo "Pre-release: creating annotated tag v$VERSION"
+            echo "Pre-release: creating annotated tag v$VERSION_FULL"
             git config user.name "GitHub Actions"
             git config user.email "actions@github.com"
-            git tag -a "v$VERSION" -m "Pre-release v$VERSION"
-            git push origin "v$VERSION"
+            git tag -a "v$VERSION_FULL" -m "Pre-release v$VERSION_FULL"
+            git push origin "v$VERSION_FULL"
           fi
         timeout-minutes: 3
       - name: Generate changelog
         id: changelog
         run: |
-          if [ "$(git cat-file -t "v$VERSION" 2>/dev/null)" = "tag" ]; then
+          if [ "$(git cat-file -t "v$VERSION_FULL" 2>/dev/null)" = "tag" ]; then
             echo "Using annotated tag message as release notes"
             # %(contents) includes the GPG/SSH signature block; strip it so the
             # release body is only the notes. The tag must be created with
             # --cleanup=verbatim so Markdown "##" headers in the notes survive.
-            git tag -l --format='%(contents)' "v$VERSION" | sed '/-----BEGIN .* SIGNATURE-----/,$d' > CHANGELOG.md
+            git tag -l --format='%(contents)' "v$VERSION_FULL" | sed '/-----BEGIN .* SIGNATURE-----/,$d' > CHANGELOG.md
           elif [ -n "$PREVIOUS_VERSION" ]; then
             echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
             echo "" >> CHANGELOG.md
 
             PREV_TAG="v$PREVIOUS_VERSION"
-            CURR_TAG="v$VERSION"
+            CURR_TAG="v$VERSION_FULL"
 
             if git rev-parse "$PREV_TAG" >/dev/null 2>&1 && git rev-parse "$CURR_TAG" >/dev/null 2>&1; then
               git log --oneline "$PREV_TAG..$CURR_TAG" --pretty=format:"- %s" >> CHANGELOG.md \
@@ -349,8 +355,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: v${{ needs.versioning.outputs.version }}
-          name: v${{ needs.versioning.outputs.version }}
+          tag_name: v${{ needs.versioning.outputs.version_full }}
+          name: v${{ needs.versioning.outputs.version_full }}
           body_path: CHANGELOG.md
           files: |
             nupkg/*.nupkg

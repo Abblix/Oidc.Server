@@ -22,7 +22,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>MVC integration for the server features: JARM authorization responses, JWT-secured token introspection, and Rich Authorization Requests and Token Exchange request binding. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+        <PackageReleaseNotes>MVC integration for the server features: JARM authorization responses, JWT-secured token introspection, and Rich Authorization Requests and Token Exchange request binding. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4.0</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

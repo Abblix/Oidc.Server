@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>JWE-encrypted token handling, JOSE critical-header processing (RFC 7515), JWS verification key pinned to its declared algorithm (RFC 7517), enforced HMAC key length (RFC 7518), typed accessors for JWS header parameters, and granular key-resolution diagnostics. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>JWE-encrypted token handling, JOSE critical-header processing (RFC 7515), JWS verification key pinned to its declared algorithm (RFC 7517), enforced HMAC key length (RFC 7518), typed accessors for JWS header parameters, and granular key-resolution diagnostics. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

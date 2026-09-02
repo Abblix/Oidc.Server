@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Base64URL handling migrated to the runtime primitive (with a .NET 8 polyfill) for a cleaner allocation profile, plus code-quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>Base64URL handling migrated to the runtime primitive (with a .NET 8 polyfill) for a cleaner allocation profile, plus code-quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
