@@ -163,7 +163,7 @@ public class BackChannelAuthenticationValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -350,6 +350,85 @@ public class BackChannelAuthenticationValidatorTests
 
         var result = await _validator.ValidateAsync(context);
 
-        Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<OidcError>(result).Error);
+        // The same code the relative case gets from StoredUriValidator ahead of this one in the
+        // pipeline, so the member answers with one code however it is wrong.
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+    }
+
+    /// <summary>
+    /// Each refusal this validator writes says which thing was wrong, and says it in its own words.
+    /// </summary>
+    /// <remarks>
+    /// Every other row here reads <c>result.Error</c>, and all five refusals carry a registration error
+    /// code, so the code cannot tell them apart. Measured before this row existed: SWAPPING the poll and
+    /// ping-or-push messages between their arms - so a client is told an endpoint is required when it
+    /// registered one too many - left 2996 unit rows and 219 E2E rows green. The description is the only
+    /// thing an integrator reads, and it was the only thing nothing read.
+    /// <para>
+    /// A distinctive FRAGMENT rather than the whole sentence, so rewording a refusal does not fail a row
+    /// that is not about the wording. What each fragment has to do is separate its arm from the other
+    /// four, which is exactly what the swap defeated.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, "https://client.example/cb", null, "is invalid if")]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
+    [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
+    [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, "http://client.example/cb", null, "HTTPS scheme")]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, null, "NOPE", "signing algorithm is not supported")]
+    public async Task ValidateAsync_EachRefusal_SaysWhichThingIsWrong(
+        string mode, string? endpoint, string? signingAlg, string fragment)
+    {
+        _jwtValidator
+            .Setup(v => v.SigningAlgorithmsSupported)
+            .Returns([SigningAlgorithms.RS256, SigningAlgorithms.ES256]);
+
+        var context = CreateContext(
+            mode,
+            endpoint is null ? null : new Uri(endpoint, UriKind.Absolute),
+            signingAlg);
+
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+
+        Assert.Contains(fragment, result.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A plain-HTTP notification endpoint is refused as registration metadata, like the relative one.
+    /// </summary>
+    /// <remarks>
+    /// The same member used to answer with two codes depending on HOW it was wrong: relative got
+    /// <c>invalid_client_metadata</c> from the URI validator ahead of this one, plain HTTP got
+    /// <c>invalid_request</c> from here. An integrator reading the two concluded that two different
+    /// kinds of thing had gone wrong with one field.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_APlainHttpNotificationEndpoint_IsRefusedAsRegistrationMetadata()
+    {
+        var context = CreateContext(
+            BackchannelTokenDeliveryModes.Ping,
+            new Uri("http://client.example/cb", UriKind.Absolute));
+
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// A registration naming no delivery mode is not told its mode is unsupported.
+    /// </summary>
+    /// <remarks>
+    /// The null-mode exit moved BELOW the switch so the endpoint check could see a registration that
+    /// names no mode. That put null in reach of the unsupported-mode arm, which asks for a mode that is
+    /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null" for this
+    /// row, and removing it turns this row red rather than some distant one.
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode()
+    {
+        var context = CreateContext(notificationEndpoint: new Uri("https://client.example/cb"));
+
+        Assert.Null(await _validator.ValidateAsync(context));
     }
 }

@@ -247,8 +247,10 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         // And that it names the member it refused. Asserting the status alone left the one refusal this
         // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
-        // redirect_uris in that message passed both suites. The whole-token form is the same one the
-        // theory below uses, and for the same pair.
+        // redirect_uris in that message passed both suites. The whole-token form is copied from the theory
+        // below so the two rows cannot drift apart - not because this member sits in a containment
+        // pair, which it does not: no member name contains it and it contains none, so a plain
+        // Contains would catch the same plant.
         var body = await ReadJsonAsync(response);
         var description = body["error_description"]!.GetValue<string>();
         Assert.True(
@@ -339,8 +341,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // swapping two of them told an operator about the wrong member with every row still green.
         //
         // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, so
-        // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed both
-        // suites. One direction only - the reverse never passed, because the longer name is not
+        // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed the
+        // UNIT theory - and passed here too, but for an unrelated reason rather than for that one.
+        // One direction only - the reverse never passed, because the longer name is not
         // contained in the shorter - and saying "for each other" would send the next reader looking
         // for a second pair that does not exist. Measured, this
         // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and

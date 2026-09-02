@@ -36,9 +36,44 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
     /// </summary>
     private OidcError? Validate(ClientRegistrationValidationContext context)
     {
-        // Asked about the VALUE, ahead of every question about the mode. Inside the switch it sat behind
-        // a first case that returns for a null delivery mode, so a registration naming the endpoint and
-        // no mode walked past it and the address was stored - measured, 201 Created over plain HTTP.
+        switch (context.Request)
+        {
+            case {
+                BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll,
+                BackChannelClientNotificationEndpoint: not null,
+            }:
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "Notification endpoint is invalid if the token delivery mode is set to poll");
+
+            case {
+                BackChannelTokenDeliveryMode:
+                    BackchannelTokenDeliveryModes.Ping or
+                    BackchannelTokenDeliveryModes.Push,
+                BackChannelClientNotificationEndpoint: null,
+            }:
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "Notification endpoint is required if the token delivery mode is set to ping or push");
+
+            // "not null and" is load-bearing since the null-mode exit moved below this switch: null is
+            // "not (poll or ping or push)" as much as "carrier-pigeon" is, so without it a registration
+            // naming no mode at all would be told its mode is unsupported.
+            case {
+                BackChannelTokenDeliveryMode: not null and not (
+                    BackchannelTokenDeliveryModes.Poll or
+                    BackchannelTokenDeliveryModes.Ping or
+                    BackchannelTokenDeliveryModes.Push),
+            }:
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "The specified token delivery mode is not supported");
+        }
+
+        // The VALUE, asked after the mode is settled and before a registration that names no mode can
+        // leave. It used to sit inside the switch behind a first case returning for a null delivery
+        // mode, so a registration naming the endpoint and no mode walked past unchecked and the
+        // address was stored - measured, 201 Created over plain HTTP.
         // Nothing else covers the member: StoredUriValidator asks absoluteness only, and
         // SubjectTypeValidator's arm needs a pairwise subject type.
         //
@@ -48,6 +83,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // deserializer does not - so each site that reads a URI member states absoluteness itself, and
         // a guard whose safety depends on another validator's position in a list moves when somebody
         // reorders that list.
+        //
         // CIBA Core 1.0 Section 4, describing backchannel_client_notification_endpoint as registration
         // metadata: "It MUST be an HTTPS URL." That is the clause the check below enforces, and Section
         // 4 is where it is written for a registration request. Null passes, because a registration is
@@ -71,49 +107,32 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // part in the sector at all.
         //
         // The remaining Section 4 rule for this parameter, "REQUIRED if the token delivery mode is set
-        // to ping or push", IS implemented - by the switch below, in the words of the refusal it returns.
+        // to ping or push", IS implemented - by the switch above, and the row driving each arm reads the
+        // description rather than the code, so which of them answered is measured rather than asserted
+        // here in prose.
+        //
+        // AFTER the arms above, so a registration that is wrong about the MODE hears about the mode
+        // rather than about the scheme. Ordered the other way, a poll client naming a plain-HTTP
+        // endpoint was told to use HTTPS, fixed the scheme, and was refused again because poll must
+        // carry no endpoint at all - a correct refusal that leads nowhere.
+        //
+        // Still ahead of the null-mode exit below, which is what the first paragraph is about.
+        //
+        // invalid_client_metadata rather than invalid_request, because that is what a registration
+        // refusal is and what the same member already gets from StoredUriValidator when it is relative.
+        // One member answering with two codes told an integrator that two different kinds of thing had
+        // gone wrong.
         if (context.Request.BackChannelClientNotificationEndpoint
             is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
         {
             return new OidcError(
-                ErrorCodes.InvalidRequest,
+                ErrorCodes.InvalidClientMetadata,
                 $"The {Parameters.BackChannelClientNotificationEndpoint} must be an absolute URI using "
                 + "the HTTPS scheme");
         }
 
-        switch (context.Request)
-        {
-            case { BackChannelTokenDeliveryMode: null }:
-                return null;
-
-            case {
-                BackChannelTokenDeliveryMode: BackchannelTokenDeliveryModes.Poll,
-                BackChannelClientNotificationEndpoint: not null,
-            }:
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "Notification endpoint is invalid if the token delivery mode is set to poll");
-
-            case {
-                BackChannelTokenDeliveryMode:
-                    BackchannelTokenDeliveryModes.Ping or
-                    BackchannelTokenDeliveryModes.Push,
-                BackChannelClientNotificationEndpoint: null,
-            }:
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "Notification endpoint is required if the token delivery mode is set to ping or push");
-
-            case {
-                BackChannelTokenDeliveryMode: not (
-                    BackchannelTokenDeliveryModes.Poll or
-                    BackchannelTokenDeliveryModes.Ping or
-                    BackchannelTokenDeliveryModes.Push),
-            }:
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The specified token delivery mode is not supported");
-        }
+        if (context.Request.BackChannelTokenDeliveryMode is null)
+            return null;
 
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;
         if (signingAlgorithm.HasValue() &&
