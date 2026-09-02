@@ -11,18 +11,16 @@ name: Publish dev build to GitHub Packages
 # version actually built, so these examples can mislead a READER of this file - which is why they are
 # kept current - but they are no longer what reaches a consumer.
 #
-# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0), and
-# these are MEASURED rather than modelled - see the note below about tags:
-#   develop at commit height 469           ->  2.4.0-dev.0.469
+# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
+#   develop, no readable tag behind it     ->  2.4.0-dev.0.<height from the root commit>
+#   a branch with a readable tag behind it ->  <that tag's version, patch bumped>-dev.0.<height>
 #   a release, version supplied by hand    ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
 #
-# MinVer reads NO tag in this repository, which is worth knowing before reasoning about what it
-# will produce. The tags are two-part and v-prefixed (v2.3), MinVerTagPrefix is set nowhere, so
-# none of them parses as a version; and they live on master, not on the branch this workflow
-# builds. So the height is counted from the ROOT COMMIT, and the whole version comes from
-# MinVerMinimumMajorMinor lifting a 0.0.0 default. Run against this worktree, MinVer says so in as
-# many words: "No commit found with a valid SemVer 2.0 version", then "Bumping version to
-# 2.4.0-dev.0.472 to satisfy minimum major minor 2.4".
+# NO tag is readable from develop, which is worth knowing before reasoning about what MinVer will
+# produce here: every release tag sits on master, which is not an ancestor of develop, and MinVer
+# walks the history of the branch it is building. So on this branch the whole version comes from
+# MinVerMinimumMajorMinor lifting a 0.0.0 default. That is NOT true everywhere - master has
+# readable three-part tags (v2.0.1 among them) and its versions come from them.
 #
 # Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
 # consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
@@ -124,6 +122,34 @@ jobs:
         # per-TFM pack. Drop --no-build; the earlier Build step left everything up to date, so pack's build
         # is an incremental no-op. GeneratePackageOnBuild=false stops the on-build pack double-running.
         run: dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false
+
+        timeout-minutes: 3
+      - name: Refuse to publish a release version
+        run: |
+          set -euo pipefail
+          # This workflow publishes DEV builds, and says so in its own summary. Anything else reaches
+          # here only when a release tag sits on the commit being built, because MinVer returns a
+          # tag's version exactly - 2.4.0 for a release, 2.4.0-beta1 for a pre-release. Both belong
+          # to enhanced-release.yml; neither is this workflow's to push.
+          #
+          # Nothing stopped that until now, and the failure was silent in both directions: this job
+          # triggers on a push to release/** and on manual dispatch, so it would have pushed the
+          # stable package to GitHub Packages past the release approval gate, and the approved
+          # publish that ran afterwards uses --skip-duplicate and would have no-opped over it. The
+          # feed would then hold a binary nobody approved, with nothing to show the difference.
+          #
+          # Stated as what must be PRESENT - the dev identifier this workflow's own builds carry -
+          # rather than as a list of the ways a tagged version can arrive here.
+          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
+          VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
+          case "$VERSION" in
+            *-dev.*) echo "Dev build $VERSION - publishing." ;;
+            *)
+              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              exit 1
+              ;;
+          esac
 
         timeout-minutes: 3
       - name: Push to GitHub Packages

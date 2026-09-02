@@ -39,10 +39,16 @@
        the history of the branch being built. Releases now tag the three-part form, and the
        release checklist carries the reachability check that nothing was making.
 
-       Until a three-part tag exists and is reachable, this property remains the whole source of
-       the number: MinVer reports "No commit found with a valid SemVer 2.0 version", lifts its
-       0.0.0 default to this line, and counts the height from the root commit. That is measured,
-       not assumed, and it is what today's 2.4.0-dev.0.469 is made of.
+       On DEVELOP this property is still the whole source of the number, because no tag is
+       reachable from it: MinVer reports "No commit found with a valid SemVer 2.0 version", lifts
+       its 0.0.0 default to this line, and counts the height from the root commit.
+
+       On MASTER it is not, and the prefix changed the number there. Nine tags are three-part
+       already (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1 and two four-part ones),
+       and v2.0.1 is reachable from master - so master went from 2.4.0-dev.0.53 to 2.4.0-dev.0.15,
+       the height now counted from that tag. A statement that nothing moved was measured on develop
+       alone; the tags were listed five at a time and the three-part ones were in the part not
+       looked at.
 
        The run summary derives all three parts of the version rather than re-asserting a zero
        patch. That is right whatever the tags do: NuGet floats only the release label, so a range
