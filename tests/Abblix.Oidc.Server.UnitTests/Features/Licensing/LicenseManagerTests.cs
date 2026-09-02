@@ -612,27 +612,79 @@ public class LicenseManagerTests
     /// <c>LicenseLoadingService</c>, so it is also where a deployment would meet it first.
     /// </para>
     /// <para>
-    /// A NEGATIVE offset is absent on purpose: the UTC instant would then lie past year 10000 and the
-    /// constructor refuses the value outright, so such a row would measure the framework rather than
-    /// this guard.
+    /// A NEGATIVE offset is the OTHER half and it is reachable, which an earlier version of this row
+    /// denied: what the constructor refuses is a maximal CLOCK time under a negative offset, not the
+    /// negative offset itself. <c>DateTimeOffset.MaxValue.ToOffset(-5h)</c> is accepted, is exactly what
+    /// <c>ToLocalTime</c> returns west of Greenwich, and its clock time sits below
+    /// <see cref="DateTime.MaxValue"/> - so a guard written on the clock time alone admits it and
+    /// <see cref="DateTimeOffset.AddTicks"/> throws, with the year-10000 message rather than the
+    /// un-representable-DateTime one. Each half of the bound admits a value the other refuses.
     /// </para>
     /// </remarks>
     [Theory]
     [InlineData(0)]
     [InlineData(5)]
+    [InlineData(-5)]
     public void A_maximal_expiry_in_any_offset_does_not_fault(int offsetHours)
     {
         var utcNow = DateTimeOffset.UtcNow;
-        var maximal = new DateTimeOffset(DateTime.MaxValue.Ticks, TimeSpan.FromHours(offsetHours));
+        var offset = TimeSpan.FromHours(offsetHours);
 
-        // The control on the row that matters: a positive offset really does put this below the maximal
-        // INSTANT, so a guard written against the instant admits it - which is the whole difference.
-        Assert.True(offsetHours == 0 || maximal < DateTimeOffset.MaxValue);
+        // The two maxima are different values, and each row carries the one its offset can express: east
+        // of Greenwich the maximal CLOCK time is constructible and the maximal instant is not, west of it
+        // the reverse. Constructing both the same way is what made the negative case look unreachable.
+        var maximal = offsetHours < 0
+            ? DateTimeOffset.MaxValue.ToOffset(offset)
+            : new DateTimeOffset(DateTime.MaxValue.Ticks, offset);
+
+        // The control on each row, said as what must be PRESENT rather than as which offsets to skip: a
+        // row is only about one half of the bound if the OTHER half admits its value.
+        Assert.True(offsetHours <= 0 || maximal < DateTimeOffset.MaxValue);
+        Assert.True(offsetHours >= 0 || maximal.DateTime < DateTime.MaxValue);
 
         var manager = new LicenseManager();
         manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = maximal });
 
         Assert.Null(Record.Exception(() => Report(manager, utcNow)));
+    }
+
+    /// <summary>
+    /// A late expiry that IS representable still yields its moment, and the narrowing after it is
+    /// announced.
+    /// </summary>
+    /// <remarks>
+    /// The rows above pin only that the guard does not throw, which every over-strict bound satisfies
+    /// too: moving it to <c>DateTime.MaxValue.AddYears(-500)</c> silences every expiry after the year
+    /// 9499 and leaves the whole suite green, so the guard could drift five centuries into refusing
+    /// moments that exist and nothing would say so. A bound needs a row on each side, and this is the
+    /// side that asserts something is PRODUCED.
+    /// <para>
+    /// The successor carries no start date of its own, so the announced moment can only have come from
+    /// the expiry: a successor starting on a day would contribute that day as a moment in its own right,
+    /// and the row would then pass over a guard that dropped the expiry entirely.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_late_but_representable_expiry_still_announces_its_narrowing()
+    {
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        // One tick below the maximum: BOTH halves of the bound admit it, so it is the last expiry the
+        // guard is supposed to let through.
+        var late = new DateTimeOffset(DateTime.MaxValue.Ticks - 1, TimeSpan.Zero);
+
+        var manager = new LicenseManager();
+        manager.AddLicense(new License
+        {
+            NotBefore = now.AddDays(-1), ExpiresAt = late, ClientLimit = 500,
+        });
+        manager.AddLicense(new License { NotBefore = now.AddDays(-1), ClientLimit = 5 });
+
+        var record = Assert.Single(Report(manager, now));
+
+        Assert.Equal(LogEvents.Licensing.LicenseManager.RenewalGrantsLess, record.EventId.Id);
+        Assert.Contains("clients 500 -> 5", record.Message, StringComparison.Ordinal);
+        Assert.Contains(late.ToString("R"), record.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -491,15 +491,20 @@ public partial class LicenseManager
     /// An expiry at the last representable moment yields no "after": there is no such tick, and asking
     /// for one throws out of a license check - a licensing question answered with a server fault.
     /// Nothing follows it either, so skipping it loses no moment.
-    /// <para>
-    /// Bounded on the CLOCK time rather than on the instant, because that is what
-    /// <see cref="DateTimeOffset.AddTicks"/> overflows on. The two coincide only at offset zero, which
-    /// is the only offset a licence file can produce - <c>LicenseLoader</c> reads unix seconds - so a
-    /// suite built from loaded licences cannot tell the bounds apart, and a guard written from that
-    /// suite reads as sufficient. <see cref="License"/> and <see cref="AddLicense"/> are public: a host
-    /// constructing an expiry whose clock time is maximal under a positive offset sits strictly below
-    /// <see cref="DateTimeOffset.MaxValue"/> and still overflows, on the request path.
     /// </para>
+    /// <para>
+    /// TWO clauses, because "representable" is two things and
+    /// <see cref="DateTimeOffset.AddTicks"/> refuses on either: it advances the CLOCK time and then
+    /// revalidates the resulting INSTANT, so it throws with one message when the clock time leaves
+    /// <see cref="DateTime"/> and a different one when the instant leaves year 10000. The two coincide
+    /// only at offset zero, which is the only offset a licence file can produce - <c>LicenseLoader</c>
+    /// reads unix seconds - so a suite built from loaded licences cannot tell the halves apart, and
+    /// either half alone reads as sufficient. <see cref="License"/> and <see cref="AddLicense"/> are
+    /// public, and each half admits a value the other refuses: an expiry whose clock time is maximal
+    /// under a POSITIVE offset sits below <see cref="DateTimeOffset.MaxValue"/>, and
+    /// <c>DateTimeOffset.MaxValue.ToOffset</c> of a NEGATIVE one - which is what
+    /// <c>ToLocalTime</c> returns west of Greenwich - has a clock time below
+    /// <see cref="DateTime.MaxValue"/>. Both overflow, on the request path.
     /// </para>
     /// </remarks>
     private IEnumerable<DateTimeOffset> ChangeMoments(DateTimeOffset utcNow)
@@ -511,7 +516,8 @@ public partial class LicenseManager
             if (license.NotBefore is { } starts && utcNow < starts)
                 moments.Add(starts);
 
-            if (license.ExpiresAt is { } ends && utcNow < ends && ends.DateTime < DateTime.MaxValue)
+            if (license.ExpiresAt is { } ends && utcNow < ends
+                && ends.DateTime < DateTime.MaxValue && ends < DateTimeOffset.MaxValue)
                 moments.Add(ends.AddTicks(1));
         }
 
