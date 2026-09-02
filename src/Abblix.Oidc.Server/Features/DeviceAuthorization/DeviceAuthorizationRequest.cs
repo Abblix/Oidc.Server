@@ -47,16 +47,12 @@ public record DeviceAuthorizationRequest(
     /// forgot it: user code verification, the step the end user reaches first, decided on
     /// <see cref="Status"/> alone and answered a full result for a record the approval would then refuse.
     /// <para>
-    /// It is NOT yet the only place. <c>DeviceCodeGrantHandler</c> still writes both halves out - the
-    /// verdict as <c>now &gt;= ExpiresAt</c> and the remaining time as <c>ExpiresAt - now</c> - and that
-    /// file is outside this change. The two agree today, exactly: this predicate is <c>now &lt; ExpiresAt</c>
-    /// and the handler's expiry arm is its complement.
-    /// </para>
-    /// <para>
-    /// Only one of the two boundaries is held. Relaxing THIS one to <c>&gt;=</c> turns two rows red, both
-    /// driving a decision at exactly <c>ExpiresAt</c>. Relaxing
-    /// <see cref="Endpoints.Token.Grants.DeviceCodeGrantHandler"/>'s leaves every suite green. That gap
-    /// is on the handler, not here.
+    /// It is now the only verdict on that boundary:
+    /// <see cref="Endpoints.Token.Grants.DeviceCodeGrantHandler"/> asks this rather than comparing for
+    /// itself, so the token endpoint and the three paths above cannot disagree about a code polled at
+    /// exactly its expiry. What holds it is that relaxing this one predicate turns rows red on both
+    /// sides of that seam - the two approval rows and the token endpoint's - rather than two
+    /// comparisons happening to stay in step.
     /// </para>
     /// <para>
     /// It hands back the remaining time because the callers that act on the record need it: a decision

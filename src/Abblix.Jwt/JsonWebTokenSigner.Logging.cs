@@ -22,4 +22,15 @@ partial class JsonWebTokenSigner
         Level = LogLevel.Warning,
         Message = "JWS signature validation failed: no signing key matched header (alg='{Algorithm}', kid='{KeyId}'); issuer has {IssuerKeyCount} key(s). FAPI category: UnknownKid.")]
     private partial void LogNoMatchingKey(string Algorithm, string? KeyId, int IssuerKeyCount);
+
+    [LoggerMessage(
+        EventId = LogEvents.Jwt.KeyBelowTheFloor,
+        Level = LogLevel.Warning,
+        Message = "JWS signature validation failed and one of the candidate keys is below the floor "
+                  + "RFC 7518 sets for its algorithm: kid='{KeyId}' carries {KeyBits} bits where "
+                  + "alg='{Algorithm}' requires {FloorBits}. Such a key is refused without verifying, "
+                  + "which reads downstream exactly like a tampered signature - so a burst of these "
+                  + "immediately after a key rotation is worth checking against the ring's retired keys "
+                  + "before it is read as tampering. It does not rule tampering out.")]
+    private partial void LogKeyBelowTheFloor(string Algorithm, string? KeyId, int KeyBits, int FloorBits);
 }

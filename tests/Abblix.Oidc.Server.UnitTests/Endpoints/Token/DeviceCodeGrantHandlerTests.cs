@@ -467,6 +467,89 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
+    /// A poll at exactly the expiry is answered as expired, and the record agrees.
+    /// </summary>
+    /// <remarks>
+    /// The boundary the token endpoint decides a device code's lifetime on, and nothing held it: relaxing
+    /// the comparison to <c>&gt;</c> left both suites green, measured, so a code polled at its own
+    /// expiry would have been answered as still pending and the code would outlive its <c>expires_in</c>
+    /// by an amount nobody chose.
+    /// <para>
+    /// The row drives the endpoint and the record on the SAME instant, because the property is that the
+    /// two agree about it - <c>HasLifetimeLeft</c> answers the verification, approval and denial paths,
+    /// and a device code the token endpoint still accepts while the approval path has already refused it
+    /// is the drift worth stopping. The handler asks that predicate now, so agreement is a fact about one
+    /// expression rather than about two rows staying in step.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task PolledAtExactlyItsExpiry_TheCodeIsExpiredAndSoSaysTheRecord()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = _currentTime,
+        };
+
+        // The other half of the property, on the same instant: whatever the endpoint answers, the record
+        // must answer the same, and a row asserting only the endpoint would let the two drift apart.
+        Assert.False(deviceRequest.HasLifetimeLeft(_currentTime, out _));
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+
+        // The code is taken out of storage rather than left for the next poll to refuse again.
+        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+    }
+
+    /// <summary>
+    /// A poll one tick BEFORE the expiry is still pending.
+    /// </summary>
+    /// <remarks>
+    /// The control on the row above, and measured rather than assumed: a handler calling EVERY code
+    /// expired is already killed by nineteen other rows in this file, so that is not what this one buys.
+    /// What it alone catches is the boundary shifted one tick EARLY - planted, and it is the only row in
+    /// the suite that dies. The fifteen-minute rows cannot see a tick.
+    /// </remarks>
+    [Fact]
+    public async Task PolledOneTickBeforeItsExpiry_TheCodeIsStillPending()
+    {
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = _currentTime.AddTicks(1),
+        };
+
+        Assert.True(deviceRequest.HasLifetimeLeft(_currentTime, out _));
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage
+            .Setup(s => s.UpdateAsync(
+                DeviceCode,
+                It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest>(),
+                It.IsAny<TimeSpan>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _handler.AuthorizeAsync(
+            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+    }
+
+    /// <summary>
     /// Verifies that when a different client tries to retrieve a device authorization result,
     /// the handler returns an InvalidGrant error per RFC 8628.
     /// </summary>

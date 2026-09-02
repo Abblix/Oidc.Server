@@ -14,6 +14,7 @@ using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -242,7 +243,43 @@ public sealed class ScopeEnforcementTests
             }),
         };
 
-    private static async Task<WebApplication> StartAsync(string? grantedScope, bool identified = true)
+    /// <summary>
+    /// A route the HOST adds to the returned group is NOT scope-checked, while its neighbours refuse the
+    /// same caller.
+    /// </summary>
+    /// <remarks>
+    /// This pins a documented gap rather than a wanted behaviour, which is the only honest way to leave
+    /// it: the filter judges a route by the requirement it declares, which for a host route is none, so
+    /// it is let through. The fail-open branch is deliberate, because refusing a route with no metadata
+    /// would refuse exactly this one.
+    /// <para>
+    /// The comparison is the whole row, and it is careful about what it proves. Asserting the host
+    /// route's 200 alone would pass on a deployment where scope checking is off entirely; the
+    /// neighbouring 403 for the SAME caller on the SAME host is what says the checking is on and the
+    /// host's route was admitted anyway. What no assertion here can show is the filter executing on that
+    /// particular route - an admitted request leaves no trace of it, which is the whole point.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARouteTheHostAddsToTheGroup_IsNotScopeChecked()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            "urn:example:something-else",
+            configureGroup: group => group.MapGet("/host-added", () => Results.Ok("served")));
+        var client = host.GetTestClient();
+
+        using var refused = await client.GetAsync("/ssf/stream", cancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+
+        using var admitted = await client.GetAsync("/ssf/host-added", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
+    }
+
+    private static async Task<WebApplication> StartAsync(
+        string? grantedScope,
+        bool identified = true,
+        Action<RouteGroupBuilder>? configureGroup = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -268,7 +305,10 @@ public sealed class ScopeEnforcementTests
         });
 
         var app = builder.Build();
-        app.MapSharedSignalsTransmitterEndpoints();
+        // Mapped first and configured second: a null-conditional call does not evaluate its ARGUMENT
+        // either, so folding these into one line maps no routes at all when no host route is added.
+        var group = app.MapSharedSignalsTransmitterEndpoints();
+        configureGroup?.Invoke(group);
         await app.StartAsync();
         return app;
     }

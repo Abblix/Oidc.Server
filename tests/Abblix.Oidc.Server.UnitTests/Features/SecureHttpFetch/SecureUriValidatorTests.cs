@@ -165,4 +165,23 @@ public class SecureUriValidatorTests
         var empty = new SecureHttpFetchOptions { AllowedDestinations = [] };
         Assert.NotNull(CreateValidator(empty).Validate(new Uri("http://localhost:5002/api")));
     }
+
+    /// <summary>
+    /// A relative URI is refused rather than faulted on.
+    /// </summary>
+    /// <remarks>
+    /// About the PUBLIC method, not about a path through the library: no caller inside it can arrive
+    /// here with a relative value, and the registration sites that store an address check absoluteness
+    /// themselves. A host that resolves <see cref="ISecureUriValidator"/> and asks it about an address of
+    /// its own can, and every <see cref="Uri"/> member read below raises on a relative one rather than
+    /// returning - so without this line the answer is an exception where a verdict was asked for.
+    /// </remarks>
+    [Fact]
+    public void Validate_ARelativeUri_IsRefusedRatherThanFaulting()
+    {
+        var refusal = CreateValidator(SecureDefaults).Validate(new Uri("/keys", UriKind.Relative));
+
+        Assert.NotNull(refusal);
+        Assert.Contains("relative", refusal, StringComparison.OrdinalIgnoreCase);
+    }
 }
