@@ -659,10 +659,14 @@ public class LicenseManagerTests
     /// moments that exist and nothing would say so. A bound needs a row on each side, and this is the
     /// side that asserts something is PRODUCED.
     /// <para>
-    /// The successor's start is a day in the PAST, which is the load-bearing choice rather than
-    /// scaffolding: <c>ChangeMoments</c> adds a start only when it is still ahead, so a start already
-    /// behind contributes no moment of its own and the announced one can only have come from the
-    /// expiry. Moved forward, the row would pass over a guard that dropped the expiry entirely.
+    /// The single announced record can only have come from the expiry, because nothing else in the
+    /// fixture yields a future moment at all: both starts are in the past, which <c>ChangeMoments</c>
+    /// skips, and the successor has no expiry of its own. Said as what the fixture LACKS rather than as
+    /// one choice being load-bearing - an earlier version of this paragraph claimed that moving the
+    /// successor's start forward would cost the row its isolation, and that is measurably false. With
+    /// the start moved forward and a guard that drops every expiry, ten rows still fail, this theory
+    /// among them: at the successor's start the merge is still the greater of the two limits, so that
+    /// moment announces nothing and could never have stolen the record.
     /// </para>
     /// <para>
     /// Driven across offsets for the same reason the guard has two clauses. Pinned at offset zero
