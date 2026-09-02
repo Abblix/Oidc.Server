@@ -73,6 +73,19 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// <inheritdoc />
     public string? Validate(Uri uri)
     {
+        // Nothing inside this library can reach here with a relative URI, and this is not that guard: an
+        // HTTP client with no base address refuses one before the outbound handler is entered, and no
+        // registration stores a relative address - which StoredUriValidator holds, and a theory walking
+        // the model's URI members by TYPE keeps honest. Not this sentence: the claim was false twice
+        // while it read as settled, both times because the list was written by hand - once missing six
+        // members with no validator at all, once missing three more whose validator was gated on
+        // something that is not the address. What this line defends
+        // is the PUBLIC method - a host resolving ISecureUriValidator and asking it about an address of
+        // its own - where the alternative is an InvalidOperationException out of a member read below,
+        // which is a fault in place of the verdict this method exists to give.
+        if (!uri.IsAbsoluteUri)
+            return "A relative URI names no destination, so nothing about it can be judged.";
+
         // A named destination is the one way past everything below, and it is checked first so that it also
         // lifts the scheme restriction: reaching a service inside the network means plain HTTP, and a
         // permission unable to say so would permit nothing.

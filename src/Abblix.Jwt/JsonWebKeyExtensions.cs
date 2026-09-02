@@ -190,6 +190,48 @@ public static class JsonWebKeyExtensions
 	public const int MinimumRsaKeyBits = 2048;
 
 	/// <summary>
+	/// The smallest RSA modulus RFC 7518 requires for <paramref name="algorithm"/>, in bits, or
+	/// <c>null</c> when that document sets no size requirement for it.
+	/// </summary>
+	/// <remarks>
+	/// The floor is per FAMILY, not per key type: Sections 3.3, 3.5, 4.2 and 4.3 each state it for their
+	/// own algorithms, and Section 3.4 - ECDSA - states none at all. A caller reporting on a key has to
+	/// ask about whatever algorithm the header named, and take "no floor here" for an answer, or it ends
+	/// up citing a requirement that document does not make.
+	/// <para>
+	/// The same nine algorithms as <see cref="RsaSectionFor"/>, and a row pins the two lists together:
+	/// this one answering null where that one names a section would leave the seam refusing a key while
+	/// the report says nothing about it.
+	/// </para>
+	/// </remarks>
+	internal static int? MinimumRsaKeyBitsFor(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 or
+			SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 or
+			EncryptionAlgorithms.KeyManagement.Rsa1_5 or EncryptionAlgorithms.KeyManagement.RsaOaep or
+			EncryptionAlgorithms.KeyManagement.RsaOaep256 => MinimumRsaKeyBits,
+		_ => null,
+	};
+
+	/// <summary>
+	/// The smallest HMAC key RFC 7518 Section 3.2 permits for <paramref name="algorithm"/>, in bits, or
+	/// <c>null</c> when the algorithm is not one of the HMAC family.
+	/// </summary>
+	/// <remarks>
+	/// "A key of the same size as the hash output" is the rule, so the number is the algorithm's own.
+	/// Null rather than a throw, because the two callers ask different questions: the signer knows it is
+	/// an HMAC algorithm and turns null into its own refusal, while a caller REPORTING on a key needs to
+	/// ask about any algorithm and take "no floor of this family" for an answer.
+	/// </remarks>
+	internal static int? MinimumHmacKeyBits(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.HS256 => 256,
+		SigningAlgorithms.HS384 => 384,
+		SigningAlgorithms.HS512 => 512,
+		_ => null,
+	};
+
+	/// <summary>
 	/// The RFC 7518 section that carries the key-size requirement for <paramref name="algorithm"/>.
 	/// </summary>
 	/// <remarks>

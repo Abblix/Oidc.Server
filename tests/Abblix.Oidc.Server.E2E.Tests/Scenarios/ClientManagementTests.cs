@@ -22,6 +22,10 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using System.Reflection;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -48,6 +52,12 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
     // Named once: the same member is written into a request and looked for in a response and in an
     // extension's view, and those three have to agree.
+    /// <summary>The JSON member every refusal in this suite reads its code out of.</summary>
+    private const string ErrorMember = "error";
+
+    /// <summary>The JSON member carrying the human-readable half of a refusal.</summary>
+    private const string DescriptionMember = "error_description";
+
     private const string VendorTier = "x_vendor_tier";
 
     // The member every size test pads with: named once so the boundary cases and the oversized cases
@@ -118,9 +128,374 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var body = await ReadJsonAsync(response);
-        var error = body["error"];
+        var error = body[ErrorMember];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An application type this server does not know is refused, not thrown on.
+    /// </summary>
+    /// <remarks>
+    /// <c>[AllowedValues]</c> on the model is not enforced against a JSON body - the same gap the
+    /// nullability annotation has, which this validator already carries a comment about - so an
+    /// arbitrary string reaches the per-application-type switch. Its <c>default</c> used to throw, which
+    /// is right for a value that cannot occur and wrong for one any caller can post: the registration
+    /// left the pipeline as a server fault rather than a refusal.
+    /// <para>
+    /// A CIBA-only client, because that is the class the redirect-URI checks reached for the first time
+    /// when they stopped being gated on the grant types - a body that answered 201 before then met the
+    /// throw. Clients WITH redirect grants met it all along.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_unknown_application_type_is_refused_rather_than_thrown_on()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("an-application-type-nobody-defined");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.ApplicationType] = "service";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
+
+        // The member by name: an operator reading "invalid_client_metadata" over a body carrying thirty
+        // members has nothing to act on otherwise.
+        Assert.Contains(
+            RequestMembers.ApplicationType,
+            body[DescriptionMember]!.GetValue<string>(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A null ELEMENT inside a URI array is refused, not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// A registration body is attacker-shaped JSON and the deserializer honours no annotation against an
+    /// explicit null, so an array element really can be null - and a check written as
+    /// <c>!uri.IsAbsoluteUri</c> reaches through it and faults the endpoint. The refusal is the answer,
+    /// not a pass: unlike an absent member, a null element WAS sent, and it names nothing.
+    /// </remarks>
+    [Theory]
+    [InlineData(RequestMembers.RedirectUris)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris)]
+    [InlineData(RequestMembers.RequestUris)]
+    public async Task A_null_element_in_a_uri_array_is_refused(string member)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"null-element-in-{member}");
+        metadata[member] = new JsonArray((JsonNode?)null);
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A plain-HTTP notification endpoint is refused even when no delivery mode is registered.
+    /// </summary>
+    /// <remarks>
+    /// The arm that enforces "It MUST be an HTTPS URL" sat behind a switch whose first case returns for
+    /// a null <c>backchannel_token_delivery_mode</c>, so a registration naming the endpoint and no mode
+    /// walked past it and the value was stored. Measured, 201 Created. Nothing else covers it:
+    /// <c>StoredUriValidator</c> asks absoluteness only, and <c>SubjectTypeValidator</c>'s arm needs a
+    /// pairwise subject type.
+    /// <para>
+    /// Whether such a client is usable is a separate question - it has no mode, so nothing polls or
+    /// pushes to it today. What is refused here is storing an address the specification forbids for the
+    /// member, so that turning the mode on later cannot quietly begin using it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_plain_http_notification_endpoint_is_refused_without_a_delivery_mode()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("notified-over-plain-http");
+        metadata[RequestMembers.BackChannelClientNotificationEndpoint] = "http://client.example.com/cb";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same body with an https endpoint registers, so the refusal is about the
+        // scheme rather than about the member being present at all.
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint,
+            AsHttps(NewClientMetadata("notified-over-https")),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // And that it names the member it refused. Asserting the status alone left the one refusal this
+        // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
+        // redirect_uris in that message passed both suites. The whole-token form is copied from the theory
+        // below so the two rows cannot drift apart - not because this member sits in a containment
+        // pair, which it does not: no member name contains it and it contains none, so a plain
+        // Contains would catch the same plant.
+        var body = await ReadJsonAsync(response);
+        var description = body[DescriptionMember]!.GetValue<string>();
+        Assert.True(
+            Regex.IsMatch(
+                description,
+                $@"(?<!\w){Regex.Escape(RequestMembers.BackChannelClientNotificationEndpoint)}(?!\w)",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(1)),
+            $"the refusal does not name the notification endpoint: {description}");
+    }
+
+    /// <summary>
+    /// The same metadata with an https notification endpoint.
+    /// </summary>
+    private static JsonObject AsHttps(JsonObject metadata)
+    {
+        metadata[RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/cb";
+        return metadata;
+    }
+
+    /// <summary>
+    /// The registration model's URI members, found by TYPE.
+    /// </summary>
+    /// <remarks>
+    /// A list written into a test falls behind for the same reason a list written into a validator does,
+    /// and this one already did: it named eleven of fourteen. Asking the model removes the way to be
+    /// wrong about which members exist.
+    /// </remarks>
+    public static TheoryData<string, bool> UriMembers()
+    {
+        var data = new TheoryData<string, bool>();
+
+        foreach (var property in typeof(ClientRegistrationRequest)
+                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                     .Where(p => p.PropertyType == typeof(Uri) || p.PropertyType == typeof(Uri[])))
+        {
+            var name = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name;
+            data.Add(name, property.PropertyType == typeof(Uri[]));
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// No URI member accepts a relative value, driven through the ENDPOINT.
+    /// </summary>
+    /// <remarks>
+    /// The half that says something reached the pipeline: <c>UriMemberCoverageTests</c> asks the
+    /// validator directly and proves the list is complete, and this asks the server and proves the
+    /// validator is wired. Neither replaces the other - removing the validator's DI registration leaves
+    /// every unit row green.
+    /// <para>
+    /// Six of these members had no validator at all until the sweep that produced this row, and one was
+    /// a live defect rather than an omission: a relative <c>frontchannel_logout_uri</c> registered
+    /// happily and reaches <c>GetLeftPart</c> in <c>FrontChannelLogoutService</c> at logout, which
+    /// raises on a relative URI.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(UriMembers))]
+    public async Task No_uri_member_accepts_a_relative_value(string member, bool isArray)
+    {
+        const string Relative = "/somewhere";
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"relative-{member}");
+        metadata[member] = isArray ? new JsonArray(Relative) : Relative;
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same metadata WITHOUT the member registers, so the refusal is about the value.
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint,
+            NewClientMetadata($"relative-control-{member}"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The MEMBER, not only the status. This is the only row that sees the text a client is
+        // actually sent, and the validator behind it is a list of hand-written (name, value) pairs -
+        // swapping two of them told an operator about the wrong member with every row still green.
+        //
+        // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, so
+        // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed the
+        // UNIT theory - and passed here too, but for an unrelated reason rather than for that one.
+        // One direction only - the reverse never passed, because the longer name is not
+        // contained in the shorter - and saying "for each other" would send the next reader looking
+        // for a second pair that does not exist. Measured, this
+        // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and
+        // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
+        // The unit theory is what catches it, by asking the validator directly.
+        var body = await ReadJsonAsync(response);
+        var description = body[DescriptionMember]!.GetValue<string>();
+        Assert.True(
+            Regex.IsMatch(
+                description,
+                $@"(?<!\w){Regex.Escape(member)}(?!\w)",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(1)),
+            $"the refusal does not name {member}: {description}");
+    }
+
+    /// <summary>
+    /// No URI member accepts a host and a port with no scheme.
+    /// </summary>
+    /// <remarks>
+    /// The detector for a whole class rather than a row for one member. A dot is legal in a URI scheme,
+    /// so <c>client.example.com:8080/x</c> parses as an ABSOLUTE Uri whose Scheme is the host name and
+    /// whose Host is the empty string - nothing throws, nothing is malformed, and it names no
+    /// destination. A validator written with <c>IsAbsoluteUri</c> as its whole test admits it, which is
+    /// how it got into this codebase once already; a validator written with the shared https predicate
+    /// refuses it. This row is what makes the NEXT one fail rather than the one after that.
+    /// <para>
+    /// Driven through the endpoint per member, because what has to hold is that SOMETHING refuses, and
+    /// which validator does is not this row's business.
+    /// </para>
+    /// <para>
+    /// Only the members whose scheme is decided - by the fetch policy, or by the specification for a
+    /// redirect URI. The rest are checked for absoluteness alone, and a host with a port IS absolute, so
+    /// listing them here would assert a rule nothing in the library holds.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(RequestMembers.JwksUri, false)]
+    [InlineData(RequestMembers.InitiateLoginUri, false)]
+    [InlineData(RequestMembers.BackChannelLogoutUri, false)]
+    [InlineData(RequestMembers.RedirectUris, true)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris, true)]
+    public async Task No_uri_member_accepts_a_host_and_port_with_no_scheme(string member, bool isArray)
+    {
+        const string HostAndPort = "client.example.com:8080/callback";
+
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"host-and-port-in-{member}");
+        metadata[member] = isArray ? new JsonArray(HostAndPort) : HostAndPort;
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same metadata WITHOUT the member registers, so a refusal here is about the
+        // value and not about a body this endpoint would have refused anyway.
+        var control = NewClientMetadata($"control-for-{member}");
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint, control, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A redirect URI is checked for shape whatever the client's grant types are.
+    /// </summary>
+    /// <remarks>
+    /// The per-URI checks used to sit behind the same gate as the "you must register one" check, which
+    /// asks whether any requested grant type NEEDS a redirect URI. A CIBA-only client needs none, so its
+    /// list was stored unread: measured, <c>"redirect_uris": ["/cb"]</c> registered 201 and the value
+    /// came back in the response. The two questions are different - whether a redirect URI is REQUIRED
+    /// depends on the grant types, whether a registered one is VALID does not.
+    /// </remarks>
+    [Fact]
+    public async Task A_redirect_uri_is_checked_even_for_a_client_that_needs_none()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("ciba-only-with-a-relative-callback");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.RedirectUris] = new JsonArray("/cb");
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        var error = body[ErrorMember];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, error.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A relative <c>jwks_uri</c> is refused at registration rather than stored.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 Section 2 makes this member a URL, and the server FETCHES it: what a relative one buys a
+    /// registrant today is a client whose keys can never be loaded, so every <c>private_key_jwt</c>
+    /// assertion it presents fails as "no signing key matched" - a message that names neither the client
+    /// metadata nor the moment the mistake was made. It cannot fault at fetch time either: an absent
+    /// base address makes the HTTP client refuse the request before the outbound policy handler runs, and
+    /// the fetcher catches everything and answers with an empty key set. Refusing it here is the only
+    /// place the registrant is still on the line to be told.
+    /// <para>
+    /// Driven through the endpoint rather than against the validator alone, because the gap this closes
+    /// was a validator that existed and was never REACHED - a unit row over the same class would have
+    /// passed the whole time it was open.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_relative_jwks_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("keys-from-nowhere");
+        metadata[RequestMembers.JwksUri] = "/.well-known/jwks.json";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await ReadJsonAsync(response);
+        var error = body[ErrorMember];
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.GetValue<string>());
+
+        // The MEMBER, not just the code: twenty-odd validators answer invalid_client_metadata, so the
+        // code alone stays green when some other one refuses for some other reason, and what proves this
+        // validator ran would live only in a mutation outside the suite.
+        var description = body[DescriptionMember];
+        Assert.NotNull(description);
+        Assert.Contains(
+            RequestMembers.JwksUri, description.GetValue<string>(), StringComparison.Ordinal);
     }
 
     /// <summary>
