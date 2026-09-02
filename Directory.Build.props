@@ -40,14 +40,17 @@
 
        Nothing depends on it reading them. A release takes its version from the workflow input via
        MinVerVersionOverride, and a dev build takes it from this property. What it does mean is
-       that the height in a dev version counts from the ROOT COMMIT, not from the last release, so
-       2.4.0-dev.0.469 says "the 469th commit" and not "the 469th since 2.3".
+       that the number after dev.0 is a distance from the ROOT COMMIT rather than from the last
+       release - and it is a DISTANCE, MinVer's shortest path through the history, not an ordinal.
+       Measured on one branch: height 476, against 681 reachable commits and 478 on the
+       first-parent chain. So it orders builds and counts nothing.
 
-       Setting MinVerTagPrefix alone would not help and does not leave the rest alone: nine older
-       tags ARE three-part (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1 and two
-       four-part), and v2.0.1 is reachable from master - measured, master's version moved from
-       2.4.0-dev.0.53 to 2.4.0-dev.0.15 with the prefix set. Moving a published number BACKWARDS
-       is the direction that collides silently.
+       Setting MinVerTagPrefix alone would not help and does not leave the rest alone: seven older
+       tags ARE three-part (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1), and v2.0.1
+       is reachable from master - measured, master's version moved from 2.4.0-dev.0.53 to
+       2.4.0-dev.0.15 with the prefix set. Moving a published number BACKWARDS is the direction
+       that collides silently. The two four-part tags are not part of that risk: measured, MinVer
+       does not read a four-part tag either.
 
        The run summary derives all three parts of the version it prints rather than re-asserting a
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a

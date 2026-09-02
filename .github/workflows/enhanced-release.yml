@@ -254,7 +254,6 @@ jobs:
       contents: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
-      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
       PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
     outputs:
       is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}

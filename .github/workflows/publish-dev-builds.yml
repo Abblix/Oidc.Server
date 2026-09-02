@@ -12,15 +12,14 @@ name: Publish dev build to GitHub Packages
 # kept current - but they are no longer what reaches a consumer.
 #
 # Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   develop, no readable tag behind it     ->  2.4.0-dev.0.<height from the root commit>
-#   a branch with a readable tag behind it ->  <that tag's version, patch bumped>-dev.0.<height>
-#   a release, version supplied by hand    ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
+#   any branch here                     ->  2.4.0-dev.0.<distance>
+#   a release, version supplied by hand ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
 #
-# NO tag is readable from develop, which is worth knowing before reasoning about what MinVer will
-# produce here: every release tag sits on master, which is not an ancestor of develop, and MinVer
-# walks the history of the branch it is building. So on this branch the whole version comes from
-# MinVerMinimumMajorMinor lifting a 0.0.0 default. That is NOT true everywhere - master has
-# readable three-part tags (v2.0.1 among them) and its versions come from them.
+# MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
+# which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
+# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the number after dev.0 is MinVer's height:
+# a shortest-path distance through the history, NOT a count of commits. Measured on this branch,
+# height 476 against 681 reachable commits and 478 on the first-parent chain.
 #
 # Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
 # consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
@@ -143,6 +142,12 @@ jobs:
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
           VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
           case "$VERSION" in
+            "")
+              # Said first and separately: with no package there is no version, no tag and no
+              # release workflow involved, and the arm below would name all three.
+              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+              exit 1
+              ;;
             *-dev.*) echo "Dev build $VERSION - publishing." ;;
             *)
               echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
