@@ -88,10 +88,12 @@ public static class Enrolment
     /// tests, and the previous round was spent discovering that neither implies the other.
     /// <para>
     /// Asserted because the list that carries it can arrive EMPTY without anything failing. It is
-    /// written by MSBuild into an assembly attribute, and a key renamed, an item group deleted, or the
-    /// group placed above the references it reads leaves the attribute present with no value - after
-    /// which every row over that list passes over nothing. Measured: renaming the key alone left all
-    /// four rows green. The version before it threw when its input was missing, which is a worse design
+    /// written by MSBuild into an assembly attribute, and three edits leave the READER with nothing:
+    /// a renamed key (the attribute is still there, under a name the reader does not ask for), a
+    /// deleted item group (no attribute at all), and the group placed above the references it reads
+    /// (the attribute present with an empty value). Only the third is literally empty, which an
+    /// earlier version of this sentence claimed of all three. Measured: renaming the key alone left
+    /// all four rows green. The version before it threw when its input was missing, which is a worse design
     /// with a better failure.
     /// </para>
     /// </remarks>

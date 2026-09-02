@@ -205,8 +205,10 @@ public class DocSampleTests
     /// that is the reference table the compiler EMITTED - trimmed to assemblies whose types the test
     /// code happens to touch. Sixteen projects are referenced now; what the assertion below reads is
     /// <see cref="Enrolment.Libraries"/> against the number of ASSEMBLIES beside the output - a third
-    /// quantity again, and one that agrees with the other two only because every referenced project
-    /// here emits documentation. The five-of-seven is history.
+    /// quantity again, and one that agrees with the other two only while BOTH halves hold: every
+    /// referenced project emits documentation, and nothing arrives beside the output that this project
+    /// does not name. Drop a transitively-reachable reference and the three read 15, 16 and 16. The
+    /// five-of-seven is history.
     /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
     /// shipped packages, and a stub named after a type in either passed.
     /// </para>
@@ -241,9 +243,10 @@ public class DocSampleTests
         // set that lost a library, which is what both earlier versions did.
         //
         // An EQUALITY, not a floor. A floor of seven read as a control and was not one: measured, nine
-        // of the eighteen references could be dropped with every row here still green, because the nine
-        // carry no sample TODAY - so the narrowing would surface on the day somebody added one, which is
-        // the day it must not. Adding a project under src/ means bumping this number, which is the same
+        // of the SIXTEEN references could be dropped with every row here still green, because those
+        // nine carry no sample today. And it would never surface later either - a library whose
+        // documentation has left the output is invisible to the count, so a sample added there is not
+        // seen at all. The equality is the guard; there is no day on which the floor would have spoken. Adding a project under src/ means bumping this number, which is the same
         // deliberate moment the unenrolled count is built around.
         Assert.NotEmpty(stubs);
         Assert.Equal(Enrolment.Libraries, libraries.Length);

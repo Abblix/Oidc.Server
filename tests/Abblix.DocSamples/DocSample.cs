@@ -79,10 +79,11 @@ public static class DocSampleReader
     /// </summary>
     /// <remarks>
     /// Needed at all because a reference REMOVED from the project file still arrives when another
-    /// referenced project pulls it in - measured, dropping <c>Abblix.Utils</c> left its assembly, its
-    /// documentation and every row exactly as before. So the reference list and the output are two
-    /// different things and have to be compared rather than conflated, and the list cannot be recovered
-    /// from the directory the build produces.
+    /// referenced project pulls it in - measured, dropping <c>Abblix.Utils</c> left its assembly and
+    /// its documentation exactly as before. So the reference list and the output are two different
+    /// things and have to be compared rather than conflated, and the list cannot be recovered from the
+    /// directory the build produces. That drop is caught NOW, by the count this list feeds; it was
+    /// green before the count existed, which is what made the point.
     /// <para>
     /// From an assembly attribute rather than from a copy of the csproj, because taking the file name
     /// out of an <c>Include</c> path means deciding what a separator is: the first attempt used
@@ -101,6 +102,10 @@ public static class DocSampleReader
             .Where(metadata => metadata.Key == "ReferencedProjects")
             .SelectMany(metadata => (metadata.Value ?? string.Empty).Split(
                 ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            // Distinct, so the COUNT cannot be satisfied by a repeat standing in for an omission:
+            // sixteen names with one twice and one missing passes every other row, and two projects
+            // in different directories sharing a file name would produce exactly that.
+            .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
