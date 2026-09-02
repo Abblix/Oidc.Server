@@ -126,10 +126,12 @@ jobs:
       - name: Refuse to publish a release version
         run: |
           set -euo pipefail
-          # This workflow publishes DEV builds, and says so in its own summary. Anything else reaches
-          # here only when a release tag sits on the commit being built, because MinVer returns a
-          # tag's version exactly - 2.4.0 for a release, 2.4.0-beta1 for a pre-release. Both belong
-          # to enhanced-release.yml; neither is this workflow's to push.
+          # This workflow publishes DEV builds, and says so in its own summary. A version carrying no
+          # dev identifier means a release tag sits on the commit being built, because MinVer returns
+          # a tag's version exactly - 2.4.0 for a release, 2.4.0-beta1 for a pre-release. Both belong
+          # to enhanced-release.yml; neither is this workflow's to push. Two other things arrive here
+          # and are neither, so each has its own arm: no package at all, and a name this step cannot
+          # read a version out of.
           #
           # Nothing stopped that until now, and the failure was silent in both directions: this job
           # triggers on a push to release/** and on manual dispatch, so it would have pushed the
@@ -149,8 +151,8 @@ jobs:
               exit 1
               ;;
             "")
-              # Said first and separately: with no package there is no version, no tag and no
-              # release workflow involved, and the arm below would name all three.
+              # With no package there is no version, no tag and no release workflow involved, so this
+              # arm says that rather than borrowing a sentence about a release that is not there.
               echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
               exit 1
               ;;
