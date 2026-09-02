@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
-"""Refuse an MSBuild file that does not parse as XML.
+"""Refuse a build XML file that does not parse.
 
-The failure this exists for is a double hyphen inside a comment, which XML forbids. MSBuild does say
-so - MSB4024 names the broken file, the comment, the hyphens and the position - but it says it once
-per project that IMPORTS the file, so a single stray character reddens the whole solution and every
-job behind it. Parsing here answers in a second, before the commit exists.
+The failure this exists for is a double hyphen inside a comment, which XML forbids. MSBuild says so
+once per project that IMPORTS the broken file, so one stray character reddens the whole solution and
+every job behind it; in Directory.Packages.props it surfaces instead as NU1015 about package
+references with no version, naming neither the file nor the comment. Parsing here answers before the
+commit exists.
 
-The same character in Directory.Packages.props is worse and is why the pattern covers more than one
-file: restore fails with NU1015 about package references carrying no version, naming neither the
-file nor the comment.
-
-Every argument is parsed and every failure is reported, rather than stopping at the first: a bulk
-edit tends to break more than one file the same way, and a check that stops early makes the second
-one look like a new problem tomorrow.
-
-The standard-library parser is enough here and a hardened one would be a dependency in every clone:
-it resolves no external entities, and its input is this repository's own build files, which MSBuild
-is about to parse with far more privilege than this check has.
+Every argument is parsed and every failure reported, because a bulk edit tends to break more than one
+file the same way.
 """
 
 import io
@@ -27,16 +19,13 @@ import xml.etree.ElementTree as ElementTree
 def read_text(path: str) -> str:
     """The file's text, whatever it is encoded in.
 
-    A build file is UTF-8 here, but the hook runs on files that failed to parse, and a wrong
-    encoding is one of the ways that happens. Decoding such a file as UTF-8 with replacements
-    yields text carrying no "<!--" at all, so the hint below would go silent on exactly the file
-    that needs it most.
+    This runs only on files that failed to parse, and a wrong encoding is one of the ways that
+    happens: read as UTF-8 with replacements, such a file carries no "<!--" at all and the hint below
+    would go silent on it. Both UTF-16 byte orders are tried, since without a byte-order mark
+    "utf-16" assumes little-endian. latin-1 decodes anything, so the loop always returns.
     """
     with io.open(path, "rb") as handle:
         data = handle.read()
-    # latin-1 is last and decodes anything, so the loop always returns. The two UTF-16 byte orders
-    # are both tried: without a byte-order mark, "utf-16" assumes little-endian, and a big-endian
-    # file then decodes as garbage that carries no comment at all - the hint would go silent on it.
     text = ""
     for encoding in ("utf-8-sig", "utf-16", "utf-16-be", "latin-1"):
         try:
@@ -51,22 +40,17 @@ def read_text(path: str) -> str:
 def double_hyphen_comment(path: str) -> bool:
     """Whether some comment in the file carries a double hyphen.
 
-    Derived from the text, because the parser reports only "not well-formed (invalid token)" and
-    names neither the comment nor the hyphens: keying the hint on the message printed nothing at
-    all against a planted one. An unterminated comment counts, since the file this runs on is by
-    definition one that did not parse.
+    Read from the text: the parser says only "not well-formed (invalid token)" and names neither the
+    comment nor the hyphens. An unterminated comment counts, since this file did not parse.
+
+    CDATA is excluded, because a literal "<!--" inside one is not a comment and the author cannot fix
+    it. The head is kept whole - it precedes every CDATA, so cutting it at a "]]>" would discard real
+    text, and a stray "]]>" is ordinary in a file that did not parse.
     """
     try:
         text = read_text(path)
     except OSError:
         return False
-    # CDATA first: a literal "<!--" inside one is not a comment, and pointing the author at a comment
-    # that is legal is a detector crying wolf on a file it cannot help with.
-    #
-    # The head is kept whole. It precedes every CDATA by construction, so dropping up to a "]]>" in
-    # it discards real text - and a stray "]]>" is ordinary in a file that did not parse, which is
-    # the only kind of file this runs on. Driven both ways: a comment before a mistyped opener, and
-    # a file with no CDATA at all and a stray "]]>" after the comment.
     parts = text.split("<![CDATA[")
     outside = parts[0] + "".join(part.split("]]>", 1)[-1] for part in parts[1:])
     return any("--" in chunk.split("-->", 1)[0] for chunk in outside.split("<!--")[1:])

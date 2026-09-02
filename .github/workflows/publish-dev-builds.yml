@@ -126,47 +126,22 @@ jobs:
       - name: Refuse to publish a release version
         run: |
           set -euo pipefail
-          # This workflow publishes DEV builds, and says so in its own summary. A version carrying no
-          # dev identifier means a release tag sits on the commit being built, because MinVer returns
-          # a tag's version exactly - 2.4.0 for a release, 2.4.0-beta1 for a pre-release. Both belong
-          # to enhanced-release.yml; neither is this workflow's to push. Two other things arrive here
-          # and are neither, so each has its own arm: no package at all, and a name this step cannot
-          # read a version out of.
-          #
-          # Nothing stopped that until now, and the failure was silent in both directions: this job
-          # triggers on a push to release/** and on manual dispatch, so it would have pushed the
-          # stable package to GitHub Packages past the release approval gate, and the approved
-          # publish that ran afterwards uses --skip-duplicate and would have no-opped over it. The
-          # feed would then hold a binary nobody approved, with nothing to show the difference.
-          #
-          # Stated as what must be PRESENT - the dev identifier this workflow's own builds carry -
-          # rather than as a list of the ways a tagged version can arrive here. The line itself is
-          # read from the property the rest of the repository reads, so this step cannot hold a
-          # second opinion about which line is being built.
+          # This workflow publishes DEV builds. A version carrying no dev identifier means a release
+          # tag sits on the commit, and those belong to enhanced-release.yml, behind its approval
+          # gate. Without this step such a package would reach the feed past that gate, and the
+          # approved publish afterwards uses --skip-duplicate and would no-op over it.
           if [ ! -f Directory.Build.props ]; then
             echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
             exit 1
           fi
-          # MSBuild EVALUATES the property rather than a pattern matching the tag it is written in.
-          # A text match reads one spelling: driven, a Condition on the ELEMENT, padding inside it, a
-          # second declaration later in the file and a commented-out copy each gave the pattern a
-          # wrong answer or none, and each would have refused a good build naming a cause that was
-          # not there - the thing this step exists to stop. (A Condition on the GROUP is not one of
-          # them: both readings agree there, and when the condition is false the pattern is the one
-          # that answers, with a value the build never sets.)
-          #
-          # Evaluated in the configuration Pack used, because the file is evaluated STANDING ALONE
-          # here and in a project's context there: a property conditioned on $(Configuration) reads
-          # empty standalone and 2.4 under Release. Driven. Today's is unconditional, so this changes
-          # nothing and costs one flag - and the case it forecloses is a good build refused for a
-          # cause that is not there, which is this step's whole subject. It closes ONE dimension of
-          # standing alone, not the difference: driven, a property conditioned on $(TargetFramework)
-          # still reads empty here and 2.4 once that is supplied too.
-          #
-          # MSBuild's stderr is NOT discarded: -getProperty puts the value alone on stdout, so an
-          # error or a warning cannot reach EXPECTED, and throwing it away would leave this step
-          # refusing with no cause at all. Driven with a broken props: the line it keeps names the
-          # file, the position and the defect.
+
+          # MSBuild evaluates the property; a pattern would read one spelling of the tag and miss a
+          # Condition on the element, padding, a later re-declaration or a commented-out copy - each
+          # of which would refuse a good build for a cause that is not there. Configuration is passed
+          # because the file is read standing alone here and in a project's context during the build;
+          # that closes one such difference, not all of them. stderr is kept: -getProperty puts the
+          # value alone on stdout, and discarding the rest would leave this step refusing with no
+          # cause in the log.
           rc=0
           EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
           if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
@@ -174,25 +149,17 @@ jobs:
             exit 1
           fi
 
-          # find is allowed to fail rather than end the step: a missing nupkg/ and an empty one are
-          # the same situation for whoever reads the log, and under set -e the missing directory
-          # would stop the run at find, with its message and none of the arm's.
+          # find may fail without ending the step, so a missing nupkg/ reaches the arm below rather
+          # than dying here with find's message and none of ours.
           rc=0
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
           [ "$rc" -eq 0 ] || PKG=""
           BASE=$(basename "$PKG" .nupkg)
 
-          # The version is the FIRST version-shaped suffix, not the last. Taking the last is what made
-          # the earlier readings wrong: a pre-release identifier with a third part hands back a
-          # fragment - 2.4.0-dev.0.0.478 came out as 0.0.478, and 2.4.0-dev.2.4.478 as 2.4.478, which
-          # is on this repository's line and has lost the dev identifier with the rest. Stripping
-          # leading id segments instead keeps the whole version in every one of those names. Driven.
-          #
-          # It assumes no SEGMENT of a package id begins with a digit, which none here does. A segment
-          # that did would be taken as the start of the version, and what follows is usually a refusal
-          # naming a cause that is not there - but not always: an id segment shaped like a version can
-          # carry a dev identifier of its own and publish a release. Driven, on a contrived name. So
-          # this is the sentence to revisit if an id ever gains a digit-leading segment.
+          # The version is the FIRST version-shaped suffix. Taking the last loses the tail of a
+          # pre-release identifier that has three parts, which then reads as a release. This assumes
+          # no segment of a package id begins with a digit, and none here does; one that did would be
+          # taken as the start of the version, usually refused and in a contrived case published.
           VERSION=""
           REST=$BASE
           while [ -n "$REST" ]; do
@@ -214,8 +181,7 @@ jobs:
             exit 1
           fi
 
-          # Both halves, on the version alone now that it arrives whole: the dev identifier this
-          # workflow's own builds carry, and the line this repository builds.
+          # Both criteria on the version: the dev identifier, and the line this repository builds.
           case "$VERSION" in
             "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
             "$EXPECTED".*)
@@ -224,8 +190,7 @@ jobs:
               exit 1
               ;;
             *)
-              # On neither count: the version line may have moved, or the name may not be one this
-              # step can read. The two cannot be told apart from here, so the message names both.
+              # Off the line, and the two causes cannot be told apart from here.
               echo "Refusing to publish $VERSION: it is not on the $EXPECTED line this repository builds." >&2
               echo "Either the version line moved and this workflow was not told, or '$PKG' is not a name this step can read." >&2
               exit 1
