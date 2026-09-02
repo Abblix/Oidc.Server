@@ -80,9 +80,13 @@ public partial class DeviceCodeGrantHandler(
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:
                 return new OidcError(ErrorCodes.InvalidGrant, "The device code was issued to another client");
 
-            // Code has reached its fixed RFC 8628 section 3.2 lifetime - reject and clean up rather than letting a
-            // polling client keep it alive by resetting the cache TTL
-            case { } when now >= deviceRequest.ExpiresAt:
+            // Code has reached its fixed RFC 8628 section 3.2 lifetime - reject and clean up rather than
+            // letting a polling client keep it alive by resetting the cache TTL.
+            //
+            // The same predicate the record answers for the verification, approval and denial paths, so
+            // the token endpoint and those three cannot disagree about the instant a device code stops
+            // being usable - one expression rather than two comparisons kept in step by hand.
+            case { } when !deviceRequest.HasLifetimeLeft(now, out _):
                 await storage.RemoveAsync(request.DeviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
