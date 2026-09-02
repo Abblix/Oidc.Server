@@ -48,6 +48,30 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // deserializer does not - so each site that reads a URI member states absoluteness itself, and
         // a guard whose safety depends on another validator's position in a list moves when somebody
         // reorders that list.
+        // CIBA Core 1.0 Section 4, describing backchannel_client_notification_endpoint as registration
+        // metadata: "It MUST be an HTTPS URL." That is the clause the check below enforces, and Section
+        // 4 is where it is written for a registration request. Null passes, because a registration is
+        // free not to name the endpoint at all; whether a mode REQUIRES one is the switch's question.
+        //
+        // The TLS half is NOT in Section 4. It is Section 9, which restates the HTTPS rule and adds
+        // "Communication with the Client Notification Endpoint MUST utilize TLS" - a property of the
+        // transport a host establishes when it calls the endpoint, so nothing about the registered value
+        // can decide it. PingModeValidator and PushModeValidator quote Section 9 and say the same of it.
+        //
+        // Section 4 carries two further rules about this parameter, and both belong to PUSH mode under
+        // pairwise subject types: the endpoint "is used in place of the redirect_uri" as the sector
+        // identifier, and where a sector_identifier_uri is registered the endpoint "must be included in
+        // the list of URIs pointed to by" it. Poll and ping put the jwks_uri in both of those roles
+        // instead, so neither rule reaches a ping registration - which is why they cannot be enforced
+        // here, where the value is judged without reference to the mode. Both ARE implemented, by
+        // SubjectTypeValidator in this same pipeline: it fetches the sector document and checks it for
+        // whichever URI the registered mode names, and takes the sector from that same URI when the client
+        // registered neither a sector_identifier_uri nor a redirect URI. Both absences, not one: a push
+        // client that registered redirect URIs takes its sector from those, and this endpoint then plays no
+        // part in the sector at all.
+        //
+        // The remaining Section 4 rule for this parameter, "REQUIRED if the token delivery mode is set
+        // to ping or push", IS implemented - by the switch below, in the words of the refusal it returns.
         if (context.Request.BackChannelClientNotificationEndpoint
             is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
         {
@@ -91,33 +115,6 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     "The specified token delivery mode is not supported");
         }
 
-        // CIBA Core 1.0 Section 4, describing backchannel_client_notification_endpoint as registration
-        // metadata: "It MUST be an HTTPS URL." That is the clause this line enforces, and Section 4 is
-        // where it is written for a registration request.
-        //
-        // The TLS half is NOT in Section 4. It is Section 9, which restates the HTTPS rule and adds
-        // "Communication with the Client Notification Endpoint MUST utilize TLS" - a property of the
-        // transport a host establishes when it calls the endpoint, so nothing about the registered value
-        // can decide it. PingModeValidator and PushModeValidator quote Section 9 and say the same of it.
-        //
-        // Section 4 carries two further rules about this parameter, and both belong to PUSH mode under
-        // pairwise subject types: the endpoint "is used in place of the redirect_uri" as the sector
-        // identifier, and where a sector_identifier_uri is registered the endpoint "must be included in
-        // the list of URIs pointed to by" it. Poll and ping put the jwks_uri in both of those roles
-        // instead, so neither rule reaches a ping registration - which is why they cannot be enforced
-        // beside the HTTPS check, whose arm covers ping and push alike. Both ARE implemented, by
-        // SubjectTypeValidator in this same pipeline: it fetches the sector document and checks it for
-        // whichever URI the registered mode names, and takes the sector from that same URI when the client
-        // registered neither a sector_identifier_uri nor a redirect URI. Both absences, not one: a push
-        // client that registered redirect URIs takes its sector from those, and this endpoint then plays no
-        // part in the sector at all.
-        //
-        // The remaining Section 4 rule for this parameter, "REQUIRED if the token delivery mode is set
-        // to ping or push", IS implemented - by the switch above, in the words of the refusal it returns.
-        //
-        // A poll request carrying NO endpoint reaches this line: the switch rejects poll WITH one and
-        // ping or push WITHOUT one, which leaves poll-with-nothing to fall through. That is what the null
-        // check below is for.
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;
         if (signingAlgorithm.HasValue() &&
             !jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))

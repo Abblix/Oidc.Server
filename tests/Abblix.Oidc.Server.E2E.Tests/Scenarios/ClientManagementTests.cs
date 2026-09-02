@@ -244,6 +244,20 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // And that it names the member it refused. Asserting the status alone left the one refusal this
+        // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
+        // redirect_uris in that message passed both suites. The whole-token form is the same one the
+        // theory below uses, and for the same pair.
+        var body = await ReadJsonAsync(response);
+        var description = body["error_description"]!.GetValue<string>();
+        Assert.True(
+            Regex.IsMatch(
+                description,
+                $@"(?<!\w){Regex.Escape(RequestMembers.BackChannelClientNotificationEndpoint)}(?!\w)",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(1)),
+            $"the refusal does not name the notification endpoint: {description}");
     }
 
     /// <summary>
@@ -324,8 +338,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // actually sent, and the validator behind it is a list of hand-written (name, value) pairs -
         // swapping two of them told an operator about the wrong member with every row still green.
         //
-        // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, and
-        // with containment a mislabelling of those two for each other passed both suites. Measured, this
+        // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, so
+        // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed both
+        // suites. One direction only - the reverse never passed, because the longer name is not
+        // contained in the shorter - and saying "for each other" would send the next reader looking
+        // for a second pair that does not exist. Measured, this
         // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and
         // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
         // The unit theory is what catches it, by asking the validator directly.
