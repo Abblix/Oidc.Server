@@ -152,12 +152,25 @@ jobs:
             exit 1
           fi
           # MSBuild EVALUATES the property rather than a pattern matching the tag it is written in.
-          # A text match reads only one spelling: driven, a Condition on the PropertyGroup, padding
-          # inside the element, a second declaration later in the file and a commented-out copy are
-          # all read correctly here, and each defeated the text match - which would have refused a
-          # good build naming a cause that was not there, the thing this whole step exists to stop.
+          # A text match reads one spelling: driven, a Condition on the ELEMENT, padding inside it, a
+          # second declaration later in the file and a commented-out copy each gave the pattern a
+          # wrong answer or none, and each would have refused a good build naming a cause that was
+          # not there - the thing this step exists to stop. (A Condition on the GROUP is not one of
+          # them: both readings agree there, and when the condition is false the pattern is the one
+          # that answers, with a value the build never sets.)
+          #
+          # Evaluated in the configuration Pack used, because the file is evaluated STANDING ALONE
+          # here and in a project's context there: a property conditioned on $(Configuration) reads
+          # empty standalone and 2.4 under Release. Driven. Today's is unconditional, so this changes
+          # nothing and costs one flag - and the case it forecloses is a good build refused for a
+          # cause that is not there, which is this step's whole subject.
+          #
+          # MSBuild's stderr is NOT discarded: -getProperty puts the value alone on stdout, so an
+          # error or a warning cannot reach EXPECTED, and throwing it away would leave this step
+          # refusing with no cause at all. Driven with a broken props: the line it keeps names the
+          # file, the position and the defect.
           rc=0
-          EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -nologo 2>/dev/null | tr -d '[:space:]') || rc=$?
+          EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
           if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
             echo "Could not evaluate MinVerMinimumMajorMinor from Directory.Build.props - there is nothing to check the built version against." >&2
             exit 1
@@ -199,7 +212,7 @@ jobs:
                   ;;
                 *)
                   # The name carries the dev identifier and the version read out of it does not, so
-                  # the extraction lost it: that is a misread and nothing else.
+                  # the extraction lost it, which is a misread.
                   echo "Refusing to publish: '$BASE' names a dev build, but the version read out of it is '$VERSION'." >&2
                   echo "The name was misread, so nothing here can say what this package holds." >&2
                   exit 1

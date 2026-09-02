@@ -32,15 +32,20 @@ def read_text(path: str) -> str:
     yields text carrying no "<!--" at all, so the hint below would go silent on exactly the file
     that needs it most.
     """
-    data = io.open(path, "rb").read()
-    for encoding in ("utf-8-sig", "utf-16", "latin-1"):
+    with io.open(path, "rb") as handle:
+        data = handle.read()
+    # latin-1 is last and decodes anything, so the loop always returns. The two UTF-16 byte orders
+    # are both tried: without a byte-order mark, "utf-16" assumes little-endian, and a big-endian
+    # file then decodes as garbage that carries no comment at all - the hint would go silent on it.
+    text = ""
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-be", "latin-1"):
         try:
             text = data.decode(encoding)
         except (UnicodeDecodeError, LookupError):
             continue
-        if "<!--" in text or encoding == "latin-1":
-            return text
-    return ""
+        if "<!--" in text:
+            break
+    return text
 
 
 def double_hyphen_comment(path: str) -> bool:
