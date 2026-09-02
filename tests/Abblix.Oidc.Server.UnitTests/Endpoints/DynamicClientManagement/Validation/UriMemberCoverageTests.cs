@@ -9,6 +9,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -64,7 +65,21 @@ public class UriMemberCoverageTests
         var result = await new StoredUriValidator().ValidateAsync(new ClientRegistrationValidationContext(request));
 
         Assert.NotNull(result);
+
+        // The NAME as well as the refusal. The validator is fourteen hand-written (name, value) pairs and
+        // its summary promises an error naming the member - measured, swapping two pairs left both suites
+        // green while an operator sending a relative policy_uri was told about their tos_uri.
+        Assert.Contains(
+            ParameterNameOf(property),
+            result.ErrorDescription,
+            StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The registration parameter a property is reported by, taken from the model's own JSON name.
+    /// </summary>
+    private static string ParameterNameOf(PropertyInfo property)
+        => property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name;
 
     /// <summary>
     /// The control: the same request with every URI member absolute is accepted, so the rows above

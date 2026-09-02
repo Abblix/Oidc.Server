@@ -265,6 +265,13 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The MEMBER, not only the status. This is the only row that sees the text a client is
+        // actually sent, and the validator behind it is a list of hand-written (name, value) pairs -
+        // swapping two of them told an operator about the wrong member with every row still green.
+        var body = await ReadJsonAsync(response);
+        Assert.Contains(
+            member, body["error_description"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     /// <summary>
