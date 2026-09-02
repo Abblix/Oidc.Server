@@ -97,11 +97,12 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // check below is for.
         // Absoluteness first, because Scheme raises on a relative URI rather than returning anything:
         // a registration body carrying "/cb" here faulted the endpoint instead of being refused. The
-        // [AbsoluteUri] on the member does not help - the form binder honours it and the JSON
-        // deserializer does not - so each site states absoluteness itself, and a row over every URI
-        // member the model carries is what keeps that true rather than a sentence here. Only
-        // absoluteness is shared: the scheme is per member, decided by the fetch policy where the server
-        // fetches and by the specification where it redirects.
+        // [AbsoluteUri] on the member is honoured by the form binder and NOT by the JSON deserializer,
+        // which is why StoredUriValidator reads the same attribute for the JSON route. That covers
+        // absoluteness for every declared member; this line states it again because the arm below runs
+        // before that validator and reads Scheme, which raises on a relative value. Only absoluteness is
+        // shared - the scheme is per member, decided by the fetch policy where the server fetches and by
+        // the specification where it redirects.
         var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
         if (notificationEndpoint is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
         {

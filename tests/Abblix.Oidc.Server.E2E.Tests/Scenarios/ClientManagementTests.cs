@@ -22,6 +22,9 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using System.Reflection;
+using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -169,30 +172,75 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// No URI member accepts a relative value.
+    /// A null ELEMENT inside a URI array is refused, not dereferenced.
     /// </summary>
     /// <remarks>
-    /// The wider of the two detectors, over every URI member a registration can carry. Absoluteness is
-    /// the rule they all share; the scheme is not, so it is the other theory's subject and only for the
-    /// members whose scheme the fetch policy decides.
+    /// A registration body is attacker-shaped JSON and the deserializer honours no annotation against an
+    /// explicit null, so an array element really can be null - and a check written as
+    /// <c>!uri.IsAbsoluteUri</c> reaches through it and faults the endpoint. The refusal is the answer,
+    /// not a pass: unlike an absent member, a null element WAS sent, and it names nothing.
+    /// </remarks>
+    [Theory]
+    [InlineData(RequestMembers.RedirectUris)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris)]
+    [InlineData(RequestMembers.RequestUris)]
+    public async Task A_null_element_in_a_uri_array_is_refused(string member)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata($"null-element-in-{member}");
+        metadata[member] = new JsonArray((JsonNode?)null);
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The registration model's URI members, found by TYPE.
+    /// </summary>
+    /// <remarks>
+    /// A list written into a test falls behind for the same reason a list written into a validator does,
+    /// and this one already did: it named eleven of fourteen. Asking the model removes the way to be
+    /// wrong about which members exist.
+    /// </remarks>
+    public static TheoryData<string, bool> UriMembers()
+    {
+        var data = new TheoryData<string, bool>();
+
+        foreach (var property in typeof(ClientRegistrationRequest)
+                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                     .Where(p => p.PropertyType == typeof(Uri) || p.PropertyType == typeof(Uri[])))
+        {
+            var name = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name;
+            data.Add(name, property.PropertyType == typeof(Uri[]));
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// No URI member accepts a relative value, driven through the ENDPOINT.
+    /// </summary>
+    /// <remarks>
+    /// The half that says something reached the pipeline: <c>UriMemberCoverageTests</c> asks the
+    /// validator directly and proves the list is complete, and this asks the server and proves the
+    /// validator is wired. Neither replaces the other - removing the validator's DI registration leaves
+    /// every unit row green.
     /// <para>
-    /// Six of these had no validator at all until the sweep that produced this row, and one of them was
+    /// Six of these members had no validator at all until the sweep that produced this row, and one was
     /// a live defect rather than an omission: a relative <c>frontchannel_logout_uri</c> registered
-    /// happily and reached <c>new UriBuilder(uri)</c> at logout, which throws on a relative URI.
+    /// happily and reaches <c>GetLeftPart</c> in <c>FrontChannelLogoutService</c> at logout, which
+    /// raises on a relative URI.
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(RequestMembers.JwksUri, false)]
-    [InlineData(RequestMembers.InitiateLoginUri, false)]
-    [InlineData(RequestMembers.BackChannelLogoutUri, false)]
-    [InlineData(RequestMembers.FrontChannelLogoutUri, false)]
-    [InlineData(RequestMembers.LogoUri, false)]
-    [InlineData(RequestMembers.ClientUri, false)]
-    [InlineData(RequestMembers.PolicyUri, false)]
-    [InlineData(RequestMembers.TosUri, false)]
-    [InlineData(RequestMembers.RedirectUris, true)]
-    [InlineData(RequestMembers.PostLogoutRedirectUris, true)]
-    [InlineData(RequestMembers.RequestUris, true)]
+    [MemberData(nameof(UriMembers))]
     public async Task No_uri_member_accepts_a_relative_value(string member, bool isArray)
     {
         const string Relative = "/somewhere";

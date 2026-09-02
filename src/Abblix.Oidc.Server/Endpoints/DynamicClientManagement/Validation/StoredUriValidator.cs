@@ -12,49 +12,60 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates that every remaining URI member a registration can carry names a destination, so that no
-/// address is stored on a client without something having read it.
+/// Refuses a registration carrying a relative URI in any member, so no address is stored on a client
+/// without something having read it.
 /// </summary>
 /// <remarks>
-/// The members here are the ones that had no validator at all: each was deserialized, stored on the
-/// client and echoed back with nothing checking anything. They are gathered into one class because what
-/// they share is the whole rule - a stored address must be absolute - rather than because they belong
-/// together in the specification.
+/// Every URI member is named here, including the ones another validator also looks at. Those others are
+/// each GATED on something that is not the address - a pairwise subject type, a TLS authentication
+/// method, a backchannel delivery mode, a grant type that redirects - so a registration naming none of
+/// those walks past them with the member stored. What is asked here is asked unconditionally.
 /// <para>
-/// The member that makes this a defect rather than tidiness is <c>frontchannel_logout_uri</c>. A
-/// relative value reaches <c>new UriBuilder(uri)</c> in <c>FrontChannelLogoutNotifier</c>, which throws
-/// on a relative URI - the same shape as a relative address faulting at fetch time, one member over,
-/// and at logout rather than at registration. The rest are addresses shown to a person, where a
-/// relative value resolves against whatever page happens to render it.
+/// What makes this a defect rather than tidiness is <c>frontchannel_logout_uri</c>. A relative value
+/// reaches <c>FrontChannelLogoutService</c>, which builds the logout page's frame-source policy with
+/// <see cref="Uri.GetLeftPart"/> - and that raises on a relative URI, unconditionally, at logout rather
+/// than at registration.
 /// </para>
 /// <para>
-/// ABSOLUTENESS only, and deliberately no opinion on the scheme. An https requirement for these members
-/// is a claim about what the specifications say, and this file does not make claims it has not read:
-/// the members this server FETCHES have their scheme decided by the fetch policy, which is a different
-/// question and is answered by <see cref="JwksUriValidator"/> and
-/// <see cref="BackChannelLogoutUriValidator"/>.
+/// ABSOLUTENESS only. The scheme requirements in this pipeline are conditional - a native client's
+/// redirect URI carries its own, a fetched address answers to the deployment's policy - and the
+/// validators that own those conditions already state them. What is unconditional is that a stored
+/// address must name somewhere.
+/// </para>
+/// <para>
+/// A null single member is ABSENT and passes; a null ELEMENT of an array was sent and is refused. That
+/// asymmetry is the shape a registration body has: it is attacker-shaped JSON and the deserializer
+/// honours no annotation against an explicit null, so both are reachable and they mean different things.
+/// </para>
+/// <para>
+/// The list is written out rather than reflected over, because a reader of this file should be able to
+/// see what is checked. What keeps it from falling behind - which it did twice while it was shorter - is
+/// <c>UriMemberCoverageTests</c>, which finds every URI member on the model by its TYPE and requires
+/// this validator to refuse a relative value in each. A member added without a line here fails that row.
 /// </para>
 /// </remarks>
 public class StoredUriValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error naming the first member that carries a relative
-    /// URI; <c>null</c> when every one it reads is absent or absolute.
+    /// URI; <c>null</c> when every member is absent or absolute.
     /// </summary>
     protected override OidcError? Validate(ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
-        // Named one by one rather than by reflection over the model: a member added later should have to
-        // be thought about, and a loop over "every Uri property" would silently adopt one whose rule is
-        // not this rule - a sector identifier, an address the fetch policy owns.
         var singles = new[]
         {
-            (Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri),
             (Parameters.LogoUri, request.LogoUri),
             (Parameters.ClientUri, request.ClientUri),
             (Parameters.PolicyUri, request.PolicyUri),
             (Parameters.TosUri, request.TermsOfServiceUri),
+            (Parameters.JwksUri, request.JwksUri),
+            (Parameters.SectorIdentifierUri, request.SectorIdentifierUri),
+            (Parameters.InitiateLoginUri, request.InitiateLoginUri),
+            (Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri),
+            (Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri),
+            (Parameters.BackChannelClientNotificationEndpoint, request.BackChannelClientNotificationEndpoint),
         };
 
         foreach (var (name, uri) in singles)
@@ -63,10 +74,18 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
                 return Relative(name);
         }
 
-        if (request.RequestUris is { Length: > 0 } requestUris
-            && Array.Exists(requestUris, uri => !uri.IsAbsoluteUri))
+        var arrays = new[]
         {
-            return Relative(Parameters.RequestUris);
+            (Parameters.RedirectUris, request.RedirectUris),
+            (Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris),
+            (Parameters.RequestUris, request.RequestUris),
+            (Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri),
+        };
+
+        foreach (var (name, uris) in arrays)
+        {
+            if (uris is { Length: > 0 } && Array.Exists(uris, uri => uri is not { IsAbsoluteUri: true }))
+                return Relative(name);
         }
 
         return null;
