@@ -89,7 +89,10 @@ public static class DocSampleReader
     /// <c>Path.GetFileNameWithoutExtension</c> on a path written with backslashes, which on Linux
     /// is not a separator at all, so the whole path came back as the name. Green here, red on the Ubuntu
     /// runner CI uses - the platform difference is invisible on the machine the code was written on.
-    /// MSBuild already knows the answer and its <c>%(Filename)</c> is right by construction.
+    /// MSBuild already knows the answer, and its <c>%(Filename)</c> - the PROJECT file's name - is the
+    /// assembly name for every project here, none of which renames its assembly. Right by convention,
+    /// then, rather than by construction; what is right by construction is only that no separator can
+    /// survive into it.
     /// </para>
     /// </remarks>
     public static IReadOnlyList<string> ReferencedProjects()

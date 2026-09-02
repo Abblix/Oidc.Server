@@ -152,14 +152,21 @@ public class DocSampleTests
         // be read as. Dropping a reference has two outcomes, both measured, and REACHABILITY decides
         // which - not whether the library carries a sample. Still reachable through another reference:
         // nothing changes, and nothing needs to, since its documentation is still here to be read.
-        // Abblix.Oidc.Server itself is in that class, arriving through Mvc and three others, though it
-        // carries two enrolled samples. Reachable no longer: its documentation goes with it and the
+        // Abblix.Oidc.Server itself is in that class, arriving through Mvc, AspNetCore and MinimalApi,
+        // though it carries two enrolled samples. Reachable no longer: its documentation goes with it and the
         // count below sees that, or a Samples/ copy names its types and the compiler refuses first.
         var documented = DocSampleReader.Documents()
             .Select(document => (string?)document.Root!.Element("assembly")!.Element("name")!)
             .ToHashSet(StringComparer.Ordinal);
 
         var referenced = DocSampleReader.ReferencedProjects();
+
+        // The control, and it is not ceremony: this list is written by MSBuild into an assembly
+        // attribute, so a renamed key or an item group placed above the references it reads yields an
+        // EMPTY list, and every Assert.All below then passes over nothing. Measured - renaming the key
+        // alone left all four rows green. The count rather than only emptiness, because a list that
+        // shrank is the same failure wearing a smaller number.
+        Assert.Equal(Enrolment.References, referenced.Count);
 
         // A bare NAME, not a path. The first version of this took the file name out of an Include path
         // with Path.GetFileNameWithoutExtension, which on Linux does not treat a backslash as a
@@ -197,8 +204,9 @@ public class DocSampleTests
     /// surface, and <c>GetReferencedAssemblies</c> covered five of the seven then referenced, because
     /// that is the reference table the compiler EMITTED - trimmed to assemblies whose types the test
     /// code happens to touch. Sixteen projects are referenced now; what the assertion below reads is
-    /// <see cref="Enrolment.Libraries"/>, the number of documentation FILES beside the output, which is
-    /// a different quantity that happens to agree today. The five-of-seven is history.
+    /// <see cref="Enrolment.Libraries"/> against the number of ASSEMBLIES beside the output - a third
+    /// quantity again, and one that agrees with the other two only because every referenced project
+    /// here emits documentation. The five-of-seven is history.
     /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
     /// shipped packages, and a stub named after a type in either passed.
     /// </para>

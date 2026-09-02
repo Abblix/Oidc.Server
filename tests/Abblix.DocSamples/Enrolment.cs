@@ -60,8 +60,10 @@ public static class Enrolment
     /// Asserted for equality rather than as a floor, and bumped by hand when a library is added, which
     /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor of seven let the nine
     /// sample-free references go at once with every row green, taking seven of the sixteen documents
-    /// with them - two of the nine survive, arriving through libraries that cannot be dropped - so the
-    /// narrowing would have surfaced on the day somebody added a sample to one of them.
+    /// with them - two of the nine survive, arriving through libraries that cannot be dropped. And it
+    /// would NOT have surfaced later: a sample added to a library whose documentation has left the
+    /// output is invisible to the count, measured, so the gate simply never sees it. That is why the
+    /// equality is the guard rather than a promise about some future day.
     /// </para>
     /// <para>
     /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
@@ -76,6 +78,24 @@ public static class Enrolment
     /// </para>
     /// </remarks>
     public const int Libraries = 16;
+
+    /// <summary>
+    /// How many projects under <c>src/</c> this one names in its own project file.
+    /// </summary>
+    /// <remarks>
+    /// The same number as <see cref="Libraries"/> today and a different QUANTITY, which is why it has
+    /// its own name: one counts what the project asks for, the other what the build put beside the
+    /// tests, and the previous round was spent discovering that neither implies the other.
+    /// <para>
+    /// Asserted because the list that carries it can arrive EMPTY without anything failing. It is
+    /// written by MSBuild into an assembly attribute, and a key renamed, an item group deleted, or the
+    /// group placed above the references it reads leaves the attribute present with no value - after
+    /// which every row over that list passes over nothing. Measured: renaming the key alone left all
+    /// four rows green. The version before it threw when its input was missing, which is a worse design
+    /// with a better failure.
+    /// </para>
+    /// </remarks>
+    public const int References = 16;
 
     /// <summary>
     /// How many distinct code samples the compiler recorded that nothing here compiles.
