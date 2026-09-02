@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Reflection;
 using System.Xml.Linq;
 
 namespace Abblix.DocSamples;
@@ -74,29 +75,31 @@ public static class DocSampleReader
     }
 
     /// <summary>
-    /// The projects this one references by name, read from the project file itself.
+    /// The projects this one references by name, as MSBuild wrote them into this assembly.
     /// </summary>
     /// <remarks>
-    /// Read from the csproj rather than counted off the output directory, because a reference REMOVED
-    /// here still arrives when another referenced project pulls it in - measured, dropping
-    /// <c>Abblix.Utils</c> left its assembly, its documentation and every row exactly as before, and it
-    /// carries a live sample. Two numbers both taken from the output cannot see that; the reference list
-    /// and the output are two different things and have to be compared, not conflated.
+    /// Needed at all because a reference REMOVED from the project file still arrives when another
+    /// referenced project pulls it in - measured, dropping <c>Abblix.Utils</c> left its assembly, its
+    /// documentation and every row exactly as before. So the reference list and the output are two
+    /// different things and have to be compared rather than conflated, and the list cannot be recovered
+    /// from the directory the build produces.
+    /// <para>
+    /// From an assembly attribute rather than from a copy of the csproj, because taking the file name
+    /// out of an <c>Include</c> path means deciding what a separator is: the first attempt used
+    /// <c>Path.GetFileNameWithoutExtension</c> on a path written with backslashes, which on Linux
+    /// is not a separator at all, so the whole path came back as the name. Green here, red on the Ubuntu
+    /// runner CI uses - the platform difference is invisible on the machine the code was written on.
+    /// MSBuild already knows the answer and its <c>%(Filename)</c> is right by construction.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<string> ReferencedProjects()
-    {
-        var beside = Path.GetDirectoryName(typeof(DocSampleReader).Assembly.Location)!;
-        var project = XDocument.Load(Path.Combine(beside, "Abblix.DocSamples.csproj"));
-
-        return project
-            .Descendants("ProjectReference")
-            .Select(reference => (string?)reference.Attribute("Include") ?? string.Empty)
-            .Select(Path.GetFileNameWithoutExtension)
-            .Where(name => !string.IsNullOrEmpty(name))
-            .Select(name => name!)
+        => typeof(DocSampleReader).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Where(metadata => metadata.Key == "ReferencedProjects")
+            .SelectMany(metadata => (metadata.Value ?? string.Empty).Split(
+                ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
-    }
 
     /// <summary>
     /// The lines of one enrolled sample.
@@ -134,7 +137,8 @@ public static class DocSampleReader
     /// <para>
     /// A constructor's blocks are dropped only when its WHOLE documented body is identical to its
     /// declaring type's, not merely its code text. The copy Roslyn makes is byte-for-byte, so the whole
-    /// body still catches it; matching on the code alone also collapsed an EXPLICIT constructor whose
+    /// body still catches it, unless the author copied the WHOLE comment too, which nothing in the XML can
+    /// tell from Roslyn's own copy. Matching on the code alone also collapsed an EXPLICIT constructor whose
     /// author deliberately repeats the type's sample - measured, a real sample lost and the uncompiled
     /// remainder unmoved, which is precisely the silence this gate exists to break.
     /// </para>

@@ -12,13 +12,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- Copied so a test can read the reference LIST rather than count what happens to sit
-             beside the output: a reference removed here still arrives transitively, so comparing
-             two numbers that both come from the output directory cannot see it go. -->
-        <None Include="Abblix.DocSamples.csproj" CopyToOutputDirectory="PreserveNewest" />
-    </ItemGroup>
-
-    <ItemGroup>
         <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
     </ItemGroup>
 
@@ -57,6 +50,18 @@
         <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
+    </ItemGroup>
+
+    <!-- The reference list, written by MSBuild rather than recovered from a copy of this file: a
+         test asserts every referenced project put its documentation beside the output, and hand-
+         parsing Include paths meant splitting them on a separator. The previous attempt did that
+         with Path.GetFileNameWithoutExtension, which does not treat a backslash as one on Linux -
+         green here, red on the Ubuntu runner CI actually uses. -->
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>ReferencedProjects</_Parameter1>
+            <_Parameter2>@(ProjectReference->'%(Filename)')</_Parameter2>
+        </AssemblyAttribute>
     </ItemGroup>
 
 </Project>

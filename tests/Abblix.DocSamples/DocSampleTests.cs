@@ -126,14 +126,15 @@ public class DocSampleTests
     /// The uncompiled remainder is the number the enrolment states, and no other.
     /// </summary>
     /// <remarks>
-    /// A gate that covers four samples out of eighteen is honest only while the fourteen are counted.
+    /// A gate that covers four samples out of sixteen is honest only while the twelve are counted.
     /// This row is what turns "the rest is not covered yet" from a sentence in a comment into something
     /// that fails when a sample is added and nobody decides about it - in either direction, since
     /// enrolling one without moving the number fails too.
     /// <para>
-    /// The number moved from twelve to fourteen when the count stopped coming from a hand-written parser
-    /// and started coming from the compiler's own documentation files. The old figure was a fact about
-    /// that parser: it could not see a one-line block or a tag with an attribute.
+    /// The number has moved twice, and each move was a fact about the INSTRUMENT rather than about the
+    /// samples. Twelve to fourteen when the count stopped coming from a hand-written parser, which could
+    /// not see a one-line block or a tag with an attribute; then fourteen back to twelve when the reader
+    /// stopped counting a primary-constructor type's comment twice.
     /// </para>
     /// </remarks>
     [Fact]
@@ -148,18 +149,27 @@ public class DocSampleTests
         // quieter pass rather than a failure.
         //
         // Not the same thing as the reference list being intact, which is what the number below used to
-        // be read as. Dropping a reference has three outcomes, all measured: one whose library carries
-        // an ENROLLED sample cannot be dropped at all - the compiler refuses, because a copy under
-        // Samples/ names its types; one that arrives TRANSITIVELY changes nothing, and nothing needs to,
-        // since its documentation is still here to be read; and one that is neither takes its file with
-        // it, which the count below sees.
+        // be read as. Dropping a reference has two outcomes, both measured, and REACHABILITY decides
+        // which - not whether the library carries a sample. Still reachable through another reference:
+        // nothing changes, and nothing needs to, since its documentation is still here to be read.
+        // Abblix.Oidc.Server itself is in that class, arriving through Mvc and three others, though it
+        // carries two enrolled samples. Reachable no longer: its documentation goes with it and the
+        // count below sees that, or a Samples/ copy names its types and the compiler refuses first.
         var documented = DocSampleReader.Documents()
             .Select(document => (string?)document.Root!.Element("assembly")!.Element("name")!)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.All(
-            DocSampleReader.ReferencedProjects(),
-            project => Assert.Contains(project, documented));
+        var referenced = DocSampleReader.ReferencedProjects();
+
+        // A bare NAME, not a path. The first version of this took the file name out of an Include path
+        // with Path.GetFileNameWithoutExtension, which on Linux does not treat a backslash as a
+        // separator - so the whole path came back as the name and every item below failed, green here
+        // and red on the runner. The list comes from MSBuild now and cannot carry a separator, and this
+        // says so on the machine where the platform difference is invisible.
+        Assert.All(referenced, project => Assert.DoesNotContain('/', project));
+        Assert.All(referenced, project => Assert.DoesNotContain('\\', project));
+
+        Assert.All(referenced, project => Assert.Contains(project, documented));
 
         // And the SIZE of what is beside the output, which is a different guarantee: the one above
         // cannot see a reference disappear, since a shorter list is a shorter loop. This one names the
@@ -186,9 +196,9 @@ public class DocSampleTests
     /// versions were narrower and both looked complete: one type's assembly covered a third of the
     /// surface, and <c>GetReferencedAssemblies</c> covered five of the seven then referenced, because
     /// that is the reference table the compiler EMITTED - trimmed to assemblies whose types the test
-    /// code happens to touch. Sixteen are referenced now, which is <see cref="Enrolment.Libraries"/>
-    /// and is what the assertion below reads; the five-of-seven is the historical measurement, not the
-    /// current shape.
+    /// code happens to touch. Sixteen projects are referenced now; what the assertion below reads is
+    /// <see cref="Enrolment.Libraries"/>, the number of documentation FILES beside the output, which is
+    /// a different quantity that happens to agree today. The five-of-seven is history.
     /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
     /// shipped packages, and a stub named after a type in either passed.
     /// </para>

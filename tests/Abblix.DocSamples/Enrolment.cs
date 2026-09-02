@@ -58,9 +58,10 @@ public static class Enrolment
     /// the reference count is THEREFORE the file count, is the step that does not hold.
     /// <para>
     /// Asserted for equality rather than as a floor, and bumped by hand when a library is added, which
-    /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor of seven let nine
-    /// of the sixteen documents vanish with every row green, because those nine carry no sample today -
-    /// so the narrowing would have surfaced on the day somebody added one.
+    /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor of seven let the nine
+    /// sample-free references go at once with every row green, taking seven of the sixteen documents
+    /// with them - two of the nine survive, arriving through libraries that cannot be dropped - so the
+    /// narrowing would have surfaced on the day somebody added a sample to one of them.
     /// </para>
     /// <para>
     /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
