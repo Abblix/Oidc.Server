@@ -26,7 +26,9 @@ internal static class BackChannelHandlerSample
 {
     internal static void Configure(IServiceCollection services)
     {
+        // <sample>
         services.AddScoped<IUserDeviceAuthenticationHandler, MyDeviceAuthHandler>();
         services.AddBackChannelAuthentication();
+        // </sample>
     }
 }

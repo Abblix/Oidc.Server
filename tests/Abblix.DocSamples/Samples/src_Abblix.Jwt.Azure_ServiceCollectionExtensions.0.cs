@@ -20,8 +20,10 @@ internal static class AzureCustodianSample
 {
     internal static void Configure(IServiceCollection services, IConfiguration configuration)
     {
+        // <sample>
         services
             .AddAzureCustodian(azure => configuration.GetSection("Azure").Bind(azure))
             .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+        // </sample>
     }
 }

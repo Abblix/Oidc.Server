@@ -25,8 +25,10 @@ internal static class VaultCustodianSample
 {
     internal static void Configure(IServiceCollection services, IConfiguration configuration)
     {
+        // <sample>
         services
             .AddVaultCustodian(vault => configuration.GetSection("Vault").Bind(vault))
             .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+        // </sample>
     }
 }

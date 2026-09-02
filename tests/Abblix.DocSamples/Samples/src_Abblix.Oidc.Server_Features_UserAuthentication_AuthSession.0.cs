@@ -24,6 +24,7 @@ internal static class AdditionalClaimsSample
     internal static AuthSession Build() => new(
         "user-1", "session-1", DateTimeOffset.UtcNow, "https://idp.example.com")
     {
+        // <sample>
         AdditionalClaims = new JsonObject
         {
             ["tenant_id"] = "tenant-123",                          // string
@@ -37,5 +38,6 @@ internal static class AdditionalClaimsSample
                 ["manager"] = "john@example.com"
             }
         }
+        // </sample>
     };
 }

@@ -25,14 +25,23 @@ namespace Abblix.DocSamples;
 public class DocSampleTests
 {
     /// <summary>
-    /// Every enrolled sample's text appears verbatim in the copy the compiler checked.
+    /// Every enrolled sample and its copy carry the same lines, in the same order.
     /// </summary>
     /// <remarks>
     /// Without this the gate guards yesterday's text: a doc comment edited on its own leaves the copy
     /// compiling happily, which is precisely the state the samples were in before any of this existed.
-    /// The copy carries a wrapper the sample does not - the ambient names a fragment calls into - so the
-    /// comparison is containment rather than equality, line by line with leading whitespace ignored,
-    /// since the wrapper indents what it encloses.
+    /// <para>
+    /// EQUALITY, which took three attempts to get right and each attempt was measured. Set membership
+    /// let the two body lines be SWAPPED, leaving documentation that calls a method before the
+    /// registration it configures. Requiring an unbroken run in order caught that and still let a line be
+    /// DELETED, because a shorter run is still a run. What a sample is has to be marked, or "the same
+    /// lines" has no second list to compare against - so each copy delimits its sample with
+    /// <c>// &lt;sample&gt;</c>, and this compares the two lists outright.
+    /// </para>
+    /// <para>
+    /// Compared with leading whitespace ignored and blank lines dropped, because the wrapper that
+    /// supplies the ambient names a fragment calls into also indents what it encloses.
+    /// </para>
     /// </remarks>
     [Fact]
     public void EveryEnrolledSampleMatchesTheCopyTheCompilerChecked()
@@ -42,20 +51,45 @@ public class DocSampleTests
 
         foreach (var sample in Enrolment.Compiled)
         {
-            var documented = DocSampleReader.Read(root, sample);
-            var compiled = File.ReadAllLines(CopyOf(root, sample)).Select(line => line.Trim()).ToHashSet();
+            var documented = Meaningful(DocSampleReader.Read(root, sample));
+            var compiled = Meaningful(MarkedRegion(CopyOf(root, sample)));
 
-            var missing = documented
-                .Select(line => line.Trim())
-                .Where(line => line.Length > 0 && !compiled.Contains(line))
-                .ToArray();
-
-            if (missing.Length > 0)
-                drifted.Add($"{sample}: {missing.Length} line(s) not in the copy, first: {missing[0]}");
+            if (!documented.SequenceEqual(compiled))
+            {
+                drifted.Add(
+                    $"{sample}: the doc comment has {documented.Count} line(s), the copy's marked sample "
+                    + $"has {compiled.Count}, and they are not the same lines in the same order");
+            }
         }
 
         Assert.Empty(drifted);
     }
+
+    /// <summary>
+    /// The lines of a copy between its sample markers.
+    /// </summary>
+    /// <remarks>
+    /// The markers are the copy's way of saying which of its lines are the sample and which are the
+    /// wrapper. A copy without them is a copy this row cannot check, so their absence is a failure
+    /// rather than an empty region that would compare equal to nothing and pass.
+    /// </remarks>
+    private static IReadOnlyList<string> MarkedRegion(string copyPath)
+    {
+        var lines = File.ReadAllLines(copyPath);
+        var begin = Array.FindIndex(lines, line => line.Trim() == "// <sample>");
+        var end = Array.FindIndex(lines, line => line.Trim() == "// </sample>");
+
+        if (begin < 0 || end < begin)
+            throw new InvalidOperationException($"{copyPath} carries no // <sample> region.");
+
+        return lines[(begin + 1)..end];
+    }
+
+    /// <summary>
+    /// The lines that carry meaning: trimmed, with blank ones dropped.
+    /// </summary>
+    private static IReadOnlyList<string> Meaningful(IEnumerable<string> lines)
+        => lines.Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
 
     /// <summary>
     /// The uncompiled remainder is the number the enrolment states, and no other.
