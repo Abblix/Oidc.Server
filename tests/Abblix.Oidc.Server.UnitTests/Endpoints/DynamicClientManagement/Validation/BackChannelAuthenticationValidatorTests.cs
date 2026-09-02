@@ -435,10 +435,12 @@ public class BackChannelAuthenticationValidatorTests
     /// The null-mode exit moved BELOW the switch so the endpoint check could see a registration that
     /// names no mode. That put null in reach of the unsupported-mode arm, which asks for a mode that is
     /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null", and
-    /// removing it turns sixteen unit rows red across two files and sixty-four E2E rows across two
-    /// SUITES - the MinimalApi one carries eleven of them, and an earlier version of this sentence
-    /// counted only the suites that had been run. This row is the one that says WHY in a sentence,
-    /// rather than the only one that speaks.
+    /// removing it turns seventeen unit rows red across two files and sixty-four E2E rows across two
+    /// SUITES - the MinimalApi one carries eleven of them. The number has been wrong twice for two
+    /// different reasons: it once counted only the suites that happened to be open, and it said
+    /// sixteen until the row below was added, which fails under the same plant. A count is valid for
+    /// the state it measured, and an edit in the same commit can invalidate it. This row is the one
+    /// that says WHY in a sentence, rather than the only one that speaks.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode()
@@ -453,15 +455,24 @@ public class BackChannelAuthenticationValidatorTests
     /// </summary>
     /// <remarks>
     /// The row above pins where the null-mode exit sits relative to the switch. This one pins the other
-    /// side of it - the algorithm check below - and without it that position is free: moving the exit
-    /// beneath the algorithm check flips a mode-less registration carrying an unsupported
-    /// <c>backchannel_authentication_request_signing_alg</c> from accepted to refused, and measured, all
-    /// three suites stayed green. A boundary a value can cross in either direction needs a row on each
-    /// side, and the exit had one.
+    /// side of it - the algorithm check below - and without it that position was free: moving the exit
+    /// beneath the algorithm check left every suite green. A boundary a value can cross in either
+    /// direction needs a row on each side, and the exit had one.
     /// <para>
-    /// Accepted rather than refused because the parameter is CIBA's, and a registration that asks for no
-    /// CIBA is not asking for this algorithm. The general one is not skipped: SigningAlgorithmsValidator
-    /// runs immediately after this validator and judges it for every mode.
+    /// What it pins is that the algorithm check is NOT REACHED, which is stronger than what it looks
+    /// like it asserts: the mock is strict and has no SigningAlgorithmsSupported setup, so the moved
+    /// exit fails this row by throwing rather than by returning a refusal. Reaching the check at all
+    /// is the thing being refused.
+    /// </para>
+    /// <para>
+    /// And the difference is not whether the REGISTRATION is refused - SigningAlgorithmsValidator runs
+    /// immediately after this one and judges the algorithm for every mode, so the endpoint refuses it
+    /// either way. What moves is which validator answers, and therefore the code and the words the
+    /// client is given.
+    /// </para>
+    /// <para>
+    /// Silent rather than refusing here because the parameter is CIBA's own, and a registration that
+    /// asks for no CIBA is not asking for this algorithm.
     /// </para>
     /// </remarks>
     [Fact]
