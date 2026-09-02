@@ -12,6 +12,12 @@
 # rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
 #   git commit --no-verify
 #
+# actionlint spawns shellcheck once per run: block, which on Windows can take longer than a commit
+# is worth waiting for. It is one of the two hooks CI re-runs, so skip that ONE - SKIP=actionlint git
+# commit - rather than reaching for --no-verify, which drops the five that run in this clone or
+# nowhere. Locally the same coverage comes from two faster halves: actionlint -shellcheck= for the
+# schema, and shellcheck on the extracted run: body.
+#
 # Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
