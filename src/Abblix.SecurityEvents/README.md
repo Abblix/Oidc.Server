@@ -3,6 +3,12 @@
 Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
 Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
 
+It also carries the receiving half of OpenID Connect Back-Channel Logout 1.0, which is the shortest
+reason to install it: an application that only wants to be told its user has signed out elsewhere
+needs the token rules and nothing about streams. See the wiring below, and
+[Abblix.SecurityEvents.MinimalAPI](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalAPI)
+for the endpoint that receives it.
+
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) is the map this package sits on: why the envelope came before the streams, and why nothing here has a stream concept even though it carries both delivery methods.
 
 ## Install
@@ -99,6 +105,21 @@ services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the ho
 services.AddDistributedReplayCache(); // receivers: "jti" replay protection over that store,
                                      // held for SecurityEventTokenValidationOptions.ReplayRetention
 ```
+
+A host that receives Back-Channel Logout adds the receiver for it, naming what every Logout Token
+must carry - the provider as the issuer, this application's client identifier as the audience:
+
+```csharp
+services.AddBackChannelLogoutReceiver(new BackChannelLogoutValidationOptions
+{
+    ExpectedIssuers = ["https://provider.example.com"],
+    ExpectedAudience = "this-application",
+});
+```
+
+The replay check the specification leaves optional is taken up here, because the request carrying
+the token is unauthenticated and the token is a bearer credential; it rides the same replay cache
+registered above, and a deployment wanting a strictly atomic reservation registers its own.
 
 A pure receiver registers a key resolver and never configures signing; a pure transmitter does
 the reverse. Event registrations go through `options.Events`: registered event types deserialize

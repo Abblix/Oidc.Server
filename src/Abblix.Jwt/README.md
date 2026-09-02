@@ -54,9 +54,16 @@ The payload is a `JsonObject` underneath, so claims keep their JSON types - numb
 - Key management: RSA-OAEP, RSA-OAEP-256, AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW), direct encryption (dir).
 - Content encryption: A128CBC-HS256, A192CBC-HS384, A256CBC-HS512, A128GCM, A192GCM, A256GCM.
 
+Two further key-management families ship and stay off until a host asks for them, each because of a
+cost the default should not impose. `AddRsaPkcs1KeyManagement()` enables RSA1_5. `AddPbes2KeyManagement()`
+enables PBES2-HS256+A128KW, PBES2-HS384+A192KW and PBES2-HS512+A256KW, where the inbound token's `p2c`
+header dictates PBKDF2 work before the token has been authenticated; the iteration count is bounded to
+[1000, 10000] even once enabled. Interop with a partner that requires either is one call, not a missing
+feature.
+
 ## Hardening built in
 
-The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11).
+The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11). A host that does understand such a parameter registers a handler for it by name, `AddCriticalHeaderHandler<MyHandler>("my-ext")`: the name is the registration key, so it cannot be claimed without a handler behind it.
 
 ## Replay protection
 
@@ -85,6 +92,19 @@ services
 ```
 
 [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) is the shared model, including what a host without our key provider does to publish the custodian's keys itself.
+
+## Key rings
+
+Keys the host does not supply itself are minted and rotated by a key ring. `AddInMemoryKeyRing(policy)`
+keeps them in the process: right for a single instance, and wrong for several, since each replica mints
+its own and nothing fails at startup - sign-ins simply break for whoever lands on the wrong replica. So
+a host that has registered an `IKeyRingStore`, which is how keys are shared, is refused here rather than
+served. `AddKeyRing(policy)` is the shared form: it seals each minted key to the custodian's
+key-encryption key and publishes it through that store, which the builder it returns supplies.
+
+What the ring's keys are then used for is the caller's business - an OpenID Provider publishes them at
+its JWKS endpoint, another host protects stored sessions with them - which is why the ring lives beside
+the key material rather than beside either consumer.
 
 ## Implemented standards
 

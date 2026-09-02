@@ -22,6 +22,8 @@ services.AddAlias<ITokenRevoker, TokenService>();
 
 `TryAddAlias` and `TryAddEnumerableAlias` follow the framework's TryAdd semantics, so a host's own registration wins over a library default.
 
+`AddKeyedAlias<TService, TSource>(serviceKey, sourceKey)` is the same idea for keyed registrations: the alias resolves to the instance already registered under the source key, so a type dispatched by a wire value - an `alg`, an event type - answers a second contract without a second instance.
+
 ## Composition: many implementations behind one contract
 
 `Compose` collapses a family of registrations into a single composite behind the singular contract - the shape of a validation pipeline, a chain of handlers, a set of strategies consulted in order:
