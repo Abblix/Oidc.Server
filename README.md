@@ -82,7 +82,14 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 
 ## ✨ What's New
 
-### Version 2.3 (Latest)
+### Version 2.4 (Latest)
+
+🚀 **Features**
+- **Minimal API integration**: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
+- **External signing keys**: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
+- **Security events and Shared Signals**: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
+
+### Version 2.3
 
 🚀 **Features**
 - **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
@@ -108,7 +115,7 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 - JWT validation returns errors instead of throwing on unsupported algorithm or key combinations
 - Dependency-injection registrations normalized so host pre-registrations win the resolution race
 
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for full details.
+> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details of 2.4, and [2.3](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for the release before it.
 
 ### ⚠️ Breaking Changes (upgrading from 2.2)
 
@@ -123,7 +130,7 @@ Most deployments need only the first two; the rest apply if you use the named fe
 
 [![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
-We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All **634** tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). We are extremely proud of this achievement. It reflects our overall approach to any endeavor. For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
+We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All **634** tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
 For convenience, the certification information is provided in the tables below:
 
@@ -200,7 +207,7 @@ dotnet build
 Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
 
-To better understand the Abblix OIDC Server product, we recommend visiting our [Documentation](https://docs.abblix.com/docs) site. There, you will find useful information about the product and the OpenID Connect standard.
+The [Documentation](https://docs.abblix.com/docs) site covers configuration, deployment, the API reference and the OpenID Connect standard itself.
 
 ## 💎 Abblix Account
 
@@ -210,16 +217,14 @@ Prefer not to run the provider yourself? [Abblix Account](https://account.abblix
 
 ## 🤝 Feedback and Contributions
 
-We've made every effort to implement all the main aspects of the OpenID protocol in the best possible way. However, the development journey doesn't end here, and your input is crucial for our continuous improvement.
+The protocol surface is complete and certified, but the library is not finished. What you run into in your own application is what we cannot see from here.
 
 > [!IMPORTANT]
-> Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. Your insights help us make the Abblix OIDC Server library more robust and user-friendly.
+> Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. A report that names the flow and the client you were using is what turns a guess into a fix.
 
-Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/Abblix/Oidc.Server/discussions). Each contribution helps us grow and improve.
+Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/Abblix/Oidc.Server/discussions).
 
 For how we handle contributions, and why the library is developed in-house, see our [Contributing Guidelines](CONTRIBUTING.md).
-
-We appreciate your support and look forward to making our product even better with your help!
 
 ## 📃 License
 
@@ -233,7 +238,7 @@ applications or users, and one production issuer per free deployment. See the
 
 ## 🗨️ Contacts
 
-For more details about our products, services, or any general information regarding the Abblix OIDC Server, feel free to reach out to us. We are here to provide support and answer any questions you may have. Below are the best ways to contact our team:
+For more details about our products, services, or any general information regarding the Abblix OIDC Server, feel free to reach out to us. Below are the best ways to contact our team:
 
 - **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
 - **Support and security reports**: [support@abblix.com](mailto:support@abblix.com), see the [Security Policy](SECURITY.md)
@@ -243,7 +248,5 @@ Subscribe to our LinkedIn and Twitter:
 
 [![LinkedIn](https://img.shields.io/badge/subscribe-white.svg?logo=data:image/svg%2bxml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIwLjQ0NyAyMC40NTJoLTMuNTU0di01LjU2OWMwLTEuMzI4LS4wMjctMy4wMzctMS44NTItMy4wMzctMS44NTMgMC0yLjEzNiAxLjQ0NS0yLjEzNiAyLjkzOXY1LjY2N0g5LjM1MVY5aDMuNDE0djEuNTYxaC4wNDZjLjQ3Ny0uOSAxLjYzNy0xLjg1IDMuMzctMS44NSAzLjYwMSAwIDQuMjY3IDIuMzcgNC4yNjcgNS40NTV2Ni4yODZ6TTUuMzM3IDcuNDMzYTIuMDYyIDIuMDYyIDAgMCAxLTIuMDYzLTIuMDY1IDIuMDY0IDIuMDY0IDAgMSAxIDIuMDYzIDIuMDY1em0xLjc4MiAxMy4wMTlIMy41NTVWOWgzLjU2NHYxMS40NTJ6TTIyLjIyNSAwSDEuNzcxQy43OTIgMCAwIC43NzQgMCAxLjcyOXYyMC41NDJDMCAyMy4yMjcuNzkyIDI0IDEuNzcxIDI0aDIwLjQ1MUMyMy4yIDI0IDI0IDIzLjIyNyAyNCAyMi4yNzFWMS43MjlDMjQgLjc3NCAyMy4yIDAgMjIuMjIyIDBoLjAwM3oiIGZpbGw9IiMwQTY2QzIiLz48cGF0aCBzdHlsZT0iZmlsbDojZmZmO3N0cm9rZS13aWR0aDouMDIwOTI0MSIgZD0iTTQuOTE3IDcuMzc3YTIuMDUyIDIuMDUyIDAgMCAxLS4yNC0zLjk0OWMxLjEyNS0uMzg0IDIuMzM5LjI3NCAyLjY1IDEuNDM3LjA2OC4yNS4wNjguNzY3LjAwMSAxLjAxYTIuMDg5IDIuMDg5IDAgMCAxLTEuNjIgMS41MSAyLjMzNCAyLjMzNCAwIDAgMS0uNzktLjAwOHoiLz48cGF0aCBzdHlsZT0iZmlsbDojZmZmO3N0cm9rZS13aWR0aDouMDIwOTI0MSIgZD0iTTQuOTE3IDcuMzc3YTIuMDU2IDIuMDU2IDAgMCAxLTEuNTItMi42NyAyLjA0NyAyLjA0NyAwIDAgMSAzLjQxOS0uNzU2Yy4yNC4yNTQuNDIuNTczLjUxMi45MDguMDY1LjI0LjA2NS43OCAwIDEuMDItLjA1MS4xODYtLjE5Ny41MDQtLjMuNjUyLS4wOS4xMzItLjMxLjM2Mi0uNDQzLjQ2NC0uNDYzLjM1Ny0xLjEuNTAzLTEuNjY4LjM4MlpNMy41NTcgMTQuNzJWOS4wMDhoMy41NTd2MTEuNDI0SDMuNTU3Wk05LjM1MyAxNC43MlY5LjAwOGgzLjQxMXYuNzg1YzAgLjYxNC4wMDUuNzg0LjAyNi43ODMuMDE0IDAgLjA3LS4wNzMuMTI0LS4xNjIuNTI0LS44NjUgMS41MDgtMS40NzggMi42NS0xLjY1LjI3NS0uMDQyIDEtLjA0NyAxLjMzMi0uMDA5Ljc5LjA5IDEuNDUxLjMxNiAxLjk0LjY2NC4yMi4xNTcuNTU3LjQ5My43MTQuNzEzLjQyLjU5Mi42OSAxLjQxMi44MDggMi40NjQuMDc0LjY2My4wODQgMS4yMTUuMDg1IDQuNTc4djMuMjU4aC0zLjUzNnYtMi45ODZjMC0yLjk3LS4wMS0zLjQ3NC0uMDc0LTMuOTA4LS4wOS0uNjA2LS4zMTQtMS4wODItLjYzNC0xLjM0Mi0uMzk1LS4zMjItMS4wMjktLjQzNy0xLjcwMy0uMzA5LS44NTguMTYzLTEuMzU1Ljc1LTEuNTIzIDEuNzk3LS4wNzYuNDcxLS4wODQuODQ1LS4wODQgMy44MzR2Mi45MTRIOS4zNTN6Ii8+PC9zdmc+)](https://www.linkedin.com/company/103540510/)
 [![X](https://img.shields.io/badge/subscribe-white.svg?logo=data:image/svg%2bxml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE4LjkwMSAxLjE1M2gzLjY4bC04LjA0IDkuMTlMMjQgMjIuODQ2aC03LjQwNmwtNS44LTcuNTg0LTYuNjM4IDcuNTg0SC40NzRsOC42LTkuODNMMCAxLjE1NGg3LjU5NGw1LjI0MyA2LjkzMlpNMTcuNjEgMjAuNjQ0aDIuMDM5TDYuNDg2IDMuMjRINC4yOThaIi8+PHBhdGggc3R5bGU9ImZpbGw6I2ZmZjtzdHJva2Utd2lkdGg6LjAyMDkyNDEiIGQ9Ik0xMS4wMzYgMTIuMDI4IDQuMzg3IDMuMzM0bC0uMDYtLjA4SDYuNDhsNi41MTYgOC42MTQgNi41NzUgOC42OTQuMDYuMDhoLTIuMDA2eiIvPjwvc3ZnPg==)](https://twitter.com/OIDCServer)
-
-We look forward to assisting you and ensuring your experience with our products is successful and enjoyable!
 
 [Back to top](#top)

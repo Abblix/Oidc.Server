@@ -67,13 +67,9 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	/// Returns the minimum key length in bytes required by RFC 7518 §3.2 for the configured
 	/// HMAC algorithm: 32 for HS256, 48 for HS384, 64 for HS512.
 	/// </summary>
-	private int GetMinimumKeyLengthBytes() => algorithm switch
-	{
-		SigningAlgorithms.HS256 => 256 >> 3,
-		SigningAlgorithms.HS384 => 384 >> 3,
-		SigningAlgorithms.HS512 => 512 >> 3,
-		_ => throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}"),
-	};
+	private int GetMinimumKeyLengthBytes()
+		=> (JsonWebKeyExtensions.MinimumHmacKeyBits(algorithm)
+			?? throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")) >> 3;
 
 	/// <summary>
 	/// Creates an HMAC instance for the configured algorithm and key.
