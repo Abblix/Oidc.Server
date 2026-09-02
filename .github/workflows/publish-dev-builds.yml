@@ -147,9 +147,19 @@ jobs:
           # pre-release identifier gaining a third part turns 2.4.0-dev.0.0.478 into 0.0.478, which
           # is version-shaped, carries no dev identifier, and would otherwise be refused for a
           # release tag that is not on the commit at all.
-          EXPECTED=$(sed -n 's:.*<MinVerMinimumMajorMinor>\([0-9][0-9]*\.[0-9][0-9]*\)</MinVerMinimumMajorMinor>.*:\1:p' Directory.Build.props)
-          if [ -z "$EXPECTED" ]; then
-            echo "Could not read MinVerMinimumMajorMinor out of Directory.Build.props - there is nothing to check the built version against." >&2
+          if [ ! -f Directory.Build.props ]; then
+            echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
+            exit 1
+          fi
+          # MSBuild EVALUATES the property rather than a pattern matching the tag it is written in.
+          # A text match reads only one spelling: driven, a Condition on the PropertyGroup, padding
+          # inside the element, a second declaration later in the file and a commented-out copy are
+          # all read correctly here, and each defeated the text match - which would have refused a
+          # good build naming a cause that was not there, the thing this whole step exists to stop.
+          rc=0
+          EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -nologo 2>/dev/null | tr -d '[:space:]') || rc=$?
+          if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
+            echo "Could not evaluate MinVerMinimumMajorMinor from Directory.Build.props - there is nothing to check the built version against." >&2
             exit 1
           fi
 
@@ -159,25 +169,59 @@ jobs:
           rc=0
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
           [ "$rc" -eq 0 ] || PKG=""
-          VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
-          case "$VERSION" in
-            "")
-              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
-              exit 1
-              ;;
-            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
-            "$EXPECTED".*)
-              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
-              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
-              exit 1
+          BASE=$(basename "$PKG" .nupkg)
+          VERSION=$(printf '%s' "$BASE" | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
+
+          # The dev identifier is read off the WHOLE NAME and the line off the extracted version, and
+          # both are needed: the extraction takes the trailing version-shaped run, so a pre-release
+          # identifier with a third part hands back a fragment. 2.4.0-dev.0.0.478 extracts as 0.0.478,
+          # which is off the line; 2.4.0-dev.2.4.478 extracts as 2.4.478, which is ON it and has lost
+          # the dev identifier with the rest. Driven, both of them. Checking only the shape passed the
+          # first to the release arm and checking only the line passed the second, so each is refused
+          # for what it is - a name this step could not read - rather than for a release tag that is
+          # not on the commit.
+          if [ -z "$VERSION" ]; then
+            echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+            exit 1
+          fi
+
+          case "$BASE" in
+            *-dev.*)
+              case "$VERSION" in
+                "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+                *-dev.*)
+                  # Read as a dev version, just not this repository's line. That is the version line
+                  # having moved, or the name having been misread into another line's shape, and the
+                  # two cannot be told apart from here.
+                  echo "Refusing to publish $VERSION: it is a dev build off the $EXPECTED line this repository builds." >&2
+                  echo "Either the version line moved and this workflow was not told, or the name was misread." >&2
+                  exit 1
+                  ;;
+                *)
+                  # The name carries the dev identifier and the version read out of it does not, so
+                  # the extraction lost it: that is a misread and nothing else.
+                  echo "Refusing to publish: '$BASE' names a dev build, but the version read out of it is '$VERSION'." >&2
+                  echo "The name was misread, so nothing here can say what this package holds." >&2
+                  exit 1
+                  ;;
+              esac
               ;;
             *)
-              # Not on the line this repository builds, and the two ways that happens cannot be told
-              # apart from here - so the message names both rather than picking the one that reads
-              # better.
-              echo "Refusing to publish: read '$VERSION' out of '$PKG', which is not on the $EXPECTED line this repository builds." >&2
-              echo "Either the package name was misread, or the version line moved and this workflow was not told." >&2
-              exit 1
+              case "$VERSION" in
+                "$EXPECTED".*)
+                  echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+                  echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+                  exit 1
+                  ;;
+                *)
+                  # Neither a dev name nor a version on this repository's line, and the two ways that
+                  # happens cannot be told apart from here - so the message names both rather than
+                  # picking the one that reads better.
+                  echo "Refusing to publish: read '$VERSION' out of '$PKG', which is not on the $EXPECTED line this repository builds." >&2
+                  echo "Either the package name was misread, or the version line moved and this workflow was not told." >&2
+                  exit 1
+                  ;;
+              esac
               ;;
           esac
 

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Refuse an MSBuild file that does not parse as XML.
 
-The failure this exists for is a double hyphen inside a comment, which XML forbids. It costs a full
-red CI run for every project in the solution, and the error names none of the files that carry the
-defect: MSBuild reports MSB4024 against each project that IMPORTS the broken file, so the reader is
-sent to the package references rather than to the comment. Parsing here answers in a second, before
-the commit exists.
+The failure this exists for is a double hyphen inside a comment, which XML forbids. MSBuild does say
+so - MSB4024 names the broken file, the comment, the hyphens and the position - but it says it once
+per project that IMPORTS the file, so a single stray character reddens the whole solution and every
+job behind it. Parsing here answers in a second, before the commit exists.
+
+The same character in Directory.Packages.props is worse and is why the pattern covers more than one
+file: restore fails with NU1015 about package references carrying no version, naming neither the
+file nor the comment.
 
 Every argument is parsed and every failure is reported, rather than stopping at the first: a bulk
 edit tends to break more than one file the same way, and a check that stops early makes the second
@@ -21,6 +24,25 @@ import sys
 import xml.etree.ElementTree as ElementTree
 
 
+def read_text(path: str) -> str:
+    """The file's text, whatever it is encoded in.
+
+    A build file is UTF-8 here, but the hook runs on files that failed to parse, and a wrong
+    encoding is one of the ways that happens. Decoding such a file as UTF-8 with replacements
+    yields text carrying no "<!--" at all, so the hint below would go silent on exactly the file
+    that needs it most.
+    """
+    data = io.open(path, "rb").read()
+    for encoding in ("utf-8-sig", "utf-16", "latin-1"):
+        try:
+            text = data.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        if "<!--" in text or encoding == "latin-1":
+            return text
+    return ""
+
+
 def double_hyphen_comment(path: str) -> bool:
     """Whether some comment in the file carries a double hyphen.
 
@@ -30,7 +52,7 @@ def double_hyphen_comment(path: str) -> bool:
     definition one that did not parse.
     """
     try:
-        text = io.open(path, encoding="utf-8", errors="replace", newline="").read()
+        text = read_text(path)
     except OSError:
         return False
     return any("--" in chunk.split("-->", 1)[0] for chunk in text.split("<!--")[1:])
@@ -41,6 +63,9 @@ def main(paths: list[str]) -> int:
     for path in paths:
         try:
             ElementTree.parse(path)
+        except OSError as error:
+            failures += 1
+            print(f"{path}: cannot be read: {error}", file=sys.stderr)
         except ElementTree.ParseError as error:
             failures += 1
             print(f"{path}: not well-formed XML: {error}", file=sys.stderr)
