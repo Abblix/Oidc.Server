@@ -80,9 +80,16 @@ public partial class DeviceCodeGrantHandler(
             case { ClientId: var clientId } when clientId != clientInfo.ClientId:
                 return new OidcError(ErrorCodes.InvalidGrant, "The device code was issued to another client");
 
-            // Code has reached its fixed RFC 8628 section 3.2 lifetime - reject and clean up rather than letting a
-            // polling client keep it alive by resetting the cache TTL
-            case { } when now >= deviceRequest.ExpiresAt:
+            // Code has reached its fixed RFC 8628 section 3.2 lifetime - reject and clean up rather than
+            // letting a polling client keep it alive by resetting the cache TTL.
+            //
+            // The same predicate the record answers for the verification, approval and denial paths, so
+            // the token endpoint and those three cannot disagree about the instant a device code stops
+            // being usable. They agreed before this too - `now >= ExpiresAt` here against `remaining > 0`
+            // there - but nothing held them in step: relaxing THIS comparison to `>` left both suites
+            // green, measured, while relaxing the record's turns two rows red. One expression is what
+            // makes the drift impossible rather than merely detectable.
+            case { } when !deviceRequest.HasLifetimeLeft(now, out _):
                 await storage.RemoveAsync(request.DeviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
