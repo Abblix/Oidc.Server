@@ -17,22 +17,23 @@ is about to parse with far more privilege than this check has.
 """
 
 import io
-import re
 import sys
 import xml.etree.ElementTree as ElementTree
 
-# The parser reports this as "not well-formed (invalid token)" and names neither the comment nor the
-# hyphens, so the hint has to be derived from the text rather than from the message. Read against a
-# planted double hyphen: keying it on the message printed nothing at all.
-COMMENT = re.compile(r"<!--(.*?)(?:-->|\Z)", re.S)
-
 
 def double_hyphen_comment(path: str) -> bool:
+    """Whether some comment in the file carries a double hyphen.
+
+    Derived from the text, because the parser reports only "not well-formed (invalid token)" and
+    names neither the comment nor the hyphens: keying the hint on the message printed nothing at
+    all against a planted one. An unterminated comment counts, since the file this runs on is by
+    definition one that did not parse.
+    """
     try:
         text = io.open(path, encoding="utf-8", errors="replace", newline="").read()
     except OSError:
         return False
-    return any("--" in body for body in COMMENT.findall(text))
+    return any("--" in chunk.split("-->", 1)[0] for chunk in text.split("<!--")[1:])
 
 
 def main(paths: list[str]) -> int:
