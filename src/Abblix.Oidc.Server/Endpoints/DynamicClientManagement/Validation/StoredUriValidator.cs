@@ -33,11 +33,6 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// address must name somewhere.
 /// </para>
 /// <para>
-/// A null single member is ABSENT and passes; a null ELEMENT of an array was sent and is refused. That
-/// asymmetry is the shape a registration body has: it is attacker-shaped JSON and the deserializer
-/// honours no annotation against an explicit null, so both are reachable and they mean different things.
-/// </para>
-/// <para>
 /// The list is written out rather than reflected over, because a reader of this file should be able to
 /// see what is checked. What keeps it from falling behind - which it did twice while it was shorter - is
 /// <c>UriMemberCoverageTests</c>, which finds every URI member on the model by its TYPE and requires
@@ -54,42 +49,47 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
     {
         var request = context.Request;
 
-        var singles = new[]
-        {
-            (Parameters.LogoUri, request.LogoUri),
-            (Parameters.ClientUri, request.ClientUri),
-            (Parameters.PolicyUri, request.PolicyUri),
-            (Parameters.TosUri, request.TermsOfServiceUri),
-            (Parameters.JwksUri, request.JwksUri),
-            (Parameters.SectorIdentifierUri, request.SectorIdentifierUri),
-            (Parameters.InitiateLoginUri, request.InitiateLoginUri),
-            (Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri),
-            (Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri),
-            (Parameters.BackChannelClientNotificationEndpoint, request.BackChannelClientNotificationEndpoint),
-        };
-
-        foreach (var (name, uri) in singles)
-        {
-            if (uri is { IsAbsoluteUri: false })
-                return Relative(name);
-        }
-
-        var arrays = new[]
-        {
-            (Parameters.RedirectUris, request.RedirectUris),
-            (Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris),
-            (Parameters.RequestUris, request.RequestUris),
-            (Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri),
-        };
-
-        foreach (var (name, uris) in arrays)
-        {
-            if (uris is { Length: > 0 } && Array.Exists(uris, uri => uri is not { IsAbsoluteUri: true }))
-                return Relative(name);
-        }
-
-        return null;
+        return Validate(Parameters.LogoUri, request.LogoUri)
+            ?? Validate(Parameters.ClientUri, request.ClientUri)
+            ?? Validate(Parameters.PolicyUri, request.PolicyUri)
+            ?? Validate(Parameters.TosUri, request.TermsOfServiceUri)
+            ?? Validate(Parameters.JwksUri, request.JwksUri)
+            ?? Validate(Parameters.SectorIdentifierUri, request.SectorIdentifierUri)
+            ?? Validate(Parameters.InitiateLoginUri, request.InitiateLoginUri)
+            ?? Validate(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri)
+            ?? Validate(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri)
+            ?? Validate(
+                Parameters.BackChannelClientNotificationEndpoint,
+                request.BackChannelClientNotificationEndpoint)
+            ?? Validate(Parameters.RedirectUris, request.RedirectUris)
+            ?? Validate(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris)
+            ?? Validate(Parameters.RequestUris, request.RequestUris)
+            ?? Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri);
     }
+
+    /// <summary>
+    /// A single member: absent passes, relative is refused.
+    /// </summary>
+    /// <remarks>
+    /// Null means the member was not sent, and absence is not a bad address.
+    /// </remarks>
+    private static OidcError? Validate(string name, Uri? uri)
+        => uri is { IsAbsoluteUri: false } ? Relative(name) : null;
+
+    /// <summary>
+    /// An array member: an absent or empty list passes, any element that is not an absolute URI is
+    /// refused.
+    /// </summary>
+    /// <remarks>
+    /// A null ELEMENT answers differently from a null member - it was sent, and it names nothing - and
+    /// the pattern form is also what keeps this from dereferencing it. A registration body is
+    /// attacker-shaped JSON and the deserializer honours no annotation against an explicit null, so
+    /// <c>[null]</c> is reachable and once faulted the endpoint.
+    /// </remarks>
+    private static OidcError? Validate(string name, Uri[]? uris)
+        => uris is { Length: > 0 } && Array.Exists(uris, uri => uri is not { IsAbsoluteUri: true })
+            ? Relative(name)
+            : null;
 
     private static OidcError Relative(string member)
         => ErrorFactory.InvalidClientMetadata($"The {member} is not an absolute URI");
