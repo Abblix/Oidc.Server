@@ -12,14 +12,14 @@ name: Publish dev build to GitHub Packages
 # kept current - but they are no longer what reaches a consumer.
 #
 # Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   any branch here                     ->  2.4.0-dev.0.<distance>
+#   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
 #   a release, version supplied by hand ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
 # which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
 # MinVerMinimumMajorMinor lifting a 0.0.0 default, and the number after dev.0 is MinVer's height:
-# a shortest-path distance through the history, NOT a count of commits. Measured on this branch,
-# height 476 against 681 reachable commits and 478 on the first-parent chain.
+# the FIRST-PARENT distance back to the root, not a count of everything reachable. Checkable at
+# any commit - height + 1 == git rev-list --count --first-parent HEAD.
 #
 # Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
 # consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
@@ -142,16 +142,23 @@ jobs:
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
           VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
           case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            [0-9]*.[0-9]*.[0-9]*)
+              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              exit 1
+              ;;
             "")
               # Said first and separately: with no package there is no version, no tag and no
               # release workflow involved, and the arm below would name all three.
               echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
               exit 1
               ;;
-            *-dev.*) echo "Dev build $VERSION - publishing." ;;
             *)
-              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
-              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              # Anything that is not a version at all: the name did not parse, so nothing here can
+              # say why. Saying "a release tag is on this commit" of it would name a cause that is
+              # not there - the arm above owns that sentence and requires the version shape first.
+              echo "Refusing to publish: could not read a version out of the package name, got '$VERSION'." >&2
               exit 1
               ;;
           esac

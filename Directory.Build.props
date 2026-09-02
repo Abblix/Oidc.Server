@@ -40,10 +40,14 @@
 
        Nothing depends on it reading them. A release takes its version from the workflow input via
        MinVerVersionOverride, and a dev build takes it from this property. What it does mean is
-       that the number after dev.0 is a distance from the ROOT COMMIT rather than from the last
-       release - and it is a DISTANCE, MinVer's shortest path through the history, not an ordinal.
-       Measured on one branch: height 476, against 681 reachable commits and 478 on the
-       first-parent chain. So it orders builds and counts nothing.
+       that the number after dev.0 counts from the ROOT COMMIT rather than from the last release.
+
+       It is the FIRST-PARENT distance, which is checkable at any commit rather than quotable:
+       height + 1 == git rev-list --count --first-parent HEAD, exactly, at every commit measured.
+       So it is not the count of everything reachable - the two differ by every commit that came
+       in on the side of a merge, which here is over two hundred. Written as the relationship
+       rather than as numbers on purpose: a height quoted in a comment is stale on the next push,
+       and two earlier attempts at this sentence were wrong precisely because they quoted.
 
        Setting MinVerTagPrefix alone would not help and does not leave the rest alone: seven older
        tags ARE three-part (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1), and v2.0.1
