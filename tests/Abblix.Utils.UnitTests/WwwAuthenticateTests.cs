@@ -106,12 +106,20 @@ public class WwwAuthenticateTests
     [InlineData("keeps\ttab", "keeps\ttab")]
     [InlineData("keeps obs-text é", "keeps obs-text é")]
 
-    // Both ENDS of the emitted range, because a row in the middle of a range says nothing about where
-    // it stops: measured, moving the upper bound off '~' or the obs-text floor off U+0080 left the
-    // whole suite green, so the builder could go back to replacing a legal character unnoticed - which
-    // is the defect this theory exists to close, one character along. U+0080 is also the half of
-    // obs-text the previous version replaced, since char.IsControl calls it a control character.
+    // Every END of every emitted range, because a row in the middle of a range says nothing about
+    // where it stops: measured, each bound could be moved by one with all 311 rows green, so the
+    // builder could go back to replacing a legal character - the defect this theory exists to close,
+    // one character along - or start emitting a forbidden one.
+    //
+    // The printable range's lower end takes TWO rows because its first character is unobservable: SP
+    // falling out of the range is replaced BY a space, so the output is identical either way. What is
+    // observable is U+0021 on one side and U+001F on the other, and they fail differently - one is a
+    // legal character silently replaced, the other a control character silently emitted. U+0080 is in
+    // the same position at the obs-text floor, and is also part of the run char.IsControl called
+    // control characters, which the previous version replaced.
     [InlineData("keeps tilde ~", "keeps tilde ~")]
+    [InlineData("bang ! stays", "bang ! stays")]
+    [InlineData("unit\u001fseparator", "unit separator")]
     [InlineData("keeps \u0080 the first obs-text", "keeps \u0080 the first obs-text")]
     public void Challenge_EmitsOnlyWhatTheGrammarAdmits(string value, string expected)
     {

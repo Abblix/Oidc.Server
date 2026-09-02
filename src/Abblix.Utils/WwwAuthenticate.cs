@@ -90,10 +90,13 @@ public static class WwwAuthenticate
             // every control character and altered a legal value, with a row pinning that as correct.
             //
             // The obs-text test is written over UTF-16 code units while the rule is over octets
-            // (%x80-FF). It holds either way: encoded as UTF-8 every byte of a multi-byte character
-            // lands inside that range, and a header encoder restricted to Latin-1 substitutes the
-            // character rather than emitting something the grammar forbids. A surrogate pair passes
-            // through whole for the same reason, and neither half can become CR, LF or DQUOTE.
+            // (%x80-FF), and it holds under either header encoder, for different reasons. Under UTF-8
+            // every byte of a multi-byte character lands inside that range. Under Latin-1, U+0080 to
+            // U+00FF go out as themselves, which IS obs-text - measured, not assumed - and only a
+            // character above U+00FF is substituted, by a best-fit mapping that yields a letter as
+            // readily as a question mark. Either way nothing emitted here can become CR, LF or DQUOTE,
+            // which is the property that matters; a surrogate pair passes the condition whole, though
+            // what reaches the wire is the encoder's business rather than this method's.
             //
             // Anything else is replaced rather than emitted, because it has no place in the grammar and
             // CR or LF would end the header field outright. The comment here used to say such a value
