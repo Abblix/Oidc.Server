@@ -589,13 +589,55 @@ public class LicenseManagerTests
     }
 
     /// <summary>
-    /// An expiry at the largest representable instant is not a fault.
+    /// An expiry at the last representable moment is not a fault, whatever offset it carries.
     /// </summary>
     /// <remarks>
-    /// There is no tick after it, and asking for one threw out of a licence check - a licensing question
-    /// answered with a server fault. Nothing follows that instant either, so it is simply not a moment
-    /// the merge can change at.
+    /// There is no tick after it, and asking for one throws out of a licence check - a licensing question
+    /// answered with a server fault. Nothing follows it either, so it is simply not a moment the merge
+    /// can change at.
+    /// <para>
+    /// The OFFSET is the half a zero-offset row cannot see, and the guard was written from a suite that
+    /// has only those: a licence file carries unix seconds, so <c>LicenseLoader</c> can produce nothing
+    /// else, and at offset zero the clock time and the instant coincide. <see cref="License"/> and
+    /// <see cref="LicenseManager.AddLicense"/> are public, so a host supplies one directly - and a value
+    /// whose CLOCK time is maximal under a positive offset sits strictly below
+    /// <see cref="DateTimeOffset.MaxValue"/> while <see cref="DateTimeOffset.AddTicks"/> still overflows
+    /// on it.
+    /// </para>
+    /// <para>
+    /// Driven through <c>ReportLoadedLicenses</c> rather than <c>TryGetCurrentLicenseLimit</c>, which is
+    /// the trap the row below already names and which caught the first version of THIS row: a licence
+    /// expiring in the year 9999 is cached and never stale, so that method returns before it scans
+    /// anything and the row passes over a build that still throws. This path runs at startup through
+    /// <c>LicenseLoadingService</c>, so it is also where a deployment would meet it first.
+    /// </para>
+    /// <para>
+    /// A NEGATIVE offset is absent on purpose: the UTC instant would then lie past year 10000 and the
+    /// constructor refuses the value outright, so such a row would measure the framework rather than
+    /// this guard.
+    /// </para>
     /// </remarks>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    public void A_maximal_expiry_in_any_offset_does_not_fault(int offsetHours)
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var maximal = new DateTimeOffset(DateTime.MaxValue.Ticks, TimeSpan.FromHours(offsetHours));
+
+        // The control on the row that matters: a positive offset really does put this below the maximal
+        // INSTANT, so a guard written against the instant admits it - which is the whole difference.
+        Assert.True(offsetHours == 0 || maximal < DateTimeOffset.MaxValue);
+
+        var manager = new LicenseManager();
+        manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = maximal });
+
+        Assert.Null(Record.Exception(() => Report(manager, utcNow)));
+    }
+
+    /// <summary>
+    /// The original zero-offset case, kept because it is the one a licence file can actually produce.
+    /// </summary>
     [Fact]
     public void A_maximal_expiry_with_a_perpetual_successor_does_not_fault()
     {

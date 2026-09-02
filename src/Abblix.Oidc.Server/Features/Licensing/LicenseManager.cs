@@ -430,9 +430,10 @@ public partial class LicenseManager
     /// it.
     /// </para>
     /// <para>
-    /// A moment at which nothing is in force is skipped rather than announced: that is a lapse to the
-    /// free tier, which the expiry and grace records already carry in their own words, and announcing it
-    /// here as a narrowing would put two different sentences on one event.
+    /// A moment at which nothing is in force ENDS the search rather than being stepped over. It is a
+    /// lapse to the free tier, which the expiry and grace records already carry in their own words, so
+    /// announcing it here would put two sentences on one event - and anything beyond it is no longer
+    /// the next thing that happens to this deployment, which is the only thing this record is for.
     /// </para>
     /// <para>
     /// Warning rather than Error: nothing is wrong, and nothing is wrong on the day either. The
@@ -487,9 +488,18 @@ public partial class LicenseManager
     /// would present it as an entitlement, which is the one thing it is not.
     /// </para>
     /// <para>
-    /// An expiry at the maximum representable instant yields no "after": there is no such tick, and
-    /// asking for one used to throw out of a license check - a licensing question answered with a server
-    /// fault. Nothing follows it either, so skipping it loses no moment.
+    /// An expiry at the last representable moment yields no "after": there is no such tick, and asking
+    /// for one throws out of a license check - a licensing question answered with a server fault.
+    /// Nothing follows it either, so skipping it loses no moment.
+    /// <para>
+    /// Bounded on the CLOCK time rather than on the instant, because that is what
+    /// <see cref="DateTimeOffset.AddTicks"/> overflows on. The two coincide only at offset zero, which
+    /// is the only offset a licence file can produce - <c>LicenseLoader</c> reads unix seconds - so a
+    /// suite built from loaded licences cannot tell the bounds apart, and a guard written from that
+    /// suite reads as sufficient. <see cref="License"/> and <see cref="AddLicense"/> are public: a host
+    /// constructing an expiry whose clock time is maximal under a positive offset sits strictly below
+    /// <see cref="DateTimeOffset.MaxValue"/> and still overflows, on the request path.
+    /// </para>
     /// </para>
     /// </remarks>
     private IEnumerable<DateTimeOffset> ChangeMoments(DateTimeOffset utcNow)
@@ -501,7 +511,7 @@ public partial class LicenseManager
             if (license.NotBefore is { } starts && utcNow < starts)
                 moments.Add(starts);
 
-            if (license.ExpiresAt is { } ends && utcNow < ends && ends < DateTimeOffset.MaxValue)
+            if (license.ExpiresAt is { } ends && utcNow < ends && ends.DateTime < DateTime.MaxValue)
                 moments.Add(ends.AddTicks(1));
         }
 
