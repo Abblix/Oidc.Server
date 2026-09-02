@@ -377,6 +377,7 @@ public class BackChannelAuthenticationValidatorTests
     [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
     [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
     [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
+    [InlineData("carrier-pigeon", "http://client.example/cb", null, "delivery mode is not supported")]
     // The ORDER, which nothing held: with the scheme check back above the mode arms this row reads
     // "HTTPS scheme" instead, and every other row in both suites stays green. A poll client naming
     // a plain-HTTP endpoint has two things wrong with it, and which one it is told about is the
@@ -429,8 +430,8 @@ public class BackChannelAuthenticationValidatorTests
     /// The null-mode exit moved BELOW the switch so the endpoint check could see a registration that
     /// names no mode. That put null in reach of the unsupported-mode arm, which asks for a mode that is
     /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null", and
-    /// removing it turns fourteen rows red, twelve of them in another file: this is the one that says
-    /// WHY in a sentence, rather than the only one that speaks.
+    /// removing it turns sixteen unit rows red across two files and fifty-three E2E rows besides: this
+    /// is the one that says WHY in a sentence, rather than the only one that speaks.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode()
