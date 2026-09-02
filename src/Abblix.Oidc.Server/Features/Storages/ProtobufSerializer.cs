@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -42,7 +43,7 @@ public class ProtobufSerializer : IBinarySerializer
     {
         // Handle primitive string type directly
         if (obj is string str)
-            return System.Text.Encoding.UTF8.GetBytes(str);
+            return Encoding.UTF8.GetBytes(str);
 
         IMessage protoMessage = obj switch
         {
@@ -82,7 +83,7 @@ public class ProtobufSerializer : IBinarySerializer
 
         // Handle primitive string type directly
         if (targetType == typeof(string))
-            return (T)(object)System.Text.Encoding.UTF8.GetString(bytes);
+            return (T)(object)Encoding.UTF8.GetString(bytes);
 
         if (targetType == typeof(Tokens.Revocation.JsonWebTokenStatus))
         {
