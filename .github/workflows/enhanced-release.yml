@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 2.3 or 2.3.0-beta3)'
+        description: 'Version to release (e.g., 2.4 or 2.4.0-beta3)'
         required: true
         type: string
       pre_release:
@@ -59,10 +59,18 @@ jobs:
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
-          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the
-          # X.Y release input to a full X.Y.0 SemVer for the build/pack override. The tag
-          # and GitHub Release keep the X.Y form; NuGet normalizes X.Y to X.Y.0 anyway, so
-          # the published package version is identical. A -prerelease suffix is preserved.
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the X.Y
+          # release input to a full X.Y.0 SemVer for the build and pack override only. The tag and
+          # the GitHub Release keep the X.Y form, deliberately: NuGet normalizes X.Y to X.Y.0, so
+          # the published package version is identical, and the short name is what the releases,
+          # their links and the notes files have always used.
+          #
+          # The cost is stated rather than discovered: MinVer parses a TAG as SemVer, and "2.3" is
+          # not one, so it reads none of this repository's release tags. Nothing depends on it
+          # reading them - the release version comes from this input and dev versions from
+          # MinVerMinimumMajorMinor - but it does mean the height in a dev version counts from the
+          # root commit rather than from the last release, and that a tag is not what any number
+          # here is derived from. A -prerelease suffix is preserved as given.
           CORE="${VERSION%%-*}"
           PRERELEASE=""
           [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"

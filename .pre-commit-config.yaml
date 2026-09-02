@@ -12,6 +12,12 @@
 # rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
 #   git commit --no-verify
 #
+# actionlint spawns shellcheck once per run: block, which on Windows can take longer than a commit
+# is worth waiting for. It is one of the two hooks CI re-runs, so skip that ONE - SKIP=actionlint git
+# commit - rather than reaching for --no-verify, which drops the five that run in this clone or
+# nowhere. Locally the same coverage comes from two faster halves: actionlint -shellcheck= for the
+# schema, and shellcheck on the extracted run: body.
+#
 # Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
@@ -38,6 +44,16 @@ repos:
         # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
         # check, or the list is edited by whoever is not looking at what it holds.
         files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
+      - id: msbuild-xml-parses
+        name: "Refuse a build XML file that does not parse"
+        entry: python .github/scripts/lint-msbuild-xml.py
+        language: python
+        # The XML the BUILD reads, by extension. Not every XML file tracked here: the .DotSettings
+        # documents are Rider's and break nothing, and an earlier version of this sentence claimed
+        # otherwise because it was checked with a search over *.xml, which could not have seen them.
+        # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
+        # content is the general answer, and this is the cheap one.
+        files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
       - id: no-split-doc-comments
         name: "Block a doc comment that documents two members"
         entry: python .github/scripts/lint-no-split-doc-comments.py

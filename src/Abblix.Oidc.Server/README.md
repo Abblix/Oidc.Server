@@ -15,7 +15,7 @@
 - **Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant
 - **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**: impersonation and delegation with multiple subject- and actor-token formats
 - **DPoP sender-constrained tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449))**: signature-based proof of possession for public clients that cannot use mTLS
-- **Certificate-bound access token verification ([RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705) §3)**: resource-server check that a presented token matches the client certificate
+- **Certificate-bound access token verification ([RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705) Section 3)**: resource-server check that a presented token matches the client certificate
 - **JARM**: signed, optionally encrypted JWT authorization responses
 - **JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701))**: signed introspection responses via content negotiation
 - **JWE-encrypted request objects ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101))**: confidential request parameters in the front channel and by reference
@@ -23,7 +23,7 @@
 
 ✏️ **Improvements**
 - Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591))
-- Token-class confusion defense via opt-in token-type pinning ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725)), JWS key pinned to its declared algorithm ([RFC 8725 §3.1](https://datatracker.ietf.org/doc/html/rfc8725)), enforced HMAC key length ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518))
+- Token-class confusion defense via opt-in token-type pinning ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725)), JWS key pinned to its declared algorithm ([RFC 8725 Section 3.1](https://datatracker.ietf.org/doc/html/rfc8725)), enforced HMAC key length ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518))
 - Authorization-response issuer parameter ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)) advertised in discovery
 
 ## Implemented Standards
