@@ -48,14 +48,20 @@ public static class Enrolment
     ];
 
     /// <summary>
-    /// How many projects under <c>src/</c> this project references, and therefore how many
-    /// documentation files must sit beside the tests.
+    /// How many documentation files sit beside the tests - which is what the gate reads.
     /// </summary>
     /// <remarks>
-    /// Asserted for equality rather than as a floor, and bumped by hand when a project is added, which
-    /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor let nine of the
-    /// eighteen references vanish with every row green, because those nine carry no sample today - so
-    /// the narrowing would have surfaced on the day somebody added one.
+    /// A count of the OUTPUT, not of the reference list, and the two do not follow from one another:
+    /// measured, a reference dropped from the project file still arrives when another referenced project
+    /// pulls it in, so half the list can be removed with the output unchanged - and unharmed, since the
+    /// documentation the gate reads is still there. What the earlier version of this sentence said, that
+    /// the reference count is THEREFORE the file count, is the step that does not hold.
+    /// <para>
+    /// Asserted for equality rather than as a floor, and bumped by hand when a library is added, which
+    /// is the same deliberate moment <see cref="Unenrolled"/> is built around. A floor of seven let nine
+    /// of the sixteen documents vanish with every row green, because those nine carry no sample today -
+    /// so the narrowing would have surfaced on the day somebody added one.
+    /// </para>
     /// <para>
     /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
     /// and that is a hole rather than a tidiness: they emit documentation and ship inside the Mvc and

@@ -74,6 +74,31 @@ public static class DocSampleReader
     }
 
     /// <summary>
+    /// The projects this one references by name, read from the project file itself.
+    /// </summary>
+    /// <remarks>
+    /// Read from the csproj rather than counted off the output directory, because a reference REMOVED
+    /// here still arrives when another referenced project pulls it in - measured, dropping
+    /// <c>Abblix.Utils</c> left its assembly, its documentation and every row exactly as before, and it
+    /// carries a live sample. Two numbers both taken from the output cannot see that; the reference list
+    /// and the output are two different things and have to be compared, not conflated.
+    /// </remarks>
+    public static IReadOnlyList<string> ReferencedProjects()
+    {
+        var beside = Path.GetDirectoryName(typeof(DocSampleReader).Assembly.Location)!;
+        var project = XDocument.Load(Path.Combine(beside, "Abblix.DocSamples.csproj"));
+
+        return project
+            .Descendants("ProjectReference")
+            .Select(reference => (string?)reference.Attribute("Include") ?? string.Empty)
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
     /// The lines of one enrolled sample.
     /// </summary>
     /// <exception cref="InvalidOperationException">The member is not documented, or has no block at that
@@ -107,9 +132,11 @@ public static class DocSampleReader
     /// at the wrong site entirely: the earlier parser's 16 was right about this, and the duplication is
     /// the reader's.
     /// <para>
-    /// A constructor's blocks are dropped only when they are IDENTICAL to its declaring type's, which is
-    /// what the copy produces. Two members that genuinely carry the same sample are a different thing
-    /// and both still count.
+    /// A constructor's blocks are dropped only when its WHOLE documented body is identical to its
+    /// declaring type's, not merely its code text. The copy Roslyn makes is byte-for-byte, so the whole
+    /// body still catches it; matching on the code alone also collapsed an EXPLICIT constructor whose
+    /// author deliberately repeats the type's sample - measured, a real sample lost and the uncompiled
+    /// remainder unmoved, which is precisely the silence this gate exists to break.
     /// </para>
     /// </remarks>
     public static int BlockCount()
@@ -118,22 +145,35 @@ public static class DocSampleReader
             .SelectMany(document => document.Descendants("member"))
             .Select(member => (
                 Name: (string?)member.Attribute("name") ?? string.Empty,
-                Texts: member.Descendants("code").Select(code => code.Value).ToArray()))
-            .Where(member => member.Texts.Length > 0)
+                Body: BodyOf(member),
+                Count: member.Descendants("code").Count()))
+            .Where(member => member.Count > 0)
             .ToArray();
 
         var byName = blocks.ToLookup(member => member.Name);
 
         return blocks
-            .Where(member => !IsCopyOfItsType(member.Name, member.Texts, byName))
-            .Sum(member => member.Texts.Length);
+            .Where(member => !IsCopyOfItsType(member.Name, member.Body, byName))
+            .Sum(member => member.Count);
     }
 
     /// <summary>
-    /// Whether this member is a primary constructor carrying its declaring type's doc comment verbatim.
+    /// A documented member's body, with the name it is filed under removed so two members can be
+    /// compared for carrying the same documentation.
+    /// </summary>
+    private static string BodyOf(XElement member)
+    {
+        var copy = new XElement(member);
+        copy.Attribute("name")?.Remove();
+        return copy.ToString(SaveOptions.None);
+    }
+
+    /// <summary>
+    /// Whether this member is a constructor carrying its declaring type's documentation verbatim, which
+    /// is what Roslyn writes for a primary constructor.
     /// </summary>
     private static bool IsCopyOfItsType(
-        string name, string[] texts, ILookup<string, (string Name, string[] Texts)> byName)
+        string name, string body, ILookup<string, (string Name, string Body, int Count)> byName)
     {
         const string ConstructorMarker = ".#ctor";
 
@@ -146,7 +186,7 @@ public static class DocSampleReader
 
         var declaringType = "T:" + name[2..marker];
 
-        return byName[declaringType].Any(type => type.Texts.SequenceEqual(texts, StringComparer.Ordinal));
+        return byName[declaringType].Any(type => string.Equals(type.Body, body, StringComparison.Ordinal));
     }
 
     /// <summary>

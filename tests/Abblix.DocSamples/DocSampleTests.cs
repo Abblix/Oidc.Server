@@ -143,8 +143,29 @@ public class DocSampleTests
         // unenrolled and read exactly like a codebase with no samples in it - and finding only ONE
         // library's file would do the same more quietly, which is the shape every narrowing here has
         // taken so far.
-        var documents = DocSampleReader.Documents();
-        Assert.Equal(Enrolment.Libraries, documents.Count);
+        // Every project this one references must have put its documentation here - a library that stops
+        // emitting documentation is a library this gate stops reading, and it would otherwise be a
+        // quieter pass rather than a failure.
+        //
+        // Not the same thing as the reference list being intact, which is what the number below used to
+        // be read as. Dropping a reference has three outcomes, all measured: one whose library carries
+        // an ENROLLED sample cannot be dropped at all - the compiler refuses, because a copy under
+        // Samples/ names its types; one that arrives TRANSITIVELY changes nothing, and nothing needs to,
+        // since its documentation is still here to be read; and one that is neither takes its file with
+        // it, which the count below sees.
+        var documented = DocSampleReader.Documents()
+            .Select(document => (string?)document.Root!.Element("assembly")!.Element("name")!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.All(
+            DocSampleReader.ReferencedProjects(),
+            project => Assert.Contains(project, documented));
+
+        // And the SIZE of what is beside the output, which is a different guarantee: the one above
+        // cannot see a reference disappear, since a shorter list is a shorter loop. This one names the
+        // number of documentation files the gate reads - however each arrived - so a library that stops
+        // being built into this output is a failure rather than a quieter pass.
+        Assert.Equal(Enrolment.Libraries, documented.Count);
 
         var total = DocSampleReader.BlockCount();
         Assert.True(total > Enrolment.Compiled.Count, $"the documents carry {total} code block(s)");

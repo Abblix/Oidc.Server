@@ -12,6 +12,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Copied so a test can read the reference LIST rather than count what happens to sit
+             beside the output: a reference removed here still arrives transitively, so comparing
+             two numbers that both come from the output directory cannot see it go. -->
+        <None Include="Abblix.DocSamples.csproj" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
         <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
     </ItemGroup>
 
