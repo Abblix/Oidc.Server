@@ -82,7 +82,14 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 
 ## ✨ What's New
 
-### Version 2.3 (Latest)
+### Version 2.4 (Latest)
+
+🚀 **Features**
+- **Minimal API integration**: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
+- **External signing keys**: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
+- **Security events and Shared Signals**: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
+
+### Version 2.3
 
 🚀 **Features**
 - **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
@@ -108,7 +115,7 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 - JWT validation returns errors instead of throwing on unsupported algorithm or key combinations
 - Dependency-injection registrations normalized so host pre-registrations win the resolution race
 
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for full details.
+> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details of 2.4, and [2.3](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for the release before it.
 
 ### ⚠️ Breaking Changes (upgrading from 2.2)
 
