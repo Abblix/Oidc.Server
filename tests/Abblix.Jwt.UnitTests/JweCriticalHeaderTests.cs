@@ -97,7 +97,7 @@ public class JweCriticalHeaderTests
         var result = await Validate(jwt);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
         Assert.Contains("crit", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 

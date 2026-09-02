@@ -25,6 +25,15 @@ partial class LicenseManager
     private static partial void LogLicenseInGracePeriod(ILogger logger, DateTimeOffset ExpiresAt);
 
     [LoggerMessage(
+        EventId = LogEvents.Licensing.LicenseManager.RenewalGrantsLess,
+        Level = LogLevel.Warning,
+        Message = "The license taking over on {TakesOverAt:R} grants less than the one in force: "
+                  + "{Narrowed}. Nothing changes before that date, and nothing is wrong today - but on "
+                  + "it, this deployment may do less than it may now")]
+    private static partial void LogRenewalGrantsLess(
+        ILogger logger, DateTimeOffset TakesOverAt, string Narrowed);
+
+    [LoggerMessage(
         EventId = LogEvents.Licensing.LicenseManager.LicenseExpired,
         Level = LogLevel.Critical,
         Message = "License expired on {ExpiresAt:R}, {ExpiredDaysAgo} days ago. Service access will be affected. Renewal is required as soon as possible!")]

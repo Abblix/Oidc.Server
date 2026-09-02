@@ -112,7 +112,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<EventTypeRegistry>(
             provider => provider.GetRequiredService<IOptions<SecurityEventsOptions>>().Value.Events);
 
-        services.TryAddSingleton<ISecurityEventTokenVerifier, DefaultSecurityEventTokenVerifier>();
+        services.TryAddSingleton<ISecurityEventTokenVerifier>(provider => new DefaultSecurityEventTokenVerifier(
+            provider.GetRequiredService<IJsonWebTokenValidator>(),
+            provider.GetRequiredService<IIssuerKeyResolver>(),
+            provider.GetRequiredService<IOptions<SecurityEventsOptions>>().Value.EffectiveSigningAlgorithms));
 
         services.TryAddSingleton<ISecurityEventTokenSigner>(provider =>
         {
@@ -121,7 +124,8 @@ public static class ServiceCollectionExtensions
             return options.SigningKeySource is { } signingKeySource
                 ? new DefaultSecurityEventTokenSigner(
                     provider.GetRequiredService<IJsonWebTokenCreator>(),
-                    signingKeySource)
+                    signingKeySource,
+                    options.EffectiveSigningAlgorithms)
                 : throw new InvalidOperationException(
                     $"Signing needs a key: set {nameof(SecurityEventsOptions)}."
                     + $"{nameof(SecurityEventsOptions.SigningKeySource)} in {nameof(AddSecurityEvents)}, or "
