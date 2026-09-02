@@ -31,10 +31,14 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
+/// handler outside this library keeps compiling - a deployment that registered none simply has nobody
+/// to wake.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     IBackChannelRequestStorage storage,
-    ISubjectTypeConverter subjectTypeConverter)
+    ISubjectTypeConverter subjectTypeConverter,
+    IBackChannelLongPollingService? statusNotifier = null)
 {
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
@@ -272,6 +276,66 @@ public abstract partial class AuthenticationCompletionHandler(
         TimeSpan expiresIn)
     {
         request.Status = BackChannelAuthenticationStatus.Denied;
-        await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(authenticationRequestId, request, expiresIn);
     }
+
+    /// <summary>
+    /// Writes the request and wakes whoever is waiting on it.
+    /// </summary>
+    /// <remarks>
+    /// One place, so that a handler cannot write a status without waking whoever waits on it. No derived
+    /// handler holds an <see cref="IBackChannelRequestStorage"/> of its own any more, which is what makes
+    /// this the only write path today - and NOT something the compiler enforces: a field initialised from
+    /// a primary-constructor parameter captures nothing, so one line takes that door back. What holds it
+    /// shut is <c>NoCompletionHandlerKeepsItsOwnStorage</c> in the unit tests, which reads the TYPES
+    /// rather than the call sites and so covers a handler that does not exist yet. The previous shape,
+    /// where each handler had its own storage field, is how ping came to signal nothing while its clients
+    /// waited and how push kept writing past this method afterwards.
+    /// <para>
+    /// A transition made by REMOVING the request rather than writing it wakes nobody, deliberately, and
+    /// only push makes one from here - through <see cref="TakeRequestAsync"/>, because a denied request
+    /// its client can never read is an orphan. Two more removals live outside this class entirely: the
+    /// grant handler drops a request whose stored expiry has passed and answers expired_token, and a
+    /// redemption drops the request it just answered. Neither passes through here, so a signal added to
+    /// this class would not fire for them. A waiter woken by any of the three would read a record that is
+    /// gone, which is what its own timeout already handles.
+    /// </para>
+    /// <para>
+    /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
+    /// nobody, because nothing hands push a notifier: its constructor has no such parameter, so no
+    /// container configuration can supply one. A deployment that registered no notifier skips the call.
+    /// </para>
+    /// </remarks>
+    /// <param name="authenticationRequestId">The authentication request identifier.</param>
+    /// <param name="request">The request whose status has just changed.</param>
+    /// <param name="expiresIn">How long the stored record remains available.</param>
+    protected async Task StoreAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        TimeSpan expiresIn)
+    {
+        await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+
+        if (statusNotifier != null)
+        {
+            await statusNotifier.NotifyStatusChangeAsync(authenticationRequestId, request.Status);
+        }
+    }
+
+    /// <summary>
+    /// Takes the request away, for a mode that answers by removing it rather than by writing a status.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="StoreAsync"/> so that a derived handler needs no storage of its own, which is
+    /// what keeps the write path from having a second door. Nobody is woken: a waiter reading a record
+    /// that has just gone learns nothing its own timeout does not already tell it.
+    /// </remarks>
+    /// <param name="authenticationRequestId">The request to take away.</param>
+    /// <returns>The request, when this caller took it - which means the protocol ran to the end and this
+    /// caller's own claim was still in the store; otherwise null. A null covers the record not being
+    /// there, somebody else having taken it, and a claim that expired mid-protocol, which happens to a
+    /// single caller with nobody to lose to. A store fault after the removal raises rather than
+    /// returning null.</returns>
+    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(string authenticationRequestId)
+        => storage.TryRemoveAsync(authenticationRequestId);
 }

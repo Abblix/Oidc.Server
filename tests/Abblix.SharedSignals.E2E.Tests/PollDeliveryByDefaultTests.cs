@@ -156,10 +156,9 @@ public sealed class PollDeliveryByDefaultTests
     /// worth driving because that path materializes at startup rather than per request. And an operator
     /// names those identifiers by hand - <c>alerts</c>, or as here something with a space in it - where a
     /// created stream gets a GUID, so this is the only path on which an operator-spelled identifier reaches
-    /// a URL. What this row does NOT prove is the escaping: a space is escaped by <c>Uri</c> itself. And an
-    /// identifier carrying a path separator stays unaddressable however it is written - it reaches the
-    /// handler as the literal <c>a%2Fb</c>, which is the one escape the path decoder preserves, so the
-    /// lookup misses. That is issue 465, and the refusal comes from the store rather than from routing.
+    /// a URL. What this row does NOT prove is the escaping: a space is escaped by <c>Uri</c> itself. An
+    /// identifier that cannot be carried into an address at all is refused when the streams are
+    /// materialized - see <c>ADeclaredIdentifierThatCannotSurviveOneSegment_IsRefused</c>.
     /// </remarks>
     [Fact]
     public async Task ADeclaredStreamWithASpelledOutIdentifier_GetsAnAddressThatAnswers()
@@ -192,8 +191,9 @@ public sealed class PollDeliveryByDefaultTests
     /// <c>PathString</c> conversion decodes escaped text back and keeps only <c>%2F</c>, so an identifier
     /// carrying <c>?</c> or <c>#</c> arrives at <c>Uri</c> as a delimiter and the remainder is cut off the
     /// path - into a query for one, into a fragment for the other. Either way the stored address is that of
-    /// a DIFFERENT stream, well-formed and served. Nothing 404s, which is what makes it worse than issue
-    /// 465.
+    /// a DIFFERENT stream, well-formed and served. Nothing 404s and nothing is refused at startup, which
+    /// is what makes it worse than an identifier that cannot be addressed at all: there is no symptom to
+    /// notice, only a receiver draining somebody else's queue.
     /// </remarks>
     [Theory]
     [InlineData("alerts?eu", "%3F")]
@@ -219,6 +219,182 @@ public sealed class PollDeliveryByDefaultTests
             poll.EndpointUrl, new PollRequest { ReturnImmediately = true }, cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+    }
+
+    /// <summary>
+    /// A declared identifier the poll address cannot carry is refused, rather than served at an address
+    /// that leads nowhere.
+    /// </summary>
+    /// <remarks>
+    /// The rows come from the two ways a segment fails, MEASURED through this host rather than reasoned
+    /// about. A path separator escapes to <c>%2F</c>, the single escape the decoder preserves, so the
+    /// handler receives the literal <c>alerts%2Feu</c> and the lookup misses; a dot segment is not
+    /// escaped at all, and the normalizer removes it before the request is sent, so no route matches.
+    /// Only the first is about a character, which is why the check is a round trip rather than a list:
+    /// the same measurement cleared <c>?</c>, <c>#</c>, <c>%</c>, <c>\</c> and non-ASCII, all of which a
+    /// list assembled from the first failure would plausibly have caught.
+    /// <para>
+    /// The control against over-refusing is not written here because it is already driven above: the
+    /// space and the URL syntax rows now pass through this same check and would go red if it refused
+    /// what the host can serve.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("alerts/eu")]
+    [InlineData("a b/c")]
+    [InlineData("..")]
+    [InlineData(".")]
+    public async Task ADeclaredIdentifierThatCannotSurviveOneSegment_IsRefused(string streamId)
+    {
+        var refusal = await Record.ExceptionAsync(() => StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = streamId }])));
+
+        Assert.IsType<InvalidOperationException>(refusal);
+        Assert.Contains(streamId, refusal.Message, StringComparison.Ordinal);
+
+        // Which of the two refusals fired, and not merely that one did. Both interpolate the stream
+        // identifier, so a row asserting only that could not tell them apart - and the arm that picks
+        // between them could be deleted whole without a single row going red.
+        Assert.Contains("Rename the stream", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The control for the row above: a transmitter that serves no poll delivery at all is refused with
+    /// the OTHER message, and its operator is sent to configure an address rather than to rename a stream.
+    /// </summary>
+    /// <remarks>
+    /// This row holds the collapse in the other direction. Deleting the arm whole is caught by the
+    /// assertion twelve lines above; making that arm unconditional - so every operator is told to rename
+    /// their stream - is caught here and nowhere else.
+    /// </remarks>
+    [Fact]
+    public async Task ADeclaredPollStreamOnATransmitterServingNoPoll_IsRefusedForThatInstead()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        AddTransmitter(builder, BaseOptions(), null);
+        builder.Services.AddSharedSignalsConfiguredStreams(
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts" }]);
+
+        await using var host = builder.Build();
+
+        var refusal = await Record.ExceptionAsync(
+            () => host.StartAsync(TestContext.Current.CancellationToken));
+
+        Assert.IsType<InvalidOperationException>(refusal);
+        Assert.Contains("offers no poll delivery", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An identifier that merely LOOKS like a dot segment is accepted, and its address answers.
+    /// </summary>
+    /// <remarks>
+    /// The row that decides HOW the expected side is built. It has to be the <c>PathString</c>
+    /// CONSTRUCTOR, which keeps the text as it is; the idiomatic <c>prefix.Add($"...")</c> compiles
+    /// identically and runs the identifier through the decoder as well, and then <c>%2E%2E</c> reads as
+    /// <c>..</c> and is refused although this host serves it. The refusal rows above cannot see that,
+    /// because they are refused either way.
+    /// </remarks>
+    [Fact]
+    public async Task ADeclaredIdentifierThatOnlyLooksLikeADotSegment_IsServed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "%2E%2E" }]));
+        var client = host.GetTestClient();
+
+        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
+
+        using var polled = await client.PostAsJsonAsync(
+            poll.EndpointUrl, new PollRequest { ReturnImmediately = true }, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+    }
+
+    /// <summary>
+    /// The same identifier on a PUSH stream is not judged: the refusal is about an address this
+    /// transmitter would have to hand out, and a push stream is delivered to, never polled.
+    /// </summary>
+    /// <remarks>
+    /// The boundary matters more than it looks. A check that refused the identifier itself would take a
+    /// working deployment off the air on an upgrade - the operator's name never reached a URL of ours,
+    /// and nothing about it was ever broken.
+    /// </remarks>
+    [Fact]
+    public async Task ADeclaredPushStreamWithTheSameIdentifier_IsNotRefused()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+            [
+                new ConfiguredStream
+                {
+                    ReceiverId = ReceiverId,
+                    StreamId = "alerts/eu",
+                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                },
+            ]));
+
+        var streams = await host.GetTestClient()
+            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+
+        Assert.Equal("alerts/eu", Assert.Single(streams!).StreamId);
+    }
+
+    /// <summary>
+    /// A receiver moving an unaddressable PUSH stream to poll delivery is refused, not faulted at.
+    /// </summary>
+    /// <remarks>
+    /// The row above admits such a stream on purpose - a push stream needs no address of ours - and that
+    /// is exactly what makes this reachable: CAEP Interoperability Profile 1.0 Section 2.3.8.1 obliges a
+    /// transmitter to entertain a request naming either delivery method, so the receiver may ask for the
+    /// one address this identifier cannot have. The first version of this branch threw there, out of a
+    /// Minimal API endpoint, turning an authenticated and specification-permitted request into a server
+    /// fault. Both verbs are driven because the management API offers both.
+    /// </remarks>
+    [Theory]
+    [InlineData("PATCH")]
+    [InlineData("PUT")]
+    public async Task AReceiverMovingAnUnaddressableStreamToPoll_IsRefused(string verb)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            configure: services => services.AddSharedSignalsConfiguredStreams(
+            [
+                new ConfiguredStream
+                {
+                    ReceiverId = ReceiverId,
+                    StreamId = "alerts/eu",
+                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                },
+            ]));
+
+        using var request = new HttpRequestMessage(new HttpMethod(verb), "/ssf/stream")
+        {
+            Content = JsonContent.Create(new UpdateStreamRequest
+            {
+                StreamId = "alerts/eu",
+                Delivery = new PollDeliveryMethod(),
+            }),
+        };
+
+        using var response = await host.GetTestClient().SendAsync(request, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The status is the half a receiver reads over the wire; the description is the half a host
+        // driving StreamManagementService directly reads, and it used to say the method was
+        // unsupported - on a transmitter whose own configuration document advertises poll.
+        var service = host.Services.GetRequiredService<StreamManagementService>();
+        var refused = await service.UpdateStreamAsync(
+            ReceiverId,
+            new UpdateStreamRequest { StreamId = "alerts/eu", Delivery = new PollDeliveryMethod() },
+            cancellationToken);
+
+        Assert.Contains("no poll address for this stream", refused.Description!, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -323,6 +499,11 @@ public sealed class PollDeliveryByDefaultTests
         var result = await service.CreateStreamAsync(ReceiverId, new CreateStreamRequest(), cancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+
+        // Which refusal, and not merely that one came. Both arms answer 400, so a row asserting the
+        // status alone leaves the condition choosing between them free to be deleted.
+        Assert.Contains(
+            "not supported by this transmitter", result.Description!, StringComparison.Ordinal);
     }
 
     private static async Task<Uri> PollEndpointOfNewStreamAsync(

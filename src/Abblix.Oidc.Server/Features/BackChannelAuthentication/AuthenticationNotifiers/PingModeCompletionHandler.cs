@@ -25,15 +25,18 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="notificationService">Service for sending ping notifications.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll. A ping client polls the token
+/// endpoint the same way a poll client does, and the long-poll gate does not read the delivery mode - so
+/// one that polls before its notification arrives waits, and is woken from here.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
-    INotificationDeliveryService notificationService)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter)
+    INotificationDeliveryService notificationService,
+    IBackChannelLongPollingService? statusNotifier = null)
+    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
-    private readonly IBackChannelRequestStorage _storage = storage;
 
     /// <summary>
     /// Handles ping mode delivery by storing the authenticated request and sending a notification to the client.
@@ -60,7 +63,7 @@ public partial class PingModeCompletionHandler(
             return;
         }
 
-        await _storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(authenticationRequestId, request, expiresIn);
 
         LogSendingPingNotification(authenticationRequestId);
 

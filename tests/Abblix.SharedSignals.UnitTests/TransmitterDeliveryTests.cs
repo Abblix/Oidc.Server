@@ -64,7 +64,7 @@ public class TransmitterDeliveryTests
         var outbox = new InMemoryEventOutbox();
         foreach (var item in items)
         {
-            await outbox.EnqueueAsync("s-1", item, TestContext.Current.CancellationToken);
+            await outbox.EnqueueAsync("receiver-a", "s-1", item, TestContext.Current.CancellationToken);
         }
 
         return outbox;
@@ -82,7 +82,7 @@ public class TransmitterDeliveryTests
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         Assert.Equal(new PushDeliveryPassOutcome(Delivered: 2, Rejected: 0), outcome);
-        Assert.Empty(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         Assert.Equal(["a.a.a", "b.b.b"], handler.Requests.Select(request => request.Body));
     }
 
@@ -106,7 +106,7 @@ public class TransmitterDeliveryTests
         Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 1), outcome);
         Assert.Equal(
             ["jti-2", "jti-3"],
-            (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
+            (await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
     }
 
@@ -185,7 +185,7 @@ public class TransmitterDeliveryTests
         Assert.Contains("no grant for this stream", written.Text, StringComparison.Ordinal);
 
         // The event is still owed to the receiver, so it stays queued.
-        Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
     }
 
     /// <summary>The receiver's words are bounded and cannot forge a line of their own.</summary>
@@ -288,7 +288,7 @@ public class TransmitterDeliveryTests
         Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 0), outcome);
         Assert.Equal(
             ["jti-1", "jti-2"],
-            (await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken))
+            (await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken))
             .Select(item => item.JwtId));
     }
 
@@ -309,7 +309,7 @@ public class TransmitterDeliveryTests
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
         Assert.Equal(new PushDeliveryPassOutcome(Delivered: 0, Rejected: 1), outcome);
-        Assert.Empty(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Empty(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public class TransmitterDeliveryTests
 
         Assert.Equal(new PushDeliveryPassOutcome(Delivered: 1, Rejected: 0), outcome);
         Assert.Equal("b.b.b", Assert.Single(handler.Requests).Body);
-        var held = Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        var held = Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         Assert.Equal("jti-1", held.JwtId);
     }
 
@@ -417,7 +417,7 @@ public class TransmitterDeliveryTests
             TestContext.Current.CancellationToken));
 
         var remaining = Assert.Single(
-            await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+            await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
         Assert.True(remaining.IsStatusAnnouncement);
         Assert.NotEqual("jti-held", remaining.JwtId);
         Assert.Equal(
