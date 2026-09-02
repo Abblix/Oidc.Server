@@ -34,9 +34,22 @@
         false positive, and the only one that runs before anybody chooses to execute a test.
     -->
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
-        <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents.RISC\Abblix.SecurityEvents.RISC.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
 </Project>

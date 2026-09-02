@@ -53,7 +53,7 @@ public class DocSampleTests
 
         foreach (var sample in Enrolment.Compiled)
         {
-            var documented = Meaningful(DocSampleReader.Read(root, sample));
+            var documented = Meaningful(DocSampleReader.Read(sample));
             var compiled = Meaningful(MarkedRegion(CopyOf(root, sample)));
 
             if (!documented.SequenceEqual(compiled))
@@ -94,25 +94,56 @@ public class DocSampleTests
         => lines.Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
 
     /// <summary>
+    /// Every file under <c>Samples/</c> is named by an enrolment.
+    /// </summary>
+    /// <remarks>
+    /// A copy nobody enrolled still COMPILES, so it looks like coverage and is none: nothing compares it
+    /// to a doc comment, and its text drifts freely while the build stays green. The remainder count
+    /// cannot see it either - that is derived from the documentation, and an orphan copy corresponds to
+    /// no documented sample at all.
+    /// </remarks>
+    [Fact]
+    public void EveryCopyIsNamedByAnEnrolment()
+    {
+        var directory = Path.Combine(
+            RepositoryRoot(), "tests", "Abblix.DocSamples", "Samples");
+
+        var files = Directory.EnumerateFiles(directory, "*.cs").Select(Path.GetFileName).ToArray();
+
+        // The control: the directory really was read, so an empty listing does not pass as "no orphans".
+        Assert.NotEmpty(files);
+
+        var enrolled = Enrolment.Compiled.Select(sample => sample.Copy).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain(files, file => !enrolled.Contains(file!));
+    }
+
+    /// <summary>
     /// The uncompiled remainder is the number the enrolment states, and no other.
     /// </summary>
     /// <remarks>
-    /// A gate that covers four samples out of sixteen is honest only while the twelve are counted. This
-    /// row is what turns "the rest is not covered yet" from a sentence in a comment into something that
-    /// fails when a sample is added and nobody decides about it - in either direction, since enrolling
-    /// one without moving the number fails too.
+    /// A gate that covers four samples out of eighteen is honest only while the fourteen are counted.
+    /// This row is what turns "the rest is not covered yet" from a sentence in a comment into something
+    /// that fails when a sample is added and nobody decides about it - in either direction, since
+    /// enrolling one without moving the number fails too.
+    /// <para>
+    /// The number moved from twelve to fourteen when the count stopped coming from a hand-written parser
+    /// and started coming from the compiler's own documentation files. The old figure was a fact about
+    /// that parser: it could not see a one-line block or a tag with an attribute.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheUncompiledRemainderIsWhatTheEnrolmentSays()
     {
-        var root = RepositoryRoot();
-        var total = Directory
-            .EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
-            .Sum(file => DocSampleReader.BlocksIn(File.ReadAllLines(file)).Count);
+        // Two controls. Documentation files that stopped being found would report every sample as
+        // unenrolled and read exactly like a codebase with no samples in it - and finding only ONE
+        // library's file would do the same more quietly, which is the shape every narrowing here has
+        // taken so far.
+        var documents = DocSampleReader.Documents();
+        Assert.True(documents.Count >= 7, $"only {documents.Count} documentation file(s) beside the tests");
 
-        // The control: a walk that stopped finding anything would report every sample as unenrolled and
-        // look exactly like a codebase with no samples in it.
-        Assert.True(total > Enrolment.Compiled.Count, $"the walk found {total} code block(s) in src/");
+        var total = DocSampleReader.BlockCount();
+        Assert.True(total > Enrolment.Compiled.Count, $"the documents carry {total} code block(s)");
 
         Assert.Equal(Enrolment.Unenrolled, total - Enrolment.Compiled.Count);
     }
@@ -126,9 +157,12 @@ public class DocSampleTests
     /// to carry the name of something a library really ships would satisfy the compiler while hiding the
     /// very rename this exists to catch, and the build would stay green through it.
     /// <para>
-    /// EVERY referenced library, taken from what this assembly references rather than from a type that
-    /// happened to be at hand. Reading one assembly covered a third of the surface: <c>CustodianHeldKeys</c>
-    /// ships from Abblix.Jwt and is used by two of the four copies, and a stub of that name passed.
+    /// Every Abblix assembly sitting BESIDE this one, which is what actually ships together. Two earlier
+    /// versions were narrower and both looked complete: one type's assembly covered a third of the
+    /// surface, and <c>GetReferencedAssemblies</c> covered five of seven, because that is the reference
+    /// table the compiler EMITTED - trimmed to assemblies whose types the test code happens to touch.
+    /// Measured, it omitted <c>Abblix.DependencyInjection</c> and <c>Abblix.SecurityEvents</c>, both
+    /// shipped packages, and a stub named after a type in either passed.
     /// </para>
     /// <para>
     /// And every type, not only the exported ones - an internal name a sample reaches through
@@ -138,10 +172,14 @@ public class DocSampleTests
     [Fact]
     public void NoStubShadowsATypeTheLibraryShips()
     {
-        var shipped = typeof(DocSampleTests).Assembly
-            .GetReferencedAssemblies()
-            .Where(reference => reference.Name?.StartsWith("Abblix.", StringComparison.Ordinal) == true)
-            .Select(Assembly.Load)
+        var beside = Path.GetDirectoryName(typeof(DocSampleTests).Assembly.Location)!;
+        var libraries = Directory
+            .EnumerateFiles(beside, "Abblix.*.dll")
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "Abblix.DocSamples")
+            .Select(Assembly.LoadFrom)
+            .ToArray();
+
+        var shipped = libraries
             .SelectMany(assembly => assembly.GetTypes())
             .Select(type => type.Name)
             .ToHashSet(StringComparer.Ordinal);
@@ -152,10 +190,12 @@ public class DocSampleTests
             .Select(type => type.Name)
             .ToArray();
 
-        // Three controls. An empty stub set passes the assertion below and measures nothing, and a
-        // shipped set that lost a library would do the same - which is exactly how this row was weak
-        // before, reading one assembly out of three.
+        // Controls, because every way this row has been weak was a SILENT narrowing of what it compares
+        // against. An empty stub set passes the assertion below and measures nothing; so would a shipped
+        // set that lost a library, which is what both earlier versions did. The count is asserted rather
+        // than the names alone, so losing one is a failure rather than a quieter pass.
         Assert.NotEmpty(stubs);
+        Assert.True(libraries.Length >= 7, $"only {libraries.Length} Abblix libraries sit beside the tests");
         Assert.Contains(nameof(CustodianHeldKeys), shipped);
         Assert.Contains(nameof(AuthSession), shipped);
 
@@ -163,36 +203,20 @@ public class DocSampleTests
     }
 
     /// <summary>
-    /// Where the compiled copy of a sample lives, read from the sources rather than from the output.
+    /// Where the compiled copy of a sample lives.
     /// </summary>
     /// <remarks>
-    /// ONE file, which is what makes the comparison mean anything: a copy emitted to the output
-    /// directory beside the compiled one would let the two disagree, and this row would then compare a
-    /// doc comment against a file no compiler ever read.
-    /// <para>
-    /// Named from the WHOLE relative path with the separators flattened, not from the file name: two of
-    /// the four enrolled samples live in files called <c>ServiceCollectionExtensions.cs</c> at the same
-    /// index, so a name taken from the file alone gives them one copy between them and one of the two is
-    /// then compared against the other's text. Measured under the rejected scheme, that fails loudly
-    /// rather than passing - which is luck, not design: it holds only while the two samples differ, and
-    /// the naming is what makes the question not arise.
-    /// </para>
+    /// Named by the enrolment rather than derived from the member's identifier, which carries brackets,
+    /// commas and braces and would make an unreadable file name. ONE file, read from the sources: a copy
+    /// emitted to the output beside the compiled one could disagree with it, and this row would then
+    /// compare a doc comment against a file no compiler ever read.
     /// </remarks>
     private static string CopyOf(string repositoryRoot, DocSample sample) => Path.Combine(
         repositoryRoot,
         "tests",
         "Abblix.DocSamples",
         "Samples",
-        FlatName(sample));
-
-    /// <summary>
-    /// The copy's file name: the sample's whole relative path with the separators flattened.
-    /// </summary>
-    private static string FlatName(DocSample sample)
-    {
-        var path = sample.Source.Replace('/', '_').Replace('\\', '_');
-        return $"{path[..^".cs".Length]}.{sample.Index}.cs";
-    }
+        sample.Copy);
 
     /// <summary>
     /// The repository root, found by walking up from the test assembly until the sources are underneath.

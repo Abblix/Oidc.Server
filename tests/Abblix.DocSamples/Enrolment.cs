@@ -25,18 +25,30 @@ namespace Abblix.DocSamples;
 public static class Enrolment
 {
     /// <summary>
-    /// The samples whose text is compiled, each with a copy under <c>Samples/</c>.
+    /// The samples whose text is compiled, each with a copy under <c>Samples/</c>, named by the
+    /// documentation identifier the compiler writes for the member they document.
     /// </summary>
     public static IReadOnlyList<DocSample> Compiled { get; } =
     [
-        new("src/Abblix.Jwt.Vault/ServiceCollectionExtensions.cs", 0),
-        new("src/Abblix.Jwt.Azure/ServiceCollectionExtensions.cs", 0),
-        new("src/Abblix.Oidc.Server/Features/UserAuthentication/AuthSession.cs", 0),
-        new("src/Abblix.Oidc.Server/Features/BackChannelAuthentication/UserDeviceAuthenticationHandlerStub.cs", 0),
+        new("M:Abblix.Jwt.Vault.ServiceCollectionExtensions.AddVaultCustodian("
+            + "Microsoft.Extensions.DependencyInjection.IServiceCollection,"
+            + "System.Action{Abblix.Jwt.Vault.VaultTransitOptions})", 0, "VaultCustodian.cs"),
+
+        new("M:Abblix.Jwt.Azure.ServiceCollectionExtensions.AddAzureCustodian("
+            + "Microsoft.Extensions.DependencyInjection.IServiceCollection,"
+            + "System.Action{Abblix.Jwt.Azure.AzureKeyVaultOptions})", 0, "AzureCustodian.cs"),
+
+        new("P:Abblix.Oidc.Server.Features.UserAuthentication.AuthSession.AdditionalClaims", 0,
+            "AdditionalClaims.cs"),
+
+        new("M:Abblix.Oidc.Server.Features.BackChannelAuthentication.UserDeviceAuthenticationHandlerStub"
+            + ".InitiateAuthenticationAsync("
+            + "Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces"
+            + ".ValidBackChannelAuthenticationRequest)", 0, "BackChannelHandler.cs"),
     ];
 
     /// <summary>
-    /// How many code blocks in <c>src/</c> are not compiled by anything.
+    /// How many code blocks the compiler recorded that nothing here compiles.
     /// </summary>
     /// <remarks>
     /// A number rather than a list, because the list is what the enrolment above is for. It is meant to
@@ -49,5 +61,5 @@ public static class Enrolment
     /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
-    public const int Unenrolled = 12;
+    public const int Unenrolled = 14;
 }
