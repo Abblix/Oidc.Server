@@ -41,7 +41,14 @@ public static class ProofErrorReasons
     /// <c>InvalidHeader</c> becomes, and that category covers an unusable <c>jwk</c>, a <c>crit</c> that
     /// is malformed or names an extension nothing handles, and a header a trust model requires and the
     /// token omits. Reporting all three as <c>invalid_jwk</c> told a client its key was bad over a
-    /// <c>crit</c> it had written itself. Which one happened is in the description.
+    /// <c>crit</c> it had written itself.
+    /// <para>
+    /// WHICH of the three happened is on <see cref="ProofError.Detail"/> and goes no further, which is a
+    /// decision rather than an omission: the core writes that sentence by quoting the token, so it
+    /// carries what the client put there verbatim, and this type's own contract forbids putting such a
+    /// value where it reaches a response. A host that wants it reads it off the <see cref="ProofError"/>
+    /// its own call to the validator returned.
+    /// </para>
     /// </remarks>
     public const string InvalidHeader = "invalid_header";
 

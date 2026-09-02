@@ -80,4 +80,30 @@ public class WwwAuthenticateTests
         => Assert.Equal(
             "Bearer error=\"invalid_token\"",
             WwwAuthenticate.Challenge("Bearer", null, "invalid_token", ""));
+    /// <summary>
+    /// A control character never reaches the header value.
+    /// </summary>
+    /// <remarks>
+    /// The quoted-string grammar has no escape for one, and a CR or an LF ends the header field - so a
+    /// value carrying either would split the response, or be refused by the server writing it, which is
+    /// a fault rather than a refusal. Measured before this was closed: the builder emitted a raw CRLF,
+    /// and the comment beside it said such a value was "rejected upstream".
+    /// <para>
+    /// Values reaching the builder are not always the library's own. An error description can quote
+    /// what a client put in a token, and a JSON string carries CR and LF perfectly well.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("bad\r\nX-Injected: 1")]
+    [InlineData("bad\u0000nul")]
+    [InlineData("bad\ttab")]
+    public void Challenge_WithAControlCharacterInAValue_EmitsNone(string value)
+    {
+        var header = WwwAuthenticate.Challenge("DPoP", ("error_description", value));
+
+        // The control: the surrounding text really did arrive, so an empty header would not pass this.
+        Assert.Contains("bad", header, StringComparison.Ordinal);
+
+        Assert.DoesNotContain(header, char.IsControl);
+    }
 }

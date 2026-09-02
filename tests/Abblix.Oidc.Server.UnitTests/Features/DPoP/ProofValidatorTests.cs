@@ -185,7 +185,9 @@ public class ProofValidatorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.InvalidHeader, error.Reason);
 
-        // The half that keeps the wider reason usable: the sentence beside it still says which header.
+        // The specific cause is on Detail, and this is the only reader of it - the library puts it in no
+        // response and no log, because the core writes that sentence by quoting the token. A host gets
+        // it the same way this row does, off the ProofError its own call returned.
         Assert.Contains("jwk", error.Detail ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 

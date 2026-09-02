@@ -72,10 +72,23 @@ public static class WwwAuthenticate
             builder.Append(first ? " " : ", ").Append(name).Append("=\"");
 
             // RFC 9110 Section 5.6.4: inside a quoted-string each `"` must be backslash-escaped and `\`
-            // itself doubled. Anything else - control bytes, CR and LF - is rejected upstream rather than
-            // mangled here, because silently mutating a value hides where the malformed input came from.
+            // itself doubled.
+            //
+            // A control character has no escape in that grammar, and CR or LF ends the header field
+            // outright - so it is replaced here rather than left to whoever writes the response. The
+            // previous version of this comment said such a value was "rejected upstream"; measured, it
+            // is not: this method emitted a raw CRLF into the value, and the only thing standing between
+            // that and a split response was the HTTP server refusing the header, which is a fault rather
+            // than a refusal. Values reaching here are not always ours - an error description can quote
+            // what a client put in a token - so the grammar answers for them.
             foreach (var c in value)
             {
+                if (char.IsControl(c))
+                {
+                    builder.Append(' ');
+                    continue;
+                }
+
                 if (c is '"' or '\\')
                     builder.Append('\\');
 
