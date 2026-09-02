@@ -9,6 +9,10 @@ commit exists.
 
 Every argument is parsed and every failure reported, because a bulk edit tends to break more than one
 file the same way.
+
+The standard-library parser is the deliberate choice, not an oversight: it resolves no external
+entities, its input is this repository's own build files, and a hardened one would be a dependency in
+every clone.
 """
 
 import io

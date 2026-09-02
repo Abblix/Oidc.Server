@@ -150,14 +150,16 @@ jobs:
           fi
 
           # find may fail without ending the step, so a missing nupkg/ reaches the arm below rather
-          # than dying here with find's message and none of ours.
+          # than ending the run here with no output at all - find's own message is discarded on the
+          # next line, so the arm's sentence is the only one there would be.
           rc=0
           PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
           [ "$rc" -eq 0 ] || PKG=""
           BASE=$(basename "$PKG" .nupkg)
 
           # The version is the FIRST version-shaped suffix. Taking the last loses the tail of a
-          # pre-release identifier that has three parts, which then reads as a release. This assumes
+          # pre-release identifier that has three parts, and what is left then reads as a release or
+          # as a version off this line, depending on the identifier. This assumes
           # no segment of a package id begins with a digit, and none here does; one that did would be
           # taken as the start of the version, usually refused and in a contrived case published.
           VERSION=""
