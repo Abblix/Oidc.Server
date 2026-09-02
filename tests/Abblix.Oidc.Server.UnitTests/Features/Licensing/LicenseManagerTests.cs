@@ -659,19 +659,32 @@ public class LicenseManagerTests
     /// moments that exist and nothing would say so. A bound needs a row on each side, and this is the
     /// side that asserts something is PRODUCED.
     /// <para>
-    /// The successor carries no start date of its own, so the announced moment can only have come from
-    /// the expiry: a successor starting on a day would contribute that day as a moment in its own right,
-    /// and the row would then pass over a guard that dropped the expiry entirely.
+    /// The successor's start is a day in the PAST, which is the load-bearing choice rather than
+    /// scaffolding: <c>ChangeMoments</c> adds a start only when it is still ahead, so a start already
+    /// behind contributes no moment of its own and the announced one can only have come from the
+    /// expiry. Moved forward, the row would pass over a guard that dropped the expiry entirely.
+    /// </para>
+    /// <para>
+    /// Driven across offsets for the same reason the guard has two clauses. Pinned at offset zero
+    /// alone, adding <c>ends.Offset == TimeSpan.Zero</c> to the guard - which silences every expiry a
+    /// host supplies with any other offset - left the whole suite green, and a host supplying one is
+    /// the entire argument for the second clause.
     /// </para>
     /// </remarks>
-    [Fact]
-    public void A_late_but_representable_expiry_still_announces_its_narrowing()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    [InlineData(-5)]
+    public void A_late_but_representable_expiry_still_announces_its_narrowing(int offsetHours)
     {
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var offset = TimeSpan.FromHours(offsetHours);
 
-        // One tick below the maximum: BOTH halves of the bound admit it, so it is the last expiry the
-        // guard is supposed to let through.
-        var late = new DateTimeOffset(DateTime.MaxValue.Ticks - 1, TimeSpan.Zero);
+        // One tick inside whichever maximum this offset can express, so BOTH halves of the bound admit
+        // it: it is the last expiry the guard is supposed to let through.
+        var late = offsetHours < 0
+            ? DateTimeOffset.MaxValue.ToOffset(offset).AddTicks(-1)
+            : new DateTimeOffset(DateTime.MaxValue.Ticks - 1, offset);
 
         var manager = new LicenseManager();
         manager.AddLicense(new License
