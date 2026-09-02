@@ -32,30 +32,27 @@
        that workflow still carries is a worked EXAMPLE in its header comment, which a bump should
        follow but which no consumer ever reads.
 
-       MinVerTagPrefix is what lets MinVer see a v-prefixed tag at all. It was unset until now, and
-       two other things had to change with it before any tag could be read: releases were tagged
-       two-part (v2.3), which is not SemVer and is refused even after the prefix is stripped, and
-       the tag was pushed to master only, which is not an ancestor of develop - and MinVer walks
-       the history of the branch being built. Releases now tag the three-part form, and the
-       release checklist carries the reachability check that nothing was making.
+       MinVer reads NO tag in this repository, and that is a consequence of choices worth
+       knowing rather than a fault to fix in passing. Release tags are two-part and v-prefixed
+       (v2.3): MinVerTagPrefix is unset, so the prefix is never stripped, and even stripped, "2.3"
+       is not SemVer and would still be refused. They also sit on master, which is not an ancestor
+       of develop, and MinVer walks the history of the branch being built.
 
-       On DEVELOP this property is still the whole source of the number, because no tag is
-       reachable from it: MinVer reports "No commit found with a valid SemVer 2.0 version", lifts
-       its 0.0.0 default to this line, and counts the height from the root commit.
+       Nothing depends on it reading them. A release takes its version from the workflow input via
+       MinVerVersionOverride, and a dev build takes it from this property. What it does mean is
+       that the height in a dev version counts from the ROOT COMMIT, not from the last release, so
+       2.4.0-dev.0.469 says "the 469th commit" and not "the 469th since 2.3".
 
-       On MASTER it is not, and the prefix changed the number there. Nine tags are three-part
-       already (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1 and two four-part ones),
-       and v2.0.1 is reachable from master - so master went from 2.4.0-dev.0.53 to 2.4.0-dev.0.15,
-       the height now counted from that tag. A statement that nothing moved was measured on develop
-       alone; the tags were listed five at a time and the three-part ones were in the part not
-       looked at.
+       Setting MinVerTagPrefix alone would not help and does not leave the rest alone: nine older
+       tags ARE three-part (v1.0.100, v1.1.0, v1.2.0, v1.3.0, v1.3.1, v1.6.0, v2.0.1 and two
+       four-part), and v2.0.1 is reachable from master - measured, master's version moved from
+       2.4.0-dev.0.53 to 2.4.0-dev.0.15 with the prefix set. Moving a published number BACKWARDS
+       is the direction that collides silently.
 
-       The run summary derives all three parts of the version rather than re-asserting a zero
-       patch. That is right whatever the tags do: NuGet floats only the release label, so a range
-       written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build, and deriving costs
-       nothing. -->
+       The run summary derives all three parts of the version it prints rather than re-asserting a
+       zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
+       range written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build. -->
   <PropertyGroup>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
