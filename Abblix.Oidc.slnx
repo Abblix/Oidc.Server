@@ -27,6 +27,7 @@
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.MinimalApi/Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" />
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
+    <Project Path="src/Abblix.Oidc.Client/Abblix.Oidc.Client.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
     <Project Path="src/Abblix.SecurityEvents.CAEP/Abblix.SecurityEvents.CAEP.csproj" />
     <Project Path="src/Abblix.SecurityEvents.MinimalApi/Abblix.SecurityEvents.MinimalApi.csproj" />
@@ -43,12 +44,14 @@
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.TestHost/Abblix.Oidc.Server.E2E.TestHost.csproj" />
+    <Project Path="tests/Abblix.Oidc.Client.E2E.Tests/Abblix.Oidc.Client.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.Tests/Abblix.Oidc.Server.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.TestHost/Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.UnitTests/Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Vault.UnitTests/Abblix.Jwt.Vault.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Azure.UnitTests/Abblix.Jwt.Azure.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Client.UnitTests/Abblix.Oidc.Client.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.UnitTests/Abblix.SecurityEvents.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.CAEP.UnitTests/Abblix.SecurityEvents.CAEP.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.RISC.UnitTests/Abblix.SecurityEvents.RISC.UnitTests.csproj" />

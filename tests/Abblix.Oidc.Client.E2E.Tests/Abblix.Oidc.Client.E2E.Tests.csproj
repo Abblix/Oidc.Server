@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Jint" />
+    <!-- The device and CIBA flows wait on a clock the provider dictates; this replaces it, so the suite
+         exercises the real polling path without sitting through the intervals. -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The client under test, and a real server for it to talk to. The reference to the server lives here, in
+      a test project, and never in Abblix.Oidc.Client itself: the client ships without any dependency on the
+      server, and this is the one place the two are allowed to meet.
+    -->
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Client\Abblix.Oidc.Client.csproj" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" />
+  </ItemGroup>
+
+</Project>
