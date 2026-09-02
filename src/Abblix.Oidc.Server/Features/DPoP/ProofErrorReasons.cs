@@ -47,13 +47,13 @@ public static class ProofErrorReasons
     /// response, no log, no metric label. That is a decision rather than an omission: two of the core's
     /// <c>crit</c> descriptions are written by quoting the token, so the value carries what the client
     /// put there, and the rest are constants that cannot be told apart from them at this seam.
+    /// </para>
     /// <para>
     /// The cost is stated rather than hidden: for all three causes a client is told <c>invalid_header</c>
     /// and an operator's log line says the same, so nothing the library emits separates an unusable
     /// <c>jwk</c> from a bad <c>crit</c>. A host that wants the difference reads
     /// <see cref="ProofError.Detail"/> off its own call - and sanitises it, because it may be the
     /// client's own bytes.
-    /// </para>
     /// </para>
     /// </remarks>
     public const string InvalidHeader = "invalid_header";

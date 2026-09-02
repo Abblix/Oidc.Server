@@ -105,6 +105,14 @@ public class WwwAuthenticateTests
     [InlineData("bad\u007fdel", "bad del")]
     [InlineData("keeps\ttab", "keeps\ttab")]
     [InlineData("keeps obs-text é", "keeps obs-text é")]
+
+    // Both ENDS of the emitted range, because a row in the middle of a range says nothing about where
+    // it stops: measured, moving the upper bound off '~' or the obs-text floor off U+0080 left the
+    // whole suite green, so the builder could go back to replacing a legal character unnoticed - which
+    // is the defect this theory exists to close, one character along. U+0080 is also the half of
+    // obs-text the previous version replaced, since char.IsControl calls it a control character.
+    [InlineData("keeps tilde ~", "keeps tilde ~")]
+    [InlineData("keeps \u0080 the first obs-text", "keeps \u0080 the first obs-text")]
     public void Challenge_EmitsOnlyWhatTheGrammarAdmits(string value, string expected)
     {
         var header = WwwAuthenticate.Challenge("DPoP", ("error_description", value));

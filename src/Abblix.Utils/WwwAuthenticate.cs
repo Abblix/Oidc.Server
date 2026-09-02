@@ -48,11 +48,18 @@ public static class WwwAuthenticate
     /// A challenge carrying whatever parameters the scheme defines, in the order given.
     /// </summary>
     /// <remarks>
+    /// The escaping below is for the VALUE. A parameter name is emitted as it stands, because RFC 9110
+    /// Section 11.2 makes it a <c>token</c> (<c>auth-param = token BWS "=" BWS ( token /
+    /// quoted-string )</c>) - a name needing an escape is not a name - and Section 11.1 says the same of
+    /// the scheme. So both are the caller's to keep well-formed, which in this library means
+    /// they are constants; anything a client sent belongs in a value, where it is escaped.
+    /// <para>
     /// Every scheme-specific parameter goes through here rather than being appended to the result, so
     /// that one place decides the delimiter and the escaping. Appending by hand loses both: the first
     /// parameter follows the scheme with a SPACE and the rest with a comma - RFC 9449 Section 7.1 Figure
     /// 15 prints <c>DPoP algs="ES256 PS256"</c>, a challenge whose only parameter is its own - and a
     /// value carrying a quotation mark has to be escaped or it ends the string early.
+    /// </para>
     /// </remarks>
     public static string Challenge(string scheme, params (string Name, string? Value)[] parameters)
     {
@@ -77,9 +84,16 @@ public static class WwwAuthenticate
             //   quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
             //
             // So a character is emitted as it stands when it is qdtext, and behind a backslash when it
-            // is DQUOTE or the backslash itself - the two the section says a sender SHOULD quote. HTAB
-            // is qdtext and needs neither: an earlier version of this replaced every control character
-            // and altered a legal value, with a row pinning that as correct.
+            // is DQUOTE or the backslash itself - the only two the section leaves no other way to
+            // carry, which is why it permits a quoted-pair for them and asks a sender not to generate
+            // one anywhere else. HTAB is qdtext and needs neither: an earlier version of this replaced
+            // every control character and altered a legal value, with a row pinning that as correct.
+            //
+            // The obs-text test is written over UTF-16 code units while the rule is over octets
+            // (%x80-FF). It holds either way: encoded as UTF-8 every byte of a multi-byte character
+            // lands inside that range, and a header encoder restricted to Latin-1 substitutes the
+            // character rather than emitting something the grammar forbids. A surrogate pair passes
+            // through whole for the same reason, and neither half can become CR, LF or DQUOTE.
             //
             // Anything else is replaced rather than emitted, because it has no place in the grammar and
             // CR or LF would end the header field outright. The comment here used to say such a value
