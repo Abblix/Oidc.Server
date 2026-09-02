@@ -88,7 +88,7 @@ That registers the full set of certified OpenID Connect endpoints. Point `LoginU
 - **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
 - **Token Exchange (RFC 8693)**: impersonation and delegation with multiple subject- and actor-token formats and a per-client allow-list of subject-token types
 - **DPoP sender-constrained tokens (RFC 9449)**: signature-based proof of possession for public clients that cannot use mTLS, binding access and refresh tokens to the client key
-- **Certificate-bound access tokens (RFC 8705 §3)**: resource-server verification that a presented token matches the client certificate on the TLS connection
+- **Certificate-bound access tokens (RFC 8705 Section 3)**: resource-server verification that a presented token matches the client certificate on the TLS connection
 - **JARM**: the authorization response returned as a signed, optionally encrypted JWT, protecting it against tampering, mix-up, and parameter injection
 - **JWT-secured token introspection (RFC 9701)**: signed, optionally encrypted introspection responses via content negotiation
 - **JWE-encrypted request objects (RFC 9101)**: confidential request parameters in the front channel and by reference
@@ -116,7 +116,7 @@ Most deployments need only the first two; the rest apply if you use the named fe
 
 - **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed, and success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
 - **Implicit Flow is opt-in.** Implicit and hybrid response types are rejected at client registration unless you call `EnableImplicitFlow()` on the OIDC builder. Authorization Code Flow is the default; no action otherwise.
-- **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 §3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
+- **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 Section 3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
 - **Back-channel logout endpoint validated at registration.** A `backchannel_logout_uri` with a non-`https` scheme, internal hostname, or private/loopback address is rejected with `invalid_client_metadata` under the secure default. Register public `https` endpoints, or relax `SecureHttpFetchOptions` for trusted internal deployments: set `BlockPrivateNetworks` to `false` and state `AllowedSchemes` in full, `https` included - the list replaces the default rather than extending it.
 
 ## 🎓 Certification
