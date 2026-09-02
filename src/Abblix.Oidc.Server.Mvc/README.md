@@ -4,27 +4,27 @@
 
 ## What's New in Version 2.4
 
-✏️ **Improvements**
+✏️ Improvements
 - Referencing both transport adapters is refused at startup with a message naming which package to drop, instead of every OIDC request failing with `AmbiguousMatchException` once the new Minimal API sibling joins the dependency graph
 
 ## What's New in Version 2.3
 
-🚀 **Features**
-- **JARM**: MVC support for signed, optionally encrypted JWT authorization responses
-- **JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701))**: content-negotiated signed introspection responses
+🚀 Features
+- JARM: MVC support for signed, optionally encrypted JWT authorization responses
+- JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)): content-negotiated signed introspection responses
 
-✏️ **Improvements**
-- Request binding for **Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396))** and **Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))**
+✏️ Improvements
+- Request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
 
 ## Key Features
 
-- **Standard MVC Integration**: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
-- **OIDC Endpoint Controllers**: Authorization, token, userinfo, introspection, revocation, device authorization, and more
-- **Session Management**: Check session iframe and RP-initiated logout with CSP nonce support
-- **Front-Channel & Back-Channel Logout**: Complete logout notification via both channels
-- **Discovery Endpoint**: Auto-configured `/.well-known/openid-configuration` metadata
-- **Dynamic Client Registration**: REST API for client management per RFC 7591/7592
-- **Host-owned interactive pages**: login and consent stay in your application - MVC, Razor Pages or anything else - while the package serves the protocol endpoints
+- Standard MVC Integration: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
+- OIDC Endpoint Controllers: Authorization, token, userinfo, introspection, revocation, device authorization, and more
+- Session Management: Check session iframe and RP-initiated logout with CSP nonce support
+- Front-Channel & Back-Channel Logout: Complete logout notification via both channels
+- Discovery Endpoint: Auto-configured `/.well-known/openid-configuration` metadata
+- Dynamic Client Registration: REST API for client management per RFC 7591/7592
+- Host-owned interactive pages: login and consent stay in your application - MVC, Razor Pages or anything else - while the package serves the protocol endpoints
 
 ## Install
 
@@ -66,9 +66,9 @@ Both transport adapters register it, so this code is written once and survives a
 
 This package provides ASP.NET Core MVC endpoints for the full suite of standards implemented by the Abblix OIDC Server core, including:
 
-- **OAuth 2.0**: Authorization Code, Implicit, Client Credentials, Device Authorization ([RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749), [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)), PAR ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)), JAR ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)), DPoP ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449))
-- **OpenID Connect**: Core 1.0, Discovery, Dynamic Client Registration, Session Management, RP-Initiated/Front-Channel/Back-Channel Logout, CIBA
-- **JWT**: JWS ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)), JWE ([RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)), JWT Access Tokens ([RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068))
+- OAuth 2.0: Authorization Code, Implicit, Client Credentials, Device Authorization ([RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749), [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)), PAR ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)), JAR ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)), DPoP ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449))
+- OpenID Connect: Core 1.0, Discovery, Dynamic Client Registration, Session Management, RP-Initiated/Front-Channel/Back-Channel Logout, CIBA
+- JWT: JWS ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)), JWE ([RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)), JWT Access Tokens ([RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068))
 
 For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) package documentation.
 

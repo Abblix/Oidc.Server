@@ -63,7 +63,9 @@ feature.
 
 ## Hardening built in
 
-The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2), and a `crit` header names only parameters a registered handler understands - an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11). A host that does understand such a parameter registers a handler for it by name, `AddCriticalHeaderHandler<MyHandler>("my-ext")`: the name is the registration key, so it cannot be claimed without a handler behind it.
+The validation pipeline enforces what the specifications say a careless implementation forgets: a key that declares an `alg` is never used for another algorithm when producing or verifying a JWS ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) Section 3.1; JWE key unwrapping selects by `kid` and the header's `alg`, so a decryption key's declared `alg` is not a filter there). An HMAC key shorter than its hash output is rejected (RFC 7518 Section 3.2).
+
+A `crit` header names only parameters a registered handler understands, and an unhandled critical parameter rejects the token, on the JWE envelope as on the JWS (RFC 7515 Section 4.1.11). A host that does understand such a parameter registers a handler for it by name, `AddCriticalHeaderHandler<MyHandler>("my-ext")`: the name is the registration key, so it cannot be claimed without a handler behind it.
 
 ## Replay protection
 
@@ -98,9 +100,9 @@ services
 Keys the host does not supply itself are minted and rotated by a key ring. `AddInMemoryKeyRing(policy)`
 keeps them in the process: right for a single instance, and wrong for several, since each replica mints
 its own and nothing fails at startup - sign-ins simply break for whoever lands on the wrong replica. So
-a host that has registered an `IKeyRingStore`, which is how keys are shared, is refused here rather than
-served. `AddKeyRing(policy)` is the shared form: it seals each minted key to the custodian's
-key-encryption key and publishes it through that store, which the builder it returns supplies.
+a host that has registered an `IKeyRingStore`, which is how keys are shared, is refused here.
+`AddKeyRing(policy)` is the shared form: it seals each minted key to the custodian's key-encryption
+key and publishes it through that store, which the builder it returns supplies.
 
 What the ring's keys are then used for is the caller's business - an OpenID Provider publishes them at
 its JWKS endpoint, another host protects stored sessions with them - which is why the ring lives beside

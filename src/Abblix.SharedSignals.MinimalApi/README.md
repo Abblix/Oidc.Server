@@ -6,11 +6,11 @@ ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuge
 
 ## Which adapter maps which endpoint
 
-There are two Minimal API packages in this family, and the line between them is not the one that first suggests itself. It is **not** transmitter here and receiver there: this package holds receiver-role code of its own - the stream management client, the transmitter discovery client. The question that decides placement is whether the endpoint stops making sense **without a stream**:
+There are two Minimal API packages in this family, and the line between them is not the one that first suggests itself. It is not transmitter here and receiver there: this package holds receiver-role code of its own - the stream management client, the transmitter discovery client. The question that decides placement is whether the endpoint stops making sense without a stream:
 
-- **Stream management, status, subjects, verification, the `ssf-configuration` document, and the transmitter's poll endpoint** - every one is meaningless without a stream, and the poll address is addressed *by stream identifier*. Here.
-- **Push delivery intake** - "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalAPI](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalAPI), which a push-based receiver installs alongside this one: the dependency chain here reaches the core library but not the core's adapter.
-- **Back-Channel Logout** - one token, delivered once, from a provider the relying party already knows. Also there.
+- Stream management, status, subjects, verification, the `ssf-configuration` document, and the transmitter's poll endpoint: every one is meaningless without a stream, and the poll address is addressed *by stream identifier*. Here.
+- Push delivery intake: "accept a SET at this address" (RFC 8935 Section 2.1). The URL is the receiver's own and carries no stream identity, so a receiver can be handed events by a counterparty known from anywhere. That endpoint is `MapPushDeliveryEndpoint` in [Abblix.SecurityEvents.MinimalAPI](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalAPI), which a push-based receiver installs alongside this one: the dependency chain here reaches the core library but not the core's adapter.
+- Back-Channel Logout: one token, delivered once, from a provider the relying party already knows. Also there.
 
 Push and poll are the pair worth understanding, because both are core delivery specifications (RFC 8935 and RFC 8936) and yet they land in different packages. What separates them is not which document defines the protocol but whether a stream is part of the addressing: the push intake just accepts a token, while the poll endpoint below serves one stream's queue and is addressed per stream. The specification says how to carry an event; the stream says to whom - and that second half is what this package is.
 
@@ -46,7 +46,9 @@ app.MapSharedSignalsTransmitterEndpoints().RequireAuthorization("ssf-receivers")
 
 One call maps the whole management surface under `SharedSignalsEndpointOptions.ManagementPrefix` (`/ssf` by default) - streams, status, subjects, verification, poll delivery - plus the configuration document at the well-known address the issuer resolves to. Every route comes from the options, so one object states the whole topology.
 
-A route you add to that group yourself is not scope-checked. The filter is attached to the group, so it is in your route's pipeline - but it judges a route by the scope requirement the route declares, and only the routes mapped by the call above declare one. A route with none is let through, which means your own route beside them is admitted for any caller your authorization admits, in a deployment where every neighbouring route answers 403 to that same caller. Attach your own authorization to that route. The scopes themselves are public - `SsfScopes` carries their names and the profile's inclusion rule, and it ships in the package this one depends on - so what you cannot declare is the requirement metadata, not the vocabulary.
+A route you add to that group yourself is not scope-checked. The filter is attached to the group, so it is in your route's pipeline - but it judges a route by the scope requirement the route declares, and only the routes mapped by the call above declare one. A route with none is let through, which means your own route beside them is admitted for any caller your authorization admits, in a deployment where every neighbouring route answers 403 to that same caller.
+
+Attach your own authorization to that route. The scopes themselves are public - `SsfScopes` carries their names and the profile's inclusion rule, and it ships in the package this one depends on - so what you cannot declare is the requirement metadata, not the vocabulary.
 
 The well-known endpoint stays outside the returned group on purpose: discovery must answer before any receiver has credentials, so the authorization you attach to the group does not cover it. What it serves is public metadata - issuer, JWKS location, endpoint addresses, supported delivery methods and authorization schemes - and nothing stream- or receiver-specific; poll delivery sits inside the group, which is where SSF 1.0 Section 7.1.1 wants it.
 
@@ -56,7 +58,11 @@ A gateway-fronted deployment adjusts this in the same options object, without mo
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
 
-Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile defines `ssf.read` and `ssf.manage` and requires a transmitter to check that a token is sufficient for what was asked. It assigns five operations: reading a stream's configuration and getting its status to `ssf.read`, creating a stream, deleting one and verification to `ssf.manage`. The other six routes it does not assign, and this library places them - everything that changes a stream needs `ssf.manage`, and poll needs `ssf.read`. Note what that last one costs: a poll acknowledges, acknowledging releases the transmitter from retaining those events, so `ssf.read` is enough to empty a queue - and while a stream is looked up by the caller's identity, the queue behind it is keyed by stream id alone, so two receivers naming one stream share it. Each route knows which scope it needs, but this package never sees a token, so it cannot find the granted scopes on its own:
+Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile defines `ssf.read` and `ssf.manage` and requires a transmitter to check that a token is sufficient for what was asked. It assigns five operations: reading a stream's configuration and getting its status to `ssf.read`, creating a stream, deleting one and verification to `ssf.manage`. The other six routes it does not assign, and this library places them - everything that changes a stream needs `ssf.manage`, and poll needs `ssf.read`.
+
+Note what that last one costs: a poll acknowledges, acknowledging releases the transmitter from retaining those events, so `ssf.read` is enough to empty a queue - and while a stream is looked up by the caller's identity, the queue behind it is keyed by stream id alone, so two receivers naming one stream share it.
+
+Each route knows which scope it needs, but this package never sees a token, so it cannot find the granted scopes on its own:
 
 ```csharp
 builder.Services.AddSingleton(new SharedSignalsEndpointOptions
@@ -77,7 +83,9 @@ What one call maps, relative to the prefix:
 | `/verify` | POST | verification request, Section 8.1.4 |
 | `/poll/{streamId}` | POST | poll delivery, RFC 8936 |
 
-The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else. The poll address travels per stream rather than in the document, and it comes from the same prefix, so a stream's `endpoint_url` leads back to the route serving it wherever you map the prefix. A proxy that rewrites paths needs nothing extra: what the mapping declares is `AdvertisedPrefix`, so the poll address follows it along with the five above. `PollEndpointFactory` is for the address that prefix cannot describe - delivery on a separate host name, say - and it wins.
+The configuration document at `/.well-known/ssf-configuration` advertises the five management addresses from the very constants that map them, so those cannot drift; the well-known path itself follows the specification, not the prefix, because that fixed address is how a receiver holding only the issuer URI finds everything else.
+
+The poll address travels per stream rather than in the document, and it comes from the same prefix, so a stream's `endpoint_url` leads back to the route serving it wherever you map the prefix. A proxy that rewrites paths needs nothing extra: what the mapping declares is `AdvertisedPrefix`, so the poll address follows it along with the five above. `PollEndpointFactory` is for the address that prefix cannot describe - delivery on a separate host name, say - and it wins.
 
 ## Receiver
 

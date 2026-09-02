@@ -14,7 +14,9 @@ dotnet add package Abblix.SharedSignals.Redis
 
 The in-package distributed-cache outbox stores each queue as one value, so its mutations are read-modify-write - correct for a single transmitter instance serializing them in-process, and silently lossy the day the transmitter scales to replicas: one replica's enqueue overwrites another's. This outbox appends, removes by value and deletes fields on the server, inside a transaction, so concurrent replicas compose instead of overwriting each other.
 
-Composing mutations is one half. The other is single delivery, and it is a separate call: `AddSharedSignalsRedisDeliveryLease()`. A delivery pass reads a stream's queue and acknowledges what the receiver takes, so without a claim every replica reads the same pending SETs and every one of them POSTs them - N transmissions of each event, by construction rather than occasionally. RFC 8935 Section 2 permits redelivery ("The SET Transmitter MAY transmit the same SET to the SET Recipient multiple times, regardless of the response"), but the same section binds the transmitter the other way: it "SHOULD NOT retransmit a SET" outside a suspected recoverable failure, and should delay retransmission "to avoid overwhelming the SET Recipient". Replicas duplicating each other's work suspect nothing, so that is the SHOULD NOT rather than a matter of traffic.
+Composing mutations is one half. The other is single delivery, and it is a separate call: `AddSharedSignalsRedisDeliveryLease()`. A delivery pass reads a stream's queue and acknowledges what the receiver takes, so without a claim every replica reads the same pending SETs and every one of them POSTs them - N transmissions of each event, by construction rather than occasionally.
+
+RFC 8935 Section 2 permits redelivery ("The SET Transmitter MAY transmit the same SET to the SET Recipient multiple times, regardless of the response"), but the same section binds the transmitter the other way: it "SHOULD NOT retransmit a SET" outside a suspected recoverable failure, and should delay retransmission "to avoid overwhelming the SET Recipient". Replicas duplicating each other's work suspect nothing, so that is the SHOULD NOT rather than a matter of traffic.
 
 ## Usage
 
@@ -30,7 +32,7 @@ builder.Services
 
 The queue and item keys of one stream share a cluster hash tag, so the outbox works unchanged under Redis Cluster. The receiver and the stream are both escaped before they are joined into that tag. That is what keeps a closing brace out of it whatever an identifier is called - one inside the tag ends it early, and one at its very start empties it, which would put a stream's two keys on different slots - and it is also what decides where the join splits, since the separator cannot occur inside either half. So no identifier is refused for its spelling. An empty receiver or stream is refused, as any missing argument is.
 
-A queue expires after `RedisOutboxOptions.Retention` without a new event, seven days by default. The clock measures inactivity, so a stream still receiving events never reaches it, and only the queue of a departed receiver is reclaimed. Losing Redis loses pending events - the tier is deliberate, and it is a decision rather than a permission: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is **paused**, and requires transmission for an enabled one. Neither delivery RFC requires durable queues, so the queue belongs beside caches, the tier that earns no backups.
+A queue expires after `RedisOutboxOptions.Retention` without a new event, seven days by default. The clock measures inactivity, so a stream still receiving events never reaches it, and only the queue of a departed receiver is reclaimed. Losing Redis loses pending events - the tier is deliberate, and it is a decision rather than a permission: SSF 1.0 Section 8.1.2.1 lets a transmitter drop events held while a stream is paused, and requires transmission for an enabled one. Neither delivery RFC requires durable queues, so the queue belongs beside caches, the tier that earns no backups.
 
 ## Stream registrations
 
@@ -83,7 +85,7 @@ builder.Services
     .AddSharedSignalsRedisDeliveryLease();
 ```
 
-Without this call the claim is `ProcessLocalDeliveryLease`, which reaches inside one process and no further, so every replica believes it holds every stream. The transmitter names the implementation in its startup log for exactly that reason - a deployment can read which one it wired rather than infer it.
+Without this call the claim is `ProcessLocalDeliveryLease`, which reaches inside one process and no further, so every replica believes it holds every stream. The transmitter names the implementation in its startup log for exactly that reason - a deployment can read which one it wired.
 
 The claim expires, because expiry is the only release a replica that died mid-pass can perform, and that makes `SharedSignalsTransmitterOptions.PushDeliveryLeaseDuration` two limits at once: the claim's life and the longest one pass may run. A pass reaching the deadline is cut off there, since past it the stream belongs to whoever takes it next; what it did not deliver goes out on a later pass. Both directions are safe - too short redoes work, too long parks a stream after a replica dies - so set it by which one the deployment minds less. The default is one minute.
 
