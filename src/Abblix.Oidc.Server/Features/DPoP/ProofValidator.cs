@@ -127,7 +127,7 @@ internal sealed class ProofValidator(
             JwtError.MalformedToken => ProofErrorReasons.MalformedJwt,
             JwtError.InvalidAlgorithm => ProofErrorReasons.InvalidAlgorithm,
             JwtError.InvalidTokenType => ProofErrorReasons.InvalidTokenType,
-            JwtError.InvalidHeader => ProofErrorReasons.InvalidJwk,
+            JwtError.InvalidHeader => ProofErrorReasons.InvalidHeader,
             JwtError.InvalidSignature => ProofErrorReasons.SignatureInvalid,
             _ => ProofErrorReasons.SignatureInvalid,
         };
