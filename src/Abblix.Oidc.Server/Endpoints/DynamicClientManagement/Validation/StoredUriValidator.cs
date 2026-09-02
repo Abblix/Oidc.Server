@@ -49,60 +49,66 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
     {
         var request = context.Request;
 
-        return Validate(Parameters.LogoUri, request.LogoUri)
-            ?? Validate(Parameters.ClientUri, request.ClientUri)
-            ?? Validate(Parameters.PolicyUri, request.PolicyUri)
-            ?? Validate(Parameters.TosUri, request.TermsOfServiceUri)
-            ?? Validate(Parameters.JwksUri, request.JwksUri)
-            ?? Validate(Parameters.SectorIdentifierUri, request.SectorIdentifierUri)
-            ?? Validate(Parameters.InitiateLoginUri, request.InitiateLoginUri)
-            ?? Validate(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri)
-            ?? Validate(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri)
-            ?? Validate(
+        return ValidateOptional(Parameters.LogoUri, request.LogoUri)
+            ?? ValidateOptional(Parameters.ClientUri, request.ClientUri)
+            ?? ValidateOptional(Parameters.PolicyUri, request.PolicyUri)
+            ?? ValidateOptional(Parameters.TosUri, request.TermsOfServiceUri)
+            ?? ValidateOptional(Parameters.JwksUri, request.JwksUri)
+            ?? ValidateOptional(Parameters.SectorIdentifierUri, request.SectorIdentifierUri)
+            ?? ValidateOptional(Parameters.InitiateLoginUri, request.InitiateLoginUri)
+            ?? ValidateOptional(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri)
+            ?? ValidateOptional(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri)
+            ?? ValidateOptional(
                 Parameters.BackChannelClientNotificationEndpoint,
                 request.BackChannelClientNotificationEndpoint)
-            ?? Validate(Parameters.RedirectUris, request.RedirectUris)
-            ?? Validate(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris)
-            ?? Validate(Parameters.RequestUris, request.RequestUris)
-            ?? Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri);
+            ?? ValidateOptional(Parameters.RedirectUris, request.RedirectUris)
+            ?? ValidateOptional(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris)
+            ?? ValidateOptional(Parameters.RequestUris, request.RequestUris)
+            ?? ValidateOptional(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri);
     }
 
     /// <summary>
-    /// A single member: absent passes, relative is refused.
+    /// A member the registration may omit: absent passes, present must be absolute.
     /// </summary>
     /// <remarks>
-    /// Null means the member was not sent, and absence is not a bad address.
+    /// <c>null</c> means the member was not sent, and absence is not a bad address - almost every
+    /// registration omits most of these, so refusing null here refuses nearly everything. Measured on
+    /// the way to this shape: writing the test as <c>uri is not { IsAbsoluteUri: true }</c>, which is
+    /// correct for an ELEMENT, turned 58 of 218 end-to-end rows red.
     /// </remarks>
-    private static OidcError? Validate(string name, Uri? uri)
+    private static OidcError? ValidateOptional(string name, Uri? uri)
         => uri is { IsAbsoluteUri: false } ? Relative(name) : null;
 
     /// <summary>
-    /// An array member: every element answered by the rule above, plus the one rule an element has and a
-    /// member does not.
+    /// An array member the registration may omit: absent or empty passes, every element present is
+    /// answered by <see cref="ValidateElement"/>.
     /// </summary>
-    /// <remarks>
-    /// A null ELEMENT is refused where a null MEMBER passes. The member was never sent and absence is
-    /// not a bad address; the element was sent and names nothing. Written out rather than folded into
-    /// the single-value rule, because that difference is the whole reason the two are separate methods -
-    /// and because a registration body is attacker-shaped JSON where the deserializer honours no
-    /// annotation against an explicit null, so <c>[null]</c> is reachable and once faulted the endpoint.
-    /// </remarks>
-    private static OidcError? Validate(string name, Uri[]? uris)
+    private static OidcError? ValidateOptional(string name, Uri[]? uris)
     {
         if (uris is null)
             return null;
 
         foreach (var uri in uris)
         {
-            if (uri is null)
-                return Relative(name);
-
-            if (Validate(name, uri) is { } error)
+            if (ValidateElement(name, uri) is { } error)
                 return error;
         }
 
         return null;
     }
+
+    /// <summary>
+    /// One element of an array member: it was sent, so <c>null</c> is refused rather than passed.
+    /// </summary>
+    /// <remarks>
+    /// The one place this differs from <see cref="ValidateOptional(string, Uri?)"/>, and the reason the
+    /// two are separate methods rather than one. A null MEMBER was never sent; a null ELEMENT was sent
+    /// and names nothing, so it is a bad value rather than an absent one. Both are reachable because a
+    /// registration body is attacker-shaped JSON and the deserializer honours no annotation against an
+    /// explicit null - <c>[null]</c> once faulted the endpoint by being dereferenced here.
+    /// </remarks>
+    private static OidcError? ValidateElement(string name, Uri? uri)
+        => uri is not { IsAbsoluteUri: true } ? Relative(name) : null;
 
     private static OidcError Relative(string member)
         => ErrorFactory.InvalidClientMetadata($"The {member} is not an absolute URI");
