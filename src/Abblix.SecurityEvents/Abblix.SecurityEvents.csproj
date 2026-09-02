@@ -60,4 +60,12 @@
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
+
+    <ItemGroup>
+        <!-- The tests read EffectiveSigningAlgorithms, which is internal because a host reads the
+             property it set rather than the resolution behind it. A visible internal beats making the
+             resolution public, and beats a test asserting the same thing through a second door. -->
+        <InternalsVisibleTo Include="Abblix.SecurityEvents.UnitTests" />
+    </ItemGroup>
+
 </Project>

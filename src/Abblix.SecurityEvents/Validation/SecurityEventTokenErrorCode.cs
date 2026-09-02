@@ -44,8 +44,22 @@ public enum SecurityEventTokenErrorCode
     UnknownIssuer,
 
     /// <summary>
-    /// The signature does not verify against the issuer's keys.
+    /// The token's signature is not one this receiver will act on: it did not verify under the issuer's
+    /// keys, or the algorithm it was made with is one the receiver refuses.
     /// </summary>
+    /// <remarks>
+    /// A property rather than a list of causes, because the list is the JWT core's and grows without
+    /// this file: an absent <c>alg</c>, one outside the RFC 7518 taxonomy and an unsigned token all
+    /// arrive here too. What they share is what these codes actually distinguish - none of them is
+    /// healed by refetching the issuer's keys, which is the whole of what <see cref="KeyNotFound"/>
+    /// means. On the wire that is <c>invalid_key</c>, which RFC 8935 Section 2.4 defines as a key
+    /// "invalid or otherwise unacceptable to the SET Recipient" - wide enough for every one of them.
+    /// <para>
+    /// WHICH of them happened is in <see cref="SecurityEventTokenValidationError.Description"/>, which
+    /// the core writes at the branch that knows: a refusal by policy names the algorithm that was
+    /// offered and the set that would have been taken, and an unsigned token says it is unsigned.
+    /// </para>
+    /// </remarks>
     SignatureInvalid,
 
     /// <summary>

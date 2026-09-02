@@ -93,7 +93,7 @@ internal static class CriticalHeaderValidation
         catch (JsonException)
         {
             return new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.InvalidHeader,
                 "Invalid 'crit' header: must be a JSON array of strings");
         }
 
@@ -103,27 +103,27 @@ internal static class CriticalHeaderValidation
         if (declared.Count == 0)
         {
             return new JwtValidationError(
-                JwtError.InvalidToken,
+                JwtError.InvalidHeader,
                 "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
         }
 
         var distinctNames = new HashSet<string>(declared, StringComparer.Ordinal);
         if (distinctNames.Count != declared.Count)
-            return new JwtValidationError(JwtError.InvalidToken, "'crit' header contains duplicate names");
+            return new JwtValidationError(JwtError.InvalidHeader, "'crit' header contains duplicate names");
 
         foreach (var name in declared)
         {
             if (reservedNames.Contains(name))
             {
                 return new JwtValidationError(
-                    JwtError.InvalidToken,
+                    JwtError.InvalidHeader,
                     $"'crit' header must not list standard JOSE header name: {name}");
             }
 
             if (!header.Json.ContainsKey(name))
             {
                 return new JwtValidationError(
-                    JwtError.InvalidToken,
+                    JwtError.InvalidHeader,
                     $"'crit' lists header name '{name}' that is not present in the JOSE header");
             }
         }

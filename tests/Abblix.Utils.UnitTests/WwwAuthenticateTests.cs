@@ -80,4 +80,51 @@ public class WwwAuthenticateTests
         => Assert.Equal(
             "Bearer error=\"invalid_token\"",
             WwwAuthenticate.Challenge("Bearer", null, "invalid_token", ""));
+    /// <summary>
+    /// Only what the quoted-string grammar admits reaches the header value.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9110 Section 5.6.4: <c>qdtext = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text</c>, and
+    /// <c>quoted-pair</c> carries DQUOTE and the backslash. So HTAB is legal and passes through -
+    /// an earlier version of this row asserted it was replaced, which pinned an alteration of a
+    /// value the grammar allows.
+    /// <para>
+    /// What is replaced is everything with no place in the grammar, and CR or LF most of all: either
+    /// ends the header field. Measured before this was closed, the builder emitted a raw CRLF while
+    /// the comment beside it said such a value was "rejected upstream" - it was not; the only thing
+    /// standing there was the HTTP server refusing the header, which is a fault, not a refusal.
+    /// </para>
+    /// <para>
+    /// Values reaching the builder are not always the library's own: an error description can quote
+    /// what a client put in a token, and a JSON string carries CR and LF perfectly well.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("bad\r\nX-Injected: 1", "bad  X-Injected: 1")]
+    [InlineData("bad\u0000nul", "bad nul")]
+    [InlineData("bad\u007fdel", "bad del")]
+    [InlineData("keeps\ttab", "keeps\ttab")]
+    [InlineData("keeps obs-text é", "keeps obs-text é")]
+
+    // Every END of every emitted range, because a row in the middle of a range says nothing about
+    // where it stops: measured, each bound could be moved by one with all 313 rows green, so the
+    // builder could go back to replacing a legal character - the defect this theory exists to close,
+    // one character along - or start emitting a forbidden one.
+    //
+    // The printable range's lower end takes TWO rows because its first character is unobservable: SP
+    // falling out of the range is replaced BY a space, so the output is identical either way. What is
+    // observable is U+0021 on one side and U+001F on the other, and they fail differently - one is a
+    // legal character silently replaced, the other a control character silently emitted. U+0080 is in
+    // the same position at the obs-text floor, and is also part of the run char.IsControl called
+    // control characters, which the previous version replaced.
+    [InlineData("keeps tilde ~", "keeps tilde ~")]
+    [InlineData("bang ! stays", "bang ! stays")]
+    [InlineData("unit\u001fseparator", "unit separator")]
+    [InlineData("keeps \u0080 the first obs-text", "keeps \u0080 the first obs-text")]
+    public void Challenge_EmitsOnlyWhatTheGrammarAdmits(string value, string expected)
+    {
+        var header = WwwAuthenticate.Challenge("DPoP", ("error_description", value));
+
+        Assert.Equal($"DPoP error_description=\"{expected}\"", header);
+    }
 }

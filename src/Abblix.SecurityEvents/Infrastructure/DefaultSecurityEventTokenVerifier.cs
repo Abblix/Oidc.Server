@@ -25,9 +25,13 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// </remarks>
 /// <param name="validator">The JWT core's validator.</param>
 /// <param name="keyResolver">The receiver's key trust.</param>
+/// <param name="allowedAlgorithms">What this deployment will accept a signature under. Stated rather
+/// than inherited: without it the accepted set is whatever the validator happens to permit, which is a
+/// policy nobody wrote and nobody can read off the configuration.</param>
 public sealed class DefaultSecurityEventTokenVerifier(
     IJsonWebTokenValidator validator,
-    IIssuerKeyResolver keyResolver) : ISecurityEventTokenVerifier
+    IIssuerKeyResolver keyResolver,
+    string[] allowedAlgorithms) : ISecurityEventTokenVerifier
 {
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
@@ -43,6 +47,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
         var parameters = new ValidationParameters
         {
             Options = ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey,
+            AllowedSigningAlgorithms = allowedAlgorithms.ToHashSet(StringComparer.Ordinal),
             ResolveIssuerSigningKeys = ResolveBuffered,
         };
 
@@ -74,7 +79,30 @@ public sealed class DefaultSecurityEventTokenVerifier(
         var code = error.Error switch
         {
             JwtError.MalformedToken => SecurityEventTokenErrorCode.MalformedToken,
+
+            // A token whose STRUCTURE the core refuses is a token that does not conform, not a key
+            // problem, so it goes to the code whose wire word is invalid_request rather than the one
+            // whose word is invalid_key. Without this a correctly signed SET with a bad 'crit' told the
+            // transmitter its keys were unacceptable.
+            //
+            // What reaches this arm is 'crit' and nothing else, and that is a fact about the parameters
+            // built above rather than about the category. InvalidHeader has three producers: the two
+            // 'jwk' ones run only under UseEmbeddedVerificationKey, the JWE one only with a non-null
+            // ResolveTokenDecryptionKeys, and this verifier sets neither. So the question to ask before
+            // adding an option here is which InvalidHeader producer that option switches on - not
+            // whether a lifetime or audience verdict could arrive, which it cannot: those stages report
+            // InvalidToken at every one of their refusal sites and InvalidHeader at none.
+            JwtError.InvalidHeader => SecurityEventTokenErrorCode.MalformedToken,
+
             _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
+
+            // An algorithm this receiver does not accept lands here with everything else the core
+            // refuses a signature over, and that is not a loss of meaning: RFC 8935 Section 2.4 renders
+            // it as invalid_key, "unacceptable to the SET Recipient", which is what it is. Reading it
+            // out of JwtError.InvalidAlgorithm instead would be wrong - that category also carries a
+            // missing alg, an unregistered one and an unsigned token, and this seam cannot tell them
+            // apart. The description says which happened, and the core writes it where the branch is
+            // known.
             _ => SecurityEventTokenErrorCode.SignatureInvalid,
         };
 
