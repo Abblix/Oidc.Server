@@ -141,7 +141,7 @@ public class ReceiverAddressPolicyTests
     {
         var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
         var outbox = new InMemoryEventOutbox();
-        await outbox.EnqueueAsync("s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
+        await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
         var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance);
         var stream = new StreamState
@@ -164,6 +164,6 @@ public class ReceiverAddressPolicyTests
 
         // Nothing was sent, and the event is still there for a pass made after the address is corrected.
         Assert.Empty(handler.Requests);
-        Assert.Single(await outbox.PendingAsync("s-1", null, TestContext.Current.CancellationToken));
+        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
     }
 }

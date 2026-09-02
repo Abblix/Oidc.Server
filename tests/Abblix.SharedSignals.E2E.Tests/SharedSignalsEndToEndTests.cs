@@ -101,7 +101,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         // Captured before draining, so the exact same SET can be redelivered afterwards.
         var outbox = _transmitter.Services.GetRequiredService<IEventOutbox>();
         var minted = Assert.Single(
-            await outbox.PendingAsync(stream.StreamId, null, cancellationToken));
+            await outbox.PendingAsync(ReceiverId, stream.StreamId, null, cancellationToken));
 
         Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
         Assert.Equal(2, _sink.Consumed.Count);
@@ -110,7 +110,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         // asks the receiver to answer as though it had not seen the token before: the repeat earns
         // the same 202 and reaches the sink again, whose contract is idempotency. Short-circuiting
         // it here is what used to swallow a delivery the sink had refused.
-        await outbox.EnqueueAsync(stream.StreamId, minted, cancellationToken);
+        await outbox.EnqueueAsync(ReceiverId, stream.StreamId, minted, cancellationToken);
         Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
         Assert.Equal(3, _sink.Consumed.Count);
     }

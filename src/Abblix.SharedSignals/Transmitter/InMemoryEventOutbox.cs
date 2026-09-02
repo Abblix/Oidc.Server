@@ -17,16 +17,21 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </summary>
 public sealed class InMemoryEventOutbox : IEventOutbox
 {
-    private readonly ConcurrentDictionary<string, List<OutboxItem>> _queues = new();
+    private readonly ConcurrentDictionary<(string ReceiverId, string StreamId), List<OutboxItem>>
+        _queues = new();
 
     /// <inheritdoc />
     public Task EnqueueAsync(
+        string receiverId,
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(receiverId);
         ArgumentException.ThrowIfNullOrEmpty(streamId);
         ArgumentNullException.ThrowIfNull(item);
+
+        var key = (receiverId, streamId);
 
         // Re-checked under the lock, because a clear between the lookup and here removes the list
         // from the dictionary: adding to it then puts the event where nothing can read it, and this
@@ -36,10 +41,10 @@ public sealed class InMemoryEventOutbox : IEventOutbox
         // administrative act rather than traffic.
         while (true)
         {
-            var queue = _queues.GetOrAdd(streamId, _ => []);
+            var queue = _queues.GetOrAdd(key, _ => []);
             lock (queue)
             {
-                if (_queues.TryGetValue(streamId, out var current) && ReferenceEquals(current, queue))
+                if (_queues.TryGetValue(key, out var current) && ReferenceEquals(current, queue))
                 {
                     queue.Add(item);
                     break;
@@ -52,11 +57,12 @@ public sealed class InMemoryEventOutbox : IEventOutbox
 
     /// <inheritdoc />
     public Task<IReadOnlyList<OutboxItem>> PendingAsync(
+        string receiverId,
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
     {
-        if (!_queues.TryGetValue(streamId, out var queue))
+        if (!_queues.TryGetValue((receiverId, streamId), out var queue))
         {
             return Task.FromResult<IReadOnlyList<OutboxItem>>([]);
         }
@@ -75,13 +81,14 @@ public sealed class InMemoryEventOutbox : IEventOutbox
 
     /// <inheritdoc />
     public Task AcknowledgeAsync(
+        string receiverId,
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(jwtIds);
 
-        if (_queues.TryGetValue(streamId, out var queue) && jwtIds.Count > 0)
+        if (_queues.TryGetValue((receiverId, streamId), out var queue) && jwtIds.Count > 0)
         {
             var acknowledged = new HashSet<string>(jwtIds, StringComparer.Ordinal);
             lock (queue)
@@ -94,9 +101,12 @@ public sealed class InMemoryEventOutbox : IEventOutbox
     }
 
     /// <inheritdoc />
-    public Task ClearAsync(string streamId, CancellationToken cancellationToken = default)
+    public Task ClearAsync(
+        string receiverId,
+        string streamId,
+        CancellationToken cancellationToken = default)
     {
-        _queues.TryRemove(streamId, out _);
+        _queues.TryRemove((receiverId, streamId), out _);
         return Task.CompletedTask;
     }
 }

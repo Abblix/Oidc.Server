@@ -687,6 +687,105 @@ public class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// A poll-mode refusal wakes whoever is waiting, exactly as an approval does.
+    /// </summary>
+    /// <remarks>
+    /// The property is not "these call sites signal" - a list of call sites is complete until the next
+    /// handler is added. It is that every transition out of Pending this handler performs reaches the
+    /// notifier. Without it a request the end user rejected in a second answers only when the waiter's
+    /// long-poll window runs out, while the identical request they approved answers at once.
+    /// <para>
+    /// The approval half is the row below, and the two of them together are what make the property
+    /// structural rather than a habit: a first version of this change wrote only this one, and deleting
+    /// the notification from the approval path left the whole suite green.
+    /// </para>
+    /// <para>
+    /// What neither row covers, because the library does not do it: a status the HOST writes to storage
+    /// itself - the denial pattern documented on <see cref="IUserDeviceAuthenticationHandler"/> is one -
+    /// reaches nothing here, and expiry is not an event at all. Both are said on the notifier's own
+    /// contract rather than implied by a test that cannot reach them.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PollMode_WhenRefused_NotifiesWaiters()
+    {
+        var notifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
+        notifier
+            .Setup(n => n.NotifyStatusChangeAsync(AuthReqId, BackChannelAuthenticationStatus.Denied))
+            .Returns(Task.CompletedTask);
+
+        var request = CreateRequest("somebody-else", requested: UserId);
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+
+        var handler = new PollModeCompletionHandler(
+            Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(), notifier.Object);
+
+        await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+        notifier.Verify(
+            n => n.NotifyStatusChangeAsync(AuthReqId, BackChannelAuthenticationStatus.Denied), Times.Once);
+    }
+
+    /// <summary>
+    /// An approval wakes whoever is waiting, in poll mode and in ping mode alike.
+    /// </summary>
+    /// <remarks>
+    /// Ping is here because a ping client polls the token endpoint like any other, and the long-poll gate
+    /// does not read the delivery mode - so one that polls before its notification arrives waits, and
+    /// used to wait out its whole window whatever the end user did. Push needs no row: its token endpoint
+    /// refuses the client outright, so no push client is ever a waiter.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(BackchannelTokenDeliveryModes.Ping)]
+    public async Task CompleteAuthenticationAsync_WhenApproved_NotifiesWaiters(string deliveryMode)
+    {
+        var notifier = new Mock<IBackChannelLongPollingService>(MockBehavior.Strict);
+        notifier
+            .Setup(n => n.NotifyStatusChangeAsync(AuthReqId, BackChannelAuthenticationStatus.Authenticated))
+            .Returns(Task.CompletedTask);
+
+        var isPing = deliveryMode == BackchannelTokenDeliveryModes.Ping;
+
+        var request = CreateRequest(UserId, requested: UserId);
+        if (isPing)
+        {
+            // Without an endpoint to notify, ping refuses before it ever stores an approval, and the row
+            // would then be measuring the denial path the row above already holds.
+            request.ClientNotificationEndpoint = _notificationEndpoint;
+            _notificationService
+                .Setup(s => s.SendAsync(
+                    It.IsAny<Uri>(),
+                    It.IsAny<string>(),
+                    It.IsAny<IBackChannelNotificationRequest>(),
+                    It.IsAny<string>()))
+                .ReturnsAsync(true);
+        }
+
+        _storage
+            .Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn))
+            .Returns(Task.CompletedTask);
+        AuthenticationCompletionHandler handler = isPing
+            ? new PingModeCompletionHandler(
+                Mock.Of<ILogger<PingModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+                _notificationService.Object, notifier.Object)
+            : new PollModeCompletionHandler(
+                Mock.Of<ILogger<PollModeCompletionHandler>>(), _storage.Object, PublicSubjects(),
+                notifier.Object);
+
+        await handler.CompleteAuthenticationAsync(
+            AuthReqId, request, isPing ? PingClient() : PollClient(), _expiresIn);
+
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
+        notifier.Verify(
+            n => n.NotifyStatusChangeAsync(AuthReqId, BackChannelAuthenticationStatus.Authenticated),
+            Times.Once);
+    }
+
+    /// <summary>
     /// A push-mode refusal removes the request instead of denying it.
     /// </summary>
     /// <remarks>
