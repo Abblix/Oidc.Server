@@ -81,29 +81,34 @@ public class WwwAuthenticateTests
             "Bearer error=\"invalid_token\"",
             WwwAuthenticate.Challenge("Bearer", null, "invalid_token", ""));
     /// <summary>
-    /// A control character never reaches the header value.
+    /// Only what the quoted-string grammar admits reaches the header value.
     /// </summary>
     /// <remarks>
-    /// The quoted-string grammar has no escape for one, and a CR or an LF ends the header field - so a
-    /// value carrying either would split the response, or be refused by the server writing it, which is
-    /// a fault rather than a refusal. Measured before this was closed: the builder emitted a raw CRLF,
-    /// and the comment beside it said such a value was "rejected upstream".
+    /// RFC 9110 Section 5.6.4: <c>qdtext = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text</c>, and
+    /// <c>quoted-pair</c> carries DQUOTE and the backslash. So HTAB is legal and passes through -
+    /// an earlier version of this row asserted it was replaced, which pinned an alteration of a
+    /// value the grammar allows.
     /// <para>
-    /// Values reaching the builder are not always the library's own. An error description can quote
+    /// What is replaced is everything with no place in the grammar, and CR or LF most of all: either
+    /// ends the header field. Measured before this was closed, the builder emitted a raw CRLF while
+    /// the comment beside it said such a value was "rejected upstream" - it was not; the only thing
+    /// standing there was the HTTP server refusing the header, which is a fault, not a refusal.
+    /// </para>
+    /// <para>
+    /// Values reaching the builder are not always the library's own: an error description can quote
     /// what a client put in a token, and a JSON string carries CR and LF perfectly well.
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("bad\r\nX-Injected: 1")]
-    [InlineData("bad\u0000nul")]
-    [InlineData("bad\ttab")]
-    public void Challenge_WithAControlCharacterInAValue_EmitsNone(string value)
+    [InlineData("bad\r\nX-Injected: 1", "bad  X-Injected: 1")]
+    [InlineData("bad\u0000nul", "bad nul")]
+    [InlineData("bad\u007fdel", "bad del")]
+    [InlineData("keeps\ttab", "keeps\ttab")]
+    [InlineData("keeps obs-text é", "keeps obs-text é")]
+    public void Challenge_EmitsOnlyWhatTheGrammarAdmits(string value, string expected)
     {
         var header = WwwAuthenticate.Challenge("DPoP", ("error_description", value));
 
-        // The control: the surrounding text really did arrive, so an empty header would not pass this.
-        Assert.Contains("bad", header, StringComparison.Ordinal);
-
-        Assert.DoesNotContain(header, char.IsControl);
+        Assert.Equal($"DPoP error_description=\"{expected}\"", header);
     }
 }

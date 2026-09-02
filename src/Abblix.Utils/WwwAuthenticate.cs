@@ -71,28 +71,36 @@ public static class WwwAuthenticate
 
             builder.Append(first ? " " : ", ").Append(name).Append("=\"");
 
-            // RFC 9110 Section 5.6.4: inside a quoted-string each `"` must be backslash-escaped and `\`
-            // itself doubled.
+            // RFC 9110 Section 5.6.4 gives the grammar this writes into:
             //
-            // A control character has no escape in that grammar, and CR or LF ends the header field
-            // outright - so it is replaced here rather than left to whoever writes the response. The
-            // previous version of this comment said such a value was "rejected upstream"; measured, it
-            // is not: this method emitted a raw CRLF into the value, and the only thing standing between
-            // that and a split response was the HTTP server refusing the header, which is a fault rather
-            // than a refusal. Values reaching here are not always ours - an error description can quote
-            // what a client put in a token - so the grammar answers for them.
+            //   qdtext      = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
+            //   quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
+            //
+            // So a character is emitted as it stands when it is qdtext, and behind a backslash when it
+            // is DQUOTE or the backslash itself - the two the section says a sender SHOULD quote. HTAB
+            // is qdtext and needs neither: an earlier version of this replaced every control character
+            // and altered a legal value, with a row pinning that as correct.
+            //
+            // Anything else is replaced rather than emitted, because it has no place in the grammar and
+            // CR or LF would end the header field outright. The comment here used to say such a value
+            // was "rejected upstream"; measured, it was not - this method emitted a raw CRLF, and the
+            // only thing between that and a split response was the HTTP server refusing the header,
+            // which is a fault rather than a refusal. Values reaching here are not always ours: an
+            // error description can quote what a client put in a token.
             foreach (var c in value)
             {
-                if (char.IsControl(c))
+                if (c is '"' or '\\')
+                {
+                    builder.Append('\\').Append(c);
+                }
+                else if (c is '\t' or >= ' ' and <= '~' or >= '\u0080')
+                {
+                    builder.Append(c);
+                }
+                else
                 {
                     builder.Append(' ');
-                    continue;
                 }
-
-                if (c is '"' or '\\')
-                    builder.Append('\\');
-
-                builder.Append(c);
             }
 
             builder.Append('"');
