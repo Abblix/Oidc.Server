@@ -85,10 +85,7 @@ public partial class DeviceCodeGrantHandler(
             //
             // The same predicate the record answers for the verification, approval and denial paths, so
             // the token endpoint and those three cannot disagree about the instant a device code stops
-            // being usable. They agreed before this too - `now >= ExpiresAt` here against `remaining > 0`
-            // there - but nothing held them in step: relaxing THIS comparison to `>` left both suites
-            // green, measured, while relaxing the record's turns two rows red. One expression is what
-            // makes the drift impossible rather than merely detectable.
+            // being usable - one expression rather than two comparisons kept in step by hand.
             case { } when !deviceRequest.HasLifetimeLeft(now, out _):
                 await storage.RemoveAsync(request.DeviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");

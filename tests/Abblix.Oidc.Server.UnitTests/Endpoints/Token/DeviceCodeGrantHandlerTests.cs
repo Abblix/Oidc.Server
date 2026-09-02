@@ -515,9 +515,10 @@ public class DeviceCodeGrantHandlerTests
     /// A poll one tick BEFORE the expiry is still pending.
     /// </summary>
     /// <remarks>
-    /// The control on the row above. Without it a handler that called every code expired would pass, and
-    /// the boundary would be pinned from one side only - which is how it came to be unheld in the first
-    /// place.
+    /// The control on the row above, and measured rather than assumed: a handler calling EVERY code
+    /// expired is already killed by nineteen other rows in this file, so that is not what this one buys.
+    /// What it alone catches is the boundary shifted one tick EARLY - planted, and it is the only row in
+    /// the suite that dies. The fifteen-minute rows cannot see a tick.
     /// </remarks>
     [Fact]
     public async Task PolledOneTickBeforeItsExpiry_TheCodeIsStillPending()
