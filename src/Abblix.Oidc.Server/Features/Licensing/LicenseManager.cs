@@ -151,9 +151,10 @@ public partial class LicenseManager
                 // to avoid service interruption" is untrue of a deployment that will not be interrupted,
                 // and the operator who acts on the record has nothing to do.
                 //
-                // What is NOT judged is what the successor is WORTH. One with fewer clients or a narrower
-                // issuer set carries the period and still changes what the deployment may do, and that is
-                // a different sentence - saying it through "renew promptly" would be untrue the other way.
+                // What the successor is WORTH is a different sentence, and it gets its own record. One
+                // with fewer clients or a narrower issuer set carries the period and still changes what
+                // the deployment may do, on a day nobody announced - and saying that through "renew
+                // promptly" would be untrue the other way, since there is nothing to renew.
                 //
                 // Only the expiring-soon status is suppressed. The arithmetic already excludes the others,
                 // since a license in its grace period has expired and nothing can start after now and
@@ -177,6 +178,8 @@ public partial class LicenseManager
         // With nothing in force the message is exactly true: the server is on the free tier, which allows
         // one issuer, and a deployment serving more than one then refuses every issuer it has seen,
         // including the first, until it restarts under a valid license.
+        ReportNextNarrowing(utcNow);
+
         if (result is null && expired is not null)
         {
             foreach (var license in expired)
@@ -406,6 +409,171 @@ public partial class LicenseManager
             return false;
 
         return starts <= expiresAt && (next.ExpiresAt is not { } ends || expiresAt < ends);
+    }
+
+    /// <summary>
+    /// Records the next moment this deployment will be allowed less than it is now, and what it loses.
+    /// </summary>
+    /// <param name="utcNow">The moment the comparison starts from.</param>
+    /// <remarks>
+    /// Asked once per pass rather than per license, because the subject is the DEPLOYMENT rather than any
+    /// one license. What a deployment may do is the merge of everything active, so the question is when
+    /// that merge next becomes smaller - and the answer is not always an expiry: a successor whose issuer
+    /// set is narrower restricts the deployment the day it STARTS, because merging a license that names
+    /// issuers with one that names none yields the named set. Anchoring the record on an expiry named a
+    /// day five days after the restriction began, which is worse than silence.
+    /// <para>
+    /// Both sides are read from <see cref="Scan"/>, which is what <see cref="TryGetCurrentLicenseLimit"/>
+    /// installs, so the comparison is between two answers the enforcement will actually give. The moments
+    /// examined are every future start and every future expiry, in order, and the FIRST loss is the one
+    /// announced: an operator can only act on the next one, and a second record about a later date buries
+    /// it.
+    /// </para>
+    /// <para>
+    /// A moment at which nothing is in force ENDS the search rather than being stepped over. It is a
+    /// lapse to the free tier, which the expiry and grace records already carry in their own words, so
+    /// announcing it here would put two sentences on one event - and anything beyond it is no longer
+    /// the next thing that happens to this deployment, which is the only thing this record is for.
+    /// </para>
+    /// <para>
+    /// Warning rather than Error: nothing is wrong, and nothing is wrong on the day either. The
+    /// deployment simply may do less than it may now, and an operator who reads this early can ask for a
+    /// bigger renewal while there is time.
+    /// </para>
+    /// </remarks>
+    private void ReportNextNarrowing(DateTimeOffset utcNow)
+    {
+        if (Scan(utcNow).InForce is not { } inForce)
+            return;
+
+        foreach (var moment in ChangeMoments(utcNow))
+        {
+            // A moment with nothing in force ENDS the search rather than being stepped over. Walking past
+            // it announced a date on the far side of a fall to the free tier, in a sentence promising
+            // that nothing changes before it - while the free tier allows one issuer, so the fall is
+            // strictly worse than whatever was being announced. The expiry and grace records name that
+            // day in their own words, so saying it again here would put two sentences on one event.
+            if (Scan(moment).InForce is not { } afterwards)
+                return;
+
+            if (Narrowings(inForce, afterwards) is not { Count: > 0 } narrowed)
+                continue;
+
+            // Keyed by VALUES, not by the merged licenses: a merge allocates a fresh set for the issuers,
+            // and License compares a HashSet member by reference, so a key holding one is new on every
+            // scan and the window never closes. That matters per request rather than per day, because a
+            // merge carrying a grace-period license reads as expired and makes every license consult
+            // rescan.
+            if (LicenseLogger.Instance.IsAllowed(
+                    new { moment, narrowed = string.Join("|", narrowed) }, utcNow, TimeSpan.FromDays(1)))
+            {
+                LogRenewalGrantsLess(LicenseLogger.Instance, moment, string.Join("; ", narrowed));
+            }
+
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Every future moment at which the merge can change, earliest first.
+    /// </summary>
+    /// <remarks>
+    /// A license enters the merge at its <c>NotBefore</c> and this asks about one tick after its
+    /// <c>ExpiresAt</c>, since a license is active at both of its endpoints.
+    /// <para>
+    /// The end of a GRACE period is a moment the merge really does change at, and it is deliberately not
+    /// here. A license in grace is past its term: the deployment is already told so, at the expiry, by an
+    /// error-level record saying to renew immediately, and the grace is drawn against the next license's
+    /// term rather than granted on top of this one. A record promising capacity until the grace runs out
+    /// would present it as an entitlement, which is the one thing it is not.
+    /// </para>
+    /// <para>
+    /// An expiry at the last representable moment yields no "after": there is no such tick, and asking
+    /// for one throws out of a license check - a licensing question answered with a server fault.
+    /// Nothing follows it either, so skipping it loses no moment.
+    /// </para>
+    /// <para>
+    /// TWO clauses, because "representable" is two things and
+    /// <see cref="DateTimeOffset.AddTicks"/> refuses on either: it advances the CLOCK time and then
+    /// revalidates the resulting INSTANT, so it throws with one message when the clock time leaves
+    /// <see cref="DateTime"/> and a different one when the instant leaves year 10000. The two coincide
+    /// only at offset zero, which is the only offset a licence file can produce - <c>LicenseLoader</c>
+    /// reads unix seconds - so a suite built from loaded licences cannot tell the halves apart, and
+    /// either half alone reads as sufficient. <see cref="License"/> and <see cref="AddLicense"/> are
+    /// public, and each half admits a value the other refuses: an expiry whose clock time is maximal
+    /// under a POSITIVE offset sits below <see cref="DateTimeOffset.MaxValue"/>, and
+    /// <c>DateTimeOffset.MaxValue.ToOffset</c> of a NEGATIVE one - which is what
+    /// <c>ToLocalTime</c> returns west of Greenwich - has a clock time below
+    /// <see cref="DateTime.MaxValue"/>. Both overflow, on the request path.
+    /// </para>
+    /// </remarks>
+    private IEnumerable<DateTimeOffset> ChangeMoments(DateTimeOffset utcNow)
+    {
+        var moments = new SortedSet<DateTimeOffset>();
+
+        foreach (var license in _licenses)
+        {
+            if (license.NotBefore is { } starts && utcNow < starts)
+                moments.Add(starts);
+
+            if (license.ExpiresAt is { } ends && utcNow < ends
+                && ends.DateTime < DateTime.MaxValue && ends < DateTimeOffset.MaxValue)
+                moments.Add(ends.AddTicks(1));
+        }
+
+        return moments;
+    }
+
+
+    /// <summary>
+    /// The ways the successor grants less than the license in force, in words an operator can act on.
+    /// </summary>
+    /// <remarks>
+    /// Absence means UNBOUNDED on all three, which is what makes each comparison asymmetric: a successor
+    /// naming a limit where the current license names none is a narrowing, while the reverse is a
+    /// widening and says nothing. The issuer set is the one where "narrower" is not a number - a
+    /// successor is narrower when it refuses an issuer the current license allows, so a set that merely
+    /// adds issuers is not reported.
+    /// </remarks>
+    private static IReadOnlyList<string> Narrowings(License license, License next)
+    {
+        var narrowed = new List<string>();
+
+        if (Narrows(license.ClientLimit, next.ClientLimit))
+            narrowed.Add($"clients {Describe(license.ClientLimit)} -> {Describe(next.ClientLimit)}");
+
+        if (Narrows(license.IssuerLimit, next.IssuerLimit))
+            narrowed.Add($"issuers {Describe(license.IssuerLimit)} -> {Describe(next.IssuerLimit)}");
+
+        if (DroppedIssuers(license.ValidIssuers, next.ValidIssuers) is { Count: > 0 } dropped)
+            narrowed.Add($"issuers no longer accepted: {string.Join(", ", dropped)}");
+
+        return narrowed;
+
+        static bool Narrows(int? current, int? successor)
+            => successor is { } limit && (current is not { } currentLimit || limit < currentLimit);
+
+        static string Describe(int? limit) => limit?.ToString() ?? "unbounded";
+    }
+
+    /// <summary>
+    /// The issuers the current license accepts and the successor does not.
+    /// </summary>
+    /// <remarks>
+    /// An empty or absent set accepts every issuer, so a successor naming any set at all drops whatever
+    /// the deployment has been using - which cannot be listed, since the license does not say what that
+    /// was. The set itself is named instead, because that is the actionable half: an operator comparing
+    /// it against their own issuers can see the gap, where a count could not.
+    /// </remarks>
+    private static IReadOnlyList<string> DroppedIssuers(HashSet<string>? current, HashSet<string>? successor)
+    {
+        if (successor is not { Count: > 0 })
+            return [];
+
+        if (current is not { Count: > 0 })
+            return [$"only {string.Join(", ", successor)} from then on"];
+
+        return current.Except(successor, StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>
