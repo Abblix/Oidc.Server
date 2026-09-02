@@ -26,10 +26,16 @@
        tagged release drops the suffix by itself.
 
        No version number is written in this comment on purpose: a number repeated in prose beside
-       the property it describes goes stale without anything noticing. It is NOT the only place
-       the line is written down - .github/workflows/publish-dev-builds.yml states it in prose and
-       emits it into the run summary - so bumping the property means editing that file in the same
-       change. -->
+       the property it describes goes stale without anything noticing. The run summary in
+       .github/workflows/publish-dev-builds.yml no longer repeats it either - it derives the range
+       from the version the build produced, so nothing there can contradict this property. What
+       that workflow still carries is a worked EXAMPLE in its header comment, which a bump should
+       follow but which no consumer ever reads.
+
+       Also worth knowing when the line moves: MinVerMinimumMajorMinor only LIFTS a version below
+       it. Once a v2.4 tag is reachable and this still says 2.4, MinVer's patch auto-increment
+       takes over and dev builds become 2.4.1-dev.*, not 2.4.0-dev.*. The summary derives the whole
+       three-part number for that reason. -->
   <PropertyGroup>
     <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
