@@ -10,6 +10,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -69,10 +70,9 @@ public class UriMemberCoverageTests
         // The NAME as well as the refusal. The validator is fourteen hand-written (name, value) pairs and
         // its summary promises an error naming the member - measured, swapping two pairs left both suites
         // green while an operator sending a relative policy_uri was told about their tos_uri.
-        Assert.Contains(
-            ParameterNameOf(property),
-            result.ErrorDescription,
-            StringComparison.Ordinal);
+        Assert.True(
+            NamesTheMember(result.ErrorDescription, ParameterNameOf(property)),
+            $"the refusal does not name {ParameterNameOf(property)}: {result.ErrorDescription}");
     }
 
     /// <summary>
@@ -80,6 +80,19 @@ public class UriMemberCoverageTests
     /// </summary>
     private static string ParameterNameOf(PropertyInfo property)
         => property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name;
+
+    /// <summary>
+    /// Whether a refusal names this member, as a whole token rather than as a substring.
+    /// </summary>
+    /// <remarks>
+    /// Containment is not enough, and the one pair it lets through is on the list: <c>redirect_uris</c>
+    /// sits inside <c>post_logout_redirect_uris</c>. Measured with a substring test in place, labelling
+    /// a relative <c>redirect_uris</c> as <c>post_logout_redirect_uris</c> left both suites green - the
+    /// exact defect the assertion was added to catch. The boundary is a word character, and underscore
+    /// counts as one, which is what separates the two names.
+    /// </remarks>
+    private static bool NamesTheMember(string description, string member)
+        => Regex.IsMatch(description, $@"(?<!\w){Regex.Escape(member)}(?!\w)");
 
     /// <summary>
     /// The control: the same request with every URI member absolute is accepted, so the rows above

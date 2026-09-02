@@ -11,6 +11,8 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 
+using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
@@ -34,6 +36,27 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
     /// </summary>
     private OidcError? Validate(ClientRegistrationValidationContext context)
     {
+        // Asked about the VALUE, ahead of every question about the mode. Inside the switch it sat behind
+        // a first case that returns for a null delivery mode, so a registration naming the endpoint and
+        // no mode walked past it and the address was stored - measured, 201 Created over plain HTTP.
+        // Nothing else covers the member: StoredUriValidator asks absoluteness only, and
+        // SubjectTypeValidator's arm needs a pairwise subject type.
+        //
+        // Absoluteness first, because Scheme raises on a relative URI rather than returning anything:
+        // a registration body carrying "/cb" here faulted the endpoint instead of being refused. The
+        // [AbsoluteUri] on the member does not help - the form binder honours it and the JSON
+        // deserializer does not - so each site that reads a URI member states absoluteness itself, and
+        // a guard whose safety depends on another validator's position in a list moves when somebody
+        // reorders that list.
+        if (context.Request.BackChannelClientNotificationEndpoint
+            is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                $"The {Parameters.BackChannelClientNotificationEndpoint} must be an absolute URI using "
+                + "the HTTPS scheme");
+        }
+
         switch (context.Request)
         {
             case { BackChannelTokenDeliveryMode: null }:
@@ -95,24 +118,6 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
         // A poll request carrying NO endpoint reaches this line: the switch rejects poll WITH one and
         // ping or push WITHOUT one, which leaves poll-with-nothing to fall through. That is what the null
         // check below is for.
-        // Absoluteness first, because Scheme raises on a relative URI rather than returning anything:
-        // a registration body carrying "/cb" here faulted the endpoint instead of being refused. The
-        // [AbsoluteUri] on the member does not help - the form binder honours it and the JSON
-        // deserializer does not - so each site that reads a URI member states absoluteness itself.
-        //
-        // Restating it here is not redundant even though StoredUriValidator runs first and would have
-        // refused a relative value already: this arm is the only thing that refuses an ABSOLUTE non-https
-        // one, and reading Scheme on a relative URI raises rather than returning. A guard whose safety
-        // depends on another validator's position in a list is a guard that moves when somebody reorders
-        // that list.
-        var notificationEndpoint = context.Request.BackChannelClientNotificationEndpoint;
-        if (notificationEndpoint is not (null or { IsAbsoluteUri: true, Scheme: "https" }))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The backchannel_client_notification_endpoint must be an absolute URI using the HTTPS scheme");
-        }
-
         var signingAlgorithm = context.Request.BackChannelAuthenticationRequestSigningAlg;
         if (signingAlgorithm.HasValue() &&
             !jwtValidator.SigningAlgorithmsSupported.Contains(signingAlgorithm, StringComparer.Ordinal))

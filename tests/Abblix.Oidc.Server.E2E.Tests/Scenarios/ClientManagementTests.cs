@@ -24,6 +24,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -202,6 +203,56 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A plain-HTTP notification endpoint is refused even when no delivery mode is registered.
+    /// </summary>
+    /// <remarks>
+    /// The arm that enforces "It MUST be an HTTPS URL" sat behind a switch whose first case returns for
+    /// a null <c>backchannel_token_delivery_mode</c>, so a registration naming the endpoint and no mode
+    /// walked past it and the value was stored. Measured, 201 Created. Nothing else covers it:
+    /// <c>StoredUriValidator</c> asks absoluteness only, and <c>SubjectTypeValidator</c>'s arm needs a
+    /// pairwise subject type.
+    /// <para>
+    /// Whether such a client is usable is a separate question - it has no mode, so nothing polls or
+    /// pushes to it today. What is refused here is storing an address the specification forbids for the
+    /// member, so that turning the mode on later cannot quietly begin using it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_plain_http_notification_endpoint_is_refused_without_a_delivery_mode()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("notified-over-plain-http");
+        metadata[RequestMembers.BackChannelClientNotificationEndpoint] = "http://client.example.com/cb";
+
+        var registrationEndpoint = discovery.RegistrationEndpoint;
+        Assert.NotNull(registrationEndpoint);
+
+        var response = await client.PostAsJsonAsync(
+            registrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        // The control: the same body with an https endpoint registers, so the refusal is about the
+        // scheme rather than about the member being present at all.
+        var accepted = await client.PostAsJsonAsync(
+            registrationEndpoint,
+            AsHttps(NewClientMetadata("notified-over-https")),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The same metadata with an https notification endpoint.
+    /// </summary>
+    private static JsonObject AsHttps(JsonObject metadata)
+    {
+        metadata[RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/cb";
+        return metadata;
+    }
+
+    /// <summary>
     /// The registration model's URI members, found by TYPE.
     /// </summary>
     /// <remarks>
@@ -269,9 +320,17 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // The MEMBER, not only the status. This is the only row that sees the text a client is
         // actually sent, and the validator behind it is a list of hand-written (name, value) pairs -
         // swapping two of them told an operator about the wrong member with every row still green.
+        //
+        // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, and
+        // with containment a mislabelling of those two for each other passed both suites. Measured, this
+        // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and
+        // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
+        // The unit theory is what catches it, by asking the validator directly.
         var body = await ReadJsonAsync(response);
-        Assert.Contains(
-            member, body["error_description"]!.GetValue<string>(), StringComparison.Ordinal);
+        var description = body["error_description"]!.GetValue<string>();
+        Assert.True(
+            Regex.IsMatch(description, $@"(?<!\w){Regex.Escape(member)}(?!\w)"),
+            $"the refusal does not name {member}: {description}");
     }
 
     /// <summary>
