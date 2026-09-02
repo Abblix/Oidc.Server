@@ -377,11 +377,16 @@ public class BackChannelAuthenticationValidatorTests
     [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
     [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
     [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
+    // The ORDER, which nothing held. These TWO rows are the whole of it: the orderings differ only
+    // where the scheme check would fire AND an arm would fire, which is poll with a bad endpoint
+    // and an unsupported mode with a bad endpoint. The ping-or-push arm requires a null endpoint,
+    // so the scheme check can never fire beside it, and the algorithm check sits below both either
+    // way. With the scheme check moved back above the arms, exactly these two read "HTTPS scheme"
+    // instead and nothing else in any suite moves.
+    //
+    // A client wrong about its MODE has two things wrong with it, and which one it is told about is
+    // the whole point of where the check sits.
     [InlineData("carrier-pigeon", "http://client.example/cb", null, "delivery mode is not supported")]
-    // The ORDER, which nothing held: with the scheme check back above the mode arms this row reads
-    // "HTTPS scheme" instead, and every other row in both suites stays green. A poll client naming
-    // a plain-HTTP endpoint has two things wrong with it, and which one it is told about is the
-    // whole point of where the check sits.
     [InlineData(BackchannelTokenDeliveryModes.Poll, "http://client.example/cb", null, "is invalid if")]
     [InlineData(BackchannelTokenDeliveryModes.Ping, "http://client.example/cb", null, "HTTPS scheme")]
     [InlineData(BackchannelTokenDeliveryModes.Poll, null, "NOPE", "signing algorithm is not supported")]
@@ -430,13 +435,39 @@ public class BackChannelAuthenticationValidatorTests
     /// The null-mode exit moved BELOW the switch so the endpoint check could see a registration that
     /// names no mode. That put null in reach of the unsupported-mode arm, which asks for a mode that is
     /// "not poll, ping or push" - and null qualifies. The arm carries an explicit "not null", and
-    /// removing it turns sixteen unit rows red across two files and fifty-three E2E rows besides: this
-    /// is the one that says WHY in a sentence, rather than the only one that speaks.
+    /// removing it turns sixteen unit rows red across two files and sixty-four E2E rows across two
+    /// SUITES - the MinimalApi one carries eleven of them, and an earlier version of this sentence
+    /// counted only the suites that had been run. This row is the one that says WHY in a sentence,
+    /// rather than the only one that speaks.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode()
     {
         var context = CreateContext(notificationEndpoint: new Uri("https://client.example/cb"));
+
+        Assert.Null(await _validator.ValidateAsync(context));
+    }
+
+    /// <summary>
+    /// A registration naming no delivery mode is not judged on its CIBA signing algorithm either.
+    /// </summary>
+    /// <remarks>
+    /// The row above pins where the null-mode exit sits relative to the switch. This one pins the other
+    /// side of it - the algorithm check below - and without it that position is free: moving the exit
+    /// beneath the algorithm check flips a mode-less registration carrying an unsupported
+    /// <c>backchannel_authentication_request_signing_alg</c> from accepted to refused, and measured, all
+    /// three suites stayed green. A boundary a value can cross in either direction needs a row on each
+    /// side, and the exit had one.
+    /// <para>
+    /// Accepted rather than refused because the parameter is CIBA's, and a registration that asks for no
+    /// CIBA is not asking for this algorithm. The general one is not skipped: SigningAlgorithmsValidator
+    /// runs immediately after this validator and judges it for every mode.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ValidateAsync_NoDeliveryMode_IsNotJudgedOnItsCibaSigningAlgorithm()
+    {
+        var context = CreateContext(signingAlg: "NOPE");
 
         Assert.Null(await _validator.ValidateAsync(context));
     }
