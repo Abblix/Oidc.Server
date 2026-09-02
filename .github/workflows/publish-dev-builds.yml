@@ -6,16 +6,21 @@ name: Publish dev build to GitHub Packages
 # package version from git tags + commit height; this workflow just packs and pushes the
 # resulting .nupkg files to nuget.pkg.github.com/Abblix.
 #
-# Example version (with MinVerMinimumMajorMinor=2.3 and DefaultPreReleaseIdentifiers=dev.0):
-#   pre-tag develop, 5 commits since v2.2  ->  2.3.0-dev.0.5
-#   tagged v2.3.0-beta1                    ->  2.3.0-beta1
-#   tagged v2.3.0                          ->  2.3.0
+# The line below is Directory.Build.props' MinVerMinimumMajorMinor, which is the ONE place that
+# decides it; every number here is an illustration of that value and nothing reads them. The summary
+# this workflow prints derives its range from the version actually built, so a stale example here
+# cannot mislead a consumer - it can only mislead a reader.
 #
-# Note: develop and release/* publish into the same 2.3.0-dev.* pre-release line, so a
-# consumer floating 2.3.0-dev.* resolves the highest commit height across both branches.
+# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
+#   pre-tag develop, 5 commits since v2.3  ->  2.4.0-dev.0.5
+#   tagged v2.4.0-beta1                    ->  2.4.0-beta1
+#   tagged v2.4.0                          ->  2.4.0
+#
+# Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
+# consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
 # To gate deterministically against a specific branch build, pin the exact version.
 #
-# Releases (canonical 2.3.0, 2.3.0-beta1, etc.) flow through the manual
+# Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
 # enhanced-release.yml - this workflow does not produce them.
 
 on:
@@ -141,7 +146,21 @@ jobs:
               echo ""
               echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
               echo ""
-              echo "Consumers floating \`2.3.0-dev.*\` will pick this up on next \`dotnet restore\`."
+              # The floating range is DERIVED from the version just built rather than written out,
+              # because the two sat side by side and disagreed: this line said 2.3 while the build
+              # produced 2.4, so it told an integrator to float a line that had stopped publishing.
+              # That failure is silent by construction - the range still resolves, to the last build
+              # it ever had, so restore succeeds and the version simply never moves again.
+              #
+              # Only for a dev build, which is the only thing this range means. A tagged pre-release
+              # reaches here with no dev identifier, and a sentence about floating would be advice
+              # about a line it is not on.
+              case "$VERSION" in
+                *-dev.*)
+                  LINE="${VERSION%%-*}"
+                  echo "Consumers floating \`${LINE%.*}.0-dev.*\` will pick this up on next \`dotnet restore\`."
+                  ;;
+              esac
             } >> "$GITHUB_STEP_SUMMARY"
           fi
         timeout-minutes: 3
