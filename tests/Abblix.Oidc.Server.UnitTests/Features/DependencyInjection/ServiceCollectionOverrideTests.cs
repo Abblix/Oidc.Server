@@ -11,6 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Jwt.Encryption;
 using Abblix.Jwt.ReplayPrevention;
@@ -18,6 +19,7 @@ using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -25,6 +27,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -126,6 +129,34 @@ public class ServiceCollectionOverrideTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => services.AddClientAuthentication());
         Assert.Contains(nameof(IClientAuthenticator), ex.Message);
+    }
+
+    [Fact]
+    public void AddClientAuthentication_ProfileEnforcementIsOutermost()
+    {
+        // The profile decorator is the only place a client already in the store meets its profile,
+        // so it has to be what the singular contract resolves to - and outside the composite, or
+        // the credential form would decide whether the profile is applied at all.
+        var services = new ServiceCollection();
+
+        services.AddClientAuthentication();
+
+        // Resolved rather than read off the descriptor: Decorate registers an object-typed factory,
+        // whose implementation type a descriptor cannot be asked for.
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton(new Mock<IClientInfoProvider>().Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
+        services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
+        services.AddSingleton(new Mock<IClientJwtValidator>().Object);
+        services.AddSingleton(new Mock<IIssuerProvider>().Object);
+        services.AddSingleton(new Mock<IReplayCache>().Object);
+
+        var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
+
+        Assert.IsType<SecurityProfileClientAuthenticator>(authenticator);
     }
 
     [Fact]
