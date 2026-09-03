@@ -64,6 +64,27 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// The decorator runs the whole checker, not the half about credentials: a registration allowing
+    /// a response type the profile forbids is refused here too, even though its credential is one the
+    /// profile admits. Without this row the response-type clauses decide no outcome in this file, and
+    /// a decorator reading only the authentication method would leave it green.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientAllowsAForbiddenResponseType_ShouldReturnNull()
+    {
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
     /// A registration the profile admits passes through untouched, which is what keeps the refusals
     /// above from being a decorator that refuses everything.
     /// </summary>
