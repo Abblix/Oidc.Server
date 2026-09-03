@@ -416,7 +416,19 @@ public class SecurityProfileTests
     [Fact]
     public void Validate_UndefinedDefaultProfile_Fails()
     {
-        var options = new OidcOptions { DefaultSecurityProfile = (ClientSecurityProfile)7 };
+        // With a client on the options, because a validator holding no clients never resolves the
+        // default at all: the case this check is for is a deployment that HAS clients inheriting it.
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = (ClientSecurityProfile)7,
+            Clients =
+            [
+                new ClientInfo("client-1")
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                },
+            ],
+        };
 
         var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
 

@@ -36,21 +36,28 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
         // bound as it stands. Nothing downstream can serve such a value, so it is named here, at
         // startup - the alternative is that the deployment starts and every endpoint requiring a
         // client answers 500 instead.
+        // Named once for the operator, whether or not any client inherits it.
         failures.AddRange(UndefinedProfile(options.DefaultSecurityProfile, "DefaultSecurityProfile"));
 
         foreach (var client in options.Clients)
         {
-            if (client.SecurityProfile is { } clientProfile)
-            {
-                var undefined = UndefinedProfile(clientProfile, $"Client '{client.ClientId}'");
-                if (undefined.Count > 0)
-                {
-                    failures.AddRange(undefined);
-                    continue;
-                }
-            }
-
             var effectiveProfile = client.SecurityProfile ?? options.DefaultSecurityProfile;
+
+            // The value tested is the EFFECTIVE one, so an undefined default and an undefined
+            // client profile are one case rather than two: the consistency walk below resolves
+            // whatever this is, and resolving a value the enum does not define throws. A guard
+            // written per source would cover whichever half its author had in mind.
+            var undefined = UndefinedProfile(
+                effectiveProfile,
+                client.SecurityProfile.HasValue
+                    ? $"Client '{client.ClientId}'"
+                    : $"Client '{client.ClientId}', inheriting DefaultSecurityProfile,");
+
+            if (undefined.Count > 0)
+            {
+                failures.AddRange(undefined);
+                continue;
+            }
 
             foreach (var violation in
                      SecurityProfileConsistency.FindViolations(

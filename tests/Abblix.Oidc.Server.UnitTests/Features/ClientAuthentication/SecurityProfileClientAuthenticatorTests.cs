@@ -76,7 +76,11 @@ public class SecurityProfileClientAuthenticatorTests
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            // The code response type is allowed as well, so this trips the clause about a
+            // FORBIDDEN response type and no other: an array carrying only the hybrid pair would
+            // also trip the clause requiring the code type, and the row would stay green if the
+            // clause its name points at were deleted.
+            AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
