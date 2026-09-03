@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
+using System;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
@@ -341,9 +342,9 @@ public class SecurityProfileTests
 
     /// <summary>
     /// The remaining two requirements are read by services rather than by the consistency check, so
-    /// what is asserted here is that the profile carries them at all. A flag a profile sets and no
-    /// consumer reads would ship silently unenforced, which is what the enforcement tests in the
-    /// end-to-end suites answer for.
+    /// what is asserted here is that the profile carries them at all. That each flag has a consumer
+    /// that reads it is answered elsewhere in this project: the audience refusals in
+    /// PrivateKeyJwtAuthenticatorTests, and the rotation case in RefreshTokenServiceTests.
     /// </summary>
     [Fact]
     public void Fapi2_CarriesTheRemainingRequirements()
@@ -353,5 +354,56 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireConfidentialClient);
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
         Assert.True(requirements.RequireIssuerAudienceInClientAssertion);
+    }
+    /// <summary>
+    /// The mistake the guard exists to catch, driven directly: a profile that drops rotation and
+    /// carries neither control that replaces it. It cannot be expressed through the profiles that
+    /// ship, since those are correct, so the walk takes its pairs from the caller.
+    /// </summary>
+    [Fact]
+    public void FindUnreplacedRelaxations_RotationDroppedWithNoReplacement_NamesBothControls()
+    {
+        var violations = SecurityProfileRequirements.FindUnreplacedRelaxations(
+            [("Unpaid", new SecurityProfileRequirements { ForbidRefreshTokenRotation = true })]);
+
+        Assert.Equal(2, violations.Count);
+        Assert.Contains(violations, v => v.Contains("confidential client"));
+        Assert.Contains(violations, v => v.Contains("sender-constrained token"));
+    }
+
+    /// <summary>
+    /// One control present and the other missing is still a violation, and only the missing one is
+    /// named. Without this the guard could pass by requiring either control rather than both.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, "sender-constrained token")]
+    [InlineData(false, true, "confidential client")]
+    public void FindUnreplacedRelaxations_OneControlMissing_NamesThatControlAlone(
+        bool confidential, bool senderConstrained, string expected)
+    {
+        var violations = SecurityProfileRequirements.FindUnreplacedRelaxations(
+        [
+            ("Half", new SecurityProfileRequirements
+            {
+                ForbidRefreshTokenRotation = true,
+                RequireConfidentialClient = confidential,
+                RequireSenderConstrainedTokens = senderConstrained,
+            }),
+        ]);
+
+        Assert.Single(violations);
+        Assert.Contains(expected, violations[0]);
+    }
+
+    /// <summary>
+    /// A profile added to the enum without a bundle resolves to nothing at all, which is the
+    /// weakest answer available and would let every guard above report clean over a deployment
+    /// running no profile. It has to be loud instead.
+    /// </summary>
+    [Fact]
+    public void Resolve_UnmappedProfile_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(
+            () => SecurityProfileRequirements.Resolve((ClientSecurityProfile)int.MaxValue));
     }
 }

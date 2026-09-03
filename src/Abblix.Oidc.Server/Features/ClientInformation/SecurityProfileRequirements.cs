@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// once the client is confidential and its tokens are bound to their sender, and it costs a user
 /// their session whenever a client fails to store the token it was handed. A relaxing flag is
 /// therefore admissible only when the same profile carries the controls that stand in for what it
-/// removes, which <see cref="FindUnreplacedRelaxations"/> checks for every profile at startup rather
+/// removes, which <see cref="FindUnreplacedRelaxations()"/> checks for every profile at startup rather
 /// than leaving to review.
 ///
 /// Every flag below names the validator that enforces it. That coupling is documented here on
@@ -104,7 +104,7 @@ public sealed record SecurityProfileRequirements
     /// The profile accepts only the server's issuer identifier, and only as a string, in the
     /// audience of a client authentication assertion, narrowing what the underlying specification
     /// otherwise permits. Enforced by
-    /// <c>Features.ClientAuthentication.ClientAssertionAudienceValidator</c>.
+    /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
     /// </summary>
     public bool RequireIssuerAudienceInClientAssertion { get; init; }
 
@@ -149,12 +149,23 @@ public sealed record SecurityProfileRequirements
     /// client that may be public and whose tokens anyone may replay.
     /// </remarks>
     public static IReadOnlyList<string> FindUnreplacedRelaxations()
+        => FindUnreplacedRelaxations(
+            Enum.GetValues<ClientSecurityProfile>()
+                .Select(profile => (profile.ToString(), Resolve(profile))));
+
+    /// <summary>
+    /// The walk itself, over named bundles supplied by the caller. Separate from the overload above
+    /// so a test can drive the mistake this guard exists to catch: a profile that forbids rotation
+    /// and carries neither replacement cannot be expressed by the profiles that ship, because they
+    /// are correct, and a guard nothing can make fail is not a guard.
+    /// </summary>
+    internal static IReadOnlyList<string> FindUnreplacedRelaxations(
+        IEnumerable<(string Name, SecurityProfileRequirements Requirements)> profiles)
     {
         var violations = new List<string>();
 
-        foreach (var profile in Enum.GetValues<ClientSecurityProfile>())
+        foreach (var (profile, requirements) in profiles)
         {
-            var requirements = Resolve(profile);
             if (!requirements.ForbidRefreshTokenRotation)
                 continue;
 
@@ -179,10 +190,18 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// Returns the control bundle a given profile mandates.
     /// </summary>
+    /// <remarks>
+    /// The default arm throws rather than answering <see cref="NoneRequirements"/>. A profile added
+    /// to the enum without a bundle here would otherwise resolve to no requirements at all, which
+    /// is silently the weakest answer available and reads at every call site as a deliberate one.
+    /// </remarks>
     public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile) => profile switch
     {
+        ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
-        _ => NoneRequirements,
+        _ => throw new InvalidOperationException(
+            $"{nameof(ClientSecurityProfile)}.{profile} has no requirements declared in " +
+            $"{nameof(SecurityProfileRequirements)}"),
     };
 
     /// <summary>
