@@ -52,7 +52,7 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// </para>
 /// <para>
 /// One framework status is outside all of this and stays there: 405 to a wrong method, which every
-/// management path answers. It belongs to no route, because no endpoint matched - which is also why an
+/// path on this surface answers. It belongs to no route, because no endpoint matched - which is also why an
 /// OpenAPI document has no operation to declare it on. That is a category exemption like the one this
 /// file refuses elsewhere, so it is written down rather than left to be noticed.
 /// </para>
@@ -88,7 +88,9 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         var answered = await DriveEveryOutcomeAsync();
 
         // A route that answered nothing would satisfy "declared covers answered" while proving no part
-        // of it, so the drive is required to have reached all eleven routes before anything is judged.
+        // of it, so the drive is required to have reached every route in the table below before
+        // anything is judged. No count is written here: the table is what says how many there are, and
+        // a number beside it is a second place to keep in step.
         var routes = MappedRoutes();
         var reached = answered.Select(answer => (answer.Method, answer.Pattern)).ToHashSet();
         Assert.True(
@@ -311,10 +313,16 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     }
 
     /// <summary>
-    /// One request per route against a host that refuses all of them for the same reason - nobody was
-    /// named, or nobody was granted the scope. Both refusals belong to the group rather than to any
-    /// handler, so they are driven over every route rather than sampled.
+    /// One request per route against a host that names nobody, or grants no scope. Both refusals
+    /// belong to the GROUP rather than to any handler, so they are driven over every route rather than
+    /// sampled.
     /// </summary>
+    /// <remarks>
+    /// Not every route here is refused, and the one that is not is the point of driving all of them.
+    /// The configuration document is mapped outside that group and answers 200 to a caller with no
+    /// identity and no scope - which is what discovery is for, and what would break silently if the
+    /// group ever grew to cover it.
+    /// </remarks>
     private async Task<List<Answer>> DriveEveryRouteAsync(
         Func<HttpContext, string?>? receiverId,
         Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null)
@@ -330,7 +338,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
             // A body every bodied route will BIND: a malformed one is refused by the framework before
-            // this package runs, which is a different answer from the one being driven here.
+            // this package runs, which is a different answer from the one being driven here. The
+            // routes that bind no body at all - the reads, and the configuration document - ignore it.
             request.Content = JsonContent.Create(new
             {
                 stream_id = "some-stream",
