@@ -181,93 +181,93 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         // Created, and the identifier every row below names.
         using (var created = await client.PostAsJsonAsync(
-            "/ssf/stream", new { delivery = PushDelivery, events_requested = new[] { SomeEvent } }, ct))
+            StreamRoute, new { delivery = PushDelivery, events_requested = new[] { SomeEvent } }, ct))
         {
-            answers.Add(new Answer("POST", StreamRoute, (int)created.StatusCode));
+            answers.Add(new Answer(HttpMethods.Post, StreamRoute, (int)created.StatusCode));
             var configuration = await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct);
             Assert.NotNull(configuration);
             _streamId = configuration.StreamId;
         }
 
         // A second stream for a receiver this transmitter allows one stream: 409 by policy.
-        await Record("POST", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Post, StreamRoute, StreamRoute,
             new { delivery = PushDelivery, events_requested = new[] { SomeEvent } });
 
         // A delivery method this transmitter does not serve: refused where the proposal is read.
-        await Record("POST", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Post, StreamRoute, StreamRoute,
             new { delivery = new { method = "urn:example:carrier-pigeon" } });
 
-        await Record("GET", StreamRoute, "/ssf/stream");
-        await Record("GET", StreamRoute, "/ssf/stream?stream_id=no-such-stream");
+        await Record(HttpMethods.Get, StreamRoute, StreamRoute);
+        await Record(HttpMethods.Get, StreamRoute, $"{StreamRoute}?stream_id={MissingStream}");
 
-        await Record("PATCH", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Patch, StreamRoute, StreamRoute,
             new { stream_id = _streamId, events_requested = new[] { SomeEvent } });
-        await Record("PATCH", StreamRoute, "/ssf/stream", new { stream_id = "no-such-stream" });
-        await Record("PATCH", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Patch, StreamRoute, StreamRoute, new { stream_id = MissingStream });
+        await Record(HttpMethods.Patch, StreamRoute, StreamRoute,
             new { stream_id = _streamId, delivery = new { method = "urn:example:carrier-pigeon" } });
 
-        await Record("PUT", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Put, StreamRoute, StreamRoute,
             new { stream_id = _streamId, delivery = PushDelivery, events_requested = new[] { SomeEvent } });
-        await Record("PUT", StreamRoute, "/ssf/stream", new { stream_id = "no-such-stream", delivery = PushDelivery });
+        await Record(HttpMethods.Put, StreamRoute, StreamRoute, new { stream_id = MissingStream, delivery = PushDelivery });
 
         // Replace with no delivery at all: a replacement states the whole configuration, so an absent
         // member is a request to serve nothing rather than a member left as it was.
-        await Record("PUT", StreamRoute, "/ssf/stream", new { stream_id = _streamId });
+        await Record(HttpMethods.Put, StreamRoute, StreamRoute, new { stream_id = _streamId });
 
-        await Record("GET", StatusRoute, $"/ssf/status?stream_id={_streamId}");
-        await Record("GET", StatusRoute, "/ssf/status?stream_id=no-such-stream");
-        await Record("GET", StatusRoute, "/ssf/status");
+        await Record(HttpMethods.Get, StatusRoute, $"{StatusRoute}?stream_id={_streamId}");
+        await Record(HttpMethods.Get, StatusRoute, $"{StatusRoute}?stream_id={MissingStream}");
+        await Record(HttpMethods.Get, StatusRoute, StatusRoute);
 
-        await Record("POST", StatusRoute, "/ssf/status", new { stream_id = _streamId, status = "paused" });
-        await Record("POST", StatusRoute, "/ssf/status", new { stream_id = "no-such-stream", status = "paused" });
-        await Record("POST", StatusRoute, "/ssf/status", new { stream_id = _streamId, status = "asleep" });
+        await Record(HttpMethods.Post, StatusRoute, StatusRoute, new { stream_id = _streamId, status = "paused" });
+        await Record(HttpMethods.Post, StatusRoute, StatusRoute, new { stream_id = MissingStream, status = "paused" });
+        await Record(HttpMethods.Post, StatusRoute, StatusRoute, new { stream_id = _streamId, status = "asleep" });
 
         // Back to enabled: verification below dispatches an event, and a paused stream is a different
         // question from the one this row asks.
-        await Record("POST", StatusRoute, "/ssf/status", new { stream_id = _streamId, status = "enabled" });
+        await Record(HttpMethods.Post, StatusRoute, StatusRoute, new { stream_id = _streamId, status = "enabled" });
 
         var subject = new { format = "opaque", id = "subject-1" };
-        await Record("POST", AddSubjectRoute, "/ssf/subjects:add", new { stream_id = _streamId, subject });
-        await Record("POST", AddSubjectRoute, "/ssf/subjects:add",
-            new { stream_id = "no-such-stream", subject });
+        await Record(HttpMethods.Post, AddSubjectRoute, AddSubjectRoute, new { stream_id = _streamId, subject });
+        await Record(HttpMethods.Post, AddSubjectRoute, AddSubjectRoute,
+            new { stream_id = MissingStream, subject });
 
         // A complex subject naming no member agrees with every event, so it is refused where it arrives.
-        await Record("POST", AddSubjectRoute, "/ssf/subjects:add",
+        await Record(HttpMethods.Post, AddSubjectRoute, AddSubjectRoute,
             new { stream_id = _streamId, subject = new { format = "complex" } });
 
-        await Record("POST", RemoveSubjectRoute, "/ssf/subjects:remove", new { stream_id = _streamId, subject });
-        await Record("POST", RemoveSubjectRoute, "/ssf/subjects:remove",
-            new { stream_id = "no-such-stream", subject });
+        await Record(HttpMethods.Post, RemoveSubjectRoute, RemoveSubjectRoute, new { stream_id = _streamId, subject });
+        await Record(HttpMethods.Post, RemoveSubjectRoute, RemoveSubjectRoute,
+            new { stream_id = MissingStream, subject });
 
-        await Record("POST", VerifyRoute, "/ssf/verify", new { stream_id = "no-such-stream" });
+        await Record(HttpMethods.Post, VerifyRoute, VerifyRoute, new { stream_id = MissingStream });
 
         // Contention on verification is driven FIRST, while the stream has never been verified: once
         // it has, every later request is throttled before it reaches the write, and the answer that
         // needs the lost write becomes unreachable through this route for the rest of the run.
         store.Refuse = true;
-        await Record("POST", VerifyRoute, "/ssf/verify", new { stream_id = _streamId });
+        await Record(HttpMethods.Post, VerifyRoute, VerifyRoute, new { stream_id = _streamId });
         store.Refuse = false;
 
-        await Record("POST", VerifyRoute, "/ssf/verify", new { stream_id = _streamId });
+        await Record(HttpMethods.Post, VerifyRoute, VerifyRoute, new { stream_id = _streamId });
 
         // The second request inside the stream's minimum interval is the throttle.
-        await Record("POST", VerifyRoute, "/ssf/verify", new { stream_id = _streamId });
+        await Record(HttpMethods.Post, VerifyRoute, VerifyRoute, new { stream_id = _streamId });
 
-        await Record("POST", PollRoute, $"/ssf/poll/{_streamId}", new { maxEvents = 1, returnImmediately = true });
-        await Record("POST", PollRoute, "/ssf/poll/no-such-stream", new { maxEvents = 1, returnImmediately = true });
+        await Record(HttpMethods.Post, PollRoute, $"{PollPathPrefix}/{_streamId}", new { maxEvents = 1, returnImmediately = true });
+        await Record(HttpMethods.Post, PollRoute, $"{PollPathPrefix}/{MissingStream}", new { maxEvents = 1, returnImmediately = true });
 
         // From here the store refuses the conditional write, so every path that ends in one reports
         // that nothing was written - as 202 where repeating the call is the way forward, and as 409
         // where the caller is being told someone else is changing the stream.
         store.Refuse = true;
 
-        await Record("PATCH", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Patch, StreamRoute, StreamRoute,
             new { stream_id = _streamId, events_requested = new[] { SomeEvent } });
-        await Record("PUT", StreamRoute, "/ssf/stream",
+        await Record(HttpMethods.Put, StreamRoute, StreamRoute,
             new { stream_id = _streamId, delivery = PushDelivery, events_requested = new[] { SomeEvent } });
-        await Record("POST", StatusRoute, "/ssf/status", new { stream_id = _streamId, status = "paused" });
-        await Record("POST", AddSubjectRoute, "/ssf/subjects:add", new { stream_id = _streamId, subject });
-        await Record("POST", RemoveSubjectRoute, "/ssf/subjects:remove", new { stream_id = _streamId, subject });
+        await Record(HttpMethods.Post, StatusRoute, StatusRoute, new { stream_id = _streamId, status = "paused" });
+        await Record(HttpMethods.Post, AddSubjectRoute, AddSubjectRoute, new { stream_id = _streamId, subject });
+        await Record(HttpMethods.Post, RemoveSubjectRoute, RemoveSubjectRoute, new { stream_id = _streamId, subject });
 
         store.Refuse = false;
 
@@ -300,11 +300,11 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         }
 
         // Deletion last: every row above needs the stream.
-        await Record("DELETE", StreamRoute, "/ssf/stream?stream_id=no-such-stream");
-        await Record("DELETE", StreamRoute, "/ssf/stream");
-        await Record("DELETE", StreamRoute, $"/ssf/stream?stream_id={_streamId}");
+        await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={MissingStream}");
+        await Record(HttpMethods.Delete, StreamRoute, StreamRoute);
+        await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={_streamId}");
 
-        await Record("GET", DocumentRoute, DocumentRoute);
+        await Record(HttpMethods.Get, DocumentRoute, DocumentRoute);
 
         answers.AddRange(await DriveEveryRouteAsync(receiverId: null));
         answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, grantedScopes: _ => []));
@@ -359,22 +359,26 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     private const string AddSubjectRoute = "/ssf/subjects:add";
     private const string RemoveSubjectRoute = "/ssf/subjects:remove";
     private const string VerifyRoute = "/ssf/verify";
-    private const string PollRoute = "/ssf/poll/{streamId}";
+    private const string PollRoute = $"{PollPathPrefix}/{{streamId}}";
     private const string DocumentRoute = "/.well-known/ssf-configuration";
+    private const string PollPathPrefix = "/ssf/poll";
+
+    /// <summary>A stream identifier this receiver has none of, so every lookup under it misses.</summary>
+    private const string MissingStream = "no-such-stream";
 
     private string _streamId = string.Empty;
 
     /// <summary>The routes that bind a body, which is where the framework's own refusals live.</summary>
     private List<(string Method, string Pattern, string Path)> BodyBoundRoutes() =>
     [
-        ("POST", StreamRoute, "/ssf/stream"),
-        ("PATCH", StreamRoute, "/ssf/stream"),
-        ("PUT", StreamRoute, "/ssf/stream"),
-        ("POST", StatusRoute, "/ssf/status"),
-        ("POST", AddSubjectRoute, "/ssf/subjects:add"),
-        ("POST", RemoveSubjectRoute, "/ssf/subjects:remove"),
-        ("POST", VerifyRoute, "/ssf/verify"),
-        ("POST", PollRoute, $"/ssf/poll/{_streamId}"),
+        (HttpMethods.Post, StreamRoute, StreamRoute),
+        (HttpMethods.Patch, StreamRoute, StreamRoute),
+        (HttpMethods.Put, StreamRoute, StreamRoute),
+        (HttpMethods.Post, StatusRoute, StatusRoute),
+        (HttpMethods.Post, AddSubjectRoute, AddSubjectRoute),
+        (HttpMethods.Post, RemoveSubjectRoute, RemoveSubjectRoute),
+        (HttpMethods.Post, VerifyRoute, VerifyRoute),
+        (HttpMethods.Post, PollRoute, $"{PollPathPrefix}/{_streamId}"),
     ];
 
     /// <summary>
@@ -384,23 +388,23 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     /// </summary>
     private static List<(string Method, string Pattern)> MappedRoutes() =>
     [
-        ("POST", StreamRoute),
-        ("GET", StreamRoute),
-        ("PATCH", StreamRoute),
-        ("PUT", StreamRoute),
-        ("DELETE", StreamRoute),
-        ("GET", StatusRoute),
-        ("POST", StatusRoute),
-        ("POST", AddSubjectRoute),
-        ("POST", RemoveSubjectRoute),
-        ("POST", VerifyRoute),
-        ("POST", PollRoute),
+        (HttpMethods.Post, StreamRoute),
+        (HttpMethods.Get, StreamRoute),
+        (HttpMethods.Patch, StreamRoute),
+        (HttpMethods.Put, StreamRoute),
+        (HttpMethods.Delete, StreamRoute),
+        (HttpMethods.Get, StatusRoute),
+        (HttpMethods.Post, StatusRoute),
+        (HttpMethods.Post, AddSubjectRoute),
+        (HttpMethods.Post, RemoveSubjectRoute),
+        (HttpMethods.Post, VerifyRoute),
+        (HttpMethods.Post, PollRoute),
 
         // Mapped by the same call and deliberately OUTSIDE the group, because discovery must answer
         // before a receiver has credentials. In scope here for exactly that reason: a route excused
         // from the comparison is a route whose document nobody checks, and this one used to publish an
         // inferred 200 while the eleven beside it were being made to state theirs.
-        ("GET", DocumentRoute),
+        (HttpMethods.Get, DocumentRoute),
     ];
 
     /// <summary>
