@@ -194,14 +194,50 @@ public sealed record SecurityProfileRequirements
     /// The default arm throws rather than answering <see cref="NoneRequirements"/>. A profile added
     /// to the enum without a bundle here would otherwise resolve to no requirements at all, which
     /// is silently the weakest answer available and reads at every call site as a deliberate one.
+    ///
+    /// A value the enum does not define is a different population and gets a different answer. It
+    /// arrives from outside - a configuration binder takes a number outside the range as it stands,
+    /// and a client store the host writes can hold anything - so it is data rather than a mistake in
+    /// this file, and the readers meeting it are handling a live request. Throwing there turns a
+    /// host's bad value into a 500 from the authorization and token endpoints, which is the reader's
+    /// failure rather than the writer's. It resolves to <see cref="StrictestRequirements"/> instead:
+    /// nothing here can say what the value meant, and of the answers available only the strictest
+    /// cannot quietly serve a client the deployment believed was constrained.
     /// </remarks>
     public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile) => profile switch
     {
         ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
+        _ when !Enum.IsDefined(profile) => StrictestRequirements,
         _ => throw new InvalidOperationException(
             $"{nameof(ClientSecurityProfile)}.{profile} has no requirements declared in " +
             $"{nameof(SecurityProfileRequirements)}"),
+    };
+
+    /// <summary>
+    /// The answer for a profile value nothing here can interpret: every control this type can demand,
+    /// demanded.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="Fapi2Requirements"/>, which would tie the fallback to whichever
+    /// profile happens to be strictest today, and deliberately not <see cref="NoneRequirements"/>,
+    /// which would hand a client that named a profile the absence of one.
+    ///
+    /// <see cref="ForbidRefreshTokenRotation"/> stays false here, and that is the strict setting
+    /// rather than an omission: it is the one flag on this type that REMOVES a control, so demanding
+    /// it would weaken the bundle meant to be the strongest available.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements StrictestRequirements = new()
+    {
+        RequirePkce = true,
+        RequireS256CodeChallenge = true,
+        RequirePushedAuthorizationRequests = true,
+        RequireSenderConstrainedTokens = true,
+        RequireCodeResponseTypeOnly = true,
+        RequireStrictRequestObjectProcessing = true,
+        RequireConfidentialClient = true,
+        RequireKeyBasedClientAuthentication = true,
+        RequireIssuerAudienceInClientAssertion = true,
     };
 
     /// <summary>

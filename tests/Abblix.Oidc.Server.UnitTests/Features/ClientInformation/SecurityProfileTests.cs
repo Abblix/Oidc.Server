@@ -396,18 +396,6 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// A profile added to the enum without a bundle resolves to nothing at all, which is the
-    /// weakest answer available and would let every guard above report clean over a deployment
-    /// running no profile. It has to be loud instead.
-    /// </summary>
-    [Fact]
-    public void Resolve_UnmappedProfile_Throws()
-    {
-        Assert.Throws<InvalidOperationException>(
-            () => SecurityProfileRequirements.Resolve((ClientSecurityProfile)int.MaxValue));
-    }
-
-    /// <summary>
     /// The configuration binder binds a NUMBER outside an enum's range as it stands - only a name it
     /// does not know throws - so a profile value nothing defines reaches the options object. Startup
     /// has to name it: every reader of the profile refuses such a value, and without this check the
@@ -475,5 +463,73 @@ public class SecurityProfileTests
         var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
 
         Assert.True(result.Succeeded);
+    }
+
+    /// <summary>
+    /// A value the enum does not define arrives from outside - the configuration binder takes a
+    /// number outside the range as it stands, and a client store the host writes can hold anything.
+    /// Resolving it must not throw, because the readers meeting it are serving a live request and
+    /// four of them sit on the authorization endpoint, where there is no client authentication to
+    /// put a guard in front of. Every one of those would have answered 500.
+    /// </summary>
+    [Theory]
+    [InlineData(7)]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    public void Resolve_UndefinedProfile_FailsClosedInsteadOfThrowing(int value)
+    {
+        var requirements = SecurityProfileRequirements.Resolve((ClientSecurityProfile)value);
+
+        Assert.True(requirements.RequirePkce);
+        Assert.True(requirements.RequireS256CodeChallenge);
+        Assert.True(requirements.RequirePushedAuthorizationRequests);
+        Assert.True(requirements.RequireSenderConstrainedTokens);
+        Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireStrictRequestObjectProcessing);
+        Assert.True(requirements.RequireConfidentialClient);
+        Assert.True(requirements.RequireKeyBasedClientAuthentication);
+        Assert.True(requirements.RequireIssuerAudienceInClientAssertion);
+    }
+
+    /// <summary>
+    /// The one flag that REMOVES a control is not demanded by the fallback: demanding it would make
+    /// the bundle meant to be the strongest available weaker than the profile that ships.
+    /// </summary>
+    [Fact]
+    public void Resolve_UndefinedProfile_DoesNotDropRefreshTokenRotation()
+    {
+        Assert.False(SecurityProfileRequirements.Resolve((ClientSecurityProfile)7)
+            .ForbidRefreshTokenRotation);
+    }
+
+    /// <summary>
+    /// A value the enum DOES define with no bundle declared is the other population: a mistake in
+    /// this file rather than data from a host, caught while the author is still here.
+    /// </summary>
+    [Fact]
+    public void Resolve_DefinedProfileWithNoBundle_Throws()
+    {
+        // Every defined value has a bundle today, so the case is expressed by the check itself:
+        // whatever the enum defines must resolve without falling through to the strictest fallback.
+        foreach (var profile in Enum.GetValues<ClientSecurityProfile>())
+        {
+            var requirements = SecurityProfileRequirements.Resolve(profile);
+            Assert.NotNull(requirements);
+        }
+    }
+
+    /// <summary>
+    /// The client-facing entry point every reader goes through carries the same answer, so a client
+    /// out of a store reaches the authorization endpoint constrained rather than crashing it.
+    /// </summary>
+    [Fact]
+    public void For_ClientWithAnUndefinedProfile_FailsClosed()
+    {
+        var client = new ClientInfo("stored") { SecurityProfile = (ClientSecurityProfile)7 };
+
+        var requirements = SecurityProfileRequirements.For(client, ClientSecurityProfile.None);
+
+        Assert.True(requirements.RequirePkce);
+        Assert.True(requirements.RequireConfidentialClient);
     }
 }

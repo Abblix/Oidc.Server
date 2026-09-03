@@ -89,10 +89,9 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// A store the HOST writes can hand back a profile value the enum does not define - the startup
-    /// check covers the configured clients and cannot reach a store. Resolving such a value throws,
-    /// so the decorator refuses instead: an exception here would be a 500 from the token endpoint,
-    /// which is the failure this class exists to remove.
+    /// A store the HOST writes can hand back a profile value the enum does not define, and no
+    /// startup check can reach a host's store. Such a value resolves to the strictest bundle, so a
+    /// client that cannot satisfy it is refused here like any other - the refusal is not special.
     /// </summary>
     [Fact]
     public async Task StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull()
@@ -100,13 +99,34 @@ public class SecurityProfileClientAuthenticatorTests
         var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
         Authenticates(inner, new ClientInfo(ClientId)
         {
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
 
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// And a client that DOES satisfy the strictest bundle is served, which is what keeps the
+    /// refusal above from being "an undefined profile refuses everything" - a reading under which
+    /// the value would be a denial of service rather than a constraint.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientWithAnUndefinedProfileButCompliant_ShouldAuthenticate()
+    {
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            SecurityProfile = (ClientSecurityProfile)7,
+        };
+        Authenticates(inner, clientInfo);
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        Assert.Same(clientInfo, result);
     }
 
     /// <summary>
