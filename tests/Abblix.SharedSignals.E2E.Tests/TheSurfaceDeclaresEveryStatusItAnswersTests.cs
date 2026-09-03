@@ -51,6 +51,12 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// named exemption is where a declaration nobody drives goes to live.
 /// </para>
 /// <para>
+/// One framework status is outside all of this and stays there: 405 to a wrong method, which every
+/// management path answers. It belongs to no route, because no endpoint matched - which is also why an
+/// OpenAPI document has no operation to declare it on. That is a category exemption like the one this
+/// file refuses elsewhere, so it is written down rather than left to be noticed.
+/// </para>
+/// <para>
 /// The statuses the FRAMEWORK answers are driven too - 415 to a wrong media type, 400 to a body that
 /// does not bind - rather than left out as "not this package's". A receiver meets them on these routes,
 /// so its client needs a branch for them whoever produced them, and the moment they are excused by
@@ -110,6 +116,17 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
                 disagreements.Add(
                     $"{method} {pattern} declares {string.Join(", ", swallowed)} and publishes "
                         + $"{string.Join(", ", published.Order())}");
+            }
+
+            // And the other direction, which is what the original defect actually looked like: an
+            // operation publishing a status nobody declared, INFERRED by the pipeline because the
+            // declarations it was given were thrown away. Unreachable today only because every route
+            // here publishes something, and that is a property of the group rather than of this check.
+            var invented = published.Except(declared).Order().ToList();
+            if (invented.Count > 0)
+            {
+                disagreements.Add(
+                    $"{method} {pattern} publishes {string.Join(", ", invented)} and declares no such thing");
             }
 
             var undeclared = sent.Except(declared).Order().ToList();
@@ -255,6 +272,10 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         // What the framework answers before this package's code runs. Driven rather than exempted:
         // a body-bound route answers these to a caller who got the media type or the JSON wrong, and a
         // status a receiver can meet is a status its client needs a branch for, whoever produced it.
+        // Without a stream the poll path collapses to /ssf/poll/, whose answer is a 404 that route
+        // already declares - so the two rows meant for it would vanish with the suite still green.
+        Assert.NotEmpty(_streamId);
+
         foreach (var (method, pattern, path) in BodyBoundRoutes())
         {
             using (var wrongType = new HttpRequestMessage(new HttpMethod(method), path)

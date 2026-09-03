@@ -732,11 +732,19 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// its outcomes as status codes and nothing else. <see cref="AnswersWithBody{TBody}"/> is for the
     /// successes that do carry one.
     /// <para>
-    /// Only THREE of the refusals say anything beyond their status. 400, 401 and 403 are built as a
-    /// challenge and carry a <c>WWW-Authenticate</c> line naming the reason; 202, 404, 409 and 429 go
-    /// through <see cref="Render{TBody}"/> as a bare status, and the description their
-    /// <c>ManagementResult</c> carried is dropped there - it exists for the operator's logs, not for
-    /// the wire. So a receiver diagnosing one of those four has the status and nothing else.
+    /// A refusal says something beyond its status exactly when it is built as a
+    /// <see cref="ChallengeResult"/>, which carries a <c>WWW-Authenticate</c> line naming the reason.
+    /// Three places build one: <see cref="Unauthenticated"/>, <see cref="EnforceScopeAsync"/> and
+    /// <see cref="MissingRequiredParameter"/>. Everything else is a bare status - anything rendered by
+    /// <see cref="Render{TBody}"/>, whose <c>ManagementResult</c> description is dropped there because
+    /// it exists for the operator's logs rather than for the wire, and the framework's own refusals
+    /// besides.
+    /// </para>
+    /// <para>
+    /// Said as a property rather than as a list of codes on purpose: 400 is on BOTH sides of it. The
+    /// one for a required parameter that names nothing is a challenge, and the one for a delivery
+    /// method this transmitter cannot serve is bare, so any enumeration by status code is wrong about
+    /// one of them whichever side it puts 400 on.
     /// </para>
     /// </remarks>
     private static void Answers<TBuilder>(this TBuilder builder, params int[] statusCodes)
