@@ -31,8 +31,25 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
         // still refuse, instead of being left to whoever reviews the next profile.
         failures.AddRange(SecurityProfileRequirements.FindUnreplacedRelaxations());
 
+        // A profile is an enum, and the configuration binder does not check that a value it binds is
+        // one the enum defines: a name it does not know throws while a NUMBER outside the range is
+        // bound as it stands. Nothing downstream can serve such a value, so it is named here, at
+        // startup - the alternative is that the deployment starts and every endpoint requiring a
+        // client answers 500 instead.
+        failures.AddRange(UndefinedProfile(options.DefaultSecurityProfile, "DefaultSecurityProfile"));
+
         foreach (var client in options.Clients)
         {
+            if (client.SecurityProfile is { } clientProfile)
+            {
+                var undefined = UndefinedProfile(clientProfile, $"Client '{client.ClientId}'");
+                if (undefined.Count > 0)
+                {
+                    failures.AddRange(undefined);
+                    continue;
+                }
+            }
+
             var effectiveProfile = client.SecurityProfile ?? options.DefaultSecurityProfile;
 
             foreach (var violation in
@@ -49,4 +66,13 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
     }
+
+    /// <summary>
+    /// Names a profile value the enum does not define, as the single-element list the caller adds to
+    /// its failures. Empty for a defined value, which is what makes it usable as a guard.
+    /// </summary>
+    private static IReadOnlyList<string> UndefinedProfile(ClientSecurityProfile profile, string where)
+        => Enum.IsDefined(profile)
+            ? []
+            : [$"{where}: {(int)profile} is not a security profile this server defines."];
 }

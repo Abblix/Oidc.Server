@@ -406,4 +406,62 @@ public class SecurityProfileTests
         Assert.Throws<InvalidOperationException>(
             () => SecurityProfileRequirements.Resolve((ClientSecurityProfile)int.MaxValue));
     }
+
+    /// <summary>
+    /// The configuration binder binds a NUMBER outside an enum's range as it stands - only a name it
+    /// does not know throws - so a profile value nothing defines reaches the options object. Startup
+    /// has to name it: every reader of the profile refuses such a value, and without this check the
+    /// deployment starts and answers 500 to the first request that carries a client.
+    /// </summary>
+    [Fact]
+    public void Validate_UndefinedDefaultProfile_Fails()
+    {
+        var options = new OidcOptions { DefaultSecurityProfile = (ClientSecurityProfile)7 };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, f => f.Contains("DefaultSecurityProfile"));
+    }
+
+    /// <summary>
+    /// The same for a client naming its own profile, and it is checked whether or not the server-wide
+    /// default is sound.
+    /// </summary>
+    [Fact]
+    public void Validate_UndefinedClientProfile_Fails()
+    {
+        var options = new OidcOptions
+        {
+            Clients =
+            [
+                new ClientInfo("client-1")
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                    SecurityProfile = (ClientSecurityProfile)9,
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, f => f.Contains("client-1"));
+    }
+
+    /// <summary>
+    /// Both defined profiles pass, which is what keeps the two refusals above from being a check that
+    /// refuses every configuration.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    public void Validate_DefinedProfile_Succeeds(ClientSecurityProfile profile)
+    {
+        var options = new OidcOptions { DefaultSecurityProfile = profile };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Succeeded);
+    }
 }
