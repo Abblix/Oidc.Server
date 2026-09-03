@@ -45,7 +45,7 @@ public sealed class ClockOffsetToleranceValidator : IValidateOptions<OidcOptions
                 $"Set a value between zero and {Ceiling}.");
         }
 
-        if (tolerance > Ceiling)
+        if (Ceiling < tolerance)
         {
             return ValidateOptionsResult.Fail(
                 $"{nameof(OidcOptions.ClockOffsetTolerance)} is {tolerance}, above the {Ceiling} " +

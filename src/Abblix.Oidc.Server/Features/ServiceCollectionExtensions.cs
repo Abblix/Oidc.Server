@@ -162,6 +162,13 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockOffsetToleranceValidator>());
 
+        // One seam rather than five: every token this server validates meets the same clock, so the
+        // tolerance is carried by the validator instead of being repeated at each place that builds
+        // validation parameters - where the site that forgot it would refuse tokens the others
+        // accept, intermittently, on whichever pair of machines drifted.
+        services.AddOptions<ClockOffsetOptions>().Configure<IOptions<OidcOptions>>(
+            (clockOffset, oidcOptions) => clockOffset.Tolerance = oidcOptions.Value.ClockOffsetTolerance);
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
         return services

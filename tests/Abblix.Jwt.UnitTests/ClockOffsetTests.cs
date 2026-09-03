@@ -32,14 +32,17 @@ public class ClockOffsetTests
     private static readonly DateTimeOffset Now =
         new(2027, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private static readonly IServiceProvider ServiceProvider = CreateServiceProvider();
-
-    private static IServiceProvider CreateServiceProvider()
+    /// <summary>
+    /// The tolerance belongs to the clock, so a case that is about a different tolerance gets a
+    /// different container rather than passing a value per call.
+    /// </summary>
+    private static IServiceProvider CreateServiceProvider(TimeSpan tolerance)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         services.AddLogging();
         services.AddJsonWebTokens();
+        services.Configure<ClockOffsetOptions>(o => o.Tolerance = tolerance);
         return services.BuildServiceProvider();
     }
 
@@ -54,7 +57,7 @@ public class ClockOffsetTests
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? notBefore = null,
         DateTimeOffset? expiresAt = null,
-        TimeSpan clockSkew = default)
+        TimeSpan? tolerance = null)
     {
         var claims = new Dictionary<string, object>();
         if (issuedAt.HasValue) claims["iat"] = issuedAt.Value.ToUnixTimeSeconds();
@@ -64,14 +67,14 @@ public class ClockOffsetTests
         var jwt = EncodeBase64Url("""{"alg":"none"}""")
                   + "." + EncodeBase64Url(JsonSerializer.Serialize(claims)) + ".";
 
-        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var validator = CreateServiceProvider(tolerance ?? TimeSpan.FromSeconds(10))
+            .GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
             ResolveTokenDecryptionKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
-            ClockSkew = clockSkew,
             // Lifetime alone: the tokens here carry no iss, aud or signature, and requiring any of
             // those would refuse them for a reason that is not what these cases are about.
             Options = ValidationOptions.ValidateLifetime,
@@ -92,7 +95,7 @@ public class ClockOffsetTests
     {
         var result = await Validate(
             issuedAt: Now.AddSeconds(secondsAhead),
-            clockSkew: TimeSpan.FromSeconds(10));
+            tolerance: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -106,7 +109,7 @@ public class ClockOffsetTests
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            clockSkew: TimeSpan.FromSeconds(10));
+            tolerance: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -123,7 +126,7 @@ public class ClockOffsetTests
     {
         var result = await Validate(
             issuedAt: Now.AddSeconds(secondsAhead),
-            clockSkew: TimeSpan.FromSeconds(10));
+            tolerance: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("future", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
@@ -137,7 +140,7 @@ public class ClockOffsetTests
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            clockSkew: TimeSpan.FromSeconds(10));
+            tolerance: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -176,8 +179,9 @@ public class ClockOffsetTests
     [Fact]
     public async Task WithoutTolerance_TheInstantItselfIsAccepted()
     {
-        Assert.True((await Validate(issuedAt: Now)).TryGetSuccess(out _));
-        Assert.True((await Validate(issuedAt: Now.AddSeconds(1))).TryGetFailure(out _));
+        Assert.True((await Validate(issuedAt: Now, tolerance: TimeSpan.Zero)).TryGetSuccess(out _));
+        Assert.True((await Validate(issuedAt: Now.AddSeconds(1), tolerance: TimeSpan.Zero))
+            .TryGetFailure(out _));
     }
 
     /// <summary>

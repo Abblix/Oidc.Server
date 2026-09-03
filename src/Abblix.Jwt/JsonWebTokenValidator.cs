@@ -13,6 +13,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 using System.Buffers.Text;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt;
 
@@ -31,13 +32,16 @@ namespace Abblix.Jwt;
 /// <c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c> at validation time. With no
 /// handler registered (the default) the library understands no crit extensions and rejects
 /// every well-formed 'crit' header.</param>
+/// <param name="clockOffset">How far ahead of this machine's clock a token's iat or nbf may
+/// be and still be accepted - a property of the clock, shared by every caller.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
     EncryptionAlgorithmsProvider encryptionAlgorithmsProvider,
-    IServiceProvider serviceProvider) : IJsonWebTokenValidator
+    IServiceProvider serviceProvider,
+    IOptions<ClockOffsetOptions> clockOffset) : IJsonWebTokenValidator
 {
     /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
@@ -632,39 +636,49 @@ internal class JsonWebTokenValidator(
         if (!notBefore.HasValue && !expiresAt.HasValue && !issuedAt.HasValue)
             return token;
 
+        return CompareTimestamps(token, parameters, notBefore, expiresAt, issuedAt);
+    }
+
+    /// <summary>
+    /// Compares the three timestamps a token may carry against this server's clock, in the order a
+    /// sender needs to hear about them.
+    /// </summary>
+    /// <remarks>
+    /// The order is a decision, not an accident. A token carrying both <c>nbf</c> and <c>iat</c>
+    /// ahead of this clock is post-dated, and "not yet valid" is what its sender needs to hear;
+    /// answering about <c>iat</c> there would change which reason a caller is given for a refusal
+    /// that already existed.
+    ///
+    /// Only the future direction of <c>iat</c> is checked. An <c>iat</c> in the past says nothing on
+    /// its own: how old a token may be is a question about the token's kind, which the caller
+    /// answers with <c>exp</c> or with its own maximum age, and answering it here would refuse every
+    /// long-lived token this validator also serves. An <c>iat</c> ahead of this clock is not open
+    /// the same way, because the token claims to have been created at an instant that has not
+    /// happened.
+    /// </remarks>
+    private Result<JsonWebToken, JwtValidationError> CompareTimestamps(
+        JsonWebToken token,
+        ValidationParameters parameters,
+        DateTimeOffset? notBefore,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? issuedAt)
+    {
         var utcNow = timeProvider.GetUtcNow();
 
-        if (notBefore.HasValue)
-        {
-            var notBeforeUtc = notBefore.Value.ToUniversalTime();
-            if (utcNow + parameters.ClockSkew < notBeforeUtc)
-                return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
-        }
+        // The FUTURE direction is bounded by the clock's own tolerance, the same for every caller.
+        // ClockSkew answers the other direction, where a caller may legitimately want a token to
+        // stay usable a little past its expiry - a generous value there must not silently widen how
+        // far ahead a token may claim to have been minted.
+        var ahead = utcNow + clockOffset.Value.Tolerance;
 
-        if (expiresAt.HasValue)
-        {
-            var expiresUtc = expiresAt.Value.ToUniversalTime();
-            if (expiresUtc <= utcNow - parameters.ClockSkew)
-                return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
-        }
+        if (notBefore.HasValue && ahead < notBefore.Value.ToUniversalTime())
+            return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
 
-        // Last of the three on purpose. A token carrying both nbf and iat ahead of this clock is
-        // post-dated, and "not yet valid" is what its sender needs to hear; answering about iat
-        // there would change which reason a caller is given for a refusal that already existed.
-        // The presence test above admits a token carrying iat alone, which is the shape a client
-        // assertion takes when it names only when it was minted.
-        //
-        // Only the future direction is checked. An iat in the past says nothing on its own: how
-        // old a token may be is a question about the token's kind, which the caller answers with
-        // exp or with its own maximum age, and answering it here would refuse every long-lived
-        // token this validator also serves. An iat ahead of this clock is not open the same way -
-        // the token claims to have been created at an instant that has not happened.
-        if (issuedAt.HasValue)
-        {
-            var issuedAtUtc = issuedAt.Value.ToUniversalTime();
-            if (utcNow + parameters.ClockSkew < issuedAtUtc)
-                return new JwtValidationError(JwtError.InvalidToken, "Token issued in the future");
-        }
+        if (expiresAt.HasValue && expiresAt.Value.ToUniversalTime() <= utcNow - parameters.ClockSkew)
+            return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
+
+        if (issuedAt.HasValue && ahead < issuedAt.Value.ToUniversalTime())
+            return new JwtValidationError(JwtError.InvalidToken, "Token issued in the future");
 
         return token;
     }

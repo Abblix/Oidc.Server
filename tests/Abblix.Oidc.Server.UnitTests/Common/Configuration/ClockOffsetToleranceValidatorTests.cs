@@ -9,6 +9,10 @@
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
 using Xunit;
+using Abblix.Jwt;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
@@ -70,6 +74,30 @@ public class ClockOffsetToleranceValidatorTests
 
         Assert.True(result.Failed);
         Assert.Contains(nameof(OidcOptions.ClockOffsetTolerance), result.Message!);
+    }
+
+    /// <summary>
+    /// The setting has to REACH the clock, which no case measured before: the tolerance is read by
+    /// the token validator, and a host edits it on the OIDC options. Delete the line that carries it
+    /// across and every other case here still passes, which is what this one refuses.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(30)]
+    [InlineData(60)]
+    public void TheSetting_ReachesTheClock(int seconds)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddOptions<OidcOptions>()
+            .Configure(o => o.ClockOffsetTolerance = TimeSpan.FromSeconds(seconds));
+        services.AddClientInformation();
+
+        var clockOffset = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<ClockOffsetOptions>>();
+
+        Assert.Equal(TimeSpan.FromSeconds(seconds), clockOffset.Value.Tolerance);
     }
 
     /// <summary>
