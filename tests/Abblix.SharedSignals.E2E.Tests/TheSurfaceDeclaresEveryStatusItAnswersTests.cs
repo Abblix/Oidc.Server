@@ -302,6 +302,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         await Record("DELETE", StreamRoute, "/ssf/stream");
         await Record("DELETE", StreamRoute, $"/ssf/stream?stream_id={_streamId}");
 
+        await Record("GET", DocumentRoute, DocumentRoute);
+
         answers.AddRange(await DriveEveryRouteAsync(receiverId: null));
         answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, grantedScopes: _ => []));
 
@@ -349,6 +351,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
     private const string RemoveSubjectRoute = "/ssf/subjects:remove";
     private const string VerifyRoute = "/ssf/verify";
     private const string PollRoute = "/ssf/poll/{streamId}";
+    private const string DocumentRoute = "/.well-known/ssf-configuration";
 
     private string _streamId = string.Empty;
 
@@ -383,6 +386,12 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         ("POST", RemoveSubjectRoute),
         ("POST", VerifyRoute),
         ("POST", PollRoute),
+
+        // Mapped by the same call and deliberately OUTSIDE the group, because discovery must answer
+        // before a receiver has credentials. In scope here for exactly that reason: a route excused
+        // from the comparison is a route whose document nobody checks, and this one used to publish an
+        // inferred 200 while the eleven beside it were being made to state theirs.
+        ("GET", DocumentRoute),
     ];
 
     /// <summary>

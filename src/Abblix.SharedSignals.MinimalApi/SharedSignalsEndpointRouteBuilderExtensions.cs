@@ -273,12 +273,19 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
         var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
-        return endpoints.MapGet(
+        // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
+        // discovery has to work before a receiver has any. Declared all the same, because an
+        // undeclared status is INFERRED into the document rather than left out, and an inference that
+        // happens to be right is indistinguishable from one that is not.
+        var document = endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SharedSignalsTransmitterOptions current, PollEndpointLocator pollEndpoints) =>
                 Results.Json(ConfigurationDocumentOf(current, pollEndpoints, advertisedPrefix)));
+
+        document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
+        return document;
     }
 
     /// <summary>
