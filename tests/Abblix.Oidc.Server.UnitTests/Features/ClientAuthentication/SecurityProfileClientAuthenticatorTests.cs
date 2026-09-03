@@ -6,12 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -30,14 +33,63 @@ public class SecurityProfileClientAuthenticatorTests
 
     private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
         CreateAuthenticator(ClientSecurityProfile defaultProfile)
+        => CreateAuthenticator(defaultProfile, NullLogger<SecurityProfileClientAuthenticator>.Instance);
+
+    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
+        CreateAuthenticator(ClientSecurityProfile defaultProfile, ILogger<SecurityProfileClientAuthenticator> logger)
     {
         var inner = new Mock<IClientAuthenticator>();
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
             Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile }),
-            NullLogger<SecurityProfileClientAuthenticator>.Instance);
+            logger);
 
         return (authenticator, inner);
+    }
+
+    /// <summary>
+    /// The value that cannot be interpreted is said out loud here, because this is the only place a
+    /// client out of a host-written store is met by name. Without it the operator sees only the
+    /// consequence - refusals citing requirements no configuration of theirs sets.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientWithAnUndefinedProfile_ShouldBeNamedInTheLog()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            SecurityProfile = (ClientSecurityProfile)7,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning);
+        Assert.Contains("7", entry.Message);
+        Assert.Contains(ClientId, entry.Message);
+    }
+
+    /// <summary>
+    /// And a profile this server does define says nothing, or the line would be noise on every
+    /// request rather than a signal about one client.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientWithADefinedProfile_ShouldNotBeNamedInTheLog()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            SecurityProfile = ClientSecurityProfile.Fapi2,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        Assert.DoesNotContain(logger.Entries, e => e.Level == LogLevel.Warning);
     }
 
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
@@ -206,5 +258,26 @@ public class SecurityProfileClientAuthenticatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         Assert.Null(await authenticator.TryAuthenticateClientAsync(new ClientRequest()));
+    }
+
+    /// <summary>
+    /// A logger that keeps what it was told. Hand-written rather than mocked because the type under
+    /// test is internal, and a dynamic proxy cannot be built over a generic logger closed on it.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }
