@@ -51,15 +51,16 @@ internal partial class SecurityProfileClientAuthenticator(
 
         var profile = clientInfo.SecurityProfile ?? options.Value.DefaultSecurityProfile;
 
-        // Said here and nowhere else, because this is the only place a client out of a host-written
-        // store is met by name. The value cannot be interpreted, so it is held to every control this
-        // server can demand - and without this line the operator sees only the consequence: refusals
-        // citing requirements no configuration of theirs sets. It does not refuse: whether such a
-        // client can work is answered by the requirements below, like any other.
+        // Said where a client is met after proving who it is. The value cannot be interpreted, so
+        // the client is held to every control this server can demand - and without this line the
+        // operator sees only the consequence: refusals citing requirements no configuration of
+        // theirs sets. It does not refuse; whether such a client can work is answered by the
+        // requirements below, like any other.
         //
-        // It covers the endpoints that authenticate a client and no others. A request to the
-        // authorization endpoint presents no credential, so it never passes through here, and a
-        // client whose only traffic is /authorize is named nowhere.
+        // It covers the endpoints that authenticate a client and no others. The authorization
+        // endpoint reads the same stored client by id and could say the same thing, but nothing
+        // there presents a credential, so a client whose only traffic is /authorize is named
+        // nowhere today.
         if (!Enum.IsDefined(profile))
         {
             LogProfileIsNotOneThisServerDefines(clientInfo.ClientId, (int)profile);

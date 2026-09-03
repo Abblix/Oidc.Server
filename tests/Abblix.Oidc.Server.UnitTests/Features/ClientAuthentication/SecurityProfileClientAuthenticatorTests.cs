@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -66,7 +67,14 @@ public class SecurityProfileClientAuthenticatorTests
 
         await authenticator.TryAuthenticateClientAsync(new ClientRequest());
 
-        var entry = Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning);
+        // Selected by EVENT, not by level: this class emits a second warning of its own, and a
+        // fixture that also tripped it would satisfy both assertions off the wrong line.
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .ProfileIsNotOneThisServerDefines);
+
+        Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Contains("7", entry.Message);
         Assert.Contains(ClientId, entry.Message);
     }
@@ -89,7 +97,10 @@ public class SecurityProfileClientAuthenticatorTests
 
         await authenticator.TryAuthenticateClientAsync(new ClientRequest());
 
-        Assert.DoesNotContain(logger.Entries, e => e.Level == LogLevel.Warning);
+        Assert.DoesNotContain(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .ProfileIsNotOneThisServerDefines);
     }
 
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
@@ -266,7 +277,7 @@ public class SecurityProfileClientAuthenticatorTests
     /// </summary>
     private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
     {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public List<(LogLevel Level, int EventId, string Message)> Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -278,6 +289,6 @@ public class SecurityProfileClientAuthenticatorTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, formatter(state, exception)));
+            => Entries.Add((logLevel, eventId.Id, formatter(state, exception)));
     }
 }
