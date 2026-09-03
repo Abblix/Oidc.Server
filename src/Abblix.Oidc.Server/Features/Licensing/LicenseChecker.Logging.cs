@@ -32,10 +32,10 @@ partial class LicenseChecker
         IEnumerable<string> ClientIds);
 
     [LoggerMessage(
-        EventId = LogEvents.Licensing.LicenseChecker.IssuerNotInWhitelist,
+        EventId = LogEvents.Licensing.LicenseChecker.IssuerNotAllowed,
         Level = LogLevel.Critical,
         Message = "The issuer {Issuer} is not allowed by current license. The list of allowed issuers is {@Issuers}")]
-    private static partial void LogIssuerNotInWhitelist(
+    private static partial void LogIssuerNotAllowed(
         ILogger logger,
         string Issuer,
         IEnumerable<string>? Issuers);

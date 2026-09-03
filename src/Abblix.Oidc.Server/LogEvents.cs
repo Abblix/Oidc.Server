@@ -653,7 +653,7 @@ internal static class LogEvents
 
             public const int ClientLimitExceededByMargin = Base + 1;
             public const int ClientLimitExceeded = Base + 2;
-            public const int IssuerNotInWhitelist = Base + 3;
+            public const int IssuerNotAllowed = Base + 3;
             public const int IssuerLimitExceeded = Base + 4;
         }
 

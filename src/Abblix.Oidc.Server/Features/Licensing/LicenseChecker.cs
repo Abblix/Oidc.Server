@@ -127,7 +127,7 @@ public static partial class LicenseChecker
             if (LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))
             {
                 // Log error: the allowed list of issuers does not contain current value.
-                LogIssuerNotInWhitelist(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
+                LogIssuerNotAllowed(LicenseLogger.Instance, issuer, currentLicense.ValidIssuers);
             }
 
             throw new InvalidOperationException("The license terms violation detected");
