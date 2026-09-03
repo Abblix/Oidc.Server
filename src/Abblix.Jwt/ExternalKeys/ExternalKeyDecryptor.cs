@@ -19,7 +19,7 @@ namespace Abblix.Jwt.ExternalKeys;
 /// key's <c>kid</c>. RSA decryption and symmetric unwrap are single remote calls; ECDH-ES sends only the
 /// agreement to the custodian and runs the Concat KDF and any AES key unwrap in process on the returned shared
 /// secret. Anything the custodian cannot serve (an algorithm with no external form, or one that does not match
-/// the key type) returns null, so the RFC 7516 §11.5 mitigation upstream sees a uniform failure.
+/// the key type) returns null, so the RFC 7516 section 11.5 mitigation upstream sees a uniform failure.
 /// </summary>
 internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProvider serviceProvider)
     : IContentKeyDecryptor
@@ -35,7 +35,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
         CancellationToken cancellationToken)
     {
         // 'algorithm' and 'kid' come from the attacker-supplied JWE header, so anything this cannot handle
-        // returns null and the caller substitutes a random CEK for a uniform failure (RFC 7516 §11.5). The kid
+        // returns null and the caller substitutes a random CEK for a uniform failure (RFC 7516 section 11.5). The kid
         // published in the token IS the custodian's handle, so an external key must carry one.
         if (key.KeyId is not { } keyId)
             return null;
@@ -77,7 +77,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
         // null (mirroring the in-process EcdhEsKeyEncryptor.TryDecryptKey) rather than throwing.
         try
         {
-            // RFC 7518 §4.6.2: when both 'apu' and 'apv' are present they must differ, otherwise the producer
+            // RFC 7518 section 4.6.2: when both 'apu' and 'apv' are present they must differ, otherwise the producer
             // and recipient identities collapse and the KDF binding loses meaning.
             var apu = header.AgreementPartyUInfo;
             var apv = header.AgreementPartyVInfo;
@@ -91,7 +91,7 @@ internal sealed class ExternalKeyDecryptor(IKeyCustodian custodian, IServiceProv
             if (!string.Equals(ephemeralKey.Curve, recipientKey.Curve, StringComparison.Ordinal))
                 return null;
 
-            // Z is the raw ECDH shared secret (NIST SP 800-56A / RFC 7518 §4.6); here it comes from the
+            // Z is the raw ECDH shared secret (NIST SP 800-56A / RFC 7518 section 4.6); here it comes from the
             // custodian rather than an in-process agreement, but the KDF over it is identical.
             var sharedSecretZ = await custodian.AgreeKeyAsync(keyId, algorithm, ephemeralKey, cancellationToken);
             try

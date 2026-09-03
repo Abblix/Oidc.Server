@@ -14,14 +14,14 @@ namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// The OpenID Provider discovery document returned by the <c>/.well-known/openid-configuration</c> endpoint,
-/// as defined by OpenID Connect Discovery 1.0 §3 and OAuth 2.0 Authorization Server Metadata (RFC 8414).
+/// as defined by OpenID Connect Discovery 1.0 section 3 and OAuth 2.0 Authorization Server Metadata (RFC 8414).
 /// Its content lists the provider's endpoints, supported algorithms, response types, scopes, and feature flags
 /// so that relying parties can configure themselves dynamically.
 /// </summary>
 /// <remarks>
 /// Decorated with <see cref="JsonIgnoreNullsAttribute"/> so that all nullable optional properties are omitted
 /// from the serialized JSON when <c>null</c>, rather than emitted as <c>"field": null</c>.
-/// RFC 8414 §2 requires that optional metadata fields be absent when not applicable - some OIDC client libraries
+/// RFC 8414 section 2 requires that optional metadata fields be absent when not applicable - some OIDC client libraries
 /// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
 /// fields they do not expect to be present.
 /// </remarks>
@@ -155,15 +155,15 @@ public record ConfigurationResponse
         public const string RequestObjectEncryptionEncValuesSupported = "request_object_encryption_enc_values_supported";
 
         /// <summary>The <c>authorization_signing_alg_values_supported</c> metadata field listing JWS algorithms
-        /// the provider uses to sign JARM authorization responses (JARM §4).</summary>
+        /// the provider uses to sign JARM authorization responses (JARM section 4).</summary>
         public const string AuthorizationSigningAlgValuesSupported = "authorization_signing_alg_values_supported";
 
         /// <summary>The <c>authorization_encryption_alg_values_supported</c> metadata field listing JWE
-        /// key-management algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        /// key-management algorithms the provider uses to encrypt JARM authorization responses (JARM section 4).</summary>
         public const string AuthorizationEncryptionAlgValuesSupported = "authorization_encryption_alg_values_supported";
 
         /// <summary>The <c>authorization_encryption_enc_values_supported</c> metadata field listing JWE
-        /// content-encryption algorithms the provider uses to encrypt JARM authorization responses (JARM §4).</summary>
+        /// content-encryption algorithms the provider uses to encrypt JARM authorization responses (JARM section 4).</summary>
         public const string AuthorizationEncryptionEncValuesSupported = "authorization_encryption_enc_values_supported";
 
         /// <summary>The <c>userinfo_signing_alg_values_supported</c> metadata field listing JWS algorithms
@@ -171,19 +171,19 @@ public record ConfigurationResponse
         public const string UserInfoSigningAlgValuesSupported = "userinfo_signing_alg_values_supported";
 
         /// <summary>The <c>introspection_signing_alg_values_supported</c> metadata field listing JWS algorithms
-        /// the provider uses to sign JWT introspection responses (RFC 9701 §7).</summary>
+        /// the provider uses to sign JWT introspection responses (RFC 9701 section 7).</summary>
         public const string IntrospectionSigningAlgValuesSupported = "introspection_signing_alg_values_supported";
 
         /// <summary>The <c>introspection_encryption_alg_values_supported</c> metadata field listing JWE
-        /// key-management algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        /// key-management algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 section 7).</summary>
         public const string IntrospectionEncryptionAlgValuesSupported = "introspection_encryption_alg_values_supported";
 
         /// <summary>The <c>introspection_encryption_enc_values_supported</c> metadata field listing JWE
-        /// content-encryption algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 §7).</summary>
+        /// content-encryption algorithms the provider uses to encrypt JWT introspection responses (RFC 9701 section 7).</summary>
         public const string IntrospectionEncryptionEncValuesSupported = "introspection_encryption_enc_values_supported";
 
         /// <summary>The <c>dpop_signing_alg_values_supported</c> metadata field listing JWS algorithms
-        /// accepted on DPoP proofs (RFC 9449 §5.1).</summary>
+        /// accepted on DPoP proofs (RFC 9449 section 5.1).</summary>
         public const string DpopSigningAlgValuesSupported = "dpop_signing_alg_values_supported";
 
         /// <summary>The <c>pushed_authorization_request_endpoint</c> metadata field pointing to the PAR
@@ -219,12 +219,12 @@ public record ConfigurationResponse
         public const string DeviceAuthorizationEndpoint = "device_authorization_endpoint";
 
         /// <summary>The <c>mtls_endpoint_aliases</c> metadata block carrying mTLS-bound alternative
-        /// endpoint URLs (RFC 8705 §5).</summary>
+        /// endpoint URLs (RFC 8705 section 5).</summary>
         public const string MtlsEndpointAliases = "mtls_endpoint_aliases";
 
         /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> metadata flag advertising
         /// that the provider supports mutual-TLS client certificate-bound access tokens
-        /// (RFC 8705 §3.3).</summary>
+        /// (RFC 8705 section 3.3).</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
 
         /// <summary>The <c>acr_values_supported</c> metadata field listing Authentication Context Class
@@ -236,12 +236,12 @@ public record ConfigurationResponse
         public const string AuthorizationResponseIssParameterSupported = "authorization_response_iss_parameter_supported";
 
         /// <summary>The <c>signed_metadata</c> field carrying a JWS whose claims duplicate this
-        /// metadata, signed by the provider so clients can verify its origin (RFC 8414 §2.1).
+        /// metadata, signed by the provider so clients can verify its origin (RFC 8414 section 2.1).
         /// </summary>
         public const string SignedMetadata = "signed_metadata";
 
         /// <summary>The <c>authorization_details_types_supported</c> metadata field listing the
-        /// authorization-detail <c>type</c> values this server understands (RFC 9396 §10).
+        /// authorization-detail <c>type</c> values this server understands (RFC 9396 section 10).
         /// Absent when no per-type validators are registered.</summary>
         public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
     }
@@ -456,7 +456,7 @@ public record ConfigurationResponse
     public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
     /// <summary>
-    /// JWS signing algorithms accepted on inbound DPoP proofs per RFC 9449 §5.1
+    /// JWS signing algorithms accepted on inbound DPoP proofs per RFC 9449 section 5.1
     /// (<c>dpop_signing_alg_values_supported</c>).
     /// </summary>
     [JsonPropertyName(Parameters.DpopSigningAlgValuesSupported)]
@@ -472,54 +472,54 @@ public record ConfigurationResponse
 
     /// <summary>
     /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider supports
-    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// when a client encrypts a request object to the provider (RFC 9101 section 6.1).
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectEncryptionAlgValuesSupported)]
     public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider supports
-    /// when a client encrypts a request object to the provider (RFC 9101 §6.1).
+    /// when a client encrypts a request object to the provider (RFC 9101 section 6.1).
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectEncryptionEncValuesSupported)]
     public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
-    /// Specifies the JWS algorithms the OpenID Provider uses to sign JARM authorization responses (JARM §4).
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationSigningAlgValuesSupported)]
     public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
-    /// JARM authorization responses (JARM §4).
+    /// JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEncryptionAlgValuesSupported)]
     public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
-    /// encrypt JARM authorization responses (JARM §4).
+    /// encrypt JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEncryptionEncValuesSupported)]
     public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
-    /// Specifies the JWS algorithms the OpenID Provider uses to sign JWT introspection responses (RFC 9701 §7).
+    /// Specifies the JWS algorithms the OpenID Provider uses to sign JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionSigningAlgValuesSupported)]
     public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWE key-management algorithms (the <c>alg</c> values) the OpenID Provider uses to encrypt
-    /// JWT introspection responses (RFC 9701 §7).
+    /// JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptionAlgValuesSupported)]
     public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) the OpenID Provider uses to
-    /// encrypt JWT introspection responses (RFC 9701 §7).
+    /// encrypt JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptionEncValuesSupported)]
     public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
@@ -571,7 +571,7 @@ public record ConfigurationResponse
     public MtlsAliases? MtlsEndpointAliases { get; init; }
 
     /// <summary>
-    /// RFC 8705 §3.3: indicates that the provider supports mutual-TLS client certificate-bound
+    /// RFC 8705 section 3.3: indicates that the provider supports mutual-TLS client certificate-bound
     /// access tokens. Emitted as <c>true</c> when the provider both issues such tokens and
     /// enforces the binding at its protected resources; omitted otherwise.
     /// </summary>
@@ -593,7 +593,7 @@ public record ConfigurationResponse
     public bool? AuthorizationResponseIssParameterSupported { get; init; }
 
     /// <summary>
-    /// RFC 8414 §2.1: a JWS whose payload restates this entire metadata set, signed with the
+    /// RFC 8414 section 2.1: a JWS whose payload restates this entire metadata set, signed with the
     /// provider's signing key. When present, a client that verifies the signature against the
     /// keys at <see cref="JwksUri"/> may trust the configuration's origin beyond the TLS layer;
     /// signed values take precedence over the corresponding plain-JSON fields. Emitted only
@@ -604,7 +604,7 @@ public record ConfigurationResponse
     public string? SignedMetadata { get; init; }
 
     /// <summary>
-    /// RFC 9396 §10: the authorization-detail <c>type</c> values this server's host has
+    /// RFC 9396 section 10: the authorization-detail <c>type</c> values this server's host has
     /// registered validators for. The list is projected from the keyed-DI registry of
     /// <see cref="IAuthorizationDetailValidator"/> so it always
     /// matches what request-time dispatch will accept. Omitted from the emitted discovery

@@ -33,7 +33,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// or opportunistic. When the client opts in but the proof is missing, the request is
 /// rejected with <c>invalid_dpop_proof</c>; when the client does not opt in, a missing
 /// proof is silently accepted (Bearer token issued downstream) and a present-and-valid
-/// proof still binds the token (RFC 9449 §5.2 server-side opportunistic binding).
+/// proof still binds the token (RFC 9449 section 5.2 server-side opportunistic binding).
 /// </remarks>
 public partial class DPoPTokenEndpointValidator(
     ILogger<DPoPTokenEndpointValidator> logger,
@@ -55,7 +55,7 @@ public partial class DPoPTokenEndpointValidator(
     }
 
     /// <summary>
-    /// RFC 8705 §4: a grant issued with a certificate-bound token must be redeemed (e.g. on refresh) by
+    /// RFC 8705 section 4: a grant issued with a certificate-bound token must be redeemed (e.g. on refresh) by
     /// re-presenting the same certificate. Clients that authenticate via mutual TLS are skipped - their
     /// authentication already proved certificate possession on this connection. For every other
     /// authentication method (including public 'none') the binding is otherwise never checked, so a stolen
@@ -81,12 +81,12 @@ public partial class DPoPTokenEndpointValidator(
 
     /// <summary>
     /// Decides whether a request that carried no DPoP proof is acceptable: rejected when the client
-    /// mandates DPoP (RFC 9449 §5.2), when a sender-constraining security profile is unmet, or when the
-    /// authorization request committed a dpop_jkt (RFC 9449 §10); otherwise a Bearer token is allowed.
+    /// mandates DPoP (RFC 9449 section 5.2), when a sender-constraining security profile is unmet, or when the
+    /// authorization request committed a dpop_jkt (RFC 9449 section 10); otherwise a Bearer token is allowed.
     /// </summary>
     private OidcError? ValidateMissingProof(TokenValidationContext context, string? committed)
     {
-        // The per-client dpop_bound_access_tokens flag (RFC 9449 §5.2) mandates DPoP specifically, so
+        // The per-client dpop_bound_access_tokens flag (RFC 9449 section 5.2) mandates DPoP specifically, so
         // an mTLS-bound token does not satisfy it and a missing proof is rejected outright.
         if (context.ClientInfo.RequireDPoP)
         {
@@ -97,7 +97,7 @@ public partial class DPoPTokenEndpointValidator(
         }
 
         // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by either a
-        // DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 §3). With the proof absent, the
+        // DPoP proof or a certificate-bound token over mutual TLS (RFC 8705 section 3). With the proof absent, the
         // requirement is met only when the token will be certificate-bound. In any other case neither
         // mechanism applies and the profile is not satisfied. The profile tightens, and the granular
         // RequireDPoP toggle cannot weaken it.
@@ -115,9 +115,9 @@ public partial class DPoPTokenEndpointValidator(
 
         if (committed is not null)
         {
-            // RFC 9449 §10: the authorization request committed to a proof-of-possession key via the dpop_jkt
+            // RFC 9449 section 10: the authorization request committed to a proof-of-possession key via the dpop_jkt
             // parameter, so presenting the auth code without the proof is the very attack the carry-over closes.
-            LogProofRequiredButMissing("§10 dpop_jkt carry-over");
+            LogProofRequiredButMissing("section 10 dpop_jkt carry-over");
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
                 "Authorization request committed to a DPoP key but no proof was presented.");
@@ -168,7 +168,7 @@ public partial class DPoPTokenEndpointValidator(
     /// <summary>
     /// Whether the client authenticates with mutual TLS (<c>tls_client_auth</c> /
     /// <c>self_signed_tls_client_auth</c>). Such a client has already proved possession of its
-    /// certificate as part of authentication, so the RFC 8705 §4 certificate-binding check on a
+    /// certificate as part of authentication, so the RFC 8705 section 4 certificate-binding check on a
     /// certificate-bound grant is redundant for it and is skipped.
     /// </summary>
     private static bool AuthenticatesByMutualTls(ClientInfo clientInfo)
@@ -177,7 +177,7 @@ public partial class DPoPTokenEndpointValidator(
             or ClientAuthenticationMethods.SelfSignedTlsClientAuth;
 
     /// <summary>
-    /// Whether the access token about to be issued will be certificate-bound (RFC 8705 §3), and
+    /// Whether the access token about to be issued will be certificate-bound (RFC 8705 section 3), and
     /// therefore sender-constrained via mutual TLS rather than DPoP. Mirrors the binding decision in
     /// TokenAuthorizationContextEvaluator: a binding the grant already carries (e.g. on refresh), or a
     /// certificate presented by a client that authenticates with mTLS or has opted into

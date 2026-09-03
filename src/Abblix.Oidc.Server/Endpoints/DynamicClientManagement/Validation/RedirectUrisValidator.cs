@@ -15,8 +15,8 @@ using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates <c>redirect_uris</c> in a registration request per RFC 7591 §2 and the
-/// per-application-type rules of OIDC DCR 1.0 §2: required when the client uses
+/// Validates <c>redirect_uris</c> in a registration request per RFC 7591 section 2 and the
+/// per-application-type rules of OIDC DCR 1.0 section 2: required when the client uses
 /// <c>authorization_code</c>, <c>implicit</c>, or <c>refresh_token</c>; absolute and
 /// fragment-free; Web clients use <c>https</c> and not localhost; Native clients use
 /// a custom scheme or <c>http://localhost</c>.

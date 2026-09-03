@@ -71,11 +71,11 @@ public static class AuthorizationContextExtensions
         payload.Scope = context.Scope;
         payload.Nonce = context.Nonce;
 
-        // RFC 8707 Resources (absolute URIs) + RFC 8693 §2.1 Audiences (opaque logical names) both feed
+        // RFC 8707 Resources (absolute URIs) + RFC 8693 section 2.1 Audiences (opaque logical names) both feed
         // into the JWT aud claim. Resources take precedence in ordering for legacy compat.
         //
-        // With neither set, the audience is the issuer. RFC 9068 §3 requires a default resource
-        // indicator here, and §4 tells a resource server to reject a token whose aud does not name it -
+        // With neither set, the audience is the issuer. RFC 9068 section 3 requires a default resource
+        // indicator here, and section 4 tells a resource server to reject a token whose aud does not name it -
         // so the client id, which names the party that asked for the token rather than the one that
         // reads it, is a value a conforming resource server must refuse. Where nothing was requested
         // the consumer is this server, and the issuer identifies it exactly, without a host having to
@@ -109,7 +109,7 @@ public static class AuthorizationContextExtensions
             };
         }
 
-        // RFC 9396 §9: the AS MAY include the authorized authorization_details in the access
+        // RFC 9396 section 9: the AS MAY include the authorized authorization_details in the access
         // token. We do, copying the raw JsonArray byte-exact so member order and type-specific
         // payload are preserved without typed deserialise/re-serialise cycles. DeepClone keeps
         // the payload's JsonNode tree independent of the source AuthorizationContext.
@@ -118,7 +118,7 @@ public static class AuthorizationContextExtensions
             payload.Json[IanaClaimTypes.AuthorizationDetails] = context.AuthorizationDetails.DeepClone();
         }
 
-        // RFC 8693 §4.1: emit the act claim for delegation tokens. Nested act chains live in
+        // RFC 8693 section 4.1: emit the act claim for delegation tokens. Nested act chains live in
         // the JsonObject's act member -- preserved byte-exact via DeepClone.
         if (context.Actor is not null)
         {

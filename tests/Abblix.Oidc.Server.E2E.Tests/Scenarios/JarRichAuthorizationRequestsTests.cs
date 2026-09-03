@@ -72,7 +72,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
 
         // 3. Build the request JWT containing every authorize parameter -- including the wire-shape
-        // authorization_details JSON array attached as a custom claim. RFC 9101 §6: iss = client_id,
+        // authorization_details JSON array attached as a custom claim. RFC 9101 section 6: iss = client_id,
         // aud = the AS issuer; iat / exp pin the request lifetime. The aud must be the issuer
         // identifier byte-exact: AbsoluteUri appends a trailing slash to a root URL, which the
         // server's exact-match audience validation rightly rejects.
@@ -101,7 +101,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var creator = JwtServices.GetRequiredService<IJsonWebTokenCreator>();
         var signedRequest = await creator.IssueAsync(requestJwt, clientKey);
 
-        // 4. Submit /authorize with request=<signed JWT> + client_id. RFC 9101 §5 allows every
+        // 4. Submit /authorize with request=<signed JWT> + client_id. RFC 9101 section 5 allows every
         // wire parameter inside the JWT plus client_id outside (so the AS can resolve jwks before
         // verifying the signature).
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
@@ -133,7 +133,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
 
     /// <summary>
     /// Strips the private RSA components from a signing key, leaving only the modulus (n) and
-    /// public exponent (e) plus identifying metadata. RFC 7517 §6: a public JWK MUST NOT include
+    /// public exponent (e) plus identifying metadata. RFC 7517 section 6: a public JWK MUST NOT include
     /// private fields; sending the full private key over the wire to a registration endpoint is a
     /// catastrophic leak even in a test.
     /// </summary>

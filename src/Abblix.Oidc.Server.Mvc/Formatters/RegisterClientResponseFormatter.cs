@@ -66,19 +66,19 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
                 : null,
 
             // Prefer the resolved server-side value from `success` (which reflects defaults
-            // applied by the registration pipeline) over the raw request - RFC 7591 §3.2.1
+            // applied by the registration pipeline) over the raw request - RFC 7591 section 3.2.1
             // requires the response to echo registered values, not the literal request input.
             InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
             TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
 
-            // RFC 7591 §3.2.1: scope echoes the registered value (the server may narrow or default
+            // RFC 7591 section 3.2.1: scope echoes the registered value (the server may narrow or default
             // it), not the literal request input.
             Scope = success.Scope ?? request.Scope,
             SoftwareId = request.SoftwareId,
             SoftwareVersion = request.SoftwareVersion,
             SoftwareStatement = request.SoftwareStatement,
 
-            // RFC 7591 §3.2.1: echo registered metadata so clients can confirm what was stored.
+            // RFC 7591 section 3.2.1: echo registered metadata so clients can confirm what was stored.
             ApplicationType = success.ApplicationType,
             RedirectUris = success.RedirectUris,
             GrantTypes = success.GrantTypes,
@@ -90,7 +90,7 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             JwksUri = success.JwksUri,
             UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
-            // RFC 9701 §6 / RFC 7591 §3.2.1: echo the registered introspection response algorithms.
+            // RFC 9701 section 6 / RFC 7591 section 3.2.1: echo the registered introspection response algorithms.
             IntrospectionSignedResponseAlg = success.IntrospectionSignedResponseAlg,
             IntrospectionEncryptedResponseAlg = success.IntrospectionEncryptedResponseAlg,
             IntrospectionEncryptedResponseEnc = success.IntrospectionEncryptedResponseEnc,
@@ -101,13 +101,13 @@ public class RegisterClientResponseFormatter(IUriResolver uriResolver) : IRegist
             TlsClientAuthSanUri = success.TlsClientAuthSanUri,
             TlsClientAuthSanIp = success.TlsClientAuthSanIp,
             TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
-            // RFC 9449 §5.2: dpop_bound_access_tokens echo.
+            // RFC 9449 section 5.2: dpop_bound_access_tokens echo.
             DpopBoundAccessTokens = success.DpopBoundAccessTokens,
-            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client enforcement flags echo.
+            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client enforcement flags echo.
             RequirePushedAuthorizationRequests = success.RequirePushedAuthorizationRequests,
             RequireSignedRequestObject = success.RequireSignedRequestObject,
             TlsClientCertificateBoundAccessTokens = success.TlsClientCertificateBoundAccessTokens,
-            // RFC 9396 §10: authorization_details_types echo.
+            // RFC 9396 section 10: authorization_details_types echo.
             AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
             // Non-standard extension: token_exchange_subject_token_types echo.
             TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,

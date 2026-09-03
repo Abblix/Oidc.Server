@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 
 /// <summary>
 /// The transport-bound counterpart of <see cref="Core.UserInfoRequest"/> for the UserInfo
-/// endpoint (OIDC Core §5.3), reachable via GET and POST. All bound properties and the
+/// endpoint (OIDC Core section 5.3), reachable via GET and POST. All bound properties and the
 /// projection back onto the core model are generated from the core type.
 /// </summary>
 [GeneratedFrom(typeof(Core.UserInfoRequest), SupportsGet = true)]

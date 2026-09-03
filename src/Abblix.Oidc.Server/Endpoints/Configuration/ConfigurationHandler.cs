@@ -97,7 +97,7 @@ public sealed class ConfigurationHandler(
 
 		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
 
-		// RFC 8705 §3.3: advertise certificate-bound access tokens only when a mutual-TLS client
+		// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
 		// authentication method is available - the server then both issues bound tokens and
 		// enforces the binding at its protected resources (MtlsUserInfoValidator).
 		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(

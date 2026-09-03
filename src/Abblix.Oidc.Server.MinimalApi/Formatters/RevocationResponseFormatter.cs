@@ -31,10 +31,10 @@ public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevo
     private IResult FormatResponse(Result<TokenRevoked, OidcError> response)
     {
         return response.Match(
-            // RFC 7009 §2.2: a successful revocation returns 200 with an empty body.
+            // RFC 7009 section 2.2: a successful revocation returns 200 with an empty body.
             onSuccess: IResult (_) => Results.Ok(),
 
-            // RFC 7009 §2.2.1 defers to RFC 6749 §5.2 for error semantics:
+            // RFC 7009 section 2.2.1 defers to RFC 6749 section 5.2 for error semantics:
             // invalid_client -> 401 with a Basic challenge, other errors -> 400.
             onFailure: error => error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer()));
     }

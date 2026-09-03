@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Validates a request against the client configuration endpoint (RFC 7592 §2-§4).
+/// Validates a request against the client configuration endpoint (RFC 7592 section 2-section 4).
 /// Confirms that the bearer registration access token authorizes the operation on the
 /// referenced <c>client_id</c> and that the client still exists.
 /// </summary>

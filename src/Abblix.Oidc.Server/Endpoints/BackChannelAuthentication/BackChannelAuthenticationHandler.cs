@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// first error so that subsequent stages never see invalid input.
 /// </summary>
 /// <param name="fetcher">Resolves the effective request, in particular substituting parameters carried in
-/// a signed Request Object per CIBA Core 1.0 §7.1.1.</param>
+/// a signed Request Object per CIBA Core 1.0 section 7.1.1.</param>
 /// <param name="validator">Validates the resolved request against client metadata and protocol rules.</param>
 /// <param name="processor">Persists the authentication request and produces the
 /// <c>auth_req_id</c>/<c>expires_in</c>/<c>interval</c> response.</param>

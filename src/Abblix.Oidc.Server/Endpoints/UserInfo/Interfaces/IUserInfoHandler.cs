@@ -13,7 +13,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Endpoint contract for the OpenID Connect UserInfo endpoint (OIDC Core 1.0 §5.3),
+/// Endpoint contract for the OpenID Connect UserInfo endpoint (OIDC Core 1.0 section 5.3),
 /// which returns claims about the authenticated end-user identified by the bearer access
 /// token presented per RFC 6750.
 /// </summary>

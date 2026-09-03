@@ -34,7 +34,7 @@ partial class DeviceCodeGrantHandler
         Message = "Client {ClientId} presented a device code whose stored grant carries " +
                   "authorization_details types the device authorization request never asked for, so the " +
                   "redemption is refused and no token was issued. Types: {EscapedTypes}. The comparison " +
-                  "is by type, because RFC 9396 §6.1 defines no universal comparator for two arbitrary " +
+                  "is by type, because RFC 9396 section 6.1 defines no universal comparator for two arbitrary " +
                   "entries.")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
 

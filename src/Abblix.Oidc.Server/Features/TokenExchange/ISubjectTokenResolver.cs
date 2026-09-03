@@ -12,7 +12,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.TokenExchange;
 
 /// <summary>
-/// Resolves a wire-level <c>subject_token</c> of a specific RFC 8693 §3 token type into a
+/// Resolves a wire-level <c>subject_token</c> of a specific RFC 8693 section 3 token type into a
 /// portable <see cref="SubjectTokenContext"/>. One resolver per supported token type URI,
 /// registered with keyed DI under the URI as key; the
 /// <see cref="Endpoints.Token.Grants.TokenExchangeGrantHandler"/> dispatches by reading the
@@ -40,7 +40,7 @@ public interface ISubjectTokenResolver
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The resolved subject context on success; an OIDC error describing the
     /// rejection reason on failure. The handler maps every failure to wire-level
-    /// <c>invalid_request</c> per RFC 8693 §2.2.2.</returns>
+    /// <c>invalid_request</c> per RFC 8693 section 2.2.2.</returns>
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         string subjectToken,
         CancellationToken cancellationToken);

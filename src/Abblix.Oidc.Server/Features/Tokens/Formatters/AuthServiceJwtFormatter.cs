@@ -115,7 +115,7 @@ public class AuthServiceJwtFormatter(
 			return await jwtCreator.IssueAsync(token, signingCredentials);
 		}
 
-		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 §4.4), else the default.
+		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 section 4.4), else the default.
 		var keyEncryptionAlgorithm = encryption.KeyManagementAlgorithm
 			?? encryptingCredentials.Algorithm
 			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;

@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// Parameters of a Client-Initiated Backchannel Authentication (CIBA) request as defined in
-/// OpenID Connect Client-Initiated Backchannel Authentication Flow Core 1.0 §7. The client posts these to
+/// OpenID Connect Client-Initiated Backchannel Authentication Flow Core 1.0 section 7. The client posts these to
 /// the <c>backchannel_authentication_endpoint</c> to ask the OP to authenticate the end-user asynchronously
 /// (out of band, on a separate device); the OP returns a <c>auth_req_id</c> the client then redeems
 /// at the token endpoint via the <c>urn:openid:params:grant-type:ciba</c> grant.
@@ -123,7 +123,7 @@ public record BackChannelAuthenticationRequest
     public RequestedClaims? Claims { get; init; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array stored as the raw wire
+    /// RFC 9396 section 3 Rich Authorization Requests array stored as the raw wire
     /// <see cref="JsonArray"/>. CIBA flows accept <c>authorization_details</c> by spec
     /// reference; the array carries through to the eventual access token issued via the
     /// CIBA grant byte-exact (member order and type-specific payload preserved).
@@ -134,7 +134,7 @@ public record BackChannelAuthenticationRequest
 
     /// <summary>
     /// Wire-level parameter names accepted at the CIBA backchannel authentication endpoint
-    /// (OpenID Connect CIBA Core 1.0 §7).
+    /// (OpenID Connect CIBA Core 1.0 section 7).
     /// </summary>
     public static class Parameters
     {
@@ -186,7 +186,7 @@ public record BackChannelAuthenticationRequest
         /// claims in the issued ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
 
-        /// <summary>The <c>authorization_details</c> CIBA request parameter (RFC 9396 §3) carrying
+        /// <summary>The <c>authorization_details</c> CIBA request parameter (RFC 9396 section 3) carrying
         /// a JSON array of Rich Authorization Requests.</summary>
         public const string AuthorizationDetails = "authorization_details";
     }

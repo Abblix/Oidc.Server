@@ -67,7 +67,7 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
 
     /// <summary>
     /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
-    /// (RFC 9449 §6.1) populated by the DPoP validator step when a valid proof accompanies
+    /// (RFC 9449 section 6.1) populated by the DPoP validator step when a valid proof accompanies
     /// the request. Surfaces to the processor so the issued access token can carry
     /// <c>cnf.jkt</c>. <c>null</c> when no proof was presented or DPoP is not in use.
     /// </summary>

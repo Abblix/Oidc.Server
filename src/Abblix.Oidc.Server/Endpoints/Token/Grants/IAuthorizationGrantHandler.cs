@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
 /// Strategy contract for resolving the <c>grant_type</c>-specific portion of an OAuth 2.0 token
-/// request (RFC 6749 §4) into an <see cref="AuthorizedGrant"/>: an authentication session plus the
+/// request (RFC 6749 section 4) into an <see cref="AuthorizedGrant"/>: an authentication session plus the
 /// <see cref="AuthorizationContext"/> (subject, scope, resources, claims) that the issued tokens
 /// will inherit. Each implementation advertises the grant types it owns via
 /// <see cref="IGrantTypeInformer.GrantTypesSupported"/>.

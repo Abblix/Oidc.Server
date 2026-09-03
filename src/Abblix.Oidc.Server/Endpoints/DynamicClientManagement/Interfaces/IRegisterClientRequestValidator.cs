@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Validates client metadata supplied to the registration endpoint per RFC 7591 §2 and
+/// Validates client metadata supplied to the registration endpoint per RFC 7591 section 2 and
 /// OpenID Connect Dynamic Client Registration 1.0. Produces a typed
 /// <see cref="ValidClientRegistrationRequest"/> on success or an <see cref="OidcError"/>
 /// describing the rejected metadata field.

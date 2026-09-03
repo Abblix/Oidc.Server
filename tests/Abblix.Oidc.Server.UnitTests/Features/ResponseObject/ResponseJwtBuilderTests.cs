@@ -27,9 +27,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ResponseObject;
 
 /// <summary>
 /// Unit tests for <see cref="ResponseJwtBuilder"/> verifying JARM (JWT Secured Authorization Response
-/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1), signing with the
-/// client's registered algorithm (default RS256, JARM §3), optional signed-then-encrypted output, and the
-/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM §2.3).
+/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM section 2.1), signing with the
+/// client's registered algorithm (default RS256, JARM section 3), optional signed-then-encrypted output, and the
+/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM section 2.3).
 /// </summary>
 public class ResponseJwtBuilderTests
 {
@@ -116,7 +116,7 @@ public class ResponseJwtBuilderTests
 
         Assert.Equal(EncodedJwt, result);
 
-        // JARM §2.1 mandated claims.
+        // JARM section 2.1 mandated claims.
         Assert.Equal(Issuer, capture.Token.Payload.Issuer);
         Assert.Equal([ClientId], capture.Token.Payload.Audiences);
         Assert.Equal(_now + TimeSpan.FromMinutes(10), capture.Token.Payload.ExpiresAt);
@@ -125,7 +125,7 @@ public class ResponseJwtBuilderTests
         Assert.Equal("auth-code", capture.Token.Payload["code"]!.GetValue<string>());
         Assert.Equal("client-state", capture.Token.Payload["state"]!.GetValue<string>());
 
-        // Signed with the client's algorithm (default RS256, JARM §3).
+        // Signed with the client's algorithm (default RS256, JARM section 3).
         Assert.Equal(SigningAlgorithms.RS256, capture.Token.Header.Algorithm);
     }
 
@@ -168,7 +168,7 @@ public class ResponseJwtBuilderTests
             .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
 
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
-        // AuthorizationEncryptedResponseEncryption omitted → JARM §3 default
+        // AuthorizationEncryptedResponseEncryption omitted → JARM section 3 default
 
         await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
 
@@ -261,7 +261,7 @@ public class ResponseJwtBuilderTests
     /// <summary>
     /// The JARM response mode is mapped to its plaintext delivery mode by
     /// <see cref="ResponseModeExtensions.ToDeliveryMode"/>: the fixed variants map to their base mode, and the
-    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
+    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM section 2.3.4).
     /// </summary>
     [Theory]
     [InlineData(ResponseModes.QueryJwt, false, ResponseModes.Query)]

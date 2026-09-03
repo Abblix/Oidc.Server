@@ -54,7 +54,7 @@ public class RegisterClientRequestProcessor(
         await clientInfoManager.AddClientAsync(clientInfo);
 
         // Record the jti of the issued registration access token so the management endpoint can
-        // bind the token to this client (RFC 7592 §5).
+        // bind the token to this client (RFC 7592 section 5).
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
         await registrationAccessTokenStore.SetTokenIdAsync(credentials.ClientId, registrationAccessTokenId);
 
@@ -71,12 +71,12 @@ public class RegisterClientRequestProcessor(
         {
             ClientSecret = credentials.ClientSecret,
             ClientSecretExpiresAt = credentials.ExpiresAt,
-            // RFC 7591 §3.2.1: echo registered metadata so the client can confirm what was
+            // RFC 7591 section 3.2.1: echo registered metadata so the client can confirm what was
             // registered (including server-assigned defaults) without a follow-up read.
             TokenEndpointAuthMethod = clientInfo.TokenEndpointAuthMethod,
             ApplicationType = clientInfo.ApplicationType,
             RedirectUris = clientInfo.RedirectUris,
-            // RFC 7591 §3.2.1: grant_types/response_types/scope are read back from the stored
+            // RFC 7591 section 3.2.1: grant_types/response_types/scope are read back from the stored
             // ClientInfo, not from the request - this is what makes server-assigned defaults
             // (authorization_code / code when omitted) visible to the client.
             GrantTypes = clientInfo.EffectiveGrantTypes,
@@ -142,14 +142,14 @@ public class RegisterClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 §5.2: dpop_bound_access_tokens - when omitted, defaults to false.
+            // RFC 9449 section 5.2: dpop_bound_access_tokens - when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
-            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
+            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client FAPI-grade enforcement
             // flags - when omitted, default to false.
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
-            // RFC 9396 §10: authorization_details_types per-client allowlist.
+            // RFC 9396 section 10: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,

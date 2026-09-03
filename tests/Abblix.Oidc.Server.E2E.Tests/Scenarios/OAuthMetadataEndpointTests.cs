@@ -14,7 +14,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 8414 §3 lets the Authorization Server Metadata be published under the oauth-authorization-server
+/// RFC 8414 section 3 lets the Authorization Server Metadata be published under the oauth-authorization-server
 /// well-known suffix in addition to openid-configuration. The MVC adapter serves the identical document at
 /// both, so a client that queries only oauth-authorization-server still resolves the provider's metadata.
 /// </summary>

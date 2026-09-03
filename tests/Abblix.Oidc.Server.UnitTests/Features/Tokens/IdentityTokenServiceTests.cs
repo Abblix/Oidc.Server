@@ -595,7 +595,7 @@ public class IdentityTokenServiceTests
 
     /// <summary>
     /// Verifies c_hash/at_hash are produced for non-RS256 signing algorithms, using the hash
-    /// matching the algorithm's digest size (OIDC Core §3.1.3.6 / §3.3.2.11): SHA-256 for *256,
+    /// matching the algorithm's digest size (OIDC Core section 3.1.3.6 / section 3.3.2.11): SHA-256 for *256,
     /// SHA-384 for *384, SHA-512 for *512. The claim is base64url of the left half of the digest,
     /// so its decoded length is half the digest size (16 / 24 / 32 bytes). Before the fix only
     /// RS256 was handled and these algorithms silently omitted the hashes, breaking hybrid flows.

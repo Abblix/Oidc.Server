@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Composite that runs the configured chain of <see cref="IClientRegistrationContextValidator"/>
-/// steps in order and short-circuits on the first failure, mirroring RFC 7591 §3.2.2 which
+/// steps in order and short-circuits on the first failure, mirroring RFC 7591 section 3.2.2 which
 /// requires the server to reject a registration on the first invalid metadata field.
 /// </summary>
 /// <param name="validationSteps">The validation steps to execute, in order.</param>

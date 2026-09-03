@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TValidator">The per-type validator implementation.</typeparam>
     /// <param name="services">The service collection to register the validator in.</param>
     /// <param name="type">The authorization-detail <c>type</c> value the validator handles
-    /// (RFC 9396 §2.1). Used as the DI key; byte-exact match with the inbound entry's
+    /// (RFC 9396 section 2.1). Used as the DI key; byte-exact match with the inbound entry's
     /// <c>type</c> member.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
@@ -52,7 +52,7 @@ public static class ServiceCollectionExtensions
     /// <see cref="IAuthorizationDetailsMetadataProvider"/> discovery contributor. Called
     /// unconditionally from <c>AddFeatures</c> so the server boots cleanly with zero
     /// <see cref="IAuthorizationDetailValidator"/> implementations registered; RAR-bearing
-    /// requests are rejected with <c>invalid_authorization_details</c> per RFC 9396 §5
+    /// requests are rejected with <c>invalid_authorization_details</c> per RFC 9396 section 5
     /// until at least one validator is registered via
     /// <see cref="AddAuthorizationDetailValidator{TValidator}"/>.
     /// </summary>

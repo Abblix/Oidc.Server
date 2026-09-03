@@ -37,11 +37,11 @@ public class AuthorizationResponseEncoder(
 			case SuccessfullyAuthenticated success:
 			{
 				// Scope rides the authorization response only for implicit/hybrid flows (OIDC Core
-				// §3.2.2.5 / §3.3.2.5), where the response itself carries tokens. The code flow returns
+				// section 3.2.2.5 / section 3.3.2.5), where the response itself carries tokens. The code flow returns
 				// only code + state (+ optional iss per RFC 9207); emitting scope there is flagged by
-				// OIDF Conformance as "unexpected parameters" and disallowed by FAPI 2.0 §5.3.1.
+				// OIDF Conformance as "unexpected parameters" and disallowed by FAPI 2.0 section 5.3.1.
 				// The value is the GRANTED scope (matching the issued token), not the requested set, so a
-				// consent-narrowed grant is advertised truthfully per RFC 6749 §3.3.
+				// consent-narrowed grant is advertised truthfully per RFC 6749 section 3.3.
 				var carriesTokens = success is { AccessToken: not null } or { IdToken: not null };
 				success.Issuer = Issuer;
 				success.Scope = carriesTokens ? string.Join(' ', success.GrantedScopes) : null;

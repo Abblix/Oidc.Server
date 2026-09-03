@@ -23,6 +23,6 @@ partial class IntrospectionRequestValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.PublicClientRejected,
 		Level = LogLevel.Warning,
-		Message = "Introspection rejected for public client {ClientId}: 'none' authentication does not satisfy RFC 7662 §2.1")]
+		Message = "Introspection rejected for public client {ClientId}: 'none' authentication does not satisfy RFC 7662 section 2.1")]
 	private partial void LogPublicClientRejected(Sanitized ClientId);
 }

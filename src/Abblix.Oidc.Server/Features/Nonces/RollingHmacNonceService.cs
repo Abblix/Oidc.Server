@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// rotation boundary: every instance derives the same bucket index from the
 /// nonce's embedded timestamp, looks up that bucket's secret in the
 /// distributed cache, and either finds it or creates one with last-write-wins
-/// semantics. Per RFC 9449 §11.3 a brief mismatch during the rotation race
+/// semantics. Per RFC 9449 section 11.3 a brief mismatch during the rotation race
 /// surfaces to the DPoP client as a single retry with a fresh
 /// <c>DPoP-Nonce</c> header, which is the protocol's intended recovery path;
 /// other consumers of this service get the analogous one-retry behaviour

@@ -19,7 +19,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.RequestFetching;
 
 /// <summary>
-/// Unit tests for <see cref="RequestObjectFetchAdapter"/> verifying the OIDC Core §6.1 rule:
+/// Unit tests for <see cref="RequestObjectFetchAdapter"/> verifying the OIDC Core section 6.1 rule:
 /// response_type and client_id passed in the OAuth request syntax must match the values inside
 /// the request object when the object carries them.
 /// </summary>
@@ -64,7 +64,7 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// OIDC Core §6.1: a request object carrying a different client_id than the OAuth request
+    /// OIDC Core section 6.1: a request object carrying a different client_id than the OAuth request
     /// syntax must be rejected - otherwise the object could silently swap the client identity.
     /// </summary>
     [Fact]
@@ -80,7 +80,7 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// OIDC Core §6.1: the same matching rule applies to response_type - a request object must not
+    /// OIDC Core section 6.1: the same matching rule applies to response_type - a request object must not
     /// silently switch the flow relative to what the plain OAuth parameters declared.
     /// </summary>
     [Fact]

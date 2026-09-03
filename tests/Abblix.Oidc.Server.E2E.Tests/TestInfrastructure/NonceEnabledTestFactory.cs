@@ -16,7 +16,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 
 /// <summary>
-/// Variant of <see cref="Tests.TestFactory"/> that flips on the RFC 9449 §8 nonce
+/// Variant of <see cref="Tests.TestFactory"/> that flips on the RFC 9449 section 8 nonce
 /// requirement at both the token endpoint and the UserInfo endpoint. Hosted under a
 /// separate xunit collection so the singleton <see cref="WebApplicationFactory{TEntryPoint}"/>
 /// inside this factory never shares state with the default flow tests - toggling

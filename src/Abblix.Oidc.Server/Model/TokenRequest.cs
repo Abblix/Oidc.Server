@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Model;
 public record TokenRequest
 {
 	/// <summary>
-	/// Wire-level parameter names accepted at the token endpoint per RFC 6749 §4, RFC 7636 (PKCE),
+	/// Wire-level parameter names accepted at the token endpoint per RFC 6749 section 4, RFC 7636 (PKCE),
 	/// RFC 7523 (JWT Bearer), RFC 8628 (Device Authorization Grant), RFC 8707 (Resource Indicators),
 	/// and OpenID Connect CIBA Core.
 	/// </summary>
@@ -75,27 +75,27 @@ public record TokenRequest
 		public const string DeviceCode = "device_code";
 
 		/// <summary>The <c>subject_token</c> Token Exchange request parameter carrying the security
-		/// token being exchanged (RFC 8693 §2.1).</summary>
+		/// token being exchanged (RFC 8693 section 2.1).</summary>
 		public const string SubjectToken = "subject_token";
 
 		/// <summary>The <c>subject_token_type</c> Token Exchange request parameter identifying the
-		/// format of <c>subject_token</c> (RFC 8693 §2.1).</summary>
+		/// format of <c>subject_token</c> (RFC 8693 section 2.1).</summary>
 		public const string SubjectTokenType = "subject_token_type";
 
 		/// <summary>The <c>actor_token</c> Token Exchange request parameter carrying a security token
-		/// representing the acting party in delegation flows (RFC 8693 §2.1).</summary>
+		/// representing the acting party in delegation flows (RFC 8693 section 2.1).</summary>
 		public const string ActorToken = "actor_token";
 
 		/// <summary>The <c>actor_token_type</c> Token Exchange request parameter identifying the
-		/// format of <c>actor_token</c> (RFC 8693 §2.1).</summary>
+		/// format of <c>actor_token</c> (RFC 8693 section 2.1).</summary>
 		public const string ActorTokenType = "actor_token_type";
 
 		/// <summary>The <c>requested_token_type</c> Token Exchange request parameter naming the
-		/// type of token the client would like to receive in the response (RFC 8693 §2.1).</summary>
+		/// type of token the client would like to receive in the response (RFC 8693 section 2.1).</summary>
 		public const string RequestedTokenType = "requested_token_type";
 
 		/// <summary>The <c>audience</c> Token Exchange request parameter naming the logical name(s)
-		/// of the relying party the requested token is intended for (RFC 8693 §2.1).</summary>
+		/// of the relying party the requested token is intended for (RFC 8693 section 2.1).</summary>
 		public const string Audience = "audience";
 	}
 
@@ -193,35 +193,35 @@ public record TokenRequest
 	public string? DeviceCode { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>subject_token</c> -- the security token being exchanged. Required for
+	/// RFC 8693 section 2.1 <c>subject_token</c> -- the security token being exchanged. Required for
 	/// <see cref="GrantTypes.TokenExchange"/>.
 	/// </summary>
 	[JsonPropertyName(Parameters.SubjectToken)]
 	public string? SubjectToken { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>subject_token_type</c> -- identifier for the format of <see cref="SubjectToken"/>,
+	/// RFC 8693 section 2.1 <c>subject_token_type</c> -- identifier for the format of <see cref="SubjectToken"/>,
 	/// one of <see cref="TokenExchangeTokenTypes"/>. Required for <see cref="GrantTypes.TokenExchange"/>.
 	/// </summary>
 	[JsonPropertyName(Parameters.SubjectTokenType)]
 	public string? SubjectTokenType { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>actor_token</c> -- security token representing the acting party in delegation
+	/// RFC 8693 section 2.1 <c>actor_token</c> -- security token representing the acting party in delegation
 	/// flows. Optional. When present, <see cref="ActorTokenType"/> MUST also be present.
 	/// </summary>
 	[JsonPropertyName(Parameters.ActorToken)]
 	public string? ActorToken { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>actor_token_type</c> -- identifier for the format of <see cref="ActorToken"/>,
+	/// RFC 8693 section 2.1 <c>actor_token_type</c> -- identifier for the format of <see cref="ActorToken"/>,
 	/// one of <see cref="TokenExchangeTokenTypes"/>. Required when <see cref="ActorToken"/> is present.
 	/// </summary>
 	[JsonPropertyName(Parameters.ActorTokenType)]
 	public string? ActorTokenType { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>requested_token_type</c> -- identifier of the token type the client would like
+	/// RFC 8693 section 2.1 <c>requested_token_type</c> -- identifier of the token type the client would like
 	/// the AS to issue, one of <see cref="TokenExchangeTokenTypes"/>. Optional; defaults to
 	/// <see cref="TokenExchangeTokenTypes.AccessToken"/>.
 	/// </summary>
@@ -229,7 +229,7 @@ public record TokenRequest
 	public string? RequestedTokenType { get; set; }
 
 	/// <summary>
-	/// RFC 8693 §2.1 <c>audience</c> -- logical name(s) of the relying party for which the requested
+	/// RFC 8693 section 2.1 <c>audience</c> -- logical name(s) of the relying party for which the requested
 	/// token is intended. Distinct from <see cref="Resources"/> (RFC 8707 absolute URIs); audience is
 	/// a free-form identifier.
 	/// </summary>

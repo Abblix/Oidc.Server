@@ -492,7 +492,7 @@ public class ResponseModeValidatorTests
     /// <summary>
     /// Verifies that ValidateAsync handles every flow type against both the plain response modes and
     /// the JARM modes. Token-bearing flows (Implicit, Hybrid) reject <c>query</c> and its
-    /// <c>query.jwt</c> JARM variant (JARM §2.3.1: the JWT does not exempt the response from the rule
+    /// <c>query.jwt</c> JARM variant (JARM section 2.3.1: the JWT does not exempt the response from the rule
     /// that credentials must not appear in the URL query), while fragment, form_post and their JARM
     /// variants are accepted; the authorization code flow accepts all modes.
     /// </summary>

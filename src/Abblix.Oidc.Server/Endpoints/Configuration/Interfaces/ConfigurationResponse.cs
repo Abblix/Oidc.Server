@@ -140,7 +140,7 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Specifies the JWS signing algorithms accepted on inbound DPoP proofs per
-	/// RFC 9449 §5.1 (<c>dpop_signing_alg_values_supported</c>): the intersection of
+	/// RFC 9449 section 5.1 (<c>dpop_signing_alg_values_supported</c>): the intersection of
 	/// the algorithms the AS validator can verify with the static DPoP-compatible
 	/// whitelist.
 	/// </summary>
@@ -148,7 +148,7 @@ public record ConfigurationResponse
 
 	/// <summary>
 	/// Indicates support for mutual-TLS client certificate-bound access tokens
-	/// (<c>tls_client_certificate_bound_access_tokens</c>, RFC 8705 §3.3). <c>true</c> when
+	/// (<c>tls_client_certificate_bound_access_tokens</c>, RFC 8705 section 3.3). <c>true</c> when
 	/// the provider both issues such tokens and enforces the binding at its protected
 	/// resources; <c>null</c> (omitted) otherwise.
 	/// </summary>
@@ -170,36 +170,36 @@ public record ConfigurationResponse
 	public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
 
 	/// <summary>
-	/// Specifies the JWS algorithms supported for signing JARM authorization responses (JARM §4).
+	/// Specifies the JWS algorithms supported for signing JARM authorization responses (JARM section 4).
 	/// </summary>
 	public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
 	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JARM
-	/// authorization responses (JARM §4).
+	/// authorization responses (JARM section 4).
 	/// </summary>
 	public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
 
 	/// <summary>
 	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JARM
-	/// authorization responses (JARM §4).
+	/// authorization responses (JARM section 4).
 	/// </summary>
 	public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
 
 	/// <summary>
-	/// Specifies the JWS algorithms supported for signing JWT introspection responses (RFC 9701 §7).
+	/// Specifies the JWS algorithms supported for signing JWT introspection responses (RFC 9701 section 7).
 	/// </summary>
 	public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
 
 	/// <summary>
 	/// Specifies the JWE key-management algorithms (the <c>alg</c> values) supported for encrypting JWT
-	/// introspection responses (RFC 9701 §7).
+	/// introspection responses (RFC 9701 section 7).
 	/// </summary>
 	public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
 
 	/// <summary>
 	/// Specifies the JWE content-encryption algorithms (the <c>enc</c> values) supported for encrypting JWT
-	/// introspection responses (RFC 9701 §7).
+	/// introspection responses (RFC 9701 section 7).
 	/// </summary>
 	public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
 
@@ -239,7 +239,7 @@ public record ConfigurationResponse
 	public bool? AuthorizationResponseIssParameterSupported { get; init; }
 
 	/// <summary>
-	/// RFC 9396 §10: the authorization-detail <c>type</c> values this server's host has
+	/// RFC 9396 section 10: the authorization-detail <c>type</c> values this server's host has
 	/// registered validators for. Sourced from the same keyed-DI registry that request-time
 	/// dispatch uses; emitted as <c>authorization_details_types_supported</c> on the wire,
 	/// or omitted when null (no per-type validators registered).

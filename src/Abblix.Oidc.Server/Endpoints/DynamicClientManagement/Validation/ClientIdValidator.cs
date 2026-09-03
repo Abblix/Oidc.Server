@@ -16,8 +16,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Cross-checks the supplied <c>client_id</c> against the operation type:
-/// for <see cref="DynamicClientOperation.Update"/> (RFC 7592 §2.2) the client must already exist,
-/// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 §3) it must not.
+/// for <see cref="DynamicClientOperation.Update"/> (RFC 7592 section 2.2) the client must already exist,
+/// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 section 3) it must not.
 /// A missing <c>client_id</c> is treated as new-registration with server-assigned id.
 /// </summary>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>

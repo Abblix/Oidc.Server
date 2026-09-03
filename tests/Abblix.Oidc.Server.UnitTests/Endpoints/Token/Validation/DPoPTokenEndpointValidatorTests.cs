@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// <summary>
 /// Unit tests for <see cref="DPoPTokenEndpointValidator"/> covering the four-way branch
 /// (mandatory vs opportunistic × proof-present vs proof-missing), the proof-validation
-/// failure path, and the RFC 9449 §8 nonce challenge-response loop. The validator's own
+/// failure path, and the RFC 9449 section 8 nonce challenge-response loop. The validator's own
 /// JWT structural / signature / claim-binding checks are out of scope here - those land
 /// in <see cref="ProofValidatorTests"/>; this test mocks <see cref="IProofValidator"/>
 /// to focus on the wiring between proof, nonce, and confirmation-stash decisions.
@@ -113,7 +113,7 @@ public class DPoPTokenEndpointValidatorTests
 
     /// <summary>
     /// A FAPI 2.0 client that sender-constrains via mutual TLS (a certificate-bound token, RFC 8705
-    /// §3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
+    /// section 3) satisfies the profile without a DPoP proof: the missing proof is accepted because the
     /// issued token will be certificate-bound. FAPI 2.0 permits either mechanism.
     /// </summary>
     [Fact]
@@ -290,7 +290,7 @@ public class DPoPTokenEndpointValidatorTests
     [Fact]
     public async Task ValidateAsync_CommittedButNoProof_ReturnsInvalidDPoPProof()
     {
-        // RFC 9449 §10 carry-over: dpop_jkt was committed at /authorize but the client
+        // RFC 9449 section 10 carry-over: dpop_jkt was committed at /authorize but the client
         // tries to redeem the auth code without a DPoP proof. This is the canonical
         // attack window the carry-over closes.
         var context = CreateContext(
@@ -319,7 +319,7 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
-    /// RFC 8705 §4: a certificate-bound grant redeemed by a non-mTLS client that presents no certificate
+    /// RFC 8705 section 4: a certificate-bound grant redeemed by a non-mTLS client that presents no certificate
     /// must be rejected with invalid_grant - otherwise a stolen certificate-bound refresh token is
     /// redeemable with no certificate at all.
     /// </summary>
@@ -340,7 +340,7 @@ public class DPoPTokenEndpointValidatorTests
 
     /// <summary>
     /// A non-mTLS client that re-presents the same certificate the grant is bound to passes the RFC 8705
-    /// §4 binding check (and, with no DPoP proof required, the request is accepted).
+    /// section 4 binding check (and, with no DPoP proof required, the request is accepted).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_CertBoundGrant_NonMtlsClient_MatchingCertificate_ReturnsNull()

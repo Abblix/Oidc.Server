@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// </summary>
 public sealed class JsonWebKeySetSettings
 {
-    /// <summary>The set of keys. Maps to the <c>keys</c> array per RFC 7517 §5.</summary>
+    /// <summary>The set of keys. Maps to the <c>keys</c> array per RFC 7517 section 5.</summary>
     [ConfigurationKeyName("keys")]
     public List<JsonWebKeySettings>? Keys { get; init; }
 

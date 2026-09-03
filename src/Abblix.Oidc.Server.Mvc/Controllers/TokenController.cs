@@ -52,7 +52,7 @@ public class TokenController : ControllerBase
     /// OpenID Connect Token Endpoint Documentation
     /// </see>
     /// </remarks>
-    // RFC 6749 §3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
+    // RFC 6749 section 3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
     // GET is rejected so credentials (code, client_secret, refresh_token) never travel in the URL,
     // where they would be logged by proxies, servers and browser history.
     [HttpPost(Path.Token)]

@@ -16,14 +16,14 @@ namespace Abblix.Jwt.Encryption;
 /// </summary>
 /// <remarks>
 /// The BCL exposes only RFC 5649 (key wrap with padding), which is a different, non-interchangeable
-/// construction, so RFC 3394 is implemented here as a line-by-line transcription of the §2.2.1/§2.2.2
+/// construction, so RFC 3394 is implemented here as a line-by-line transcription of the section 2.2.1/section 2.2.2
 /// pseudocode - six rounds of AES-ECB over (register || block) pairs with the step counter XORed into
 /// the register - with no deviations from the specification. The cipher itself stays in the platform:
 /// this class never touches key schedule or S-boxes; everything beyond the transcription is engineering
 /// hygiene (in-place state layout, constant-time register comparison, zeroing recovered blocks on
 /// integrity failure), none of it altering the algorithm.
 /// Correctness is pinned by tests on two independent axes: <c>AesKeyWrapTests</c> asserts all six
-/// known-answer vectors of RFC 3394 §4 - every KEK-size × key-data-size combination the specification
+/// known-answer vectors of RFC 3394 section 4 - every KEK-size × key-data-size combination the specification
 /// defines, byte-exact - plus an unwrap-failure check for every single-byte tampering position, and
 /// <c>JweKeyManagementInteropTests</c> proves bidirectional interoperability with the
 /// Microsoft.IdentityModel implementation of the same construction: wraps produced by either
@@ -36,14 +36,14 @@ namespace Abblix.Jwt.Encryption;
 // the RFC vectors, not implementation details, precisely for this.
 internal static class AesKeyWrap
 {
-    // 64-bit semiblock size per RFC 3394 §2; all lengths in this construction are multiples of it.
+    // 64-bit semiblock size per RFC 3394 section 2; all lengths in this construction are multiples of it.
     private const int SemiblockSize = 8;
 
-    // RFC 3394 §2.2.3.1 default initial value of the integrity check register.
+    // RFC 3394 section 2.2.3.1 default initial value of the integrity check register.
     private static ReadOnlySpan<byte> IntegrityCheckValue => [0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6];
 
     /// <summary>
-    /// Wraps key material per RFC 3394 §2.2.1. The output is 8 bytes longer than the input:
+    /// Wraps key material per RFC 3394 section 2.2.1. The output is 8 bytes longer than the input:
     /// the integrity check register followed by the transformed key blocks.
     /// </summary>
     /// <param name="keyEncryptionKey">The AES key encryption key (16, 24 or 32 bytes).</param>
@@ -52,7 +52,7 @@ internal static class AesKeyWrap
     /// <exception cref="ArgumentException">Thrown when the key data length is not wrappable.</exception>
     public static byte[] Wrap(byte[] keyEncryptionKey, byte[] keyData)
     {
-        // NIST SP 800-38F §5.3.1: the plaintext must span at least two semiblocks. Shorter or unaligned
+        // NIST SP 800-38F section 5.3.1: the plaintext must span at least two semiblocks. Shorter or unaligned
         // key material cannot be represented in the R[1..n] block structure at all.
         if (keyData.Length < 2 * SemiblockSize || keyData.Length % SemiblockSize != 0)
         {
@@ -76,7 +76,7 @@ internal static class AesKeyWrap
     }
 
     /// <summary>
-    /// Unwraps key material per RFC 3394 §2.2.2 and verifies the integrity check register.
+    /// Unwraps key material per RFC 3394 section 2.2.2 and verifies the integrity check register.
     /// </summary>
     /// <param name="keyEncryptionKey">The AES key encryption key (16, 24 or 32 bytes).</param>
     /// <param name="wrappedKey">The wrapped key; at least 24 bytes and a multiple of 8 bytes.</param>

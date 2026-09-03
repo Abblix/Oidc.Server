@@ -10,7 +10,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
 /// Issues and validates server-issued opaque, time-bounded nonces. The current
-/// consumer is DPoP-Nonce per RFC 9449 §8 / §9 - the server returns a nonce
+/// consumer is DPoP-Nonce per RFC 9449 section 8 / section 9 - the server returns a nonce
 /// via the <c>DPoP-Nonce</c> response header and the client echoes it back in
 /// the <c>nonce</c> claim of a subsequent DPoP proof to prove freshness - but
 /// the primitive is intentionally generic: any future feature needing

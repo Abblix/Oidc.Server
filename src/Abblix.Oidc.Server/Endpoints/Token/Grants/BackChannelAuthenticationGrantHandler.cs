@@ -122,7 +122,7 @@ public partial class BackChannelAuthenticationGrantHandler(
             return NotWhatTheRequestAskedFor();
 
         // And what the type comparison structurally cannot see: an entry of a type the request DID ask
-        // for, carrying content it did not. RFC 9396 §6.1 leaves that to the type's own validator, so this
+        // for, carrying content it did not. RFC 9396 section 6.1 leaves that to the type's own validator, so this
         // asks it - on a copy, because the question must not rewrite its own subject.
         if (await authorizationDetailsPolicy.RefuseAsync(grant, clientInfo, cancellationToken)
             is not { } refusal)
@@ -145,7 +145,7 @@ public partial class BackChannelAuthenticationGrantHandler(
     /// Whether the grant carries an <c>authorization_details</c> type the request never asked for.
     /// </summary>
     /// <remarks>
-    /// Types only, for the reason the completion path gives: RFC 9396 §6.1 defines no universal
+    /// Types only, for the reason the completion path gives: RFC 9396 section 6.1 defines no universal
     /// comparator for
     /// intra-entry narrowing. A null baseline means the request predates the field rather than asked for
     /// nothing, and is left alone, since refusing it would deny an authentication the end user approved
@@ -206,7 +206,7 @@ public partial class BackChannelAuthenticationGrantHandler(
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
-        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.AuthenticationRequestId.HasValue())
         {

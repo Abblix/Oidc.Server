@@ -111,7 +111,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
         services.TryAddScoped<IAuthorizationRequestProcessor, AuthorizationRequestProcessor>();
 
-        // Single-use PAR (RFC 9126 §7.3): decorate the processor so a pushed request_uri is consumed once a
+        // Single-use PAR (RFC 9126 section 7.3): decorate the processor so a pushed request_uri is consumed once a
         // terminal success has minted a code or token. Mirrors the session-management decorator and stacks
         // with it; both act independently on a SuccessfullyAuthenticated outcome.
         services.Decorate<IAuthorizationRequestProcessor, PushedAuthorizationRequestProcessorDecorator>();
@@ -723,7 +723,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PushModeValidator>(),
-            // RFC 9396 §3 authorization_details on CIBA backchannel auth requests.
+            // RFC 9396 section 3 authorization_details on CIBA backchannel auth requests.
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthorizationDetailsValidator>(),
         ]);
         return services.Compose<IBackChannelAuthenticationContextValidator, BackChannelAuthenticationValidatorComposite>();
@@ -766,7 +766,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorization.Validation.ResourceValidator>(),
-            // RFC 9396 §3 authorization_details on device authorization requests.
+            // RFC 9396 section 3 authorization_details on device authorization requests.
             ServiceDescriptor.Singleton<IDeviceAuthorizationContextValidator, DeviceAuthorizationDetailsValidator>(),
         ]);
         return services.Compose<IDeviceAuthorizationContextValidator, DeviceAuthorizationValidatorComposite>();

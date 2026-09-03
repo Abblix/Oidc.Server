@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// allowlist) read the resolved <see cref="SubjectTokenContext"/> directly from the context.
 /// </para>
 /// <para>
-/// Supports both RFC 8693 §4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
+/// Supports both RFC 8693 section 4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
 /// <c>sub</c> equals the subject_token's subject, no <c>act</c> claim) and delegation
 /// (<c>actor_token</c> provided; the issued token's <c>sub</c> still equals the subject's
 /// subject, and the <c>act</c> claim names the actor. When the subject_token itself already
@@ -96,8 +96,8 @@ public class TokenExchangeGrantHandler(
         SubjectTokenContext? Actor = null);
 
     /// <summary>
-    /// RFC 8693 §2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
-    /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 §5.2), not a server
+    /// RFC 8693 section 2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
+    /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 section 5.2), not a server
     /// fault - the previous throw-on-access surfaced it as HTTP 500.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateRequiredParameters(ValidationContext ctx)
@@ -132,7 +132,7 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// RFC 8693 §2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
+    /// RFC 8693 section 2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
     /// either is present -- a request that supplies one without the other is malformed.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateActorTokenPair(ValidationContext ctx)
@@ -320,7 +320,7 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 §2.1). The requested audience is
+    /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 section 2.1). The requested audience is
     /// written into the issued token's <c>aud</c> claim, so it must be constrained - otherwise a
     /// client could mint a token for any target service it names. The allowlist is default-deny: an
     /// <c>audience</c> is accepted only when the client declares a non-empty
@@ -332,7 +332,7 @@ public class TokenExchangeGrantHandler(
     /// default-deny because no other gate exists for logical service names, while <c>resource</c>
     /// stays subject to the global resource registry (<c>ResourceValidator</c> has already checked
     /// it earlier in the token pipeline). A request without either parameter passes through.
-    /// Rejections use <c>invalid_target</c> (RFC 8693 §2.2.1: the AS is unwilling to issue a token
+    /// Rejections use <c>invalid_target</c> (RFC 8693 section 2.2.1: the AS is unwilling to issue a token
     /// for the requested target service).
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateAudiences(ValidationContext ctx)
@@ -450,7 +450,7 @@ public class TokenExchangeGrantHandler(
         var request = ctx.Request;
         var clientInfo = ctx.ClientInfo;
 
-        // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
+        // RFC 8693 section 4.1: issued token's subject is always the subject_token's subject (impersonation
         // and delegation alike). Scope handling keeps the exchange least-privilege - the issued token
         // never carries more authority than either the presented subject_token or the client's own
         // registration:
@@ -462,7 +462,7 @@ public class TokenExchangeGrantHandler(
         //   scope upper bound, so the RFC 8693 id_token -> access_token scenario keeps working.
         // - Fallback to the subject_token's scope (2b): the fallback path does not pass through
         //   ScopeValidator, so it is filtered to the client's AllowedScopes here - otherwise a broker
-        //   client would obtain scopes it was never registered for (RFC 6749 §3.3).
+        //   client would obtain scopes it was never registered for (RFC 6749 section 3.3).
         string[] scope;
         if (request.Scope is { Length: > 0 } requestedScope)
         {
@@ -475,7 +475,7 @@ public class TokenExchangeGrantHandler(
             scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
         }
 
-        // Delegation act chain (RFC 8693 §4.1): when an actor_token was supplied, the new actor's
+        // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
         // subject_token becomes the new actor's nested act.act, preserving the full delegation
         // path. Impersonation = no actor_token = no act emission.
@@ -490,7 +490,7 @@ public class TokenExchangeGrantHandler(
         }
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
-        // (RFC 8693 §2.1) through the initializer into the issued token's claims rather than
+        // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than
         // silently dropping them
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
@@ -515,7 +515,7 @@ public class TokenExchangeGrantHandler(
     /// Restricts a scope set inherited from the subject_token to the requesting client's registered
     /// <see cref="ClientInfo.AllowedScopes"/>. A null or empty allow-list means "no per-client
     /// restriction" (matching <c>ScopeManager.Validate</c> and the JWT bearer grant), so the inherited
-    /// scope passes through unchanged. Comparison is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// scope passes through unchanged. Comparison is ordinal per RFC 6749 section 3.3 scope-token semantics.
     /// </summary>
     private static string[] FilterToAllowedScopes(string[]? inheritedScope, string[]? allowedScopes)
     {
@@ -532,7 +532,7 @@ public class TokenExchangeGrantHandler(
     /// Intersects the explicitly requested scope with the subject_token's own scope, keeping only the
     /// requested values the subject token also holds. Caller applies this only when the subject token
     /// carries a scope; a scopeless subject token (e.g. an id_token) imposes no upper bound. Comparison
-    /// is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// is ordinal per RFC 6749 section 3.3 scope-token semantics.
     /// </summary>
     private static string[] IntersectScopes(string[] requestedScope, string[] subjectScope)
         => Array.FindAll(requestedScope, scope => Array.IndexOf(subjectScope, scope) >= 0);

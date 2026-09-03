@@ -50,7 +50,7 @@ public class ClientRequestValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
         if (clientInfo == null)
         {
-            // RFC 7592 §2.3: when the addressed client does not exist, the server responds
+            // RFC 7592 section 2.3: when the addressed client does not exist, the server responds
             // 401 Unauthorized and the registration access token MUST be immediately revoked.
             // The error is invalid_token, not invalid_client: this endpoint authenticates with a
             // Bearer token (RFC 6750), and invalid_client would be formatted as a Basic challenge -

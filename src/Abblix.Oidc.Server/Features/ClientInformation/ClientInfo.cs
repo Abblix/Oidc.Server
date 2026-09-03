@@ -184,7 +184,7 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Specifies the algorithm that must be used for signing identity token responses issued to this client.
-    /// Per Back-Channel Logout 1.0 §2.4 logout tokens are signed in the same manner as ID Tokens, so this
+    /// Per Back-Channel Logout 1.0 section 2.4 logout tokens are signed in the same manner as ID Tokens, so this
     /// value also serves as the default signing algorithm for back-channel logout tokens unless
     /// <see cref="LogoutTokenSignedResponseAlgorithm"/> overrides it.
     /// </summary>
@@ -193,7 +193,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// The algorithm used to sign back-channel logout tokens issued to this client. When null
     /// (the default), the value of <see cref="IdentityTokenSignedResponseAlgorithm"/> applies -
-    /// Back-Channel Logout 1.0 §2.4 signs logout tokens in the same manner as ID Tokens, and this
+    /// Back-Channel Logout 1.0 section 2.4 signs logout tokens in the same manner as ID Tokens, and this
     /// property makes that otherwise implicit coupling visible and overridable per client. There is
     /// no registered DCR metadata parameter for it, so the override is host-side configuration only.
     /// </summary>
@@ -206,7 +206,7 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// RFC 9396 §10: the client's per-client allowlist of authorization-detail <c>type</c>
+    /// RFC 9396 section 10: the client's per-client allowlist of authorization-detail <c>type</c>
     /// values it may use in <c>authorization_details</c> requests. DCR-exposed
     /// (<c>authorization_details_types</c>). Semantics:
     /// <list type="bullet">
@@ -234,7 +234,7 @@ public record ClientInfo(string ClientId)
     public bool ForceAuthorizationDetailsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
+    /// RFC 8693 section 2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
     /// to the Token Exchange grant. Independent of <see cref="EffectiveGrantTypes"/> -- a client must
     /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
     /// <see cref="EffectiveGrantTypes"/> to invoke the grant, and the requested
@@ -252,7 +252,7 @@ public record ClientInfo(string ClientId)
     public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
-    /// RFC 8693 §2.1 per-client allowlist of <c>audience</c> values this client may request when
+    /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when
     /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
     /// claim, so without a constraint a client could mint a token for any target service it names.
     /// This allowlist is therefore <b>default-deny</b>, unlike the unconstrained-by-default
@@ -269,12 +269,12 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The locations this client answers for when it acts as a resource server, matched against the
-    /// RFC 9396 §2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
+    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
     /// issued to somebody else returns the entries addressed to one of these, and nothing when the
     /// list is absent.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §9 obliges the server to make the granted details available to the resource server
+    /// RFC 9396 section 9 obliges the server to make the granted details available to the resource server
     /// enforcing them, and allows either channel: the access token, or the introspection response.
     /// A deployment whose access tokens are readable by their audience needs neither this member nor
     /// the disclosure, since the details ride in the token. One encrypting them to its own keys has
@@ -283,7 +283,7 @@ public record ClientInfo(string ClientId)
     /// Absent by default, so no existing deployment starts disclosing anything.
     /// </para>
     /// <para>
-    /// Matching is TEXTUAL and exact. RFC 9396 §12 requires it: "No additional transformation or
+    /// Matching is TEXTUAL and exact. RFC 9396 section 12 requires it: "No additional transformation or
     /// normalization is to be done in evaluating equivalence of string values". A location is
     /// therefore compared to what is written here character for character, so a trailing slash, a
     /// spelled-out default port or a different case is a different location. Write the value exactly
@@ -299,7 +299,7 @@ public record ClientInfo(string ClientId)
     public Uri[]? ResourceLocations { get; set; }
 
     /// <summary>
-    /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
+    /// RFC 8693 section 1.3: by default this AS rejects a Token Exchange request where the
     /// <c>subject_token</c> was originally issued to a different client than the one presenting
     /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
     /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
@@ -311,17 +311,17 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
-    /// RFC 7662 §4: the authorization server "SHOULD require protected resources to be specifically authorized
+    /// RFC 7662 section 4: the authorization server "SHOULD require protected resources to be specifically authorized
     /// to call the introspection endpoint". This is that authorization.
     /// </summary>
     /// <remarks>
     /// Without it a caller may only ask about tokens issued to itself, which is the one caller RFC 7662 is not
-    /// written for: §2.1 has the protected resource make the call, and a protected resource is by construction
+    /// written for: section 2.1 has the protected resource make the call, and a protected resource is by construction
     /// not the client the token was issued to. Such a caller would otherwise be told a live token does not
-    /// exist, the answer §2.2 reserves for a token that was never issued or that the caller may not ask about.
+    /// exist, the answer section 2.2 reserves for a token that was never issued or that the caller may not ask about.
     /// <para>
     /// The response is narrowed for a token issued to somebody else: the end-user identifier and any claims
-    /// beyond the members RFC 7662 §2.2 defines are withheld, per §5 - "omitting privacy-sensitive information
+    /// beyond the members RFC 7662 section 2.2 defines are withheld, per section 5 - "omitting privacy-sensitive information
     /// from an introspection response is the simplest way of minimizing privacy issues".
     /// </para>
     /// This is granted by the host, never through dynamic client registration. A client may take a restriction
@@ -330,7 +330,7 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientIntrospection { get; set; } = false;
 
     /// <summary>
-    /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
+    /// Describes how the client authenticates to the token endpoint per RFC 6749 section 2.3 / OIDC Core section 9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
     /// Drives the value of <see cref="ClientType"/>.
@@ -343,7 +343,7 @@ public record ClientInfo(string ClientId)
     public TlsClientAuthOptions? TlsClientAuth { get; set; }
 
     /// <summary>
-    /// RFC 9449 §5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
+    /// RFC 9449 section 5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
     /// the client MUST present a valid DPoP proof on the token endpoint and the issued
     /// access token will be DPoP-bound (<c>cnf.jkt</c>). When <c>false</c>, DPoP is
     /// opportunistic - a valid proof still binds the token, otherwise a Bearer token is
@@ -352,7 +352,7 @@ public record ClientInfo(string ClientId)
     public bool RequireDPoP { get; set; } = false;
 
     /// <summary>
-    /// RFC 9126 §6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
+    /// RFC 9126 section 6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
     /// a pushed authorization request is the only way this client may start an authorization flow -
     /// a request arriving at the authorization endpoint without a PAR-issued request URI is rejected
     /// even when the server-wide requirement is off. FAPI-grade clients set this so a granular
@@ -361,7 +361,7 @@ public record ClientInfo(string ClientId)
     public bool RequirePushedAuthorizationRequests { get; set; } = false;
 
     /// <summary>
-    /// RFC 9101 §10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
+    /// RFC 9101 section 10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
     /// this client must deliver its authorization request parameters as a signed request object
     /// (via the request parameter or a pushed authorization request) - plain-parameter requests and
     /// unsigned request objects are rejected.
@@ -369,7 +369,7 @@ public record ClientInfo(string ClientId)
     public bool RequireSignedRequestObject { get; set; } = false;
 
     /// <summary>
-    /// RFC 8705 §3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
+    /// RFC 8705 section 3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
     /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
     /// request arrives over mutual TLS - independently of the client authentication method, which
     /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
@@ -557,7 +557,7 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// JARM (<c>authorization_signed_response_alg</c>): the JWS algorithm used to sign authorization responses
-    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM §3; the
+    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM section 3; the
     /// algorithm <c>none</c> is not permitted. Only consulted when the client requests a JWT response mode.
     /// </summary>
     public string AuthorizationSignedResponseAlgorithm { get; set; } = SigningAlgorithms.RS256;

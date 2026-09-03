@@ -83,7 +83,7 @@ public class RefreshTokenService(
 		{
 			// Rotation marks the previous token Used ("superseded"), not Revoked ("killed"). A later
 			// presentation of a superseded token is the replay signal that TokenStatusValidatorDecorator
-			// turns into a whole-family revocation (RFC 9700 §4.14.2). Running this only after the expiry
+			// turns into a whole-family revocation (RFC 9700 section 4.14.2). Running this only after the expiry
 			// check means a refused renewal never consumes the presented token.
 			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
 		}

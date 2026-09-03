@@ -21,7 +21,7 @@ namespace Abblix.Utils.UnitTests;
 /// <c>+</c> and <c>/</c>) and on length-mod-4-equals-1 inputs, which fixes the main correctness gap
 /// in the legacy <c>HttpServerUtility.UrlTokenDecode</c>. The BCL is permissive on <c>=</c> padding
 /// and on whitespace inside the input - accepting them as compat tolerance. That residual leniency
-/// is wider than RFC 7515 §3 strict mandates, but narrower than the legacy decoder, and is
+/// is wider than RFC 7515 section 3 strict mandates, but narrower than the legacy decoder, and is
 /// acceptable for the migration's scope. Tests assert what BCL actually enforces.
 /// </remarks>
 public class Base64UrlTests
@@ -97,7 +97,7 @@ public class Base64UrlTests
     }
 
     /// <summary>
-    /// The base64url alphabet is exactly <c>A-Z a-z 0-9 - _</c> (RFC 4648 §5). Standard-base64
+    /// The base64url alphabet is exactly <c>A-Z a-z 0-9 - _</c> (RFC 4648 section 5). Standard-base64
     /// characters <c>+</c> and <c>/</c> MUST be rejected - accepting them would let two
     /// cosmetically different encodings of the same payload decode to the same bytes, breaking
     /// identity-of-bytes checks (replay caches, jti hashes, at_hash binding).

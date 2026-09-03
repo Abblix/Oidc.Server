@@ -16,7 +16,7 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// OAuth 2.0 Multiple Response Type Encoding Practices §4 (none response type) end-to-end: a
+/// OAuth 2.0 Multiple Response Type Encoding Practices section 4 (none response type) end-to-end: a
 /// <c>response_type=none</c> request authorizes the flow and redirects back to <c>redirect_uri</c>
 /// carrying only <c>state</c> and <c>iss</c> (RFC 9207) - no authorization code, access token, or
 /// id_token. The host opts into the response type via <c>EnableNoneFlow()</c>.
@@ -49,12 +49,12 @@ public class NoneResponseTypeTests(TestFactory factory) : TestBase(factory)
         var location = response.Headers.Location
             ?? throw new InvalidOperationException("/authorize did not set Location header");
 
-        // Delivered to the registered redirect_uri via the query response mode (§4 default).
+        // Delivered to the registered redirect_uri via the query response mode (section 4 default).
         Assert.Equal(TestConstants.RedirectUri, location.GetLeftPart(UriPartial.Path));
 
         var callback = System.Web.HttpUtility.ParseQueryString(location.Query);
 
-        // §4: a successful none response carries state (and iss per RFC 9207) but no credentials.
+        // section 4: a successful none response carries state (and iss per RFC 9207) but no credentials.
         Assert.Equal(state, callback[ResponseParameters.State]);
         Assert.Equal(TestConstants.Issuer, callback["iss"]);
         Assert.Null(callback[ResponseParameters.Error]);

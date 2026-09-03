@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <c>GetKeyedServices&lt;IAuthorizationDetailValidator&gt;(KeyedService.AnyKey)</c> in
 /// slice #132 - no <c>TryAddEnumerable</c> parallel slot. Lookup that returns <c>null</c>
 /// (no host registration for the requested type) yields
-/// <c>invalid_authorization_details</c> per RFC 9396 §5, never throws - the server boots
+/// <c>invalid_authorization_details</c> per RFC 9396 section 5, never throws - the server boots
 /// cleanly with zero per-type validators and rejects RAR requests with a structured error.
 /// </remarks>
 internal sealed class AuthorizationDetailsPolicy(
@@ -105,7 +105,7 @@ internal sealed class AuthorizationDetailsPolicy(
 
         var result = await ValidateAsync(authorizationDetails, client, ask, token);
 
-        // Rebuild the raw array from the validated typed list (RFC 9396 §7.1 narrow / extend).
+        // Rebuild the raw array from the validated typed list (RFC 9396 section 7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
         // to the original - DeepClone in ToRawJsonArray preserves member order and any
         // type-specific payload. When a validator returned a modified AuthorizationDetail,
@@ -128,7 +128,7 @@ internal sealed class AuthorizationDetailsPolicy(
             if (string.IsNullOrEmpty(detail.Type))
             {
                 return new OidcError(ErrorCodes.InvalidAuthorizationDetails, 
-                    "authorization_details entry is missing the required 'type' member (RFC 9396 §2)");
+                    "authorization_details entry is missing the required 'type' member (RFC 9396 section 2)");
             }
 
             var validator = serviceProvider.GetKeyedService<IAuthorizationDetailValidator>(detail.Type);

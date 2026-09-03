@@ -11,8 +11,8 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Single source of truth for the DPoP signing-algorithm whitelist (RFC 9449 §4.2,
-/// §7.1). Both the proof-validator's enforcement (it rejects proofs whose <c>alg</c>
+/// Single source of truth for the DPoP signing-algorithm whitelist (RFC 9449 section 4.2,
+/// section 7.1). Both the proof-validator's enforcement (it rejects proofs whose <c>alg</c>
 /// header sits outside this set) and the resource-server's <c>WWW-Authenticate: DPoP
 /// algs="..."</c> challenge advertisement read from here, so adding a new algorithm
 /// (e.g. EdDSA when the JWS layer gains support) propagates everywhere automatically.
@@ -21,7 +21,7 @@ public static class DPoPAlgorithms
 {
     /// <summary>
     /// JWS algorithms accepted on a DPoP proof. <c>none</c> and HMAC-based algorithms
-    /// are intentionally absent - RFC 9449 §4.2 forbids them because the embedded
+    /// are intentionally absent - RFC 9449 section 4.2 forbids them because the embedded
     /// <c>jwk</c> header carries an asymmetric public key for verification.
     /// </summary>
     public static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)

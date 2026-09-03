@@ -69,7 +69,7 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
         Mint(TestConstants.EmptyAllowlistClientId, secret, redirect, [], idTokenRar: false),
-        // Doubles as the protected resource in the introspection scenarios: RFC 7662 §4 has such a caller
+        // Doubles as the protected resource in the introspection scenarios: RFC 7662 section 4 has such a caller
         // "specifically authorized to call the introspection endpoint", which is what this permission is.
         Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false) with
         {
@@ -79,10 +79,10 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
         // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.
         Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
-        // RFC 9449 §5 public client: same-key MUST be presented on refresh.
+        // RFC 9449 section 5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
 
-        // RFC 6749 §4.4 client_credentials client, used to verify that an RFC 8707 resource
+        // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
         // no redirect_uri / PKCE is configured.
         new ClientInfo(TestConstants.ClientCredentialsClientId)
@@ -93,7 +93,7 @@ builder.Services.AddOidcServices(options =>
         },
 
         // Client restricted to the none response type (OAuth 2.0 Multiple Response Type Encoding
-        // Practices §4): /authorize authorizes the request but returns no code or token, so the
+        // Practices section 4): /authorize authorizes the request but returns no code or token, so the
         // client carries no grant type and requires no PKCE.
         new ClientInfo(TestConstants.NoneResponseTypeClientId)
         {
@@ -148,7 +148,7 @@ builder.Services.AddOidcServices(options =>
     {
         // Public clients carry no shared secret; the AS gates them on PKCE + (when DPoP
         // is in play) on the proof-of-possession key. TokenEndpointAuthMethod = "none"
-        // flips ClientInfo.ClientType to Public, which in turn forces RFC 9449 §5
+        // flips ClientInfo.ClientType to Public, which in turn forces RFC 9449 section 5
         // same-key refresh binding (no client-auth fallback to sender-constrain).
         ClientSecrets = isPublic ? [] : [secret],
         TokenEndpointAuthMethod = isPublic
@@ -171,7 +171,7 @@ builder.Services.AddOidcServices(options =>
 builder.Services.AddRichAuthorizationRequests();
 builder.Services.AddAuthorizationDetailValidator<PaymentInitiationValidator>(TestConstants.PaymentInitiationType);
 
-// Opt into the OAuth 2.0 none response type (OAuth 2.0 Multiple Response Type Encoding Practices §4)
+// Opt into the OAuth 2.0 none response type (OAuth 2.0 Multiple Response Type Encoding Practices section 4)
 // so the none-response-type client can drive the credential-less authorization flow end-to-end.
 builder.Services.EnableNoneFlow();
 

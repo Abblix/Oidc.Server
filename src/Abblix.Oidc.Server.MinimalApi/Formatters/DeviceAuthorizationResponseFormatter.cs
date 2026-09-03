@@ -43,7 +43,7 @@ public class DeviceAuthorizationResponseFormatter(
                     DeviceCode = success.DeviceCode,
                     UserCode = success.UserCode,
                     VerificationUri = deviceAuthOptions.VerificationUri,
-                    // RFC 8628 §3.2: verification_uri_complete lets capable devices render a direct link / QR code so
+                    // RFC 8628 section 3.2: verification_uri_complete lets capable devices render a direct link / QR code so
                     // the user skips typing the code.
                     VerificationUriComplete = new Uri(
                         deviceAuthOptions.VerificationUri.AddToQuery(

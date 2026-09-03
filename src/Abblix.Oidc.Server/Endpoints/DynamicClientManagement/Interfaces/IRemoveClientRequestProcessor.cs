@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Performs the storage-level deregistration of a client whose request has already been
-/// validated for authentication and existence per RFC 7592 §2.3.
+/// validated for authentication and existence per RFC 7592 section 2.3.
 /// </summary>
 public interface IRemoveClientRequestProcessor
 {

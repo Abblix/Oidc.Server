@@ -93,13 +93,13 @@ public class LogoutTokenServiceTests
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken!.Header.Type);
-        // The default ClientInfo registers RS256 for ID Token signing, and §2.4 signs the logout
+        // The default ClientInfo registers RS256 for ID Token signing, and section 2.4 signs the logout
         // token in the same manner as the ID Token.
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
-    /// Back-Channel Logout §2.4: the logout token is signed in the same manner as the ID Token -
+    /// Back-Channel Logout section 2.4: the logout token is signed in the same manner as the ID Token -
     /// by default the client's registered ID Token signing algorithm applies, not a hardcoded RS256.
     /// </summary>
     [Theory]
@@ -124,7 +124,7 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
-    /// The explicit per-client logout token algorithm overrides the §2.4 default coupling with
+    /// The explicit per-client logout token algorithm overrides the section 2.4 default coupling with
     /// the ID Token signing algorithm.
     /// </summary>
     [Fact]
@@ -148,7 +148,7 @@ public class LogoutTokenServiceTests
     }
 
     /// <summary>
-    /// Back-Channel Logout §2.4: "A Logout Token MUST be signed" and none "MUST NOT be used" -
+    /// Back-Channel Logout section 2.4: "A Logout Token MUST be signed" and none "MUST NOT be used" -
     /// even when the client legally registered id_token_signed_response_alg=none (allowed for
     /// response types that return no ID Token from the authorization endpoint), the logout token
     /// must fall back to RS256, the algorithm every OIDC client is required to support.

@@ -84,7 +84,7 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.6: in Direct Key Agreement mode the JWE Encrypted Key is the empty octet
+	/// RFC 7518 section 4.6: in Direct Key Agreement mode the JWE Encrypted Key is the empty octet
 	/// sequence - a non-empty value signals a malformed or tampered token and must be rejected.
 	/// </summary>
 	[Fact]
@@ -100,7 +100,7 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
+	/// RFC 7518 section 4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
 	/// equal values collapse the producer and recipient identities the KDF is meant to bind.
 	/// </summary>
 	[Fact]
@@ -281,7 +281,7 @@ public class EcdhEsKeyAgreementTests
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
 		var jwe = await creator.IssueAsync(token, signingKey, recipientKey, keyManagementAlgorithm, contentEncryption);
 
-		// Assert: JWE structure per RFC 7518 §4.6 - the encrypted key is empty exactly in direct mode
+		// Assert: JWE structure per RFC 7518 section 4.6 - the encrypted key is empty exactly in direct mode
 		var parts = jwe.Split('.');
 		Assert.Equal(5, parts.Length);
 		Assert.Equal(emptyEncryptedKey, parts[1].Length == 0);

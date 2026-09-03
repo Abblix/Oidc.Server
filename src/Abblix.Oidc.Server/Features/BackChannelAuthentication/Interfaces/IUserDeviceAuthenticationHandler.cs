@@ -152,7 +152,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// <para>
 /// Narrowing is yours to decide; widening is refused. Completion compares the grant's
 /// <c>authorization_details</c> types against what the client actually sent, and a type the request never
-/// carried denies the request rather than issuing it. RFC 9396 §7 has the server return what was granted,
+/// carried denies the request rather than issuing it. RFC 9396 section 7 has the server return what was granted,
 /// which is only meaningful while "granted" stays inside "requested".
 /// </para>
 ///
@@ -163,7 +163,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///   <item><strong>Authentication:</strong> All notifications use Bearer token from <c>client_notification_token</c></item>
 /// </list>
 ///
-/// <para><strong>Security contract - user_code verification (CIBA Core 1.0 §7.1):</strong></para>
+/// <para><strong>Security contract - user_code verification (CIBA Core 1.0 section 7.1):</strong></para>
 /// <para>
 /// The library validates only the <em>presence</em> of <c>user_code</c> when the provider and client
 /// require it (see <see cref="Endpoints.BackChannelAuthentication.Validation.UserCodeValidator"/>); it

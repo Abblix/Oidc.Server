@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 
-/// <summary>Formats the result of removing a client (RFC 7592 §2.3) into an <see cref="IResult"/>.</summary>
+/// <summary>Formats the result of removing a client (RFC 7592 section 2.3) into an <see cref="IResult"/>.</summary>
 public interface IRemoveClientResponseFormatter
 {
     /// <summary>Formats the removal result (empty 204 on success, or the OAuth error).</summary>

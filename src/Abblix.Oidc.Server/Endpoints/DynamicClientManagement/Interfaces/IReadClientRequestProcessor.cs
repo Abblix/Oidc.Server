@@ -13,9 +13,9 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Builds the RFC 7592 §2.1 read-client response from a request that has already been validated.
+/// Builds the RFC 7592 section 2.1 read-client response from a request that has already been validated.
 /// Reads stored metadata, formats it for the wire, and issues a fresh
-/// <c>registration_access_token</c> as recommended by RFC 7592 §3.
+/// <c>registration_access_token</c> as recommended by RFC 7592 section 3.
 /// </summary>
 public interface IReadClientRequestProcessor
 {

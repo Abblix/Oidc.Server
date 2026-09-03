@@ -26,7 +26,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.DPoP;
 
 /// <summary>
-/// Tests for <see cref="ProofValidator"/> covering RFC 9449 §4.2 / §4.3 structural,
+/// Tests for <see cref="ProofValidator"/> covering RFC 9449 section 4.2 / section 4.3 structural,
 /// algorithmic and claim-binding validation. Replay-cache and DPoP-Nonce checks are out
 /// of scope here and land in the next slice.
 /// </summary>
@@ -106,10 +106,10 @@ public class ProofValidatorTests
     }
 
     /// <summary>
-    /// RFC 9449 §7.1: a request must carry at most one DPoP header. ASP.NET Core's string
+    /// RFC 9449 section 7.1: a request must carry at most one DPoP header. ASP.NET Core's string
     /// FromHeader binder joins repeated header values with a comma - the proof string
     /// arrives at the validator looking like "&lt;jwt1&gt;,&lt;jwt2&gt;". Because JWS
-    /// compact serialization (RFC 7515 §3.1) uses only base64url + '.', a comma is
+    /// compact serialization (RFC 7515 section 3.1) uses only base64url + '.', a comma is
     /// unambiguous evidence of HTTP-level concatenation. The validator must reject before
     /// the downstream JsonWebTokenValidator sees a string with 5 dot-separated parts,
     /// which would route to the JWE branch and crash with "ResolveTokenDecryptionKeys is
@@ -296,7 +296,7 @@ public class ProofValidatorTests
     [Fact]
     public async Task ValidateAsync_JtiTooShort_ReturnsJtiMissing()
     {
-        // RFC 9449 §11.1 RECOMMENDS at least 96 bits of effective entropy in the jti
+        // RFC 9449 section 11.1 RECOMMENDS at least 96 bits of effective entropy in the jti
         // claim - anything shorter is rejected to harden the replay defence.
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "short" }.Build();
 

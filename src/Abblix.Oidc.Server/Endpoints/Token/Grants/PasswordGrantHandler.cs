@@ -51,7 +51,7 @@ public class PasswordGrantHandler(
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
-        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.UserName.HasValue())
         {

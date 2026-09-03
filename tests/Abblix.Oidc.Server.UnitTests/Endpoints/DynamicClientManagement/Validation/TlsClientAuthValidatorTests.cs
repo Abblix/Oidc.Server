@@ -72,7 +72,7 @@ public class TlsClientAuthValidatorTests
 
     /// <summary>
     /// Verifies validation fails when more than one subject identifier is specified.
-    /// RFC 8705 §2.1.2 requires a tls_client_auth client to register exactly one of the
+    /// RFC 8705 section 2.1.2 requires a tls_client_auth client to register exactly one of the
     /// subject-identifier parameters; supplying both a Subject DN and a SAN must be rejected.
     /// </summary>
     [Fact]
@@ -368,7 +368,7 @@ public class TlsClientAuthValidatorTests
 
     /// <summary>
     /// Verifies validation fails when several subject-identifier metadata types are combined.
-    /// RFC 8705 §2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
+    /// RFC 8705 section 2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
     /// be rejected rather than accepted.
     /// </summary>
     [Fact]

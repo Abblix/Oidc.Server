@@ -19,9 +19,9 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 §5.1),
-/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 §11),
-/// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 §3.1.3.3, with <c>at_hash</c>
+/// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 section 5.1),
+/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11),
+/// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 section 3.1.3.3, with <c>at_hash</c>
 /// computed from the issued access token).
 /// </summary>
 /// <param name="accessTokenService">Issues access-token JWTs.</param>
@@ -56,7 +56,7 @@ public class TokenRequestProcessor(
 
 		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		// RFC 6749 §5.2/§6 and RFC 8707 §2.2: a token request may only narrow what the grant carries,
+		// RFC 6749 section 5.2/section 6 and RFC 8707 section 2.2: a token request may only narrow what the grant carries,
 		// never reach for scopes or resources it never held. The evaluator intersects requested with
 		// granted; a non-empty request that collapses to an empty intersection means the client asked
 		// for scopes/resources the grant does not cover. Issuing a scopeless token, or one whose audience
@@ -82,7 +82,7 @@ public class TokenRequestProcessor(
 			authContext,
 			clientInfo);
 
-		// RFC 9449 §7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
+		// RFC 9449 section 7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
 		// from the proof key) advertises token_type "DPoP"; otherwise "Bearer".
 		var tokenType = !string.IsNullOrEmpty(authContext.ProofKeyThumbprint)
 			? TokenTypes.DPoP
@@ -94,7 +94,7 @@ public class TokenRequestProcessor(
 			clientInfo.AccessTokenExpiresIn,
 			TokenTypeIdentifiers.AccessToken)
 		{
-			// RFC 9396 §7: the AS MUST return the authorization_details "as granted by the resource owner
+			// RFC 9396 section 7: the AS MUST return the authorization_details "as granted by the resource owner
 			// and assigned to the respective access token", and the same section lets the server OMIT
 			// values while never letting it name more than the token holds.
 			//
@@ -115,7 +115,7 @@ public class TokenRequestProcessor(
 					: null,
 		};
 
-		// RFC 6749 §4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
+		// RFC 6749 section 4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
 		// returns neither a refresh token nor an ID token - the exchanged access token is the whole
 		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
 		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
@@ -130,21 +130,21 @@ public class TokenRequestProcessor(
 		{
 			var refreshContext = request.AuthorizedGrant.Context with
 			{
-				// RFC 9449 §5 confidential-vs-public split:
+				// RFC 9449 section 5 confidential-vs-public split:
 				ProofKeyThumbprint = clientInfo.ClientType switch
 				{
 					//   * Confidential clients: refresh tokens are not separately DPoP-bound,
 					//     client authentication already sender-constrains them. Stripping the
 					//     committed jkt from the persisted refresh-token context lets a follow-up
 					//     refresh call skip the committed-vs-presented compare in
-					//     DPoPTokenEndpointValidator, allowing key rotation per §5's carve-out.
+					//     DPoPTokenEndpointValidator, allowing key rotation per section 5's carve-out.
 					ClientType.Confidential => null,
 
-					//   * Public clients: DPoP is the SOLE sender-constraint, so §5 mandates
+					//   * Public clients: DPoP is the SOLE sender-constraint, so section 5 mandates
 					//     same-key MUST on every refresh. Source the binding from authContext
 					//     (the evaluator stamps the live proof's thumbprint) rather than from
 					//     the original grant context, otherwise a non-PAR initial flow loses
-					//     the binding and the next refresh would accept any key - a §5 violation.
+					//     the binding and the next refresh would accept any key - a section 5 violation.
 					//     authContext.ProofKeyThumbprint is null when the request carried no proof,
 					//     which keeps Bearer-only public flows unchanged.
 					_ => authContext.ProofKeyThumbprint,

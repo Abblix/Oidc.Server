@@ -18,30 +18,30 @@ namespace Abblix.Jwt.Encryption;
 /// <remarks>
 /// This is the polyfill used on target frameworks whose base class library does not expose RFC 5649 natively
 /// (before .NET 10's <c>Aes.EncryptKeyWrapPadded</c>/<c>DecryptKeyWrapPadded</c>); <see cref="AesKeyWrapPadded"/>
-/// routes to the platform on .NET 10 and to this transcription otherwise. RFC 5649 §3 is followed with no
+/// routes to the platform on .NET 10 and to this transcription otherwise. RFC 5649 section 3 is followed with no
 /// deviations: the Alternative Initial Value is <c>A65959A6</c> concatenated with the 32-bit big-endian message
 /// length; a single-semiblock input is a lone AES-ECB block over AIV||padding, and a longer input runs the RFC 3394
-/// §2.2.1 six-round wrapping with the register initialised to the AIV. The cipher itself stays in the platform;
+/// section 2.2.1 six-round wrapping with the register initialised to the AIV. The cipher itself stays in the platform;
 /// this class never touches the key schedule or S-boxes. Correctness is pinned by <c>AesKeyWrapPaddedTests</c>
-/// against the two RFC 5649 §4 known-answer vectors (both the multi-block and the single-block path) and, on .NET
+/// against the two RFC 5649 section 4 known-answer vectors (both the multi-block and the single-block path) and, on .NET
 /// 10, cross-checked byte-for-byte against the native implementation of the same standard.
 /// </remarks>
 internal static class Rfc5649KeyWrap
 {
     private const int SemiblockSize = 8;
 
-    // RFC 5649 §3 Alternative Initial Value constant: the fixed 4-byte prefix that unwrapping checks, followed by
+    // RFC 5649 section 3 Alternative Initial Value constant: the fixed 4-byte prefix that unwrapping checks, followed by
     // the message length indicator. Its presence after unwrapping is the integrity check of this construction.
     private static ReadOnlySpan<byte> AivPrefix => [0xA6, 0x59, 0x59, 0xA6];
 
     /// <summary>
-    /// Wraps <paramref name="plaintext"/> per RFC 5649 §4.1. The output is padded up to a multiple of 8 bytes and
+    /// Wraps <paramref name="plaintext"/> per RFC 5649 section 4.1. The output is padded up to a multiple of 8 bytes and
     /// carries an extra 8-byte block, so it is <c>8 * (ceil(len/8) + 1)</c> bytes for a two-or-more-semiblock input
     /// and 16 bytes for a single-semiblock input.
     /// </summary>
     public static byte[] Wrap(byte[] keyEncryptionKey, ReadOnlySpan<byte> plaintext)
     {
-        // RFC 5649 §3: the AIV is A65959A6 followed by the unpadded length as a 32-bit big-endian integer, and the
+        // RFC 5649 section 3: the AIV is A65959A6 followed by the unpadded length as a 32-bit big-endian integer, and the
         // plaintext is zero-padded to a whole number of 64-bit semiblocks.
         var n = (plaintext.Length + SemiblockSize - 1) / SemiblockSize;
         if (n == 0)
@@ -57,7 +57,7 @@ internal static class Rfc5649KeyWrap
         using var aes = Aes.Create();
         aes.Key = keyEncryptionKey;
 
-        // RFC 5649 §4.1: a single padded semiblock is wrapped as one AES-ECB block over AIV || padded; the general
+        // RFC 5649 section 4.1: a single padded semiblock is wrapped as one AES-ECB block over AIV || padded; the general
         // case runs the RFC 3394 wrapping with the register seeded by the AIV instead of the fixed A6A6... value.
         if (n == 1)
         {
@@ -77,7 +77,7 @@ internal static class Rfc5649KeyWrap
     }
 
     /// <summary>
-    /// Unwraps a value produced by <see cref="Wrap"/> per RFC 5649 §4.2, verifying the AIV, the length indicator and
+    /// Unwraps a value produced by <see cref="Wrap"/> per RFC 5649 section 4.2, verifying the AIV, the length indicator and
     /// the zero padding before returning any plaintext.
     /// </summary>
     /// <returns>True with the recovered plaintext when every check passes; otherwise false and null.</returns>
@@ -113,7 +113,7 @@ internal static class Rfc5649KeyWrap
             padded = state.AsSpan(SemiblockSize).ToArray();
         }
 
-        // RFC 5649 §4.2: the recovered AIV must carry the fixed prefix and a length indicator consistent with the
+        // RFC 5649 section 4.2: the recovered AIV must carry the fixed prefix and a length indicator consistent with the
         // number of padded semiblocks, and every padding byte must be zero. The prefix comparison is constant-time,
         // and a failure returns nothing rather than attacker-influenced bytes.
         if (!CryptographicOperations.FixedTimeEquals(aiv[..4], AivPrefix))

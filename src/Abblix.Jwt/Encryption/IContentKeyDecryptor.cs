@@ -33,7 +33,7 @@ public interface IContentKeyDecryptor
     /// Recovers the Content Encryption Key from <paramref name="encryptedKey"/>: an RSA decryption, a symmetric
     /// unwrap, or an ECDH-ES agreement, selected by <paramref name="algorithm"/>. Returns null on a decryption
     /// failure - wrong key, bad ciphertext, unsupported algorithm, or a malformed header parameter - so a wrong
-    /// key is indistinguishable from a bad ciphertext (the RFC 7516 §11.5 mitigation upstream relies on this). A
+    /// key is indistinguishable from a bad ciphertext (the RFC 7516 section 11.5 mitigation upstream relies on this). A
     /// key with no decryption path at all (a public-only key with no custodian, which a correct configuration
     /// never presents) fails loud instead.
     /// </summary>

@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <summary>
 /// Outcome signalling that more than one active end-user session matches the request and the
 /// host UI must let the user pick one before authorization can continue. Maps to OpenID Connect
-/// Core 1.0 §3.1.2.6 <c>account_selection_required</c> when <c>prompt=none</c>; otherwise the
+/// Core 1.0 section 3.1.2.6 <c>account_selection_required</c> when <c>prompt=none</c>; otherwise the
 /// host renders an account picker over the supplied <see cref="Users"/> set.
 /// </summary>
 /// <param name="Model">The authorization request that triggered the multi-account branch.</param>

@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// <summary>
 /// Formats UserInfo results as <see cref="IResult"/>: the plain claims JSON, or, when the client registered a
 /// <c>userinfo_signed_response_alg</c>, a signed (and optionally encrypted) JWT carrying the same claims (OpenID
-/// Connect Core 5.3.2). On failure it returns the RFC 6750 / RFC 9449 §7.1 challenge response that advertises both the
+/// Connect Core 5.3.2). On failure it returns the RFC 6750 / RFC 9449 section 7.1 challenge response that advertises both the
 /// DPoP and Bearer schemes.
 /// </summary>
 public class UserInfoResponseFormatter(

@@ -12,7 +12,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Validates the registration access token presented on calls to the client configuration
-/// endpoint per RFC 7592 §3. Verifies the bearer token from the <c>Authorization</c> header
+/// endpoint per RFC 7592 section 3. Verifies the bearer token from the <c>Authorization</c> header
 /// is bound to the requested <c>client_id</c>.
 /// </summary>
 public interface IRegistrationAccessTokenValidator

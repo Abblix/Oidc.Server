@@ -19,9 +19,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
 /// Shared driver/assert helpers for the RFC 9449 DPoP scenario classes. The DPoP
-/// suite is split by RFC section into <see cref="DPoPTests"/> (token endpoint, §6),
-/// <see cref="DPoPRefreshTests"/> (refresh-token rebinding, §5) and
-/// <see cref="DPoPUserInfoTests"/> (resource access, §9) so each runs as its own
+/// suite is split by RFC section into <see cref="DPoPTests"/> (token endpoint, section 6),
+/// <see cref="DPoPRefreshTests"/> (refresh-token rebinding, section 5) and
+/// <see cref="DPoPUserInfoTests"/> (resource access, section 9) so each runs as its own
 /// parallel xunit collection; this non-test base keeps the PAR -> /authorize ->
 /// /token choreography and the <c>cnf.jkt</c> assertions in one place. Helpers are
 /// <c>protected static</c> - section-specific helpers live on the concrete classes.
@@ -160,7 +160,7 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
         var tokenType = tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>();
         Assert.Equal(TokenTypes.DPoP, tokenType);
 
-        // RFC 9449 §6: the issued access token carries cnf.jkt = the proof key's JWK thumbprint.
+        // RFC 9449 section 6: the issued access token carries cnf.jkt = the proof key's JWK thumbprint.
         var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
 

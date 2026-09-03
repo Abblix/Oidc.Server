@@ -15,7 +15,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Variant of <see cref="RegisterClientRequestValidator"/> used by the RFC 7592 §2.2 update flow.
+/// Variant of <see cref="RegisterClientRequestValidator"/> used by the RFC 7592 section 2.2 update flow.
 /// Wraps the request in a <see cref="ClientRegistrationValidationContext"/> with
 /// <see cref="DynamicClientOperation.Update"/> so steps such as <c>ClientIdValidator</c>
 /// require the client to already exist instead of forbidding it.

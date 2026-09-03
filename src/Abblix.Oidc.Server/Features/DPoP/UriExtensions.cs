@@ -20,7 +20,7 @@ internal static class UriExtensions
 {
     /// <summary>
     /// Returns the canonical-string form of <paramref name="uri"/> for DPoP <c>htu</c>
-    /// comparison per RFC 9449 §6 and RFC 3986 §6.2: scheme and host folded to
+    /// comparison per RFC 9449 section 6 and RFC 3986 section 6.2: scheme and host folded to
     /// lowercase, default ports stripped, query and fragment dropped, path preserved
     /// verbatim. Internationalised host names are returned in Punycode ASCII so two
     /// peers produce byte-stable output for the same conceptual URI.
@@ -31,7 +31,7 @@ internal static class UriExtensions
     internal static string Normalize(this Uri uri)
         => UppercasePercentTriplets(uri.GetLeftPart(UriPartial.Path));
 
-    // RFC 3986 §6.2.2.2: percent-encoded triplets carry significant case in their two
+    // RFC 3986 section 6.2.2.2: percent-encoded triplets carry significant case in their two
     // hex digits and MUST be normalised to uppercase. The .NET Uri class folds scheme
     // and host case but leaves percent-triplets verbatim, so we close the gap here.
     private static string UppercasePercentTriplets(string source)

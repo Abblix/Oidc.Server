@@ -49,7 +49,7 @@ public class AuthorizationCodeBuilder(
             request.ClientInfo.AuthorizationCodeExpiresIn);
 
         // Record this transaction's replay-protection values so a later reuse of a constant code_challenge
-        // or nonce by the same client is detected (RFC 9700 §2.1.1). Doing it here - once per issued code -
+        // or nonce by the same client is detected (RFC 9700 section 2.1.1). Doing it here - once per issued code -
         // means the same request re-processed across a login or consent redirect is not flagged.
         var context = authorizedGrant.Context;
         if (context.CodeChallenge is { } codeChallenge)

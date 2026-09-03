@@ -397,7 +397,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
                 case AuthorizationHeaderMarkerName:
                     // The Authorization header is the standard transport for client/registration credentials
-                    // (RFC 9110 §11.6.2); parsed once into a local that every authorization-header property reads.
+                    // (RFC 9110 section 11.6.2); parsed once into a local that every authorization-header property reads.
                     if (_preStatements.All(static statement => !statement.Contains("authorizationHeader")))
                     {
                         _preStatements.Add(

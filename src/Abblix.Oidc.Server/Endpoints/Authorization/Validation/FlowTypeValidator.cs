@@ -53,7 +53,7 @@ public partial class FlowTypeValidator(
         var responseType = context.Request.ResponseType;
         var returnsTokenFromAuthorization = responseType.ReturnsTokenFromAuthorization();
 
-        // RFC 6749 §4.1.2.1: response_type is REQUIRED, and a missing required parameter is
+        // RFC 6749 section 4.1.2.1: response_type is REQUIRED, and a missing required parameter is
         // invalid_request - not unsupported_response_type (no method was named at all) and not
         // unauthorized_client (no client policy was consulted).
         if (responseType is not { Length: > 0 })
@@ -92,7 +92,7 @@ public partial class FlowTypeValidator(
         if (!ResponseTypeAllowed(context))
         {
             LogResponseTypeNotAllowed(responseType);
-            // RFC 6749 §4.1.2.1 / §4.2.2.1: the server supports this response_type (the gate above
+            // RFC 6749 section 4.1.2.1 / section 4.2.2.1: the server supports this response_type (the gate above
             // passed), but this particular client is not registered to use it - that is
             // unauthorized_client. unsupported_response_type (returned before) is reserved for
             // methods the server itself cannot produce.
@@ -115,7 +115,7 @@ public partial class FlowTypeValidator(
             return context.Error(errorCode, message);
         }
 
-        // OAuth 2.0 Multiple Response Types §5: when the requested response_type contains a
+        // OAuth 2.0 Multiple Response Types section 5: when the requested response_type contains a
         // value that requires fragment encoding (token / id_token), the error response MUST be
         // returned in the fragment as well. The previous unconditional query default delivered
         // the error to a channel the client never reads and exposed it to the server hosting

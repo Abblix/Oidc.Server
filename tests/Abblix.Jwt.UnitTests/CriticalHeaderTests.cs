@@ -13,7 +13,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Unit tests for the JWS 'crit' header parameter validation per RFC 7515 §4.1.11. Tokens are
+/// Unit tests for the JWS 'crit' header parameter validation per RFC 7515 section 4.1.11. Tokens are
 /// signed with a real RSA key so the signature step passes; the focus is on the post-signature
 /// 'crit' validation pass that decides whether the JOSE header itself is acceptable. Library
 /// ships with zero <see cref="ICriticalHeaderHandler"/> implementations by default - the
@@ -44,7 +44,7 @@ public class CriticalHeaderTests
     }
 
     /// <summary>
-    /// Per RFC 7515 §4.1.11 a producer MUST NOT use the empty list as 'crit'. The validator
+    /// Per RFC 7515 section 4.1.11 a producer MUST NOT use the empty list as 'crit'. The validator
     /// rejects malformed input as recipient-MAY.
     /// </summary>
     [Fact]
@@ -123,7 +123,7 @@ public class CriticalHeaderTests
 
     /// <summary>
     /// A 'crit' name that names an extension this library does not understand MUST be rejected
-    /// (RFC 7515 §4.1.11: "If any of the listed extension Header Parameters are not understood
+    /// (RFC 7515 section 4.1.11: "If any of the listed extension Header Parameters are not understood
     /// and supported by the recipient, then the JWS is invalid"). The library currently
     /// understands no extensions, so any well-formed 'crit' that survives the malformation
     /// guards lands here.

@@ -18,7 +18,7 @@ using CorePushedAuthorizationResponse = Abblix.Oidc.Server.Endpoints.PushedAutho
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
 /// <summary>
-/// Regression coverage for the PAR response formatter: per RFC 9126 §2.3 PAR is a server-to-server
+/// Regression coverage for the PAR response formatter: per RFC 9126 section 2.3 PAR is a server-to-server
 /// endpoint, so responses must always be JSON and errors must never redirect to a browser-facing
 /// login page.
 /// </summary>

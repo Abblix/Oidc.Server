@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// Handles authorization requests by fetching, validating, processing and encoding the response.
 /// </summary>
 /// <param name="fetcher">Resolves the effective authorization request, including dereferencing pushed
-/// (RFC 9126) or request-object (OIDC Core §6) variants.</param>
+/// (RFC 9126) or request-object (OIDC Core section 6) variants.</param>
 /// <param name="validator">Performs protocol-level validation of the resolved request prior to processing.</param>
 /// <param name="processor">Produces the validated authorization result projected onto the wire.</param>
 /// <param name="responseEncoder">Applies iss/scope gating and, for a JARM request, packs the response

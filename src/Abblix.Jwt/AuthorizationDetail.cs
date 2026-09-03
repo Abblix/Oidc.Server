@@ -11,17 +11,17 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// One entry in the OAuth 2.0 Rich Authorization Requests <c>authorization_details</c> array
-/// (RFC 9396 §2), wrapped over a <see cref="JsonNode"/> which is the source of truth for the
-/// entry's content. The wrapper exposes the RFC 9396 §2.2 common-data members as strongly-typed
+/// (RFC 9396 section 2), wrapped over a <see cref="JsonNode"/> which is the source of truth for the
+/// entry's content. The wrapper exposes the RFC 9396 section 2.2 common-data members as strongly-typed
 /// accessors that read from and write to the underlying <see cref="Json"/> directly - the same
 /// shape <see cref="JsonWebTokenPayload"/> uses over its <see cref="JsonObject"/>.
 /// </summary>
 /// <param name="Json">The underlying JSON node carrying the entry's wire shape. Member order,
-/// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
+/// type-specific payload (RFC 9396 section 2.2 extension members), and any unknown fields the AS does
 /// not model survive the authorize → code → token round-trip byte-exact because no typed
 /// deserialise / re-serialise cycle ever runs over them.</param>
 /// <remarks>
-/// Type-specific members outside the §2.2 common-data set (for example the
+/// Type-specific members outside the section 2.2 common-data set (for example the
 /// <c>instructedAmount</c> / <c>creditorAccount</c> fields of a PSD2 <c>payment_initiation</c>
 /// entry) are accessed directly through <see cref="Json"/>; the per-type validator that owns
 /// the schema for a given <c>type</c> reads and writes them via the
@@ -30,13 +30,13 @@ namespace Abblix.Jwt;
 public record AuthorizationDetail(JsonObject Json)
 {
     /// <summary>The underlying JSON node carrying the entry's wire shape. Member order,
-    /// type-specific payload (RFC 9396 §2.2 extension members), and any unknown fields the AS does
+    /// type-specific payload (RFC 9396 section 2.2 extension members), and any unknown fields the AS does
     /// not model survive the authorize → code → token round-trip byte-exact because no typed
     /// deserialise / re-serialise cycle ever runs over them.</summary>
     public JsonObject Json { get; } = Json;
 
     /// <summary>
-    /// The authorization-detail type identifier. RFC 9396 §2 makes it REQUIRED, and §2.1 governs
+    /// The authorization-detail type identifier. RFC 9396 section 2 makes it REQUIRED, and section 2.1 governs
     /// what a value may be;
     /// the per-type validator rejects entries where this member is missing with
     /// <c>invalid_authorization_details</c>.
@@ -48,7 +48,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// Locations of the resource server(s) the client wants to access, per RFC 9396 §2.2.
+    /// Locations of the resource server(s) the client wants to access, per RFC 9396 section 2.2.
     /// Typically URIs identifying resource servers.
     /// </summary>
     public IEnumerable<string>? Locations
@@ -58,7 +58,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// Kinds of actions to be taken at the resource, per RFC 9396 §2.2.
+    /// Kinds of actions to be taken at the resource, per RFC 9396 section 2.2.
     /// </summary>
     public IEnumerable<string>? Actions
     {
@@ -67,7 +67,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// Kinds of data being requested from the resource, per RFC 9396 §2.2.
+    /// Kinds of data being requested from the resource, per RFC 9396 section 2.2.
     /// </summary>
     public IEnumerable<string>? Datatypes
     {
@@ -76,7 +76,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// A specific resource identifier at the API, per RFC 9396 §2.2.
+    /// A specific resource identifier at the API, per RFC 9396 section 2.2.
     /// </summary>
     public string? Identifier
     {
@@ -85,7 +85,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// Types or levels of privilege being requested at the resource, per RFC 9396 §2.2.
+    /// Types or levels of privilege being requested at the resource, per RFC 9396 section 2.2.
     /// </summary>
     public IEnumerable<string>? Privileges
     {
@@ -94,7 +94,7 @@ public record AuthorizationDetail(JsonObject Json)
     }
 
     /// <summary>
-    /// RFC 9396 §2.2 member names. Type-specific members outside this set live alongside in
+    /// RFC 9396 section 2.2 member names. Type-specific members outside this set live alongside in
     /// <see cref="Json"/> and are accessed by per-type validators directly through the
     /// <see cref="System.Text.Json.Nodes"/> API on the wrapped node.
     /// </summary>

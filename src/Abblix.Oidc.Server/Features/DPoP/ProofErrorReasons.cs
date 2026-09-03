@@ -70,7 +70,7 @@ public static class ProofErrorReasons
     /// <summary>Payload <c>htu</c> is not a valid absolute URI.</summary>
     public const string HttpUriInvalid = "htu_invalid";
 
-    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 §6.2 canonicalisation.</summary>
+    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 section 6.2 canonicalisation.</summary>
     public const string HttpUriMismatch = "htu_mismatch";
 
     /// <summary>Payload <c>iat</c> claim is missing.</summary>

@@ -612,7 +612,7 @@ public class ClientJwtValidatorTests
     /// <summary>
     /// Verifies that ValidateAsync wires the server's own private keys as the token-decryption keys,
     /// so a request object that the client JWE-encrypted to the server can be decrypted (RFC 9101
-    /// §6.1). The inner signed JWT is still verified with the client's key.
+    /// section 6.1). The inner signed JWT is still verified with the client's key.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ShouldResolveServerDecryptionKeys()

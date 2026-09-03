@@ -71,7 +71,7 @@ public static class ActionResultExtensions
 	/// <summary>
 	/// Decorates an <see cref="ActionResult"/> to append each value as a separate header line.
 	/// Use when the wire form expects multiple header lines under the same name (e.g. RFC 9449
-	/// §7.1 dual <c>WWW-Authenticate</c> emission for DPoP and Bearer); plain
+	/// section 7.1 dual <c>WWW-Authenticate</c> emission for DPoP and Bearer); plain
 	/// <see cref="WithHeader"/> overwrites instead of appending.
 	/// </summary>
 	public static ActionResult WithAppendHeader(
@@ -110,7 +110,7 @@ public static class ActionResultExtensions
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
 				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
 
-			// RFC 6749 §5.2: a 401 is REQUIRED when the client authenticated via the Authorization
+			// RFC 6749 section 5.2: a 401 is REQUIRED when the client authenticated via the Authorization
 			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
 			// only Authorization-header scheme the client-authenticating endpoints (token,
 			// introspection, revocation) support, hence the Basic challenge; the error itself stays
@@ -132,7 +132,7 @@ public static class ActionResultExtensions
 
 	/// <summary>
 	/// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP
-	/// scheme (RFC 9449 §7.1) on the <c>WWW-Authenticate</c> header, optionally alongside the
+	/// scheme (RFC 9449 section 7.1) on the <c>WWW-Authenticate</c> header, optionally alongside the
 	/// Bearer scheme. <see cref="UseDPoPNonceError"/> additionally emits the <c>DPoP-Nonce</c>
 	/// response header so the client can echo the freshly issued nonce on retry.
 	/// </summary>

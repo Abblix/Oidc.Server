@@ -63,7 +63,7 @@ public partial class RevocationRequestValidator(
 		ClientRequest clientRequest)
 	{
 		// Authenticate the client making the revocation request. Public clients (auth method
-		// "none") are deliberately allowed through: RFC 7009 §5 states a revocation request
+		// "none") are deliberately allowed through: RFC 7009 section 5 states a revocation request
 		// "must contain a valid client_id, in the case of a public client, or valid client
 		// credentials, in the case of a confidential client", and the spec's own security
 		// analysis dismisses the guessed-client_id threat - a guessed token is worth far more

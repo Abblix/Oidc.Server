@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// </summary>
 /// <param name="authorizationDetailsPolicy">Re-runs granted <c>authorization_details</c> through the
 /// per-type validators and per-client allowlist; the per-type validator owns the "is B a narrowing
-/// of A" decision for intra-entry content (RFC 9396 §6.1 has no universal comparator).</param>
+/// of A" decision for intra-entry content (RFC 9396 section 6.1 has no universal comparator).</param>
 public class ConsentConstraintEnforcer(
     IAuthorizationDetailsPolicy authorizationDetailsPolicy) : IConsentConstraintEnforcer
 {
@@ -97,7 +97,7 @@ public class ConsentConstraintEnforcer(
         var grantedTypes = RefuseTypesOutside(
             requestedTypes, grantedAuthorizationDetails, nameof(IUserConsentsProvider));
 
-        // Intra-entry narrowing: RFC 9396 §6.1 defines no universal comparator for "is B a narrowing of
+        // Intra-entry narrowing: RFC 9396 section 6.1 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
         // the per-type validators and per-client allowlist and let the per-type validator own that
         // decision. A rejection means a granted entry's content escalated beyond what the validator
@@ -157,7 +157,7 @@ public class ConsentConstraintEnforcer(
             if (details.ToTypedArray() is not { } typed || typed.Length != details.Count)
                 throw Violation(culprit, "authorization_details entries", ["an entry that is not a JSON object"]);
 
-            // A missing type is refused on its own, never folded into a stand-in string. RFC 9396 §2 makes
+            // A missing type is refused on its own, never folded into a stand-in string. RFC 9396 section 2 makes
             // type REQUIRED, and a stand-in would be a value a client can request: naming it as its own
             // type would then admit every entry that has none.
             if (Array.Exists(typed, detail => detail.Type is null))

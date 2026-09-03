@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <summary>
 /// Outcome signalling that the user is authenticated but has not yet granted every scope or
 /// resource the client is asking for, so the host must show its consent UI for the deltas in
-/// <see cref="RequiredUserConsents"/>. Maps to OpenID Connect Core 1.0 §3.1.2.6
+/// <see cref="RequiredUserConsents"/>. Maps to OpenID Connect Core 1.0 section 3.1.2.6
 /// <c>consent_required</c> when <c>prompt=none</c>.
 /// </summary>
 /// <param name="Model">The authorization request that produced the pending-consent state.</param>

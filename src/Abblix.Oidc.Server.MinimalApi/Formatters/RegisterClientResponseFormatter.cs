@@ -46,7 +46,7 @@ public class RegisterClientResponseFormatter(RegistrationClientUriBuilder uriBui
                 ? uriBuilder.Build(success.ClientId)
                 : null,
 
-            // RFC 7591 §3.2.1: the response echoes the registered values (the server may default or narrow them),
+            // RFC 7591 section 3.2.1: the response echoes the registered values (the server may default or narrow them),
             // not the literal request input.
             InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
             TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
@@ -66,7 +66,7 @@ public class RegisterClientResponseFormatter(RegistrationClientUriBuilder uriBui
             JwksUri = success.JwksUri,
             UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
-            // RFC 9701 §6 / RFC 7591 §3.2.1: echo the registered introspection response algorithms.
+            // RFC 9701 section 6 / RFC 7591 section 3.2.1: echo the registered introspection response algorithms.
             IntrospectionSignedResponseAlg = success.IntrospectionSignedResponseAlg,
             IntrospectionEncryptedResponseAlg = success.IntrospectionEncryptedResponseAlg,
             IntrospectionEncryptedResponseEnc = success.IntrospectionEncryptedResponseEnc,

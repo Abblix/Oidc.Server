@@ -46,12 +46,12 @@ public class IntrospectionResponseFormatter(
     {
         var introspectionResponse = success.Claims ?? new JsonObject();
 
-        // RFC 7662 §2.2: active is the only REQUIRED member and is a JSON boolean.
+        // RFC 7662 section 2.2: active is the only REQUIRED member and is a JSON boolean.
         introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
         var clientInfo = success.ClientInfo;
 
-        // RFC 9701 §4: a JWT response is returned only when the client registered a signing algorithm AND requested
+        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
         // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
         if (clientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
             return Results.Json(introspectionResponse);
@@ -70,7 +70,7 @@ public class IntrospectionResponseFormatter(
                 Issuer = issuerProvider.GetIssuer(),
                 Audiences = [clientInfo.ClientId],
 
-                // RFC 9701 §5: the introspection response object is carried as the token_introspection claim. The
+                // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The
                 // object is cloned because it is otherwise still parented to the introspected token's payload.
                 [IanaClaimTypes.TokenIntrospection] = introspectionResponse.DeepClone(),
             },

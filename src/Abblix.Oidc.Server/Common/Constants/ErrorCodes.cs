@@ -234,7 +234,7 @@ public static class ErrorCodes
 	public const string InvalidToken = "invalid_token";
 
 	/// <summary>
-	/// The DPoP proof JWT presented with the request is invalid (RFC 9449 §7.1). This is the
+	/// The DPoP proof JWT presented with the request is invalid (RFC 9449 section 7.1). This is the
 	/// OAuth-protocol-level error code returned to the client for ANY structural,
 	/// algorithmic, claim-binding, signature, or replay-protection failure of a DPoP proof.
 	/// The fine-grained internal reason (used in logs and metrics) is carried separately.
@@ -243,7 +243,7 @@ public static class ErrorCodes
 
 	/// <summary>
 	/// The authorization server or resource server requires a DPoP-Nonce in the proof
-	/// (RFC 9449 §8). The response carries a <c>DPoP-Nonce</c> header with the nonce value
+	/// (RFC 9449 section 8). The response carries a <c>DPoP-Nonce</c> header with the nonce value
 	/// the client must include in subsequent proofs.
 	/// </summary>
 	public const string UseDPoPNonce = "use_dpop_nonce";
@@ -257,7 +257,7 @@ public static class ErrorCodes
 	public const string InsufficientScope = "insufficient_scope";
 
 	/// <summary>
-	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 §5:
+	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 section 5:
 	/// an entry's <c>type</c> is unknown to the AS, fields do not match the registered per-type
 	/// schema, field values are out of the wrong JSON type, or the request otherwise fails to
 	/// satisfy the per-type validator. The AS MUST refuse to process the request.

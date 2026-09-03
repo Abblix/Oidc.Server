@@ -78,7 +78,7 @@ public sealed record OctetJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Required oct members per RFC 7638 §3.2 in lexicographic order: <c>k</c>,
+    /// Required oct members per RFC 7638 section 3.2 in lexicographic order: <c>k</c>,
     /// <c>kty</c>. The base64url-encoded key value contains only characters that need
     /// no JSON escaping.
     /// </remarks>

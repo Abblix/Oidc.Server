@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates the OpenID Connect RP-Initiated Logout 1.0 <c>post_logout_redirect_uris</c>:
-/// each URI must be absolute, fragment-free, and consistent with the OIDC DCR 1.0 §2
+/// each URI must be absolute, fragment-free, and consistent with the OIDC DCR 1.0 section 2
 /// scheme rules for the declared <c>application_type</c> (Web = <c>https</c>,
 /// non-localhost; Native = custom scheme or <c>http://localhost</c>).
 /// </summary>

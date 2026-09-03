@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common;
 
 /// <summary>
 /// Unit tests for <see cref="WwwAuthenticateBuilder"/>: covers Bearer-only emission per
-/// RFC 6750 §3, DPoP-only emission per RFC 9449 §7.1 (including the <c>algs</c>
+/// RFC 6750 section 3, DPoP-only emission per RFC 9449 section 7.1 (including the <c>algs</c>
 /// attribute), the dual-scheme ordering rule (DPoP first, Bearer second when both are
 /// advertised), and the «Bearer line carries no error attributes when the failure was
 /// DPoP-specific» exception that prevents the Bearer line from misrepresenting the
@@ -59,7 +59,7 @@ public class WwwAuthenticateBuilderTests
     }
 
     /// <summary>
-    /// RFC 6750 §3.1: a request that carried no authentication information at all gets a bare
+    /// RFC 6750 section 3.1: a request that carried no authentication information at all gets a bare
     /// challenge - realm only, no error attributes - on both the Bearer and the DPoP lines.
     /// </summary>
     [Fact]
@@ -129,7 +129,7 @@ public class WwwAuthenticateBuilderTests
     public void BuildBasicChallenge_WithRealm_EmitsRealmOnly()
     {
         // RFC 7617 defines no error attributes for the Basic scheme, so the challenge carries
-        // only the realm - the error itself travels in the JSON body (RFC 6749 §5.2).
+        // only the realm - the error itself travels in the JSON body (RFC 6749 section 5.2).
         var challenge = WwwAuthenticateBuilder.BuildBasicChallenge(Realm);
 
         Assert.Equal($"Basic realm=\"{Realm}\"", challenge);
@@ -167,7 +167,7 @@ public class WwwAuthenticateBuilderTests
     [Fact]
     public void BuildChallenges_DualScheme_BearerCarriesNoErrorAttributes()
     {
-        // RFC 9449 §7.1: «the Bearer scheme didn't fail; the client used the DPoP scheme».
+        // RFC 9449 section 7.1: «the Bearer scheme didn't fail; the client used the DPoP scheme».
         // Attaching error="invalid_dpop_proof" to the Bearer line would misrepresent the
         // failure - the Bearer line carries only the realm.
         var challenges = WwwAuthenticateBuilder.BuildChallenges(
@@ -189,7 +189,7 @@ public class WwwAuthenticateBuilderTests
     [Fact]
     public void BuildBearerChallenge_QuoteInDescription_BackslashEscaped()
     {
-        // RFC 7235 §2.2 / RFC 9110 §5.6.4: inside a quoted-string each `"` MUST be
+        // RFC 7235 section 2.2 / RFC 9110 section 5.6.4: inside a quoted-string each `"` MUST be
         // backslash-escaped. The builder preserves the original character rather than
         // substituting a different glyph so the on-wire value round-trips.
         var error = new OidcError(ErrorCodes.InvalidToken, "value with \"quotes\" inside");
@@ -203,7 +203,7 @@ public class WwwAuthenticateBuilderTests
     public void BuildBearerChallenge_BackslashInDescription_DoubledForRfc7235()
     {
         // A literal backslash inside a quoted-string is itself the escape character,
-        // so it MUST be doubled per RFC 7235 §2.2.
+        // so it MUST be doubled per RFC 7235 section 2.2.
         var error = new OidcError(ErrorCodes.InvalidToken, @"value with \ inside");
 
         var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm: null);

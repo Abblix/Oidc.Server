@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// <summary>
 /// Base configuration class for the generic stateless-nonce service.
 /// Each feature that needs server-issued, time-bounded opaque tokens
-/// (DPoP-Nonce per RFC 9449 §8 / §9 is the current consumer; future
+/// (DPoP-Nonce per RFC 9449 section 8 / section 9 is the current consumer; future
 /// candidates include state-parameter validation and challenge-response
 /// patterns) defines its own subclass - see <see cref="DPoPNonceOptions"/> -
 /// and adds its own slot under <see cref="OidcOptions"/>. This base governs
@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// The nonce service is stateless: nonces themselves are not stored. Only a
 /// short-lived rotating HMAC secret lives in <c>IDistributedCache</c>, keyed
 /// by time bucket so multiple server instances can validate each other's
-/// nonces without coordination. Per RFC 9449 §11.3 a nonce mismatch is
+/// nonces without coordination. Per RFC 9449 section 11.3 a nonce mismatch is
 /// recoverable - the client receives a fresh nonce and retries - so the
 /// brief window during secret rotation where two instances disagree on the
 /// current secret degrades to a single client-side retry, not a hard failure.

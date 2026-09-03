@@ -11,7 +11,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// Implements the simple-string-comparison matching rule for redirect URIs (RFC 6749 §3.1.2.2):
+/// Implements the simple-string-comparison matching rule for redirect URIs (RFC 6749 section 3.1.2.2):
 /// the candidate URI must equal a single registered absolute URI. Optionally strips the query
 /// and fragment from the candidate before comparison to accommodate clients that append
 /// dynamic query parameters at runtime.

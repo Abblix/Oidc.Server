@@ -13,7 +13,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Enforces the end-user confirmation step described in OpenID Connect RP-Initiated Logout 1.0 §2:
+/// Enforces the end-user confirmation step described in OpenID Connect RP-Initiated Logout 1.0 section 2:
 /// when the request omits <c>id_token_hint</c> the OP cannot trust that the user really
 /// initiated the logout, so a UI confirmation must precede the call. This validator surfaces
 /// <see cref="ErrorCodes.ConfirmationRequired"/> until the host echoes back

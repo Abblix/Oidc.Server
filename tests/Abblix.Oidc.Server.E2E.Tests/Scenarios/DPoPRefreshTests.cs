@@ -20,11 +20,11 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9449 §5 refresh-token rebinding for DPoP, end-to-end against the test OIDC
+/// RFC 9449 section 5 refresh-token rebinding for DPoP, end-to-end against the test OIDC
 /// provider. Covers the same-key MUST for public clients, the confidential-client
 /// carve-out (refresh tokens already sender-constrained by client authentication may
 /// rotate keys), and both PAR-anchored and non-PAR binding paths. Token-endpoint
-/// binding (§6) lives in <see cref="DPoPTests"/> and resource access (§9) in
+/// binding (section 6) lives in <see cref="DPoPTests"/> and resource access (section 9) in
 /// <see cref="DPoPUserInfoTests"/>; the three share <see cref="DPoPTestBase"/>.
 /// </summary>
 public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
@@ -32,8 +32,8 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {
-        // RFC 9449 §5: when refreshing a DPoP-bound access token, the new token MUST be
-        // bound to the same key as the previous one. Abblix enforces this via the §10
+        // RFC 9449 section 5: when refreshing a DPoP-bound access token, the new token MUST be
+        // bound to the same key as the previous one. Abblix enforces this via the section 10
         // carry-over mechanism - the original grant's ProofKeyThumbprint is committed on
         // the refresh token and DPoPTokenEndpointValidator rejects any proof key drift.
         using var proofKey = new DPoPProofGenerator();
@@ -58,14 +58,14 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Confidential_client_can_rebind_to_new_dpop_key_on_refresh()
     {
-        // RFC 9449 §5 explicit carve-out: «Refresh tokens issued to confidential
+        // RFC 9449 section 5 explicit carve-out: «Refresh tokens issued to confidential
         // clients (those having established authentication credentials with the
         // authorization server) are not bound to the DPoP proof public key because
         // they are already sender-constrained with a different existing mechanism»
         // (client authentication). The AS therefore accepts a fresh DPoP key on
         // refresh and binds the new access token to it - a confidential client may
         // rotate keys without re-running the auth-code dance. The strict
-        // same-key-MUST rule of §5 applies only to PUBLIC clients; a no-secret
+        // same-key-MUST rule of section 5 applies only to PUBLIC clients; a no-secret
         // seeded client is out of scope for this slice.
         using var originalKey = new DPoPProofGenerator();
         using var rotatedKey = new DPoPProofGenerator();
@@ -91,9 +91,9 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Public_client_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {
-        // RFC 9449 §5: public clients (token_endpoint_auth_method = none) lack a shared
+        // RFC 9449 section 5: public clients (token_endpoint_auth_method = none) lack a shared
         // secret, so DPoP is the sole sender-constraint. Same-key MUST therefore be
-        // enforced on refresh. Abblix carries the thumbprint forward via the §10
+        // enforced on refresh. Abblix carries the thumbprint forward via the section 10
         // PAR-time commitment path; a proof on the PAR request commits dpop_jkt into
         // the stored authorization request, the auth code restores it, and refresh
         // tokens for public clients keep it (vs. confidential clients which strip).
@@ -120,7 +120,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Public_client_non_par_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {
-        // RFC 9449 §5 applies regardless of how the initial token was obtained - a
+        // RFC 9449 section 5 applies regardless of how the initial token was obtained - a
         // proof at /token alone (no PAR commitment) is enough to bind the access
         // token, and the binding MUST flow through to the refresh token. Pins the
         // TokenRequestProcessor fix: public-flow refreshContext sources its thumbprint
@@ -150,7 +150,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         // refresh path sourced refreshContext from request.AuthorizedGrant.Context,
         // which carried no ProofKeyThumbprint for non-PAR flows; the validator's
         // committed-vs-presented compare then short-circuited (committed = null) and
-        // a rotated key was silently accepted - a §5 MUST violation. Post-fix the
+        // a rotated key was silently accepted - a section 5 MUST violation. Post-fix the
         // refresh JWT carries cnf.jkt from authContext (live proof's thumbprint), so
         // the next refresh's mismatched proof is caught.
         using var originalKey = new DPoPProofGenerator();
@@ -173,12 +173,12 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Public_client_refresh_with_different_dpop_key_is_rejected_per_rfc9449_section5()
     {
-        // RFC 9449 §5 MUST for public clients: «such a client MUST present a DPoP proof
+        // RFC 9449 section 5 MUST for public clients: «such a client MUST present a DPoP proof
         // for the same key that was used to obtain the refresh token each time that
         // refresh token is used». A rotated key on refresh is the canonical theft
         // scenario the constraint exists to close - without a shared secret, the proof
         // key is the only thing tying the holder to the original grant. Commitment is
-        // anchored at PAR (Abblix §10 carry-over path); a proof on PAR makes the AS
+        // anchored at PAR (Abblix section 10 carry-over path); a proof on PAR makes the AS
         // pin dpop_jkt onto the stored authorization request, and the public-client
         // refresh path preserves the binding through to subsequent token requests.
         using var originalKey = new DPoPProofGenerator();
@@ -229,7 +229,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
     /// <summary>
     /// Sends a refresh_token grant request with a DPoP proof. The refresh token is
     /// taken from the previous token response; the proof must be signed by the same
-    /// keypair the original access token was bound to (RFC 9449 §5 + §10 carry-over).
+    /// keypair the original access token was bound to (RFC 9449 section 5 + section 10 carry-over).
     /// </summary>
     private static async Task<HttpResponseMessage> SendRefreshAsync(
         HttpClient client,

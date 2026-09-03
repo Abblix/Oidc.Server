@@ -27,7 +27,7 @@ public class ConfigurationResponseSerializationTests
     public void ConfigurationResponse_NullableFieldsOmittedWhenNull()
     {
         // All nullable fields intentionally left at their default (null).
-        // RFC 8414 §2 requires absent optional fields - "null" is not compliant.
+        // RFC 8414 section 2 requires absent optional fields - "null" is not compliant.
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",

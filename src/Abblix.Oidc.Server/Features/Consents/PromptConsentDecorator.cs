@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Consents;
 
 /// <summary>
-/// Honours the OIDC Core §3.1.2.1 <c>prompt=consent</c> parameter by short-circuiting the wrapped
+/// Honours the OIDC Core section 3.1.2.1 <c>prompt=consent</c> parameter by short-circuiting the wrapped
 /// <see cref="IUserConsentsProvider"/>: when the client explicitly requests consent re-confirmation,
 /// every requested scope and resource is forced into the pending bucket so the consent UI is shown
 /// even if the user previously granted it. For any other prompt value the decorator delegates to the

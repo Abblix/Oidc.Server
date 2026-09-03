@@ -19,7 +19,7 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class AuthorizationDetailTests
 {
-    // RFC 9396 §2.2 example types / actions reused across fixtures.
+    // RFC 9396 section 2.2 example types / actions reused across fixtures.
     private const string PaymentInitiationType = "payment_initiation";
     private const string InitiateAction = "initiate";
 
@@ -77,7 +77,7 @@ public class AuthorizationDetailTests
     [Fact]
     public void TypeSpecificMembers_AccessedDirectlyViaJson()
     {
-        // RFC 9396 §2.2 extension members (per-type payload like PSD2 instructedAmount /
+        // RFC 9396 section 2.2 extension members (per-type payload like PSD2 instructedAmount /
         // creditorAccount) live in the wrapper's Json as ordinary JSON members; per-type
         // validators read and write them directly through the System.Text.Json.Nodes API.
         var json = (JsonObject)JsonNode.Parse(
@@ -254,7 +254,7 @@ public class AuthorizationDetailTests
     /// A single value assigned to an array member is written as an array of one, not as a bare string.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §2.2 defines locations, actions, datatypes and privileges as arrays of strings, and the
+    /// RFC 9396 section 2.2 defines locations, actions, datatypes and privileges as arrays of strings, and the
     /// count of what a host happens to grant does not change that. The case matters because narrowing is
     /// what these setters exist for: a validator that keeps one location out of three is the ordinary
     /// path, and it is exactly the path that used to emit a shape no resource server owes us a reading of.
@@ -285,7 +285,7 @@ public class AuthorizationDetailTests
     /// An empty collection removes the member rather than writing an empty array.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §2.2 makes every one of these members optional, so absence is the honest way to say
+    /// RFC 9396 section 2.2 makes every one of these members optional, so absence is the honest way to say
     /// "none" - and it keeps the behaviour a caller already had before the single-value case was fixed,
     /// which is what stops that fix from being a second, silent change.
     /// </remarks>

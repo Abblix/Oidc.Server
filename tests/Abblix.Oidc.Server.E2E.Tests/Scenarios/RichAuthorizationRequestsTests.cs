@@ -40,7 +40,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : RarTestBase(f
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        // RFC 9396 §7: authorization_details echoed byte-exact in the token response
+        // RFC 9396 section 7: authorization_details echoed byte-exact in the token response
         var echoed = (tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
 

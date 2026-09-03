@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// Enforces the RFC 9101 §10.5 <c>require_signed_request_object</c> client metadata: a client that
+/// Enforces the RFC 9101 section 10.5 <c>require_signed_request_object</c> client metadata: a client that
 /// committed to it must deliver its authorization parameters as a signed request object. A request
 /// that came neither from a request object nor from a PAR-stored request is plain parameters and is
 /// rejected. The PAR push itself runs through the same validator pipeline, so a flagged client

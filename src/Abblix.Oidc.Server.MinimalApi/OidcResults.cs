@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.MinimalApi;
 public static class OidcResults
 {
     /// <summary>
-    /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 §3 / RFC 6749 §5.2:
+    /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
     /// and the JSON error body; everything else uses the fallback status code with a JSON body.
@@ -41,7 +41,7 @@ public static class OidcResults
                 .StatusCode(StatusCodes.Status403Forbidden)
                 .WithHeader(HeaderNames.WWWAuthenticate, challenge),
 
-            // RFC 6749 §5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
+            // RFC 6749 section 5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
             // JSON body because RFC 7617 defines no error attributes for the Basic scheme.
             (ErrorCodes.InvalidClient, _) => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
@@ -58,7 +58,7 @@ public static class OidcResults
     }
 
     /// <summary>
-    /// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP scheme (RFC 9449 §7.1) on
+    /// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP scheme (RFC 9449 section 7.1) on
     /// the <c>WWW-Authenticate</c> header, optionally alongside Bearer. <see cref="UseDPoPNonceError"/> additionally
     /// emits the <c>DPoP-Nonce</c> header so the client can echo the freshly issued nonce on retry.
     /// </summary>

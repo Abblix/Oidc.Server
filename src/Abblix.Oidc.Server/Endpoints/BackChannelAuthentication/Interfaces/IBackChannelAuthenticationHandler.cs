@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 /// <summary>
 /// Endpoint contract for the OpenID Connect CIBA (Client-Initiated Backchannel Authentication) flow,
 /// orchestrating fetch, validation and processing of an incoming backchannel authentication request
-/// to produce the response defined in CIBA Core 1.0 §7.
+/// to produce the response defined in CIBA Core 1.0 section 7.
 /// </summary>
 public interface IBackChannelAuthenticationHandler
 {

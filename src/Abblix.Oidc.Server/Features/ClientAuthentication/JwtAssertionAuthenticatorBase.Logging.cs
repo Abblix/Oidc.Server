@@ -52,7 +52,7 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingJti,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {@ClientId} has no jti claim, which OIDC Core §9 requires for single-use replay protection")]
+        Message = "The client assertion for {@ClientId} has no jti claim, which OIDC Core section 9 requires for single-use replay protection")]
     private partial void LogMissingJti(string ClientId);
 
     [LoggerMessage(
@@ -70,7 +70,7 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.MissingExpiration,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} has no exp claim, which RFC 7523 §3 requires to bound the assertion's usage window")]
+        Message = "The client assertion for {ClientId} has no exp claim, which RFC 7523 section 3 requires to bound the assertion's usage window")]
     private partial void LogMissingExpiration(string ClientId);
 
     [LoggerMessage(

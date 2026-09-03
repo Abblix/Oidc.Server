@@ -16,7 +16,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9396 §7.1 consent-side handling of Rich Authorization Requests, end-to-end:
+/// RFC 9396 section 7.1 consent-side handling of Rich Authorization Requests, end-to-end:
 /// narrowing, deny-all, drop-entry from a multi-set, cross-detail amount caps,
 /// null-grant passthrough, and refresh-token preservation of authorization_details.
 /// Core round-trip lives in <see cref="RichAuthorizationRequestsTests"/> and the
@@ -71,7 +71,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
     [Fact]
     public async Task Consent_drop_entry_from_multi_set_token_carries_only_remaining_entries()
     {
-        // RFC 9396 §7.1 partial-consent drop-entry, E2E. Client requested two entries,
+        // RFC 9396 section 7.1 partial-consent drop-entry, E2E. Client requested two entries,
         // consent provider returns Granted.AuthorizationDetails with one entry only.
         const string requestedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
@@ -88,7 +88,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
     [Fact]
     public async Task Consent_cross_detail_total_amount_cap_propagates_to_access_token()
     {
-        // RFC 9396 §7.1 cross-detail policy, E2E. Three entries of 500.00 each; consent
+        // RFC 9396 section 7.1 cross-detail policy, E2E. Three entries of 500.00 each; consent
         // provider zeroes the last to stay under a total-amount cap of 1000.00.
         const string requestedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";

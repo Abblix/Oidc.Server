@@ -20,8 +20,8 @@ public class SecretLengthOptionsValidator : IValidateOptions<OidcOptions>
 {
     /// <summary>
     /// Minimum length, in characters, of a generated client secret. A client authenticating with
-    /// <c>client_secret_jwt</c> (OpenID Connect Core §9) uses the secret's UTF-8 bytes as the HMAC
-    /// key, and RFC 7518 §3.2 requires an HS256 key of at least 32 bytes; a shorter secret cannot
+    /// <c>client_secret_jwt</c> (OpenID Connect Core section 9) uses the secret's UTF-8 bytes as the HMAC
+    /// key, and RFC 7518 section 3.2 requires an HS256 key of at least 32 bytes; a shorter secret cannot
     /// serve that method at all.
     /// </summary>
     public const int MinimumClientSecretLength = 32;

@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.UnitTests.Model;
 
 /// <summary>
 /// Wire-shape regressions for the DCR / RFC 7592 client-management response DTOs:
-/// #28 client_secret_expires_at must serialize as a Unix-seconds number (RFC 7591 §3.2.1), and
+/// #28 client_secret_expires_at must serialize as a Unix-seconds number (RFC 7591 section 3.2.1), and
 /// #31 unregistered metadata must be omitted rather than emitted as explicit null (RFC 7591/7592).
 /// </summary>
 public class ClientManagementResponseSerializationTests
@@ -33,7 +33,7 @@ public class ClientManagementResponseSerializationTests
     [Fact]
     public void ReadClientSecretExpiresAt_SerializesAsUnixSecondsNumber()
     {
-        // RFC 7591 §3.2.1 defines client_secret_expires_at as a number (seconds since epoch), matching
+        // RFC 7591 section 3.2.1 defines client_secret_expires_at as a number (seconds since epoch), matching
         // the register-path DTO. A fixed instant keeps the test off the ambient system clock.
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
         var response = new ReadClientSuccessfulResponse
@@ -53,7 +53,7 @@ public class ClientManagementResponseSerializationTests
     [Fact]
     public void RegistrationResponse_NullableFieldsOmittedWhenNull()
     {
-        // Minimal public-client registration: no secret, no optional metadata. RFC 7591 §3.2.1 models
+        // Minimal public-client registration: no secret, no optional metadata. RFC 7591 section 3.2.1 models
         // unregistered metadata as absent members, not explicit nulls. System.Text.Json compact form
         // writes ":null" without spaces.
         var response = new ClientRegistrationResponse

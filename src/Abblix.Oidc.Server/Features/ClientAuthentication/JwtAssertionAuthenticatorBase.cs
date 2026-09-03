@@ -74,7 +74,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        // OIDC Core §9 / RFC 7591: when the client registered token_endpoint_auth_signing_alg, the
+        // OIDC Core section 9 / RFC 7591: when the client registered token_endpoint_auth_signing_alg, the
         // assertion MUST use exactly that algorithm. The signature is already verified by here; this
         // pins the registered algorithm so a client cannot authenticate with a different (e.g. weaker)
         // algorithm its key happens to support.
@@ -108,7 +108,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // such a JWT be typed "client-authentication+jwt or another more specific explicit type value defined
         // by a specification profiling this specification" - a SHOULD on the sender, and one that admits
         // values we cannot list, so the exact value cannot be demanded. What can be refused is a JWT declaring
-        // itself some other type this class names, which is the replay RFC 8725 §3.11 describes. The client
+        // itself some other type this class names, which is the replay RFC 8725 section 3.11 describes. The client
         // signs this one itself, so the types within its reach are not only the ones this server issued.
         var tokenType = token.Header.Type;
         if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
@@ -117,7 +117,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique
+        // OIDC Core section 9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,
         // and accepting it would leave the assertion replayable within its expiry window (the
@@ -128,7 +128,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        // RFC 7523 §3: the assertion MUST contain an 'exp' claim that limits the window during
+        // RFC 7523 section 3: the assertion MUST contain an 'exp' claim that limits the window during
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.

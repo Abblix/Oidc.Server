@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// <summary>
 /// Default <see cref="IUserInfoRequestProcessor"/>: assembles the UserInfo claims set from
 /// <see cref="IUserClaimsProvider"/>, filtered by the access token's authorized scopes and any
-/// <c>userinfo</c> entry of the OIDC Core §5.5 <c>claims</c> request. Returns
+/// <c>userinfo</c> entry of the OIDC Core section 5.5 <c>claims</c> request. Returns
 /// <see cref="ErrorCodes.InvalidToken"/> if no claims are produced for the subject.
 /// </summary>
 public class UserInfoRequestProcessor(IIssuerProvider issuerProvider, IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor

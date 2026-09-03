@@ -231,7 +231,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects null response_type.
-    /// Per RFC 6749 §4.1.2.1, response_type is REQUIRED and a missing required parameter
+    /// Per RFC 6749 section 4.1.2.1, response_type is REQUIRED and a missing required parameter
     /// is invalid_request.
     /// </summary>
     [Fact]
@@ -251,7 +251,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects empty response_type array.
-    /// Per RFC 6749 §4.1.2.1, an absent required parameter is invalid_request.
+    /// Per RFC 6749 section 4.1.2.1, an absent required parameter is invalid_request.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_EmptyResponseType_ShouldReturnError()
@@ -289,8 +289,8 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects response_type not allowed by client.
-    /// Per RFC 6749 §4.1.2.1 / §4.2.2.1 this is unauthorized_client (the server supports the
-    /// method, this client is not registered for it), and per OAuth 2.0 Multiple Response Types §5
+    /// Per RFC 6749 section 4.1.2.1 / section 4.2.2.1 this is unauthorized_client (the server supports the
+    /// method, this client is not registered for it), and per OAuth 2.0 Multiple Response Types section 5
     /// the error for a fragment-encoded response_type must travel in the fragment.
     /// </summary>
     [Fact]
@@ -352,7 +352,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects an uppercase <c>response_type</c> at the server-level
-    /// support gate. RFC 6749 §3.1.1 declares <c>response_type</c> values case-sensitive; the
+    /// support gate. RFC 6749 section 3.1.1 declares <c>response_type</c> values case-sensitive; the
     /// server-level part check (introduced with the Implicit Flow opt-in in #90) compares each
     /// part against registered <see cref="IAuthorizationResponseBuilder"/> instances using
     /// <see cref="StringComparer.Ordinal"/>, so <c>CODE</c> does not match the registered
@@ -377,7 +377,7 @@ public class FlowTypeValidatorTests
     /// Verifies that without <c>EnableImplicitFlow()</c> the validator rejects requests asking for
     /// the <c>token</c> response type with <c>unsupported_response_type</c>, even when the client
     /// is configured to allow it. The server-level support gate (registered processors) takes
-    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist - per OAuth 2.1 §1.4
+    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist - per OAuth 2.1 section 1.4
     /// the Implicit Grant is deprecated and the library default refuses to issue access tokens
     /// directly from the authorization endpoint.
     /// </summary>
@@ -562,7 +562,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// OAuth 2.0 Multiple Response Types §5: a rejected hybrid request (contains token) must get
+    /// OAuth 2.0 Multiple Response Types section 5: a rejected hybrid request (contains token) must get
     /// its error in the fragment even when the rejection happens at the server-level support gate.
     /// </summary>
     [Fact]
@@ -750,7 +750,7 @@ public class FlowTypeValidatorTests
     /// <summary>
     /// With the none response type opted in (its builder registered), <c>response_type=none</c> is
     /// detected as the none flow with the query default response mode (OAuth 2.0 Multiple Response Type
-    /// Encoding Practices §4).
+    /// Encoding Practices section 4).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_NoneResponseType_WhenEnabled_ShouldDetectNoneFlow()
@@ -766,7 +766,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// OAuth 2.0 Multiple Response Type Encoding Practices §4: <c>none</c> MUST stand alone. A
+    /// OAuth 2.0 Multiple Response Type Encoding Practices section 4: <c>none</c> MUST stand alone. A
     /// <c>none code</c> request matches no flow and is rejected with <c>unsupported_response_type</c>,
     /// even though both parts have registered builders.
     /// </summary>

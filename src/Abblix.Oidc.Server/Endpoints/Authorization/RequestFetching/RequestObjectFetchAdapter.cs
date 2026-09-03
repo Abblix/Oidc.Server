@@ -48,7 +48,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     }
 
     /// <summary>
-    /// OIDC Core §6.1: the response_type and client_id values passed in the OAuth request syntax
+    /// OIDC Core section 6.1: the response_type and client_id values passed in the OAuth request syntax
     /// MUST match the ones inside the request object when the object carries them. The merge gives
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the

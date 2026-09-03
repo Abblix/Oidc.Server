@@ -127,7 +127,7 @@ public abstract partial class AuthenticationCompletionHandler(
 
         // The end user's answer arrives here and nowhere else, which makes this the seam a narrowed
         // authorization_details set travels through: a host whose device interaction let them approve
-        // part of the request replaces the grant's context before completing, and RFC 9396 §7 then has
+        // part of the request replaces the grant's context before completing, and RFC 9396 section 7 then has
         // the server return what was GRANTED rather than what was asked for.
         //
         // Narrowing is the host's to make; widening is not. The types are compared against what the
@@ -168,7 +168,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// the grant stays inside what was requested.
     /// </summary>
     /// <remarks>
-    /// Types only. RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing
+    /// Types only. RFC 9396 section 6.1 defines no universal comparator for "is this entry a narrowing
     /// of that one", so
     /// what can be judged without knowing a type's schema is whether an entry of that type was asked for at
     /// all. An entry that cannot be read as a JSON object counts as escaped: the conversion drops it silently,

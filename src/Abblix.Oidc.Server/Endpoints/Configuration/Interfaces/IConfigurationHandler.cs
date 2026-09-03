@@ -10,7 +10,7 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
 /// Builds the discovery document served at <c>/.well-known/openid-configuration</c>
-/// per OpenID Connect Discovery 1.0 §3 and RFC 8414 (OAuth 2.0 Authorization Server Metadata).
+/// per OpenID Connect Discovery 1.0 section 3 and RFC 8414 (OAuth 2.0 Authorization Server Metadata).
 /// </summary>
 public interface IConfigurationHandler
 {

@@ -201,7 +201,7 @@ public record OidcOptions
 	/// <summary>
 	/// The lifetime of a JARM (JWT Secured Authorization Response Mode) <c>response</c> JWT. The authorization
 	/// response is consumed by the client immediately upon redirect, so a short window suffices and mostly
-	/// absorbs clock skew. JARM §2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
+	/// absorbs clock skew. JARM section 2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
 	/// (e.g. FAPI) may shorten it.
 	/// </summary>
 	public TimeSpan JwtAuthorizationResponseExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
@@ -265,16 +265,16 @@ public record OidcOptions
 	/// </summary>
 	/// <remarks>
 	/// A deployment fact rather than a protocol one, which is why it is a switch and not a default. RFC
-	/// 9396 §2.2 says <c>locations</c> "typically" holds URIs identifying resource servers, and §9.1's own
+	/// 9396 section 2.2 says <c>locations</c> "typically" holds URIs identifying resource servers, and section 9.1's own
 	/// worked example pairs a client-style <c>aud</c> with a resource URI in <c>locations</c> - so the two
 	/// members are not required to be drawn from the same namespace, and comparing them is only meaningful
-	/// where a deployment has decided they are. §7 leaves what an access token carries to the authorization
-	/// server where the client did not ask, and §13 asks for need-to-know "as determined by local policy".
+	/// where a deployment has decided they are. section 7 leaves what an access token carries to the authorization
+	/// server where the client did not ask, and section 13 asks for need-to-know "as determined by local policy".
 	/// This is that policy, stated once.
 	///
 	/// The shape this was written for: several resource servers, every access token that carries
 	/// authorization details minted for a <c>resource</c>, and each server's <c>locations</c> written
-	/// exactly as the resource indicator it is registered under. That is RFC 9396 §12's
+	/// exactly as the resource indicator it is registered under. That is RFC 9396 section 12's
 	/// multiple-resource-server case, which is what <c>locations</c> was defined for. Matching a deployment
 	/// against that description is the operator's judgement, not a recommendation made here.
 	///
@@ -285,7 +285,7 @@ public record OidcOptions
 	/// they come from the client's own allowlist rather than from this list and the filter works.
 	///
 	/// Turn it on and an entry naming only other resource servers stops travelling to this one, which is
-	/// what §9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
+	/// what section 9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
 	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
 	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
 	/// off until a host says the two agree, because nothing here can check that they do.
@@ -355,15 +355,15 @@ public record OidcOptions
 	/// <summary>
 	/// Governs how a request object resolves a parameter that appears both inside the object and in the
 	/// OAuth query syntax - a choice between two specifications. When <c>false</c> (the default), request-object
-	/// processing follows the OpenID Connect Core §6.1 merge semantics: the object's values supersede those
+	/// processing follows the OpenID Connect Core section 6.1 merge semantics: the object's values supersede those
 	/// passed outside it, but a parameter passed only outside the object is still used. Set to <c>true</c> for
-	/// the strict RFC 9101 §6.3 rule, where the authorization request is exactly the content of the object and
+	/// the strict RFC 9101 section 6.3 rule, where the authorization request is exactly the content of the object and
 	/// any parameter passed outside it is ignored ("the authorization server MUST only use the parameters in
 	/// the Request Object"). The strict rule suits FAPI-style OAuth deployments; as an OpenID Provider the
 	/// server defaults to the merge behaviour, since strict processing would drop parameters that existing
 	/// OpenID Connect clients commonly pass outside the object. A client held to the FAPI 2.0 security profile
 	/// is processed strictly regardless of this global default.
-	/// This switch affects only parameter exclusivity; the other RFC 9101 §6.3 requirement - that a
+	/// This switch affects only parameter exclusivity; the other RFC 9101 section 6.3 requirement - that a
 	/// <c>client_id</c> or <c>response_type</c> present both inside and outside the object be identical - is
 	/// enforced in both modes and cannot be turned off.
 	/// </summary>

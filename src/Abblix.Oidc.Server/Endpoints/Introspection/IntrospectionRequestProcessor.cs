@@ -169,18 +169,18 @@ public class IntrospectionRequestProcessor(
 	/// Adds the RFC 9396 <c>authorization_details</c> entries this caller is the resource server for.
 	/// </summary>
 	/// <remarks>
-	/// RFC 9396 §9: "In order to enable the RS to enforce the authorization details as approved in the
+	/// RFC 9396 section 9: "In order to enable the RS to enforce the authorization details as approved in the
 	/// authorization process, the AS MUST make this data available to the RS", by the access token or by
-	/// introspection. §9.2 governs the shape when it comes this way: the member carries "the same
+	/// introspection. section 9.2 governs the shape when it comes this way: the member carries "the same
 	/// structure defined in Section 2, potentially filtered and extended for the RS making the
 	/// introspection request", which is the filter applied here.
 	/// <para>
 	/// An entry reaches a caller only by naming it in <c>locations</c>. An entry without them is
-	/// addressed to nobody in particular and stays withheld: §2.2 makes <c>locations</c> optional, so
+	/// addressed to nobody in particular and stays withheld: section 2.2 makes <c>locations</c> optional, so
 	/// its absence says the client did not name a resource server, not that every one may read it.
 	/// </para>
 	/// <para>
-	/// Addresses are compared as TEXT, byte for byte. RFC 9396 §12: "All string comparisons in an
+	/// Addresses are compared as TEXT, byte for byte. RFC 9396 section 12: "All string comparisons in an
 	/// authorization_details parameter are to be done as defined by [RFC8259]. No additional
 	/// transformation or normalization is to be done in evaluating equivalence of string values."
 	/// Parsing both sides into <see cref="Uri"/> and comparing those would be that transformation, and
@@ -191,8 +191,8 @@ public class IntrospectionRequestProcessor(
 	/// should hear about it where it was written; only the comparison is textual.
 	/// </para>
 	/// <para>
-	/// What is disclosed is filtered too. §9.2 allows the member to be "filtered and extended for the RS
-	/// making the introspection request", and §13 asks that this data be shared "on a 'need to know'
+	/// What is disclosed is filtered too. section 9.2 allows the member to be "filtered and extended for the RS
+	/// making the introspection request", and section 13 asks that this data be shared "on a 'need to know'
 	/// basis": the entry goes out with its <c>locations</c> reduced to the ones this caller matched, so
 	/// one resource server does not learn the addresses of the others from an entry naming several.
 	/// </para>
@@ -232,8 +232,8 @@ public class IntrospectionRequestProcessor(
 	/// </summary>
 	/// <remarks>
 	/// Written through the typed setter, which keeps <c>locations</c> an array however few entries
-	/// survive the match: RFC 9396 §9.2 has the member carry "the same structure defined in Section 2",
-	/// and §2.2 defines it as an array of strings. A single surviving location is the case that would
+	/// survive the match: RFC 9396 section 9.2 has the member carry "the same structure defined in Section 2",
+	/// and section 2.2 defines it as an array of strings. A single surviving location is the case that would
 	/// otherwise leave this endpoint answering with a shape no caller is required to accept.
 	/// </remarks>
 	private static JsonNode Disclose(AuthorizationDetail detail, string[] matchedLocations)

@@ -31,7 +31,7 @@ public class TokenStatusValidatorDecorator(
 	IJsonWebTokenValidator innerValidator) : IJsonWebTokenValidator
 {
 	/// <summary>
-	/// Forwards the set of JWS signing algorithms accepted by the inner validator (RFC 7518 §3.1
+	/// Forwards the set of JWS signing algorithms accepted by the inner validator (RFC 7518 section 3.1
 	/// names such as <c>RS256</c>, <c>PS256</c>, <c>ES256</c>); revocation checking does not
 	/// influence which algorithms are supported.
 	/// </summary>
@@ -88,7 +88,7 @@ public class TokenStatusValidatorDecorator(
 			// Refresh tokens carry a grant id (Payload.GrantId); other token types leave it null, so the family
 			// logic below is inert for them. A revoked grant is a kill switch that outlives any single token:
 			// once one member's replay trips it, every member of the family - including the currently active
-			// one - is rejected here on its next use (RFC 9700 §4.14.2).
+			// one - is rejected here on its next use (RFC 9700 section 4.14.2).
 			var grantId = token.Payload.GrantId;
 
 			if (grantId is not null && await tokenRegistry.GetStatusAsync(grantId) == JsonWebTokenStatus.Revoked)

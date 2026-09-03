@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents the response for a successful client read request,
 /// detailing the configuration and metadata of an OAuth or OpenID Connect client.
 /// Per RFC 7592 Section 3, this response includes the registration access token and all registered client metadata.
-/// Unregistered metadata is omitted from the JSON per RFC 7592 §3, not emitted as an explicit null.
+/// Unregistered metadata is omitted from the JSON per RFC 7592 section 3, not emitted as an explicit null.
 /// </summary>
 [JsonIgnoreNulls]
 public record ReadClientSuccessfulResponse
@@ -41,7 +41,7 @@ public record ReadClientSuccessfulResponse
     /// The expiration time of the client secret. Indicates when the client secret will become invalid.
     /// Required if client_secret is issued. Per RFC 7591 Section 3.2.1.
     /// A value of 0 indicates the secret does not expire.
-    /// Serialized as Unix seconds (a JSON number) per RFC 7591 §3.2.1, matching the register-path DTO.
+    /// Serialized as Unix seconds (a JSON number) per RFC 7591 section 3.2.1, matching the register-path DTO.
     /// </summary>
     [JsonPropertyOrder(3)]
     [JsonPropertyName(Parameters.ClientSecretExpiresAt)]
@@ -210,7 +210,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// Whether access tokens issued to this client are sender-constrained via DPoP per
-    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>.
+    /// RFC 9449 section 5.2 (<c>dpop_bound_access_tokens</c>). Echoes <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>.
     /// </summary>
     [JsonPropertyOrder(24)]
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
@@ -219,7 +219,7 @@ public record ReadClientSuccessfulResponse
     /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
-    /// RFC 9396 §10). Echoes the registered value of
+    /// RFC 9396 section 10). Echoes the registered value of
     /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
     /// </summary>
     [JsonPropertyOrder(25)]
@@ -245,7 +245,7 @@ public record ReadClientSuccessfulResponse
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
-    /// The registered grant types, including server-assigned defaults. Per RFC 7591 §2 / RFC 7592 §3.
+    /// The registered grant types, including server-assigned defaults. Per RFC 7591 section 2 / RFC 7592 section 3.
     /// </summary>
     [JsonPropertyOrder(28)]
     [JsonPropertyName(Parameters.GrantTypes)]
@@ -253,7 +253,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// The registered response type combinations (each entry space-separated), including
-    /// server-assigned defaults. Per RFC 7591 §2 / RFC 7592 §3.
+    /// server-assigned defaults. Per RFC 7591 section 2 / RFC 7592 section 3.
     /// </summary>
     [JsonPropertyOrder(29)]
     [JsonPropertyName(Parameters.ResponseTypes)]
@@ -262,7 +262,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// The registered scope values, serialized as a space-separated string.
-    /// Per RFC 7591 §2 / RFC 7592 §3.
+    /// Per RFC 7591 section 2 / RFC 7592 section 3.
     /// </summary>
     [JsonPropertyOrder(30)]
     [JsonPropertyName(Parameters.Scope)]
@@ -270,7 +270,7 @@ public record ReadClientSuccessfulResponse
     public string[]? Scope { get; init; }
 
     /// <summary>
-    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 section 6.
     /// Echoes <see cref="Features.ClientInformation.ClientInfo.RequirePushedAuthorizationRequests"/>.
     /// </summary>
     [JsonPropertyOrder(31)]
@@ -279,7 +279,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// Whether this client must deliver authorization parameters as a signed request object per
-    /// RFC 9101 §10.5. Echoes
+    /// RFC 9101 section 10.5. Echoes
     /// <see cref="Features.ClientInformation.ClientInfo.RequireSignedRequestObject"/>.
     /// </summary>
     [JsonPropertyOrder(32)]
@@ -288,7 +288,7 @@ public record ReadClientSuccessfulResponse
 
     /// <summary>
     /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
-    /// TLS per RFC 8705 §3.4. Echoes
+    /// TLS per RFC 8705 section 3.4. Echoes
     /// <see cref="Features.ClientInformation.ClientInfo.TlsClientCertificateBoundAccessTokens"/>.
     /// </summary>
     [JsonPropertyOrder(33)]
@@ -296,7 +296,7 @@ public record ReadClientSuccessfulResponse
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// Wire-level member names of the client read response (RFC 7592 §3, RFC 7591 §2/§3.2.1,
+    /// Wire-level member names of the client read response (RFC 7592 section 3, RFC 7591 section 2/section 3.2.1,
     /// and OpenID Connect Dynamic Client Registration).
     /// </summary>
     private static class Parameters
@@ -373,11 +373,11 @@ public record ReadClientSuccessfulResponse
         /// <summary>The <c>tls_client_auth_san_email</c> registered metadata member (RFC 8705).</summary>
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
 
-        /// <summary>The <c>dpop_bound_access_tokens</c> registered metadata member (RFC 9449 §5.2).
+        /// <summary>The <c>dpop_bound_access_tokens</c> registered metadata member (RFC 9449 section 5.2).
         /// </summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
 
-        /// <summary>The <c>authorization_details_types</c> registered metadata member (RFC 9396 §10).
+        /// <summary>The <c>authorization_details_types</c> registered metadata member (RFC 9396 section 10).
         /// </summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
 
@@ -399,15 +399,15 @@ public record ReadClientSuccessfulResponse
         public const string Scope = "scope";
 
         /// <summary>The <c>require_pushed_authorization_requests</c> registered metadata member
-        /// (RFC 9126 §6).</summary>
+        /// (RFC 9126 section 6).</summary>
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
 
-        /// <summary>The <c>require_signed_request_object</c> registered metadata member (RFC 9101 §10.5).
+        /// <summary>The <c>require_signed_request_object</c> registered metadata member (RFC 9101 section 10.5).
         /// </summary>
         public const string RequireSignedRequestObject = "require_signed_request_object";
 
         /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registered metadata member
-        /// (RFC 8705 §3.4).</summary>
+        /// (RFC 8705 section 3.4).</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
     }
 }

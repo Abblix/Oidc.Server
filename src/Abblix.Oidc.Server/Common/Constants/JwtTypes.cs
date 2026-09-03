@@ -111,14 +111,14 @@ public static class JwtTypes
 	public const string InitialAccessToken = VendorPrefix + "iat+jwt";
 
 	/// <summary>
-	/// The "DPoP proof" JWT type per RFC 9449 §4.2, fixed by the specification.
+	/// The "DPoP proof" JWT type per RFC 9449 section 4.2, fixed by the specification.
 	/// </summary>
 	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.DPoPProof)}.")]
 	public const string DPoPProof = JsonWebTokenTypes.DPoPProof;
 
 	/// <summary>
-	/// The "token introspection response" JWT type per RFC 9701 §5, fixed by the specification.
+	/// The "token introspection response" JWT type per RFC 9701 section 5, fixed by the specification.
 	/// </summary>
 	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
 	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.TokenIntrospection)}.")]

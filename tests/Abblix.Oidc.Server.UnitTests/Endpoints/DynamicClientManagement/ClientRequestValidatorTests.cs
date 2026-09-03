@@ -82,7 +82,7 @@ public class ClientRequestValidatorTests
     }
 
     /// <summary>
-    /// RFC 7592 §2.3: when the addressed client does not exist, the server responds
+    /// RFC 7592 section 2.3: when the addressed client does not exist, the server responds
     /// 401 Unauthorized and the registration access token MUST be immediately revoked.
     /// The error therefore has to be <c>invalid_token</c> (RFC 6750, Bearer challenge) -
     /// <c>invalid_client</c> would produce a Basic challenge that names an authentication

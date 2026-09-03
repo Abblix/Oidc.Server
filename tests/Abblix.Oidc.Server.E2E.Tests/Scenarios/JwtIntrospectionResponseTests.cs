@@ -46,14 +46,14 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var payload = DecodeJwtPayload(jwt);
 
-        // RFC 9701 §5: addressed to the client and issued by the AS.
+        // RFC 9701 section 5: addressed to the client and issued by the AS.
         Assert.Equal(clientId, payload[IanaClaimTypes.Aud]!.GetValue<string>());
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
 
         // The RFC 7662 response is carried under the token_introspection claim and reports the token as active.
-        // RFC 7662 §2.2 types active as a JSON boolean, so the assertion reads it as bool.
+        // RFC 7662 section 2.2 types active as a JSON boolean, so the assertion reads it as bool.
         var introspection = payload[IanaClaimTypes.TokenIntrospection]!.AsObject();
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }

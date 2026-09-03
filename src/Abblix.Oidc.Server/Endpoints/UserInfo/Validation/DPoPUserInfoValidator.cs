@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 /// branching logic stays symmetric across endpoints; differences are limited to the
 /// trigger (<c>cnf.jkt</c> on the inbound access token) and the error envelope (typed
 /// <see cref="InvalidDPoPProofError"/> / <see cref="UseDPoPNonceError"/> so the response
-/// formatter can emit the §7.1 <c>WWW-Authenticate: DPoP</c> challenge).
+/// formatter can emit the section 7.1 <c>WWW-Authenticate: DPoP</c> challenge).
 /// </summary>
 public partial class DPoPUserInfoValidator(
     ILogger<DPoPUserInfoValidator> logger,
@@ -45,7 +45,7 @@ public partial class DPoPUserInfoValidator(
         {
             // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
             // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
-            // (RFC 9449 §7.1) and presenting it via DPoP would bypass logging/policy
+            // (RFC 9449 section 7.1) and presenting it via DPoP would bypass logging/policy
             // gates that key off scheme.
             if (schemeDPoP)
             {

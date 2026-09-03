@@ -49,7 +49,7 @@ public enum JwtError
 
 	/// <summary>
 	/// The <c>typ</c> header parameter is missing or does not match the caller's
-	/// <see cref="ValidationParameters.ExpectedTokenTypes"/> (RFC 8725 §3.11
+	/// <see cref="ValidationParameters.ExpectedTokenTypes"/> (RFC 8725 section 3.11
 	/// token-type confusion guard).
 	/// </summary>
 	InvalidTokenType,

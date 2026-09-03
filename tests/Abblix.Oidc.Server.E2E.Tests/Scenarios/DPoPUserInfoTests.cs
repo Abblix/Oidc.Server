@@ -19,11 +19,11 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9449 §9 resource access (UserInfo as the protected resource) for DPoP-bound
+/// RFC 9449 section 9 resource access (UserInfo as the protected resource) for DPoP-bound
 /// access tokens, end-to-end against the test OIDC provider. Covers the matching-proof
-/// success path, the §7.2 downgrade-to-Bearer rejection, Abblix's reject-unbound-as-DPoP
-/// posture, and proof-key mismatch. Token-endpoint binding (§6) lives in
-/// <see cref="DPoPTests"/> and refresh rebinding (§5) in <see cref="DPoPRefreshTests"/>;
+/// success path, the section 7.2 downgrade-to-Bearer rejection, Abblix's reject-unbound-as-DPoP
+/// posture, and proof-key mismatch. Token-endpoint binding (section 6) lives in
+/// <see cref="DPoPTests"/> and refresh rebinding (section 5) in <see cref="DPoPRefreshTests"/>;
 /// the three share <see cref="DPoPTestBase"/>.
 /// </summary>
 public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
@@ -36,7 +36,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
         var accessToken = await ObtainDPoPBoundAccessTokenAsync(client, discovery, proofKey);
 
-        // RFC 9449 §7.1: proof must carry ath = base64url(sha256(access_token)).
+        // RFC 9449 section 7.1: proof must carry ath = base64url(sha256(access_token)).
         var userInfoProof = proofKey.BuildProof(
             HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
 
@@ -50,9 +50,9 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task UserInfo_dpop_bound_token_presented_as_bearer_is_rejected()
     {
-        // RFC 9449 §7.2: "such a protected resource MUST reject a DPoP-bound access
+        // RFC 9449 section 7.2: "such a protected resource MUST reject a DPoP-bound access
         // token received as a bearer token". The check exists to close the downgrade-
-        // to-Bearer attack surface. RFC 9449 §7.1 also asks the response to carry a
+        // to-Bearer attack surface. RFC 9449 section 7.1 also asks the response to carry a
         // WWW-Authenticate: DPoP challenge so the client knows which scheme to switch to.
         using var proofKey = new DPoPProofGenerator();
         var client = CreateClient();
@@ -69,7 +69,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task UserInfo_unbound_token_presented_as_dpop_is_rejected()
     {
-        // Abblix-side defensive posture: RFC 9449 §7.1's check list "the public key of
+        // Abblix-side defensive posture: RFC 9449 section 7.1's check list "the public key of
         // the DPoP proof matches the public key to which the access token is bound"
         // has no defined behaviour when the token carries no cnf.jkt at all (nothing
         // to match against). Abblix chooses to reject so a Bearer-issued token cannot
@@ -108,7 +108,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
 
         // Proof signed with a different key - the attacker stole the token but lacks the
         // private key the token was bound to. The AS computes the proof's jkt and finds
-        // it doesn't match the token's cnf.jkt. RFC 9449 §7.1: the resource server SHOULD
+        // it doesn't match the token's cnf.jkt. RFC 9449 section 7.1: the resource server SHOULD
         // accompany the 401 with a WWW-Authenticate: DPoP challenge so the client knows
         // which scheme to use on retry.
         var attackerProof = attackerKey.BuildProof(

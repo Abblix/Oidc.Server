@@ -19,13 +19,13 @@ public record ClientRegistrationValidationContext(ClientRegistrationRequest Requ
 {
 	/// <summary>
 	/// The pairwise sector identifier (host) resolved by <c>SubjectTypeValidator</c> per
-	/// OIDC Core §8.1. <c>null</c> when the client does not request pairwise subjects.
+	/// OIDC Core section 8.1. <c>null</c> when the client does not request pairwise subjects.
 	/// </summary>
 	public string? SectorIdentifier { get; set; }
 
 	/// <summary>
-	/// Whether the pipeline is running for a new registration (RFC 7591 §3) or for an
-	/// update of an existing client (RFC 7592 §2.2). Steps such as
+	/// Whether the pipeline is running for a new registration (RFC 7591 section 3) or for an
+	/// update of an existing client (RFC 7592 section 2.2). Steps such as
 	/// <see cref="ClientIdValidator"/> branch on this value.
 	/// </summary>
 	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;

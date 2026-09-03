@@ -65,16 +65,16 @@ public sealed class DPoPProofGenerator : IDisposable
     /// presenting the same returned string twice trips the AS replay cache on the second
     /// attempt (the canonical E2E replay scenario).
     /// </summary>
-    /// <param name="httpMethod">HTTP method byte-exact (RFC 9449 §4.2 <c>htm</c>).
+    /// <param name="httpMethod">HTTP method byte-exact (RFC 9449 section 4.2 <c>htm</c>).
     /// Uppercase per IETF convention.</param>
-    /// <param name="requestUri">Absolute URI of the request after RFC 3986 §6.2
+    /// <param name="requestUri">Absolute URI of the request after RFC 3986 section 6.2
     /// canonicalisation. Pass exactly what the client will send on the wire; the
     /// validator canonicalises both sides before comparing.</param>
     /// <param name="accessToken">When the proof accompanies an access token at a
     /// protected resource, the proof MUST carry <c>ath = base64url(sha256(token))</c>
-    /// per RFC 9449 §4.2. Pass the raw access token here and the generator embeds the
+    /// per RFC 9449 section 4.2. Pass the raw access token here and the generator embeds the
     /// hash. Leave null at the /token endpoint and elsewhere proof-only.</param>
-    /// <param name="nonce">RFC 9449 §8 server-supplied freshness nonce. Pass the value
+    /// <param name="nonce">RFC 9449 section 8 server-supplied freshness nonce. Pass the value
     /// from the previous response's <c>DPoP-Nonce</c> header when the AS challenged for
     /// one; leave null for nonce-disabled deployments (the E2E default).</param>
     public string BuildProof(

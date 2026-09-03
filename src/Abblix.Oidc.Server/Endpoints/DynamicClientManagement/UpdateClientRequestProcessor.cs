@@ -54,7 +54,7 @@ public class UpdateClientRequestProcessor(
             TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
             AllowedResponseTypes = model.ResponseTypes,
             AllowedGrantTypes = model.GrantTypes,
-            // Empty rather than null when the client registers none, matching registration: RFC 7592 §2
+            // Empty rather than null when the client registers none, matching registration: RFC 7592 section 2
             // replaces the whole metadata set, so a client dropping its redirect URIs must end up with an
             // empty set rather than an absent one.
             RedirectUris = model.RedirectUris ?? [],
@@ -62,14 +62,14 @@ public class UpdateClientRequestProcessor(
             JwksUri = model.JwksUri,
             PkceRequired = model.PkceRequired,
             OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 §5.2: dpop_bound_access_tokens - when omitted, defaults to false.
+            // RFC 9449 section 5.2: dpop_bound_access_tokens - when omitted, defaults to false.
             RequireDPoP = model.DpopBoundAccessTokens ?? false,
-            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
+            // RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: per-client FAPI-grade enforcement
             // flags - RFC 7592 update is a full replacement, so omission resets them to false.
             RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
             RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
             TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
-            // RFC 9396 §10: authorization_details_types per-client allowlist.
+            // RFC 9396 section 10: authorization_details_types per-client allowlist.
             AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
             // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
             TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
@@ -168,7 +168,7 @@ public class UpdateClientRequestProcessor(
         // Update client in storage
         await clientInfoManager.UpdateClientAsync(updatedClient);
 
-        // RFC 7592 §5: rotate the registration access token on update. Recording a fresh jti
+        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
         // invalidates every token issued before this update, limiting the exposure window of a
         // leaked token to the period between rotations.
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
@@ -191,7 +191,7 @@ public class UpdateClientRequestProcessor(
             TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,
             ApplicationType = updatedClient.ApplicationType,
             RedirectUris = updatedClient.RedirectUris,
-            // RFC 7592 §3: echo the post-update registered state so the client can verify the
+            // RFC 7592 section 3: echo the post-update registered state so the client can verify the
             // full replacement took effect (grant/response types and scope included).
             GrantTypes = updatedClient.EffectiveGrantTypes,
             ResponseTypes = updatedClient.EffectiveResponseTypes,
@@ -215,10 +215,10 @@ public class UpdateClientRequestProcessor(
             TlsClientAuthSanUri = updatedClient.TlsClientAuth?.SanUris,
             TlsClientAuthSanIp = updatedClient.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = updatedClient.TlsClientAuth?.SanEmails,
-            // RFC 9449 §5.2: echo dpop_bound_access_tokens so the client can confirm the
+            // RFC 9449 section 5.2: echo dpop_bound_access_tokens so the client can confirm the
             // current binding state.
             DpopBoundAccessTokens = updatedClient.RequireDPoP,
-            // RFC 9396 §10: echo authorization_details_types so the client confirms its allowlist.
+            // RFC 9396 section 10: echo authorization_details_types so the client confirms its allowlist.
             AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
             // Non-standard extension: echo token_exchange_subject_token_types.
             TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,

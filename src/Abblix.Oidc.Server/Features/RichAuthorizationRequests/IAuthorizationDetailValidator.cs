@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <remarks>
 /// The library ships no concrete implementations of this interface - each authorization-detail
 /// type (e.g. <c>payment_initiation</c>, <c>consent</c>, OpenID4VC presentation schemas) demands
-/// its own per-type schema and is contributed by the host or a separate package. RFC 9396 §5
+/// its own per-type schema and is contributed by the host or a separate package. RFC 9396 section 5
 /// requires the AS to refuse any entry whose <c>type</c> is unknown; with zero implementations
 /// registered, every RAR-bearing request is rejected with <c>invalid_authorization_details</c>
 /// and the server still boots cleanly.
@@ -42,14 +42,14 @@ public interface IAuthorizationDetailValidator
     /// </summary>
     /// <param name="detail">The entry to validate. Its <see cref="AuthorizationDetail.Type"/>
     /// matches this validator's <see cref="Type"/>; the per-type schema lives in the raw
-    /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 §2.2
+    /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 section 2.2
     /// standardised members where applicable.</param>
     /// <param name="client">The client that submitted the request, for policy decisions that
     /// depend on per-client allowlists or registered metadata.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or a
     /// <see cref="OidcError"/> describing the rejection reason on
-    /// failure. RFC 9396 §5 makes the protocol-level error code at the wire
+    /// failure. RFC 9396 section 5 makes the protocol-level error code at the wire
     /// <c>invalid_authorization_details</c> regardless of the underlying reason.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
         AuthorizationDetail detail,
@@ -62,13 +62,13 @@ public interface IAuthorizationDetailValidator
     /// type that does not enrich answers the same question in both phases.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §7.1 says that "Whether enrichment is allowed and specifics of how it works are
+    /// RFC 9396 section 7.1 says that "Whether enrichment is allowed and specifics of how it works are
     /// necessarily part of the definition of the respective authorization details type", and in this
     /// library the definition of a type is this validator. Its worked example (Figures 16 and 17) is
     /// an <c>account_information</c> entry whose empty arrays are placeholders the server fills with
     /// the identifiers the user picked.
     /// <para>
-    /// That shape is one the request-time question may legitimately refuse: RFC 9396 §5 has the server
+    /// That shape is one the request-time question may legitimately refuse: RFC 9396 section 5 has the server
     /// reject an entry that "contains fields with invalid values for the authorization details type",
     /// and a type whose definition says the client must not choose the accounts makes a populated
     /// placeholder exactly that. Such a type overrides this member so the consent decision's own

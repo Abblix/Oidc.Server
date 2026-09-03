@@ -29,7 +29,7 @@ public class DPoPOptions
 
     /// <summary>
     /// DPoP-specific nonce configuration: per-endpoint require-nonce policy
-    /// (RFC 9449 §8) plus DPoP-specific overrides of the generic
+    /// (RFC 9449 section 8) plus DPoP-specific overrides of the generic
     /// <see cref="NonceOptions.AcceptanceWindow"/> and
     /// <see cref="NonceOptions.RotationInterval"/>.
     /// </summary>

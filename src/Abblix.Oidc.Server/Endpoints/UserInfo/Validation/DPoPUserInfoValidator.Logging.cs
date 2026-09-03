@@ -28,7 +28,7 @@ partial class DPoPUserInfoValidator
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPUserInfoValidator.ProofKeyMismatch,
         Level = LogLevel.Information,
-        Message = "DPoP proof key thumbprint {ActualThumbprint} does not match access-token cnf.jkt {CommittedThumbprint} (RFC 9449 §6.1).")]
+        Message = "DPoP proof key thumbprint {ActualThumbprint} does not match access-token cnf.jkt {CommittedThumbprint} (RFC 9449 section 6.1).")]
     private partial void LogProofKeyMismatch(string committedThumbprint, string actualThumbprint);
 
     [LoggerMessage(
@@ -40,6 +40,6 @@ partial class DPoPUserInfoValidator
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPUserInfoValidator.SchemeBindingMismatch,
         Level = LogLevel.Warning,
-        Message = "Authorization scheme/binding mismatch at UserInfo endpoint: presented scheme={PresentedScheme}, access-token DPoP-bound={TokenIsBound} (RFC 9449 §7.1).")]
+        Message = "Authorization scheme/binding mismatch at UserInfo endpoint: presented scheme={PresentedScheme}, access-token DPoP-bound={TokenIsBound} (RFC 9449 section 7.1).")]
     private partial void LogSchemeBindingMismatch(string presentedScheme, bool tokenIsBound);
 }

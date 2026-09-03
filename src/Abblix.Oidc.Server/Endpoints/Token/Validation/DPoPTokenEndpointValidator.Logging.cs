@@ -28,7 +28,7 @@ partial class DPoPTokenEndpointValidator
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.ProofKeyMismatch,
         Level = LogLevel.Information,
-        Message = "DPoP proof key thumbprint {ActualThumbprint} does not match committed dpop_jkt {CommittedThumbprint} (RFC 9449 §10).")]
+        Message = "DPoP proof key thumbprint {ActualThumbprint} does not match committed dpop_jkt {CommittedThumbprint} (RFC 9449 section 10).")]
     private partial void LogProofKeyMismatch(string committedThumbprint, string actualThumbprint);
 
     [LoggerMessage(

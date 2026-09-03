@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// RFC 9396 / RFC 8693 server-metadata surface for Rich Authorization Requests:
 /// discovery advertisement (grant types, authorization_details_types_supported),
 /// DCR round-trip of authorization_details_types, the embedded-license issuer
-/// whitelist, and introspection echo of authorization_details (§9.2). Core round-trip
+/// whitelist, and introspection echo of authorization_details (section 9.2). Core round-trip
 /// lives in <see cref="RichAuthorizationRequestsTests"/> and consent in
 /// <see cref="RarConsentTests"/>; the three share <see cref="RarTestBase"/>.
 /// </summary>
@@ -30,7 +30,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     [Fact]
     public async Task Discovery_exposes_token_exchange_grant_type()
     {
-        // RFC 8693 §5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
+        // RFC 8693 section 5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
         // Exposure follows the host opting in: AddTokenExchangeGrant() -> AddAuthorizationGrant
         // <TokenExchangeGrantHandler>, CompositeAuthorizationGrantHandler aggregates GrantTypesSupported
         // across all registered handlers and the discovery pipeline reads from it. A host that never calls
@@ -94,7 +94,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     }
 
     [Fact]
-    public async Task Introspection_response_echoes_authorization_details_from_access_token(/* RFC 9396 §9.2 */)
+    public async Task Introspection_response_echoes_authorization_details_from_access_token(/* RFC 9396 section 9.2 */)
     {
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,

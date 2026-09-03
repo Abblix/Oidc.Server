@@ -19,9 +19,9 @@ namespace Abblix.Jwt.Encryption;
 /// </summary>
 /// <remarks>
 /// RSA-OAEP and RSA-OAEP-256 are the recommended algorithms. RSA1_5 (RSAES-PKCS1-v1_5) is supported
-/// for backward compatibility despite RFC 8725 §3.2's advice to prefer RSAES-OAEP. Its PKCS1-v1.5
+/// for backward compatibility despite RFC 8725 section 3.2's advice to prefer RSAES-OAEP. Its PKCS1-v1.5
 /// padding would expose the decryption endpoint to a Bleichenbacher oracle; that oracle is closed
-/// upstream in <see cref="JsonWebTokenEncryptor"/> by the RFC 7516 §11.5 mitigation (a failed CEK
+/// upstream in <see cref="JsonWebTokenEncryptor"/> by the RFC 7516 section 11.5 mitigation (a failed CEK
 /// decryption is replaced with a random CEK so the outcome is uniform), not in this encryptor.
 /// This is a stateless service that can be registered as a singleton in DI.
 /// </remarks>

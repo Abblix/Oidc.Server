@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
-/// Thin endpoint-side adapter that delegates the RFC 9396 §3 CIBA
+/// Thin endpoint-side adapter that delegates the RFC 9396 section 3 CIBA
 /// <c>authorization_details</c> validation to
 /// <see cref="IAuthorizationDetailsPolicy.ApplyAsync"/>. The composite already returns
 /// an <see cref="OidcError"/> with <c>error = invalid_authorization_details</c>, so this

@@ -26,40 +26,40 @@ public abstract record AuthorizationResponse(AuthorizationRequest Model)
     public static class Parameters
     {
         /// <summary>The <c>state</c> value echoed back verbatim to bind the response to the request
-        /// (OAuth 2.0 §4.1.2).</summary>
+        /// (OAuth 2.0 section 4.1.2).</summary>
         public const string State = "state";
 
         /// <summary>The <c>code</c> authorization code returned by the Authorization Code Flow
-        /// (OAuth 2.0 §4.1.2).</summary>
+        /// (OAuth 2.0 section 4.1.2).</summary>
         public const string Code = "code";
 
-        /// <summary>The <c>token_type</c> of the issued access token (OAuth 2.0 §4.2.2).</summary>
+        /// <summary>The <c>token_type</c> of the issued access token (OAuth 2.0 section 4.2.2).</summary>
         public const string TokenType = "token_type";
 
         /// <summary>The <c>access_token</c> issued directly by the Implicit/Hybrid Flow
-        /// (OAuth 2.0 §4.2.2).</summary>
+        /// (OAuth 2.0 section 4.2.2).</summary>
         public const string AccessToken = "access_token";
 
-        /// <summary>The <c>expires_in</c> access-token lifetime in seconds (OAuth 2.0 §4.2.2).</summary>
+        /// <summary>The <c>expires_in</c> access-token lifetime in seconds (OAuth 2.0 section 4.2.2).</summary>
         public const string ExpiresIn = "expires_in";
 
-        /// <summary>The <c>id_token</c> issued by the Implicit/Hybrid Flow (OIDC Core §3.2.2.5).</summary>
+        /// <summary>The <c>id_token</c> issued by the Implicit/Hybrid Flow (OIDC Core section 3.2.2.5).</summary>
         public const string IdToken = "id_token";
 
-        /// <summary>The <c>error</c> code identifying the failure (OAuth 2.0 §4.1.2.1).</summary>
+        /// <summary>The <c>error</c> code identifying the failure (OAuth 2.0 section 4.1.2.1).</summary>
         public const string Error = "error";
 
-        /// <summary>The <c>error_description</c> human-readable failure detail (OAuth 2.0 §4.1.2.1).</summary>
+        /// <summary>The <c>error_description</c> human-readable failure detail (OAuth 2.0 section 4.1.2.1).</summary>
         public const string ErrorDescription = "error_description";
 
-        /// <summary>The <c>error_uri</c> pointing to documentation about the error (OAuth 2.0 §4.1.2.1).</summary>
+        /// <summary>The <c>error_uri</c> pointing to documentation about the error (OAuth 2.0 section 4.1.2.1).</summary>
         public const string ErrorUri = "error_uri";
 
-        /// <summary>The <c>scope</c> granted when it differs from the requested scope (OAuth 2.0 §3.3).</summary>
+        /// <summary>The <c>scope</c> granted when it differs from the requested scope (OAuth 2.0 section 3.3).</summary>
         public const string Scope = "scope";
 
         /// <summary>The <c>session_state</c> value tracking the End-User session (OIDC Session Management
-        /// §3).</summary>
+        /// section 3).</summary>
         public const string SessionState = "session_state";
 
         /// <summary>The <c>iss</c> issuer identifier authenticating the response source (RFC 9207).</summary>

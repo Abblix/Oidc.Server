@@ -13,7 +13,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Handles <c>DELETE</c> requests to the client configuration endpoint per RFC 7592 §2.3,
+/// Handles <c>DELETE</c> requests to the client configuration endpoint per RFC 7592 section 2.3,
 /// deregistering an existing client after verifying its registration access token.
 /// A successful deletion invalidates the client's <c>client_id</c>, <c>client_secret</c>,
 /// the registration access token, and any outstanding grants and tokens.
@@ -22,7 +22,7 @@ public interface IRemoveClientHandler
 {
     /// <summary>
     /// Validates the request, then removes the addressed client. The HTTP layer is expected to
-    /// translate the success result into <c>204 No Content</c> per RFC 7592 §2.3.
+    /// translate the success result into <c>204 No Content</c> per RFC 7592 section 2.3.
     /// </summary>
     /// <param name="clientRequest">The incoming request including the registration access token
     /// and target <c>client_id</c>.</param>

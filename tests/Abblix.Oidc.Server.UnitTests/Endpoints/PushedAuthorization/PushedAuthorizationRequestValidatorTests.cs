@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.PushedAuthorization;
 
 /// <summary>
 /// Unit tests for <see cref="PushedAuthorizationRequestValidator"/> covering the new
-/// RFC 9449 §10 carry-over plumbing at the PAR endpoint: optional DPoP header
+/// RFC 9449 section 10 carry-over plumbing at the PAR endpoint: optional DPoP header
 /// validation, equality check between header-derived thumbprint and the
 /// <c>dpop_jkt</c> form parameter, back-fill behaviour when only the header is
 /// presented, and nonce-policy enforcement when the deployment opts in.

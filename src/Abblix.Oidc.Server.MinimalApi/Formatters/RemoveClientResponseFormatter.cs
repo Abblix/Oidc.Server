@@ -17,7 +17,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats a client-removal result (RFC 7592 §2.3) as <see cref="IResult"/>: an empty 204 on success, or the JSON
+/// Formats a client-removal result (RFC 7592 section 2.3) as <see cref="IResult"/>: an empty 204 on success, or the JSON
 /// OAuth error on failure.
 /// </summary>
 public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter

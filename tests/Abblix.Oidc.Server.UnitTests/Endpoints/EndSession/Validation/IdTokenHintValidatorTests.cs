@@ -183,7 +183,7 @@ public class IdTokenHintValidatorTests
     }
 
     /// <summary>
-    /// RFC 8725 §3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
+    /// RFC 8725 section 3.12: the id_token_hint must be an ID Token, not another own-issued class. A token typed as
     /// one of this server's own classes - a stolen access token replayed as a hint - must be rejected even
     /// when its audience matches the requesting client.
     /// </summary>

@@ -13,7 +13,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Handles <c>GET</c> requests to the client configuration endpoint per RFC 7592 §2.1,
+/// Handles <c>GET</c> requests to the client configuration endpoint per RFC 7592 section 2.1,
 /// returning the registered metadata of the authenticated client.
 /// </summary>
 public interface IReadClientHandler

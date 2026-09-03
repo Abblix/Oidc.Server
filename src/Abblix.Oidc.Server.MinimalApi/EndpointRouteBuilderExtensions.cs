@@ -80,14 +80,14 @@ public static class EndpointRouteBuilderExtensions
 
         // Gate every OIDC endpoint on HTTPS, the public discovery and JWKS metadata included. This mirrors the
         // [RequireHttps] carried by every MVC controller (DiscoveryController included): the credential- and
-        // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 §3.2/§10.1), and the metadata must
+        // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 section 3.2/section 10.1), and the metadata must
         // not be readable over plain HTTP either - a man-in-the-middle could rewrite the advertised endpoints or
         // jwks_uri and steer clients onto attacker infrastructure. A host that genuinely needs an ungated route -
         // a liveness/health probe - maps it outside MapOidcEndpoints; the library gates all of its own endpoints
         // without exception. See RequireHttpsAsync for the redirect/refuse behaviour.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
-        // RFC 6749 §5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
+        // RFC 6749 section 5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
         // introspection, authorize, checksession, discovery, JWKS) carries it - matching the MVC controllers'
         // class-level ResponseCache. Registered before the validation filter so even a validation short-circuit
         // (400 invalid_request) still ships no-store.
@@ -105,7 +105,7 @@ public static class EndpointRouteBuilderExtensions
                 .WithName(EndpointNames.Configuration)
                 .RequireCors(OidcConstants.CorsPolicyName);
 
-            // RFC 8414 §3: the same Authorization Server Metadata document, also served at the
+            // RFC 8414 section 3: the same Authorization Server Metadata document, also served at the
             // oauth-authorization-server suffix so a client that queries only that suffix still resolves it.
             oidcGroup
                 .MapGet(routes.OAuthAuthorizationServer, ConfigurationAsync)
@@ -222,7 +222,7 @@ public static class EndpointRouteBuilderExtensions
     /// <summary>
     /// Group endpoint filter mirroring the MVC controllers' <c>[RequireHttps]</c>: a non-HTTPS GET is redirected to
     /// the HTTPS URL and any other non-HTTPS method is refused, so client credentials and tokens are never served in
-    /// cleartext (RFC 6749 §3.2/§10.1). Behind a TLS-terminating proxy the host must run <c>ForwardedHeaders</c> so
+    /// cleartext (RFC 6749 section 3.2/section 10.1). Behind a TLS-terminating proxy the host must run <c>ForwardedHeaders</c> so
     /// <see cref="HttpRequest.IsHttps"/> reflects the edge, otherwise this filter blocks all traffic.
     /// </summary>
     private static async ValueTask<object?> RequireHttpsAsync(
@@ -244,7 +244,7 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Applies the no-store cache headers (RFC 6749 §5.1) through an endpoint filter, so the no-cache behavior is a
+    /// Applies the no-store cache headers (RFC 6749 section 5.1) through an endpoint filter, so the no-cache behavior is a
     /// property of the endpoint rather than something each <see cref="IResult"/> opts into individually. Applied
     /// group-wide before the validation filter, so it covers every OIDC response - handler success, handler error, and
     /// a request short-circuited by validation - matching the MVC controllers' class-level ResponseCache.
@@ -288,7 +288,7 @@ public static class EndpointRouteBuilderExtensions
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
     }
 
-    /// <summary>Reads a registered client's configuration (RFC 7592 §2.1).</summary>
+    /// <summary>Reads a registered client's configuration (RFC 7592 section 2.1).</summary>
     private static async Task<IResult> ReadClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IReadClientHandler handler,
@@ -299,7 +299,7 @@ public static class EndpointRouteBuilderExtensions
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 
-    /// <summary>Updates a registered client's configuration (RFC 7592 §2.2).</summary>
+    /// <summary>Updates a registered client's configuration (RFC 7592 section 2.2).</summary>
     private static async Task<IResult> UpdateClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         Core.ClientRegistrationRequest registrationRequest,
@@ -311,7 +311,7 @@ public static class EndpointRouteBuilderExtensions
         return await formatter.FormatResponseAsync(updateRequest, response);
     }
 
-    /// <summary>Removes a registered client (RFC 7592 §2.3).</summary>
+    /// <summary>Removes a registered client (RFC 7592 section 2.3).</summary>
     private static async Task<IResult> RemoveClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         IRemoveClientHandler handler,
@@ -347,7 +347,7 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Initiates a CIBA backchannel authentication request (OpenID Connect CIBA §7). The request and the
+    /// Initiates a CIBA backchannel authentication request (OpenID Connect CIBA section 7). The request and the
     /// client-authentication context are each bound from the posted form.
     /// </summary>
     private static async Task<IResult> BackChannelAuthenticationAsync(
@@ -409,7 +409,7 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Issues tokens (OpenID Connect Core 3.1.3, OAuth 2.0 RFC 6749 §3.2). The request and the client-authentication
+    /// Issues tokens (OpenID Connect Core 3.1.3, OAuth 2.0 RFC 6749 section 3.2). The request and the client-authentication
     /// context are each bound from the posted form via their own <c>BindAsync</c>.
     /// </summary>
     private static async Task<IResult> TokenAsync(

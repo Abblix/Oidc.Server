@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Issues OpenID Connect Back-Channel Logout tokens (OIDC Back-Channel Logout 1.0 §2.4): JWTs
+/// Issues OpenID Connect Back-Channel Logout tokens (OIDC Back-Channel Logout 1.0 section 2.4): JWTs
 /// with an <c>events</c> claim containing the back-channel logout event URI, addressed to a
 /// specific RP and identifying the affected end-user via <c>sub</c> and/or <c>sid</c>. The
 /// <c>nonce</c> claim is prohibited per the specification.

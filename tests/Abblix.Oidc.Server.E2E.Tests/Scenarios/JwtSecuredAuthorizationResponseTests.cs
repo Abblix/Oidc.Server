@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <summary>
 /// JWT Secured Authorization Response Mode (JARM). The client requests <c>response_mode=query.jwt</c>; the
 /// authorization server returns the authorization response parameters packed into a single signed
-/// <c>response</c> JWT carrying the JARM-mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1). The
+/// <c>response</c> JWT carrying the JARM-mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM section 2.1). The
 /// end-to-end invariant: the authorization code lives inside the response JWT, not as a bare query parameter,
 /// and that code is still redeemable at the token endpoint.
 /// </summary>
@@ -32,7 +32,7 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         var (verifier, challenge) = GeneratePkcePair();
 
         // Register a code-flow client. No JARM-specific registration is required: the response is signed with
-        // the server's default algorithm (RS256, JARM §3); the client opts in purely by the response mode.
+        // the server's default algorithm (RS256, JARM section 3); the client opts in purely by the response mode.
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
@@ -65,7 +65,7 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
 
         var payload = DecodeJwtPayload(responseJwt);
 
-        // JARM §2.1 mandated claims. Compare the issuer ignoring a trailing slash (Uri.AbsoluteUri keeps one,
+        // JARM section 2.1 mandated claims. Compare the issuer ignoring a trailing slash (Uri.AbsoluteUri keeps one,
         // the issuer identifier does not).
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),

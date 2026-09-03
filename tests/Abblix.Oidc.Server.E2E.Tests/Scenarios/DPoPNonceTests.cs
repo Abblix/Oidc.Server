@@ -22,7 +22,7 @@ using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9449 §8 (AS) and §9 (RS) DPoP-Nonce challenge-response tests. The default
+/// RFC 9449 section 8 (AS) and section 9 (RS) DPoP-Nonce challenge-response tests. The default
 /// <see cref="TestFactory"/> ships with nonce enforcement OFF; these tests run against
 /// <see cref="NonceEnabledTestFactory"/> (RequireAtTokenEndpoint and
 /// RequireAtUserInfoEndpoint both = true) under a dedicated xunit collection so the
@@ -68,7 +68,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             [UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
 
         // First UserInfo call: no nonce on the proof - RS issues a fresh nonce challenge
-        // (RFC 9449 §9 + §7.1 SHOULD WWW-Authenticate: DPoP).
+        // (RFC 9449 section 9 + section 7.1 SHOULD WWW-Authenticate: DPoP).
         var proofWithoutNonce = proofKey.BuildProof(
             HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
         var response = await SendUserInfoAsync(client, discovery, accessToken, proofWithoutNonce);
@@ -110,8 +110,8 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     /// <summary>
     /// Bootstraps PAR + /authorize, then makes the first /token call with a proof that
     /// carries no nonce - the AS issues a 400 + <c>use_dpop_nonce</c> + a fresh
-    /// <c>DPoP-Nonce</c> response header (RFC 9449 §8). Returns the PKCE verifier, the
-    /// auth code (still spendable per §8 retry semantics), the fresh nonce, the parsed
+    /// <c>DPoP-Nonce</c> response header (RFC 9449 section 8). Returns the PKCE verifier, the
+    /// auth code (still spendable per section 8 retry semantics), the fresh nonce, the parsed
     /// error body, and the raw response so callers can pin extra assertions.
     /// </summary>
     private static async Task<(string Verifier, string Code, string Nonce, JsonObject Body, HttpResponseMessage Response)>
@@ -142,7 +142,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     /// <summary>
     /// Walks the full token-endpoint nonce dance - first request gets a challenge, second
     /// embeds the issued nonce and succeeds - and returns the parsed success-body. Used
-    /// directly by the retry-success test and as bootstrap for the §9 UserInfo nonce tests.
+    /// directly by the retry-success test and as bootstrap for the section 9 UserInfo nonce tests.
     /// </summary>
     private static async Task<JsonObject> ObtainDPoPBoundTokenViaNonceFlowAsync(
         HttpClient client,

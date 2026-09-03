@@ -67,7 +67,7 @@ public sealed class OidcRouteOptions
     public string Keys { get; set; } = "/.well-known/jwks";
 
     /// <summary>
-    /// The OAuth 2.0 Authorization Server Metadata document (RFC 8414 §3) - the same metadata served at
+    /// The OAuth 2.0 Authorization Server Metadata document (RFC 8414 section 3) - the same metadata served at
     /// <see cref="Configuration"/>, also exposed at the oauth-authorization-server suffix.
     /// </summary>
     public string OAuthAuthorizationServer { get; set; } = "/.well-known/oauth-authorization-server";

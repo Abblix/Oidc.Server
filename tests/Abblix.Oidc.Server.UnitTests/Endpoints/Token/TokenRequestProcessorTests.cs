@@ -723,7 +723,7 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies the RFC 9449 §7.1 token-type contract: an authorization context carrying a
+    /// Verifies the RFC 9449 section 7.1 token-type contract: an authorization context carrying a
     /// DPoP proof-key thumbprint produces <c>token_type: "DPoP"</c> (so the client sends a
     /// DPoP proof on every resource-server request); absent the thumbprint, the response
     /// advertises <c>token_type: "Bearer"</c>. The Bearer row is the regression guard for
@@ -760,7 +760,7 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies the RFC 9449 §5 split: a public client's refresh token inherits the
+    /// Verifies the RFC 9449 section 5 split: a public client's refresh token inherits the
     /// committed proof-key thumbprint (the binding survives rotation, so the client
     /// must keep presenting matching proofs); a confidential client's refresh token
     /// is stripped of the binding because client authentication already
@@ -820,7 +820,7 @@ public class TokenRequestProcessorTests
         Assert.Equal(expectedRefreshContextThumbprint, capturedRefreshContext.ProofKeyThumbprint);
     }
     /// <summary>
-    /// RFC 6749 §4.4.3 and RFC 8693: neither the client_credentials grant nor a token exchange
+    /// RFC 6749 section 4.4.3 and RFC 8693: neither the client_credentials grant nor a token exchange
     /// may return a refresh token or an ID token, even when offline_access / openid end up in the
     /// granted scope. The strict mocks make an unexpected refresh/ID mint fail the test.
     /// </summary>
@@ -862,7 +862,7 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2/§6: a refresh request whose scope is disjoint from the granted scope must be
+    /// RFC 6749 section 5.2/section 6: a refresh request whose scope is disjoint from the granted scope must be
     /// rejected with invalid_scope rather than answered with a zero-scope access token.
     /// </summary>
     [Fact]
@@ -896,7 +896,7 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// RFC 8707 §2.2: a request for a resource the grant did carry but does not match (empty resource
+    /// RFC 8707 section 2.2: a request for a resource the grant did carry but does not match (empty resource
     /// intersection over a grant that HELD resources) must be rejected with invalid_target rather than
     /// issuing a token whose audience silently falls back to the client id.
     /// </summary>

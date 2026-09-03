@@ -13,8 +13,8 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
 /// Tracks JWT IDs (jti claims) presented to the server, so a JWT-bearing flow can detect
-/// replay attempts. Both RFC 7523 §3 (JWT-bearer-grant assertion replay) and RFC 9449
-/// §11.1 (DPoP proof replay) want this primitive; it is intentionally namespace-neutral
+/// replay attempts. Both RFC 7523 section 3 (JWT-bearer-grant assertion replay) and RFC 9449
+/// section 11.1 (DPoP proof replay) want this primitive; it is intentionally namespace-neutral
 /// so a single distributed-cache instance serves every consumer.
 /// </summary>
 /// <remarks>
@@ -51,7 +51,7 @@ public interface IJwtReplayCache
     /// which exposes only Get + Set and no compare-and-set primitive. It therefore
     /// provides only a probabilistic guarantee: two concurrent presenters of the
     /// same jti can both observe a miss before either writes. The race window is
-    /// bounded by the cache round-trip and RFC 9449 §11.1 accepts probabilistic
+    /// bounded by the cache round-trip and RFC 9449 section 11.1 accepts probabilistic
     /// replay defence - but hosts that need strict atomicity should override the
     /// registration with a backend-aware implementation that bypasses
     /// <see cref="Microsoft.Extensions.Caching.Distributed.IDistributedCache"/> and

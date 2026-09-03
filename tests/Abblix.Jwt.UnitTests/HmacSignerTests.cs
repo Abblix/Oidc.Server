@@ -13,7 +13,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Unit tests for <see cref="HmacSigner"/> covering the minimum-key-length contract from
-/// RFC 7518 §3.2: HMAC keys for HS256/HS384/HS512 MUST be at least as long as the hash output
+/// RFC 7518 section 3.2: HMAC keys for HS256/HS384/HS512 MUST be at least as long as the hash output
 /// (32/48/64 bytes respectively). Tests both the Sign path (which throws for short keys)
 /// and the Verify path (which returns false for short keys without performing the HMAC).
 /// </summary>
@@ -23,7 +23,7 @@ public class HmacSignerTests
 
     /// <summary>
     /// Verifies that <see cref="HmacSigner.Sign"/> rejects keys shorter than the algorithm's
-    /// hash output. Per RFC 7518 §3.2 a shorter key trivially weakens integrity below the
+    /// hash output. Per RFC 7518 section 3.2 a shorter key trivially weakens integrity below the
     /// algorithm's nominal strength and must not be accepted.
     /// </summary>
     [Theory]
@@ -40,7 +40,7 @@ public class HmacSignerTests
 
     /// <summary>
     /// Verifies that <see cref="HmacSigner.Sign"/> succeeds with a key exactly at the
-    /// minimum length required by RFC 7518 §3.2. Locks the boundary on the accepted side.
+    /// minimum length required by RFC 7518 section 3.2. Locks the boundary on the accepted side.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.HS256, 32)]

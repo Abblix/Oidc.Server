@@ -16,7 +16,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Builds the RFC 7592 §2.1 read-client response from stored client metadata. The
+/// Builds the RFC 7592 section 2.1 read-client response from stored client metadata. The
 /// <c>client_secret</c> is intentionally omitted because secrets are persisted only as
 /// hashes; a registration access token bearing the client's current jti is re-issued so the
 /// client can keep using the management endpoint after the read, without invalidating the token
@@ -51,7 +51,7 @@ public class ReadClientRequestProcessor(
             TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
             ApplicationType = client.ApplicationType,
             RedirectUris = client.RedirectUris,
-            // RFC 7592 §3: the read response carries the full registered metadata, including the
+            // RFC 7592 section 3: the read response carries the full registered metadata, including the
             // grant/response types the server assigned by default when registration omitted them.
             GrantTypes = client.EffectiveGrantTypes,
             ResponseTypes = client.EffectiveResponseTypes,
@@ -75,7 +75,7 @@ public class ReadClientRequestProcessor(
             TlsClientAuthSanUri = client.TlsClientAuth?.SanUris,
             TlsClientAuthSanIp = client.TlsClientAuth?.SanIps,
             TlsClientAuthSanEmail = client.TlsClientAuth?.SanEmails,
-            // RFC 7592 §3 requires the read response to carry all registered metadata; mirror the
+            // RFC 7592 section 3 requires the read response to carry all registered metadata; mirror the
             // update path so read and update return the identical surface for the same client.
             DpopBoundAccessTokens = client.RequireDPoP,
             AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,

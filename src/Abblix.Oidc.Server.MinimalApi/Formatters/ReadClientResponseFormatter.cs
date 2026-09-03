@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats a client-read result (RFC 7592 §2.1) as <see cref="IResult"/>: a 200 with the client configuration (its
+/// Formats a client-read result (RFC 7592 section 2.1) as <see cref="IResult"/>: a 200 with the client configuration (its
 /// <c>registration_client_uri</c> filled in) on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the client.</param>

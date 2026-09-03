@@ -13,10 +13,10 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// The response returned from the client registration endpoint per RFC 7591 §3.2.1 and OIDC Dynamic Client
-/// Registration §3.2, echoing the registered metadata together with server-issued credentials and the URL
+/// The response returned from the client registration endpoint per RFC 7591 section 3.2.1 and OIDC Dynamic Client
+/// Registration section 3.2, echoing the registered metadata together with server-issued credentials and the URL
 /// of the client configuration endpoint (RFC 7592) for subsequent management operations.
-/// Unregistered metadata is omitted from the JSON per RFC 7591 §3.2.1, not emitted as an explicit null.
+/// Unregistered metadata is omitted from the JSON per RFC 7591 section 3.2.1, not emitted as an explicit null.
 /// </summary>
 [JsonIgnoreNulls]
 public record ClientRegistrationResponse
@@ -105,107 +105,107 @@ public record ClientRegistrationResponse
 
     /// <summary>
     /// The type of application for which the client is registered (<c>web</c>, <c>native</c>).
-    /// Optional - server may assign a default. Per RFC 7591 §2.
+    /// Optional - server may assign a default. Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
     public string? ApplicationType { get; init; }
 
     /// <summary>
     /// The URIs where the client expects to receive responses after user authentication.
-    /// Per RFC 7591 §2.
+    /// Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.RedirectUris)]
     public Uri[]? RedirectUris { get; init; }
 
     /// <summary>
-    /// The registered grant types, including server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// The registered grant types, including server-assigned defaults. Per RFC 7591 section 2/section 3.2.1.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.GrantTypes)]
     public string[]? GrantTypes { get; init; }
 
     /// <summary>
     /// The registered response type combinations (each entry space-separated), including
-    /// server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// server-assigned defaults. Per RFC 7591 section 2/section 3.2.1.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
     public string[][]? ResponseTypes { get; init; }
 
     /// <summary>
-    /// The human-readable name of the client. Optional client metadata. Per RFC 7591 §2.
+    /// The human-readable name of the client. Optional client metadata. Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.ClientName)]
     public string? ClientName { get; init; }
 
     /// <summary>
-    /// URL that references a logo for the client. Optional. Per RFC 7591 §2.
+    /// URL that references a logo for the client. Optional. Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.LogoUri)]
     public Uri? LogoUri { get; init; }
 
     /// <summary>
     /// The type of subject identifier used (<c>public</c>, <c>pairwise</c>).
-    /// Optional. Per OpenID Connect Core §8.
+    /// Optional. Per OpenID Connect Core section 8.
     /// </summary>
     [JsonPropertyName(Parameters.SubjectType)]
     public string? SubjectType { get; init; }
 
     /// <summary>
     /// URL using <c>https</c> scheme used in calculating pseudonymous identifiers for
-    /// pairwise subject type. Optional. Per OpenID Connect Core §8.1.
+    /// pairwise subject type. Optional. Per OpenID Connect Core section 8.1.
     /// </summary>
     [JsonPropertyName(Parameters.SectorIdentifierUri)]
     public Uri? SectorIdentifierUri { get; init; }
 
     /// <summary>
     /// URL for the client's JSON Web Key Set document.
-    /// Optional. Per RFC 7591 §2.
+    /// Optional. Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.JwksUri)]
     public Uri? JwksUri { get; init; }
 
     /// <summary>
     /// JWE <c>alg</c> algorithm for encrypting UserInfo responses.
-    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// Optional. Per OpenID Connect Core section 5.6.2.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseAlg)]
     public string? UserInfoEncryptedResponseAlg { get; init; }
 
     /// <summary>
     /// JWE <c>enc</c> algorithm for encrypting UserInfo responses.
-    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// Optional. Per OpenID Connect Core section 5.6.2.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseEnc)]
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>
-    /// JWS algorithm for signing introspection responses. Optional. Per RFC 9701 §6.
+    /// JWS algorithm for signing introspection responses. Optional. Per RFC 9701 section 6.
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
     public string? IntrospectionSignedResponseAlg { get; init; }
 
     /// <summary>
-    /// JWE <c>alg</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// JWE <c>alg</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 section 6.
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
     public string? IntrospectionEncryptedResponseAlg { get; init; }
 
     /// <summary>
-    /// JWE <c>enc</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// JWE <c>enc</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 section 6.
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
     public string? IntrospectionEncryptedResponseEnc { get; init; }
 
     /// <summary>
     /// Array of contact email addresses for people responsible for this client.
-    /// Optional. Per RFC 7591 §2.
+    /// Optional. Per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.Contacts)]
     public string[]? Contacts { get; init; }
 
     /// <summary>
     /// Array of <c>request_uri</c> values pre-registered by the client.
-    /// Optional. Per OpenID Connect Core §6.2.
+    /// Optional. Per OpenID Connect Core section 6.2.
     /// </summary>
     [JsonPropertyName(Parameters.RequestUris)]
     public Uri[]? RequestUris { get; init; }
@@ -242,14 +242,14 @@ public record ClientRegistrationResponse
 
     /// <summary>
     /// Whether access tokens issued to this client are sender-constrained via DPoP per
-    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes the registered value of
+    /// RFC 9449 section 5.2 (<c>dpop_bound_access_tokens</c>). Echoes the registered value of
     /// <c>ClientInfo.RequireDPoP</c>.
     /// </summary>
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 section 6.
     /// Echoes <c>ClientInfo.RequirePushedAuthorizationRequests</c>.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests)]
@@ -257,14 +257,14 @@ public record ClientRegistrationResponse
 
     /// <summary>
     /// Whether this client must deliver authorization parameters as a signed request object per
-    /// RFC 9101 §10.5. Echoes <c>ClientInfo.RequireSignedRequestObject</c>.
+    /// RFC 9101 section 10.5. Echoes <c>ClientInfo.RequireSignedRequestObject</c>.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.RequireSignedRequestObject)]
     public bool? RequireSignedRequestObject { get; init; }
 
     /// <summary>
     /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
-    /// TLS per RFC 8705 §3.4. Echoes <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c>.
+    /// TLS per RFC 8705 section 3.4. Echoes <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c>.
     /// </summary>
     [JsonPropertyName(ClientRegistrationRequest.Parameters.TlsClientCertificateBoundAccessTokens)]
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
@@ -272,7 +272,7 @@ public record ClientRegistrationResponse
     /// <summary>
     /// The per-client allowlist of authorization-detail <c>type</c> values this client may
     /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
-    /// RFC 9396 §10). Echoes the registered value of
+    /// RFC 9396 section 10). Echoes the registered value of
     /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
@@ -295,8 +295,8 @@ public record ClientRegistrationResponse
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
-    /// Wire-level member names of the client registration response (RFC 7591 §3.2.1, RFC 7592 §3,
-    /// OIDC Dynamic Client Registration §3.2).
+    /// Wire-level member names of the client registration response (RFC 7591 section 3.2.1, RFC 7592 section 3,
+    /// OIDC Dynamic Client Registration section 3.2).
     /// </summary>
     /// <remarks>
     /// Public for the same reason <see cref="ClientRegistrationRequest.Parameters"/> is: these are the member
@@ -361,13 +361,13 @@ public record ClientRegistrationResponse
         /// <summary>The <c>userinfo_encrypted_response_enc</c> echoed registration metadata member.</summary>
         public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
 
-        /// <summary>The <c>introspection_signed_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        /// <summary>The <c>introspection_signed_response_alg</c> echoed registration metadata member (RFC 9701 section 6).</summary>
         public const string IntrospectionSignedResponseAlg = "introspection_signed_response_alg";
 
-        /// <summary>The <c>introspection_encrypted_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        /// <summary>The <c>introspection_encrypted_response_alg</c> echoed registration metadata member (RFC 9701 section 6).</summary>
         public const string IntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg";
 
-        /// <summary>The <c>introspection_encrypted_response_enc</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        /// <summary>The <c>introspection_encrypted_response_enc</c> echoed registration metadata member (RFC 9701 section 6).</summary>
         public const string IntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc";
 
         /// <summary>The <c>contacts</c> echoed registration metadata member.</summary>
@@ -396,12 +396,12 @@ public record ClientRegistrationResponse
         /// </summary>
         public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
 
-        /// <summary>The <c>dpop_bound_access_tokens</c> echoed registration metadata member (RFC 9449 §5.2).
+        /// <summary>The <c>dpop_bound_access_tokens</c> echoed registration metadata member (RFC 9449 section 5.2).
         /// </summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
 
         /// <summary>The <c>authorization_details_types</c> echoed registration metadata member
-        /// (RFC 9396 §10).</summary>
+        /// (RFC 9396 section 10).</summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
 
         /// <summary>The <c>token_exchange_subject_token_types</c> echoed registration metadata member

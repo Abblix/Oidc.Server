@@ -68,9 +68,9 @@ public partial class RequestObjectFetcher(
             {
                 var (payload, client) = validated;
 
-                // Strict RFC 9101 §6.3 processing - only the request object's parameters are used and anything
+                // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
                 // passed outside it is ignored - applies when the host turns it on globally or the client's
-                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core §6.1 merge
+                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
@@ -91,7 +91,7 @@ public partial class RequestObjectFetcher(
     }
 
     /// <summary>
-    /// In strict mode (RFC 9101 §6.3) parameters passed outside the request object are silently dropped.
+    /// In strict mode (RFC 9101 section 6.3) parameters passed outside the request object are silently dropped.
     /// This surfaces them as a warning so an operator can see a client sending parameters that never take
     /// effect. A parameter is reported only when it is absent from the object, is not the parameter that
     /// carries the object itself, and differs from the request model's default (so it was actually supplied).
@@ -149,7 +149,7 @@ public partial class RequestObjectFetcher(
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
         // Always validate lifetime (exp/nbf claims) if present
-        // RFC 9101 §4 / OIDC Core §6.1: the aud of a request object SHOULD be the OP - when the
+        // RFC 9101 section 4 / OIDC Core section 6.1: the aud of a request object SHOULD be the OP - when the
         // object carries an audience, reject values addressed to another server (a request object
         // minted for a different OP must not be replayable here); an absent aud stays accepted.
         // Only require signed tokens when RequireSignedRequestObject is true
@@ -168,12 +168,12 @@ public partial class RequestObjectFetcher(
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>
             {
-                // A request object carries authorization request parameters; it is not a token. RFC 9101 §4
+                // A request object carries authorization request parameters; it is not a token. RFC 9101 section 4
                 // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
                 // deployments may alternatively be using the type application/jwt", so the exact value cannot
                 // be demanded of a conformant client. What can be refused is a JWT declaring itself some
                 // other type this class names, which is one being replayed where request parameters belong -
-                // the confusion RFC 8725 §3.11 describes. The client signs this one, so the kinds within its
+                // the confusion RFC 8725 section 3.11 describes. The client signs this one, so the kinds within its
                 // reach are not only the ones this server issued.
                 var tokenType = validJwt.Token.Header.Type;
                 if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.RequestObject))
@@ -183,7 +183,7 @@ public partial class RequestObjectFetcher(
                         $"A token of type '{tokenType}' cannot be used as a request object");
                 }
 
-                // RFC 9101 §10.5: a client registered with require_signed_request_object committed
+                // RFC 9101 section 10.5: a client registered with require_signed_request_object committed
                 // to SIGNED request objects - an unsigned (alg=none) object satisfies the
                 // structural check but not the commitment.
                 if (validJwt.Client.RequireSignedRequestObject &&

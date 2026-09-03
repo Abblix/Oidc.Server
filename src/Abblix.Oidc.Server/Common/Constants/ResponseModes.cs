@@ -52,7 +52,7 @@ public static class ResponseModes
 
 	/// <summary>
 	/// JARM shortcut response mode: indicates the default JWT redirect encoding for the requested response type
-	/// (<see cref="QueryJwt"/> for the code flow, <see cref="FragmentJwt"/> for token-bearing flows), per JARM §2.3.4.
+	/// (<see cref="QueryJwt"/> for the code flow, <see cref="FragmentJwt"/> for token-bearing flows), per JARM section 2.3.4.
 	/// </summary>
 	public const string Jwt = "jwt";
 }

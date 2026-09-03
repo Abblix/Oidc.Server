@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// validators exist, but that they participate in the registration pipeline a host actually
 /// invokes via <c>IRegisterClientHandler</c>. Construction of the registration request goes
 /// through the public DTO; resolution goes through DI; rejections come back as OidcError
-/// per OIDC DCR §3.3, Client Registration Error Response.
+/// per OIDC DCR section 3.3, Client Registration Error Response.
 /// </summary>
 public class RegisterClientHandlerIntegrationTests
 {
@@ -74,7 +74,7 @@ public class RegisterClientHandlerIntegrationTests
             // POCO, so this stays a simple Add without any further DI plumbing.
             opts.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
 
-            // Anonymous registration: opt out of RFC 7591 §3 initial access token gating so
+            // Anonymous registration: opt out of RFC 7591 section 3 initial access token gating so
             // the test focuses on the response_types / grant_types support gates added by
             // this PR. With RequireInitialAccessToken = true the InitialAccessTokenValidator
             // fires first and short-circuits with «invalid_token» before any support gate
@@ -126,7 +126,7 @@ public class RegisterClientHandlerIntegrationTests
     /// Without <c>EnableImplicitFlow()</c> the host advertises only the Code Flow. A client
     /// trying to register with <c>response_types=["token"]</c> + <c>grant_types=["implicit"]</c>
     /// must be rejected at registration time with <c>invalid_client_metadata</c> per OIDC DCR
-    /// §3.2 - the gap <c>SupportedResponseTypeValidator</c> closes, surfaced through the
+    /// section 3.2 - the gap <c>SupportedResponseTypeValidator</c> closes, surfaced through the
     /// full handler pipeline.
     /// </summary>
     [Fact]
@@ -236,7 +236,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 9449 §5.2: when the client metadata omits <c>dpop_bound_access_tokens</c>, the
+    /// RFC 9449 section 5.2: when the client metadata omits <c>dpop_bound_access_tokens</c>, the
     /// effective value is <c>false</c>. Locks the default-on-omission contract end-to-end.
     /// </summary>
     [Fact]
@@ -257,7 +257,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 9700 §2.1.1 requires an authorization server to enforce PKCE for public clients, and this server
+    /// RFC 9700 section 2.1.1 requires an authorization server to enforce PKCE for public clients, and this server
     /// requires it of every client that can receive a code. A registration request that says nothing about
     /// <c>pkce_required</c> must therefore leave the stored client on the server's own default rather than
     /// carrying a weaker one in from the request model: the flag is nullable precisely so that "not stated"
@@ -305,7 +305,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 7591 §3.2.1: the registration response echoes registered client metadata so the
+    /// RFC 7591 section 3.2.1: the registration response echoes registered client metadata so the
     /// client can confirm what was stored without a follow-up read. Locks that the
     /// extended echo (added alongside DPoP) actually surfaces a representative subset of
     /// fields - <c>redirect_uris</c>, <c>token_endpoint_auth_method</c>, and the
@@ -329,7 +329,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 9701 §6: the registration response echoes a registered <c>introspection_signed_response_alg</c>, while a
+    /// RFC 9701 section 6: the registration response echoes a registered <c>introspection_signed_response_alg</c>, while a
     /// client that did not register one (the implicit <c>none</c> default) gets no such field in the response.
     /// </summary>
     [Fact]
@@ -348,9 +348,9 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: the per-client FAPI-grade enforcement flags
+    /// RFC 9126 section 6 / RFC 9101 section 10.5 / RFC 8705 section 3.4: the per-client FAPI-grade enforcement flags
     /// round-trip through registration into the stored ClientInfo and are echoed on the response
-    /// (RFC 7591 §3.2.1).
+    /// (RFC 7591 section 3.2.1).
     /// </summary>
     [Fact]
     public async Task HandleAsync_FapiEnforcementFlags_RoundTripAndEcho()
@@ -381,7 +381,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 7591 §3: with the initial access token gate enabled, a client presenting a token minted
+    /// RFC 7591 section 3: with the initial access token gate enabled, a client presenting a token minted
     /// by this server's own <see cref="IInitialAccessTokenService"/> must be allowed to register.
     /// The minted token carries no <c>aud</c> (registration authorizes at the issuer itself), so this
     /// exercises the mint-side and validate-side option sets composing end to end: the validator must
@@ -412,7 +412,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// OIDC Core §10.1: HS* signing keys on the client_secret, which this server stores only as a
+    /// OIDC Core section 10.1: HS* signing keys on the client_secret, which this server stores only as a
     /// hash - registration asking for an HMAC-signed id_token must be rejected at DCR time instead
     /// of failing with a server error on the first issued token.
     /// </summary>
@@ -433,7 +433,7 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// RFC 7591 §3.2.1: the response carries grant_types, response_types and scope read back from
+    /// RFC 7591 section 3.2.1: the response carries grant_types, response_types and scope read back from
     /// the stored registration. Without them a client cannot learn the server-assigned defaults
     /// (authorization_code / code) when its request omitted these fields - the DCR conformance
     /// profile checks exactly this.

@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// Output of <see cref="IIntrospectionRequestValidator"/> handed to the processor: pairs the
 /// original request with either the parsed token (active branch) or a <c>null</c> token
 /// (inactive branch produced via <see cref="InvalidToken"/>, used so token-level failures
-/// flow through the same processing path without disclosing why per RFC 7662 §2.2).
+/// flow through the same processing path without disclosing why per RFC 7662 section 2.2).
 /// </summary>
 public record ValidIntrospectionRequest
 {

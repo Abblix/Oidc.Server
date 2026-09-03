@@ -13,7 +13,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Tests for the typed accessors on <see cref="JsonWebTokenHeader"/> covering the optional
-/// JOSE header parameters defined in RFC 7515 §4.1.2 - §4.1.8: <c>jku</c>, <c>jwk</c>,
+/// JOSE header parameters defined in RFC 7515 section 4.1.2 - section 4.1.8: <c>jku</c>, <c>jwk</c>,
 /// <c>x5u</c>, <c>x5c</c>, <c>x5t</c>, <c>x5t#S256</c>.
 ///
 /// The accessors are a thin typed surface over <see cref="JsonWebTokenHeader.Json"/>; they do
@@ -26,7 +26,7 @@ public class JsonWebTokenHeaderTests
     private static JsonWebTokenHeader EmptyHeader() => new(new JsonObject());
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // jku - RFC 7515 §4.1.2 (URL of a JWK Set whose keys verify the JWS)
+    // jku - RFC 7515 section 4.1.2 (URL of a JWK Set whose keys verify the JWS)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -69,7 +69,7 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // jwk - RFC 7515 §4.1.3 (public key embedded directly as a JWK)
+    // jwk - RFC 7515 section 4.1.3 (public key embedded directly as a JWK)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -121,7 +121,7 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5u - RFC 7515 §4.1.5 (URL of an X.509 certificate or chain)
+    // x5u - RFC 7515 section 4.1.5 (URL of an X.509 certificate or chain)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -152,7 +152,7 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5c - RFC 7515 §4.1.6 (X.509 certificate chain as a JSON array of base64-DER)
+    // x5c - RFC 7515 section 4.1.6 (X.509 certificate chain as a JSON array of base64-DER)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -212,8 +212,8 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5t - RFC 7515 §4.1.7 (base64url SHA-1 thumbprint, deprecated per §10.11)
-    // x5t#S256 - RFC 7515 §4.1.8 (base64url SHA-256 thumbprint)
+    // x5t - RFC 7515 section 4.1.7 (base64url SHA-1 thumbprint, deprecated per section 10.11)
+    // x5t#S256 - RFC 7515 section 4.1.8 (base64url SHA-256 thumbprint)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]

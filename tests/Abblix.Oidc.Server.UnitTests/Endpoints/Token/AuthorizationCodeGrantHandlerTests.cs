@@ -39,7 +39,7 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 6749 §5.2: a token request without the required code parameter is the caller's protocol
+	/// RFC 6749 section 5.2: a token request without the required code parameter is the caller's protocol
 	/// error and yields invalid_request - previously it threw and surfaced as HTTP 500.
 	/// </summary>
 	[Fact]
@@ -52,7 +52,7 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 6749 §5.2 lists a code issued to another client explicitly under invalid_grant -
+	/// RFC 6749 section 5.2 lists a code issued to another client explicitly under invalid_grant -
 	/// previously this case was reported as unauthorized_client, which describes a client barred
 	/// from the grant type itself.
 	/// </summary>
@@ -102,7 +102,7 @@ public class AuthorizationCodeGrantHandlerTests
 	[InlineData(CodeChallengeMethods.S256, "qwerty", null)]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "asdfgh")]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", null)]
-	// RFC 7636 §4.6: the plain verifier is compared byte-for-byte, so a case flip must fail. This case
+	// RFC 7636 section 4.6: the plain verifier is compared byte-for-byte, so a case flip must fail. This case
 	// would have passed under the previous case-insensitive comparison - it locks the ordinal comparison in.
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "QWERTY")]
 	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
@@ -115,7 +115,7 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 9700 (OAuth 2.0 Security BCP) §2.1.1: presenting a code_verifier for an authorization code that
+	/// RFC 9700 (OAuth 2.0 Security BCP) section 2.1.1: presenting a code_verifier for an authorization code that
 	/// was issued without a code_challenge signals a PKCE downgrade / code-injection attempt. The verifier
 	/// must be rejected (invalid_grant) rather than silently ignored while tokens are issued.
 	/// </summary>

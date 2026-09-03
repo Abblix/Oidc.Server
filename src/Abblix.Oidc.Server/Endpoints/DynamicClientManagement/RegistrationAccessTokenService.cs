@@ -50,7 +50,7 @@ public class RegistrationAccessTokenService(
             {
                 // The jti binds the token to the client: the validator accepts only the token whose
                 // jti matches the value stored on the client, so a rotated token invalidates its
-                // predecessors (RFC 7592 §5).
+                // predecessors (RFC 7592 section 5).
                 JwtId = tokenId,
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,

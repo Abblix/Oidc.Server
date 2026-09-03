@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
 /// <summary>
 /// Unit tests for <see cref="SignedRequestObjectRequirementValidator"/> verifying the
-/// RFC 9101 §10.5 require_signed_request_object client metadata: plain-parameter requests from a
+/// RFC 9101 section 10.5 require_signed_request_object client metadata: plain-parameter requests from a
 /// committed client are rejected, while request-object and PAR-originated requests pass.
 /// </summary>
 public class SignedRequestObjectRequirementValidatorTests

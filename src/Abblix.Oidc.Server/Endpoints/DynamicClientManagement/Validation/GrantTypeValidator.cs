@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Enforces the consistency rule from OIDC DCR 1.0 §2 between <c>response_types</c> and
+/// Enforces the consistency rule from OIDC DCR 1.0 section 2 between <c>response_types</c> and
 /// <c>grant_types</c>: a client requesting <c>code</c> must register the
 /// <c>authorization_code</c> grant, and one requesting <c>token</c> or <c>id_token</c>
 /// must register the <c>implicit</c> grant.

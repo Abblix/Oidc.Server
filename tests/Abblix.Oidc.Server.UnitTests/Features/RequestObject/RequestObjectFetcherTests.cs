@@ -86,7 +86,7 @@ public class RequestObjectFetcherTests
     private record TestRequest(string ClientId, string RedirectUri, string? State);
 
     // A request type with wire-named JSON keys, mirroring how real request models bind, so strict
-    // RFC 9101 §6.3 processing can be exercised where parameter names line up with the object's claims.
+    // RFC 9101 section 6.3 processing can be exercised where parameter names line up with the object's claims.
     private record JarTestRequest
     {
         [JsonPropertyName("client_id")] public string? ClientId { get; init; }
@@ -95,7 +95,7 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// A client held to the FAPI 2.0 security profile is processed under the strict RFC 9101 §6.3 rule even
+    /// A client held to the FAPI 2.0 security profile is processed under the strict RFC 9101 section 6.3 rule even
     /// when the global default stays merge: a parameter passed outside the request object that the object does
     /// not carry is dropped, and the drop is reported as a warning.
     /// </summary>
@@ -839,7 +839,7 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// RFC 9101 §10.5: a client registered with require_signed_request_object committed to SIGNED
+    /// RFC 9101 section 10.5: a client registered with require_signed_request_object committed to SIGNED
     /// request objects - an unsigned (alg=none) object passes structural validation but must be
     /// rejected by the per-client commitment even when the server-wide requirement is off.
     /// </summary>
@@ -870,7 +870,7 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// RFC 9101 §5 strict mode: the payload binds onto a fresh model instead of merging over the
+    /// RFC 9101 section 5 strict mode: the payload binds onto a fresh model instead of merging over the
     /// outer request, so parameters passed outside the request object are ignored.
     /// </summary>
     [Fact]

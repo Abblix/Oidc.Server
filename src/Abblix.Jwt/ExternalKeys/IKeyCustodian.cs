@@ -54,7 +54,7 @@ public interface IKeyCustodian
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
     /// <returns>The recovered CEK, or null on any failure. Returning null rather than throwing keeps a
-    /// decryption failure indistinguishable from a wrong key, which the RFC 7516 §11.5 mitigation upstream
+    /// decryption failure indistinguishable from a wrong key, which the RFC 7516 section 11.5 mitigation upstream
     /// relies on to close the Bleichenbacher / padding-oracle side channel.</returns>
     Task<byte[]?> UnwrapKeyAsync(
         string keyId,

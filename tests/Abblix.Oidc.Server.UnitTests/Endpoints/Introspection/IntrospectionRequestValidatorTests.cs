@@ -128,7 +128,7 @@ public class IntrospectionRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies that a public client (token_endpoint_auth_method = none) is rejected. RFC 7662 §2.1
+    /// Verifies that a public client (token_endpoint_auth_method = none) is rejected. RFC 7662 section 2.1
     /// requires the introspection endpoint to require some form of authorization to prevent token
     /// scanning; a client_id alone is not a credential, so the token is never even validated.
     /// </summary>

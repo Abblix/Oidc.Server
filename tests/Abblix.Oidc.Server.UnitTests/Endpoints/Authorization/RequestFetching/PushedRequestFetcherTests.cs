@@ -21,7 +21,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.RequestFetching;
 
 /// <summary>
-/// Unit tests for <see cref="PushedRequestFetcher"/> verifying the RFC 9126 §6 per-client
+/// Unit tests for <see cref="PushedRequestFetcher"/> verifying the RFC 9126 section 6 per-client
 /// require_pushed_authorization_requests metadata: a flagged client may start an authorization
 /// flow only via PAR, independent of the server-wide requirement.
 /// </summary>

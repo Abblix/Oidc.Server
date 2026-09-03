@@ -48,7 +48,7 @@ public class TokenExchangeGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 8693 §2.1 / RFC 6749 §5.2: a request without subject_token or subject_token_type is the
+    /// RFC 8693 section 2.1 / RFC 6749 section 5.2: a request without subject_token or subject_token_type is the
     /// caller's protocol error and yields invalid_request - previously it threw and surfaced as
     /// HTTP 500.
     /// </summary>
@@ -274,7 +274,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ResolverFailure_Propagated()
     {
         // Resolver returns an OidcError -- the handler propagates it without rewrapping so
-        // resolver-specific failure descriptions reach the wire client (RFC 8693 §2.2.2 maps
+        // resolver-specific failure descriptions reach the wire client (RFC 8693 section 2.2.2 maps
         // every error to invalid_request at the wire, but the description preserves diagnostic
         // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);

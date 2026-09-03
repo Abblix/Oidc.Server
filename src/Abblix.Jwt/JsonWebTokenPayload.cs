@@ -317,7 +317,7 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The HTTP method bound by a DPoP proof (RFC 9449 §4.2 <c>htm</c>). Compared
+	/// The HTTP method bound by a DPoP proof (RFC 9449 section 4.2 <c>htm</c>). Compared
 	/// byte-exact against the current request method on the server side.
 	/// </summary>
 	public string? DPoPHttpMethod
@@ -327,7 +327,7 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The HTTP URI bound by a DPoP proof (RFC 9449 §4.2 <c>htu</c>). Returned as the
+	/// The HTTP URI bound by a DPoP proof (RFC 9449 section 4.2 <c>htu</c>). Returned as the
 	/// raw claim string so callers keep the three-way "missing / unparseable / mismatched"
 	/// distinction; parsing into a <see cref="Uri"/> belongs to the comparison step.
 	/// </summary>
@@ -339,7 +339,7 @@ public class JsonWebTokenPayload(JsonObject json)
 
 	/// <summary>
 	/// The access-token hash bound by a DPoP proof when one accompanies an access token
-	/// (RFC 9449 §4.2 <c>ath</c>): <c>Base64Url(SHA-256(access_token))</c>.
+	/// (RFC 9449 section 4.2 <c>ath</c>): <c>Base64Url(SHA-256(access_token))</c>.
 	/// </summary>
 	public string? DPoPAccessTokenHash
 	{
@@ -348,9 +348,9 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// The proof-of-possession confirmation object (RFC 7800 §3.1 <c>cnf</c>) bound to this
+	/// The proof-of-possession confirmation object (RFC 7800 section 3.1 <c>cnf</c>) bound to this
 	/// JWT. Carries each binding the token holds - <c>cnf.x5t#S256</c> for mTLS-bound
-	/// tokens (RFC 8705 §3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 §6.1) -
+	/// tokens (RFC 8705 section 3.1) and <c>cnf.jkt</c> for DPoP-bound tokens (RFC 9449 section 6.1) -
 	/// behind typed accessors. Assignment writes the wrapped <see cref="JsonObject"/> as
 	/// the <c>cnf</c> claim; assigning <c>null</c> removes the claim.
 	/// </summary>

@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Validates the DPoP-binding contract on a UserInfo request per RFC 9449 §7.1: when the
+/// Validates the DPoP-binding contract on a UserInfo request per RFC 9449 section 7.1: when the
 /// inbound access token is DPoP-bound (carries <c>cnf.jkt</c>), the request MUST present
 /// <c>Authorization: DPoP &lt;token&gt;</c> together with a valid <c>DPoP</c> header
 /// proof whose key thumbprint matches the access token's <c>cnf.jkt</c> and whose
@@ -26,7 +26,7 @@ public interface IDPoPUserInfoValidator
     /// Returns <c>null</c> on success, an <see cref="OidcError"/> describing the binding
     /// failure otherwise. The typed subclasses <see cref="InvalidDPoPProofError"/> and
     /// <see cref="UseDPoPNonceError"/> let the response formatter pattern-match for the
-    /// RFC 9449 §7.1 <c>WWW-Authenticate: DPoP</c> challenge or the §8 nonce response
+    /// RFC 9449 section 7.1 <c>WWW-Authenticate: DPoP</c> challenge or the section 8 nonce response
     /// header attachment.
     /// </summary>
     /// <param name="clientRequest">Carries the <c>Authorization</c> scheme + token plus

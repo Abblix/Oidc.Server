@@ -273,7 +273,7 @@ public class DiscoveryControllerMtlsTests
     }
 
     /// <summary>
-    /// Verifies the RFC 8705 §3.3 tls_client_certificate_bound_access_tokens flag surfaces in the
+    /// Verifies the RFC 8705 section 3.3 tls_client_certificate_bound_access_tokens flag surfaces in the
     /// formatted discovery document when the handler advertised support.
     /// </summary>
     [Fact]

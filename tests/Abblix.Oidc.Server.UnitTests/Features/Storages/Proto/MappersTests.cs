@@ -328,7 +328,7 @@ public class MappersTests
     [Fact]
     public void AuthorizationContextMapper_RoundTrips_Actor_ByteExact()
     {
-        // RFC 8693 §4.1 act claim. The simplest delegation shape: { sub: actor-id } with no
+        // RFC 8693 section 4.1 act claim. The simplest delegation shape: { sub: actor-id } with no
         // nested act member. After ToProto -> FromProto the JsonObject must serialise back
         // to the same wire JSON byte-for-byte.
         const string actorJson = """{"sub":"svc-worker-7","client_id":"svc-fleet"}""";

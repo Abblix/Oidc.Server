@@ -85,12 +85,12 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'crit' (Critical) header parameter (RFC 7515 §4.1.11): names of JOSE header parameters
+    /// The 'crit' (Critical) header parameter (RFC 7515 section 4.1.11): names of JOSE header parameters
     /// that the recipient MUST understand and process. Returns null when 'crit' is absent.
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'crit' is present but is not a JSON array of strings.</exception>
     [SuppressMessage("Sonar Bug", "S2372:Exceptions should not be thrown from property getters",
-        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state - RFC 7515 §4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
+        Justification = "JsonWebTokenHeader is a typed view over untrusted external JSON. Returning null on a malformed 'crit' would silently coerce a producer-spec violation into accepted state - RFC 7515 section 4.1.11 requires the recipient to reject it, and the validator's critical-headers pass relies on this getter surfacing the parse error.")]
     public IReadOnlyList<string>? Critical
     {
         get
@@ -124,10 +124,10 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'jku' (JWK Set URL) header parameter (RFC 7515 §4.1.2): a URI referring to a JSON Web
+    /// The 'jku' (JWK Set URL) header parameter (RFC 7515 section 4.1.2): a URI referring to a JSON Web
     /// Key Set whose keys the issuer claims are candidates for verifying the JWS. The library
     /// only exposes the URI; it does not fetch the URL - the host is responsible for trust and
-    /// transport per RFC 7515 §8 (TLS with server identity validation per RFC 6125).
+    /// transport per RFC 7515 section 8 (TLS with server identity validation per RFC 6125).
     /// </summary>
     public Uri? JwkSetUrl
     {
@@ -140,7 +140,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'jwk' (JSON Web Key) header parameter (RFC 7515 §4.1.3): the public key used to
+    /// The 'jwk' (JSON Web Key) header parameter (RFC 7515 section 4.1.3): the public key used to
     /// verify the JWS, embedded directly in the JOSE header as a JWK. Returns null when
     /// 'jwk' is absent. Trust is the consumer's responsibility - for example, DPoP (RFC 9449)
     /// binds this key to the request via a separate confirmation claim.
@@ -163,7 +163,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'x5u' (X.509 URL) header parameter (RFC 7515 §4.1.5): a URI referring to an X.509
+    /// The 'x5u' (X.509 URL) header parameter (RFC 7515 section 4.1.5): a URI referring to an X.509
     /// public-key certificate or certificate chain corresponding to the key used for the JWS
     /// signature. Same caveat as <see cref="JwkSetUrl"/> - the library does not fetch.
     /// </summary>
@@ -178,7 +178,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'x5c' (X.509 Certificate Chain) header parameter (RFC 7515 §4.1.6): an X.509
+    /// The 'x5c' (X.509 Certificate Chain) header parameter (RFC 7515 section 4.1.6): an X.509
     /// certificate chain as a JSON array of base64-encoded DER certificates, the first being
     /// the leaf. Returns the raw base64 strings; consumers are responsible for decoding to
     /// <c>X509Certificate2</c> and validating the chain per RFC 5280.
@@ -219,8 +219,8 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 §4.1.7): base64url-encoded
-    /// SHA-1 digest of the DER-encoded leaf certificate. Per RFC 7515 §10.11, SHA-1 is
+    /// The 'x5t' (X.509 SHA-1 Thumbprint) header parameter (RFC 7515 section 4.1.7): base64url-encoded
+    /// SHA-1 digest of the DER-encoded leaf certificate. Per RFC 7515 section 10.11, SHA-1 is
     /// discouraged because of cryptographic weaknesses - prefer <see cref="CertificateSha256Thumbprint"/>
     /// for new deployments. The library exposes 'x5t' for inspection of legacy producers.
     /// </summary>
@@ -231,7 +231,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'x5t#S256' (X.509 SHA-256 Thumbprint) header parameter (RFC 7515 §4.1.8):
+    /// The 'x5t#S256' (X.509 SHA-256 Thumbprint) header parameter (RFC 7515 section 4.1.8):
     /// base64url-encoded SHA-256 digest of the DER-encoded leaf certificate. The C# member
     /// name strips the '#' character (illegal in identifiers); the JSON literal stays
     /// 'x5t#S256' as defined by the spec.
@@ -243,7 +243,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'iv' header parameter (RFC 7518 §4.7.1.1): base64url-encoded 96-bit Initialization Vector
+    /// The 'iv' header parameter (RFC 7518 section 4.7.1.1): base64url-encoded 96-bit Initialization Vector
     /// used when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
     /// </summary>
     public string? KeyWrapInitializationVector
@@ -253,7 +253,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'tag' header parameter (RFC 7518 §4.7.1.2): base64url-encoded 128-bit GCM authentication tag
+    /// The 'tag' header parameter (RFC 7518 section 4.7.1.2): base64url-encoded 128-bit GCM authentication tag
     /// produced when the CEK is wrapped with AES-GCM key wrapping (A128GCMKW/A192GCMKW/A256GCMKW).
     /// </summary>
     public string? KeyWrapAuthenticationTag
@@ -263,7 +263,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'epk' header parameter (RFC 7518 §4.6.1.1): the originator's ephemeral public key for
+    /// The 'epk' header parameter (RFC 7518 section 4.6.1.1): the originator's ephemeral public key for
     /// ECDH-ES key agreement, carried as a JWK with public members only. Returns null when absent.
     /// </summary>
     /// <exception cref="JsonException">Thrown when 'epk' is present but is not a valid JWK (e.g. unknown 'kty').</exception>
@@ -296,7 +296,7 @@ public class JsonWebTokenHeader(JsonObject json)
     };
 
     /// <summary>
-    /// The 'apu' header parameter (RFC 7518 §4.6.1.2): base64url-encoded Agreement PartyUInfo
+    /// The 'apu' header parameter (RFC 7518 section 4.6.1.2): base64url-encoded Agreement PartyUInfo
     /// (producer information) fed into the Concat KDF during ECDH-ES key agreement.
     /// </summary>
     public string? AgreementPartyUInfo
@@ -306,7 +306,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'apv' header parameter (RFC 7518 §4.6.1.3): base64url-encoded Agreement PartyVInfo
+    /// The 'apv' header parameter (RFC 7518 section 4.6.1.3): base64url-encoded Agreement PartyVInfo
     /// (recipient information) fed into the Concat KDF during ECDH-ES key agreement.
     /// </summary>
     public string? AgreementPartyVInfo
@@ -316,7 +316,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'p2s' header parameter (RFC 7518 §4.8.1.1): the base64url-encoded PBES2 salt input.
+    /// The 'p2s' header parameter (RFC 7518 section 4.8.1.1): the base64url-encoded PBES2 salt input.
     /// Per the spec it must decode to at least 8 octets; the PBES2 decryptor enforces that bound.
     /// </summary>
     public string? Pbes2SaltInput
@@ -326,7 +326,7 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
-    /// The 'p2c' header parameter (RFC 7518 §4.8.1.2): the PBKDF2 iteration count for PBES2.
+    /// The 'p2c' header parameter (RFC 7518 section 4.8.1.2): the PBKDF2 iteration count for PBES2.
     /// Returns null when absent or when the value is not representable as a positive 32-bit integer -
     /// a count beyond int.MaxValue could never pass the decryptor's denial-of-service cap anyway.
     /// </summary>

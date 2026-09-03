@@ -97,7 +97,7 @@ public sealed class JwtSubjectTokenResolver(
         // rejects the second serialisation because the JsonNode is parented twice.
         var authorizationDetails = Extract<JsonArray>(jwt, IanaClaimTypes.AuthorizationDetails);
 
-        // RFC 8693 §4.1 act chain: preserve the subject_token's act so a delegation chain can
+        // RFC 8693 section 4.1 act chain: preserve the subject_token's act so a delegation chain can
         // be extended when this resolver feeds a Token Exchange request that also supplies an
         // actor_token. DeepClone for the same parenting reason as AD.
         var act = Extract<JsonObject>(jwt, IanaClaimTypes.Act);

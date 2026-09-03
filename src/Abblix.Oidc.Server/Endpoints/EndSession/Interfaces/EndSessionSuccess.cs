@@ -9,7 +9,7 @@
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
-/// Result of a successful RP-initiated logout (OpenID Connect RP-Initiated Logout 1.0 §3).
+/// Result of a successful RP-initiated logout (OpenID Connect RP-Initiated Logout 1.0 section 3).
 /// Carries the post-logout redirect target (with <c>state</c> already appended when present)
 /// and the set of front-channel logout URIs the user agent must visit so each affected
 /// client can clear its own session.

@@ -12,7 +12,7 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Discovery metadata block published as <c>mtls_endpoint_aliases</c> per RFC 8705 §5,
+/// Discovery metadata block published as <c>mtls_endpoint_aliases</c> per RFC 8705 section 5,
 /// advertising alternate endpoint URLs that are served on a host configured for mutual TLS.
 /// Clients performing certificate-bound authentication or requesting certificate-bound tokens
 /// should target these aliases instead of the default endpoints exposed in

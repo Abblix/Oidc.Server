@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
 /// <summary>
 /// Validates incoming RP-initiated logout requests against the rules of
-/// OpenID Connect RP-Initiated Logout 1.0 §2 (e.g. <c>id_token_hint</c> integrity,
+/// OpenID Connect RP-Initiated Logout 1.0 section 2 (e.g. <c>id_token_hint</c> integrity,
 /// <c>post_logout_redirect_uri</c> against the client's registered list, end-user
 /// confirmation when no <c>id_token_hint</c> is provided).
 /// </summary>

@@ -26,7 +26,7 @@ using JsonWebKey = Abblix.Jwt.JsonWebKey;
 namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 
 /// <summary>
-/// Unit tests for <see cref="ConfigurationResponseFormatter"/> verifying RFC 8414 §2.1
+/// Unit tests for <see cref="ConfigurationResponseFormatter"/> verifying RFC 8414 section 2.1
 /// <c>signed_metadata</c> emission: opt-in gating, pure-JWS production (never JWE), the
 /// mandatory <c>iss</c> claim, and the requirement that the signed payload restate the
 /// metadata without containing <c>signed_metadata</c> itself.
@@ -123,7 +123,7 @@ public class DiscoverySignedMetadataTests
 
     /// <summary>
     /// The signed payload must restate the metadata (resolved endpoints included), carry the
-    /// mandatory <c>iss</c> claim (RFC 8414 §2.1) and an <c>iat</c>, and must NOT contain
+    /// mandatory <c>iss</c> claim (RFC 8414 section 2.1) and an <c>iat</c>, and must NOT contain
     /// <c>signed_metadata</c> itself.
     /// </summary>
     [Fact]

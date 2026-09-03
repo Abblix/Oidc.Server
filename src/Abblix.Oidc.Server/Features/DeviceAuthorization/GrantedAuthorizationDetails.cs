@@ -35,7 +35,7 @@ internal static class GrantedAuthorizationDetails
     /// <returns>The escaped type names, or a single entry describing why the grant could not be read.
     /// </returns>
     /// <remarks>
-    /// Types only: RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing of that
+    /// Types only: RFC 9396 section 6.1 defines no universal comparator for "is this entry a narrowing of that
     /// one", so what can be judged here is whether an entry of that type was asked for at all. An entry
     /// that cannot be read as a JSON object counts as escaped, because the conversion drops it silently
     /// and "nothing escaped" would then describe what could be read rather than the grant.

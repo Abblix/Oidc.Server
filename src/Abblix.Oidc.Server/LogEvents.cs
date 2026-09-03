@@ -283,7 +283,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> -
         /// cross-checks supplied <c>client_id</c> against register/update operation type
-        /// per RFC 7591 §3 / RFC 7592 §2.2 (sub-range 4000-4019).
+        /// per RFC 7591 section 3 / RFC 7592 section 2.2 (sub-range 4000-4019).
         /// </summary>
         public static class ClientIdValidator
         {
@@ -295,7 +295,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/SoftwareStatementValidator.cs</c> -
-        /// validates the <c>software_statement</c> JWT parameter per RFC 7591 §2.3
+        /// validates the <c>software_statement</c> JWT parameter per RFC 7591 section 2.3
         /// (sub-range 4020-4039).
         /// </summary>
         public static class SoftwareStatementValidator
@@ -308,7 +308,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/SubjectTypeValidator.cs</c> -
-        /// validates OIDC Core §8 <c>subject_type</c> metadata and pairwise sector
+        /// validates OIDC Core section 8 <c>subject_type</c> metadata and pairwise sector
         /// identifier resolution (sub-range 4040-4059).
         /// </summary>
         public static class SubjectTypeValidator
@@ -357,7 +357,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> - JWT replay
         /// protection via <c>IDistributedCache</c> per RFC 7523 Section 3 and
-        /// RFC 9449 §11.1 (sub-range 5040-5059).
+        /// RFC 9449 section 11.1 (sub-range 5040-5059).
         /// </summary>
         public static class DistributedJwtReplayCache
         {
@@ -384,7 +384,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/Nonces/RollingHmacNonceService.cs</c> - generic
         /// stateless-nonce issuance and validation. DPoP-Nonce per RFC 9449
-        /// §8 / §9 is the current consumer (sub-range 5080-5099).
+        /// section 8 / section 9 is the current consumer (sub-range 5080-5099).
         /// </summary>
         public static class RollingHmacNonceService
         {
@@ -735,7 +735,7 @@ internal static class LogEvents
     public static class DPoP
     {
         /// <summary>
-        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> - RFC 9449 §7
+        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> - RFC 9449 section 7
         /// resource-server enforcement on the UserInfo endpoint (sub-range 10000-10019).
         /// </summary>
         public static class DPoPUserInfoValidator
@@ -750,7 +750,7 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> - RFC 9449 §5
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> - RFC 9449 section 5
         /// token-endpoint binding (sub-range 10020-10039).
         /// </summary>
         public static class DPoPTokenEndpointValidator

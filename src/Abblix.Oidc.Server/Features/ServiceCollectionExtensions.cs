@@ -918,7 +918,7 @@ public static class ServiceCollectionExtensions
     /// Registers the generic stateless-nonce service. The default
     /// <see cref="RollingHmacNonceService"/> implementation is shared across
     /// any feature that needs server-issued, time-bounded opaque tokens
-    /// (DPoP-Nonce per RFC 9449 §8 / §9 is the current consumer; future
+    /// (DPoP-Nonce per RFC 9449 section 8 / section 9 is the current consumer; future
     /// candidates include state-parameter validation and challenge-response
     /// patterns). Idempotent via <c>TryAdd</c> so feature-level
     /// <c>Add*</c> methods can declare the dependency without contention.

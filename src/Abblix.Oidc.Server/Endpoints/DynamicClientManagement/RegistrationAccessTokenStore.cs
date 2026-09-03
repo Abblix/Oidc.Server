@@ -24,7 +24,7 @@ public class RegistrationAccessTokenStore(
     IEntityStorageKeyFactory keyFactory) : IRegistrationAccessTokenStore
 {
     // No expiration: the registration access token does not expire while the client is registered
-    // (RFC 7592 §5), so neither does its binding. RemoveAsync drops it on deregistration.
+    // (RFC 7592 section 5), so neither does its binding. RemoveAsync drops it on deregistration.
     private static readonly StorageOptions NonExpiring = new();
 
     /// <inheritdoc />

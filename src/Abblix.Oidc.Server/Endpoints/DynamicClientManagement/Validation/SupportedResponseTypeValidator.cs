@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Server-level support gate for the <c>response_types</c> registration parameter
-/// (OIDC DCR §3.2): every part of every requested combination must have a registered
+/// (OIDC DCR section 3.2): every part of every requested combination must have a registered
 /// <see cref="IAuthorizationResponseBuilder"/>. Without <c>EnableImplicitFlow()</c> the
 /// <c>token</c> / <c>id_token</c> processors are absent - registration must reject those
 /// values with <c>invalid_client_metadata</c> at registration time, instead of letting the

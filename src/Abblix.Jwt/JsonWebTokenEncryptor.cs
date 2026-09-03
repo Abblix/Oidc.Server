@@ -140,7 +140,7 @@ internal class JsonWebTokenEncryptor(
     /// Implements RFC 7516 (JWE) decryption.
     /// </summary>
     [SuppressMessage("Major Code Smell", "S3776:Cognitive Complexity of methods should not be too high",
-        Justification = "The complexity is the linear sequence of RFC 7516 §5.2 mandated validation guards " +
+        Justification = "The complexity is the linear sequence of RFC 7516 section 5.2 mandated validation guards " +
                         "(base64, header JSON, enc/alg presence, decryptor resolution, per-key decryption); " +
                         "splitting the single decrypt flow would fragment it without improving readability. " +
                         "Covered by the JwtEncryptionTests decryption suite.")]
@@ -241,7 +241,7 @@ internal class JsonWebTokenEncryptor(
             // mitigation below turns into a uniform outcome. The "must have the secret half" gate lives with the
             // seam's routing.
 
-            // RFC 7516 §11.5: substitute a randomly generated CEK of the correct size and still run the
+            // RFC 7516 section 11.5: substitute a randomly generated CEK of the correct size and still run the
             // AEAD step when CEK decryption fails - wrong key, malformed padding, or an unregistered
             // key-management 'alg' - OR when it succeeds with a structurally valid but wrong-length key.
             // The authentication tag then fails exactly as it would for a successful-but-wrong CEK, so a

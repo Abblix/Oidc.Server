@@ -36,9 +36,9 @@ public class PushedAuthorizationRequestValidator(
     /// </summary>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
-    /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 §2. Also carries an
+    /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 section 2. Also carries an
     /// optional DPoP header used to pre-bind the request to a proof-of-possession key
-    /// (RFC 9449 §10).</param>
+    /// (RFC 9449 section 10).</param>
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
@@ -85,7 +85,7 @@ public class PushedAuthorizationRequestValidator(
     }
 
     /// <summary>
-    /// Resolves the RFC 9449 §10 commitment from the inbound PAR call: when a DPoP header
+    /// Resolves the RFC 9449 section 10 commitment from the inbound PAR call: when a DPoP header
     /// accompanies the request, validates the proof against the PAR endpoint's method+URI
     /// and (if configured) the nonce policy, then either back-fills <c>dpop_jkt</c> from
     /// the proof's thumbprint or - if the client also posted <c>dpop_jkt</c> as a form

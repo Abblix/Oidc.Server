@@ -52,7 +52,7 @@ public class PkceValidator(
 			// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 			// rejected - including plain and the non-standard S512 - before the per-client plain check,
 			// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
-			// defaults to plain (RFC 7636 §4.3), which fails this S256 comparison as it should.
+			// defaults to plain (RFC 7636 section 4.3), which fails this S256 comparison as it should.
 			if (profile.RequireS256CodeChallenge &&
 			    context.Request.CodeChallengeMethod != CodeChallengeMethods.S256)
 			{
@@ -66,7 +66,7 @@ public class PkceValidator(
 				return context.InvalidRequest("The client is not allowed PKCE plain method");
 			}
 
-			// A code_challenge must be transaction-specific (RFC 9700 §2.1.1). When reuse detection is on,
+			// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
 			// reject a value this client already used for a previously issued authorization code.
 			if (await reuseDetector.IsReusedAsync(context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
 			{

@@ -132,8 +132,8 @@ public class AuthorizationRequestProcessor(
 			return new ConsentRequired(model, authSession, userConsents.Pending);
 		}
 
-		// RFC 9396 §7.1: "The authorization details attached to the access token MAY differ from what
-		// the client requests", the user authorizing less than was asked being the named case. §7 is what
+		// RFC 9396 section 7.1: "The authorization details attached to the access token MAY differ from what
+		// the client requests", the user authorizing less than was asked being the named case. section 7 is what
 		// obliges the server to tell the client what it actually got.
 		//   Granted.AuthorizationDetails == null    -> legacy provider, no AD opinion; pass through what the
 		//                                              validator pipeline produced (backward compat with PR #135).
@@ -200,7 +200,7 @@ public class AuthorizationRequestProcessor(
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
 		// scope set (identical to what the issued token carries) so the response encoder advertises the
-		// granted scope on the front-channel scope parameter, not the broader requested set (RFC 6749 §3.3)
+		// granted scope on the front-channel scope parameter, not the broader requested set (RFC 6749 section 3.3)
 		var result = new SuccessfullyAuthenticated(
 			model,
 			request.ResponseMode,
@@ -248,7 +248,7 @@ public class AuthorizationRequestProcessor(
 		var authSessions = authSessionService.GetAvailableAuthSessions();
 
 		// Filter by maximum authentication age. When the request omits max_age, fall back to the
-		// client's registered default_max_age (OIDC Core §2 / §3.1.2.1).
+		// client's registered default_max_age (OIDC Core section 2 / section 3.1.2.1).
 		var maxAge = model.MaxAge ?? clientInfo.DefaultMaxAge;
 		if (maxAge.HasValue)
 		{
@@ -258,7 +258,7 @@ public class AuthorizationRequestProcessor(
 		}
 
 		// Filter by required ACR values. When the request omits acr_values, fall back to the client's
-		// registered default_acr_values (OIDC Core §2).
+		// registered default_acr_values (OIDC Core section 2).
 		var acrValues = model.AcrValues is { Length: > 0 } requestedAcrValues
 			? requestedAcrValues
 			: clientInfo.DefaultAcrValues;

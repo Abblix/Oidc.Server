@@ -103,7 +103,7 @@ public class SigningAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// request_object_signing_alg may be "none" (OIDC Core §6.1 - unsigned request objects delivered
+    /// request_object_signing_alg may be "none" (OIDC Core section 6.1 - unsigned request objects delivered
     /// over TLS), so it stays acceptable when the server advertises it.
     /// </summary>
     [Fact]
@@ -177,7 +177,7 @@ public class SigningAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1: "none" is not a valid backchannel_authentication_request_signing_alg -
+    /// CIBA Core section 7.1.1: "none" is not a valid backchannel_authentication_request_signing_alg -
     /// the filtered set excludes it, so registration is rejected.
     /// </summary>
     [Fact]
@@ -197,7 +197,7 @@ public class SigningAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1 requires an asymmetric signature - a symmetric HS* value is rejected because
+    /// CIBA Core section 7.1.1 requires an asymmetric signature - a symmetric HS* value is rejected because
     /// it is not a member of the filtered backchannel set.
     /// </summary>
     [Fact]
@@ -255,7 +255,7 @@ public class SigningAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: "none" is not a valid token_endpoint_auth_signing_alg -
+    /// RFC 8414 section 2 / OIDC Discovery 1.0 section 3: "none" is not a valid token_endpoint_auth_signing_alg -
     /// the filtered set excludes it, so registration is rejected.
     /// </summary>
     [Fact]

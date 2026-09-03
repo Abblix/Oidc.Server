@@ -35,7 +35,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
         if (!IsTlsClientAuth(request))
             return null;
 
-        // RFC 8705 §2.1.2: a tls_client_auth client registers EXACTLY ONE subject identifier.
+        // RFC 8705 section 2.1.2: a tls_client_auth client registers EXACTLY ONE subject identifier.
         switch (CountSubjectIdentifiers(request))
         {
             case 0:
@@ -47,7 +47,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
             case > 1:
                 return ErrorFactory.InvalidClientMetadata(
                     "When using tls_client_auth, exactly one subject identifier may be specified " +
-                    "(RFC 8705 §2.1.2): choose a single one of tls_client_auth_subject_dn, " +
+                    "(RFC 8705 section 2.1.2): choose a single one of tls_client_auth_subject_dn, " +
                     "tls_client_auth_san_dns, tls_client_auth_san_uri, tls_client_auth_san_ip, or " +
                     "tls_client_auth_san_email");
         }
@@ -68,7 +68,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
         request.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth;
 
     /// <summary>
-    /// Counts how many of the five RFC 8705 §2.1.2 subject-identifier metadata parameters are
+    /// Counts how many of the five RFC 8705 section 2.1.2 subject-identifier metadata parameters are
     /// present. A SAN array with several entries still counts as a single parameter - the spec
     /// constrains which parameter is registered, not how many values it carries.
     /// </summary>

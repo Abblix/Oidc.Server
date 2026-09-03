@@ -220,7 +220,7 @@ public class ConsentConstraintEnforcerTests
     public async Task EnforceAsync_PolicyReturnsAnEntryWithoutAType_Throws()
     {
         // A missing type passes "not among the types nobody granted" by being unreadable, and RFC 9396
-        // §2 makes type REQUIRED on every entry - so the answer is a refusal, not a skip. Change the
+        // section 2 makes type REQUIRED on every entry - so the answer is a refusal, not a skip. Change the
         // type and the guard refuses; delete it and it must not wave the entry through.
         var request = CreateRequest(authorizationDetails:
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));

@@ -134,7 +134,7 @@ public class AuthorizationResponseFormatter(
         Scope = success.Scope,
         Code = success.Code,
         TokenType = success.TokenType,
-        // RFC 6749 §4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from the authorization
+        // RFC 6749 section 4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from the authorization
         // endpoint; derived from the issued token's own iat/exp so the advertised lifetime matches the token.
         ExpiresIn = success.AccessToken is { Token.Payload: { ExpiresAt: { } expiresAt, IssuedAt: { } issuedAt } }
             ? expiresAt - issuedAt

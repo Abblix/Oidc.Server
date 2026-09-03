@@ -18,7 +18,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=refresh_token</c> (RFC 6749 §6).
+/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=refresh_token</c> (RFC 6749 section 6).
 /// Verifies the refresh token's signature and lifetime, requires the JWT <c>typ</c> header to be
 /// <c>rt+jwt</c>, recovers the original <see cref="AuthorizedGrant"/>, and rejects the request with
 /// <c>invalid_grant</c> when the refreshing client differs from the client that received the token.
@@ -54,7 +54,7 @@ public class RefreshTokenGrantHandler(
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
 	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
 	{
-		// RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+		// RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
 		if (!request.RefreshToken.HasValue())
 		{

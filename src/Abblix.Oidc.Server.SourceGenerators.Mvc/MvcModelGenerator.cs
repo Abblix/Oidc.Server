@@ -294,7 +294,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 				case AuthorizationHeaderMarkerName
 					when _binderMap.TryGetValue(markerClass.ToDisplayString(), out var headerBinder):
 					// "Authorization" is the standard HTTP header name implied by the marker's
-					// semantics (RFC 9110 §11.6.2), not binder-specific knowledge.
+					// semantics (RFC 9110 section 11.6.2), not binder-specific knowledge.
 					_writer.AppendLine(
 						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), Name = \"Authorization\")]");
 					break;

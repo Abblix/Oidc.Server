@@ -97,7 +97,7 @@ public partial class LogoutTokenService(
 
         // Where Back-Channel Logout deliberately departs from the SET default profile, each
         // departure is one visible line on the open token model, which the builder refuses to
-        // write by design: §2.4 registers the token's own type, and REQUIRES an expiration -
+        // write by design: section 2.4 registers the token's own type, and REQUIRES an expiration -
         // for a logout order, expiry is what bounds how long a lost token still logs somebody
         // out - where a generic SET must carry none.
         logoutToken.Header.Type = JsonWebTokenTypes.LogoutToken;

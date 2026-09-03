@@ -362,7 +362,7 @@ public class AuthorizationRequestProcessorTests
 
     /// <summary>
     /// Verifies that when the request omits max_age, the client's registered default_max_age is
-    /// applied (OIDC Core §2 / §3.1.2.1): a session older than default_max_age is filtered out.
+    /// applied (OIDC Core section 2 / section 3.1.2.1): a session older than default_max_age is filtered out.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_WithoutMaxAge_AppliesClientDefaultMaxAge()
@@ -387,7 +387,7 @@ public class AuthorizationRequestProcessorTests
 
     /// <summary>
     /// Verifies that when the request omits acr_values, the client's registered default_acr_values
-    /// is applied (OIDC Core §2): a session whose ACR is not among them is filtered out.
+    /// is applied (OIDC Core section 2): a session whose ACR is not among them is filtered out.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_WithoutAcrValues_AppliesClientDefaultAcrValues()
@@ -751,7 +751,7 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
-    /// RFC 6749 §3.3 / §4.2.2: when the consent decision narrows the grant, the front-channel
+    /// RFC 6749 section 3.3 / section 4.2.2: when the consent decision narrows the grant, the front-channel
     /// <c>scope</c> parameter of an implicit/hybrid response must advertise the GRANTED scope
     /// (matching the issued access token), not the broader requested set. Drives the real processor and
     /// the real <see cref="AuthorizationResponseEncoder"/> end to end.
@@ -1702,7 +1702,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ConsentDropsOneEntryFromMultiSet_TokenReflectsRemaining()
     {
-        // RFC 9396 §3 notes the user may grant a subset of what was requested, and §7 then has the
+        // RFC 9396 section 3 notes the user may grant a subset of what was requested, and section 7 then has the
         // server return what was granted. Client requested two entries, user
         // agreed to one. Consent layer is the right surface for this -- per-type
         // validators only see a single entry and cannot reason cross-entry.
@@ -1728,7 +1728,7 @@ public class AuthorizationRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ConsentAppliesCrossDetailCapAcrossEntries_TokenReflectsCappedSet()
     {
-        // The same §3 note read across entries rather than within one. Client requested three
+        // The same section 3 note read across entries rather than within one. Client requested three
         // payment_initiation
         // entries of 500 each (total 1500); host policy caps total at 1000; consent
         // provider sees the entire list and returns the cross-cut narrow with the

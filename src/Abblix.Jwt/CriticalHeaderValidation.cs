@@ -104,7 +104,7 @@ internal static class CriticalHeaderValidation
         {
             return new JwtValidationError(
                 JwtError.InvalidHeader,
-                "'crit' header must not be the empty array (RFC 7515 §4.1.11)");
+                "'crit' header must not be the empty array (RFC 7515 section 4.1.11)");
         }
 
         var distinctNames = new HashSet<string>(declared, StringComparer.Ordinal);

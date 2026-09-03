@@ -50,7 +50,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator();
 
         var clientInfo = CreateClientInfo(ClientId);
-        // A spec-valid client assertion carries a jti (OIDC Core §9 REQUIRED).
+        // A spec-valid client assertion carries a jti (OIDC Core section 9 REQUIRED).
         var validToken = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "valid-jti-assertion",
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
@@ -447,7 +447,7 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies that an assertion without a jti claim is rejected. OpenID Connect Core §9 makes
+    /// Verifies that an assertion without a jti claim is rejected. OpenID Connect Core section 9 makes
     /// jti REQUIRED ("A unique identifier for the token, which can be used to prevent reuse of the
     /// token"); accepting a jti-less assertion would leave it replayable within its expiry window,
     /// since single-use enforcement keys off jti.
@@ -483,7 +483,7 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies that an assertion without an exp claim is rejected. RFC 7523 §3 makes exp REQUIRED
+    /// Verifies that an assertion without an exp claim is rejected. RFC 7523 section 3 makes exp REQUIRED
     /// ("The JWT MUST contain an 'exp' (expiration time) claim that limits the time window during
     /// which the JWT can be used"); without it the replay-registry entry has no TTL to key off,
     /// so the assertion would be replayable indefinitely.
@@ -629,7 +629,7 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Creates a JWT token with a jti claim but no exp claim, for testing the RFC 7523 §3
+    /// Creates a JWT token with a jti claim but no exp claim, for testing the RFC 7523 section 3
     /// expiration requirement. Uses real JsonObject instances for JWT payload - NOT mocked!
     /// </summary>
     /// <param name="issuer">The issuer claim (iss).</param>

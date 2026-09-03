@@ -65,7 +65,7 @@ public class JsonSerializationBinderRarTests
 
         Assert.NotNull(merged);
         // JAR is the integrity-protected source - JWT-side value wins over the
-        // outer raw form parameter on conflict (RFC 9101 §5).
+        // outer raw form parameter on conflict (RFC 9101 section 5).
         Assert.Equal(WireJson, merged!.AuthorizationDetails!.ToJsonString());
     }
 

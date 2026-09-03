@@ -12,7 +12,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// Records, for each registered client, the identifier (jti) of the registration access token
 /// currently authorized to manage it via the RFC 7592 client configuration endpoint. The token
 /// validator accepts only a token whose jti matches the stored value, so rotating the token on
-/// update (storing a fresh jti) invalidates every previously issued token (RFC 7592 §5).
+/// update (storing a fresh jti) invalidates every previously issued token (RFC 7592 section 5).
 /// </summary>
 /// <remarks>
 /// The binding outlives any single request and must be shared across all server replicas, so the

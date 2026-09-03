@@ -32,7 +32,7 @@ public class SecretLengthOptionsValidatorTests
     }
 
     /// <summary>
-    /// A client secret below the HS256 HMAC-key floor (RFC 7518 §3.2) must be rejected at startup.
+    /// A client secret below the HS256 HMAC-key floor (RFC 7518 section 3.2) must be rejected at startup.
     /// </summary>
     [Fact]
     public void Validate_ClientSecretBelowFloor_Fails()

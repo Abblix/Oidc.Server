@@ -19,7 +19,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// #30 regression: the RFC 7592 §2.1/§3 read response must carry the full registered metadata surface.
+/// #30 regression: the RFC 7592 section 2.1/section 3 read response must carry the full registered metadata surface.
 /// The processor previously omitted dpop_bound_access_tokens, authorization_details_types and the
 /// token-exchange allowlists, so read diverged from the update response for the identical client.
 /// </summary>

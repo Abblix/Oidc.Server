@@ -10,8 +10,8 @@
 namespace System.Buffers.Text;
 
 /// <summary>
-/// Polyfill of the BCL <see cref="Base64Url"/> shipping in net9.0+, providing strict RFC 7515 §3
-/// (and RFC 4648 §5) base64url decoding/encoding without padding for the net8.0 target. The
+/// Polyfill of the BCL <see cref="Base64Url"/> shipping in net9.0+, providing strict RFC 7515 section 3
+/// (and RFC 4648 section 5) base64url decoding/encoding without padding for the net8.0 target. The
 /// shape mirrors the BCL surface so consumer code references <c>System.Buffers.Text.Base64Url</c>
 /// uniformly across all TFMs we ship to. Removed in the same commit that drops the net8.0 target
 /// after net8.0 reaches end-of-life on 2026-11-10.
@@ -19,7 +19,7 @@ namespace System.Buffers.Text;
 public static class Base64Url
 {
     /// <summary>
-    /// Decodes a base64url-encoded character span into a byte array. Strict per RFC 7515 §3:
+    /// Decodes a base64url-encoded character span into a byte array. Strict per RFC 7515 section 3:
     /// rejects characters outside the alphabet <c>A-Z a-z 0-9 - _</c>, rejects standard-base64
     /// alphabet characters <c>+</c> and <c>/</c>, rejects padding <c>=</c>, and rejects inputs
     /// whose length leaves <c>length mod 4 == 1</c>.
@@ -109,7 +109,7 @@ public static class Base64Url
     }
 
     /// <summary>
-    /// Encodes a byte span as a base64url string per RFC 7515 §3, without trailing padding.
+    /// Encodes a byte span as a base64url string per RFC 7515 section 3, without trailing padding.
     /// Replaces standard-base64 <c>+</c> with <c>-</c> and <c>/</c> with <c>_</c>.
     /// </summary>
     /// <param name="source">The bytes to encode.</param>

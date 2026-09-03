@@ -15,10 +15,10 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.ScopeManagement;
 
 /// <summary>
-/// In-memory <see cref="IScopeManager"/> that seeds the registry with the six OIDC Core §5.4
+/// In-memory <see cref="IScopeManager"/> that seeds the registry with the six OIDC Core section 5.4
 /// standard scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>address</c>, <c>phone</c>,
 /// <c>offline_access</c>) and merges any host-defined scopes from
-/// <see cref="OidcOptions.Scopes"/>. Lookups are case-sensitive (RFC 6749 §3.3 treats scope
+/// <see cref="OidcOptions.Scopes"/>. Lookups are case-sensitive (RFC 6749 section 3.3 treats scope
 /// values as case-sensitive strings). A host-defined scope under a standard name extends that
 /// scope: the claims it lists are added to the standard ones, so the standard claim set cannot be
 /// narrowed by redefinition and the host's additions cannot be lost to it.

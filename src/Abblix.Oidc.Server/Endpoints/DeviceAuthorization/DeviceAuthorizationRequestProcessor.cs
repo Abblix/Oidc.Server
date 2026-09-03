@@ -64,7 +64,7 @@ public class DeviceAuthorizationRequestProcessor(
             // governs every request after it.
             NextPollAt = timeProvider.GetUtcNow(),
 
-            // RFC 9396 §3: stash authorization_details on the persisted record so the
+            // RFC 9396 section 3: stash authorization_details on the persisted record so the
             // host's user-verification step can read it (via ValidUserCode) and thread it
             // onto the AuthorizedGrant's AuthorizationContext when approving.
             AuthorizationDetails = request.AuthorizationDetails,

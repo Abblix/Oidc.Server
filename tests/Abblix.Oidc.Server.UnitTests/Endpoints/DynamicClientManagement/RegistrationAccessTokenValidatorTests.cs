@@ -20,7 +20,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Verifies the RFC 7592 §5 registration-access-token binding in
+/// Verifies the RFC 7592 section 5 registration-access-token binding in
 /// <see cref="RegistrationAccessTokenValidator"/>: a token is accepted only when its jti matches
 /// the value recorded on the client, so a rotated token invalidates its predecessors, while a null
 /// expectation keeps statically configured / pre-existing clients working unchanged.

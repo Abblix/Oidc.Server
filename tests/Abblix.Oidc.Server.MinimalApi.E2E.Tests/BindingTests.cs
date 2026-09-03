@@ -177,14 +177,14 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Null(registerResponse.Headers.Location);
         Assert.False(string.IsNullOrEmpty(registrationClientUri));
 
-        // READ (RFC 7592 §2.1): the registration_access_token authenticates as Bearer against the management URL.
+        // READ (RFC 7592 section 2.1): the registration_access_token authenticates as Bearer against the management URL.
         var read = await SendWithBearerAsync(client, HttpMethod.Get, registrationClientUri, registrationAccessToken);
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
         var readBody = JsonNode.Parse(
             await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.Equal(clientId, readBody[ClientRequest.Parameters.ClientId]!.GetValue<string>());
 
-        // UPDATE (RFC 7592 §2.2): PUT the full metadata with a changed client_name.
+        // UPDATE (RFC 7592 section 2.2): PUT the full metadata with a changed client_name.
         var updateBody = new JsonObject
         {
             [ClientRequest.Parameters.ClientId] = clientId,
@@ -202,11 +202,11 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var updated = JsonNode.Parse(
             await update.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
-        // RFC 7592 §3 permits the server to rotate the registration_access_token on update; the management
+        // RFC 7592 section 3 permits the server to rotate the registration_access_token on update; the management
         // operations that follow must use the most recently issued one.
         var manageToken = updated["registration_access_token"]?.GetValue<string>() ?? registrationAccessToken;
 
-        // DELETE (RFC 7592 §2.3): 204 No Content.
+        // DELETE (RFC 7592 section 2.3): 204 No Content.
         var delete = await SendWithBearerAsync(client, HttpMethod.Delete, registrationClientUri, manageToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }

@@ -18,7 +18,7 @@ using Abblix.Utils.Json;
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
 /// <summary>
-/// Signs the discovery document with one of this provider's own signing keys, per RFC 8414 §2.1.
+/// Signs the discovery document with one of this provider's own signing keys, per RFC 8414 section 2.1.
 /// </summary>
 /// <param name="jwtCreator">Issues the JWS.</param>
 /// <param name="serviceKeysProvider">Supplies this provider's signing keys.</param>
@@ -32,7 +32,7 @@ public class SignedMetadataProvider(
     /// Serializes the metadata into the <c>signed_metadata</c> JWS payload with the same null-omission
     /// semantics the wire JSON uses (see <see cref="JsonIgnoreNullsModifier"/>, wired by each adapter).
     /// Without re-attaching the modifier here the signed copy would carry <c>"field": null</c> entries the
-    /// plain JSON omits, and RFC 8414 §2.1 "signed values take precedence" would then assert those nulls
+    /// plain JSON omits, and RFC 8414 section 2.1 "signed values take precedence" would then assert those nulls
     /// onto clients.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -48,7 +48,7 @@ public class SignedMetadataProvider(
         {
             throw new InvalidOperationException(
                 $"{nameof(DiscoveryOptions)}.{nameof(DiscoveryOptions.SignedMetadata)} is enabled but no signing keys are configured. " +
-                "Configure signing certificates so the discovery document can be signed (RFC 8414 §2.1).");
+                "Configure signing certificates so the discovery document can be signed (RFC 8414 section 2.1).");
         }
 
         var payload = JsonSerializer.SerializeToNode(metadata, SerializerOptions) switch
@@ -57,7 +57,7 @@ public class SignedMetadataProvider(
 
             _ => throw new InvalidOperationException(
                 "Discovery metadata serialized to a non-object JSON node. The metadata must serialize to a JSON object so it " +
-                "can form the signed_metadata JWS payload (RFC 8414 §2.1); " +
+                "can form the signed_metadata JWS payload (RFC 8414 section 2.1); " +
                 "a different node kind indicates a broken serializer or type-info resolver."),
         };
 
@@ -80,7 +80,7 @@ public class SignedMetadataProvider(
     /// Names the algorithm to sign with: the one the key declares, or the standard one for its kind.
     /// </summary>
     /// <remarks>
-    /// RFC 7517 §4.4 makes <c>alg</c> OPTIONAL on a key, and the rest of this server honours that - a key
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL on a key, and the rest of this server honours that - a key
     /// declaring no algorithm is usable with any compatible one (see
     /// <c>JsonWebKeyExtensions.FirstByAlgorithmAsync</c>). Reading the algorithm straight off the key
     /// inverted that rule here, and since a key imported from an RSA certificate declares none, every such

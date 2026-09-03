@@ -52,7 +52,7 @@ public class SignedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// OIDC Registration 1.0 §2: id_token_signed_response_alg=none is allowed only for response
+    /// OIDC Registration 1.0 section 2: id_token_signed_response_alg=none is allowed only for response
     /// types that return no ID Token from the authorization endpoint - an unsigned ID Token
     /// delivered through the browser would be modifiable in transit.
     /// </summary>
@@ -136,7 +136,7 @@ public class SignedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// Verifies validation succeeds with a supported JARM authorization_signed_response_alg (JARM §3).
+    /// Verifies validation succeeds with a supported JARM authorization_signed_response_alg (JARM section 3).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithSupportedAuthorizationAlg_ShouldReturnNull()
@@ -172,7 +172,7 @@ public class SignedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// Verifies the JARM authorization response cannot be signed with <c>none</c> (JARM §3 forbids it),
+    /// Verifies the JARM authorization response cannot be signed with <c>none</c> (JARM section 3 forbids it),
     /// even when the server otherwise advertises <c>none</c> (e.g. for unsigned UserInfo).
     /// </summary>
     [Fact]

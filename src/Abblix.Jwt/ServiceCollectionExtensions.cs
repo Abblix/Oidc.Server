@@ -165,10 +165,10 @@ public static class ServiceCollectionExtensions
     /// Enables the RSA1_5 (RSAES-PKCS1-v1_5) key management algorithm (RFC 7518 Section 4.2) for
     /// both producing and consuming JWE tokens. It is deliberately not part of
     /// <see cref="AddJsonWebTokens"/>: NIST SP 800-131A Rev. 2 disallows RSA key transport with
-    /// PKCS#1 v1.5 padding after 2023, and RFC 8725 §3.2 prescribes preferring RSAES-OAEP -
+    /// PKCS#1 v1.5 padding after 2023, and RFC 8725 section 3.2 prescribes preferring RSAES-OAEP -
     /// interoperating with a legacy peer that still requires it is an explicit hosting decision.
     /// The padding's Bleichenbacher decryption oracle stays closed for opted-in hosts by the
-    /// RFC 7516 §11.5 mitigation in <see cref="JsonWebTokenEncryptor"/>: a CEK that fails to
+    /// RFC 7516 section 11.5 mitigation in <see cref="JsonWebTokenEncryptor"/>: a CEK that fails to
     /// decrypt is replaced with a random CEK and the AEAD step still runs, so a decryption
     /// failure is processed identically regardless of padding validity.
     /// </summary>
@@ -199,14 +199,14 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension
-    /// parameter listed in a JWS 'crit' array (RFC 7515 §4.1.11). The parameter name is the
+    /// parameter listed in a JWS 'crit' array (RFC 7515 section 4.1.11). The parameter name is the
     /// DI key, so the registration cannot claim a name without a handler behind it - name and
     /// behaviour are inseparable.
     /// </summary>
     /// <typeparam name="THandler">Concrete handler type.</typeparam>
     /// <param name="services">The service collection to register the handler in.</param>
     /// <param name="headerName">The JOSE header parameter name the handler implements
-    /// (byte-exact per RFC 7515 §5.3); used as the DI key the validator routes a 'crit' name
+    /// (byte-exact per RFC 7515 section 5.3); used as the DI key the validator routes a 'crit' name
     /// to. A handler covering a family of related names registers under each.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>

@@ -775,7 +775,7 @@ public class JsonWebTokenClaimsTests
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
-                // A signed token is always signature-verified now (RFC 8725 §3.1/§3.3), and the
+                // A signed token is always signature-verified now (RFC 8725 section 3.1/section 3.3), and the
                 // issuer-resolved-keys branch needs an 'iss' to select keys; the resolver returns
                 // the signing key regardless of value, so any issuer lets verification proceed.
                 Issuer = "https://issuer.example.com",

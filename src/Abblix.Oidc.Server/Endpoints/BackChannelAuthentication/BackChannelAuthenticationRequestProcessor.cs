@@ -120,7 +120,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			request.Resources,
 			request.Model.Claims)
 		{
-			// RFC 9396 §3: authorization_details from the CIBA request carries onto the
+			// RFC 9396 section 3: authorization_details from the CIBA request carries onto the
 			// grant byte-exact, so the access token issued via the CIBA grant emits the
 			// claim through the same pipeline as the authorization-code flow.
 			AuthorizationDetails = request.AuthorizationDetails,

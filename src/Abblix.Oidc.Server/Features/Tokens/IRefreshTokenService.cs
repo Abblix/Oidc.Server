@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Issues and consumes OAuth 2.0 refresh tokens (RFC 6749 §6) used to obtain renewed access
+/// Issues and consumes OAuth 2.0 refresh tokens (RFC 6749 section 6) used to obtain renewed access
 /// tokens without re-prompting the user. Implementations apply the configured absolute and
 /// sliding expiration policies and may revoke the previous refresh token when reuse is
 /// disallowed.

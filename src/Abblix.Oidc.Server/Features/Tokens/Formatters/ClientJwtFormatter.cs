@@ -70,7 +70,7 @@ public class ClientJwtFormatter(
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
-        // JARM §2.2 / §3 opt-in: when the policy requires a registered key-management algorithm and the client has
+        // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has
         // not registered one, the response is signed only - the client's encryption keys are not even resolved.
         if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
             return await jwtCreator.IssueAsync(token, signingCredentials);

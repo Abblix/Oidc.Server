@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <param name="clock">Supplies the current time for the JWT <c>iat</c> claim.</param>
 /// <param name="options">Supplies the default content-encryption algorithm for JWT introspection responses.</param>
 /// <param name="httpContextAccessor">Provides the current request so the formatter can honor the <c>Accept</c>
-/// header negotiation defined by RFC 9701 §4.</param>
+/// header negotiation defined by RFC 9701 section 4.</param>
 public class IntrospectionResponseFormatter(
     IIssuerProvider issuerProvider,
     IClientJwtFormatter clientJwtFormatter,
@@ -62,7 +62,7 @@ public class IntrospectionResponseFormatter(
     {
         var introspectionResponse = success.Claims ?? new JsonObject();
 
-        // RFC 7662 §2.2: active is the only REQUIRED member and its type is a JSON boolean. Serializing it
+        // RFC 7662 section 2.2: active is the only REQUIRED member and its type is a JSON boolean. Serializing it
         // as the strings "true"/"false" (as before) broke strict deserializers and, worse, inverted the
         // semantics for lenient ones: a non-empty string "false" is truthy, so a revoked token could be
         // treated as active by the resource server.
@@ -70,7 +70,7 @@ public class IntrospectionResponseFormatter(
 
         var clientInfo = success.ClientInfo;
 
-        // RFC 9701 §4: a JWT response is returned only when the client registered a signing algorithm AND requested
+        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
         // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
         if (clientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
         {
@@ -91,7 +91,7 @@ public class IntrospectionResponseFormatter(
                 Issuer = issuerProvider.GetIssuer(),
                 Audiences = [clientInfo.ClientId],
 
-                // RFC 9701 §5: the introspection response object is carried as the token_introspection claim. The
+                // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The
                 // object is cloned because it is otherwise still parented to the introspected token's payload.
                 [IanaClaimTypes.TokenIntrospection] = introspectionResponse.DeepClone(),
             },

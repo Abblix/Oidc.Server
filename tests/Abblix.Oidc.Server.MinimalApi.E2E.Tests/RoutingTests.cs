@@ -336,7 +336,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     {
         var client = ClientOf(factory);
 
-        // RFC 8414 §3 lets the Authorization Server Metadata be published under the oauth-authorization-server
+        // RFC 8414 section 3 lets the Authorization Server Metadata be published under the oauth-authorization-server
         // suffix as well as openid-configuration. Abblix serves the identical document at both, so a client that
         // queries only oauth-authorization-server resolves the same issuer and endpoints.
         var oidc = JsonNode.Parse(await client.GetStringAsync(

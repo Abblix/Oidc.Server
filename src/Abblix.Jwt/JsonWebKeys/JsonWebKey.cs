@@ -113,7 +113,7 @@ public abstract record JsonWebKey
     public abstract bool HasPrivateKey { get; }
 
     /// <summary>
-    /// Builds the canonical-JSON form of this key per RFC 7638 §3.2: the required members
+    /// Builds the canonical-JSON form of this key per RFC 7638 section 3.2: the required members
     /// for this <c>kty</c>, in lexicographic order, with no whitespace. Optional members
     /// (<c>use</c>, <c>alg</c>, <c>kid</c>, certificate metadata) must NOT enter the form.
     /// </summary>
@@ -124,19 +124,19 @@ public abstract record JsonWebKey
     protected abstract string CanonicalJson();
 
     /// <summary>
-    /// Computes the JWK Thumbprint of this key per RFC 7638 §3 as the raw 32-byte SHA-256
+    /// Computes the JWK Thumbprint of this key per RFC 7638 section 3 as the raw 32-byte SHA-256
     /// digest of the canonical-JSON form built by <see cref="CanonicalJson"/>.
     /// </summary>
     /// <remarks>
     /// The thumbprint is computed at runtime from the public-key material; it is not a
     /// stored member on the JWK and is distinct from the X.509 certificate thumbprints
-    /// <c>x5t</c> (RFC 7517 §4.8) and <c>x5t#S256</c> (RFC 7517 §4.9), which hash the
+    /// <c>x5t</c> (RFC 7517 section 4.8) and <c>x5t#S256</c> (RFC 7517 section 4.9), which hash the
     /// certificate, not the key. OAuth 2.0 DPoP (RFC 9449) uses this value for
     /// <c>cnf.jkt</c> and the <c>dpop_jkt</c> request parameter.
     /// </remarks>
     /// <returns>The 32-byte SHA-256 digest.</returns>
     /// <exception cref="InvalidOperationException">A required member
-    /// (per RFC 7638 §3.2) is missing on this key.</exception>
+    /// (per RFC 7638 section 3.2) is missing on this key.</exception>
     public byte[] ComputeJwkThumbprint()
     {
         var canonical = CanonicalJson();
@@ -144,13 +144,13 @@ public abstract record JsonWebKey
     }
 
     /// <summary>
-    /// Computes the JWK Thumbprint of this key per RFC 7638 §3 and returns the
+    /// Computes the JWK Thumbprint of this key per RFC 7638 section 3 and returns the
     /// base64url-encoded form, which is the wire shape used by DPoP <c>cnf.jkt</c> and
     /// the <c>dpop_jkt</c> authorization-request parameter.
     /// </summary>
     /// <returns>The base64url-encoded SHA-256 digest of the canonical-JSON form.</returns>
     /// <exception cref="InvalidOperationException">A required member
-    /// (per RFC 7638 §3.2) is missing on this key.</exception>
+    /// (per RFC 7638 section 3.2) is missing on this key.</exception>
     public string ComputeJwkThumbprintBase64Url()
         => Base64Url.EncodeToString(ComputeJwkThumbprint());
 

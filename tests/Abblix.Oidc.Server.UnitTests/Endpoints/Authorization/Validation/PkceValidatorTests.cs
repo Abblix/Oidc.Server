@@ -587,7 +587,7 @@ public class PkceValidatorTests
 
     /// <summary>
     /// Under the FAPI 2.0 profile a code challenge with no explicit method is rejected: a missing
-    /// method defaults to plain (RFC 7636 §4.3), which is not the required S256.
+    /// method defaults to plain (RFC 7636 section 4.3), which is not the required S256.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_Fapi2WithChallengeAndNoMethod_ShouldReturnError()

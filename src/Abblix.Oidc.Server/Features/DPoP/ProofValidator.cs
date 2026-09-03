@@ -19,7 +19,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Validates a DPoP proof JWT per RFC 9449 §4.2 / §4.3 / §11.1.5 covering structure,
+/// Validates a DPoP proof JWT per RFC 9449 section 4.2 / section 4.3 / section 11.1.5 covering structure,
 /// algorithm whitelist, embedded-JWK shape, signature, the request-binding claim triplet
 /// (<c>htm</c>, <c>htu</c>, optional <c>ath</c>), <c>iat</c> window, <c>jti</c> presence,
 /// and <c>jti</c> replay protection against a shared cache. DPoP-Nonce checks layer on
@@ -52,9 +52,9 @@ internal sealed class ProofValidator(
         string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
-        // RFC 9449 §7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
+        // RFC 9449 section 7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
         // string FromHeader binder joins repeated header values with a comma. The DPoP
-        // proof is JWS compact serialization (RFC 7515 §3.1), whose alphabet is
+        // proof is JWS compact serialization (RFC 7515 section 3.1), whose alphabet is
         // base64url + '.' - no comma is permitted - so a comma in the proof string
         // is unambiguous evidence that the client sent the header twice. Reject before
         // the downstream JWS validator sees a string with 5 dot-separated parts (which
@@ -63,7 +63,7 @@ internal sealed class ProofValidator(
         {
             return new ProofError(
                 ProofErrorReasons.MalformedJwt,
-                "Multiple DPoP header values are not permitted (RFC 9449 §7.1).");
+                "Multiple DPoP header values are not permitted (RFC 9449 section 7.1).");
         }
 
         var jwtResult = await jwtValidator.ValidateAsync(
@@ -97,7 +97,7 @@ internal sealed class ProofValidator(
         // iat + tolerance; the replay-cache only needs to remember jti up to that point.
         // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
-        // the documented probabilistic guarantee accepted under RFC 9449 §11.1.
+        // the documented probabilistic guarantee accepted under RFC 9449 section 11.1.
         var fresh = await replayCache.TryReserveAsync(
             jwtId,
             issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
@@ -135,7 +135,7 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// Enforces the RFC 9449 §4.2 rule that the embedded <c>jwk</c> MUST NOT contain
+    /// Enforces the RFC 9449 section 4.2 rule that the embedded <c>jwk</c> MUST NOT contain
     /// private-key material. The JWT validator already extracted the JWK and used its
     /// public part to verify the signature, so the key is guaranteed non-null on the
     /// success path; this post-check catches accidental private-key disclosure before
@@ -155,8 +155,8 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// Validates the request-binding claims per RFC 9449 §4.3: <c>htm</c> matches the
-    /// request method byte-exact, <c>htu</c> matches the request URI after RFC 3986 §6.2
+    /// Validates the request-binding claims per RFC 9449 section 4.3: <c>htm</c> matches the
+    /// request method byte-exact, <c>htu</c> matches the request URI after RFC 3986 section 6.2
     /// canonicalisation, and <c>iat</c> falls within the configured tolerance window
     /// around the server's current time. Returns the parsed <c>iat</c> on success.
     /// </summary>
@@ -189,7 +189,7 @@ internal sealed class ProofValidator(
 
     /// <summary>
     /// Compares the proof's <c>htm</c> claim against the current request method
-    /// byte-exact (RFC 9449 §4.3).
+    /// byte-exact (RFC 9449 section 4.3).
     /// </summary>
     private static ProofError? ValidateHttpMethod(JsonWebTokenPayload payload, string httpMethod)
     {
@@ -206,7 +206,7 @@ internal sealed class ProofValidator(
 
     /// <summary>
     /// Compares the proof's <c>htu</c> claim against the current request URI after
-    /// RFC 3986 §6.2 canonicalisation.
+    /// RFC 3986 section 6.2 canonicalisation.
     /// </summary>
     private static ProofError? ValidateHttpUri(JsonWebTokenPayload payload, Uri requestUri)
     {
@@ -267,7 +267,7 @@ internal sealed class ProofValidator(
 
     /// <summary>
     /// When the proof accompanies an access token, verifies the <c>ath</c> claim equals
-    /// <c>Base64Url(SHA-256(access_token))</c> per RFC 9449 §4.2.
+    /// <c>Base64Url(SHA-256(access_token))</c> per RFC 9449 section 4.2.
     /// </summary>
     private static ProofError? ValidateAccessTokenBinding(JsonWebTokenPayload payload, string? accessToken)
     {
@@ -294,7 +294,7 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// RFC 9449 §4.2 floor on jti entropy: at least 96 bits of pseudorandom data
+    /// RFC 9449 section 4.2 floor on jti entropy: at least 96 bits of pseudorandom data
     /// (or a UUIDv4) so in-window collisions stay negligible. The strictest length
     /// floor that admits every conforming encoding is the byte count of the raw
     /// payload itself; every wider encoding (base64url, hex, UUIDv4) lands above.
@@ -302,7 +302,7 @@ internal sealed class ProofValidator(
     private const int MinJwtIdLengthInBits = 96;
 
     /// <summary>
-    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 §4.1.7
+    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 section 4.1.7
     /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy. The downstream
     /// replay-cache uses the value as its key.
     /// </summary>

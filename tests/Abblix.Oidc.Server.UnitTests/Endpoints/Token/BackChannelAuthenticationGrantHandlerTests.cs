@@ -128,7 +128,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: a token request without the required auth_req_id parameter is the caller's
+    /// RFC 6749 section 5.2: a token request without the required auth_req_id parameter is the caller's
     /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
@@ -464,7 +464,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        // slow_down (polled too fast, CIBA Core §11) is the stable wire contract; the human-readable
+        // slow_down (polled too fast, CIBA Core section 11) is the stable wire contract; the human-readable
         // description is free to change, so the test pins the error code only.
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
     }

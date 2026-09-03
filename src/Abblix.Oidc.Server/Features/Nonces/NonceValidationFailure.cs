@@ -11,7 +11,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// <summary>
 /// Reasons a server-issued nonce can fail validation. The categories are for
 /// log filters and metrics - at the protocol layer DPoP-Nonce flows surface
-/// every failure as the same RFC 9449 §8 <c>use_dpop_nonce</c> error with a
+/// every failure as the same RFC 9449 section 8 <c>use_dpop_nonce</c> error with a
 /// freshly issued nonce in the response header, regardless of the underlying
 /// reason.
 /// </summary>

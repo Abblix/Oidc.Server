@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Features.Nonces;
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Base class for DPoP-aware endpoint validators that enforce the RFC 9449 §8 nonce
+/// Base class for DPoP-aware endpoint validators that enforce the RFC 9449 section 8 nonce
 /// challenge-response loop. Encapsulates the proof-claim check, fresh-nonce issuance,
 /// and <see cref="UseDPoPNonceError"/> shaping; concrete validators override
 /// <see cref="LogNonceChallengeIssued"/> to attribute the «challenge issued» event to

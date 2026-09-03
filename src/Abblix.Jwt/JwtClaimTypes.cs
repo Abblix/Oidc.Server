@@ -81,7 +81,7 @@ public static class JwtClaimTypes
     /// <summary>
     /// "x5t" header parameter (RFC 7515 Section 4.1.7): base64url-encoded SHA-1 thumbprint of
     /// the DER encoding of the corresponding X.509 certificate. Discouraged in favour of
-    /// <see cref="X509Sha256Thumbprint"/> per RFC 7515 §10.11.
+    /// <see cref="X509Sha256Thumbprint"/> per RFC 7515 section 10.11.
     /// </summary>
     public const string X509Sha1Thumbprint = "x5t";
 
@@ -194,19 +194,19 @@ public static class JwtClaimTypes
 
     /// <summary>
     /// The 'htm' (HTTP Method) claim binds a DPoP proof to the HTTP method of the request
-    /// (RFC 9449 §4.2). Compared byte-exact against the request method.
+    /// (RFC 9449 section 4.2). Compared byte-exact against the request method.
     /// </summary>
     public const string DPoPHttpMethod = "htm";
 
     /// <summary>
     /// The 'htu' (HTTP URI) claim binds a DPoP proof to the request target URI
-    /// (RFC 9449 §4.2). Compared after RFC 3986 §6.2 canonicalisation.
+    /// (RFC 9449 section 4.2). Compared after RFC 3986 section 6.2 canonicalisation.
     /// </summary>
     public const string DPoPHttpUri = "htu";
 
     /// <summary>
     /// The 'ath' (Access Token Hash) claim binds a DPoP proof to the access token it
-    /// accompanies at a protected resource (RFC 9449 §4.2). Base64url-encoded SHA-256 of
+    /// accompanies at a protected resource (RFC 9449 section 4.2). Base64url-encoded SHA-256 of
     /// the access-token ASCII bytes; present only when an access token is presented.
     /// Distinct from <see cref="AccessTokenHash"/> (OIDC <c>at_hash</c> in id_tokens).
     /// </summary>

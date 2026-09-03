@@ -23,7 +23,7 @@ using Xunit;
 // its ConcurrentDictionary state stays trivial and thread-safe under concurrent
 // tests, and the license cannot be lifted into a production host.
 //
-// NonceEnabledTestFactory is a separate host with RFC 9449 §8 nonce enforcement
+// NonceEnabledTestFactory is a separate host with RFC 9449 section 8 nonce enforcement
 // flipped on at the token and UserInfo endpoints; it stays distinct so its
 // per-host options never cascade the default-flow tests into the nonce loop.
 [assembly: AssemblyFixture(typeof(TestFactory))]

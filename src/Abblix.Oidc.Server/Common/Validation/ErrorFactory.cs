@@ -37,7 +37,7 @@ public static class ErrorFactory
     {
         var description = string.Join(' ', messages.Where(message => !string.IsNullOrWhiteSpace(message)));
 
-        // error_description is optional per RFC 6749 §5.2, so an empty join means the caller had no concrete
+        // error_description is optional per RFC 6749 section 5.2, so an empty join means the caller had no concrete
         // message and the generic fallback stands in for it.
         return new OidcError(
             ErrorCodes.InvalidRequest,

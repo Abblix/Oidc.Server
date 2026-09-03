@@ -101,7 +101,7 @@ public record EndSessionRequest
 
 	/// <summary>
 	/// Carries the End-User's answer to the logout confirmation prompt that the OP is required to display
-	/// per OIDC RP-Initiated Logout 1.0 §2 ("the OP SHOULD ask the End-User whether to log out ... MUST ask ...
+	/// per OIDC RP-Initiated Logout 1.0 section 2 ("the OP SHOULD ask the End-User whether to log out ... MUST ask ...
 	/// if an id_token_hint was not provided"). When <c>true</c>, the user has explicitly approved logout in
 	/// the interactive UI; when <c>null</c> or <c>false</c>, the request is treated as not-yet-confirmed and
 	/// the OP renders the confirmation screen. Encoded via the <see cref="Parameters.Confirmed"/> form field

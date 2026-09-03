@@ -9,7 +9,7 @@
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
-/// Produces the RFC 8414 §2.1 <c>signed_metadata</c> value for a discovery document.
+/// Produces the RFC 8414 section 2.1 <c>signed_metadata</c> value for a discovery document.
 /// </summary>
 /// <remarks>
 /// Lives in the core rather than in an adapter because the value is a property of the metadata, not of the
@@ -23,7 +23,7 @@ public interface ISignedMetadataProvider
     /// </summary>
     /// <param name="metadata">
     /// The fully assembled metadata, including resolved endpoint URLs and any mTLS aliases, and without
-    /// <c>signed_metadata</c> itself: RFC 8414 §2.1 has the bundle assert the metadata, not restate its own
+    /// <c>signed_metadata</c> itself: RFC 8414 section 2.1 has the bundle assert the metadata, not restate its own
     /// signature.
     /// </param>
     /// <returns>The compact-serialized JWS.</returns>

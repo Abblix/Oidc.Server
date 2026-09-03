@@ -20,7 +20,7 @@ using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.P
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// End-to-end coverage for ID tokens encrypted with the ECDH-ES key management family (OIDC Core §10.2):
+/// End-to-end coverage for ID tokens encrypted with the ECDH-ES key management family (OIDC Core section 10.2):
 /// a client registers an EC encryption key via DCR together with <c>id_token_encrypted_response_alg</c>,
 /// completes the authorization code flow through the real endpoints and receives its ID token as a JWE
 /// it can decrypt with the EC private key. The <c>ECDH-ES+A256KW</c> case also drives the RFC 3394

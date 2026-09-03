@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Features.NoneFlow;
 
 /// <summary>
 /// Builds the <c>none</c> response-type component of an authorization endpoint success response
-/// (OAuth 2.0 Multiple Response Type Encoding Practices §4). The none response type authorizes the
+/// (OAuth 2.0 Multiple Response Type Encoding Practices section 4). The none response type authorizes the
 /// request without returning any credentials, so this builder contributes nothing to the running
 /// <see cref="SuccessfullyAuthenticated"/> result - the authorization endpoint returns only
 /// <c>state</c> and, when advertised, <c>iss</c> (RFC 9207). Registered by opt-in through

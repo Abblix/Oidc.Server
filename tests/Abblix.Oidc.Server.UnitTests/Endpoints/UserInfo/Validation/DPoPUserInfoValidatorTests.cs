@@ -33,9 +33,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo.Validation;
 
 /// <summary>
-/// Unit tests for <see cref="DPoPUserInfoValidator"/> covering the RFC 9449 §7.1
+/// Unit tests for <see cref="DPoPUserInfoValidator"/> covering the RFC 9449 section 7.1
 /// resource-server enforcement matrix: scheme/binding alignment, proof presence,
-/// proof-key thumbprint match against <c>cnf.jkt</c>, and the optional §8 nonce
+/// proof-key thumbprint match against <c>cnf.jkt</c>, and the optional section 8 nonce
 /// challenge-response loop. Mirrors the structure of
 /// <see cref="DPoPTokenEndpointValidatorTests"/> - proof JWT structural / signature
 /// checks belong to <c>ProofValidatorTests</c>, this suite mocks

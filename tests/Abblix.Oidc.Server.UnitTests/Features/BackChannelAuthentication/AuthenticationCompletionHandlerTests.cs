@@ -966,7 +966,7 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_WhenTheGrantNarrowsTheRequest_Completes()
     {
         // The end user approved one of the two entries the client asked for. That is the whole point of the
-        // seam, and RFC 9396 §7 has the server return what was granted rather than what was asked for.
+        // seam, and RFC 9396 section 7 has the server return what was granted rather than what was asked for.
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: ["payment_initiation", "account_information"],
             grantedTypes: ["account_information"]);

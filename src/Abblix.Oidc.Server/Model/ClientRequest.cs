@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// Carries the OAuth 2.0 client authentication material common to back-channel endpoints (token,
-/// introspection, revocation): credentials passed in the request body per RFC 6749 §2.3.1, JWT-based
+/// introspection, revocation): credentials passed in the request body per RFC 6749 section 2.3.1, JWT-based
 /// client assertions per RFC 7521/7523, and the mTLS client certificate per RFC 8705.
 /// Concrete request DTOs typically expose these values alongside their endpoint-specific parameters.
 /// </summary>
@@ -24,7 +24,7 @@ public record ClientRequest
 {
 	/// <summary>
 	/// Wire-level parameter names for OAuth 2.0 client authentication material common to back-channel
-	/// endpoints (RFC 6749 §2.3.1, RFC 7521/7523 client assertions, OIDC Core §9).
+	/// endpoints (RFC 6749 section 2.3.1, RFC 7521/7523 client assertions, OIDC Core section 9).
 	/// </summary>
 	public static class Parameters
 	{
@@ -53,7 +53,7 @@ public record ClientRequest
 	public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
 
 	/// <summary>
-	/// The OAuth 2.0 <c>client_id</c> identifying the registered client (RFC 6749 §2.3.1).
+	/// The OAuth 2.0 <c>client_id</c> identifying the registered client (RFC 6749 section 2.3.1).
 	/// May be <c>null</c> when the client is identified solely by an Authorization header or a client assertion.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientId)]
@@ -61,21 +61,21 @@ public record ClientRequest
 
 	/// <summary>
 	/// The OAuth 2.0 <c>client_secret</c> presented in the request body for the
-	/// <c>client_secret_post</c> authentication method (RFC 6749 §2.3.1).
+	/// <c>client_secret_post</c> authentication method (RFC 6749 section 2.3.1).
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientSecret)]
 	public string? ClientSecret { get; set; }
 
 	/// <summary>
 	/// The <c>client_assertion_type</c>, which for JWT bearer client assertions equals
-	/// <c>urn:ietf:params:oauth:client-assertion-type:jwt-bearer</c> per RFC 7521 §4.2 / RFC 7523 §2.2.
+	/// <c>urn:ietf:params:oauth:client-assertion-type:jwt-bearer</c> per RFC 7521 section 4.2 / RFC 7523 section 2.2.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClientAssertionType)]
 	public string? ClientAssertionType { get; set; }
 
 	/// <summary>
 	/// The <c>client_assertion</c>: a signed JWT used to authenticate the client via
-	/// <c>private_key_jwt</c> or <c>client_secret_jwt</c> (RFC 7523 §2.2, OIDC Core §9).
+	/// <c>private_key_jwt</c> or <c>client_secret_jwt</c> (RFC 7523 section 2.2, OIDC Core section 9).
 	/// </summary>
     [JsonPropertyName(Parameters.ClientAssertion)]
     public string? ClientAssertion { get; set; }
@@ -91,7 +91,7 @@ public record ClientRequest
 
     /// <summary>
     /// The compact-form DPoP proof JWT taken from the inbound request's <c>DPoP</c> header
-    /// per RFC 9449 §4.1. Travels alongside <see cref="AuthorizationHeader"/> and
+    /// per RFC 9449 section 4.1. Travels alongside <see cref="AuthorizationHeader"/> and
     /// <see cref="ClientCertificate"/> as transport-level material so the core layer stays
     /// ASP.NET-Core-free; the MVC binder lifts it from the header. <c>null</c> when no
     /// proof was presented.

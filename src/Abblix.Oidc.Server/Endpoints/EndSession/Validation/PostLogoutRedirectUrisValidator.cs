@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
 /// Verifies that the request's <c>post_logout_redirect_uri</c> is one of the URIs the
-/// resolved client previously registered (OpenID Connect RP-Initiated Logout 1.0 §2).
+/// resolved client previously registered (OpenID Connect RP-Initiated Logout 1.0 section 2).
 /// A request without <c>post_logout_redirect_uri</c> is allowed; if one is present but
 /// the client cannot be resolved from <c>client_id</c> or <c>id_token_hint</c>, the
 /// redirect URI cannot be safely validated and the request is rejected.

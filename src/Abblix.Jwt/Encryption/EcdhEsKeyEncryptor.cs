@@ -21,7 +21,7 @@ namespace Abblix.Jwt.Encryption;
 /// </summary>
 /// <remarks>
 /// The ephemeral-static agreement yields the raw shared secret Z, on which the Concat KDF
-/// (NIST SP 800-56A §5.8.1, JOSE OtherInfo per RFC 7518 §4.6.2) is run by
+/// (NIST SP 800-56A section 5.8.1, JOSE OtherInfo per RFC 7518 section 4.6.2) is run by
 /// <see cref="ConcatKeyDerivation"/>. Expressing the KDF over a raw Z, rather than fusing it with the
 /// agreement, is what lets the identical derivation serve the external-custodian path, where an HSM/KMS
 /// performs the agreement and returns Z. Supports the NIST curves P-256, P-384 and P-521 - the set the
@@ -90,7 +90,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 
 		try
 		{
-			// RFC 7518 §4.6.2: both agreement parties may be identified by 'apu'/'apv'; when both are
+			// RFC 7518 section 4.6.2: both agreement parties may be identified by 'apu'/'apv'; when both are
 			// present they must be distinct, otherwise the producer and recipient roles collapse into
 			// one identity and the KDF binding loses its meaning.
 			var apu = header.AgreementPartyUInfo;
@@ -157,7 +157,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 	/// Performs the encryption-side agreement: generates an ephemeral key pair on the recipient
 	/// key's curve, publishes its public part as the 'epk' header parameter and derives a key of
 	/// the requested size. The AlgorithmID of the Concat KDF is the 'enc' value in Direct Key
-	/// Agreement mode and the 'alg' value in the key-wrapping variants, per RFC 7518 §4.6.2.
+	/// Agreement mode and the 'alg' value in the key-wrapping variants, per RFC 7518 section 4.6.2.
 	/// </summary>
 	private byte[] DeriveKeyForEncryption(
 		JsonWebTokenHeader header,
@@ -224,7 +224,7 @@ internal sealed class EcdhEsKeyEncryptor(string algorithm, IServiceProvider serv
 		string? apv,
 		int keySizeInBytes)
 	{
-		// Z is the raw ECDH shared secret named by NIST SP 800-56A and RFC 7518 §4.6.
+		// Z is the raw ECDH shared secret named by NIST SP 800-56A and RFC 7518 section 4.6.
 		// DeriveRawSecretAgreement yields exactly what the fused DeriveKeyFromHash would hash internally.
 		var sharedSecretZ = privateParty.DeriveRawSecretAgreement(publicParty);
 		try

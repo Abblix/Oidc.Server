@@ -132,7 +132,7 @@ internal partial class JsonWebTokenSigner(
             LogNoSigningKeys(algorithm, keyId);
             return new JwtValidationError(
                 JwtError.InvalidToken,
-                "No signing keys configured for issuer (RFC 7515 §6: cannot verify signature without keys)");
+                "No signing keys configured for issuer (RFC 7515 section 6: cannot verify signature without keys)");
         }
 
         // The binding a key declares over its algorithm comes from RFC 8725 Section 3.1, not from

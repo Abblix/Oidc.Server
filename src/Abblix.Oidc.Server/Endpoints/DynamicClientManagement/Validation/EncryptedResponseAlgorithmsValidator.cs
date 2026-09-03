@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// Validates the JWE algorithms a client requests for the JWTs this server encrypts or decrypts:
 /// <c>id_token_encrypted_response_alg</c>/<c>enc</c> and <c>userinfo_encrypted_response_alg</c>/<c>enc</c>
 /// (OIDC Core), <c>request_object_encryption_alg</c>/<c>enc</c> (RFC 9101) and
-/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM §3). Each key-management (<c>alg</c>) value
+/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each key-management (<c>alg</c>) value
 /// must appear in the server's supported key-management algorithms and each content-encryption (<c>enc</c>)
 /// value in its supported content-encryption algorithms.
 /// </summary>

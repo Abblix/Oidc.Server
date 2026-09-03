@@ -21,10 +21,10 @@ using System.Buffers.Text;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=authorization_code</c> (RFC 6749 §4.1.3).
+/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=authorization_code</c> (RFC 6749 section 4.1.3).
 /// Resolves the code to its stored <see cref="AuthorizedGrant"/>, asserts that the redeeming client is
 /// the same one the code was issued to, and, when a <c>code_challenge</c> was bound at the authorization
-/// request, runs the RFC 7636 §4.6 verification by transforming the submitted <c>code_verifier</c> with
+/// request, runs the RFC 7636 section 4.6 verification by transforming the submitted <c>code_verifier</c> with
 /// the recorded <c>plain</c> / <c>S256</c> / <c>S512</c> method.
 /// </summary>
 /// <param name="authorizationCodeService">Persists, looks up and removes authorization codes.</param>
@@ -56,7 +56,7 @@ public class AuthorizationCodeGrantHandler(
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
-        // RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+        // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
         if (!request.Code.HasValue())
         {
@@ -73,7 +73,7 @@ public class AuthorizationCodeGrantHandler(
         var grant = result.GetSuccess();
 
         // Verifies that the authorization code was issued for the requesting client.
-        // RFC 6749 §5.2 lists "authorization code ... issued to another client" explicitly under
+        // RFC 6749 section 5.2 lists "authorization code ... issued to another client" explicitly under
         // invalid_grant; unauthorized_client (used before) means the client is barred from the
         // grant type as such, which is a different failure.
         if (grant.Context.ClientId != clientInfo.ClientId)
@@ -98,7 +98,7 @@ public class AuthorizationCodeGrantHandler(
             }
 
             // Validates the code verifier against the stored code challenge using the appropriate method.
-            // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 §4.6,
+            // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 section 4.6,
             // so the comparison is ordinal - case folding would widen the accepted set and weaken the plain method.
             if (!string.Equals(
                     grant.Context.CodeChallenge,
@@ -110,7 +110,7 @@ public class AuthorizationCodeGrantHandler(
         }
         else if (!string.IsNullOrEmpty(request.CodeVerifier))
         {
-            // RFC 9700 (OAuth 2.0 Security BCP) §2.1.1: a code_verifier presented for an authorization code that was
+            // RFC 9700 (OAuth 2.0 Security BCP) section 2.1.1: a code_verifier presented for an authorization code that was
             // issued without a code_challenge signals a PKCE downgrade / code-injection attempt. Reject it rather
             // than silently ignore the verifier and issue tokens.
             return new OidcError(

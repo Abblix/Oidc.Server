@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// <summary>
 /// Builds the RFC 7662 introspection response for an already-validated request: returns
 /// <c>active=true</c> with claims for a live token, or <c>active=false</c> alone when the
-/// token is missing, expired, revoked, or issued to a different client (§2.2).
+/// token is missing, expired, revoked, or issued to a different client (section 2.2).
 /// </summary>
 public interface IIntrospectionRequestProcessor
 {

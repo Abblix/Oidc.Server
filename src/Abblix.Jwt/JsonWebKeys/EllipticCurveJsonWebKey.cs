@@ -101,7 +101,7 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Required EC members per RFC 7638 §3.2 in lexicographic order: <c>crv</c>,
+    /// Required EC members per RFC 7638 section 3.2 in lexicographic order: <c>crv</c>,
     /// <c>kty</c>, <c>x</c>, <c>y</c>. The interpolated <c>crv</c> identifier and the
     /// base64url-encoded coordinates contain only characters that need no JSON escaping.
     /// </remarks>

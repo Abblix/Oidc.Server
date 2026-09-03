@@ -61,16 +61,16 @@ public static class JsonWebTokenTypes
 	public const string LogoutToken = "logout+jwt";
 
 	/// <summary>
-	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
+	/// The "DPoP proof" JWT type per RFC 9449 section 4.2. The <c>typ</c> header MUST equal this
 	/// value so a relying party that trusts the same client across multiple JWT types
 	/// (id_token, request_object, DPoP proof) cannot have one type replayed as another
-	/// per the RFC 8725 §3.11 token-type confusion guidance.
+	/// per the RFC 8725 section 3.11 token-type confusion guidance.
 	/// </summary>
 	public const string DPoPProof = "dpop+jwt";
 
 	/// <summary>
-	/// The "token introspection response" JWT type per RFC 9701 §5. The <c>typ</c> header equals this value so a
-	/// signed introspection response cannot be replayed as a different JWT type (RFC 8725 §3.11).
+	/// The "token introspection response" JWT type per RFC 9701 section 5. The <c>typ</c> header equals this value so a
+	/// signed introspection response cannot be replayed as a different JWT type (RFC 8725 section 3.11).
 	/// </summary>
 	public const string TokenIntrospection = "token-introspection+jwt";
 

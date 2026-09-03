@@ -74,7 +74,7 @@ public class IntrospectionResponseFormatterTests
     {
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.None), MediaTypes.TokenIntrospectionJwt);
 
-        // RFC 7662 §2.2: active is a JSON boolean, not the string "true".
+        // RFC 7662 section 2.2: active is a JSON boolean, not the string "true".
         var json = Assert.IsType<JsonResult>(result);
         var introspection = Assert.IsType<JsonObject>(json.Value);
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
@@ -128,7 +128,7 @@ public class IntrospectionResponseFormatterTests
         Assert.Equal(MediaTypes.TokenIntrospectionJwt, content.ContentType);
         Assert.Equal(EncodedJwt, content.Content);
 
-        // RFC 9701 §5: typ header is the introspection JWT type, signed with the client's algorithm, addressed to
+        // RFC 9701 section 5: typ header is the introspection JWT type, signed with the client's algorithm, addressed to
         // the client, and the response carried under the token_introspection claim.
         Assert.NotNull(capturedToken);
         Assert.Equal(JsonWebTokenTypes.TokenIntrospection, capturedToken!.Header.Type);

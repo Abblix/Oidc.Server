@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// One step in the client-registration validation pipeline (RFC 7591 §2 / OIDC DCR 1.0).
+/// One step in the client-registration validation pipeline (RFC 7591 section 2 / OIDC DCR 1.0).
 /// Implementations check a specific aspect of the supplied metadata (redirect URIs,
 /// grant types, signing algorithms, sector identifier, software statement, etc.) and
 /// either clear it or surface an <see cref="OidcError"/> for the response.

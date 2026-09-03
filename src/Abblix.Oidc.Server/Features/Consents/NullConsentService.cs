@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// <summary>
 /// Default no-op consent provider that auto-grants every requested scope and resource and never marks
 /// consent as pending. Suitable for trusted first-party deployments and as the starting placeholder
-/// during integration; replace with a host-supplied implementation to honour OIDC Core §3.1.2.4
+/// during integration; replace with a host-supplied implementation to honour OIDC Core section 3.1.2.4
 /// (authorization server obtains end-user consent).
 /// </summary>
 public class NullConsentService : IUserConsentsProvider

@@ -35,7 +35,7 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             onSuccess: IResult (success) => Results.Json(success),
             onFailure: error => error switch
             {
-                // RFC 9110 §11.6.1: a 401 carries a WWW-Authenticate challenge matching the client's scheme.
+                // RFC 9110 section 11.6.1: a 401 carries a WWW-Authenticate challenge matching the client's scheme.
                 BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status401Unauthorized)
                         .WithHeader(HeaderNames.WWWAuthenticate, FormatClientChallenge(clientRequest)),
@@ -51,7 +51,7 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             }));
 
     /// <summary>
-    /// Builds the <c>WWW-Authenticate</c> challenge matching the client's authentication scheme. Per RFC 6749 §5.2 the
+    /// Builds the <c>WWW-Authenticate</c> challenge matching the client's authentication scheme. Per RFC 6749 section 5.2 the
     /// challenge scheme must match what the client attempted, falling back to <c>Bearer</c> when the client did not use
     /// the <c>Authorization</c> header (e.g. <c>client_secret_post</c> or <c>private_key_jwt</c>).
     /// </summary>

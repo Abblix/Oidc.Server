@@ -11,7 +11,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Validates a DPoP proof JWT per RFC 9449 §4.2 / §4.3 (structure, signature, claim
+/// Validates a DPoP proof JWT per RFC 9449 section 4.2 / section 4.3 (structure, signature, claim
 /// shape) but excluding replay-cache and nonce checks. Those layered checks land
 /// alongside the <c>jti</c>-replay-cache and DPoP-Nonce service in a separate slice and
 /// build on the <see cref="Proof"/> returned by a successful validation here.
@@ -25,7 +25,7 @@ public interface IProofValidator
     /// into the validator, so callers never need to thread them through. When
     /// <paramref name="accessToken"/> is supplied (the proof accompanies a bearer-style
     /// access-token presentation), the proof's <c>ath</c> claim is verified against the
-    /// access-token hash per RFC 9449 §4.2.
+    /// access-token hash per RFC 9449 section 4.2.
     /// </summary>
     /// <param name="proofJwt">The compact JWS form of the DPoP proof, taken from the
     /// <c>DPoP</c> request header.</param>

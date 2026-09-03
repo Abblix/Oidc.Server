@@ -15,10 +15,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Validates an RFC 7592 §2.2 update request: authenticates the registration access token and
+/// Validates an RFC 7592 section 2.2 update request: authenticates the registration access token and
 /// confirms the client exists, then validates the supplied replacement metadata via the
 /// update-specific keyed <see cref="IRegisterClientRequestValidator"/>. Also enforces the
-/// RFC 7592 §2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
+/// RFC 7592 section 2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
 /// </summary>
 /// <param name="clientRequestValidator">Validator for the registration access token.</param>
 /// <param name="registrationRequestValidator">Update-flow metadata validator

@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Formatters;
 /// Unit tests for <see cref="RegisterClientResponseFormatter"/>. Locks the bridge from the
 /// internal <see cref="ClientRegistrationSuccessResponse"/> business-shape into the
 /// public-API <see cref="ClientRegistrationResponse"/> wire-shape, with emphasis on the
-/// RFC 7591 §3.2.1 «echo registered metadata» surface and the RFC 9449 §5.2
+/// RFC 7591 section 3.2.1 «echo registered metadata» surface and the RFC 9449 section 5.2
 /// <c>dpop_bound_access_tokens</c> field. Without these tests, fields added on
 /// <see cref="ClientRegistrationSuccessResponse"/> stay unsurfaced on the JSON payload -
 /// the failure mode that prompted writing this suite (slice #108).
@@ -76,7 +76,7 @@ public class RegisterClientResponseFormatterTests
     [Fact]
     public async Task FormatResponseAsync_RfcMetadata_EchoedOnWireShape()
     {
-        // RFC 7591 §3.2.1 echo: registered metadata MUST appear on the wire response.
+        // RFC 7591 section 3.2.1 echo: registered metadata MUST appear on the wire response.
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
             RedirectUris = [RedirectUri],
@@ -122,10 +122,10 @@ public class RegisterClientResponseFormatterTests
     }
 
     /// <summary>
-    /// #29 regression: RFC 9701 §6 introspection response algorithms set by the register processor
+    /// #29 regression: RFC 9701 section 6 introspection response algorithms set by the register processor
     /// must survive the core→wire bridge. Before the wire DTO gained these members (and the formatter
     /// mapped them) a client registering signed/encrypted introspection got a 201 that dropped them,
-    /// violating RFC 7591 §3.2.1's "echo all registered metadata".
+    /// violating RFC 7591 section 3.2.1's "echo all registered metadata".
     /// </summary>
     [Fact]
     public async Task FormatResponseAsync_IntrospectionResponseAlgorithms_EchoedOnWireShape()

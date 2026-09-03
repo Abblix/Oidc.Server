@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// <param name="ProofKey">The public-only JWK from the proof header.</param>
 /// <param name="ProofKeyThumbprint">RFC 7638 base64url-encoded JWK Thumbprint of
 /// <paramref name="ProofKey"/>. This is the value that goes into <c>cnf.jkt</c> on the issued
-/// access token (RFC 9449 §6.1) - the role-name «proof key thumbprint» reflects the
+/// access token (RFC 9449 section 6.1) - the role-name «proof key thumbprint» reflects the
 /// protocol-level meaning, while the wire-level cnf-member retains the RFC's
 /// <c>jkt</c> spelling.</param>
 /// <param name="JwtId">The <c>jti</c> claim of the proof. The validator does not check it

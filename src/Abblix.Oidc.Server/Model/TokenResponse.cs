@@ -76,7 +76,7 @@ public record TokenResponse
     public string? IdToken { get; init; }
 
     /// <summary>
-    /// RFC 9396 §7 <c>authorization_details</c>: the structured authorization data the token was granted for, echoed
+    /// RFC 9396 section 7 <c>authorization_details</c>: the structured authorization data the token was granted for, echoed
     /// back to the client byte-exact. Omitted when no Rich Authorization Request was used.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]

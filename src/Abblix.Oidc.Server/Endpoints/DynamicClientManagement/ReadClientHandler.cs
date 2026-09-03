@@ -25,7 +25,7 @@ public class ReadClientHandler(
 {
     /// <summary>
     /// Validates the registration access token and resolves the addressed client, then delegates
-    /// to the processor to build the read-client response per RFC 7592 §2.1.
+    /// to the processor to build the read-client response per RFC 7592 section 2.1.
     /// </summary>
     /// <param name="clientRequest">The incoming RFC 7592 read request.</param>
     /// <returns>The current client metadata or an error result.</returns>

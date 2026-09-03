@@ -432,7 +432,7 @@ public class SymmetricKeyEncryptionTests
 		};
 	}
 	/// <summary>
-	/// RFC 7518 §4.7.1: AES-GCM key wrapping must put the 96-bit IV and 128-bit tag in the JOSE header
+	/// RFC 7518 section 4.7.1: AES-GCM key wrapping must put the 96-bit IV and 128-bit tag in the JOSE header
 	/// 'iv'/'tag' parameters and return ONLY the wrapped-CEK ciphertext as the encrypted_key. This test
 	/// asserts that wire shape (and that the pair still round-trips), so the previous IV||ct||tag layout
 	/// in the encrypted_key fails it.
@@ -470,7 +470,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.7.1: a wrap produced the standard way by an external JOSE library (encrypted_key =
+	/// RFC 7518 section 4.7.1: a wrap produced the standard way by an external JOSE library (encrypted_key =
 	/// ciphertext only, iv/tag in the header) must decrypt. The previous implementation sliced iv/ct/tag
 	/// out of encrypted_key and ignored the header, so it fails this test.
 	/// </summary>
@@ -486,7 +486,7 @@ public class SymmetricKeyEncryptionTests
 		};
 		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
 
-		// Produce a standard RFC 7518 §4.7 wrap exactly as a conformant external producer would.
+		// Produce a standard RFC 7518 section 4.7 wrap exactly as a conformant external producer would.
 		var iv = CryptoRandom.GetRandomBytes(12);
 		var ciphertext = new byte[contentEncryptionKey.Length];
 		var tag = new byte[16];

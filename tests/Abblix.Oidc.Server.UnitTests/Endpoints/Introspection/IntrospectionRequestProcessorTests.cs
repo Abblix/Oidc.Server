@@ -224,10 +224,10 @@ public class IntrospectionRequestProcessorTests
     }
 
     /// <summary>
-    /// RFC 9396 §9 makes the granted authorization_details reaching the resource server a MUST, by the
+    /// RFC 9396 section 9 makes the granted authorization_details reaching the resource server a MUST, by the
     /// access token or by introspection. A deployment encrypting its access tokens to its own keys has
-    /// only the second, and the caller names itself through the locations it answers for (§2.2), which
-    /// is the filter §9.2 sanctions.
+    /// only the second, and the caller names itself through the locations it answers for (section 2.2), which
+    /// is the filter section 9.2 sanctions.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_ForAResourceServerNamedInLocations_ReturnsItsOwnEntries()
@@ -288,7 +288,7 @@ public class IntrospectionRequestProcessorTests
     }
 
     /// <summary>
-    /// RFC 9396 §12: "No additional transformation or normalization is to be done in evaluating
+    /// RFC 9396 section 12: "No additional transformation or normalization is to be done in evaluating
     /// equivalence of string values". Every input here is one that a parsed comparison would have called
     /// equal, and each of them opens one resource server's entry to another - the dot-segment case joins
     /// two resource servers separated only by a path, which is the ordinary deployment shape.
@@ -329,9 +329,9 @@ public class IntrospectionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ForAnEntryNamingSeveralLocations_DisclosesOnlyTheCallersOwn()
     {
-        // RFC 7662 §2.2 grants the latitude to answer resources differently "to prevent a protected
+        // RFC 7662 section 2.2 grants the latitude to answer resources differently "to prevent a protected
         // resource from learning more about the larger network than is necessary for its operation", and
-        // §9.2 of RFC 9396 allows the member to be filtered for the caller. An entry naming three
+        // section 9.2 of RFC 9396 allows the member to be filtered for the caller. An entry naming three
         // addresses would otherwise hand each of them the other two.
         var request = CreateIntrospectionRequest();
         var token = CreateValidToken();

@@ -16,17 +16,17 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Validates an incoming OAuth 2.0 token request (RFC 6749 §3.2) against the rules required by the
+/// Validates an incoming OAuth 2.0 token request (RFC 6749 section 3.2) against the rules required by the
 /// requested <c>grant_type</c>: client authentication, grant ownership (e.g. an authorization code
-/// MUST have been issued to the authenticated client per OIDC Core 1.0 §3.1.3.2), redirect URI
+/// MUST have been issued to the authenticated client per OIDC Core 1.0 section 3.1.3.2), redirect URI
 /// equivalence for code exchange, scope and resource (RFC 8707) consistency, and PKCE verifier
-/// matching (RFC 7636 §4.5) where applicable.
+/// matching (RFC 7636 section 4.5) where applicable.
 /// </summary>
 public interface ITokenRequestValidator
 {
 	/// <summary>
 	/// Validates the request and returns a <see cref="ValidTokenRequest"/> ready for token issuance,
-	/// or an <see cref="OidcError"/> using one of the codes from RFC 6749 §5.2 (e.g. <c>invalid_grant</c>,
+	/// or an <see cref="OidcError"/> using one of the codes from RFC 6749 section 5.2 (e.g. <c>invalid_grant</c>,
 	/// <c>invalid_client</c>, <c>unsupported_grant_type</c>).
 	/// </summary>
 	[Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +

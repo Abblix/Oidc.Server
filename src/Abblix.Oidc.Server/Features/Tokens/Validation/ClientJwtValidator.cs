@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
-/// objects that the client encrypted to the server (RFC 9101 §6.1).</param>
+/// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -69,7 +69,7 @@ public partial class ClientJwtValidator(
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = context.ValidateIssuer,
                 ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
-                // RFC 9101 §6.1: a request object may be JWE-encrypted to the server. Decrypt it with
+                // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
                 // the server's own private keys; the inner JWS is then verified with the client's key
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).

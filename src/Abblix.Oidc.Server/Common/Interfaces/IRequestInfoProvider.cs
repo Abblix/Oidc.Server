@@ -27,7 +27,7 @@ public interface IRequestInfoProvider
 
     /// <summary>
     /// The HTTP method of the current request (e.g. <c>GET</c>, <c>POST</c>) in upper case
-    /// per RFC 9110 §9. Surfaced for protocol-binding checks (e.g. RFC 9449 §4.3 DPoP
+    /// per RFC 9110 section 9. Surfaced for protocol-binding checks (e.g. RFC 9449 section 4.3 DPoP
     /// <c>htm</c>) that match the inbound method byte-exact rather than assuming a fixed
     /// value per endpoint.
     /// </summary>

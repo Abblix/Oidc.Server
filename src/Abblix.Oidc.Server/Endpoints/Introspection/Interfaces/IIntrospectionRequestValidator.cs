@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 
 /// <summary>
-/// Authenticates the calling client (RFC 7662 §2.1, "the protected resource calls the
+/// Authenticates the calling client (RFC 7662 section 2.1, "the protected resource calls the
 /// introspection endpoint using an HTTP request") and validates the supplied <c>token</c>.
 /// Implementations are expected to coerce token problems (expired, signed by a different
 /// issuer, audience mismatch, issued to another client) into a non-disclosing

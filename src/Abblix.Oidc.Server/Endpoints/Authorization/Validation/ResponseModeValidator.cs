@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
 /// Verifies that an explicit <c>response_mode</c> is compatible with the OAuth 2.0 flow
-/// derived from <c>response_type</c> (OAuth 2.0 Multiple Response Types §2.1, OAuth 2.0
+/// derived from <c>response_type</c> (OAuth 2.0 Multiple Response Types section 2.1, OAuth 2.0
 /// Form Post Response Mode). For the authorization-code flow any of <c>query</c>,
 /// <c>fragment</c>, <c>form_post</c> is allowed; flows that issue tokens at the
 /// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
@@ -71,8 +71,8 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 	{
 		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
 		// is then subject to the same flow-compatibility rules as its plaintext counterpart - so query.jwt
-		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
-		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
+		// inherits query's prohibition for token-bearing flows (JARM section 2.3.1). The `jwt` shortcut resolves to
+		// query for the code flow and fragment otherwise (JARM section 2.3.4), both of which are acceptable.
 		if (responseMode.IsJwtMode())
 		{
 			responseMode = responseMode switch
@@ -91,7 +91,7 @@ public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger
 			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
 			// The none response type returns no credentials, so every delivery mode is safe - including
-			// query, which OAuth 2.0 Multiple Response Type Encoding Practices §4 makes its default.
+			// query, which OAuth 2.0 Multiple Response Type Encoding Practices section 4 makes its default.
 			FlowTypes.None => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
 			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
 		};

@@ -385,7 +385,7 @@ public static class IanaClaimTypes
     public const string Cnf = "cnf";
 
     /// <summary>
-    /// Member names of the <c>cnf</c> confirmation-method JSON object (RFC 7800 §3.1 / IANA
+    /// Member names of the <c>cnf</c> confirmation-method JSON object (RFC 7800 section 3.1 / IANA
     /// "JWT Confirmation Methods" registry). Each member encodes a different proof-of-possession
     /// binding scheme; multiple members can coexist when a deployment uses several schemes
     /// concurrently (e.g. mTLS for client authentication and DPoP for token binding).
@@ -394,13 +394,13 @@ public static class IanaClaimTypes
     {
         /// <summary>
         /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate that
-        /// authenticated the request (RFC 8705 §3.1). Locks an access token to the
+        /// authenticated the request (RFC 8705 section 3.1). Locks an access token to the
         /// certificate the client presented at the token endpoint via mutual TLS.
         /// </summary>
         public const string CertificateSha256Thumbprint = "x5t#S256";
 
         /// <summary>
-        /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 §6.1).
+        /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 section 6.1).
         /// Locks an access token to the specific proof-of-possession key the client
         /// demonstrated control of when the token was issued.
         /// </summary>

@@ -55,7 +55,7 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
-    /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 §3). Enforced by
+    /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
     /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
@@ -69,9 +69,9 @@ public sealed record SecurityProfileRequirements
     public bool RequireCodeResponseTypeOnly { get; init; }
 
     /// <summary>
-    /// The profile requires strict RFC 9101 §6.3 request-object processing: only the parameters inside the
+    /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
     /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
-    /// Core §6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
+    /// Core section 6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
     /// Enforced by <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     public bool RequireStrictRequestObjectProcessing { get; init; }

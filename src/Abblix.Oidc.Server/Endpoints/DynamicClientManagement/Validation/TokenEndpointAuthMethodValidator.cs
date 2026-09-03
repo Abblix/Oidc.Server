@@ -14,7 +14,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates that the requested <c>token_endpoint_auth_method</c> (RFC 7591 §2) is one this
+/// Validates that the requested <c>token_endpoint_auth_method</c> (RFC 7591 section 2) is one this
 /// server announces in <c>token_endpoint_auth_methods_supported</c> on its discovery document.
 /// </summary>
 /// <param name="clientAuthenticator">Source of supported client authentication methods.</param>

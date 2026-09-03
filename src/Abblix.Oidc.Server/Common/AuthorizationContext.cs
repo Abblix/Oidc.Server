@@ -123,7 +123,7 @@ public record AuthorizationContext
     /// <summary>
     /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
     /// for mutual TLS client authentication. When present, access tokens carry a confirmation
-    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 §3.1).
+    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 section 3.1).
     /// </summary>
     public string? CertificateSha256Thumbprint { get; init; }
 
@@ -145,7 +145,7 @@ public record AuthorizationContext
 
     /// <summary>
     /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
-    /// bound to this authorization (RFC 9449 §6.1). When present, access tokens carry a
+    /// bound to this authorization (RFC 9449 section 6.1). When present, access tokens carry a
     /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the
     /// specific key the client demonstrated control of at the token endpoint.
     /// </summary>
@@ -193,7 +193,7 @@ public record AuthorizationContext
     public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>
-    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// RFC 8693 section 4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
     /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
     /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
     /// non-Token-Exchange grants.
@@ -201,7 +201,7 @@ public record AuthorizationContext
     public JsonObject? Actor { get; init; }
 
     /// <summary>
-    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// RFC 8693 section 2.1 <c>audience</c> request parameter passed through to the issued token. Logical
     /// names of the relying party for which the requested token is intended. Distinct from
     /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
     /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.

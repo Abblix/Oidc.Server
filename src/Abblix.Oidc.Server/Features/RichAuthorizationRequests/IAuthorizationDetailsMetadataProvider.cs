@@ -19,7 +19,7 @@ public interface IAuthorizationDetailsMetadataProvider
     /// <summary>
     /// The set of authorization-detail <c>type</c> values this server's host has registered
     /// validators for, suitable for the discovery field
-    /// <c>authorization_details_types_supported</c> per RFC 9396 §10. Returns <c>null</c> when
+    /// <c>authorization_details_types_supported</c> per RFC 9396 section 10. Returns <c>null</c> when
     /// no per-type validators are registered so the discovery emitter omits the field per
     /// OIDC convention (absent = unsupported, not the empty array).
     /// </summary>

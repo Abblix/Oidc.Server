@@ -25,7 +25,7 @@ public static class HttpServerUtility
 	/// </remarks>
 	[Obsolete(
 		"Use System.Buffers.Text.Base64Url.DecodeFromChars instead. " +
-		"UrlTokenDecode accepts characters outside the strict RFC 7515 §3 base64url alphabet " +
+		"UrlTokenDecode accepts characters outside the strict RFC 7515 section 3 base64url alphabet " +
 		"('+', '/', '=' from standard base64), so two cosmetically different encodings of the " +
 		"same payload decode to the same bytes. That breaks identity-of-bytes checks (replay " +
 		"caches keyed by full JWT, jti hashes, at_hash binding). Base64Url.DecodeFromChars is " +
@@ -73,7 +73,7 @@ public static class HttpServerUtility
 		"Use System.Buffers.Text.Base64Url.EncodeToString instead. " +
 		"For encode-with-length use Base64Url.EncodeToString(input.AsSpan(0, length)). " +
 		"Base64Url.EncodeToString is the BCL primitive on net9.0+ and matches the strict " +
-		"RFC 7515 §3 contract directly; this wrapper accepts a nullable byte[] for symmetry " +
+		"RFC 7515 section 3 contract directly; this wrapper accepts a nullable byte[] for symmetry " +
 		"with UrlTokenDecode and exists only to bridge the net8.0 target. It will be removed " +
 		"when net8.0 reaches end-of-life on 2026-11-10.")]
 	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",

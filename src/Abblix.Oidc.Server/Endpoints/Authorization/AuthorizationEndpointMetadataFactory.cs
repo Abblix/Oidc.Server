@@ -27,7 +27,7 @@ public static class AuthorizationEndpointMetadataFactory
 	/// <returns>The metadata advertised at the discovery endpoint.</returns>
 	public static AuthorizationEndpointMetadata Create(IEnumerable<IAuthorizationResponseBuilder> responseBuilders)
 	{
-		// RFC 6749 §3.1.1 declares response_type values case-sensitive; OIDC Core §3 inherits the same rules.
+		// RFC 6749 section 3.1.1 declares response_type values case-sensitive; OIDC Core section 3 inherits the same rules.
 		// Ordinal comparison so a host-supplied builder declaring a non-canonical case (e.g. "Code") is treated
 		// as an unsupported response type rather than silently merged with the spec-defined "code".
 		var supportedResponseTypes = new HashSet<string>(StringComparer.Ordinal);

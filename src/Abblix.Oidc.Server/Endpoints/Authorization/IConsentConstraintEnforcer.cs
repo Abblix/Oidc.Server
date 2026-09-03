@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// the set granted by <see cref="IUserConsentsProvider"/> MUST be a subset of what the
 /// authorization request carried. This mirrors the strictly narrowing-only
 /// <see cref="Abblix.Oidc.Server.Endpoints.Token.Interfaces.ITokenAuthorizationContextEvaluator"/> at
-/// the token endpoint (RFC 8707 §2.2), giving the authorize-time consent path the same guarantee.
+/// the token endpoint (RFC 8707 section 2.2), giving the authorize-time consent path the same guarantee.
 /// </summary>
 /// <remarks>
 /// Violating <c>granted ⊆ requested</c> is never a protocol-level condition: the consent decision
@@ -51,7 +51,7 @@ public interface IConsentConstraintEnforcer
     /// second entry of its own type means.
     /// </remarks>
     /// <remarks>
-    /// RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing of that one", so the
+    /// RFC 9396 section 6.1 defines no universal comparator for "is this entry a narrowing of that one", so the
     /// per-type validator owns that decision - and a normalising validator expresses it by RETURNING
     /// a modified entry rather than by failing. The value that comes back is therefore the decision
     /// itself, and the caller emits it; emitting what went in instead would put content in the token

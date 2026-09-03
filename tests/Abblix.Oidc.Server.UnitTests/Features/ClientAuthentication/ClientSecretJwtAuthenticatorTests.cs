@@ -216,7 +216,7 @@ public class ClientSecretJwtAuthenticatorTests
 
     /// <summary>
     /// Verifies authentication is rejected when the assertion's algorithm does not match the
-    /// client's registered token_endpoint_auth_signing_alg (OIDC Core §9 / RFC 7591): the client
+    /// client's registered token_endpoint_auth_signing_alg (OIDC Core section 9 / RFC 7591): the client
     /// registered HS384 but the assertion is signed with HS256.
     /// </summary>
     [Fact]
@@ -453,7 +453,7 @@ public class ClientSecretJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Verifies authentication is rejected when the assertion has no jti. OpenID Connect Core §9
+    /// Verifies authentication is rejected when the assertion has no jti. OpenID Connect Core section 9
     /// makes jti REQUIRED ("A unique identifier for the token, which can be used to prevent reuse
     /// of the token"); without it the assertion is replayable within its expiry window.
     /// </summary>

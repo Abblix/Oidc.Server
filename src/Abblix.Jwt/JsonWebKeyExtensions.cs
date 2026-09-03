@@ -71,7 +71,7 @@ public static class JsonWebKeyExtensions
 
 	/// <summary>
 	/// Derives the JWK <c>use</c> value from a certificate's Key Usage extension. A certificate that permits both
-	/// signing and encryption maps to no <c>use</c> (<c>null</c>): RFC 7517 §4.2 makes <c>use</c> a single value,
+	/// signing and encryption maps to no <c>use</c> (<c>null</c>): RFC 7517 section 4.2 makes <c>use</c> a single value,
 	/// so an unrestricted key is expressed by omitting <c>use</c>, never by a multi-valued string. A certificate
 	/// with no Key Usage extension defaults to signing.
 	/// </summary>
@@ -92,7 +92,7 @@ public static class JsonWebKeyExtensions
 
 		return (sig, enc) switch
 		{
-			(true, true) => null, // permits both: omit use per RFC 7517 §4.2, never a multi-valued "sig enc"
+			(true, true) => null, // permits both: omit use per RFC 7517 section 4.2, never a multi-valued "sig enc"
 			(true, false) => PublicKeyUsages.Signature,
 			(false, true) => PublicKeyUsages.Encryption,
 			_ => defaultUsage,

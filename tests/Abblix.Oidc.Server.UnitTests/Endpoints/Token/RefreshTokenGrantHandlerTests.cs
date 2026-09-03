@@ -50,7 +50,7 @@ public class RefreshTokenGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: a token request without the required refresh_token parameter is the caller's
+    /// RFC 6749 section 5.2: a token request without the required refresh_token parameter is the caller's
     /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]

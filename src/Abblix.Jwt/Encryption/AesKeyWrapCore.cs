@@ -10,22 +10,22 @@ using System.Security.Cryptography;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// The RFC 3394 §2.2 wrapping rounds, shared by plain AES Key Wrap (<see cref="AesKeyWrap"/>, initial register the
+/// The RFC 3394 section 2.2 wrapping rounds, shared by plain AES Key Wrap (<see cref="AesKeyWrap"/>, initial register the
 /// fixed A6A6... value) and AES Key Wrap with Padding (<see cref="Rfc5649KeyWrap"/>, initial register the RFC 5649
 /// Alternative Initial Value). Both wrap constructions differ only in that initial register and the check applied to
 /// it after unwrapping; the six-round transformation over the register and the data semiblocks is identical, so it
-/// lives here once. Correctness of the shared rounds is pinned twice over - by the RFC 3394 §4 vectors through
-/// <c>AesKeyWrapTests</c> and by the RFC 5649 §4 vectors through <c>AesKeyWrapPaddedTests</c>.
+/// lives here once. Correctness of the shared rounds is pinned twice over - by the RFC 3394 section 4 vectors through
+/// <c>AesKeyWrapTests</c> and by the RFC 5649 section 4 vectors through <c>AesKeyWrapPaddedTests</c>.
 /// </summary>
 internal static class AesKeyWrapCore
 {
     private const int SemiblockSize = 8;
 
-    // RFC 3394 §2.2.1: the wrapping is exactly six rounds over all blocks; unwrapping runs the same six in reverse.
+    // RFC 3394 section 2.2.1: the wrapping is exactly six rounds over all blocks; unwrapping runs the same six in reverse.
     private const int Rounds = 6;
 
     /// <summary>
-    /// Applies the RFC 3394 §2.2.1 six-round wrapping in place over <paramref name="state"/>, laid out as the
+    /// Applies the RFC 3394 section 2.2.1 six-round wrapping in place over <paramref name="state"/>, laid out as the
     /// integrity register A in the first semiblock followed by the <paramref name="n"/> data semiblocks R[1..n].
     /// </summary>
     public static void Wrap(Aes aes, byte[] state, int n)
@@ -52,7 +52,7 @@ internal static class AesKeyWrapCore
     }
 
     /// <summary>
-    /// Applies the RFC 3394 §2.2.2 inverse of <see cref="Wrap"/> in place over <paramref name="state"/>, leaving the
+    /// Applies the RFC 3394 section 2.2.2 inverse of <see cref="Wrap"/> in place over <paramref name="state"/>, leaving the
     /// recovered integrity register in the first semiblock and the recovered data in R[1..n].
     /// </summary>
     public static void Unwrap(Aes aes, byte[] state, int n)
@@ -78,7 +78,7 @@ internal static class AesKeyWrapCore
         }
     }
 
-    // XORs the big-endian step counter into the low-order bytes of the 64-bit register (RFC 3394 §2.2.1 step 2).
+    // XORs the big-endian step counter into the low-order bytes of the 64-bit register (RFC 3394 section 2.2.1 step 2).
     private static void XorCounter(Span<byte> register, uint t)
     {
         for (var k = register.Length - 1; t != 0; k--, t >>= 8)

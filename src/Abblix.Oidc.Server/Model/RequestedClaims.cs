@@ -32,7 +32,7 @@ public record RequestedClaims
     public Dictionary<string, RequestedClaimDetails>? IdToken { get; init; }
 
     /// <summary>
-    /// Wire-level member names of the OIDC Core 1.0 §5.5 <c>claims</c> request parameter
+    /// Wire-level member names of the OIDC Core 1.0 section 5.5 <c>claims</c> request parameter
     /// (the top-level <c>userinfo</c> / <c>id_token</c> objects within it).
     /// </summary>
     public static class Parameters

@@ -175,7 +175,7 @@ public class AuthorizationResponseFormatter(
         Code = success.Code,
         TokenType = success.TokenType,
         AccessToken = success.AccessToken?.EncodedJwt,
-        // RFC 6749 §4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from
+        // RFC 6749 section 4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from
         // the authorization endpoint (implicit/hybrid). Derived from the issued token's own
         // iat/exp pair, so the advertised lifetime always matches the token itself.
         ExpiresIn = success.AccessToken is { Token.Payload: { ExpiresAt: { } expiresAt, IssuedAt: { } issuedAt } }

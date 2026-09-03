@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// Performs the storage-level deregistration of a client through the configured
-/// <see cref="IClientInfoManager"/> per RFC 7592 §2.3.
+/// <see cref="IClientInfoManager"/> per RFC 7592 section 2.3.
 /// </summary>
 /// <param name="clientInfoManager">Store used to remove the client record.</param>
 /// <param name="registrationAccessTokenStore">Store holding the client's registration-token binding.</param>

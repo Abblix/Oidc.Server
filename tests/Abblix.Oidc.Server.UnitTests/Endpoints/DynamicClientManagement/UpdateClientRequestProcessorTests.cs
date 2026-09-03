@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 /// <summary>
 /// Verifies RFC 7592 client-update behavior: the update (a full replacement) re-persists the
 /// per-client scope set, and it rotates the registration access token's jti so previously issued
-/// tokens are invalidated (RFC 7592 §5).
+/// tokens are invalidated (RFC 7592 section 5).
 /// </summary>
 public class UpdateClientRequestProcessorTests
 {
@@ -82,7 +82,7 @@ public class UpdateClientRequestProcessorTests
     /// #27 regression: the update (a full replacement) must map the signed/encrypted response algorithms
     /// the register path maps, otherwise a resubmitted metadata set is silently reset to ClientInfo defaults
     /// (id_token → RS256, userinfo/introspection → none). A client registered with a non-default signing
-    /// algorithm would have its subsequent ID tokens fail signature validation after any update (RFC 7592 §2.2).
+    /// algorithm would have its subsequent ID tokens fail signature validation after any update (RFC 7592 section 2.2).
     /// </summary>
     [Fact]
     public async Task Update_PreservesSignedAndIntrospectionResponseAlgorithms()
@@ -120,7 +120,7 @@ public class UpdateClientRequestProcessorTests
     /// <summary>
     /// Verifies the update rotates the registration access token jti: a freshly generated id is
     /// recorded in the binding store and embedded in the issued token. Because the validator binds
-    /// the token to the stored jti, this invalidates every token issued before the update (RFC 7592 §5).
+    /// the token to the stored jti, this invalidates every token issued before the update (RFC 7592 section 5).
     /// </summary>
     [Fact]
     public async Task Update_RotatesRegistrationAccessTokenId()
@@ -148,7 +148,7 @@ public class UpdateClientRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 §3:
+    /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 section 3:
     /// the response must contain the full registered metadata (including DTO defaults), otherwise
     /// the client cannot confirm the result of the full-replacement update.
     /// </summary>

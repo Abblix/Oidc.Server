@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.PushedAuthorization;
 
 /// <summary>
 /// Unit tests for <see cref="PushedAuthorizationRequestProcessorDecorator"/> verifying single-use
-/// enforcement of a pushed authorization <c>request_uri</c> per RFC 9126 §6.
+/// enforcement of a pushed authorization <c>request_uri</c> per RFC 9126 section 6.
 /// </summary>
 public class PushedAuthorizationRequestProcessorDecoratorTests
 {

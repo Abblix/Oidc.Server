@@ -67,7 +67,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.Equal(3, responseJwt.Split('.').Length);
         var payload = OidcFlows.DecodeJwtPayload(responseJwt);
 
-        // JARM §2.1 mandated claims, plus the authorization response packed inside the JWT (not on the wire).
+        // JARM section 2.1 mandated claims, plus the authorization response packed inside the JWT (not on the wire).
         Assert.Equal(
             discovery[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>().TrimEnd('/'),
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
@@ -99,7 +99,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
 
         response.EnsureSuccessStatusCode();
 
-        // RFC 6749 §5.1: the token response MUST carry Cache-Control: no-store. The adapter applies it through
+        // RFC 6749 section 5.1: the token response MUST carry Cache-Control: no-store. The adapter applies it through
         // OidcResults.WithNoCacheHeaders rather than MVC response filters.
         Assert.True(response.Headers.CacheControl?.NoStore,
             $"expected Cache-Control: no-store, got '{response.Headers.CacheControl}'");
@@ -136,7 +136,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.Contains(TestConstants.RedirectUri, html);
         Assert.Contains(state, html);
 
-        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 §4.16).
+        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 section 4.16).
         Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var csp));
         Assert.Contains("frame-ancestors 'none'", csp);
         Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));

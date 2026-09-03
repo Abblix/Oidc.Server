@@ -249,7 +249,7 @@ public class JweKeyManagementInteropTests
 	}
 
 	/// <summary>
-	/// The RFC 3394 wrap algorithm behind each ECDH-ES key-wrapping variant, per RFC 7518 §4.6:
+	/// The RFC 3394 wrap algorithm behind each ECDH-ES key-wrapping variant, per RFC 7518 section 4.6:
 	/// the derived key is used as the KEK for the corresponding "A*KW" algorithm.
 	/// </summary>
 	private static string ToKeyWrapAlgorithm(string keyEncAlg) => keyEncAlg switch

@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
 /// Unit tests for the composite <see cref="IAuthorizationDetailsPolicy"/> registered via
-/// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 §5 unknown-type
+/// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 section 5 unknown-type
 /// rejection, per-type-validator failure propagation, and the graceful-degradation contract
 /// (server boots cleanly with zero per-type validators registered).
 /// </summary>
@@ -63,7 +63,7 @@ public class AuthorizationDetailsPolicyTests
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        // RFC 9396 §2: the 'type' member is required. Entry without it must reject.
+        // RFC 9396 section 2: the 'type' member is required. Entry without it must reject.
         var raw = new JsonArray(new JsonObject());
 
         var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
@@ -291,7 +291,7 @@ public class AuthorizationDetailsPolicyTests
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 §7.1 validator-side mutation pipeline. Per-type validators see
+    // RFC 9396 section 7.1 validator-side mutation pipeline. Per-type validators see
     // one entry at a time and may narrow or normalise it; mutations propagate
     // through ApplyAsync's rebuild from the validated typed list. Cross-entry
     // policy (drop-entry, total-amount cap across the whole list) is the
@@ -408,7 +408,7 @@ public class AuthorizationDetailsPolicyTests
     [Fact]
     public async Task ApplyGrantedAsync_uses_the_overridden_granted_phase()
     {
-        // RFC 9396 §7.1 enrichment: the same entry that must be refused from a client is the one the
+        // RFC 9396 section 7.1 enrichment: the same entry that must be refused from a client is the one the
         // consent decision produces, so the two phases have to be able to disagree.
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
@@ -567,7 +567,7 @@ public class AuthorizationDetailsPolicyTests
     }
 
     /// <summary>
-    /// An enrichable type, in the shape of RFC 9396 §7.1 Figures 16 and 17: the client sends empty
+    /// An enrichable type, in the shape of RFC 9396 section 7.1 Figures 16 and 17: the client sends empty
     /// placeholders, and the server writes the identifiers the user picked into them.
     /// </summary>
     private sealed class EnrichableAccountValidator : IAuthorizationDetailValidator

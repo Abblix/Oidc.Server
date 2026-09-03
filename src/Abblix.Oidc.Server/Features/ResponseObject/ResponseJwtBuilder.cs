@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
 /// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
 /// response JWT and hands it to <see cref="IClientJwtFormatter"/> for signing and - when the client registered an
-/// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM §2.2).
+/// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM section 2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
@@ -68,7 +68,7 @@ public class ResponseJwtBuilder(
                 token.Payload[name] = value;
         }
 
-        // JARM §2.2 / §3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
+        // JARM section 2.2 / section 3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
         // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted.
         return await clientJwtFormatter.FormatAsync(
             token,

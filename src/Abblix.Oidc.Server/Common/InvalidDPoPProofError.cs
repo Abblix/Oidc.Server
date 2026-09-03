@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Subtype of <see cref="OidcError"/> tagging an RFC 9449 §7.1 DPoP proof rejection at a
+/// Subtype of <see cref="OidcError"/> tagging an RFC 9449 section 7.1 DPoP proof rejection at a
 /// protected endpoint (UserInfo, introspection, revocation). The typed marker lets the
 /// response formatter pattern-match deterministically and emit the
 /// <c>WWW-Authenticate: DPoP error="invalid_dpop_proof"</c> challenge instead of a Bearer

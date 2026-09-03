@@ -16,7 +16,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Validates the <c>id_token_hint</c> parameter (OpenID Connect RP-Initiated Logout 1.0 §2):
+/// Validates the <c>id_token_hint</c> parameter (OpenID Connect RP-Initiated Logout 1.0 section 2):
 /// verifies signature/issuer/audience but deliberately accepts expired tokens (since the
 /// hint's role is to identify a no-longer-active session), then either populates
 /// <c>ClientId</c> from the token's audience when the request omitted it, or asserts that

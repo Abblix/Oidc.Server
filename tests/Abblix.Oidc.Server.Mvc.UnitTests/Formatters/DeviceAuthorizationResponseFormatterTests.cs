@@ -18,7 +18,7 @@ using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
 /// <summary>
-/// Unit tests for <see cref="DeviceAuthorizationResponseFormatter"/> verifying the RFC 8628 §3.2
+/// Unit tests for <see cref="DeviceAuthorizationResponseFormatter"/> verifying the RFC 8628 section 3.2
 /// response shape, in particular that verification_uri_complete carries the user code so capable
 /// devices can render a direct link or QR code.
 /// </summary>

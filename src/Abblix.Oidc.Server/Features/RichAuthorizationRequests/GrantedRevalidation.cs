@@ -37,7 +37,7 @@ internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 /// without letting them change it.
 /// </summary>
 /// <remarks>
-/// The comparison the out-of-band flows can make on their own is by type, because RFC 9396 §6.1 defines no
+/// The comparison the out-of-band flows can make on their own is by type, because RFC 9396 section 6.1 defines no
 /// standardized way to compare two arbitrary entries and says the definition of the type owns that
 /// decision. A host that raises an amount inside an entry of a type the request did ask for therefore
 /// passes every type check there is. Only the validator for that type can refuse it.
@@ -121,15 +121,15 @@ internal static class GrantedRevalidation
     /// The refusal, with the code RFC 9396 registers for it.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §14.6 registers <c>invalid_authorization_details</c> with the token endpoint among its
-    /// usage locations, and points its Reference at §5, which is the requirement being enforced here: the
+    /// RFC 9396 section 14.6 registers <c>invalid_authorization_details</c> with the token endpoint among its
+    /// usage locations, and points its Reference at section 5, which is the requirement being enforced here: the
     /// authorization server MUST refuse authorization details not conforming to the respective type
     /// definition. Applying that requirement again when a stored grant is spent is this library's choice
-    /// about WHEN, not something the specification asks for - §6 covers a different case, the
+    /// about WHEN, not something the specification asks for - section 6 covers a different case, the
     /// <c>authorization_details</c> token request parameter, and nothing is requested on these flows.
     ///
     /// It is also the only available code that is TRUE on the flows that answer a waiting client - CIBA
-    /// Core §11 defines <c>access_denied</c> as "The end-user denied the authorization request", and here
+    /// Core section 11 defines <c>access_denied</c> as "The end-user denied the authorization request", and here
     /// the end user approved while the deployment refused. The push mode answers nobody and discards this
     /// code, which is why keeping poll and ping on the redemption path matters: they are the ones that can
     /// still be told the truth.

@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 /// indicating the permissions requested by the client.</param>
 /// <param name="Resources">The set of resources requested as part of the authorization process,
 /// specifying the accessible resources for the client.</param>
-/// <param name="AuthorizationDetails">RFC 9396 §3 Rich Authorization Requests array
+/// <param name="AuthorizationDetails">RFC 9396 section 3 Rich Authorization Requests array
 /// (already passed the per-client allowlist and per-type validator dispatch) which the
 /// downstream processor threads onto the issued grant's AuthorizationContext byte-exact.</param>
 public record ValidBackChannelAuthenticationRequest(
