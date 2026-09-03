@@ -40,6 +40,37 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
 
     /// <summary>
+    /// Answers whether the assertion's audience is one the profile governing this client admits.
+    /// </summary>
+    /// <remarks>
+    /// FAPI 2.0 section 5.3.2.1 narrows what may stand there: a server held to the profile "shall
+    /// only accept its issuer identifier value (as defined in [RFC8414]) as a string". Both halves
+    /// matter. The value must be the issuer rather than any address this server answers on, and it
+    /// must be alone rather than one entry among several, so an assertion minted for a different
+    /// recipient cannot be replayed here by naming both. Outside the profile the wider reading the
+    /// underlying specification permits is left untouched, which is why this answers true there
+    /// rather than checking anything.
+    /// </remarks>
+    private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
+    {
+        if (!SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+                .RequireIssuerAudienceInClientAssertion)
+        {
+            return true;
+        }
+
+        var issuerIdentifier = issuerProvider.GetIssuer();
+        var audiences = token.Payload.Audiences.ToArray();
+        if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
+        {
+            return true;
+        }
+
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, audiences, issuerIdentifier);
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
     /// </summary>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
@@ -124,22 +155,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        // FAPI 2.0 section 5.3.2.1 narrows what may stand in the audience: a server held to it
-        // "shall only accept its issuer identifier value (as defined in [RFC8414]) as a string".
-        // Both halves matter. The value must be the issuer rather than any address this server
-        // answers on, and it must be alone rather than one entry among several, so an assertion
-        // minted for a different recipient cannot be replayed here by naming both. Outside the
-        // profile the wider reading the underlying specification permits is left untouched.
-        if (SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
-                .RequireIssuerAudienceInClientAssertion)
+        if (!AudienceSatisfiesTheProfile(token, clientInfo))
         {
-            var issuerIdentifier = issuerProvider.GetIssuer();
-            var audiences = token.Payload.Audiences.ToArray();
-            if (audiences is not [var onlyAudience] || onlyAudience != issuerIdentifier)
-            {
-                LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, audiences, issuerIdentifier);
-                return null;
-            }
+            return null;
         }
 
         // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique

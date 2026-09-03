@@ -284,6 +284,7 @@ internal static class LogEvents
             private const int Base = 3090;
 
             public const int RegistrationCannotSatisfyProfile = Base + 1;
+            public const int ProfileIsNotOneThisServerDefines = Base + 2;
         }
     }
 

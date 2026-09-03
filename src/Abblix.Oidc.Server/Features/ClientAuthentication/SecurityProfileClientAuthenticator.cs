@@ -51,6 +51,17 @@ internal partial class SecurityProfileClientAuthenticator(
 
         var profile = clientInfo.SecurityProfile ?? options.Value.DefaultSecurityProfile;
 
+        // A client arrives from a store the HOST writes, so its profile is not covered by the
+        // startup check over the configured clients: a value outside the enum reaches here, and
+        // resolving one throws. Refusing it is the answer rather than letting the exception out,
+        // because the alternative is a 500 from the token endpoint - the failure this whole class
+        // exists to remove - for a client the server simply cannot decide about.
+        if (!Enum.IsDefined(profile))
+        {
+            LogProfileIsNotOneThisServerDefines(clientInfo.ClientId, (int)profile);
+            return null;
+        }
+
         var violations = SecurityProfileConsistency.FindViolations(
             clientInfo.EffectiveResponseTypes,
             clientInfo.TokenEndpointAuthMethod,
@@ -72,4 +83,11 @@ internal partial class SecurityProfileClientAuthenticator(
         string ClientId,
         ClientSecurityProfile Profile,
         IReadOnlyList<string> Violations);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.ProfileIsNotOneThisServerDefines,
+        Level = LogLevel.Error,
+        Message = "The client {ClientId} is held to security profile {Profile}, which this server "
+                  + "does not define, so nothing can decide what it requires")]
+    private partial void LogProfileIsNotOneThisServerDefines(string ClientId, int Profile);
 }

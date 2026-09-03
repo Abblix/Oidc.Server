@@ -89,6 +89,27 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// A store the HOST writes can hand back a profile value the enum does not define - the startup
+    /// check covers the configured clients and cannot reach a store. Resolving such a value throws,
+    /// so the decorator refuses instead: an exception here would be a 500 from the token endpoint,
+    /// which is the failure this class exists to remove.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull()
+    {
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            SecurityProfile = (ClientSecurityProfile)7,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
     /// A registration the profile admits passes through untouched, which is what keeps the refusals
     /// above from being a decorator that refuses everything.
     /// </summary>
