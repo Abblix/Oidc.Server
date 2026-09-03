@@ -29,15 +29,39 @@ public static class SecurityProfileConsistency
     /// rather than merely tightened.
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
     /// <param name="profile">The effective profile governing the client.</param>
     public static IReadOnlyList<string> FindViolations(
         IReadOnlyList<string[]> allowedResponseTypes,
+        string tokenEndpointAuthMethod,
         ClientSecurityProfile profile)
     {
-        if (!SecurityProfileRequirements.Resolve(profile).RequireCodeResponseTypeOnly)
-            return [];
-
+        var requirements = SecurityProfileRequirements.Resolve(profile);
         var violations = new List<string>();
+
+        // RFC 6749 draws the line at whether the client can hold a credential at all, and the
+        // registered authentication method is where that shows: a client authenticating with
+        // nothing IS the public client the profile excludes.
+        if (requirements.RequireConfidentialClient &&
+            tokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+        {
+            violations.Add(
+                "the FAPI 2.0 Security Profile admits confidential clients only, " +
+                "but the client authenticates with none at the token endpoint");
+        }
+
+        // Both surviving methods prove possession of a key. Every other method the server offers
+        // proves possession of a shared secret, which is what the profile removes.
+        if (requirements.RequireKeyBasedClientAuthentication &&
+            !KeyBasedAuthenticationMethods.Contains(tokenEndpointAuthMethod))
+        {
+            violations.Add(
+                "the FAPI 2.0 Security Profile requires client authentication by mutual TLS or a " +
+                $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
+        }
+
+        if (!requirements.RequireCodeResponseTypeOnly)
+            return violations;
 
         // A single-element "code" entry, matched case-insensitively to stay consistent with the
         // token-bearing check below (both ultimately use HasFlag's OrdinalIgnoreCase comparison).
@@ -59,4 +83,16 @@ public static class SecurityProfileConsistency
 
         return violations;
     }
+
+    /// <summary>
+    /// The client authentication methods that prove possession of a key rather than of a shared
+    /// secret: mutual TLS in both its forms (RFC 8705 section 2) and the private key JWT assertion
+    /// (OpenID Connect Core section 9).
+    /// </summary>
+    private static readonly string[] KeyBasedAuthenticationMethods =
+    [
+        ClientAuthenticationMethods.TlsClientAuth,
+        ClientAuthenticationMethods.SelfSignedTlsClientAuth,
+        ClientAuthenticationMethods.PrivateKeyJwt,
+    ];
 }

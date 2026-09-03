@@ -26,12 +26,20 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
     {
         var failures = new List<string>();
 
+        // A profile that removes a control without the controls that replace it is a defect in this
+        // library rather than in the host's configuration, so it is checked here, where startup can
+        // still refuse, instead of being left to whoever reviews the next profile.
+        failures.AddRange(SecurityProfileRequirements.FindUnreplacedRelaxations());
+
         foreach (var client in options.Clients)
         {
             var effectiveProfile = client.SecurityProfile ?? options.DefaultSecurityProfile;
 
             foreach (var violation in
-                     SecurityProfileConsistency.FindViolations(client.EffectiveResponseTypes, effectiveProfile))
+                     SecurityProfileConsistency.FindViolations(
+                         client.EffectiveResponseTypes,
+                         client.TokenEndpointAuthMethod,
+                         effectiveProfile))
             {
                 failures.Add($"Client '{client.ClientId}': {violation}.");
             }

@@ -80,6 +80,7 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
             ClientSecurityProfile.Fapi2);
 
         Assert.Empty(violations);
@@ -94,6 +95,7 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [["Code"]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
             ClientSecurityProfile.Fapi2);
 
         Assert.Empty(violations);
@@ -104,6 +106,7 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
             ClientSecurityProfile.Fapi2);
 
         Assert.Equal(2, violations.Count);
@@ -114,6 +117,7 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
             ClientSecurityProfile.Fapi2);
 
         // code is allowed, so only the implicit/hybrid violation remains.
@@ -125,6 +129,7 @@ public class SecurityProfileTests
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
             ClientSecurityProfile.None);
 
         Assert.Empty(violations);
@@ -141,6 +146,7 @@ public class SecurityProfileTests
                 {
                     SecurityProfile = ClientSecurityProfile.Fapi2,
                     AllowedResponseTypes = [[ResponseTypes.Code]],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
                 },
             ],
         };
@@ -240,5 +246,112 @@ public class SecurityProfileTests
         var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
 
         Assert.True(result.Succeeded);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.1: the server "shall only support confidential clients as defined in
+    /// [RFC6749]". A client authenticating with nothing at the token endpoint is the public client
+    /// that rule excludes, and the refusal has to reach it before it ever sends a request.
+    /// </summary>
+    [Fact]
+    public void FindViolations_Fapi2PublicClient_Violation()
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code]],
+            ClientAuthenticationMethods.None,
+            ClientSecurityProfile.Fapi2);
+
+        Assert.Contains(violations, violation => violation.Contains("confidential clients only"));
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.1 admits mutual TLS and the private key JWT assertion, both of which
+    /// prove possession of a key. Every method keyed on a shared secret is refused, whichever form
+    /// it takes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt)]
+    public void FindViolations_Fapi2SharedSecretAuthentication_Violation(string method)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code]],
+            method,
+            ClientSecurityProfile.Fapi2);
+
+        Assert.Contains(violations, violation => violation.Contains("mutual TLS or a private key JWT"));
+    }
+
+    /// <summary>
+    /// The two methods the profile admits pass, which is what keeps the refusal above from being a
+    /// check that refuses everything.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt)]
+    public void FindViolations_Fapi2KeyBasedAuthentication_NoViolations(string method)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code]],
+            method,
+            ClientSecurityProfile.Fapi2);
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// Neither new requirement fires without a profile, so a deployment that selects none keeps the
+    /// client configurations it already has.
+    /// </summary>
+    [Fact]
+    public void FindViolations_NoProfilePublicClient_NoViolations()
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code]],
+            ClientAuthenticationMethods.None,
+            ClientSecurityProfile.None);
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.1: the server "shall not use refresh token rotation except in
+    /// extraordinary circumstances". This is the one requirement that removes a control instead of
+    /// adding one.
+    /// </summary>
+    [Fact]
+    public void Fapi2_ForbidsRefreshTokenRotation()
+    {
+        Assert.True(SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2)
+            .ForbidRefreshTokenRotation);
+    }
+
+    /// <summary>
+    /// Removing rotation is sound only because the same profile requires the two controls that
+    /// stand in for it. This is the check that keeps that condition true as profiles are added or
+    /// edited, and it runs at startup rather than at review time.
+    /// </summary>
+    [Fact]
+    public void FindUnreplacedRelaxations_ShippedProfiles_None()
+    {
+        Assert.Empty(SecurityProfileRequirements.FindUnreplacedRelaxations());
+    }
+
+    /// <summary>
+    /// The remaining two requirements are read by services rather than by the consistency check, so
+    /// what is asserted here is that the profile carries them at all. A flag a profile sets and no
+    /// consumer reads would ship silently unenforced, which is what the enforcement tests in the
+    /// end-to-end suites answer for.
+    /// </summary>
+    [Fact]
+    public void Fapi2_CarriesTheRemainingRequirements()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2);
+
+        Assert.True(requirements.RequireConfidentialClient);
+        Assert.True(requirements.RequireKeyBasedClientAuthentication);
+        Assert.True(requirements.RequireIssuerAudienceInClientAssertion);
     }
 }

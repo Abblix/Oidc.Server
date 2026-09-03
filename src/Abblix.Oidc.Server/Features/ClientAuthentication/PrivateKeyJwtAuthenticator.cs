@@ -13,6 +13,9 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -23,10 +26,15 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
+/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
+/// <param name="options">Supplies the server-wide default security profile.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     IReplayCache replayCache,
-    IServiceProvider serviceProvider) : JwtAssertionAuthenticatorBase(logger, replayCache)
+    IServiceProvider serviceProvider,
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.

@@ -21,6 +21,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Common.Configuration;
+using System.Globalization;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -552,11 +556,127 @@ public class PrivateKeyJwtAuthenticatorTests
         Assert.Equal(ClientAuthenticationMethods.PrivateKeyJwt, methods[0]);
     }
 
+
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.1: a server held to the profile "shall only accept its issuer
+    /// identifier value (as defined in [RFC8414]) as a string in the aud claim received in client
+    /// authentication assertions". An assertion naming the token endpoint satisfies the wider
+    /// reading OpenID Connect Core permits and is refused here.
+    /// </summary>
+    [Theory]
+    [InlineData("https://issuer.example.com/connect/token")]
+    [InlineData("https://another-issuer.example.com")]
+    public async Task Fapi2AssertionAudienceIsNotTheIssuer_ShouldReturnNull(string audience)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-not-the-issuer",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Audiences = [audience];
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The issuer alone is accepted, which is what keeps the refusal above from being a check that
+    /// refuses every assertion.
+    /// </summary>
+    [Fact]
+    public async Task Fapi2AssertionAudienceIsTheIssuer_ShouldAuthenticate()
+    {
+        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-is-the-issuer",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Audiences = ["https://issuer.example.com"];
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// The issuer named alongside another audience is refused: the specification asks for the value
+    /// as a string, so an assertion minted for a different recipient cannot be replayed here by
+    /// naming both.
+    /// </summary>
+    [Fact]
+    public async Task Fapi2AssertionAudienceCarriesTheIssuerAmongOthers_ShouldReturnNull()
+    {
+        var (authenticator, mocks) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-among-others",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Audiences = ["https://issuer.example.com", "https://another.example.com"];
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Without the profile the wider reading stands, so an assertion naming the token endpoint keeps
+    /// working. This is what makes the three cases above statements about the profile rather than
+    /// about the authenticator.
+    /// </summary>
+    [Fact]
+    public async Task NoProfileAssertionAudienceIsTheTokenEndpoint_ShouldAuthenticate()
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-outside-the-profile",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Audiences = ["https://issuer.example.com/connect/token"];
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.NotNull(result);
+    }
+
     /// <summary>
     /// Creates a new instance of PrivateKeyJwtAuthenticator with mocked dependencies for testing.
     /// </summary>
     /// <returns>A tuple containing the authenticator instance and the mock objects.</returns>
-    private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
+    private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator(
+        ClientSecurityProfile profile = ClientSecurityProfile.None)
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
@@ -575,7 +695,9 @@ public class PrivateKeyJwtAuthenticatorTests
         var authenticator = new PrivateKeyJwtAuthenticator(
             logger.Object,
             replayCache.Object,
-            serviceProvider);
+            serviceProvider,
+            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
+            Options.Create(new OidcOptions { DefaultSecurityProfile = profile }));
 
         var mocks = new Mocks
         {

@@ -78,7 +78,17 @@ public class RefreshTokenService(
 		if (expiresAt < now)
 			return null;
 
-		if (!clientInfo.RefreshToken.AllowReuse &&
+		// FAPI 2.0 section 5.3.2.1 forbids rotation for a client held to it, because a confidential
+		// client with a sender-constrained token gains nothing from rotating while losing its session
+		// whenever it fails to store the token it was handed. The profile decides over the client's own
+		// setting here, which is the one place a profile removes a control rather than adding one; the
+		// two controls that make the removal sound are required by the same profile.
+		var rotates = !clientInfo.RefreshToken.AllowReuse &&
+		              !SecurityProfileRequirements
+		                  .For(clientInfo, options.Value.DefaultSecurityProfile)
+		                  .ForbidRefreshTokenRotation;
+
+		if (rotates &&
 		    refreshToken is { Payload: { JwtId: { } previousJwtId, ExpiresAt: { } previousExpiresAt } })
 		{
 			// Rotation marks the previous token Used ("superseded"), not Revoked ("killed"). A later

@@ -78,4 +78,14 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The client assertion jti {Jti} for {ClientId} has already been used; possible replay attack")]
     private partial void LogReplayDetected(string Jti, string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} carries {@Audiences} where the profile "
+                  + "governing it accepts the issuer identifier {IssuerIdentifier} alone")]
+    private partial void LogAudienceIsNotTheIssuerAlone(
+        string ClientId,
+        string[] Audiences,
+        string IssuerIdentifier);
 }
