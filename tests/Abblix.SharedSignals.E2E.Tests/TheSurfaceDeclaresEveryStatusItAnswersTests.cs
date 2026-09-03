@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Mime;
+using System.Text;
 using System.Net.Http.Json;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Infrastructure;
@@ -17,6 +19,7 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +49,12 @@ namespace Abblix.SharedSignals.E2E.Tests;
 /// <see cref="RefusingUpdates"/> is for - a store that takes every call except the write, so the retry
 /// loop ends with nothing written. Without it those answers could only be exempted by name, and a
 /// named exemption is where a declaration nobody drives goes to live.
+/// </para>
+/// <para>
+/// The statuses the FRAMEWORK answers are driven too - 415 to a wrong media type, 400 to a body that
+/// does not bind - rather than left out as "not this package's". A receiver meets them on these routes,
+/// so its client needs a branch for them whoever produced them, and the moment they are excused by
+/// category the excuse covers whatever else falls into it.
 /// </para>
 /// <para>
 /// What the drive cannot do is find a status nobody thought to reach: an answer neither driven nor
@@ -91,6 +100,17 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
                 .ToHashSet();
 
             var declared = DeclaredBy(method, pattern);
+            var published = PublishedBy(method, pattern);
+
+            // Attached and published are two facts. The first is what this file used to check alone,
+            // and it stays green over a declaration the description pipeline throws away.
+            var swallowed = declared.Except(published).Order().ToList();
+            if (swallowed.Count > 0)
+            {
+                disagreements.Add(
+                    $"{method} {pattern} declares {string.Join(", ", swallowed)} and publishes "
+                        + $"{string.Join(", ", published.Order())}");
+            }
 
             var undeclared = sent.Except(declared).Order().ToList();
             if (undeclared.Count > 0)
@@ -232,6 +252,30 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         store.Refuse = false;
 
+        // What the framework answers before this package's code runs. Driven rather than exempted:
+        // a body-bound route answers these to a caller who got the media type or the JSON wrong, and a
+        // status a receiver can meet is a status its client needs a branch for, whoever produced it.
+        foreach (var (method, pattern, path) in BodyBoundRoutes())
+        {
+            using (var wrongType = new HttpRequestMessage(new HttpMethod(method), path)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, MediaTypeNames.Text.Plain),
+            })
+            {
+                using var refused = await client.SendAsync(wrongType, ct);
+                answers.Add(new Answer(method, pattern, (int)refused.StatusCode));
+            }
+
+            using (var malformed = new HttpRequestMessage(new HttpMethod(method), path)
+            {
+                Content = new StringContent("{", Encoding.UTF8, MediaTypeNames.Application.Json),
+            })
+            {
+                using var refused = await client.SendAsync(malformed, ct);
+                answers.Add(new Answer(method, pattern, (int)refused.StatusCode));
+            }
+        }
+
         // Deletion last: every row above needs the stream.
         await Record("DELETE", StreamRoute, "/ssf/stream?stream_id=no-such-stream");
         await Record("DELETE", StreamRoute, "/ssf/stream");
@@ -287,6 +331,19 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
     private string _streamId = string.Empty;
 
+    /// <summary>The routes that bind a body, which is where the framework's own refusals live.</summary>
+    private List<(string Method, string Pattern, string Path)> BodyBoundRoutes() =>
+    [
+        ("POST", StreamRoute, "/ssf/stream"),
+        ("PATCH", StreamRoute, "/ssf/stream"),
+        ("PUT", StreamRoute, "/ssf/stream"),
+        ("POST", StatusRoute, "/ssf/status"),
+        ("POST", AddSubjectRoute, "/ssf/subjects:add"),
+        ("POST", RemoveSubjectRoute, "/ssf/subjects:remove"),
+        ("POST", VerifyRoute, "/ssf/verify"),
+        ("POST", PollRoute, $"/ssf/poll/{_streamId}"),
+    ];
+
     /// <summary>
     /// The routes this surface maps, as the pair a request is addressed by. Written out rather than
     /// read off the endpoint table, because the table is one of the two things being compared and a
@@ -307,6 +364,33 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         ("POST", PollRoute),
     ];
 
+    /// <summary>
+    /// The statuses a route publishes, taken from the API description the framework builds - which is
+    /// what an OpenAPI document is generated from, and therefore the only place the declaration becomes
+    /// something a client author can see.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT the endpoint's raw metadata. Metadata reaching the endpoint and metadata
+    /// surviving into a document are two facts, and the second is the one the ticket is about: a
+    /// response type the description pipeline discards leaves the endpoint carrying a declaration
+    /// nobody downstream ever reads, which reads exactly like a declaration that works.
+    /// </remarks>
+    private HashSet<int> PublishedBy(string method, string pattern)
+    {
+        var described = _descriptions
+            .SelectMany(group => group.Items)
+            .Where(item =>
+                string.Equals("/" + item.RelativePath?.Split('?')[0], pattern, StringComparison.Ordinal)
+                && string.Equals(item.HttpMethod, method, StringComparison.Ordinal))
+            .ToList();
+
+        // Not described is a failure rather than an empty answer, for the reason DeclaredBy states.
+        Assert.NotEmpty(described);
+
+        return [.. described.SelectMany(item => item.SupportedResponseTypes)
+            .Select(response => response.StatusCode)];
+    }
+
     /// <summary>The statuses a route declares, read back off its own metadata.</summary>
     private HashSet<int> DeclaredBy(string method, string pattern)
     {
@@ -324,6 +408,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
     private IReadOnlyList<Endpoint> _endpoints = [];
 
+    private IReadOnlyList<ApiDescriptionGroup> _descriptions = [];
+
     private sealed record Answer(string Method, string Pattern, int StatusCode);
 
     private async Task<WebApplication> StartAsync(
@@ -333,6 +419,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
+        builder.Services.AddEndpointsApiExplorer();
 
         builder.Services.AddSecurityEvents(o =>
             o.SigningKeySource = _ => Task.FromResult<JsonWebKey>(
@@ -363,6 +450,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         await app.StartAsync();
 
         _endpoints = app.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+        _descriptions = app.Services
+            .GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items;
         return app;
     }
 

@@ -135,8 +135,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
 
         group.MapPost(Routes.Stream, CreateStreamAsync)
             .RequiresScope(SsfScopes.Manage)
-            .Answers<StreamConfiguration>(StatusCodes.Status201Created)
-            .Answers(StatusCodes.Status400BadRequest, StatusCodes.Status409Conflict);
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status201Created)
+            .Answers(
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
 
         // The read is the one route whose success carries two shapes: the configuration when
         // "stream_id" names a stream, an array of them when it names none (SSF 1.0 Section 8.1.1.2).
@@ -148,19 +151,21 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
 
         group.MapPatch(Routes.Stream, UpdateStreamAsync)
             .RequiresScope(SsfScopes.Manage)
-            .Answers<StreamConfiguration>(StatusCodes.Status200OK)
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status200OK)
             .Answers(
                 StatusCodes.Status202Accepted,
                 StatusCodes.Status400BadRequest,
-                StatusCodes.Status404NotFound);
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
 
         group.MapPut(Routes.Stream, ReplaceStreamAsync)
             .RequiresScope(SsfScopes.Manage)
-            .Answers<StreamConfiguration>(StatusCodes.Status200OK)
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status200OK)
             .Answers(
                 StatusCodes.Status202Accepted,
                 StatusCodes.Status400BadRequest,
-                StatusCodes.Status404NotFound);
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
 
         group.MapDelete(Routes.Stream, DeleteStreamAsync)
             .RequiresScope(SsfScopes.Manage)
@@ -171,16 +176,17 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
 
         group.MapGet(Routes.Status, GetStatusAsync)
             .RequiresScope(SsfScopes.Read)
-            .Answers<StreamStatus>(StatusCodes.Status200OK)
+            .AnswersWithBody<StreamStatus>(StatusCodes.Status200OK)
             .Answers(StatusCodes.Status400BadRequest, StatusCodes.Status404NotFound);
 
         group.MapPost(Routes.Status, UpdateStatusAsync)
             .RequiresScope(SsfScopes.Manage)
-            .Answers<StreamStatus>(StatusCodes.Status200OK)
+            .AnswersWithBody<StreamStatus>(StatusCodes.Status200OK)
             .Answers(
                 StatusCodes.Status202Accepted,
                 StatusCodes.Status400BadRequest,
-                StatusCodes.Status404NotFound);
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
 
         // Adding a subject answers 200 with no body (SSF 1.0 Section 8.1.3.2), so the success is
         // declared as a status rather than as a shape.
@@ -190,27 +196,35 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
                 StatusCodes.Status200OK,
                 StatusCodes.Status400BadRequest,
                 StatusCodes.Status404NotFound,
-                StatusCodes.Status409Conflict);
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
 
         group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync)
             .RequiresScope(SsfScopes.Manage)
             .Answers(
                 StatusCodes.Status204NoContent,
+                StatusCodes.Status400BadRequest,
                 StatusCodes.Status404NotFound,
-                StatusCodes.Status409Conflict);
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
 
         group.MapPost(Routes.Verify, RequestVerificationAsync)
             .RequiresScope(SsfScopes.Manage)
             .Answers(
                 StatusCodes.Status204NoContent,
+                StatusCodes.Status400BadRequest,
                 StatusCodes.Status404NotFound,
                 StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType,
                 StatusCodes.Status429TooManyRequests);
 
         group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync)
             .RequiresScope(SsfScopes.Read)
-            .Answers<PollResponse>(StatusCodes.Status200OK)
-            .Answers(StatusCodes.Status404NotFound);
+            .AnswersWithBody<PollResponse>(StatusCodes.Status200OK)
+            .Answers(
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
 
         // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
         // and a receiver polls it for as long as the stream lives, so an address that does not lead back
@@ -715,23 +729,35 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// </summary>
     /// <remarks>
     /// Bodiless on purpose: the Stream Management API defines no error body - SSF 1.0 Section 8.1 gives
-    /// its outcomes as status codes and nothing else - so a refusal carries its explanation in the
-    /// <c>WWW-Authenticate</c> challenge. The overload taking a type is for the successes that do carry
-    /// one.
+    /// its outcomes as status codes and nothing else. <see cref="AnswersWithBody{TBody}"/> is for the
+    /// successes that do carry one.
+    /// <para>
+    /// Only THREE of the refusals say anything beyond their status. 400, 401 and 403 are built as a
+    /// challenge and carry a <c>WWW-Authenticate</c> line naming the reason; 202, 404, 409 and 429 go
+    /// through <see cref="Render{TBody}"/> as a bare status, and the description their
+    /// <c>ManagementResult</c> carried is dropped there - it exists for the operator's logs, not for
+    /// the wire. So a receiver diagnosing one of those four has the status and nothing else.
+    /// </para>
     /// </remarks>
     private static void Answers<TBuilder>(this TBuilder builder, params int[] statusCodes)
         where TBuilder : IEndpointConventionBuilder
     {
         foreach (var statusCode in statusCodes)
         {
-            builder.WithMetadata(new ProducesResponseTypeMetadata(statusCode));
+            // typeof(void), not the parameterless form. A response type whose Type is null is
+            // DISCARDED by the API description pipeline every OpenAPI generator reads, and the
+            // operation then falls back to an inferred 200 - so the declaration reaches the endpoint,
+            // reads correct at the call site, and publishes nothing. void is how the framework's own
+            // Produces(int) says "this status carries no body".
+            builder.WithMetadata(new ProducesResponseTypeMetadata(statusCode, typeof(void)));
         }
     }
 
     /// <summary>
     /// Records a status whose response carries a body, and the type of that body.
     /// </summary>
-    private static RouteHandlerBuilder Answers<TBody>(this RouteHandlerBuilder builder, int statusCode)
+    private static RouteHandlerBuilder AnswersWithBody<TBody>(
+        this RouteHandlerBuilder builder, int statusCode)
     {
         builder.WithMetadata(new ProducesResponseTypeMetadata(
             statusCode, typeof(TBody), [MediaTypeNames.Application.Json]));
