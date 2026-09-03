@@ -504,17 +504,43 @@ public class SecurityProfileTests
 
     /// <summary>
     /// A value the enum DOES define with no bundle declared is the other population: a mistake in
-    /// this file rather than data from a host, caught while the author is still here.
+    /// this file rather than data from a host, and it has to be loud while the author is still here.
+    /// It cannot be expressed through the enum, because every value that ships has a bundle, so the
+    /// bundle comes from the caller.
     /// </summary>
     [Fact]
     public void Resolve_DefinedProfileWithNoBundle_Throws()
     {
-        // Every defined value has a bundle today, so the case is expressed by the check itself:
-        // whatever the enum defines must resolve without falling through to the strictest fallback.
+        var error = Assert.Throws<InvalidOperationException>(
+            () => SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2, declared: null));
+
+        Assert.Contains(nameof(ClientSecurityProfile.Fapi2), error.Message);
+    }
+
+    /// <summary>
+    /// And the refusal is about the missing bundle rather than about the profile being unusual: a
+    /// defined value WITH one resolves to exactly it.
+    /// </summary>
+    [Fact]
+    public void Resolve_DefinedProfileWithABundle_ReturnsIt()
+    {
+        var declared = new SecurityProfileRequirements { RequirePkce = true };
+
+        Assert.Same(
+            declared,
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None, declared));
+    }
+
+    /// <summary>
+    /// Every profile that ships resolves, which is what keeps the refusal above from being a case
+    /// nobody meets: a value added to the enum without a bundle fails here and at startup.
+    /// </summary>
+    [Fact]
+    public void Resolve_EveryShippedProfile_Resolves()
+    {
         foreach (var profile in Enum.GetValues<ClientSecurityProfile>())
         {
-            var requirements = SecurityProfileRequirements.Resolve(profile);
-            Assert.NotNull(requirements);
+            Assert.NotNull(SecurityProfileRequirements.Resolve(profile));
         }
     }
 

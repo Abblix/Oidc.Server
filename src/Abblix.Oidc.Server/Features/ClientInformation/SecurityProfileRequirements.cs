@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// The bundle of controls a <see cref="ClientSecurityProfile"/> forces on a client, expressed as
 /// individual flags the request-pipeline validators consult. This is the single place the
 /// profile-to-controls mapping lives, so a validator never needs to know what "FAPI 2.0" means - it
-/// only reads the one flag it owns - and adding a future profile touches only <see cref="Resolve"/>.
+/// only reads the one flag it owns - and adding a future profile touches only <see cref="Resolve(ClientSecurityProfile)"/>.
 /// </summary>
 /// <remarks>
 /// A flag normally requires a control and never relaxes one, so a profile tightens a client and
@@ -204,14 +204,40 @@ public sealed record SecurityProfileRequirements
     /// nothing here can say what the value meant, and of the answers available only the strictest
     /// cannot quietly serve a client the deployment believed was constrained.
     /// </remarks>
-    public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile) => profile switch
+    public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile)
+        => Resolve(profile, Declared(profile));
+
+    /// <summary>
+    /// The decision the overload above makes, over a bundle supplied by the caller. Separate so a
+    /// test can hand a DEFINED profile no bundle, which is the only way to reach the refusal below:
+    /// every profile that ships has one, so the arm would otherwise be dead under test and could be
+    /// deleted with the suite staying green - the same reason
+    /// <see cref="FindUnreplacedRelaxations()"/> carries its own overload.
+    /// </summary>
+    internal static SecurityProfileRequirements Resolve(
+        ClientSecurityProfile profile,
+        SecurityProfileRequirements? declared)
+    {
+        if (declared != null)
+            return declared;
+
+        if (!Enum.IsDefined(profile))
+            return StrictestRequirements;
+
+        throw new InvalidOperationException(
+            $"{nameof(ClientSecurityProfile)}.{profile} has no requirements declared in " +
+            $"{nameof(SecurityProfileRequirements)}");
+    }
+
+    /// <summary>
+    /// The bundle written for a profile in this file, or null where none is - which is a question
+    /// about this file alone, with no judgement about what an absent one means.
+    /// </summary>
+    private static SecurityProfileRequirements? Declared(ClientSecurityProfile profile) => profile switch
     {
         ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
-        _ when !Enum.IsDefined(profile) => StrictestRequirements,
-        _ => throw new InvalidOperationException(
-            $"{nameof(ClientSecurityProfile)}.{profile} has no requirements declared in " +
-            $"{nameof(SecurityProfileRequirements)}"),
+        _ => null,
     };
 
     /// <summary>
