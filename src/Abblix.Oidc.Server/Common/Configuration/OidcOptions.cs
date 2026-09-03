@@ -425,6 +425,32 @@ public record OidcOptions
 	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
+	/// How far ahead of this server's clock a token's <c>iat</c> or <c>nbf</c> may be and still be
+	/// accepted. Ten seconds by default.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// FAPI 2.0 Security Profile section 5.3.2.1 asks an authorization server, "to accommodate clock
+	/// offsets", to "accept JWTs with an <c>iat</c> or <c>nbf</c> timestamp between 0 and 10 seconds
+	/// in the future but shall reject JWTs with an <c>iat</c> or <c>nbf</c> timestamp greater than 60
+	/// seconds in the future". Ten seconds is the value it names, and it is the default here so that
+	/// the interoperable behaviour is what a host gets without doing anything: a few hundred
+	/// milliseconds of skew between two machines is enough to have a freshly minted assertion
+	/// refused as issued in the future.
+	/// </para>
+	/// <para>
+	/// Sixty seconds is the ceiling, refused at startup rather than at the first request. The ceiling
+	/// is why this is not simply "a tolerance a host chooses": without one, the check could be turned
+	/// off by configuration while every document still said the server performed it.
+	/// </para>
+	/// <para>
+	/// It is a duration rather than a count of seconds so that the unit lives in the type instead of
+	/// in the name, which is how every other interval on this object is expressed.
+	/// </para>
+	/// </remarks>
+	public TimeSpan ClockOffsetTolerance { get; set; } = TimeSpan.FromSeconds(10);
+
+	/// <summary>
 	/// The set of revoked initial access token identifiers (JWT subject claims).
 	/// Tokens whose subject appears in this set will be rejected during client registration.
 	/// For production use with large or dynamic revocation lists, replace

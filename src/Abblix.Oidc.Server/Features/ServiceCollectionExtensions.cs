@@ -159,6 +159,9 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RegistrationRequestSizeValidator>());
 
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockOffsetToleranceValidator>());
+
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
         return services

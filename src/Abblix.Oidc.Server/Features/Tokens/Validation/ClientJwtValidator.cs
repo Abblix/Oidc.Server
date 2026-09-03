@@ -13,6 +13,8 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -35,6 +37,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 §6.1).</param>
+/// <param name="oidcOptions">Carries the clock-offset tolerance applied to the timestamps of
+/// tokens this validator receives.</param>
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -42,7 +46,8 @@ public partial class ClientJwtValidator(
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
     IIssuerProvider issuerProvider,
-    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtValidator
+    IAuthServiceKeysProvider serviceKeysProvider,
+    IOptions<OidcOptions> oidcOptions) : IClientJwtValidator
 {
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -74,6 +79,10 @@ public partial class ClientJwtValidator(
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).
                 ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+
+                // FAPI 2.0 section 5.3.2.1 asks that a small offset between two clocks not refuse
+                // a freshly minted assertion. The window is the deployment's, bounded at startup.
+                ClockSkew = oidcOptions.Value.ClockOffsetTolerance,
             });
 
         if (result.TryGetFailure(out var error))

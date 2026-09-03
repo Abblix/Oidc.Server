@@ -627,7 +627,9 @@ internal class JsonWebTokenValidator(
         if (!validateLifetime)
             return token;
 
-        if (!notBefore.HasValue && !expiresAt.HasValue)
+        var issuedAt = token.Payload.IssuedAt;
+
+        if (!notBefore.HasValue && !expiresAt.HasValue && !issuedAt.HasValue)
             return token;
 
         var utcNow = timeProvider.GetUtcNow();
@@ -644,6 +646,24 @@ internal class JsonWebTokenValidator(
             var expiresUtc = expiresAt.Value.ToUniversalTime();
             if (expiresUtc <= utcNow - parameters.ClockSkew)
                 return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
+        }
+
+        // Last of the three on purpose. A token carrying both nbf and iat ahead of this clock is
+        // post-dated, and "not yet valid" is what its sender needs to hear; answering about iat
+        // there would change which reason a caller is given for a refusal that already existed.
+        // The presence test above admits a token carrying iat alone, which is the shape a client
+        // assertion takes when it names only when it was minted.
+        //
+        // Only the future direction is checked. An iat in the past says nothing on its own: how
+        // old a token may be is a question about the token's kind, which the caller answers with
+        // exp or with its own maximum age, and answering it here would refuse every long-lived
+        // token this validator also serves. An iat ahead of this clock is not open the same way -
+        // the token claims to have been created at an instant that has not happened.
+        if (issuedAt.HasValue)
+        {
+            var issuedAtUtc = issuedAt.Value.ToUniversalTime();
+            if (utcNow + parameters.ClockSkew < issuedAtUtc)
+                return new JwtValidationError(JwtError.InvalidToken, "Token issued in the future");
         }
 
         return token;
