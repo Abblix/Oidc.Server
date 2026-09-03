@@ -246,6 +246,46 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// FAPI 2.0 section 5.3.2.1: a server held to the profile "shall not use refresh token rotation
+    /// except in extraordinary circumstances". The client below asks for rotation the ordinary way,
+    /// by leaving reuse off, and the profile decides over it - the one place a profile removes a
+    /// control instead of adding one. The proof is that the previous token is never marked, so a
+    /// client presenting it again is not treated as a replay.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_WithRenewalUnderFapi2_ShouldNotSupersedeOldToken()
+    {
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AllowReuse = false,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-4),
+                ExpiresAt = _currentTime.AddHours(4),
+            }
+        };
+
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+
+        _tokenRegistry.Verify(
+            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// Verifies that when rotating a token (AllowReuse=false), the previous refresh token is marked
     /// <see cref="JsonWebTokenStatus.Used"/> - superseded, not killed. Per the RFC 9700 Section 4.14.2
     /// rotation model, a later replay of a superseded token is the breach signal that

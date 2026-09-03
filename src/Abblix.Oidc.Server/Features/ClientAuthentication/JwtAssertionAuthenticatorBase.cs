@@ -14,6 +14,9 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.Issuer;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -23,14 +26,49 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
+/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
+/// <param name="options">Supplies the server-wide default security profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
-    IReplayCache replayCache) : IClientAuthenticator
+    IReplayCache replayCache,
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options) : IClientAuthenticator
 {
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
     /// </summary>
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
+
+    /// <summary>
+    /// Answers whether the assertion's audience is one the profile governing this client admits.
+    /// </summary>
+    /// <remarks>
+    /// FAPI 2.0 section 5.3.2.1 narrows what may stand there: a server held to the profile "shall
+    /// only accept its issuer identifier value (as defined in [RFC8414]) as a string". Both halves
+    /// matter. The value must be the issuer rather than any address this server answers on, and it
+    /// must be alone rather than one entry among several, so an assertion minted for a different
+    /// recipient cannot be replayed here by naming both. Outside the profile the wider reading the
+    /// underlying specification permits is left untouched, which is why this answers true there
+    /// rather than checking anything.
+    /// </remarks>
+    private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
+    {
+        if (!SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+                .RequireIssuerAudienceInClientAssertion)
+        {
+            return true;
+        }
+
+        var issuerIdentifier = issuerProvider.GetIssuer();
+        var audiences = token.Payload.Audiences.ToArray();
+        if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
+        {
+            return true;
+        }
+
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, audiences, issuerIdentifier);
+        return false;
+    }
 
     /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
@@ -114,6 +152,11 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
         {
             LogOtherKindPresentedAsAssertion(clientInfo.ClientId, tokenType);
+            return null;
+        }
+
+        if (!AudienceSatisfiesTheProfile(token, clientInfo))
+        {
             return null;
         }
 

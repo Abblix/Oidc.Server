@@ -203,6 +203,7 @@ internal static class LogEvents
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
+            public const int AudienceIsNotTheIssuerAlone = Base + 12;
         }
 
         /// <summary>
@@ -264,7 +265,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/ClientAuthentication/TlsMetadataClientAuthenticator.cs</c> -
         /// RFC 8705 tls_client_auth via Subject DN / SAN matching
-        /// (sub-range 3085-3099).
+        /// (sub-range 3085-3089).
         /// </summary>
         public static class TlsMetadataClientAuthenticator
         {
@@ -272,6 +273,18 @@ internal static class LogEvents
 
             public const int NoTlsMetadataConfigured = Base + 1;
             public const int Authenticated = Base + 2;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/SecurityProfileClientAuthenticator.cs</c> - refuses a
+        /// stored registration that cannot satisfy the profile it is held to (sub-range 3090-3099).
+        /// </summary>
+        public static class SecurityProfileClientAuthenticator
+        {
+            private const int Base = 3090;
+
+            public const int RegistrationCannotSatisfyProfile = Base + 1;
+            public const int ProfileIsNotOneThisServerDefines = Base + 2;
         }
     }
 

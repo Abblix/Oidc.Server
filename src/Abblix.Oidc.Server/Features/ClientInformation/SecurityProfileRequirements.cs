@@ -14,13 +14,22 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// The bundle of controls a <see cref="ClientSecurityProfile"/> forces on a client, expressed as
 /// individual flags the request-pipeline validators consult. This is the single place the
 /// profile-to-controls mapping lives, so a validator never needs to know what "FAPI 2.0" means - it
-/// only reads the one flag it owns - and adding a future profile touches only <see cref="Resolve"/>.
+/// only reads the one flag it owns - and adding a future profile touches only <see cref="Resolve(ClientSecurityProfile)"/>.
 /// </summary>
 /// <remarks>
-/// Each flag is enforcement-only: it can require a control but never relax one. A profile therefore
-/// tightens a client and cannot weaken it, which is the invariant that lets a granular toggle (for
-/// example <see cref="ClientInfo.PkceRequired"/> set to <c>false</c>) coexist with a profile without
-/// silently downgrading it.
+/// A flag normally requires a control and never relaxes one, so a profile tightens a client and
+/// cannot weaken it. That is what lets a granular toggle (for example
+/// <see cref="ClientInfo.PkceRequired"/> set to <c>false</c>) coexist with a profile without silently
+/// downgrading it.
+///
+/// One flag goes the other way, and the exception is deliberate rather than an escape hatch.
+/// <see cref="ForbidRefreshTokenRotation"/> removes a control, because the specification it comes
+/// from replaces that control with two others instead of dropping protection: rotation earns nothing
+/// once the client is confidential and its tokens are bound to their sender, and it costs a user
+/// their session whenever a client fails to store the token it was handed. A relaxing flag is
+/// therefore admissible only when the same profile carries the controls that stand in for what it
+/// removes, which <see cref="FindUnreplacedRelaxations()"/> checks for every profile at startup rather
+/// than leaving to review.
 ///
 /// Every flag below names the validator that enforces it. That coupling is documented here on
 /// purpose: the enforcement is distributed across the request pipeline, so a new flag added to a
@@ -76,6 +85,37 @@ public sealed record SecurityProfileRequirements
     /// </summary>
     public bool RequireStrictRequestObjectProcessing { get; init; }
 
+    /// <summary>
+    /// The profile admits only confidential clients as defined by RFC 6749, so a client that
+    /// authenticates with nothing at the token endpoint cannot be held to it. Enforced by
+    /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
+    /// </summary>
+    public bool RequireConfidentialClient { get; init; }
+
+    /// <summary>
+    /// The profile admits only client authentication that proves possession of a key: mutual TLS
+    /// (RFC 8705 section 2) or a private key JWT assertion (OpenID Connect Core section 9). Every
+    /// method keyed on a shared secret is refused. Enforced by
+    /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
+    /// </summary>
+    public bool RequireKeyBasedClientAuthentication { get; init; }
+
+    /// <summary>
+    /// The profile accepts only the server's issuer identifier, and only as a string, in the
+    /// audience of a client authentication assertion, narrowing what the underlying specification
+    /// otherwise permits. Enforced by
+    /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
+    /// </summary>
+    public bool RequireIssuerAudienceInClientAssertion { get; init; }
+
+    /// <summary>
+    /// The profile forbids refresh token rotation, which is the one flag that removes a control
+    /// rather than requiring one. See the remarks on this type for why that is admissible here and
+    /// what stands in its place. Enforced by
+    /// <c>Features.Tokens.RefreshTokenService</c>.
+    /// </summary>
+    public bool ForbidRefreshTokenRotation { get; init; }
+
     private static readonly SecurityProfileRequirements NoneRequirements = new();
 
     private static readonly SecurityProfileRequirements Fapi2Requirements = new()
@@ -86,15 +126,144 @@ public sealed record SecurityProfileRequirements
         RequireSenderConstrainedTokens = true,
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        RequireConfidentialClient = true,
+        RequireKeyBasedClientAuthentication = true,
+        RequireIssuerAudienceInClientAssertion = true,
+        ForbidRefreshTokenRotation = true,
     };
+
+    /// <summary>
+    /// Names every profile that removes a control without carrying the controls that stand in for
+    /// it. An empty list means each relaxation in this file is paid for.
+    /// </summary>
+    /// <remarks>
+    /// This exists because a relaxing flag is one edit away from becoming an ordinary permission.
+    /// Someone adding a profile, or loosening an existing one, sees a set of booleans with no
+    /// direction to them, and nothing in the type distinguishes the flag that removes protection
+    /// from the nine that add it. So the condition that makes the removal sound is stated as code
+    /// and run at startup, where it can fail, rather than as a paragraph that can be skipped.
+    ///
+    /// Refusing refresh token rotation is sound only alongside a confidential client and a
+    /// sender-constrained token, because those two are what make rotation redundant. A profile
+    /// carrying the relaxation without them would hand out long-lived multi-use refresh tokens to a
+    /// client that may be public and whose tokens anyone may replay.
+    /// </remarks>
+    public static IReadOnlyList<string> FindUnreplacedRelaxations()
+        => FindUnreplacedRelaxations(
+            Enum.GetValues<ClientSecurityProfile>()
+                .Select(profile => (profile.ToString(), Resolve(profile))));
+
+    /// <summary>
+    /// The walk itself, over named bundles supplied by the caller. Separate from the overload above
+    /// so a test can drive the mistake this guard exists to catch: a profile that forbids rotation
+    /// and carries neither replacement cannot be expressed by the profiles that ship, because they
+    /// are correct, and a guard nothing can make fail is not a guard.
+    /// </summary>
+    internal static IReadOnlyList<string> FindUnreplacedRelaxations(
+        IEnumerable<(string Name, SecurityProfileRequirements Requirements)> profiles)
+    {
+        var violations = new List<string>();
+
+        foreach (var (profile, requirements) in profiles)
+        {
+            if (!requirements.ForbidRefreshTokenRotation)
+                continue;
+
+            if (!requirements.RequireConfidentialClient)
+            {
+                violations.Add(
+                    $"the {profile} profile forbids refresh token rotation without requiring a " +
+                    "confidential client, which is one of the two controls that replace it");
+            }
+
+            if (!requirements.RequireSenderConstrainedTokens)
+            {
+                violations.Add(
+                    $"the {profile} profile forbids refresh token rotation without requiring a " +
+                    "sender-constrained token, which is one of the two controls that replace it");
+            }
+        }
+
+        return violations;
+    }
 
     /// <summary>
     /// Returns the control bundle a given profile mandates.
     /// </summary>
-    public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile) => profile switch
+    /// <remarks>
+    /// The default arm throws rather than answering <see cref="NoneRequirements"/>. A profile added
+    /// to the enum without a bundle here would otherwise resolve to no requirements at all, which
+    /// is silently the weakest answer available and reads at every call site as a deliberate one.
+    ///
+    /// A value the enum does not define is a different population and gets a different answer. It
+    /// arrives from outside - a configuration binder takes a number outside the range as it stands,
+    /// and a client store the host writes can hold anything - so it is data rather than a mistake in
+    /// this file, and the readers meeting it are handling a live request. Throwing there turns a
+    /// host's bad value into a 500 from the authorization and token endpoints, which is the reader's
+    /// failure rather than the writer's. It resolves to <see cref="StrictestRequirements"/> instead:
+    /// nothing here can say what the value meant, and of the answers available only the strictest
+    /// cannot quietly serve a client the deployment believed was constrained.
+    /// </remarks>
+    public static SecurityProfileRequirements Resolve(ClientSecurityProfile profile)
+        => Resolve(profile, Declared(profile));
+
+    /// <summary>
+    /// The decision the overload above makes, over a bundle supplied by the caller. Separate so a
+    /// test can hand a DEFINED profile no bundle, which is the only way to reach the refusal below:
+    /// every profile that ships has one, so the arm would otherwise be dead under test and could be
+    /// deleted with the suite staying green - the same reason
+    /// <see cref="FindUnreplacedRelaxations()"/> carries its own overload.
+    /// </summary>
+    internal static SecurityProfileRequirements Resolve(
+        ClientSecurityProfile profile,
+        SecurityProfileRequirements? declared)
     {
+        if (declared != null)
+            return declared;
+
+        if (!Enum.IsDefined(profile))
+            return StrictestRequirements;
+
+        throw new InvalidOperationException(
+            $"{nameof(ClientSecurityProfile)}.{profile} has no requirements declared in " +
+            $"{nameof(SecurityProfileRequirements)}");
+    }
+
+    /// <summary>
+    /// The bundle written for a profile in this file, or null where none is - which is a question
+    /// about this file alone, with no judgement about what an absent one means.
+    /// </summary>
+    private static SecurityProfileRequirements? Declared(ClientSecurityProfile profile) => profile switch
+    {
+        ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
-        _ => NoneRequirements,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The answer for a profile value nothing here can interpret: every control this type can demand,
+    /// demanded.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="Fapi2Requirements"/>, which would tie the fallback to whichever
+    /// profile happens to be strictest today, and deliberately not <see cref="NoneRequirements"/>,
+    /// which would hand a client that named a profile the absence of one.
+    ///
+    /// <see cref="ForbidRefreshTokenRotation"/> stays false here, and that is the strict setting
+    /// rather than an omission: it is the one flag on this type that REMOVES a control, so demanding
+    /// it would weaken the bundle meant to be the strongest available.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements StrictestRequirements = new()
+    {
+        RequirePkce = true,
+        RequireS256CodeChallenge = true,
+        RequirePushedAuthorizationRequests = true,
+        RequireSenderConstrainedTokens = true,
+        RequireCodeResponseTypeOnly = true,
+        RequireStrictRequestObjectProcessing = true,
+        RequireConfidentialClient = true,
+        RequireKeyBasedClientAuthentication = true,
+        RequireIssuerAudienceInClientAssertion = true,
     };
 
     /// <summary>

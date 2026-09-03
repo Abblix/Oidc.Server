@@ -24,6 +24,9 @@ using Moq;
 using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -65,7 +68,9 @@ public class ClientSecretJwtAuthenticatorTests
             _clientInfoProvider.Object,
             _requestInfoProvider.Object,
             _clock,
-            _replayCache.Object);
+            _replayCache.Object,
+            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
+            Options.Create(new OidcOptions()));
     }
 
     /// <summary>

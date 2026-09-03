@@ -35,6 +35,11 @@ public class SecurityProfileValidatorTests
         {
             RedirectUris = [TestConstants.DefaultRedirectUri],
             ResponseTypes = responseTypes,
+
+            // These cases are about response types, so the authentication method is one the
+            // profile admits: leaving the default here would make every one of them fail for
+            // the wrong reason.
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
         };
 
         return new ClientRegistrationValidationContext(request);

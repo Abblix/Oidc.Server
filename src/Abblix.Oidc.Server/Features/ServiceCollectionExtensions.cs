@@ -101,7 +101,12 @@ public static class ServiceCollectionExtensions
         // or enable JWT Bearer still resolve the dependency.
         services.AddReplayPrevention();
 
-        return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
+        services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
+
+        // Outermost, so it sees every client whichever credential form got it through. The
+        // configuration paths cannot: a client registered dynamically before a profile was turned
+        // on lives in the store and is re-read by nobody.
+        return services.Decorate<IClientAuthenticator, SecurityProfileClientAuthenticator>();
     }
 
     /// <summary>
