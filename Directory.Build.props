@@ -65,7 +65,7 @@
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
        range written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build. -->
   <PropertyGroup>
-    <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>2.5</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>

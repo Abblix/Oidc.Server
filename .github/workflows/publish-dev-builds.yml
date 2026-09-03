@@ -11,9 +11,9 @@ name: Publish dev build to GitHub Packages
 # version actually built, so these examples can mislead a READER of this file - which is why they are
 # kept current - but they are no longer what reaches a consumer.
 #
-# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
-#   a release, version supplied by hand ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
+# Example version (with MinVerMinimumMajorMinor=2.5 and DefaultPreReleaseIdentifiers=dev.0):
+#   any branch here                     ->  2.5.0-dev.0.<first-parent distance from the root>
+#   a release, version supplied by hand ->  2.5.0   (enhanced-release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
 # which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
