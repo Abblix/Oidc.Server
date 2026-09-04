@@ -80,6 +80,13 @@ partial class JwtAssertionAuthenticatorBase
     private partial void LogReplayDetected(string Jti, string ClientId);
 
     [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TimestampsOutsideTheClientsProfile,
+        Level = LogLevel.Warning,
+        Message = "The assertion from {ClientId} passed the deployment's clock tolerance but not the "
+                  + "one the client's own security profile allows: {Refusal}")]
+    private partial void LogTimestampsOutsideTheClientsProfile(string ClientId, string Refusal);
+
+    [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} carries {@Audiences} where the profile "

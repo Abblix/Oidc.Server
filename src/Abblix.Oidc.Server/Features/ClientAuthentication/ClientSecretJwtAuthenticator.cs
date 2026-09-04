@@ -44,7 +44,7 @@ public partial class ClientSecretJwtAuthenticator(
     IReplayCache replayCache,
     IIssuerProvider issuerProvider,
     IOptions<OidcOptions> options)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options, clock)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
@@ -170,7 +170,7 @@ public partial class ClientSecretJwtAuthenticator(
             yield break;
         }
 
-        var utcNow = clock.GetUtcNow();
+        var utcNow = Clock.GetUtcNow();
         foreach (var clientSecret in client.ClientSecrets)
         {
             if (clientSecret.ExpiresAt.HasValue && clientSecret.ExpiresAt.Value < utcNow)

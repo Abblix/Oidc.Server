@@ -37,6 +37,13 @@ partial class ClientJwtValidator
     private partial void LogValidationSucceeded(string ClientId);
 
     [LoggerMessage(
+        EventId = LogEvents.Tokens.ClientJwtValidator.TimestampsOutsideTheClientsProfile,
+        Level = LogLevel.Warning,
+        Message = "The token from {ClientId} passed the deployment's clock tolerance but not the one "
+                  + "the client's own security profile allows: {Refusal}")]
+    private partial void LogTimestampsOutsideTheClientsProfile(string ClientId, string Refusal);
+
+    [LoggerMessage(
         EventId = LogEvents.Tokens.ClientJwtValidator.AudienceValidationFailed,
         Level = LogLevel.Warning,
         Message = "Audience validation failed, token audiences: {@Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]

@@ -28,12 +28,20 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
 /// <param name="options">Supplies the server-wide default security profile.</param>
+/// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
     IIssuerProvider issuerProvider,
-    IOptions<OidcOptions> options) : IClientAuthenticator
+    IOptions<OidcOptions> options,
+    TimeProvider timeProvider) : IClientAuthenticator
 {
+    /// <summary>
+    /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
+    /// reads the same instant rather than capturing a second copy of the same dependency.
+    /// </summary>
+    protected TimeProvider Clock => timeProvider;
+
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
     /// </summary>
@@ -46,6 +54,41 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </summary>
     protected SecurityProfileRequirements DefaultProfileRequirements
         => SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile);
+
+    /// <summary>
+    /// Answers whether the assertion's timestamps sit inside the window the profile governing THIS
+    /// CLIENT allows, which the validator could not ask: the client is identified from the assertion
+    /// it is validating, so its profile is not known until the validation has finished.
+    /// </summary>
+    /// <remarks>
+    /// The first pass ran under the deployment's own window, which is the widest any client can be
+    /// given - a deployment-wide profile is a floor and a client may only tighten it. So this
+    /// narrows and never widens, and a client asking for the deployment's profile or for nothing at
+    /// all reaches the same answer twice.
+    ///
+    /// Placed before the identifier is reserved, because a reservation is spent and cannot be given
+    /// back: a refusal after it would burn the assertion's own identifier on a request this check
+    /// was going to reject.
+    /// </remarks>
+    /// <param name="token">The assertion whose timestamps are being judged.</param>
+    /// <param name="clientInfo">The client the assertion authenticates.</param>
+    private bool TimestampsSatisfyTheClientsOwnProfile(JsonWebToken token, ClientInfo clientInfo)
+    {
+        var refusal = SecurityProfileRequirements
+            .For(clientInfo, options.Value.DefaultSecurityProfile)
+            .ClockSkewOrDefault()
+            .WhyRefused(
+                timeProvider.GetUtcNow(),
+                token.Payload.NotBefore,
+                token.Payload.ExpiresAt,
+                token.Payload.IssuedAt);
+
+        if (refusal is null)
+            return true;
+
+        LogTimestampsOutsideTheClientsProfile(clientInfo.ClientId, refusal);
+        return false;
+    }
 
     /// <summary>
     /// Answers whether the assertion's audience is one the profile governing this client admits.
@@ -164,6 +207,11 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         }
 
         if (!AudienceSatisfiesTheProfile(token, clientInfo))
+        {
+            return null;
+        }
+
+        if (!TimestampsSatisfyTheClientsOwnProfile(token, clientInfo))
         {
             return null;
         }

@@ -204,6 +204,7 @@ internal static class LogEvents
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
             public const int AudienceIsNotTheIssuerAlone = Base + 12;
+            public const int TimestampsOutsideTheClientsProfile = Base + 13;
         }
 
         /// <summary>
@@ -362,6 +363,7 @@ internal static class LogEvents
             public const int ClientNotDetermined = Base + 3;
             public const int ValidationSucceeded = Base + 4;
             public const int AudienceValidationFailed = Base + 5;
+            public const int TimestampsOutsideTheClientsProfile = Base + 6;
         }
 
         /// <summary>
