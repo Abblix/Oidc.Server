@@ -54,7 +54,8 @@ public class ClockOffsetTests
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? notBefore = null,
         DateTimeOffset? expiresAt = null,
-        TimeSpan? skew = null)
+        TimeSpan? skew = null,
+        TimeSpan? ceiling = null)
     {
         var claims = new Dictionary<string, object>();
         if (issuedAt.HasValue) claims["iat"] = issuedAt.Value.ToUnixTimeSeconds();
@@ -80,6 +81,8 @@ public class ClockOffsetTests
         // satisfied by a value this helper supplied.
         if (skew.HasValue)
             parameters.ClockSkew = skew.Value;
+
+        parameters.MaxClockOffsetAhead = ceiling;
 
         return validator.ValidateAsync(jwt, parameters);
     }
@@ -231,13 +234,46 @@ public class ClockOffsetTests
     [InlineData(60, true)]
     [InlineData(61, false)]
     [InlineData(240, false)]
-    public async Task AheadOfTheCeiling_IsRefusedWhateverSkewIsAsked(int secondsAhead, bool accepted)
+    public async Task UnderACeiling_AheadOfItIsRefusedWhateverSkewIsAsked(int secondsAhead, bool accepted)
+    {
+        var result = await Validate(
+            issuedAt: Now.AddSeconds(secondsAhead),
+            skew: TimeSpan.FromMinutes(5),
+            ceiling: TimeSpan.FromSeconds(60));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// And without one the skew is the whole answer, which is what a deployment outside a profile
+    /// that bounds this is entitled to: RFC 7523 Section 3 allows for clock skew and names no bound.
+    /// Without this row the case above would be satisfied by a ceiling applied unconditionally.
+    /// </summary>
+    [Theory]
+    [InlineData(61)]
+    [InlineData(240)]
+    public async Task WithNoCeiling_TheWholeSkewIsAllowedAhead(int secondsAhead)
     {
         var result = await Validate(
             issuedAt: Now.AddSeconds(secondsAhead),
             skew: TimeSpan.FromMinutes(5));
 
-        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A ceiling bounds one direction only. Past an expiry the whole skew still applies, because no
+    /// specification in play says how long an issued token may outlive its stated end.
+    /// </summary>
+    [Fact]
+    public async Task UnderACeiling_PastExpiryTheWholeSkewStillApplies()
+    {
+        var result = await Validate(
+            expiresAt: Now.AddMinutes(-4),
+            skew: TimeSpan.FromMinutes(5),
+            ceiling: TimeSpan.FromSeconds(60));
+
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>

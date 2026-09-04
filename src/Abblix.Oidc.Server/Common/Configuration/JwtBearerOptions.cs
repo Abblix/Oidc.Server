@@ -29,20 +29,21 @@ public record JwtBearerOptions
 	public IEnumerable<TrustedIssuer> TrustedIssuers { get; set; } = [];
 
 	/// <summary>
-	/// The clock skew tolerance for JWT validation.
-	/// Allows for small differences in clock times between the JWT issuer and this server.
-	/// Default is 60 seconds.
+	/// The clock skew tolerance applied to a bearer assertion, in both directions. Ten seconds,
+	/// the same as everywhere else, unless this deployment says otherwise.
 	/// </summary>
 	/// <remarks>
-	/// RFC 7523 Section 3 allows for clock skew without naming a bound, but FAPI 2.0 Security
-	/// Profile section 5.3.2.1 does name one: a server "shall reject JWTs with an <c>iat</c> or
-	/// <c>nbf</c> timestamp greater than 60 seconds in the future". The validator holds that bound
-	/// whatever this value says, so a larger number here would widen only how long an assertion
-	/// stays usable past its expiry - while reading as though it also widened the other direction.
-	/// The default is the bound itself: an assertion arrives from an issuer whose clock this server
-	/// does not run, which is the case the tolerance exists for.
+	/// RFC 7523 Section 3 allows for clock skew without naming a bound, so a deployment whose
+	/// assertions come from an issuer with a loosely-run clock may raise this - minutes are a
+	/// legitimate answer here, and were this server's own default until the tolerance became one
+	/// number for every kind of token.
+	///
+	/// Under a security profile that bounds how far ahead a token may be dated, the forward
+	/// direction is cut to that bound and a value above it is refused at startup, so the number here
+	/// cannot quietly mean one thing while the validator does another. FAPI 2.0 Security Profile
+	/// section 5.3.2.1 is the profile that does so, at sixty seconds.
 	/// </remarks>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(60);
+	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(10);
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.

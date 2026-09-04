@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -50,6 +51,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
+/// <param name="oidcOptions">Carries the security profile whose bound on how far ahead an
+/// assertion may be dated applies to this grant.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -57,7 +60,8 @@ public partial class JwtBearerGrantHandler(
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider) : IAuthorizationGrantHandler
+	TimeProvider timeProvider,
+	IOptions<OidcOptions> oidcOptions) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -162,6 +166,11 @@ public partial class JwtBearerGrantHandler(
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
 				ClockSkew = options.ClockSkew,
+
+				// The bound belongs to the profile this deployment is held to, and is absent where it
+				// is held to none - RFC 7523 Section 3 names no bound of its own.
+				MaxClockOffsetAhead = SecurityProfileRequirements
+					.Resolve(oidcOptions.Value.DefaultSecurityProfile).MaxClockOffsetAhead,
 			});
 
 		return validationResult.MapFailure(failure =>

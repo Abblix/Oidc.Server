@@ -10,6 +10,7 @@ using System;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Common.Constants;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
@@ -20,10 +21,16 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// </summary>
 public class ClockSkewCeilingValidatorTests
 {
-    private static ValidateOptionsResult Validate(TimeSpan skew)
+    private static ValidateOptionsResult Validate(
+        TimeSpan skew,
+        ClientSecurityProfile profile = ClientSecurityProfile.Fapi2)
         => new ClockSkewCeilingValidator().Validate(
             null,
-            new OidcOptions { JwtBearer = new JwtBearerOptions { ClockSkew = skew } });
+            new OidcOptions
+            {
+                DefaultSecurityProfile = profile,
+                JwtBearer = new JwtBearerOptions { ClockSkew = skew },
+            });
 
     /// <summary>
     /// Both ends of the permitted range and the default pass, so the refusals below cannot be
@@ -65,6 +72,30 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
+    /// And outside a profile that bounds this, the same five minutes pass. RFC 7523 Section 3 allows
+    /// for clock skew and names no bound, so a deployment held to no profile is entitled to them -
+    /// without this case the guard would be refusing on its own authority rather than the profile's.
+    /// </summary>
+    [Theory]
+    [InlineData(300)]
+    [InlineData(3600)]
+    public void WithNoProfile_AnythingPasses(int seconds)
+    {
+        Assert.False(
+            Validate(TimeSpan.FromSeconds(seconds), ClientSecurityProfile.None).Failed);
+    }
+
+    /// <summary>
+    /// A negative value is refused whatever the profile: it is not a loosening somebody may want but
+    /// a window that refuses an assertion valid at the instant its request arrives.
+    /// </summary>
+    [Fact]
+    public void WithNoProfile_NegativeStillFails()
+    {
+        Assert.True(Validate(TimeSpan.FromSeconds(-1), ClientSecurityProfile.None).Failed);
+    }
+
+    /// <summary>
     /// A negative window refuses an assertion valid at the instant its request arrives, which reads
     /// as an intermittent fault rather than as a setting.
     /// </summary>
@@ -79,11 +110,11 @@ public class ClockSkewCeilingValidatorTests
     /// would be a defect nobody meets until they read the options object.
     /// </summary>
     [Fact]
-    public void TheDefault_IsSixtySecondsAndPasses()
+    public void TheDefault_IsTenSecondsAndPasses()
     {
         var options = new OidcOptions();
 
-        Assert.Equal(TimeSpan.FromSeconds(60), options.JwtBearer.ClockSkew);
+        Assert.Equal(TimeSpan.FromSeconds(10), options.JwtBearer.ClockSkew);
         Assert.False(new ClockSkewCeilingValidator().Validate(null, options).Failed);
     }
 }

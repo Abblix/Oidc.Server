@@ -636,12 +636,6 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// The furthest ahead of this clock a token may claim to start or to have been minted, whatever
-    /// skew a caller asks for (FAPI 2.0 Security Profile section 5.3.2.1).
-    /// </summary>
-    private static readonly TimeSpan MaxClockOffsetAhead = TimeSpan.FromSeconds(60);
-
-    /// <summary>
     /// Compares the three timestamps a token may carry against this server's clock, in the order a
     /// sender needs to hear about them.
     /// </summary>
@@ -667,15 +661,13 @@ internal class JsonWebTokenValidator(
     {
         var utcNow = timeProvider.GetUtcNow();
 
-        // FAPI 2.0 Security Profile section 5.3.2.1 bounds ONE direction: a server "shall reject
-        // JWTs with an iat or nbf timestamp greater than 60 seconds in the future". Note 3 says why
-        // the number is there at all - "to prevent implementations switching off iat and nbf checks
-        // completely" - so it is a property of this validator rather than a default a deployment
-        // chooses, and a caller asking for more gets 60 seconds forward. The other direction keeps
-        // the whole skew: how long an already-issued token stays usable past its expiry is the
-        // caller's business, and the specification says nothing about it.
-        var ahead = utcNow + (MaxClockOffsetAhead < parameters.ClockSkew
-            ? MaxClockOffsetAhead
+        // The forward window is the skew, bounded by whatever ceiling the caller is held to. A
+        // caller under no ceiling keeps its whole skew, which is what a deployment outside the
+        // profile that demands one is entitled to. The other direction is never bounded here: how
+        // long an issued token stays usable past its expiry is a question no specification in play
+        // answers, so it keeps the whole skew regardless.
+        var ahead = utcNow + (parameters.MaxClockOffsetAhead is { } ceiling && ceiling < parameters.ClockSkew
+            ? ceiling
             : parameters.ClockSkew);
 
         if (notBefore.HasValue && ahead < notBefore.Value.ToUniversalTime())

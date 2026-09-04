@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -55,6 +56,9 @@ public partial class SoftwareStatementValidator(
         var validationParameters = new ValidationParameters
         {
             // Skip audience - software statements describe the software, not target a specific server
+            MaxClockOffsetAhead = SecurityProfileRequirements
+                .Resolve(options.CurrentValue.DefaultSecurityProfile).MaxClockOffsetAhead,
+
             Options = ValidationOptions.Default &
                       ~ValidationOptions.RequireAudience &
                       ~ValidationOptions.ValidateAudience,

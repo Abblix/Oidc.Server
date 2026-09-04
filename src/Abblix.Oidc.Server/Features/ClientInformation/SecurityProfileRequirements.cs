@@ -70,6 +70,20 @@ public sealed record SecurityProfileRequirements
     public bool RequireSenderConstrainedTokens { get; init; }
 
     /// <summary>
+    /// The furthest ahead of this server a token may claim to start or to have been minted, or
+    /// null where the profile puts no bound on it. Read by every place that builds JWT
+    /// validation parameters.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the flags around it this carries a VALUE, because the requirement names one and a
+    /// boolean would leave each reader to remember it - which is how two readers come to bound
+    /// the same thing differently. Null rather than a large number, so that a profile putting no
+    /// bound on the future is the ABSENCE of one and cannot be mistaken for a generous bound
+    /// somebody chose.
+    /// </remarks>
+    public TimeSpan? MaxClockOffsetAhead { get; init; }
+
+    /// <summary>
     /// The profile permits only the authorization-code response type, rejecting any implicit or
     /// hybrid response type that returns a token or id_token from the authorization endpoint.
     /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
@@ -124,6 +138,13 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+
+        // FAPI 2.0 section 5.3.2.1: "shall reject JWTs with an iat or nbf timestamp greater
+        // than 60 seconds in the future". Note 3 says the number is in the document to keep an
+        // implementation from switching the checks off, which is why it belongs to the profile
+        // rather than to the server: a deployment outside it answers to RFC 7523 Section 3,
+        // which names no bound at all.
+        MaxClockOffsetAhead = TimeSpan.FromSeconds(60),
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
@@ -259,6 +280,13 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+
+        // FAPI 2.0 section 5.3.2.1: "shall reject JWTs with an iat or nbf timestamp greater
+        // than 60 seconds in the future". Note 3 says the number is in the document to keep an
+        // implementation from switching the checks off, which is why it belongs to the profile
+        // rather than to the server: a deployment outside it answers to RFC 7523 Section 3,
+        // which names no bound at all.
+        MaxClockOffsetAhead = TimeSpan.FromSeconds(60),
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,

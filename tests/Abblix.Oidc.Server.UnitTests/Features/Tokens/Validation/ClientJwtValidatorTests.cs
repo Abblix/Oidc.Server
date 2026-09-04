@@ -69,7 +69,8 @@ public class ClientJwtValidatorTests
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
             issuerProvider.Object,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            Options.Create(new OidcOptions()));
     }
 
     #region Audience Validation Tests

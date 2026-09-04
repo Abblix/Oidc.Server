@@ -40,6 +40,14 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
 
     /// <summary>
+    /// The control bundle this deployment's default profile mandates, for a derived authenticator
+    /// building its own validation parameters. Read from the same options this class validates
+    /// against, so the two cannot disagree.
+    /// </summary>
+    protected SecurityProfileRequirements DefaultProfileRequirements
+        => SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile);
+
+    /// <summary>
     /// Answers whether the assertion's audience is one the profile governing this client admits.
     /// </summary>
     /// <remarks>

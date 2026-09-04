@@ -57,6 +57,28 @@ public record ValidationParameters
 	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(10);
 
 	/// <summary>
+	/// The furthest ahead of this clock a token may claim to start or to have been minted,
+	/// whatever <see cref="ClockSkew"/> allows. Absent by default, which is no bound at all.
+	/// </summary>
+	/// <remarks>
+	/// A bound belongs to whoever is held to one. FAPI 2.0 Security Profile section 5.3.2.1
+	/// requires a server to "reject JWTs with an <c>iat</c> or <c>nbf</c> timestamp greater than
+	/// 60 seconds in the future", and its Note 3 gives the reason the number is in the document at
+	/// all: "to prevent implementations switching off <c>iat</c> and <c>nbf</c> checks completely".
+	/// RFC 7523 Section 3, which governs a bearer assertion outside that profile, names no bound,
+	/// so a deployment not held to the profile may legitimately allow minutes.
+	///
+	/// Absence therefore means "no ceiling" rather than "the default ceiling": a value that meant
+	/// the latter would impose a profile's rule on every caller that never opted into it, and it
+	/// would do so silently, since nothing in a validation call names the profile.
+	///
+	/// It bounds one direction only. How long an already-issued token stays usable past its
+	/// expiry is a different question, which no specification here answers, so that side keeps the
+	/// whole of <see cref="ClockSkew"/>.
+	/// </remarks>
+	public TimeSpan? MaxClockOffsetAhead { get; set; }
+
+	/// <summary>
 	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.
 	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 §3.11 to
 	/// prevent token-type confusion: a JWS signed for one type (id_token, logout_token,
