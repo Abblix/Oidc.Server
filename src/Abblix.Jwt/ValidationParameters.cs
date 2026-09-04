@@ -38,9 +38,23 @@ public record ValidationParameters
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
 
 	/// <summary>
-	/// Time window applied to accommodate clock discrepancies when validating timestamps.
+	/// Time window applied in both directions to accommodate clock discrepancies when validating
+	/// timestamps: how far ahead of this clock <c>nbf</c> and <c>iat</c> may be, and how far past
+	/// <c>exp</c> a token stays usable. Ten seconds unless the caller says otherwise.
 	/// </summary>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.Zero;
+	/// <remarks>
+	/// FAPI 2.0 Security Profile section 5.3.2.1 asks a server, "to accommodate clock offsets", to
+	/// "accept JWTs with an <c>iat</c> or <c>nbf</c> timestamp between 0 and 10 seconds in the
+	/// future but shall reject JWTs with an <c>iat</c> or <c>nbf</c> timestamp greater than 60
+	/// seconds in the future". Ten seconds is the value it names, and it is the DEFAULT rather than
+	/// a rule so that a caller with a reason to allow more still decides for its own tokens - the
+	/// JWT bearer grant allows minutes, deliberately.
+	///
+	/// A default of none is what makes this worth stating: a few hundred milliseconds between two
+	/// machines is enough to have a freshly minted assertion refused as not yet valid, and every
+	/// construction site that never thought about clock offset inherited exactly that.
+	/// </remarks>
+	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(10);
 
 	/// <summary>
 	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.

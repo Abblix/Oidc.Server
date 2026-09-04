@@ -92,6 +92,10 @@ public class JwtEncryptionTests
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
             ResolveTokenDecryptionKeys = _ => new [] { encryptionKey }.ToAsyncEnumerable(),
             ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
+
+            // This case measures the expiry itself, so it tolerates no clock offset: the default
+            // window would keep the token usable for ten seconds past the instant under test.
+            ClockSkew = TimeSpan.Zero,
         };
 
         var validatorResult = await validator.ValidateAsync(jwt, parameters);

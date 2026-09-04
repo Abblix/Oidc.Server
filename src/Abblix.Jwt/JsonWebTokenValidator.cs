@@ -32,16 +32,13 @@ namespace Abblix.Jwt;
 /// <c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c> at validation time. With no
 /// handler registered (the default) the library understands no crit extensions and rejects
 /// every well-formed 'crit' header.</param>
-/// <param name="clockOffset">How far ahead of this machine's clock a token's iat or nbf may
-/// be and still be accepted - a property of the clock, shared by every caller.</param>
 internal class JsonWebTokenValidator(
     TimeProvider timeProvider,
     IJsonWebTokenEncryptor encryptor,
     IJsonWebTokenSigner signer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
     EncryptionAlgorithmsProvider encryptionAlgorithmsProvider,
-    IServiceProvider serviceProvider,
-    IOptions<ClockOffsetOptions> clockOffset) : IJsonWebTokenValidator
+    IServiceProvider serviceProvider) : IJsonWebTokenValidator
 {
     /// <summary>
     /// Provides a collection of signing algorithms supported by the validator.
@@ -665,11 +662,7 @@ internal class JsonWebTokenValidator(
     {
         var utcNow = timeProvider.GetUtcNow();
 
-        // The FUTURE direction is bounded by the clock's own tolerance, the same for every caller.
-        // ClockSkew answers the other direction, where a caller may legitimately want a token to
-        // stay usable a little past its expiry - a generous value there must not silently widen how
-        // far ahead a token may claim to have been minted.
-        var ahead = utcNow + clockOffset.Value.Tolerance;
+        var ahead = utcNow + parameters.ClockSkew;
 
         if (notBefore.HasValue && ahead < notBefore.Value.ToUniversalTime())
             return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");

@@ -32,17 +32,14 @@ public class ClockOffsetTests
     private static readonly DateTimeOffset Now =
         new(2027, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// The tolerance belongs to the clock, so a case that is about a different tolerance gets a
-    /// different container rather than passing a value per call.
-    /// </summary>
-    private static IServiceProvider CreateServiceProvider(TimeSpan tolerance)
+    private static readonly IServiceProvider ServiceProvider = CreateServiceProvider();
+
+    private static IServiceProvider CreateServiceProvider()
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         services.AddLogging();
         services.AddJsonWebTokens();
-        services.Configure<ClockOffsetOptions>(o => o.Tolerance = tolerance);
         return services.BuildServiceProvider();
     }
 
@@ -57,7 +54,7 @@ public class ClockOffsetTests
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? notBefore = null,
         DateTimeOffset? expiresAt = null,
-        TimeSpan? tolerance = null)
+        TimeSpan? skew = null)
     {
         var claims = new Dictionary<string, object>();
         if (issuedAt.HasValue) claims["iat"] = issuedAt.Value.ToUnixTimeSeconds();
@@ -67,8 +64,7 @@ public class ClockOffsetTests
         var jwt = EncodeBase64Url("""{"alg":"none"}""")
                   + "." + EncodeBase64Url(JsonSerializer.Serialize(claims)) + ".";
 
-        var validator = CreateServiceProvider(tolerance ?? TimeSpan.FromSeconds(10))
-            .GetRequiredService<IJsonWebTokenValidator>();
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
             ValidateAudience = _ => Task.FromResult(true),
@@ -79,6 +75,11 @@ public class ClockOffsetTests
             // those would refuse them for a reason that is not what these cases are about.
             Options = ValidationOptions.ValidateLifetime,
         };
+
+        // Left alone when the case is about the DEFAULT, so that a case relying on it cannot be
+        // satisfied by a value this helper supplied.
+        if (skew.HasValue)
+            parameters.ClockSkew = skew.Value;
 
         return validator.ValidateAsync(jwt, parameters);
     }
@@ -95,7 +96,7 @@ public class ClockOffsetTests
     {
         var result = await Validate(
             issuedAt: Now.AddSeconds(secondsAhead),
-            tolerance: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -109,7 +110,7 @@ public class ClockOffsetTests
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            tolerance: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -126,7 +127,7 @@ public class ClockOffsetTests
     {
         var result = await Validate(
             issuedAt: Now.AddSeconds(secondsAhead),
-            tolerance: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("future", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
@@ -140,7 +141,7 @@ public class ClockOffsetTests
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            tolerance: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(10));
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -179,8 +180,8 @@ public class ClockOffsetTests
     [Fact]
     public async Task WithoutTolerance_TheInstantItselfIsAccepted()
     {
-        Assert.True((await Validate(issuedAt: Now, tolerance: TimeSpan.Zero)).TryGetSuccess(out _));
-        Assert.True((await Validate(issuedAt: Now.AddSeconds(1), tolerance: TimeSpan.Zero))
+        Assert.True((await Validate(issuedAt: Now, skew: TimeSpan.Zero)).TryGetSuccess(out _));
+        Assert.True((await Validate(issuedAt: Now.AddSeconds(1), skew: TimeSpan.Zero))
             .TryGetFailure(out _));
     }
 
@@ -199,6 +200,22 @@ public class ClockOffsetTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("not yet valid", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The case that measures the DEFAULT: no skew is supplied, so the ten seconds come from the
+    /// validation parameters themselves. Every other case here passes a value, which would keep them
+    /// green over a default of none - the shape every construction site inherited before.
+    /// </summary>
+    [Theory]
+    [InlineData(5, true)]
+    [InlineData(10, true)]
+    [InlineData(11, false)]
+    public async Task TheDefaultTolerance_IsTenSeconds(int secondsAhead, bool accepted)
+    {
+        var result = await Validate(issuedAt: Now.AddSeconds(secondsAhead));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

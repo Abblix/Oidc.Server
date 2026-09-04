@@ -68,7 +68,6 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IJsonWebTokenCreator, JsonWebTokenCreator>();
         services.TryAddSingleton<IJsonWebTokenValidator, JsonWebTokenValidator>();
-        services.AddOptions<ClockOffsetOptions>();
         services.TryAddSingleton<IJsonWebTokenEncryptor, JsonWebTokenEncryptor>();
         services.TryAddSingleton<IJsonWebTokenSigner, JsonWebTokenSigner>();
 
