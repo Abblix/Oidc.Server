@@ -80,6 +80,62 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// The refusal an operator reads names BOTH sides, because the controls come from the two
+    /// together and neither alone says where the requirement came from. A client naming the empty
+    /// profile satisfies it and is refused anyway, which is the line that would otherwise send the
+    /// operator looking at the client's registration for a demand the deployment made.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_NamesTheClientsChoiceAndTheDeploymentsFloor()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyProfile);
+
+        Assert.Contains(nameof(ClientSecurityProfile.None), entry.Message);
+        Assert.Contains(nameof(ClientSecurityProfile.Fapi2), entry.Message);
+    }
+
+    /// <summary>
+    /// And a client naming NO profile - which is most of them - still produces a sentence, rather
+    /// than one with a hole where the name would be. This is the shape the message is read on most
+    /// often, so a placeholder that renders empty for it makes the line worse than saying nothing.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_ReadsAsASentenceWhenTheClientNamesNoProfile()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyProfile);
+
+        Assert.DoesNotContain("null", entry.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(ClientSecurityProfile.Fapi2), entry.Message);
+    }
+
+    /// <summary>
     /// And a profile this server does define says nothing, or the line would be noise on every
     /// request rather than a signal about one client.
     /// </summary>

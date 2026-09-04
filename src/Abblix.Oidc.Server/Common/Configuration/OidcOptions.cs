@@ -542,7 +542,8 @@ public record OidcOptions
 	/// every client is held to the FAPI 2.0 control bundle.
 	/// This is a floor rather than a default: a client can ask for more and no registration can take
 	/// it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/>
-	/// demands nothing, leaving clients governed by their individual metadata flags.
+	/// demands nothing, leaving each client governed by whatever it names for itself, or by its
+	/// individual metadata flags where it names nothing.
 	/// </summary>
 	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
 

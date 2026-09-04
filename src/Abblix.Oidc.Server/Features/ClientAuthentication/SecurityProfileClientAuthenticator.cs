@@ -78,30 +78,14 @@ internal partial class SecurityProfileClientAuthenticator(
         if (violations.Count == 0)
             return clientInfo;
 
+        // Spelled out rather than passed as a nullable: the generator renders an absent value as
+        // "(null)", which names the shape of a field where the sentence is about a client - and a
+        // client naming nothing is the common case, not the exception.
         LogRegistrationCannotSatisfyProfile(
             clientInfo.ClientId,
-            clientInfo.SecurityProfile,
+            clientInfo.SecurityProfile is { } named ? named.ToString() : "no profile of its own",
             options.Value.DefaultSecurityProfile,
             violations);
         return null;
     }
-
-    [LoggerMessage(
-        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.RegistrationCannotSatisfyProfile,
-        Level = LogLevel.Warning,
-        Message = "The client {ClientId} authenticated, but its registration cannot satisfy the "
-                  + "controls it is held to - it names {ClientProfile} and this deployment holds "
-                  + "every client to {DeploymentProfile}: {@Violations}")]
-    private partial void LogRegistrationCannotSatisfyProfile(
-        string ClientId,
-        ClientSecurityProfile? ClientProfile,
-        ClientSecurityProfile DeploymentProfile,
-        IReadOnlyList<string> Violations);
-
-    [LoggerMessage(
-        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.ProfileIsNotOneThisServerDefines,
-        Level = LogLevel.Warning,
-        Message = "The client {ClientId} names security profile {Profile}, which this server does "
-                  + "not define, so it is held to every control this server can demand")]
-    private partial void LogProfileIsNotOneThisServerDefines(string ClientId, int Profile);
 }

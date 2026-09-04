@@ -277,8 +277,9 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// And the same client under a deployment naming no profile starts clean, without which the
-    /// case above would be satisfied by a walk refusing every shared-secret client.
+    /// The control for the shared-secret case: the same client under a deployment naming no profile
+    /// starts clean, without which that case would be satisfied by a walk refusing every
+    /// shared-secret client whatever the deployment demands.
     /// </summary>
     [Fact]
     public void OptionsValidator_NoGlobalDefault_ClientNamesNoneAndUsesASharedSecret_Succeeds()
