@@ -98,6 +98,45 @@ public readonly record struct ClockSkew
     public static implicit operator ClockSkew(TimeSpan symmetric) => new() { Past = symmetric, Future = symmetric };
 
     /// <summary>
+    /// Why a token's timestamps are refused at <paramref name="now"/>, or null where this tolerance
+    /// admits them.
+    /// </summary>
+    /// <remarks>
+    /// The comparison belongs here rather than to whoever validates, because more than one caller
+    /// asks it: a token is checked once against the tolerance it arrived under, and again wherever a
+    /// tighter one turns out to apply. Two copies would part company on the boundaries, which is
+    /// where they are least likely to be noticed - expiry is compared with <c>&lt;=</c>, so a token
+    /// exactly its whole tolerance past the end is already expired, while one exactly the whole
+    /// tolerance ahead is still accepted.
+    ///
+    /// The order is deliberate: a token both post-dated and expired answers "not yet valid", which
+    /// is what its sender meant to send and what tells them so.
+    /// </remarks>
+    /// <param name="now">The instant the timestamps are judged against.</param>
+    /// <param name="notBefore">When the token says it starts, if it says.</param>
+    /// <param name="expiresAt">When the token says it ends, if it says.</param>
+    /// <param name="issuedAt">When the token says it was minted, if it says.</param>
+    public string? WhyRefused(
+        DateTimeOffset now,
+        DateTimeOffset? notBefore,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? issuedAt)
+    {
+        var future = now + Future;
+
+        if (notBefore.HasValue && future < notBefore.Value.ToUniversalTime())
+            return "Token not yet valid";
+
+        if (expiresAt.HasValue && expiresAt.Value.ToUniversalTime() <= now - Past)
+            return "Token has expired";
+
+        if (issuedAt.HasValue && future < issuedAt.Value.ToUniversalTime())
+            return "Token issued in the future";
+
+        return null;
+    }
+
+    /// <summary>
     /// This tolerance with neither direction exceeding <paramref name="ceiling"/>, or unchanged
     /// where there is no ceiling to hold it to.
     /// </summary>

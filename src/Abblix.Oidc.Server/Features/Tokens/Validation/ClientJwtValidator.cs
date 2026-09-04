@@ -38,8 +38,10 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
-/// <param name="oidcOptions">Carries the security profile whose bound on how far ahead a token
-/// may be dated this validator applies.</param>
+/// <param name="oidcOptions">Carries the security profile every client is held to, and the default
+/// a client without one of its own falls back to.</param>
+/// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
+/// the client is known.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
     Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the options carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
@@ -50,7 +52,8 @@ public partial class ClientJwtValidator(
     IClientKeysProvider clientJwksProvider,
     IIssuerProvider issuerProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
-    IOptions<OidcOptions> oidcOptions) : IClientJwtValidator
+    IOptions<OidcOptions> oidcOptions,
+    TimeProvider timeProvider) : IClientJwtValidator
 {
     private SecurityProfileRequirements Profile
         => SecurityProfileRequirements.Resolve(oidcOptions.Value.DefaultSecurityProfile);
@@ -121,6 +124,34 @@ public partial class ClientJwtValidator(
         {
             LogClientNotDetermined();
             return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
+        }
+
+        // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
+        // token being validated and is not known until that has finished. A client naming a profile
+        // of its own may be held to a tighter one, and this is the first line where there is a client
+        // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
+        // wider than the one already applied.
+        //
+        // The same flag the pass above reads, because the caller's options are handed to it
+        // unchanged where the validation parameters are built. Not symmetry for its own sake: a
+        // caller that opted out of time handling must not meet the timestamp accessors either,
+        // since they throw on a value outside the range DateTimeOffset can hold.
+        if (options.HasFlag(ValidationOptions.ValidateLifetime))
+        {
+            var refusal = SecurityProfileRequirements
+                .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
+                .ClockSkewOrDefault()
+                .WhyRefused(
+                    timeProvider.GetUtcNow(),
+                    validatedToken.Payload.NotBefore,
+                    validatedToken.Payload.ExpiresAt,
+                    validatedToken.Payload.IssuedAt);
+
+            if (refusal != null)
+            {
+                LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, refusal);
+                return new JwtValidationError(JwtError.InvalidToken, refusal);
+            }
         }
 
         LogValidationSucceeded(context.ClientInfo.ClientId);

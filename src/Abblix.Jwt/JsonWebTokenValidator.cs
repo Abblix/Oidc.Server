@@ -664,19 +664,11 @@ internal class JsonWebTokenValidator(
         // Whatever bound the caller is held to has already been applied to the value it handed
         // over: a ceiling arriving as a second field is a ceiling somebody forgets to pass, and the
         // omission would read as a caller entitled to be looser rather than as the mistake it is.
-        var skew = parameters.ClockSkew;
-        var future = utcNow + skew.Future;
+        var refusal = parameters.ClockSkew.WhyRefused(utcNow, notBefore, expiresAt, issuedAt);
 
-        if (notBefore.HasValue && future < notBefore.Value.ToUniversalTime())
-            return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
-
-        if (expiresAt.HasValue && expiresAt.Value.ToUniversalTime() <= utcNow - skew.Past)
-            return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
-
-        if (issuedAt.HasValue && future < issuedAt.Value.ToUniversalTime())
-            return new JwtValidationError(JwtError.InvalidToken, "Token issued in the future");
-
-        return token;
+        return refusal is null
+            ? token
+            : new JwtValidationError(JwtError.InvalidToken, refusal);
     }
 
 }
