@@ -454,10 +454,10 @@ public class JwksIssuerKeyResolverTests
     ///     way to say "not mine".
     /// </summary>
     /// <remarks>
-    ///     The fallback itself is not new - the resolver has always treated a null RESULT the same
-    ///     as a null delegate. What this pins is that the annotation now permits the answer, so a
-    ///     selector no longer has to throw for an issuer it does not know; a throw would take the
-    ///     fallback out for every other issuer, since nothing runs past it.
+    ///     The resolver treats a null RESULT the same as a null delegate, and the annotation permits
+    ///     the answer - so a selector may decline an issuer it does not know rather than throw for
+    ///     it. A throw would take the fallback out for every other issuer, since nothing runs past
+    ///     it, which is what makes the permitted answer worth pinning.
     /// </remarks>
     [Fact]
     public async Task ASelectorAnsweringNull_FallsThroughToTheConvention()

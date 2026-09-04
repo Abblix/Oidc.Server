@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Jwt;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -64,10 +65,64 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
-    /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 §3). Enforced by
+    /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
     /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
+
+    /// <summary>
+    /// The furthest either clock window may reach under this profile, or null where the profile
+    /// puts no bound on them. Read by every place that builds JWT validation parameters.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the flags around it this carries a VALUE, because the requirement names one and a
+    /// boolean would leave each reader to remember it - which is how two readers come to bound
+    /// the same thing differently. Null rather than a large number, so that a profile putting no
+    /// bound on the future is the ABSENCE of one and cannot be mistaken for a generous bound
+    /// somebody chose.
+    /// </remarks>
+    public TimeSpan? MaxClockSkew { get; init; }
+
+    /// <summary>
+    /// The tolerance in force where a deployment names none of its own - an answer this profile
+    /// supplies rather than imposes: a deployment setting a value of its own wins over it, and is
+    /// held only by <see cref="MaxClockSkew"/>.
+    /// </summary>
+    /// <remarks>
+    /// Selecting no profile is a posture rather than the absence of one, and its answer is
+    /// <see cref="UnprofiledClockSkew"/>: an assertion arrives from an issuer whose clock this
+    /// server does not run, and RFC 7523 Section 3 allows for that offset without naming a bound.
+    ///
+    /// Where a profile bounds freshness the two halves part company: an expiry the client itself
+    /// chose is a deadline this server has no reason to extend, because the grace exists for a clock
+    /// that disagrees rather than for a token that is simply late.
+    /// </remarks>
+    public ClockSkew DefaultClockSkew { get; init; } = UnprofiledClockSkew;
+
+    /// <summary>
+    /// What a deployment held to no bounding profile grants either way.
+    /// </summary>
+    /// <remarks>
+    /// Generous because the clock it is measured against belongs to somebody else: an issuer this
+    /// server trusts but does not run. A profile that cares about freshness names its own window;
+    /// this is what is left when none does.
+    /// </remarks>
+    private static readonly ClockSkew UnprofiledClockSkew = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The tolerance that actually applies: what the caller configured where it configured
+    /// anything, otherwise <see cref="DefaultClockSkew"/>, in either case held to
+    /// <see cref="MaxClockSkew"/>.
+    /// </summary>
+    /// <remarks>
+    /// The bound is applied HERE rather than carried onward beside the value, so that no reader can
+    /// take one without the other. A ceiling travelling as a second field is a ceiling somebody
+    /// forgets to pass, and the omission reads as a deployment allowed to be looser rather than as
+    /// the mistake it is.
+    /// </remarks>
+    /// <param name="configured">A tolerance the caller set, or null to take this profile's own.</param>
+    public ClockSkew ClockSkewOrDefault(ClockSkew? configured = null)
+        => (configured ?? DefaultClockSkew).BoundedBy(MaxClockSkew);
 
     /// <summary>
     /// The profile permits only the authorization-code response type, rejecting any implicit or
@@ -78,9 +133,9 @@ public sealed record SecurityProfileRequirements
     public bool RequireCodeResponseTypeOnly { get; init; }
 
     /// <summary>
-    /// The profile requires strict RFC 9101 §6.3 request-object processing: only the parameters inside the
+    /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
     /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
-    /// Core §6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
+    /// Core section 6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
     /// Enforced by <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     public bool RequireStrictRequestObjectProcessing { get; init; }
@@ -124,6 +179,11 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+
+        MaxClockSkew = ClockSkew.Fapi2Ceiling,
+
+        DefaultClockSkew = ClockSkew.Fapi2,
+
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
@@ -252,13 +312,21 @@ public sealed record SecurityProfileRequirements
     /// <see cref="ForbidRefreshTokenRotation"/> stays false here, and that is the strict setting
     /// rather than an omission: it is the one flag on this type that REMOVES a control, so demanding
     /// it would weaken the bundle meant to be the strongest available.
+    ///
+    /// Internal rather than private so a test can assert the property this bundle claims - every
+    /// tightening flag set - rather than the list somebody remembered to write. A flag added to this
+    /// type and forgotten here would otherwise leave the strictest answer quietly short of one
+    /// control, which is exactly the outcome it exists to prevent.
     /// </remarks>
-    private static readonly SecurityProfileRequirements StrictestRequirements = new()
+    internal static readonly SecurityProfileRequirements StrictestRequirements = new()
     {
         RequirePkce = true,
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+
+        MaxClockSkew = ClockSkew.Fapi2Ceiling,
+        DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,

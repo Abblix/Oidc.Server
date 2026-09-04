@@ -92,6 +92,10 @@ public class JwtEncryptionTests
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
             ResolveTokenDecryptionKeys = _ => new [] { encryptionKey }.ToAsyncEnumerable(),
             ResolveIssuerSigningKeys = _ => new [] { SigningKey }.ToAsyncEnumerable(),
+
+            // This case measures the expiry itself, so it tolerates no clock offset: the default
+            // window would keep the token usable past the instant under test.
+            ClockSkew = Abblix.Jwt.ClockSkew.None,
         };
 
         var validatorResult = await validator.ValidateAsync(jwt, parameters);
@@ -137,7 +141,7 @@ public class JwtEncryptionTests
     /// Verifies RSA1_5 (RSAES-PKCS1-v1_5) round-trips once a host opts in via
     /// <c>AddRsaPkcs1KeyManagement</c> (this class's service provider does): a JWE encrypted with it
     /// decrypts correctly and the algorithm is advertised. The Bleichenbacher oracle that PKCS1-v1.5
-    /// would otherwise expose is closed by the RFC 7516 §11.5 random-CEK mitigation (see
+    /// would otherwise expose is closed by the RFC 7516 section 11.5 random-CEK mitigation (see
     /// <see cref="TamperedEncryptedKey_IsRejected_Uniformly"/>).
     /// </summary>
     [Fact]
@@ -172,7 +176,7 @@ public class JwtEncryptionTests
     }
 
     /// <summary>
-    /// Verifies the RFC 7516 §11.5 mitigation: when the encrypted Content Encryption Key cannot be
+    /// Verifies the RFC 7516 section 11.5 mitigation: when the encrypted Content Encryption Key cannot be
     /// decrypted (here the encrypted-key segment is replaced with random bytes), the decryptor
     /// substitutes a random CEK and still runs the AEAD step, which fails the authentication tag.
     /// The outcome is a uniform invalid_token result - no exception and no distinct error that
@@ -216,7 +220,7 @@ public class JwtEncryptionTests
         => from claim in token.Payload.Json
             select (claim.Key, claim.Value?.ToJsonString());
     /// <summary>
-    /// Verifies the RFC 7516 §11.5 mitigation closes the Bleichenbacher timing oracle even when RSA1_5
+    /// Verifies the RFC 7516 section 11.5 mitigation closes the Bleichenbacher timing oracle even when RSA1_5
     /// decryption SUCCEEDS with structurally valid PKCS#1 v1.5 padding but produces a wrong-length CEK.
     /// A wrong-length CEK would make the content decryptor fast-fail on its length check before running
     /// the AEAD step, whereas the padding-invalid branch substitutes a correct-length random CEK and runs

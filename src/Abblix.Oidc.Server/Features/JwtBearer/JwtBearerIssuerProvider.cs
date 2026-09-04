@@ -120,9 +120,9 @@ public partial class JwtBearerIssuerProvider(
 
 	/// <inheritdoc />
 	public async Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt)
-		// An assertion carrying no expiry names no window to remember it for, so the identifier
-		// is held for the fallback hour - the same guess this provider has always made, now
-		// stated in one place instead of hidden inside the cache.
+		// An assertion carrying no expiry names no window to remember it for, so the identifier is
+		// held for the fallback the cache publishes. The guess is made here, where the reason for it
+		// is visible, rather than inside the cache where a caller cannot see what it got.
 		=> !await replayCache.TryReserveAsync(
 			jti,
 			expiresAt ?? timeProvider.GetUtcNow() + ReplayPrevention.ConfiguredReplayCache.DefaultExpiration);

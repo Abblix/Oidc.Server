@@ -85,8 +85,8 @@ public class IntrospectionCallerTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// The client the token was issued to keeps the full response it has always received, permission or not.
-    /// The subject is its own to begin with, so nothing is disclosed by returning it.
+    /// The client the token was issued to keeps the full response, permission or not. The subject
+    /// is its own to begin with, so nothing is disclosed by returning it.
     /// </summary>
     [Fact]
     public async Task The_tokens_own_client_still_receives_the_end_user_identifier()
@@ -100,7 +100,7 @@ public class IntrospectionCallerTests(TestFactory factory) : TestBase(factory)
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
         Assert.True(
             body.ContainsKey(IanaClaimTypes.Sub),
-            $"the token's own client lost the subject it has always been given: {body.ToJsonString()}");
+            $"the token's own client lost the subject it is entitled to: {body.ToJsonString()}");
     }
 
     private static async Task<string> ObtainConfidentialUserAccessTokenAsync(

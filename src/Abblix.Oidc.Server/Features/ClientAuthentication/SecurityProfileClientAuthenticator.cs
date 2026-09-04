@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// The same requirements are checked where a client is configured - at dynamic registration and
 /// over <see cref="OidcOptions.Clients"/> at startup - and that covers every client the deployment
 /// declares. It does not cover a client that was registered dynamically while no profile was in
-/// force and has been in the store ever since: turning the profile on afterwards leaves it
+/// force and is still in the store: turning the profile on afterwards leaves it
 /// authenticating with whatever it registered with, because nothing re-reads a stored registration.
 ///
 /// So the profile is enforced here as well, where every client arrives whatever its origin. The

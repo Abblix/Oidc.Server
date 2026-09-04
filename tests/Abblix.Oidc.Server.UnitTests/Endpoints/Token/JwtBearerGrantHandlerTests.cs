@@ -24,6 +24,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -674,7 +675,8 @@ public class JwtBearerGrantHandlerTests
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
-			timeProvider);
+			timeProvider,
+			Options.Create(new OidcOptions()));
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

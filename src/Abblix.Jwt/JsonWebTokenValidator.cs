@@ -25,7 +25,7 @@ namespace Abblix.Jwt;
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
 /// <param name="encryptionAlgorithmsProvider">The provider for supported JWE encryption algorithms.</param>
 /// <param name="serviceProvider">Resolves registered <see cref="ICriticalHeaderHandler"/>
-/// instances by JWS 'crit' header name (RFC 7515 §4.1.11). Handlers are registered as keyed
+/// instances by JWS 'crit' header name (RFC 7515 section 4.1.11). Handlers are registered as keyed
 /// singletons via <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/>;
 /// the validator routes a 'crit' name to its handler with
 /// <c>GetKeyedService&lt;ICriticalHeaderHandler&gt;(name)</c> at validation time. With no
@@ -221,7 +221,7 @@ internal class JsonWebTokenValidator(
         if (algorithm == null)
             return new JwtValidationError(JwtError.InvalidAlgorithm, "Missing algorithm in JWT header");
 
-        // Reject anything outside the registered RFC 7518 §3 alg taxonomy with the matching
+        // Reject anything outside the registered RFC 7518 section 3 alg taxonomy with the matching
         // taxonomy-level error. Without this gate, an unknown alg (e.g. byte-variant 'None')
         // streams into the signature-verification path and surfaces as InvalidSignature,
         // which is the wrong category - the cryptographic check never had a chance to run
@@ -230,7 +230,7 @@ internal class JsonWebTokenValidator(
         {
             return new JwtValidationError(
                 JwtError.InvalidAlgorithm,
-                $"Unknown signing algorithm '{algorithm}' (RFC 7515 §5.3 byte-exact comparison).");
+                $"Unknown signing algorithm '{algorithm}' (RFC 7515 section 5.3 byte-exact comparison).");
         }
 
         // Ahead of the allowlist, because an unsigned token is refused for BEING unsigned rather than
@@ -261,7 +261,7 @@ internal class JsonWebTokenValidator(
                 + $"{string.Join(", ", whitelist.Order(StringComparer.Ordinal))}.");
         }
 
-        // 'alg' is byte-exact per RFC 7515 §5.3 / §10.13: switching on the const string ensures
+        // 'alg' is byte-exact per RFC 7515 section 5.3 / section 10.13: switching on the const string ensures
         // case-variants like "None"/"NONE" never match the unsecured-JWS branch.
         return algorithm switch
         {
@@ -284,7 +284,7 @@ internal class JsonWebTokenValidator(
 
     /// <summary>
     /// Verifies the JWS signature against the key embedded in the JOSE header's <c>jwk</c>
-    /// parameter. This is the trust model RFC 9449 §4.2 prescribes for DPoP proofs - the
+    /// parameter. This is the trust model RFC 9449 section 4.2 prescribes for DPoP proofs - the
     /// proof carries its own public key and the validator's job is solely to confirm that
     /// the signature matches that key. The issuer-resolved-keys delegate is intentionally
     /// not consulted: in the embedded-key model there is no out-of-band key registry, so
@@ -375,11 +375,11 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Validates the JWS 'crit' header parameter (RFC 7515 §4.1.11). Runs the spec-required
+    /// Validates the JWS 'crit' header parameter (RFC 7515 section 4.1.11). Runs the spec-required
     /// malformation guards (empty array, duplicates, reserved names, dangling references)
     /// independent of any registry, then routes each crit name to its registered
     /// <see cref="ICriticalHeaderHandler"/>. An unrouted name is rejected as «unknown
-    /// critical header parameter» per RFC 7515 §4.1.11 ("If any of the listed extension
+    /// critical header parameter» per RFC 7515 section 4.1.11 ("If any of the listed extension
     /// Header Parameters are not understood and supported by the recipient, then the JWS
     /// is invalid").
     /// </summary>
@@ -403,7 +403,7 @@ internal class JsonWebTokenValidator(
     /// <summary>
     /// Resolves the registered handler for each crit-listed name (keyed by name in DI) and
     /// runs them in declaration order. Every name is resolved BEFORE any handler runs: per
-    /// RFC 7515 §4.1.11 an unknown name invalidates the whole JWS, so an earlier extension's
+    /// RFC 7515 section 4.1.11 an unknown name invalidates the whole JWS, so an earlier extension's
     /// side effects must never apply only to reject on a later unknown name. An unresolved
     /// name is rejected as «unknown critical header parameter».
     /// </summary>
@@ -448,7 +448,7 @@ internal class JsonWebTokenValidator(
     {
         // The token may be a perfectly well-formed JWE - the failure mode here is that
         // this validation path was not wired with a decryption-key resolver. Most callsites
-        // validate JWS only (DPoP proofs per RFC 9449 §4.2, client_assertion per RFC 7521,
+        // validate JWS only (DPoP proofs per RFC 9449 section 4.2, client_assertion per RFC 7521,
         // etc.) and intentionally pass ResolveTokenDecryptionKeys = null. Throwing
         // InvalidOperationException from .NotNull turns a category mismatch into a 500
         // and a noisy server log; return a typed validation error instead so the caller
@@ -468,23 +468,23 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
-    /// Pins the JWT's <c>typ</c> header (RFC 7515 §4.1.9) to the set the caller expects, per
-    /// the RFC 8725 §3.11 token-type confusion guidance. When
+    /// Pins the JWT's <c>typ</c> header (RFC 7515 section 4.1.9) to the set the caller expects, per
+    /// the RFC 8725 section 3.11 token-type confusion guidance. When
     /// <see cref="ValidationParameters.ExpectedTokenTypes"/> is null or empty the check is
     /// skipped (backward-compatible default for callers that have not opted in).
     /// </summary>
     /// <remarks>
     /// Matching is case-insensitive, and the <c>application/</c> prefix is stripped from the
     /// expectation as well as from the token, so either form may be written on either side.
-    /// A <c>typ</c> is a media type: RFC 7515 §4.1.9 says "Per RFC 2045, all media type values,
-    /// subtype values, and parameter names are case insensitive", and RFC 2045 §5.1 puts it
+    /// A <c>typ</c> is a media type: RFC 7515 section 4.1.9 says "Per RFC 2045, all media type values,
+    /// subtype values, and parameter names are case insensitive", and RFC 2045 section 5.1 puts it
     /// flatly - "Matching of media type and subtype is ALWAYS case-insensitive". The same
-    /// §4.1.9 requires a recipient to treat a value without a '/' as if <c>application/</c>
+    /// section 4.1.9 requires a recipient to treat a value without a '/' as if <c>application/</c>
     /// were prepended, which makes the short and long forms one name rather than two.
-    /// Note that RFC 7515 §5.3 does NOT apply here despite defining the library's general
+    /// Note that RFC 7515 section 5.3 does NOT apply here despite defining the library's general
     /// string-comparison rules: it ends by exempting exactly this parameter, "Only the 'typ'
     /// and 'cty' member values defined in this specification do not use these comparison
-    /// rules". This code cited §5.3 for the opposite conclusion until 2026-07-20.
+    /// rules". This code cited section 5.3 for the opposite conclusion until 2026-07-20.
     /// Folding costs no separation between the classes actually pinned here (<c>dpop+jwt</c>,
     /// <c>at+jwt</c>, <c>logout+jwt</c>, <c>id_token</c>): they differ in their letters, not
     /// their casing. The one place RFC 2045 keeps case significant is the value of a
@@ -627,24 +627,54 @@ internal class JsonWebTokenValidator(
         if (!validateLifetime)
             return token;
 
-        if (!notBefore.HasValue && !expiresAt.HasValue)
+        var issuedAt = token.Payload.IssuedAt;
+
+        if (!notBefore.HasValue && !expiresAt.HasValue && !issuedAt.HasValue)
             return token;
 
+        return CompareTimestamps(token, parameters, notBefore, expiresAt, issuedAt);
+    }
+
+    /// <summary>
+    /// Compares the three timestamps a token may carry against this server's clock, in the order a
+    /// sender needs to hear about them.
+    /// </summary>
+    /// <remarks>
+    /// The order is a decision, not an accident. A token carrying both <c>nbf</c> and <c>iat</c>
+    /// ahead of this clock is post-dated, and "not yet valid" is what its sender needs to hear;
+    /// answering about <c>iat</c> there would change which reason a caller is given for a refusal
+    /// that already existed.
+    ///
+    /// Only the future direction of <c>iat</c> is checked. An <c>iat</c> in the past says nothing on
+    /// its own: how old a token may be is a question about the token's kind, which the caller
+    /// answers with <c>exp</c> or with its own maximum age, and answering it here would refuse every
+    /// long-lived token this validator also serves. An <c>iat</c> ahead of this clock is not open
+    /// the same way, because the token claims to have been created at an instant that has not
+    /// happened.
+    /// </remarks>
+    private Result<JsonWebToken, JwtValidationError> CompareTimestamps(
+        JsonWebToken token,
+        ValidationParameters parameters,
+        DateTimeOffset? notBefore,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? issuedAt)
+    {
         var utcNow = timeProvider.GetUtcNow();
 
-        if (notBefore.HasValue)
-        {
-            var notBeforeUtc = notBefore.Value.ToUniversalTime();
-            if (utcNow + parameters.ClockSkew < notBeforeUtc)
-                return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
-        }
+        // Whatever bound the caller is held to has already been applied to the value it handed
+        // over: a ceiling arriving as a second field is a ceiling somebody forgets to pass, and the
+        // omission would read as a caller entitled to be looser rather than as the mistake it is.
+        var skew = parameters.ClockSkew;
+        var future = utcNow + skew.Future;
 
-        if (expiresAt.HasValue)
-        {
-            var expiresUtc = expiresAt.Value.ToUniversalTime();
-            if (expiresUtc <= utcNow - parameters.ClockSkew)
-                return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
-        }
+        if (notBefore.HasValue && future < notBefore.Value.ToUniversalTime())
+            return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
+
+        if (expiresAt.HasValue && expiresAt.Value.ToUniversalTime() <= utcNow - skew.Past)
+            return new JwtValidationError(JwtError.InvalidToken, "Token has expired");
+
+        if (issuedAt.HasValue && future < issuedAt.Value.ToUniversalTime())
+            return new JwtValidationError(JwtError.InvalidToken, "Token issued in the future");
 
         return token;
     }

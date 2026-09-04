@@ -19,6 +19,8 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
@@ -67,7 +69,8 @@ public class ClientJwtValidatorTests
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
             issuerProvider.Object,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            Options.Create(new OidcOptions()));
     }
 
     #region Audience Validation Tests

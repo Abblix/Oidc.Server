@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -50,6 +51,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
+/// <param name="oidcOptions">Carries the deployment's clock tolerance and the default security
+/// profile a client without one of its own falls back to.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -57,7 +60,8 @@ public partial class JwtBearerGrantHandler(
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider) : IAuthorizationGrantHandler
+	TimeProvider timeProvider,
+	IOptions<OidcOptions> oidcOptions) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -115,6 +119,28 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
+	/// The tolerance applied to this client's bearer assertion, resolved once so the two checks that
+	/// use it - the timestamp comparison and the age limit - cannot disagree about what an unset
+	/// value meant.
+	/// </summary>
+	/// <remarks>
+	/// The CLIENT's profile decides, falling back to the deployment's, the way every other reader of
+	/// a profile in this codebase resolves one. Reading the server default alone would ignore both
+	/// directions of a per-client setting: a client held to a bounding profile under a server held
+	/// to none would keep the looser window, and a client explicitly opted out under a bounding
+	/// server would not get its opt-out.
+	/// </remarks>
+	private ClockSkew ResolveClockSkew(ClientInfo clientInfo)
+		=> issuerProvider.Options.ResolveClockSkew(Profile(clientInfo));
+
+	/// <summary>
+	/// The control bundle this client is held to - its own profile where it names one, the
+	/// deployment's otherwise, which is how every other reader of a profile here resolves it.
+	/// </summary>
+	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
+		=> SecurityProfileRequirements.For(clientInfo, oidcOptions.Value.DefaultSecurityProfile);
+
+	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
 	/// </summary>
 	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer);
@@ -147,8 +173,6 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(string assertion, ClientInfo clientInfo)
 	{
-		var options = issuerProvider.Options;
-
 		var validationResult = await jwtValidator.ValidateAsync(
 			assertion,
 			new()
@@ -161,7 +185,9 @@ public partial class JwtBearerGrantHandler(
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
-				ClockSkew = options.ClockSkew,
+				// The tolerance belongs to the profile this CLIENT is held to, ceiling included -
+				// RFC 7523 Section 3 names no ceiling of its own.
+				ClockSkew = ResolveClockSkew(clientInfo),
 			});
 
 		return validationResult.MapFailure(failure =>
@@ -264,7 +290,7 @@ public partial class JwtBearerGrantHandler(
 		var now = timeProvider.GetUtcNow();
 		var jwtAge = now - issuedAt.Value;
 
-		if (jwtAge <= maxAge + options.ClockSkew)
+		if (jwtAge <= maxAge + ResolveClockSkew(clientInfo).Past)
 			return ctx;
 
 		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);

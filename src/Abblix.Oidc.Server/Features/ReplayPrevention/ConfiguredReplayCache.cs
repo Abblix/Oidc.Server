@@ -10,6 +10,8 @@ using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
@@ -19,10 +21,16 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// an operator's runbook keys off.
 /// </summary>
 /// <remarks>
-/// The skew is read from <see cref="JwtBearerOptions.ClockSkew"/> and applied to every consumer,
-/// DPoP proofs included. That is deliberate rather than tidy: one knob decides how far this
-/// server's notion of "expired" may lag a presenter's, and splitting it per profile would let a
-/// deployment tighten one path while believing it had tightened all of them.
+/// The retention is the WIDEST window in which the thing an entry names could still be accepted,
+/// which is the LARGER of the two answers rather than whichever one is set. An entry must outlive
+/// that window, because a reservation that expires first is a replay hole rather than a tidy cache.
+///
+/// It deliberately does not read the CLIENT's profile. Nothing here knows which client a
+/// reservation belongs to, and a profile is a property of the client: one that opted out of a bounding profile
+/// is accepted for longer than the deployment's own profile would suggest, so retaining for the
+/// deployment's window alone would leave exactly that client replayable in the gap. Over-retention
+/// costs an entry held a while longer and cannot be a hole, which is what settles the direction to
+/// err in.
 /// </remarks>
 /// <param name="logger">Records the two replay events.</param>
 /// <param name="inner">The storage the reservation actually lands in.</param>
@@ -46,7 +54,24 @@ internal sealed partial class ConfiguredReplayCache(
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
-        var skewed = expiresAt + options.CurrentValue.JwtBearer.ClockSkew;
+        // The WIDEST window any caller could still be accepted in, which is the LARGER of the two
+        // answers rather than whichever one happens to be set. The two are reached by different
+        // paths: the bearer grant honours this deployment's own setting, while a client assertion
+        // is accepted on the profile's window and never reads that setting at all. Taking the
+        // setting would therefore retain for a window the assertion path goes on accepting
+        // past, and the assertion stays replayable in the gap.
+        //
+        // Under-retention is a replay hole; over-retention costs an entry held a while longer. That
+        // asymmetry is why this takes the maximum rather than reading a profile it has no client to
+        // look up. The configured value is deliberately not bounded here for the same reason: a
+        // ceiling would only shorten the window.
+        var unprofiled = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None);
+        var configured = options.CurrentValue.JwtBearer.ClockSkew ?? TimeSpan.Zero;
+        var widest = configured < unprofiled.DefaultClockSkew.Past
+            ? unprofiled.DefaultClockSkew.Past
+            : configured;
+
+        var skewed = expiresAt + widest;
 
         if (!await inner.TryReserveAsync(identifier, skewed, cancellationToken))
         {

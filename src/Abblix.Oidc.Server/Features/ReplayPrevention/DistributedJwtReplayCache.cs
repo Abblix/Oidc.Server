@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// expiry. The moved contract requires its caller to say when an identifier stops being worth
 /// remembering, because a cache that guesses either outlives or forgets the window its caller
 /// actually validates against. This shim keeps guessing on its callers' behalf, with the hour the
-/// deprecated contract has always used.
+/// deprecated contract names.
 /// </remarks>
 /// <param name="replayCache">Where the reservation lands.</param>
 /// <param name="timeProvider">Turns an absent expiry into an absolute moment.</param>

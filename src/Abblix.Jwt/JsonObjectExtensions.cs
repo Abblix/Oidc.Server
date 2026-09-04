@@ -38,7 +38,7 @@ public static class JsonObjectExtensions
     public static T? GetProperty<T>(this JsonObject json, string name)
     {
         // A member that is present but is not the JSON type asked for reads as absent, which is what the
-        // summary above has always promised and what every caller is written against. It matters because
+        // summary above promises and what every caller is written against. It matters because
         // the objects this reads are shaped by whoever sent the request: a JWT payload and an
         // authorization_details entry are both schemaless on the wire, so "type" can arrive as a number
         // and "locations" as a string. GetValue<T> answers that with an InvalidOperationException thrown
