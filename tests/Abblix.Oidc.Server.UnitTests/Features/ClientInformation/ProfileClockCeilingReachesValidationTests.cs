@@ -22,6 +22,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using System.Linq;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
@@ -68,6 +71,53 @@ public class ProfileClockCeilingReachesValidationTests
         });
 
         return captured.NotNull(nameof(captured));
+    }
+
+    /// <summary>
+    /// The same for the private key JWT and request-object path, which is the one FAPI 2.0 governs
+    /// most directly. Each construction site carries the bound in a line of its own, so each needs a
+    /// case of its own: deleting any one of them leaves every other case green.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, 60)]
+    [InlineData(ClientSecurityProfile.None, null)]
+    public async Task ClientJwtValidator_CarriesTheProfilesBound(
+        ClientSecurityProfile profile, int? ceilingSeconds)
+    {
+        ValidationParameters? captured = null;
+
+        var tokenValidator = new Mock<IJsonWebTokenValidator>();
+        tokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, parameters) => captured = parameters)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+
+        var requestInfoProvider = new Mock<IRequestInfoProvider>();
+        requestInfoProvider.Setup(p => p.RequestUri).Returns("https://auth.example.com");
+
+        var issuerProvider = new Mock<IIssuerProvider>();
+        issuerProvider.Setup(p => p.GetIssuer()).Returns("https://auth.example.com");
+
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>();
+        serviceKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<bool>()))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        var validator = new ClientJwtValidator(
+            NullLogger<ClientJwtValidator>.Instance,
+            requestInfoProvider.Object,
+            tokenValidator.Object,
+            new Mock<IClientInfoProvider>().Object,
+            new Mock<IClientKeysProvider>().Object,
+            issuerProvider.Object,
+            serviceKeys.Object,
+            Options.Create(new OidcOptions { DefaultSecurityProfile = profile }));
+
+        await validator.ValidateAsync("header.payload.signature");
+
+        Assert.Equal(
+            ceilingSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
+            captured.NotNull(nameof(captured)).MaxClockOffsetAhead);
     }
 
     /// <summary>

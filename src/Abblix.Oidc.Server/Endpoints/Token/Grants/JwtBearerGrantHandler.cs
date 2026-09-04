@@ -119,12 +119,20 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
-	/// The tolerance this deployment applies to a bearer assertion, resolved once so the two
-	/// checks that use it - the timestamp comparison and the age limit - cannot disagree about
-	/// what an unset value meant.
+	/// The tolerance applied to this client's bearer assertion, resolved once so the two checks that
+	/// use it - the timestamp comparison and the age limit - cannot disagree about what an unset
+	/// value meant.
 	/// </summary>
-	private TimeSpan ResolveClockSkew()
-		=> issuerProvider.Options.ResolveClockSkew(oidcOptions.Value.DefaultSecurityProfile);
+	/// <remarks>
+	/// The CLIENT's profile decides, falling back to the deployment's, the way every other reader of
+	/// a profile in this codebase resolves one. Reading the server default alone would ignore both
+	/// directions of a per-client setting: a client held to a bounding profile under a server held
+	/// to none would keep the looser window, and a client explicitly opted out under a bounding
+	/// server would not get its opt-out.
+	/// </remarks>
+	private TimeSpan ResolveClockSkew(ClientInfo clientInfo)
+		=> issuerProvider.Options.ResolveClockSkew(
+			clientInfo.SecurityProfile ?? oidcOptions.Value.DefaultSecurityProfile);
 
 	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
@@ -171,12 +179,12 @@ public partial class JwtBearerGrantHandler(
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
-				ClockSkew = ResolveClockSkew(),
+				ClockSkew = ResolveClockSkew(clientInfo),
 
-				// The bound belongs to the profile this deployment is held to, and is absent where it
-				// is held to none - RFC 7523 Section 3 names no bound of its own.
+				// The bound belongs to the profile this CLIENT is held to, and is absent where it is
+				// held to none - RFC 7523 Section 3 names no bound of its own.
 				MaxClockOffsetAhead = SecurityProfileRequirements
-					.Resolve(oidcOptions.Value.DefaultSecurityProfile).MaxClockOffsetAhead,
+					.For(clientInfo, oidcOptions.Value.DefaultSecurityProfile).MaxClockOffsetAhead,
 			});
 
 		return validationResult.MapFailure(failure =>
@@ -279,7 +287,7 @@ public partial class JwtBearerGrantHandler(
 		var now = timeProvider.GetUtcNow();
 		var jwtAge = now - issuedAt.Value;
 
-		if (jwtAge <= maxAge + ResolveClockSkew())
+		if (jwtAge <= maxAge + ResolveClockSkew(clientInfo))
 			return ctx;
 
 		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);

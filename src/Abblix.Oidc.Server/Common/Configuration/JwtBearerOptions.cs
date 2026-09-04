@@ -39,10 +39,11 @@ public record JwtBearerOptions
 	/// <remarks>
 	/// <para>
 	/// An assertion arrives from an issuer whose clock this server does not run, which is why the
-	/// tolerance here is looser than the one applied to tokens minted closer to home. RFC 7523
-	/// Section 3 allows for clock skew without naming a bound, so five minutes is this server's
-	/// choice rather than the specification's - and it is only reachable where no profile says
-	/// otherwise. FAPI 2.0 Security Profile section 5.3.2.1 does say otherwise, at sixty seconds.
+	/// tolerance a profile-free deployment gets here is looser than the one applied to tokens minted
+	/// closer to home. RFC 7523 Section 3 allows for clock skew without naming a bound, so those five
+	/// minutes are this server's choice rather than the specification's. FAPI 2.0 Security Profile
+	/// section 5.3.2.1 makes a different choice, ten seconds, and separately forbids anything past
+	/// sixty - which is a ceiling on whatever is set here rather than a value this resolves to.
 	/// </para>
 	/// <para>
 	/// Absent rather than five minutes written here, because the two are not the same fact. A number

@@ -19,10 +19,16 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// an operator's runbook keys off.
 /// </summary>
 /// <remarks>
-/// The skew is read from <see cref="JwtBearerOptions.ClockSkew"/> and applied to every consumer,
-/// DPoP proofs included. That is deliberate rather than tidy: one knob decides how far this
-/// server's notion of "expired" may lag a presenter's, and splitting it per profile would let a
-/// deployment tighten one path while believing it had tightened all of them.
+/// The skew is resolved from <see cref="JwtBearerOptions.ResolveClockSkew"/> and applied to every
+/// consumer, DPoP proofs included. One value decides how far this server's notion of "expired" may
+/// lag a presenter's, so an entry outlives the window in which the thing it names could still be
+/// accepted - which is the property a replay cache has to keep and the reason it is not read per
+/// consumer.
+///
+/// The value follows the deployment's profile, so tightening the profile tightens retention with
+/// it. What it does NOT follow is a per-client profile: nothing here knows which client a
+/// reservation belongs to, and the retention has to cover the loosest window any of them could get
+/// rather than the one this call happens to be for.
 /// </remarks>
 /// <param name="logger">Records the two replay events.</param>
 /// <param name="inner">The storage the reservation actually lands in.</param>

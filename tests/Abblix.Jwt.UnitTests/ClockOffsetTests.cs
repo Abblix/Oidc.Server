@@ -122,8 +122,8 @@ public class ClockOffsetTests
 
     /// <summary>
     /// The second half, which the first says nothing about: past the window the token is refused.
-    /// Ninety seconds is beyond the ceiling a tolerance may be set to at all, so no configuration
-    /// of the server accepts it.
+    /// The window here is the skew this case asks for, not a ceiling - a ceiling is what a profile
+    /// adds on top, and the cases for it are further down.
     /// </summary>
     [Theory]
     [InlineData(11)]

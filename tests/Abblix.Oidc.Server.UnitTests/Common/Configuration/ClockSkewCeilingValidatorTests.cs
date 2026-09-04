@@ -16,9 +16,10 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// The validator holds the sixty-second bound whatever a caller asks for, so this guard is not what
-/// makes the requirement true. It is what keeps a deployment from reading a setting back and
-/// believing a number the validator will not honour.
+/// Where a profile names a bound the validator holds it whatever a caller asks for, so this guard is
+/// not what makes the requirement true. It is what keeps a deployment from reading a setting back and
+/// believing a number the validator will not honour - and it says nothing at all to a deployment held
+/// to no bounding profile, which RFC 7523 Section 3 leaves free to choose.
 /// </summary>
 public class ClockSkewCeilingValidatorTests
 {
@@ -173,6 +174,27 @@ public class ClockSkewCeilingValidatorTests
         var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2);
 
         Assert.True(requirements.PrescribedClockOffsetTolerance < requirements.MaxClockOffsetAhead);
+    }
+
+    /// <summary>
+    /// A client carries its own profile, and it decides for that client's assertions - in both
+    /// directions. A client held to a bounding profile under a server held to none keeps the tight
+    /// window rather than the loose one; a client opted out under a bounding server gets its
+    /// opt-out. Every other reader of a profile in this codebase resolves it this way, and reading
+    /// the server default alone silently ignores both halves.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, 10)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, 300)]
+    public void TheClientsOwnProfileDecides(
+        ClientSecurityProfile serverProfile, ClientSecurityProfile clientProfile, int seconds)
+    {
+        var client = new ClientInfo("client-1") { SecurityProfile = clientProfile };
+        var effective = client.SecurityProfile ?? serverProfile;
+
+        Assert.Equal(
+            TimeSpan.FromSeconds(seconds),
+            new JwtBearerOptions().ResolveClockSkew(effective));
     }
 
     /// <summary>
