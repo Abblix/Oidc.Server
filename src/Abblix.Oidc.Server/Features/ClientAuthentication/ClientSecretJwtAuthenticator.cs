@@ -77,9 +77,9 @@ public partial class ClientSecretJwtAuthenticator(
                 // used", and RFC 7523 Section 3 item 4 states it as a MUST on the exp claim.
                 Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
 
-                // The bound belongs to the profile this deployment is held to, and is absent
-                // where it is held to none.
-                MaxClockOffsetAhead = DefaultProfileRequirements.MaxClockOffsetAhead,
+                // The tolerance belongs to the profile this deployment is held to, ceiling
+                // included - RFC 7523 Section 3 names no ceiling of its own.
+                ClockSkew = DefaultProfileRequirements.ClockSkewOrDefault(),
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = issuer => ValidateIssuer(issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(issuer, context),

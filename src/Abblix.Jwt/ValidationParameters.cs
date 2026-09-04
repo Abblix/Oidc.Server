@@ -38,49 +38,14 @@ public record ValidationParameters
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
 
 	/// <summary>
-	/// Time window applied in both directions to accommodate clock discrepancies when validating
-	/// timestamps: how far ahead of this clock <c>nbf</c> and <c>iat</c> may be, and how far past
-	/// <c>exp</c> a token stays usable. Ten seconds unless the caller says otherwise.
+	/// How far this token's timestamps may sit either side of this clock and still be honoured.
+	/// <see cref="Jwt.ClockSkew.Default"/> unless the caller says otherwise.
 	/// </summary>
-	/// <remarks>
-	/// FAPI 2.0 Security Profile section 5.3.2.1 asks a server, "to accommodate clock offsets", to
-	/// "accept JWTs with an <c>iat</c> or <c>nbf</c> timestamp between 0 and 10 seconds in the
-	/// future but shall reject JWTs with an <c>iat</c> or <c>nbf</c> timestamp greater than 60
-	/// seconds in the future". Ten seconds is the value it names, and it is the DEFAULT rather than
-	/// a rule so that a caller with a reason to allow more still decides for its own tokens - the
-	/// JWT bearer grant allows minutes, deliberately.
-	///
-	/// A default of none is what makes this worth stating: a few hundred milliseconds between two
-	/// machines is enough to have a freshly minted assertion refused as not yet valid, and every
-	/// construction site that never thought about clock offset inherited exactly that.
-	/// </remarks>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(10);
+	public ClockSkew ClockSkew { get; set; } = ClockSkew.Default;
 
 	/// <summary>
-	/// The furthest ahead of this clock a token may claim to start or to have been minted,
-	/// whatever <see cref="ClockSkew"/> allows. Absent by default, which is no bound at all.
-	/// </summary>
-	/// <remarks>
-	/// A bound belongs to whoever is held to one. FAPI 2.0 Security Profile section 5.3.2.1
-	/// requires a server to "reject JWTs with an <c>iat</c> or <c>nbf</c> timestamp greater than
-	/// 60 seconds in the future", and its Note 3 gives the reason the number is in the document at
-	/// all: "to prevent implementations switching off <c>iat</c> and <c>nbf</c> checks completely".
-	/// RFC 7523 Section 3, which governs a bearer assertion outside that profile, names no bound,
-	/// so a deployment not held to the profile may legitimately allow minutes.
-	///
-	/// Absence therefore means "no ceiling" rather than "the default ceiling": a value that meant
-	/// the latter would impose a profile's rule on every caller that never opted into it, and it
-	/// would do so silently, since nothing in a validation call names the profile.
-	///
-	/// It bounds one direction only. How long an already-issued token stays usable past its
-	/// expiry is a different question, which no specification here answers, so that side keeps the
-	/// whole of <see cref="ClockSkew"/>.
-	/// </remarks>
-	public TimeSpan? MaxClockOffsetAhead { get; set; }
-
-	/// <summary>
-	/// Token-type values (per RFC 7515 §4.1.9 <c>typ</c> header) that the JWT MUST match.
-	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 §3.11 to
+	/// Token-type values (per RFC 7515 section 4.1.9 <c>typ</c> header) that the JWT MUST match.
+	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 section 3.11 to
 	/// prevent token-type confusion: a JWS signed for one type (id_token, logout_token,
 	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
 	/// as another by relying parties that trust the same issuer for several classes.
@@ -88,9 +53,9 @@ public record ValidationParameters
 	/// <remarks>
 	/// Matching is case-insensitive and accepts either spelling of the <c>application/</c>
 	/// prefix on either side, so <c>at+jwt</c> and <c>application/AT+JWT</c> name the same
-	/// class. A <c>typ</c> is a media type, and RFC 7515 §4.1.9 adopts RFC 2045 §5.1 for it:
+	/// class. A <c>typ</c> is a media type, and RFC 7515 section 4.1.9 adopts RFC 2045 section 5.1 for it:
 	/// "Matching of media type and subtype is ALWAYS case-insensitive". The general
-	/// string-comparison rules of RFC 7515 §5.3 do not govern this parameter; that section
+	/// string-comparison rules of RFC 7515 section 5.3 do not govern this parameter; that section
 	/// ends by exempting it by name.
 	/// The comparer carried by the set is NOT what produces this behaviour and is not consulted
 	/// for matching - the validator compares explicitly, so that its rules cannot be widened or
@@ -109,9 +74,9 @@ public record ValidationParameters
 	/// </summary>
 	/// <remarks>
 	/// Use this to express policy beyond "signed-or-not" without writing per-algorithm
-	/// matchers in callers: pass the asymmetric-only set to enforce DPoP RFC 9449 §4.2,
+	/// matchers in callers: pass the asymmetric-only set to enforce DPoP RFC 9449 section 4.2,
 	/// pass {RS256, ES256} to require small-footprint algorithms only, and so on.
-	/// Comparison is byte-exact per RFC 7515 §5.3.
+	/// Comparison is byte-exact per RFC 7515 section 5.3.
 	/// </remarks>
 	public IReadOnlySet<string>? AllowedSigningAlgorithms { get; init; }
 

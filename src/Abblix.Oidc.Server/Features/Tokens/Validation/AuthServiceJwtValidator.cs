@@ -49,13 +49,11 @@ public class AuthServiceJwtValidator(
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
 
-				// No MaxClockOffsetAhead here, and the absence is a decision. These are tokens this
-				// server issued, read back with no skew of their own, so the ten-second default
-				// already sits under any bound a profile could name - the property would be inert.
-				// The reason to leave it off rather than set it anyway is what a bound would do in a
-				// multi-node deployment: it would turn one node running ahead of another into a
-				// refusal of the server's own refresh token, which is an operational hazard rather
-				// than the third-party freshness the requirement is about.
+				// No profile tolerance here, and the absence is a decision. These are tokens this
+				// server issued and reads back, so the freshness a profile bounds is not the
+				// question: a tolerance tight enough for a third party would turn one node running
+				// ahead of another into a refusal of this server's own refresh token, which is an
+				// operational hazard rather than the requirement.
 			});
 	}
 

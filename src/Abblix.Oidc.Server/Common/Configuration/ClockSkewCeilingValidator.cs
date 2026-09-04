@@ -23,9 +23,9 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 ///
 /// Where a bound does apply, the validator holds it whatever is configured - so this guard is not
 /// what makes the requirement true. It exists because a setting that is silently clamped is worse
-/// than one that is refused: a deployment could set five minutes, read the setting back, and believe
-/// a number the validator was halving. This says which value and which bound, at startup, where the
-/// operator is still looking.
+/// than one that is refused: a deployment could set a window, read the setting back, and believe a
+/// number the validator was cutting down. This says which value and which bound, at startup, where
+/// the operator is still looking.
 /// </remarks>
 public sealed class ClockSkewCeilingValidator : IValidateOptions<OidcOptions>
 {
@@ -47,7 +47,7 @@ public sealed class ClockSkewCeilingValidator : IValidateOptions<OidcOptions>
         }
 
         // A profile that names no bound leaves the question to RFC 7523, which does not answer it.
-        if (SecurityProfileRequirements.Resolve(options.DefaultSecurityProfile).MaxClockOffsetAhead
+        if (SecurityProfileRequirements.Resolve(options.DefaultSecurityProfile).MaxClockSkew
                 is not { } ceiling)
         {
             return ValidateOptionsResult.Success;

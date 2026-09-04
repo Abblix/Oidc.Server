@@ -53,11 +53,13 @@ public partial class SoftwareStatementValidator(
                 "No trusted issuers configured for software statement validation");
         }
 
+        var profile = SecurityProfileRequirements.Resolve(
+            options.CurrentValue.DefaultSecurityProfile);
+
         var validationParameters = new ValidationParameters
         {
             // Skip audience - software statements describe the software, not target a specific server
-            MaxClockOffsetAhead = SecurityProfileRequirements
-                .Resolve(options.CurrentValue.DefaultSecurityProfile).MaxClockOffsetAhead,
+            ClockSkew = profile.ClockSkewOrDefault(),
 
             Options = ValidationOptions.Default &
                       ~ValidationOptions.RequireAudience &

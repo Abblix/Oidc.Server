@@ -25,19 +25,22 @@ using Xunit;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Linq;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
 /// <summary>
-/// The profile names the bound and the JWT validator honours it, and each of those has its own
-/// cases. Neither says the bound TRAVELS from one to the other, which is the seam a construction
-/// site sits on: removing the line that carries it leaves both halves green.
+/// The profile decides a tolerance and the JWT validator applies whatever it is handed, and each of
+/// those has its own cases. Neither says the profile's answer TRAVELS from one to the other, which
+/// is the seam a construction site sits on: removing the line that carries it leaves both halves
+/// green, because a validator handed the library default refuses nothing these cases drive.
 /// </summary>
-public class ProfileClockCeilingReachesValidationTests
+public class ProfileClockSkewReachesValidationTests
 {
     /// <summary>
     /// Captures the parameters a client-assertion authenticator hands the JWT validator, which is
-    /// where the profile's bound has to appear if it reaches anything at all.
+    /// where the profile's answer has to appear if it reaches anything at all.
     /// </summary>
     private static async Task<ValidationParameters> CaptureParameters(ClientSecurityProfile profile)
     {
@@ -74,15 +77,67 @@ public class ProfileClockCeilingReachesValidationTests
     }
 
     /// <summary>
-    /// The same for the private key JWT and request-object path, which is the one FAPI 2.0 governs
-    /// most directly. Each construction site carries the bound in a line of its own, so each needs a
-    /// case of its own: deleting any one of them leaves every other case green.
+    /// The dynamic-registration path. A software statement is a JWT from a party this server trusts
+    /// but does not run, so the profile's answer reaches it too - and, like every other site,
+    /// through a line of its own that nothing else would miss.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.Fapi2, 60)]
-    [InlineData(ClientSecurityProfile.None, null)]
-    public async Task ClientJwtValidator_CarriesTheProfilesBound(
-        ClientSecurityProfile profile, int? ceilingSeconds)
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.None)]
+    public async Task SoftwareStatementValidator_CarriesTheProfilesTolerance(
+        ClientSecurityProfile profile)
+    {
+        ValidationParameters? captured = null;
+
+        var tokenValidator = new Mock<IJsonWebTokenValidator>();
+        tokenValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, parameters) => captured = parameters)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+
+        var options = new Mock<IOptionsMonitor<OidcOptions>>();
+        options
+            .SetupGet(o => o.CurrentValue)
+            .Returns(new OidcOptions
+            {
+                DefaultSecurityProfile = profile,
+                SoftwareStatement = new SoftwareStatementOptions
+                {
+                    TrustedIssuers =
+                    [
+                        new TrustedIssuer
+                        {
+                            Issuer = "https://issuer.example.com",
+                            JwksUri = new Uri("https://issuer.example.com/jwks"),
+                        },
+                    ],
+                },
+            });
+
+        var validator = new SoftwareStatementValidator(
+            NullLogger<SoftwareStatementValidator>.Instance,
+            tokenValidator.Object,
+            options.Object,
+            new Mock<ISecureHttpFetcher>().Object);
+
+        await validator.ValidateAsync(new ClientRegistrationValidationContext(
+            new ClientRegistrationRequest { SoftwareStatement = "header.payload.signature" }));
+
+        Assert.Equal(
+            SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),
+            captured.NotNull(nameof(captured)).ClockSkew);
+    }
+
+    /// <summary>
+    /// The same for the private key JWT and request-object path, which is the one FAPI 2.0 governs
+    /// most directly. Each construction site carries the tolerance in a line of its own, so each
+    /// needs a case of its own: deleting any one of them leaves every other case green.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.None)]
+    public async Task ClientJwtValidator_CarriesTheProfilesTolerance(
+        ClientSecurityProfile profile)
     {
         ValidationParameters? captured = null;
 
@@ -116,32 +171,32 @@ public class ProfileClockCeilingReachesValidationTests
         await validator.ValidateAsync("header.payload.signature");
 
         Assert.Equal(
-            ceilingSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
-            captured.NotNull(nameof(captured)).MaxClockOffsetAhead);
+            SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),
+            captured.NotNull(nameof(captured)).ClockSkew);
     }
 
     /// <summary>
-    /// Under the profile the bound arrives at the validator, carrying the number section 5.3.2.1
-    /// names rather than a boolean each reader would have to expand for itself.
+    /// Under the profile its own tolerance arrives at the validator - the asymmetric pair section
+    /// 5.3.2.1 describes, rather than the symmetric default a site that forgot the line would send.
     /// </summary>
     [Fact]
-    public async Task UnderTheProfile_TheBoundReachesTheValidator()
+    public async Task UnderTheProfile_TheProfilesToleranceReachesTheValidator()
     {
         var parameters = await CaptureParameters(ClientSecurityProfile.Fapi2);
 
-        Assert.Equal(TimeSpan.FromSeconds(60), parameters.MaxClockOffsetAhead);
+        Assert.Equal(ClockSkew.Fapi2, parameters.ClockSkew);
     }
 
     /// <summary>
-    /// And outside it none arrives, which is what keeps the case above from being satisfied by a
-    /// bound applied unconditionally: RFC 7523 Section 3 names none, so a deployment held to no
-    /// profile keeps whatever skew it configured.
+    /// And outside it the library default arrives, which is what keeps the case above from being
+    /// satisfied by the profile's pair applied unconditionally: RFC 7523 Section 3 names no bound,
+    /// so a deployment held to no profile keeps the looser window.
     /// </summary>
     [Fact]
-    public async Task WithNoProfile_NoBoundReachesTheValidator()
+    public async Task WithNoProfile_TheLibraryDefaultReachesTheValidator()
     {
         var parameters = await CaptureParameters(ClientSecurityProfile.None);
 
-        Assert.Null(parameters.MaxClockOffsetAhead);
+        Assert.Equal(ClockSkew.Default, parameters.ClockSkew);
     }
 }

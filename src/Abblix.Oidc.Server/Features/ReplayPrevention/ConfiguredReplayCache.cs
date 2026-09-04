@@ -10,6 +10,8 @@ using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
@@ -19,16 +21,16 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// an operator's runbook keys off.
 /// </summary>
 /// <remarks>
-/// The skew is resolved from <see cref="JwtBearerOptions.ResolveClockSkew"/> and applied to every
-/// consumer, DPoP proofs included. One value decides how far this server's notion of "expired" may
-/// lag a presenter's, so an entry outlives the window in which the thing it names could still be
-/// accepted - which is the property a replay cache has to keep and the reason it is not read per
-/// consumer.
+/// The retention is the WIDEST window in which the thing an entry names could still be accepted:
+/// what the deployment configured, or - where it configured nothing - the tolerance a client held to
+/// no bounding profile receives. An entry must outlive that window, because a reservation that
+/// expires first is a replay hole rather than a tidy cache.
 ///
-/// The value follows the deployment's profile, so tightening the profile tightens retention with
-/// it. What it does NOT follow is a per-client profile: nothing here knows which client a
-/// reservation belongs to, and the retention has to cover the loosest window any of them could get
-/// rather than the one this call happens to be for.
+/// It deliberately does not read a security profile. Nothing here knows which client a reservation
+/// belongs to, and a profile is a property of the client: one that opted out of a bounding profile
+/// is accepted for longer than the deployment's own profile would suggest, so retaining for the
+/// deployment's window would leave exactly that client replayable in the gap. Over-retention costs
+/// an entry held a while longer and cannot be a hole.
 /// </remarks>
 /// <param name="logger">Records the two replay events.</param>
 /// <param name="inner">The storage the reservation actually lands in.</param>
@@ -52,8 +54,16 @@ internal sealed partial class ConfiguredReplayCache(
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
-        var skewed = expiresAt + options.CurrentValue.JwtBearer.ResolveClockSkew(
-            options.CurrentValue.DefaultSecurityProfile);
+        // The WIDEST window any client could be accepted in, not the one the deployment's own
+        // profile supplies. A client may carry a profile of its own, and a client that opted out
+        // of a bounding one is accepted for longer than the deployment would be - so retaining for
+        // the deployment's window would let that client's assertion be replayed in the gap between
+        // the two. Under-retention is a replay hole; over-retention costs an entry held a while
+        // longer, which is why the asymmetry is resolved this way rather than by reading a profile
+        // this class has no client to look up.
+        var unprofiled = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None);
+        var skewed = expiresAt + (options.CurrentValue.JwtBearer.ClockSkew
+                                  ?? unprofiled.DefaultClockSkew.Past);
 
         if (!await inner.TryReserveAsync(identifier, skewed, cancellationToken))
         {

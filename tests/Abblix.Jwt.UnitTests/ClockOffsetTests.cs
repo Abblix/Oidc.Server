@@ -78,11 +78,13 @@ public class ClockOffsetTests
         };
 
         // Left alone when the case is about the DEFAULT, so that a case relying on it cannot be
-        // satisfied by a value this helper supplied.
+        // satisfied by a value this helper supplied. A ceiling is held against whichever value is in
+        // force, the default included, which is what a caller under a bounding profile does.
         if (skew.HasValue)
             parameters.ClockSkew = skew.Value;
 
-        parameters.MaxClockOffsetAhead = ceiling;
+        if (ceiling.HasValue)
+            parameters.ClockSkew = parameters.ClockSkew.BoundedBy(ceiling);
 
         return validator.ValidateAsync(jwt, parameters);
     }
@@ -160,7 +162,7 @@ public class ClockOffsetTests
     [Fact]
     public async Task IssuedAtAloneIsStillChecked()
     {
-        var result = await Validate(issuedAt: Now.AddSeconds(90));
+        var result = await Validate(issuedAt: Now.AddMinutes(10));
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -199,8 +201,8 @@ public class ClockOffsetTests
     public async Task NotBeforeAndIssuedAtBothAhead_AnswersAboutNotBefore()
     {
         var result = await Validate(
-            issuedAt: Now.AddMinutes(5),
-            notBefore: Now.AddMinutes(5),
+            issuedAt: Now.AddMinutes(10),
+            notBefore: Now.AddMinutes(10),
             expiresAt: Now.AddHours(1));
 
         Assert.True(result.TryGetFailure(out var error));
@@ -208,15 +210,20 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// The case that measures the DEFAULT: no skew is supplied, so the ten seconds come from the
+    /// The case that measures the DEFAULT: no skew is supplied, so the tolerance comes from the
     /// validation parameters themselves. Every other case here passes a value, which would keep them
-    /// green over a default of none - the shape every construction site inherited before.
+    /// green over a default of none.
+    ///
+    /// The default belongs to no specification and is not meant to: it is the value the platform's
+    /// own token validator uses, so a caller arriving from there meets no surprise. A number a
+    /// profile requires is the profile's to supply, and taking one of those as the general default
+    /// would hold a caller to a profile it never selected.
     /// </summary>
     [Theory]
-    [InlineData(5, true)]
-    [InlineData(10, true)]
-    [InlineData(11, false)]
-    public async Task TheDefaultTolerance_IsTenSeconds(int secondsAhead, bool accepted)
+    [InlineData(60, true)]
+    [InlineData(300, true)]
+    [InlineData(301, false)]
+    public async Task TheDefaultTolerance_ComesFromTheParameters(int secondsAhead, bool accepted)
     {
         var result = await Validate(issuedAt: Now.AddSeconds(secondsAhead));
 
@@ -262,24 +269,29 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// A ceiling bounds one direction only. Past an expiry the whole skew still applies, because no
-    /// specification in play says how long an issued token may outlive its stated end.
+    /// The ceiling holds the backward direction too: a profile distrusting a clock past some point
+    /// one way has no reason to trust it further the other. A caller asking for more than the
+    /// ceiling past an expiry gets the ceiling, and anything beyond it is refused.
     /// </summary>
-    [Fact]
-    public async Task UnderACeiling_PastExpiryTheWholeSkewStillApplies()
+    [Theory]
+    [InlineData(-59, true)]
+    [InlineData(-61, false)]
+    [InlineData(-240, false)]
+    public async Task UnderACeiling_PastExpiryIsBoundedToo(int secondsPastExpiry, bool accepted)
     {
         var result = await Validate(
-            expiresAt: Now.AddMinutes(-4),
+            expiresAt: Now.AddSeconds(secondsPastExpiry),
             skew: TimeSpan.FromMinutes(5),
             ceiling: TimeSpan.FromSeconds(60));
 
-        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 
     /// <summary>
-    /// The ceiling is one-directional, and this is the half that keeps it from being a cap on the
-    /// skew itself: the specification says nothing about how long an issued token stays usable past
-    /// its expiry, so a caller asking for five minutes there gets five minutes.
+    /// And without a ceiling the backward window is the whole skew, which is what keeps the case
+    /// above from being satisfied by a bound applied unconditionally: no specification in play says
+    /// how long an issued token stays usable past its expiry, so a caller asking for a window there
+    /// gets the window it asked for.
     /// </summary>
     [Fact]
     public async Task PastExpiry_TheWholeSkewApplies()
@@ -308,18 +320,18 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// And the default reaches that direction too. Ten seconds past an expiry is a shipped change
-    /// of behaviour, not a side effect: a skew is symmetric, so naming it forward and leaving the
-    /// other side unmeasured would be half a criterion.
+    /// And the default reaches that direction too: a skew is symmetric unless a profile makes it
+    /// otherwise, so naming it forward and leaving the other side unmeasured would be half a
+    /// criterion.
     ///
     /// The boundary differs from the forward one and is measured rather than assumed: expiry is
     /// compared with <c>&lt;=</c>, so a token exactly the whole skew past its expiry is already
     /// expired, while one exactly the whole skew ahead is still accepted.
     /// </summary>
     [Theory]
-    [InlineData(5, true)]
-    [InlineData(9, true)]
-    [InlineData(10, false)]
+    [InlineData(60, true)]
+    [InlineData(299, true)]
+    [InlineData(300, false)]
     public async Task TheDefaultTolerance_ReachesPastExpiryToo(int secondsPast, bool accepted)
     {
         var result = await Validate(expiresAt: Now.AddSeconds(-secondsPast));

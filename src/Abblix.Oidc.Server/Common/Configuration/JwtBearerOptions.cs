@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -33,20 +34,20 @@ public record JwtBearerOptions
 
 	/// <summary>
 	/// The clock skew tolerance applied to a bearer assertion, in both directions. Absent unless
-	/// this deployment sets one, which leaves the answer to the security profile in force: five
-	/// minutes where no profile is selected, and ten seconds under FAPI 2.0.
+	/// this deployment sets one, which leaves the answer to the security profile in force.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// An assertion arrives from an issuer whose clock this server does not run, which is why the
 	/// tolerance a profile-free deployment gets here is looser than the one applied to tokens minted
-	/// closer to home. RFC 7523 Section 3 allows for clock skew without naming a bound, so those five
-	/// minutes are this server's choice rather than the specification's. FAPI 2.0 Security Profile
-	/// section 5.3.2.1 makes a different choice, ten seconds, and separately forbids anything past
-	/// sixty - which is a ceiling on whatever is set here rather than a value this resolves to.
+	/// closer to home. RFC 7523 Section 3 allows for clock skew without naming a bound, so the value
+	/// a profile-free deployment receives is this server's choice rather than the specification's.
+	/// FAPI 2.0 Security Profile section 5.3.2.1 makes a tighter choice of its own, and separately
+	/// names a furthest point - which is a ceiling on whatever is set here rather than a value this
+	/// resolves to.
 	/// </para>
 	/// <para>
-	/// Absent rather than five minutes written here, because the two are not the same fact. A number
+	/// Absent rather than the default written here, because the two are not the same fact. A number
 	/// nobody chose cannot be told apart from one a deployment set on purpose, so a guard refusing a
 	/// value a profile will not honour would refuse the default as well - failing every FAPI
 	/// deployment at startup over a value it never touched. Absence says "decide for me"; a value
@@ -61,7 +62,7 @@ public record JwtBearerOptions
 
 	/// <summary>
 	/// The tolerance actually applied to a bearer assertion: what this deployment set, or what the
-	/// profile in force prescribes.
+	/// profile in force supplies.
 	/// </summary>
 	/// <remarks>
 	/// Every reader of the setting goes through here. Three readers each applying their own
@@ -69,8 +70,16 @@ public record JwtBearerOptions
 	/// disagreement would surface as one check refusing an assertion another had just accepted.
 	/// </remarks>
 	/// <param name="profile">The security profile this deployment is held to.</param>
-	public TimeSpan ResolveClockSkew(ClientSecurityProfile profile)
-		=> ClockSkew ?? SecurityProfileRequirements.Resolve(profile).PrescribedClockOffsetTolerance;
+	public ClockSkew ResolveClockSkew(ClientSecurityProfile profile)
+		=> ResolveClockSkew(SecurityProfileRequirements.Resolve(profile));
+
+	/// <summary>
+	/// The same, over a bundle the caller has already resolved - which a per-client caller has,
+	/// since the client's own profile decides for it.
+	/// </summary>
+	/// <param name="requirements">The control bundle in force.</param>
+	public ClockSkew ResolveClockSkew(SecurityProfileRequirements requirements)
+		=> requirements.ClockSkewOrDefault(ClockSkew);
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.

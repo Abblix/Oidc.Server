@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -64,18 +65,20 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
-    /// Five minutes was the default this change replaced, so it is the value a deployment carrying
-    /// the old configuration forward will still be holding.
+    /// The value a deployment gets by saying nothing is still refused when it is SAID under a
+    /// bounding profile. The two are not the same act: nothing set asks the profile to decide and
+    /// gets what the profile allows, while the same number typed into the configuration is a
+    /// deployment asking for a window this profile does not permit.
     /// </summary>
     [Fact]
-    public void TheFormerDefault_Fails()
+    public void TheLibraryDefault_SetExplicitly_Fails()
     {
         Assert.True(Validate(TimeSpan.FromMinutes(5)).Failed);
     }
 
     /// <summary>
-    /// And outside a profile that bounds this, the same five minutes pass. RFC 7523 Section 3 allows
-    /// for clock skew and names no bound, so a deployment held to no profile is entitled to them -
+    /// And outside a profile that bounds this, the same values pass. RFC 7523 Section 3 allows for
+    /// clock skew and names no bound, so a deployment held to no profile is entitled to them -
     /// without this case the guard would be refusing on its own authority rather than the profile's.
     /// </summary>
     [Theory]
@@ -122,46 +125,107 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
-    /// And what nothing-set resolves to: this server's own five minutes where no profile prescribes
-    /// a tolerance, and the value the profile names where one does. Without this the guard above
-    /// would be silent about a resolution that could be anything.
+    /// And what nothing-set resolves to: the library's own default in both directions where no
+    /// profile prescribes a tolerance, and the pair the profile names where one does. Both halves
+    /// are asserted, because FAPI 2.0 section 5.3.2.1 makes them different numbers, and a case
+    /// reading one half passes on a symmetric answer.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None, 300)]
-    [InlineData(ClientSecurityProfile.Fapi2, 10)]
-    public void NothingSet_ResolvesToTheProfilesAnswer(ClientSecurityProfile profile, int seconds)
+    [InlineData(ClientSecurityProfile.None, 300, 300)]
+    [InlineData(ClientSecurityProfile.Fapi2, 0, 10)]
+    public void NothingSet_ResolvesToTheProfilesAnswer(
+        ClientSecurityProfile profile, int pastSeconds, int futureSeconds)
     {
         var options = new JwtBearerOptions();
 
-        Assert.Equal(TimeSpan.FromSeconds(seconds), options.ResolveClockSkew(profile));
+        var skew = options.ResolveClockSkew(profile);
+
+        Assert.Equal(TimeSpan.FromSeconds(pastSeconds), skew.Past);
+        Assert.Equal(TimeSpan.FromSeconds(futureSeconds), skew.Future);
     }
 
     /// <summary>
     /// What each profile carries, as a table, because the two numbers come from one sentence and are
-    /// easy to collapse into each other: FAPI 2.0 section 5.3.2.1 names ten seconds as the tolerance
-    /// a server shall accept and sixty as the furthest anything may be dated. Resolving to the
-    /// ceiling would be the most permissive value allowed rather than the value named, and would
-    /// still pass every other case here.
+    /// easy to collapse into each other: FAPI 2.0 section 5.3.2.1 names one tolerance a server shall
+    /// accept and, separately, the furthest anything may be dated. Resolving to the ceiling would be
+    /// the most permissive value allowed rather than the value named, and would still pass every
+    /// other case here.
     ///
-    /// Selecting no profile is a posture too, not the absence of one: five minutes and no ceiling,
-    /// which is what a bearer assertion from an issuer whose clock this server does not run has
-    /// always been given.
+    /// Selecting no profile is a posture too, not the absence of one: the library default and no
+    /// ceiling, which is what an assertion from an issuer whose clock this server does not run is
+    /// entitled to under RFC 7523 Section 3.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None, 300, null)]
-    [InlineData(ClientSecurityProfile.Fapi2, 10, 60)]
+    [InlineData(ClientSecurityProfile.None, 300, 300, null)]
+    [InlineData(ClientSecurityProfile.Fapi2, 0, 10, 60)]
     public void EachProfileCarriesItsOwnToleranceAndCeiling(
-        ClientSecurityProfile profile, int prescribedSeconds, int? ceilingSeconds)
+        ClientSecurityProfile profile, int pastSeconds, int futureSeconds, int? ceilingSeconds)
     {
         var requirements = SecurityProfileRequirements.Resolve(profile);
 
         Assert.Equal(
-            TimeSpan.FromSeconds(prescribedSeconds),
-            requirements.PrescribedClockOffsetTolerance);
+            TimeSpan.FromSeconds(pastSeconds),
+            requirements.DefaultClockSkew.Past);
 
         Assert.Equal(
-            ceilingSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
-            requirements.MaxClockOffsetAhead);
+            TimeSpan.FromSeconds(futureSeconds),
+            requirements.DefaultClockSkew.Future);
+
+        Assert.Equal(
+            ceilingSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : (TimeSpan?)null,
+            requirements.MaxClockSkew);
+    }
+
+    /// <summary>
+    /// The ceiling is applied where the tolerance is resolved, so a value above it comes back cut
+    /// down rather than travelling onward beside a bound somebody must remember to pass. This is the
+    /// case that would go on passing if the bound were dropped from the resolution: the startup
+    /// guard below refuses such a value only for the SERVER's own profile, while a client carrying a
+    /// profile of its own reaches this path with a value nothing refused.
+    /// </summary>
+    [Fact]
+    public void AValueAboveTheCeiling_ComesBackBounded()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2);
+
+        var resolved = requirements.ClockSkewOrDefault(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(requirements.MaxClockSkew, resolved.Past);
+        Assert.Equal(requirements.MaxClockSkew, resolved.Future);
+    }
+
+    /// <summary>
+    /// And where the profile names no ceiling the same value comes back untouched, without which the
+    /// case above would be satisfied by a bound applied to everything.
+    /// </summary>
+    [Fact]
+    public void WithNoCeiling_TheValueIsUntouched()
+    {
+        var asked = TimeSpan.FromMinutes(5);
+
+        var resolved = SecurityProfileRequirements
+            .Resolve(ClientSecurityProfile.None)
+            .ClockSkewOrDefault(asked);
+
+        Assert.Equal(asked, resolved.Past);
+        Assert.Equal(asked, resolved.Future);
+    }
+
+    /// <summary>
+    /// A value under the ceiling is not cut down to it, which is what keeps the first case from
+    /// being satisfied by a resolution that answers the ceiling whatever it is asked.
+    /// </summary>
+    [Fact]
+    public void AValueUnderTheCeiling_IsKept()
+    {
+        var asked = TimeSpan.FromSeconds(5);
+
+        var resolved = SecurityProfileRequirements
+            .Resolve(ClientSecurityProfile.Fapi2)
+            .ClockSkewOrDefault(asked);
+
+        Assert.Equal(asked, resolved.Past);
+        Assert.Equal(asked, resolved.Future);
     }
 
     /// <summary>
@@ -173,28 +237,37 @@ public class ClockSkewCeilingValidatorTests
     {
         var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2);
 
-        Assert.True(requirements.PrescribedClockOffsetTolerance < requirements.MaxClockOffsetAhead);
+        Assert.True(requirements.DefaultClockSkew.Past < requirements.MaxClockSkew);
+        Assert.True(requirements.DefaultClockSkew.Future < requirements.MaxClockSkew);
     }
 
     /// <summary>
-    /// A client carries its own profile, and it decides for that client's assertions - in both
-    /// directions. A client held to a bounding profile under a server held to none keeps the tight
-    /// window rather than the loose one; a client opted out under a bounding server gets its
-    /// opt-out. Every other reader of a profile in this codebase resolves it this way, and reading
-    /// the server default alone silently ignores both halves.
+    /// A replay reservation has to outlive the window in which the thing it names could still be
+    /// accepted, and the widest such window belongs to a client held to NO bounding profile - which
+    /// a deployment under a bounding one still may have. Resolving the retention from the
+    /// deployment's own profile would leave exactly that client replayable in the gap between the
+    /// two, which is a hole rather than a tidy cache.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, 10)]
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, 300)]
-    public void TheClientsOwnProfileDecides(
-        ClientSecurityProfile serverProfile, ClientSecurityProfile clientProfile, int seconds)
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    public void RetentionCoversTheLoosestClientWindow(ClientSecurityProfile serverProfile)
     {
-        var client = new ClientInfo("client-1") { SecurityProfile = clientProfile };
-        var effective = client.SecurityProfile ?? serverProfile;
+        var options = new OidcOptions { DefaultSecurityProfile = serverProfile };
+        var optedOutClient = new ClientInfo("client-1") { SecurityProfile = ClientSecurityProfile.None };
 
-        Assert.Equal(
-            TimeSpan.FromSeconds(seconds),
-            new JwtBearerOptions().ResolveClockSkew(effective));
+        var accepted = options.JwtBearer.ResolveClockSkew(
+            optedOutClient.SecurityProfile ?? options.DefaultSecurityProfile).Past;
+
+        var retained = options.JwtBearer.ClockSkew
+                       ?? SecurityProfileRequirements
+                           .Resolve(ClientSecurityProfile.None)
+                           .DefaultClockSkew.Past;
+
+        Assert.True(
+            accepted <= retained,
+            $"a reservation kept for {retained} would expire while an assertion is still accepted "
+            + $"for {accepted}");
     }
 
     /// <summary>
@@ -205,6 +278,10 @@ public class ClockSkewCeilingValidatorTests
     {
         var options = new JwtBearerOptions { ClockSkew = TimeSpan.FromSeconds(30) };
 
-        Assert.Equal(TimeSpan.FromSeconds(30), options.ResolveClockSkew(ClientSecurityProfile.Fapi2));
+        // One number set by a host means it both ways: the asymmetry belongs to the profile's own
+        // prescription, not to a value somebody typed.
+        Assert.Equal(
+            (ClockSkew)TimeSpan.FromSeconds(30),
+            options.ResolveClockSkew(ClientSecurityProfile.Fapi2));
     }
 }
