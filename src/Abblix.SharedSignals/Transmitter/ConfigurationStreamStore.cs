@@ -274,8 +274,8 @@ public sealed class ConfigurationStreamStore : IStreamStore
     /// </summary>
     /// <remarks>
     /// The file is this store's stream set, so anything else is either a stream the operator
-    /// removed or one created through the API, which this store has always treated as lasting only
-    /// until the process restarts. Keeping either would go on delivering security events to a
+    /// removed or one created through the API, which this store treats as lasting only until the
+    /// process restarts. Keeping either would go on delivering security events to a
     /// receiver nobody declared.
     /// </remarks>
     private async Task RemoveUndeclaredAsync(CancellationToken cancellationToken)

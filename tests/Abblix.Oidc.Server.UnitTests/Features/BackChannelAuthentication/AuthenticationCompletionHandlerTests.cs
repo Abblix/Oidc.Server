@@ -623,8 +623,8 @@ public class AuthenticationCompletionHandlerTests
     /// configuration error and marks the request Denied.
     /// </summary>
     /// <remarks>
-    /// Ping, not push, which the handler this builds has always been; the name said otherwise. Push
-    /// removes instead of denying: the two tests above are its clauses.
+    /// Ping, not push: this builds the ping handler, and push removes instead of denying - the two
+    /// tests above are its clauses.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
@@ -966,7 +966,7 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_WhenTheGrantNarrowsTheRequest_Completes()
     {
         // The end user approved one of the two entries the client asked for. That is the whole point of the
-        // seam, and RFC 9396 §7 has the server return what was granted rather than what was asked for.
+        // seam, and RFC 9396 section 7 has the server return what was granted rather than what was asked for.
         var request = CreateRequestWithAuthorizationDetails(
             requestedTypes: ["payment_initiation", "account_information"],
             grantedTypes: ["account_information"]);
