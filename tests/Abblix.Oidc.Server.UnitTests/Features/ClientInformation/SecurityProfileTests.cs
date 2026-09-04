@@ -48,13 +48,22 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
     }
 
+    /// <summary>
+    /// A deployment-wide profile is a FLOOR: a client can ask for more and never for less. The row
+    /// that carries the decision is the third - naming a profile that demands nothing, under a
+    /// deployment that demands the FAPI 2.0 bundle, leaves the client held to that bundle.
+    /// </summary>
+    /// <remarks>
+    /// The first two rows keep the case from being satisfied by a resolution that answers the
+    /// strictest bundle whatever it is asked, and the fourth by one that answers the deployment's.
+    /// </remarks>
     [Theory]
     // clientProfile (null = unset), defaultProfile, expected effective
     [InlineData(null, ClientSecurityProfile.None, ClientSecurityProfile.None)]
-    [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset inherits the default
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.None)] // explicit None opts out
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // client wins
-    public void For_UnsetInheritsDefault_ExplicitWins(
+    [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset takes the floor
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // cannot step below it
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // may rise above it
+    public void For_TakesTheFloorAndWhateverTheClientAddsToIt(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile defaultProfile,
         ClientSecurityProfile expected)

@@ -644,11 +644,17 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default: the explicit
-    /// profile overrides the default, so the plain method it allows is accepted.
+    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it: a
+    /// deployment-wide profile is a floor, so naming a profile that demands nothing adds nothing and
+    /// takes nothing away. The plain method the client's own toggle allows is refused all the same.
     /// </summary>
+    /// <remarks>
+    /// The registration that would otherwise escape here does not read as a decision to weaken the
+    /// server, which is what makes the floor worth having: one such client is enough to leave a
+    /// deployment serving requests under none of the controls it turned on.
+    /// </remarks>
     [Fact]
-    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_AllowsPlain()
+    public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesPlain()
     {
         var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
         var context = CreateContext(
@@ -659,7 +665,7 @@ public class PkceValidatorTests
 
         var result = await validator.ValidateAsync(context);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
     }
 
     /// <summary>
