@@ -276,8 +276,9 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ClientAuthentication/SecurityProfileClientAuthenticator.cs</c> - refuses a
-        /// stored registration that cannot satisfy the profile it is held to (sub-range 3090-3099).
+        /// <c>Features/ClientAuthentication/SecurityProfileClientAuthenticator.cs</c> - the security
+        /// profile a stored registration is held to: what it fails, and what it names
+        /// (sub-range 3090-3099).
         /// </summary>
         public static class SecurityProfileClientAuthenticator
         {
@@ -285,6 +286,14 @@ internal static class LogEvents
 
             public const int RegistrationCannotSatisfyProfile = Base + 1;
             public const int ProfileIsNotOneThisServerDefines = Base + 2;
+
+            /// <summary>
+            /// The same refusal for a client that names no profile of its own. A number of its own
+            /// rather than a second wording under <see cref="RegistrationCannotSatisfyProfile"/>, so
+            /// that the absent case is selected by an id that is PRESENT rather than by the absence
+            /// of a field - and so that this record goes on naming one shape per number.
+            /// </summary>
+            public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
         }
     }
 

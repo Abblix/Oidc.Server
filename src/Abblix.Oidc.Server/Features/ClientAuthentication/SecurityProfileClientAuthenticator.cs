@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -78,14 +77,15 @@ internal partial class SecurityProfileClientAuthenticator(
         if (violations.Count == 0)
             return clientInfo;
 
-        // Spelled out rather than passed as a nullable: the generator renders an absent value as
-        // "(null)", which names the shape of a field where the sentence is about a client - and a
-        // client naming nothing is the common case, not the exception.
-        LogRegistrationCannotSatisfyProfile(
-            clientInfo.ClientId,
-            clientInfo.SecurityProfile is { } named ? named.ToString() : "no profile of its own",
-            options.Value.DefaultSecurityProfile,
-            violations);
+        // Two wordings rather than one with an absent value in it: the generator renders a null as
+        // "(null)", which names the shape of a field where the sentence is about a client, and a
+        // sentinel string would put prose where a consumer expects a value it can query.
+        if (clientInfo.SecurityProfile is { } named)
+            LogRegistrationCannotSatisfyProfile(
+                clientInfo.ClientId, named, options.Value.DefaultSecurityProfile, violations);
+        else
+            LogRegistrationCannotSatisfyDeploymentProfile(
+                clientInfo.ClientId, options.Value.DefaultSecurityProfile, violations);
         return null;
     }
 }

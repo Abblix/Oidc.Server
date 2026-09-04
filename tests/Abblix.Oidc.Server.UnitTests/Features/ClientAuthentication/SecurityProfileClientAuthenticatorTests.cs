@@ -104,8 +104,8 @@ public class SecurityProfileClientAuthenticatorTests
             e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
                 .RegistrationCannotSatisfyProfile);
 
-        Assert.Contains(nameof(ClientSecurityProfile.None), entry.Message);
-        Assert.Contains(nameof(ClientSecurityProfile.Fapi2), entry.Message);
+        Assert.Contains($"it names {ClientSecurityProfile.None}", entry.Message);
+        Assert.Contains($"every client to {ClientSecurityProfile.Fapi2}", entry.Message);
     }
 
     /// <summary>
@@ -129,10 +129,70 @@ public class SecurityProfileClientAuthenticatorTests
         var entry = Assert.Single(
             logger.Entries,
             e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyDeploymentProfile);
+
+        Assert.Contains("it names no profile of its own", entry.Message);
+        Assert.Contains($"every client to {ClientSecurityProfile.Fapi2}", entry.Message);
+    }
+
+    /// <summary>
+    /// The structured field carries the VALUE, not the word: a consumer filtering on the profile a
+    /// client named gets an enum it can compare, rather than a rendering of one.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_CarriesTheClientsProfileAsAValue()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
                 .RegistrationCannotSatisfyProfile);
 
-        Assert.DoesNotContain("null", entry.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(nameof(ClientSecurityProfile.Fapi2), entry.Message);
+        Assert.Equal(
+            ClientSecurityProfile.None,
+            Assert.IsType<ClientSecurityProfile>(
+                Assert.Single(entry.Fields, f => f.Key == "ClientProfile").Value));
+    }
+
+    /// <summary>
+    /// And the case where the client named nothing carries no such field at all, under an event id
+    /// of its own. That id is what a consumer selects on: a filter naming an id that is PRESENT
+    /// cannot be satisfied by a field dropped somewhere in the pipeline, which is what asking for an
+    /// absent key would be.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_ForAClientNamingNothing_CarriesNoProfileFieldAndItsOwnEventId()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyDeploymentProfile);
+
+        Assert.DoesNotContain(entry.Fields, f => f.Key == "ClientProfile");
+        Assert.Equal(
+            ClientSecurityProfile.Fapi2,
+            Assert.IsType<ClientSecurityProfile>(
+                Assert.Single(entry.Fields, f => f.Key == "DeploymentProfile").Value));
     }
 
     /// <summary>
@@ -349,12 +409,25 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// A logger that keeps what it was told. Hand-written rather than mocked because the type under
-    /// test is internal, and a dynamic proxy cannot be built over a generic logger closed on it.
+    /// A logger that keeps what it was told, STATE included. Hand-written rather than mocked because
+    /// the type under test is internal, and a dynamic proxy cannot be built over a generic logger
+    /// closed on it.
     /// </summary>
+    /// <remarks>
+    /// Without the state nothing here can tell an enum in a structured field from prose in it, or
+    /// either from a field that is absent - so a decision about what a field carries would rest on
+    /// reading rather than on a run.
+    ///
+    /// The cast falls back to an empty list, which is what a case asserting a field is ABSENT would
+    /// be satisfied by if the generator's state type ever stopped carrying the interface. What stops
+    /// that is the assertion beside it, naming a field that must be PRESENT on the same entry: it
+    /// goes red on an empty list, so it is the control for the absence rather than a repetition of
+    /// the case above it.
+    /// </remarks>
     private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
     {
-        public List<(LogLevel Level, int EventId, string Message)> Entries { get; } = [];
+        public List<(LogLevel Level, int EventId, string Message, IReadOnlyList<KeyValuePair<string, object?>> Fields)>
+            Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -366,6 +439,10 @@ public class SecurityProfileClientAuthenticatorTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, eventId.Id, formatter(state, exception)));
+            => Entries.Add((
+                logLevel,
+                eventId.Id,
+                formatter(state, exception),
+                state as IReadOnlyList<KeyValuePair<string, object?>> ?? []));
     }
 }
