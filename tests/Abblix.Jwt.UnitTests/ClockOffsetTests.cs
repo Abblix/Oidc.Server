@@ -103,14 +103,16 @@ public class ClockOffsetTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(5)]
-    [InlineData(10)]
+    [InlineData(20)]
+    [InlineData(30)]
     public async Task NotBeforeWithinTheTolerance_IsAccepted(int secondsAhead)
     {
+        // A value the default does not supply, so the row measures the skew the caller asked for
+        // rather than the one every other case would have got anyway.
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            skew: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(30));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -134,14 +136,14 @@ public class ClockOffsetTests
     }
 
     [Theory]
-    [InlineData(11)]
+    [InlineData(31)]
     [InlineData(90)]
     public async Task NotBeforeBeyondTheTolerance_IsRefused(int secondsAhead)
     {
         var result = await Validate(
             notBefore: Now.AddSeconds(secondsAhead),
             expiresAt: Now.AddHours(1),
-            skew: TimeSpan.FromSeconds(10));
+            skew: TimeSpan.FromSeconds(30));
 
         Assert.True(result.TryGetFailure(out _));
     }
@@ -214,6 +216,77 @@ public class ClockOffsetTests
     public async Task TheDefaultTolerance_IsTenSeconds(int secondsAhead, bool accepted)
     {
         var result = await Validate(issuedAt: Now.AddSeconds(secondsAhead));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The reject half of FAPI 2.0 section 5.3.2.1 - "shall reject JWTs with an iat or nbf timestamp
+    /// greater than 60 seconds in the future" - holds against a caller asking for more. Note 3 gives
+    /// the reason the number is in the specification at all: "to prevent implementations switching
+    /// off iat and nbf checks completely", which is a property of this validator rather than a
+    /// default somebody may edit.
+    /// </summary>
+    [Theory]
+    [InlineData(60, true)]
+    [InlineData(61, false)]
+    [InlineData(240, false)]
+    public async Task AheadOfTheCeiling_IsRefusedWhateverSkewIsAsked(int secondsAhead, bool accepted)
+    {
+        var result = await Validate(
+            issuedAt: Now.AddSeconds(secondsAhead),
+            skew: TimeSpan.FromMinutes(5));
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The ceiling is one-directional, and this is the half that keeps it from being a cap on the
+    /// skew itself: the specification says nothing about how long an issued token stays usable past
+    /// its expiry, so a caller asking for five minutes there gets five minutes.
+    /// </summary>
+    [Fact]
+    public async Task PastExpiry_TheWholeSkewApplies()
+    {
+        var result = await Validate(
+            expiresAt: Now.AddMinutes(-4),
+            skew: TimeSpan.FromMinutes(5));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// And the other end of that direction, without which the row above would be satisfied by a
+    /// backward window with no bound at all. Each direction needs both an acceptance and a refusal,
+    /// at the default and at a value the caller asked for.
+    /// </summary>
+    [Fact]
+    public async Task PastExpiry_BeyondTheSkew_IsRefused()
+    {
+        var result = await Validate(
+            expiresAt: Now.AddMinutes(-6),
+            skew: TimeSpan.FromMinutes(5));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// And the default reaches that direction too. Ten seconds past an expiry is a shipped change
+    /// of behaviour, not a side effect: a skew is symmetric, so naming it forward and leaving the
+    /// other side unmeasured would be half a criterion.
+    ///
+    /// The boundary differs from the forward one and is measured rather than assumed: expiry is
+    /// compared with <c>&lt;=</c>, so a token exactly the whole skew past its expiry is already
+    /// expired, while one exactly the whole skew ahead is still accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(5, true)]
+    [InlineData(9, true)]
+    [InlineData(10, false)]
+    public async Task TheDefaultTolerance_ReachesPastExpiryToo(int secondsPast, bool accepted)
+    {
+        var result = await Validate(expiresAt: Now.AddSeconds(-secondsPast));
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }

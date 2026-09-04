@@ -31,10 +31,18 @@ public record JwtBearerOptions
 	/// <summary>
 	/// The clock skew tolerance for JWT validation.
 	/// Allows for small differences in clock times between the JWT issuer and this server.
-	/// Default is 5 minutes. RFC 7523 Section 3 allows for clock skew without naming a bound,
-	/// so the number is this server's choice rather than the specification's.
+	/// Default is 60 seconds.
 	/// </summary>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(5);
+	/// <remarks>
+	/// RFC 7523 Section 3 allows for clock skew without naming a bound, but FAPI 2.0 Security
+	/// Profile section 5.3.2.1 does name one: a server "shall reject JWTs with an <c>iat</c> or
+	/// <c>nbf</c> timestamp greater than 60 seconds in the future". The validator holds that bound
+	/// whatever this value says, so a larger number here would widen only how long an assertion
+	/// stays usable past its expiry - while reading as though it also widened the other direction.
+	/// The default is the bound itself: an assertion arrives from an issuer whose clock this server
+	/// does not run, which is the case the tolerance exists for.
+	/// </remarks>
+	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(60);
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.

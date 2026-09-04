@@ -13,7 +13,6 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 using System.Buffers.Text;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt;
 
@@ -637,6 +636,12 @@ internal class JsonWebTokenValidator(
     }
 
     /// <summary>
+    /// The furthest ahead of this clock a token may claim to start or to have been minted, whatever
+    /// skew a caller asks for (FAPI 2.0 Security Profile section 5.3.2.1).
+    /// </summary>
+    private static readonly TimeSpan MaxClockOffsetAhead = TimeSpan.FromSeconds(60);
+
+    /// <summary>
     /// Compares the three timestamps a token may carry against this server's clock, in the order a
     /// sender needs to hear about them.
     /// </summary>
@@ -662,7 +667,16 @@ internal class JsonWebTokenValidator(
     {
         var utcNow = timeProvider.GetUtcNow();
 
-        var ahead = utcNow + parameters.ClockSkew;
+        // FAPI 2.0 Security Profile section 5.3.2.1 bounds ONE direction: a server "shall reject
+        // JWTs with an iat or nbf timestamp greater than 60 seconds in the future". Note 3 says why
+        // the number is there at all - "to prevent implementations switching off iat and nbf checks
+        // completely" - so it is a property of this validator rather than a default a deployment
+        // chooses, and a caller asking for more gets 60 seconds forward. The other direction keeps
+        // the whole skew: how long an already-issued token stays usable past its expiry is the
+        // caller's business, and the specification says nothing about it.
+        var ahead = utcNow + (MaxClockOffsetAhead < parameters.ClockSkew
+            ? MaxClockOffsetAhead
+            : parameters.ClockSkew);
 
         if (notBefore.HasValue && ahead < notBefore.Value.ToUniversalTime())
             return new JwtValidationError(JwtError.InvalidToken, "Token not yet valid");
