@@ -184,8 +184,7 @@ public class DPoPTokenEndpointValidatorTests
 
         var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
-        Assert.NotNull(error);
-        Assert.Null(context.ProofKeyThumbprint);
+        AssertProofRejected(error, context);
     }
 
     [Fact]

@@ -539,10 +539,10 @@ public record OidcOptions
 	/// The server-wide default security profile, applied to every client whose own
 	/// <see cref="ClientInfo.SecurityProfile"/> is left unset (<c>null</c>). A single-profile
 	/// deployment sets this once - for example to <see cref="ClientSecurityProfile.Fapi2"/> - and
-	/// every client without an explicit profile inherits the FAPI 2.0 control bundle; an individual
-	/// client opts out by setting its own profile to <see cref="ClientSecurityProfile.None"/>. The
-	/// default <see cref="ClientSecurityProfile.None"/> leaves unprofiled clients governed by their
-	/// individual metadata flags, so existing deployments are unaffected.
+	/// every client is held to the FAPI 2.0 control bundle, whatever profile it names for itself.
+	/// This is a floor rather than a default: a client can ask for more and no registration can take
+	/// it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/>
+	/// demands nothing, leaving clients governed by their individual metadata flags.
 	/// </summary>
 	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
 

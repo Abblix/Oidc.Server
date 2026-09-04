@@ -384,7 +384,7 @@ public record ClientInfo(string ClientId)
     /// sender-constrained tokens, code-only responses) and prevents the individual toggles above
     /// from weakening it.
     ///
-    /// It can only ADD demands. <see cref="ClientSecurityProfile.None"/> names no controls of its
+    /// It can only tighten. <see cref="ClientSecurityProfile.None"/> names no controls of its
     /// own and therefore changes nothing where the deployment names some: a server-wide profile is
     /// a floor every client stands on, so no registration can take a client out from under it. That
     /// matters because such a registration would not read as a decision to weaken the server, and

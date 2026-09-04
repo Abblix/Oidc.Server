@@ -231,21 +231,25 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// The client's own profile outranks the server-wide default, in both directions: a client
-    /// naming no profile under a Fapi2 server is held to it, and a client naming none under one is
-    /// not. Without the second half the decorator could be reading the default alone.
+    /// The client's profile adds to the deployment's and never replaces it, in both directions: a
+    /// shared-secret client is refused under a Fapi2 server whether it names the empty profile or
+    /// names none at all, and equally when it names Fapi2 under a server that names nothing.
     /// </summary>
+    /// <remarks>
+    /// The second half is what keeps this from being satisfied by a decorator reading the
+    /// deployment alone; the first is what keeps a registration from stepping out from under it.
+    /// </remarks>
     [Fact]
-    public async Task ClientProfileOverridesTheDefault()
+    public async Task TheClientProfileAddsToTheDefaultRatherThanReplacingIt()
     {
-        var (relaxed, relaxedInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
-        Authenticates(relaxedInner, new ClientInfo(ClientId)
+        var (underFloor, underFloorInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        Authenticates(underFloorInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.NotNull(await relaxed.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.Null(await underFloor.TryAuthenticateClientAsync(new ClientRequest()));
 
         var (tightened, tightenedInner) = CreateAuthenticator(ClientSecurityProfile.None);
         Authenticates(tightenedInner, new ClientInfo(ClientId)
@@ -255,6 +259,23 @@ public class SecurityProfileClientAuthenticatorTests
         });
 
         Assert.Null(await tightened.TryAuthenticateClientAsync(new ClientRequest()));
+    }
+
+    /// <summary>
+    /// And a shared-secret client under a server naming no profile is accepted, without which the
+    /// case above would be satisfied by a decorator refusing every shared-secret client.
+    /// </summary>
+    [Fact]
+    public async Task NoProfileEitherSide_LeavesASharedSecretClientAlone()
+    {
+        var (unprofiled, unprofiledInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        Authenticates(unprofiledInner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        Assert.NotNull(await unprofiled.TryAuthenticateClientAsync(new ClientRequest()));
     }
 
     /// <summary>

@@ -49,6 +49,10 @@ internal partial class SecurityProfileClientAuthenticator(
         if (clientInfo == null)
             return null;
 
+        // The raw value, because the question below is whether this server DEFINES it - not what
+        // it demands. What the client is held to comes from the combination further down, which
+        // takes the deployment's demands as a floor; this read must not, or an undefined value the
+        // client set would be hidden behind a defined deployment default.
         var profile = clientInfo.SecurityProfile ?? options.Value.DefaultSecurityProfile;
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
@@ -69,7 +73,7 @@ internal partial class SecurityProfileClientAuthenticator(
         var violations = SecurityProfileConsistency.FindViolations(
             clientInfo.EffectiveResponseTypes,
             clientInfo.TokenEndpointAuthMethod,
-            profile);
+            SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile));
 
         if (violations.Count == 0)
             return clientInfo;

@@ -41,6 +41,8 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
 
         foreach (var client in options.Clients)
         {
+            // The raw value, for the definedness question alone. The controls this client is
+            // held to come from the combination below, which takes the deployment's as a floor.
             var effectiveProfile = client.SecurityProfile ?? options.DefaultSecurityProfile;
 
             // The value tested is the EFFECTIVE one, so an undefined default and an undefined
@@ -63,7 +65,7 @@ public class OidcOptionsSecurityProfileValidator : IValidateOptions<OidcOptions>
                      SecurityProfileConsistency.FindViolations(
                          client.EffectiveResponseTypes,
                          client.TokenEndpointAuthMethod,
-                         effectiveProfile))
+                         SecurityProfileRequirements.For(client, options.DefaultSecurityProfile)))
             {
                 failures.Add($"Client '{client.ClientId}': {violation}.");
             }

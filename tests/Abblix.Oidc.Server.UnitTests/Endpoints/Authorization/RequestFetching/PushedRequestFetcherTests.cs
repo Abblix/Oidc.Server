@@ -154,6 +154,7 @@ public class PushedRequestFetcherTests
         var request = CreateRequest();
         var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2).FetchAsync(request);
 
-        Assert.True(result.TryGetFailure(out _));
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
     }
 }

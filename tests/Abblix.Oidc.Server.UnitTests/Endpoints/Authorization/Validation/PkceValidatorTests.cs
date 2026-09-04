@@ -666,6 +666,8 @@ public class PkceValidatorTests
         var result = await validator.ValidateAsync(context);
 
         Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
