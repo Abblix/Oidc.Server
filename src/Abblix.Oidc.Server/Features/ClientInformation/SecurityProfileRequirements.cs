@@ -335,11 +335,90 @@ public sealed record SecurityProfileRequirements
     };
 
     /// <summary>
-    /// Convenience entry point for the validators: resolves the effective profile for a client and
-    /// returns its control bundle in one call.
+    /// The control bundle a client is actually held to: what the deployment demands of everyone,
+    /// tightened by whatever the client names for itself.
     /// </summary>
+    /// <remarks>
+    /// A deployment-wide profile is a FLOOR, not a default. Turning one on is a statement about
+    /// every client the server serves, so a client cannot step out from under it - it can only ask
+    /// for more. The alternative reading, where a client naming a profile replaces the deployment's,
+    /// makes the server-wide setting a suggestion: one registration would quietly leave a
+    /// FAPI 2.0 deployment serving a client under none of its controls, and nothing about that
+    /// registration would look like a decision to weaken the server.
+    ///
+    /// The combination is per CONTROL rather than a choice between two bundles, because "stricter"
+    /// is not a property a bundle has - one profile can demand sender-constrained tokens while
+    /// another names a tighter clock window, and picking either bundle whole would drop the other's
+    /// demand.
+    /// </remarks>
     /// <param name="client">The client whose effective profile is being resolved.</param>
-    /// <param name="defaultProfile">The server-wide default profile to fall back to.</param>
+    /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
     public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
-        => Resolve(client.SecurityProfile ?? defaultProfile);
+    {
+        var deployment = Resolve(defaultProfile);
+
+        return client.SecurityProfile is not { } chosen
+            ? deployment
+            : deployment.TightenedBy(Resolve(chosen));
+    }
+
+    /// <summary>
+    /// This bundle with every control at whichever of the two values concedes less.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each flag is OR-ed, including <see cref="ForbidRefreshTokenRotation"/>, and that one is not a
+    /// slip. It removes a control, but the profile removing it introduces two others in its place -
+    /// so carrying it over is what keeps a profile whole, while AND-ing it would hand rotation back
+    /// to a client under a deployment that had switched it off, dismantling one part of a bundle
+    /// the deployment turned on entire.
+    /// </para>
+    /// <para>
+    /// A ceiling is the SMALLER of the two, and an absent ceiling concedes to a present one: no
+    /// bound cannot cancel a bound. A tolerance is compared half by half, since the two directions
+    /// answer different questions and a profile may tighten one without touching the other.
+    /// </para>
+    /// </remarks>
+    /// <param name="other">The bundle whose demands are added to this one's.</param>
+    private SecurityProfileRequirements TightenedBy(SecurityProfileRequirements other) => new()
+    {
+        RequirePkce = RequirePkce || other.RequirePkce,
+        RequireS256CodeChallenge = RequireS256CodeChallenge || other.RequireS256CodeChallenge,
+        RequirePushedAuthorizationRequests =
+            RequirePushedAuthorizationRequests || other.RequirePushedAuthorizationRequests,
+        RequireSenderConstrainedTokens =
+            RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
+        RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
+        RequireStrictRequestObjectProcessing =
+            RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
+        RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
+        RequireKeyBasedClientAuthentication =
+            RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
+        RequireIssuerAudienceInClientAssertion =
+            RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
+        ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+
+        MaxClockSkew = Tighter(MaxClockSkew, other.MaxClockSkew),
+        DefaultClockSkew = new ClockSkew
+        {
+            Past = Shorter(DefaultClockSkew.Past, other.DefaultClockSkew.Past),
+            Future = Shorter(DefaultClockSkew.Future, other.DefaultClockSkew.Future),
+        },
+    };
+
+    /// <summary>
+    /// The tighter of two ceilings, where absence means no ceiling and therefore concedes.
+    /// </summary>
+    private static TimeSpan? Tighter(TimeSpan? left, TimeSpan? right) => (left, right) switch
+    {
+        ({ } a, { } b) => Shorter(a, b),
+        ({ } a, null) => a,
+        (null, { } b) => b,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The shorter of two windows, which is the one granting less.
+    /// </summary>
+    private static TimeSpan Shorter(TimeSpan left, TimeSpan right) => left < right ? left : right;
 }

@@ -48,13 +48,22 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
     }
 
+    /// <summary>
+    /// A deployment-wide profile is a FLOOR: a client can ask for more and never for less. The row
+    /// that carries the decision is the third - naming a profile that demands nothing, under a
+    /// deployment that demands the FAPI 2.0 bundle, leaves the client held to that bundle.
+    /// </summary>
+    /// <remarks>
+    /// The first two rows keep the case from being satisfied by a resolution that answers the
+    /// strictest bundle whatever it is asked, and the fourth by one that answers the deployment's.
+    /// </remarks>
     [Theory]
     // clientProfile (null = unset), defaultProfile, expected effective
     [InlineData(null, ClientSecurityProfile.None, ClientSecurityProfile.None)]
-    [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset inherits the default
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.None)] // explicit None opts out
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // client wins
-    public void For_UnsetInheritsDefault_ExplicitWins(
+    [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset takes the floor
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // cannot step below it
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // may rise above it
+    public void For_TakesTheFloorAndWhateverTheClientAddsToIt(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile defaultProfile,
         ClientSecurityProfile expected)
@@ -82,7 +91,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
     }
@@ -97,7 +106,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [["Code"]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
     }
@@ -108,7 +117,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Equal(2, violations.Count);
     }
@@ -119,7 +128,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         // code is allowed, so only the implicit/hybrid violation remains.
         Assert.Single(violations);
@@ -131,7 +140,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            ClientSecurityProfile.None);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);
     }
@@ -201,6 +210,99 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// The floor reaches the two controls only this walk enforces. A client naming the empty
+    /// profile under a FAPI 2.0 deployment, registered to authenticate with a shared secret, is
+    /// refused at startup - the profile admits confidential clients authenticating by key, and it
+    /// admits them of every client the deployment serves.
+    /// </summary>
+    /// <remarks>
+    /// These two flags have no other consumer, so a resolution that dropped the floor here would
+    /// show up nowhere else: every request-time validator would refuse such a client while the
+    /// server started clean, leaving the operator to learn it from refusals citing requirements no
+    /// configuration of theirs sets. Worse, the client would go on holding a shared secret while
+    /// the profile switched OFF its refresh token rotation, which is what the two controls this
+    /// walk enforces are there to pay for.
+    /// </remarks>
+    [Fact]
+    public void OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Fails()
+    {
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    SecurityProfile = ClientSecurityProfile.None,
+                    AllowedResponseTypes = [[ResponseTypes.Code]],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains("private key JWT", result.FailureMessage!);
+    }
+
+    /// <summary>
+    /// The other control this walk owns, given its own case: a client authenticating with NOTHING is
+    /// the public client the profile excludes, and the floor reaches it too. The case above cannot
+    /// stand for this one - it uses a shared secret, which is a confidential client by RFC 6749 and
+    /// trips the key-based requirement alone, so removing the confidential-client arm would leave it
+    /// green.
+    /// </summary>
+    [Fact]
+    public void OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndAuthenticatesWithNothing_Fails()
+    {
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    SecurityProfile = ClientSecurityProfile.None,
+                    AllowedResponseTypes = [[ResponseTypes.Code]],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains("confidential clients only", result.FailureMessage!);
+    }
+
+    /// <summary>
+    /// The control for the shared-secret case: the same client under a deployment naming no profile
+    /// starts clean, without which that case would be satisfied by a walk refusing every
+    /// shared-secret client whatever the deployment demands.
+    /// </summary>
+    [Fact]
+    public void OptionsValidator_NoGlobalDefault_ClientNamesNoneAndUsesASharedSecret_Succeeds()
+    {
+        var options = new OidcOptions
+        {
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    SecurityProfile = ClientSecurityProfile.None,
+                    AllowedResponseTypes = [[ResponseTypes.Code]],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    /// <summary>
     /// An unprofiled client inherits the server-wide DefaultSecurityProfile=FAPI 2.0; a hybrid
     /// response type then makes it inconsistent and startup validation fails.
     /// </summary>
@@ -225,11 +327,12 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// A client that explicitly selects None opts out of the server-wide FAPI 2.0 default, so its
-    /// hybrid response type is not constrained and startup validation passes.
+    /// A client naming the empty profile under a server-wide FAPI 2.0 default is refused at startup
+    /// for its hybrid response type, the same as one naming no profile at all. The deployment's
+    /// profile is a floor, and naming a profile that demands nothing adds nothing to it.
     /// </summary>
     [Fact]
-    public void OptionsValidator_ExplicitNoneOverridesGlobalDefault_Succeeds()
+    public void OptionsValidator_ExplicitNoneUnderGlobalDefault_StillFails()
     {
         var options = new OidcOptions
         {
@@ -246,7 +349,7 @@ public class SecurityProfileTests
 
         var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
 
-        Assert.True(result.Succeeded);
+        Assert.True(result.Failed);
     }
 
     /// <summary>
@@ -260,7 +363,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("confidential clients only"));
     }
@@ -279,7 +382,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("mutual TLS or a private key JWT"));
     }
@@ -297,7 +400,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
-            ClientSecurityProfile.Fapi2);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
     }
@@ -312,7 +415,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
-            ClientSecurityProfile.None);
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);
     }

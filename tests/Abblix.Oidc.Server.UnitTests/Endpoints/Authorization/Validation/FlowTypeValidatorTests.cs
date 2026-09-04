@@ -718,11 +718,12 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default: the implicit
-    /// response type it is registered for is accepted.
+    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it, so the
+    /// implicit response type it is registered for is refused. The profile permits the authorization
+    /// code alone, and it permits it of every client the deployment serves.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ExplicitNoneOverridesGlobalDefaultFapi2_AllowsImplicit()
+    public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesImplicit()
     {
         var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
         var context = CreateContext(
@@ -732,8 +733,8 @@ public class FlowTypeValidatorTests
 
         var result = await validator.ValidateAsync(context);
 
-        Assert.Null(result);
-        Assert.Equal(FlowTypes.Implicit, context.FlowType);
+        Assert.NotNull(result);
+        Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     private static FlowTypeValidator NoneEnabledValidator()

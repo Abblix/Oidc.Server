@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -49,6 +48,10 @@ internal partial class SecurityProfileClientAuthenticator(
         if (clientInfo == null)
             return null;
 
+        // The raw value, because the question below is whether this server DEFINES it - not what
+        // it demands. What the client is held to comes from the combination further down, which
+        // takes the deployment's demands as a floor; this read must not, or an undefined value the
+        // client set would be hidden behind a defined deployment default.
         var profile = clientInfo.SecurityProfile ?? options.Value.DefaultSecurityProfile;
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
@@ -69,29 +72,20 @@ internal partial class SecurityProfileClientAuthenticator(
         var violations = SecurityProfileConsistency.FindViolations(
             clientInfo.EffectiveResponseTypes,
             clientInfo.TokenEndpointAuthMethod,
-            profile);
+            SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile));
 
         if (violations.Count == 0)
             return clientInfo;
 
-        LogRegistrationCannotSatisfyProfile(clientInfo.ClientId, profile, violations);
+        // Two wordings rather than one with an absent value in it: the generator renders a null as
+        // "(null)", which names the shape of a field where the sentence is about a client, and a
+        // sentinel string would put prose where a consumer expects a value it can query.
+        if (clientInfo.SecurityProfile is { } named)
+            LogRegistrationCannotSatisfyProfile(
+                clientInfo.ClientId, named, options.Value.DefaultSecurityProfile, violations);
+        else
+            LogRegistrationCannotSatisfyDeploymentProfile(
+                clientInfo.ClientId, options.Value.DefaultSecurityProfile, violations);
         return null;
     }
-
-    [LoggerMessage(
-        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.RegistrationCannotSatisfyProfile,
-        Level = LogLevel.Warning,
-        Message = "The client {ClientId} authenticated, but its registration cannot satisfy the "
-                  + "{Profile} profile it is held to: {@Violations}")]
-    private partial void LogRegistrationCannotSatisfyProfile(
-        string ClientId,
-        ClientSecurityProfile Profile,
-        IReadOnlyList<string> Violations);
-
-    [LoggerMessage(
-        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.ProfileIsNotOneThisServerDefines,
-        Level = LogLevel.Warning,
-        Message = "The client {ClientId} names security profile {Profile}, which this server does "
-                  + "not define, so it is held to every control this server can demand")]
-    private partial void LogProfileIsNotOneThisServerDefines(string ClientId, int Profile);
 }

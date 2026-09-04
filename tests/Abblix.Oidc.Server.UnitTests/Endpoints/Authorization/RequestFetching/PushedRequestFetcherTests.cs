@@ -137,11 +137,12 @@ public class PushedRequestFetcherTests
     }
 
     /// <summary>
-    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default, so PAR is not
-    /// imposed and a non-pushed request passes through.
+    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it, so a request
+    /// that was not pushed is refused. The profile requires every authorization flow to start through
+    /// a pushed request, of every client the deployment serves.
     /// </summary>
     [Fact]
-    public async Task FetchAsync_ExplicitNoneOverridesGlobalDefaultFapi2_PassesThrough()
+    public async Task FetchAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
     {
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId))
@@ -153,7 +154,7 @@ public class PushedRequestFetcherTests
         var request = CreateRequest();
         var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2).FetchAsync(request);
 
-        Assert.True(result.TryGetSuccess(out var passed));
-        Assert.Same(request, passed);
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
     }
 }

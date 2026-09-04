@@ -80,6 +80,122 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// The refusal an operator reads names BOTH sides, because the controls come from the two
+    /// together and neither alone says where the requirement came from. A client naming the empty
+    /// profile satisfies it and is refused anyway, which is the line that would otherwise send the
+    /// operator looking at the client's registration for a demand the deployment made.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_NamesTheClientsChoiceAndTheDeploymentsFloor()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyProfile);
+
+        Assert.Contains($"it names {ClientSecurityProfile.None}", entry.Message);
+        Assert.Contains($"every client to {ClientSecurityProfile.Fapi2}", entry.Message);
+    }
+
+    /// <summary>
+    /// And a client naming NO profile - which is most of them - still produces a sentence, rather
+    /// than one with a hole where the name would be. This is the shape the message is read on most
+    /// often, so a placeholder that renders empty for it makes the line worse than saying nothing.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_ReadsAsASentenceWhenTheClientNamesNoProfile()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyDeploymentProfile);
+
+        Assert.Contains("it names no profile of its own", entry.Message);
+        Assert.Contains($"every client to {ClientSecurityProfile.Fapi2}", entry.Message);
+    }
+
+    /// <summary>
+    /// The structured field carries the VALUE, not the word: a consumer filtering on the profile a
+    /// client named gets an enum it can compare, rather than a rendering of one.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_CarriesTheClientsProfileAsAValue()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyProfile);
+
+        Assert.Equal(
+            ClientSecurityProfile.None,
+            Assert.IsType<ClientSecurityProfile>(
+                Assert.Single(entry.Fields, f => f.Key == "ClientProfile").Value));
+    }
+
+    /// <summary>
+    /// And the case where the client named nothing carries no such field at all, under an event id
+    /// of its own. That id is what a consumer selects on: a filter naming an id that is PRESENT
+    /// cannot be satisfied by a field dropped somewhere in the pipeline, which is what asking for an
+    /// absent key would be.
+    /// </summary>
+    [Fact]
+    public async Task TheRefusal_ForAClientNamingNothing_CarriesNoProfileFieldAndItsOwnEventId()
+    {
+        var logger = new CapturingLogger();
+
+        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        });
+
+        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+
+        var entry = Assert.Single(
+            logger.Entries,
+            e => e.EventId == LogEvents.ClientAuth.SecurityProfileClientAuthenticator
+                .RegistrationCannotSatisfyDeploymentProfile);
+
+        Assert.DoesNotContain(entry.Fields, f => f.Key == "ClientProfile");
+        Assert.Equal(
+            ClientSecurityProfile.Fapi2,
+            Assert.IsType<ClientSecurityProfile>(
+                Assert.Single(entry.Fields, f => f.Key == "DeploymentProfile").Value));
+    }
+
+    /// <summary>
     /// And a profile this server does define says nothing, or the line would be noise on every
     /// request rather than a signal about one client.
     /// </summary>
@@ -231,21 +347,25 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// The client's own profile outranks the server-wide default, in both directions: a client
-    /// naming no profile under a Fapi2 server is held to it, and a client naming none under one is
-    /// not. Without the second half the decorator could be reading the default alone.
+    /// The client's profile adds to the deployment's and never replaces it, in both directions: a
+    /// shared-secret client is refused under a Fapi2 server whether it names the empty profile or
+    /// names none at all, and equally when it names Fapi2 under a server that names nothing.
     /// </summary>
+    /// <remarks>
+    /// The second half is what keeps this from being satisfied by a decorator reading the
+    /// deployment alone; the first is what keeps a registration from stepping out from under it.
+    /// </remarks>
     [Fact]
-    public async Task ClientProfileOverridesTheDefault()
+    public async Task TheClientProfileAddsToTheDefaultRatherThanReplacingIt()
     {
-        var (relaxed, relaxedInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
-        Authenticates(relaxedInner, new ClientInfo(ClientId)
+        var (underFloor, underFloorInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        Authenticates(underFloorInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.NotNull(await relaxed.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.Null(await underFloor.TryAuthenticateClientAsync(new ClientRequest()));
 
         var (tightened, tightenedInner) = CreateAuthenticator(ClientSecurityProfile.None);
         Authenticates(tightenedInner, new ClientInfo(ClientId)
@@ -255,6 +375,23 @@ public class SecurityProfileClientAuthenticatorTests
         });
 
         Assert.Null(await tightened.TryAuthenticateClientAsync(new ClientRequest()));
+    }
+
+    /// <summary>
+    /// And a shared-secret client under a server naming no profile is accepted, without which the
+    /// case above would be satisfied by a decorator refusing every shared-secret client.
+    /// </summary>
+    [Fact]
+    public async Task NoProfileEitherSide_LeavesASharedSecretClientAlone()
+    {
+        var (unprofiled, unprofiledInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        Authenticates(unprofiledInner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+            SecurityProfile = ClientSecurityProfile.None,
+        });
+
+        Assert.NotNull(await unprofiled.TryAuthenticateClientAsync(new ClientRequest()));
     }
 
     /// <summary>
@@ -272,12 +409,25 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// A logger that keeps what it was told. Hand-written rather than mocked because the type under
-    /// test is internal, and a dynamic proxy cannot be built over a generic logger closed on it.
+    /// A logger that keeps what it was told, STATE included. Hand-written rather than mocked because
+    /// the type under test is internal, and a dynamic proxy cannot be built over a generic logger
+    /// closed on it.
     /// </summary>
+    /// <remarks>
+    /// Without the state nothing here can tell an enum in a structured field from prose in it, or
+    /// either from a field that is absent - so a decision about what a field carries would rest on
+    /// reading rather than on a run.
+    ///
+    /// The cast falls back to an empty list, which is what a case asserting a field is ABSENT would
+    /// be satisfied by if the generator's state type ever stopped carrying the interface. What stops
+    /// that is the assertion beside it, naming a field that must be PRESENT on the same entry: it
+    /// goes red on an empty list, so it is the control for the absence rather than a repetition of
+    /// the case above it.
+    /// </remarks>
     private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
     {
-        public List<(LogLevel Level, int EventId, string Message)> Entries { get; } = [];
+        public List<(LogLevel Level, int EventId, string Message, IReadOnlyList<KeyValuePair<string, object?>> Fields)>
+            Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -289,6 +439,10 @@ public class SecurityProfileClientAuthenticatorTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, eventId.Id, formatter(state, exception)));
+            => Entries.Add((
+                logLevel,
+                eventId.Id,
+                formatter(state, exception),
+                state as IReadOnlyList<KeyValuePair<string, object?>> ?? []));
     }
 }

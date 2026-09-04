@@ -30,13 +30,20 @@ public static class SecurityProfileConsistency
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
     /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
-    /// <param name="profile">The effective profile governing the client.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    /// <remarks>
+    /// The BUNDLE rather than a profile name, because a client is held to the deployment's profile
+    /// tightened by its own and no enum value names that combination. Taking a name here would put
+    /// the resolution inside this method, where it would silently undo whichever floor its caller
+    /// had just applied - and the two controls below are the ones nothing else enforces, so the
+    /// gap would show up as a client authenticating with a shared secret under a profile that
+    /// admits no such client.
+    /// </remarks>
     public static IReadOnlyList<string> FindViolations(
         IReadOnlyList<string[]> allowedResponseTypes,
         string tokenEndpointAuthMethod,
-        ClientSecurityProfile profile)
+        SecurityProfileRequirements requirements)
     {
-        var requirements = SecurityProfileRequirements.Resolve(profile);
         var violations = new List<string>();
 
         // RFC 6749 draws the line at whether the client can hold a credential at all, and the

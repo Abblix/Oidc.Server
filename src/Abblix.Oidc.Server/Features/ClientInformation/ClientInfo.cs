@@ -378,15 +378,21 @@ public record ClientInfo(string ClientId)
     public bool TlsClientCertificateBoundAccessTokens { get; set; } = false;
 
     /// <summary>
-    /// The named security profile this client is held to. <see cref="ClientSecurityProfile.Fapi2"/>
-    /// forces the FAPI 2.0 control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization
-    /// Requests, sender-constrained tokens, code-only responses) on the client and prevents the
-    /// individual toggles above from weakening it. <see cref="ClientSecurityProfile.None"/> is an
-    /// explicit opt-out that leaves the client governed by those individual toggles alone, overriding
-    /// any server-wide default. <c>null</c> (the default) means the client states no preference and
-    /// inherits <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> - which is
-    /// itself <see cref="ClientSecurityProfile.None"/> unless the deployment sets a server-wide
-    /// profile, so existing clients are unaffected.
+    /// A named security profile this client asks to be held to, ON TOP of whatever the deployment
+    /// demands of every client. <see cref="ClientSecurityProfile.Fapi2"/> forces the FAPI 2.0
+    /// control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization Requests,
+    /// sender-constrained tokens, code-only responses) and prevents the individual toggles above
+    /// from weakening it.
+    ///
+    /// It can only tighten. <see cref="ClientSecurityProfile.None"/> names no controls of its
+    /// own and therefore changes nothing where the deployment names some: a server-wide profile is
+    /// a floor every client stands on, so no registration can take a client out from under it. That
+    /// matters because such a registration would not read as a decision to weaken the server, and
+    /// one of them is enough to leave a deployment serving a client under none of the controls it
+    /// turned on.
+    ///
+    /// <c>null</c> (the default) states no preference and leaves the client on
+    /// <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> alone.
     /// </summary>
     public ClientSecurityProfile? SecurityProfile { get; set; }
 

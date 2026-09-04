@@ -125,17 +125,15 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	/// <remarks>
 	/// The CLIENT's profile decides, falling back to the deployment's, the way every other reader of
-	/// a profile in this codebase resolves one. Reading the server default alone would ignore both
-	/// directions of a per-client setting: a client held to a bounding profile under a server held
-	/// to none would keep the looser window, and a client explicitly opted out under a bounding
-	/// server would not get its opt-out.
+	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
+	/// client that asks for a tighter window than the deployment demands.
 	/// </remarks>
 	private ClockSkew ResolveClockSkew(ClientInfo clientInfo)
 		=> issuerProvider.Options.ResolveClockSkew(Profile(clientInfo));
 
 	/// <summary>
-	/// The control bundle this client is held to - its own profile where it names one, the
-	/// deployment's otherwise, which is how every other reader of a profile here resolves it.
+	/// The control bundle this client is held to: what the deployment demands of everyone,
+	/// tightened by whatever the client names for itself.
 	/// </summary>
 	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
 		=> SecurityProfileRequirements.For(clientInfo, oidcOptions.Value.DefaultSecurityProfile);
