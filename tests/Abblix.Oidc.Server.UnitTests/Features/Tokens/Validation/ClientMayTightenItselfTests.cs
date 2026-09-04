@@ -58,7 +58,9 @@ public class ClientMayTightenItselfTests
         ClientSecurityProfile deploymentProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? notBefore = null)
+        DateTimeOffset? notBefore = null,
+        bool unreadableIssuedAt = false,
+        ValidationOptions options = ValidationOptions.Default)
     {
         var token = new JsonWebToken
         {
@@ -75,6 +77,9 @@ public class ClientMayTightenItselfTests
 
         if (notBefore.HasValue)
             token.Payload.NotBefore = notBefore.Value;
+
+        if (unreadableIssuedAt)
+            token.Payload.Json[JwtClaimTypes.IssuedAt] = 99999999999999;
 
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
@@ -108,7 +113,7 @@ public class ClientMayTightenItselfTests
             Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile }),
             new FixedClock(Now));
 
-        return await validator.ValidateAsync("header.payload.signature");
+        return await validator.ValidateAsync("header.payload.signature", options);
     }
 
     /// <summary>
@@ -231,6 +236,39 @@ public class ClientMayTightenItselfTests
             clientProfile: null,
             deploymentProfile: ClientSecurityProfile.None,
             notBefore: Now + AheadOfEveryProfileButNone);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
+    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()
+    {
+        var result = await Validate(
+            clientProfile: ClientSecurityProfile.Fapi2,
+            deploymentProfile: ClientSecurityProfile.None,
+            notBefore: Now.AddSeconds(5));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A caller that did not ask for lifetime validation does not get it, and - the reason the pass
+    /// is written as a condition rather than run unconditionally - does not meet the timestamp
+    /// accessors either. This token's <c>iat</c> is outside the range <see cref="DateTimeOffset"/>
+    /// can hold, so reading it at all throws rather than refusing.
+    /// </summary>
+    [Fact]
+    public async Task ACallerNotAskingForLifetimeValidation_IsNotGivenIt()
+    {
+        var result = await Validate(
+            clientProfile: ClientSecurityProfile.Fapi2,
+            deploymentProfile: ClientSecurityProfile.None,
+            unreadableIssuedAt: true,
+            options: ValidationOptions.RequireValidSignedTokens);
 
         Assert.True(result.TryGetSuccess(out _));
     }

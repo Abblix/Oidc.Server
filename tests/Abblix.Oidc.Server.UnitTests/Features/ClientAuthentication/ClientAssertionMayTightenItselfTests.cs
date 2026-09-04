@@ -179,6 +179,20 @@ public class ClientAssertionMayTightenItselfTests
         Assert.NotNull(result);
     }
 
+    /// <summary>
+    /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
+    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()
+    {
+        var result = await Authenticate(
+            ClientSecurityProfile.Fapi2,
+            notBefore: Now.AddSeconds(5));
+
+        Assert.NotNull(result);
+    }
+
     private async Task<ClientInfo?> Authenticate(
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,

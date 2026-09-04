@@ -215,6 +215,27 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
+        if (!await ReserveTheAssertionAsync(token, clientInfo))
+        {
+            return null;
+        }
+
+        return clientInfo;
+    }
+
+    /// <summary>
+    /// Claims the assertion's identifier so it cannot be presented a second time, answering whether
+    /// the claim was granted.
+    /// </summary>
+    /// <remarks>
+    /// Its own method because the reservation is irreversible, and a method ending in the spend
+    /// cannot grow a check underneath it by accident: anything added to the caller lands before the
+    /// call rather than after it.
+    /// </remarks>
+    /// <param name="token">The assertion whose identifier is being claimed.</param>
+    /// <param name="clientInfo">The client the assertion authenticates.</param>
+    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, ClientInfo clientInfo)
+    {
         // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,
@@ -223,7 +244,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (token is not { Payload.JwtId: { } jwtId })
         {
             LogMissingJti(clientInfo.ClientId);
-            return null;
+            return false;
         }
 
         // RFC 7523 §3: the assertion MUST contain an 'exp' claim that limits the window during
@@ -233,7 +254,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (token is not { Payload.ExpiresAt: { } expiresAt })
         {
             LogMissingExpiration(clientInfo.ClientId);
-            return null;
+            return false;
         }
 
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
@@ -242,10 +263,10 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (!await replayCache.TryReserveAsync(jwtId, expiresAt))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
-            return null;
+            return false;
         }
 
-        return clientInfo;
+        return true;
     }
 
     /// <summary>

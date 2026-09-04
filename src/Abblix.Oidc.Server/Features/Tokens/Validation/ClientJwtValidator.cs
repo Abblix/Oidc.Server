@@ -132,9 +132,10 @@ public partial class ClientJwtValidator(
         // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
         // wider than the one already applied.
         //
-        // Under the same flag as the pass above, and not merely for symmetry: a caller that opted
-        // out of time handling must not meet the timestamp accessors either, since they throw on a
-        // value outside the range DateTimeOffset can hold.
+        // The same flag the pass above reads, because the caller's options are handed to it
+        // unchanged where the validation parameters are built. Not symmetry for its own sake: a
+        // caller that opted out of time handling must not meet the timestamp accessors either,
+        // since they throw on a value outside the range DateTimeOffset can hold.
         if (options.HasFlag(ValidationOptions.ValidateLifetime))
         {
             var refusal = SecurityProfileRequirements
