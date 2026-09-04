@@ -39,9 +39,9 @@ public record ValidationParameters
 
 	/// <summary>
 	/// How far this token's timestamps may sit either side of this clock and still be honoured.
-	/// <see cref="Jwt.ClockSkew.Default"/> unless the caller says otherwise.
+	/// None unless the caller says otherwise.
 	/// </summary>
-	public ClockSkew ClockSkew { get; set; } = ClockSkew.Default;
+	public ClockSkew ClockSkew { get; set; } = ClockSkew.None;
 
 	/// <summary>
 	/// Token-type values (per RFC 7515 section 4.1.9 <c>typ</c> header) that the JWT MUST match.

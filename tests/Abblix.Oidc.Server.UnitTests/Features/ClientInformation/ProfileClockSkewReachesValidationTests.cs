@@ -188,15 +188,18 @@ public class ProfileClockSkewReachesValidationTests
     }
 
     /// <summary>
-    /// And outside it the library default arrives, which is what keeps the case above from being
-    /// satisfied by the profile's pair applied unconditionally: RFC 7523 Section 3 names no bound,
-    /// so a deployment held to no profile keeps the looser window.
+    /// And selecting no profile brings ITS answer, not the library's own - which is none, and would
+    /// leave a bearer assertion from an issuer whose clock this server does not run refused over a
+    /// second of drift. Without this case the one above would be satisfied by a site that sets no
+    /// tolerance at all, since the profile's pair would then never be asked for.
     /// </summary>
     [Fact]
-    public async Task WithNoProfile_TheLibraryDefaultReachesTheValidator()
+    public async Task WithNoProfile_TheProfilesOwnToleranceReachesTheValidator()
     {
+        var expected = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None).DefaultClockSkew;
         var parameters = await CaptureParameters(ClientSecurityProfile.None);
 
-        Assert.Equal(ClockSkew.Default, parameters.ClockSkew);
+        Assert.Equal(expected, parameters.ClockSkew);
+        Assert.NotEqual(ClockSkew.None, parameters.ClockSkew);
     }
 }

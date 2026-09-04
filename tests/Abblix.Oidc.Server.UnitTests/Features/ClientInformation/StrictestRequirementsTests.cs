@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
+using Abblix.Jwt;
 using System.Linq;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -28,22 +30,24 @@ public class StrictestRequirementsTests
     /// moment it is declared, which is the whole point: a list would go on passing without it.
     /// </summary>
     [Fact]
-    public void EveryTighteningFlag_IsSet()
+    public void EveryControl_CarriesItsStrictestValue()
     {
-        var unset = TighteningFlags()
-            .Where(flag => !(bool)flag.GetValue(SecurityProfileRequirements.StrictestRequirements)!)
-            .Select(flag => flag.Name)
+        var wrong = Controls()
+            .Where(control => !Equals(
+                control.GetValue(SecurityProfileRequirements.StrictestRequirements),
+                StrictestValue(control.Name)))
+            .Select(control => control.Name)
             .ToArray();
 
         Assert.True(
-            unset.Length == 0,
-            $"the strictest bundle leaves a control undemanded: {string.Join(", ", unset)}");
+            wrong.Length == 0,
+            $"the strictest bundle leaves a control undemanded: {string.Join(", ", wrong)}");
     }
 
     /// <summary>
     /// And the one flag that REMOVES a control stays off, which is the strict setting for it.
-    /// Without this case the assertion above could be satisfied by turning everything on, which
-    /// would weaken the bundle it is meant to strengthen.
+    /// Stated here as well as in the table, so that an entry deleted from the table cannot quietly
+    /// turn this control into one more thing the bundle demands.
     /// </summary>
     [Fact]
     public void TheRelaxingFlag_IsNotSet()
@@ -64,24 +68,68 @@ public class StrictestRequirementsTests
     }
 
     /// <summary>
-    /// The tightening flags: every boolean the type declares except the single one that removes a
-    /// control. Named through <c>nameof</c> so a rename carries it, and derived from the type rather
-    /// than written out, so the set cannot fall behind the type.
+    /// Every control this bundle must demand carries the strictest value its type can express, and
+    /// a control whose strictest value is not simply <c>true</c> is named here with the value it
+    /// must hold. Named through <c>nameof</c> so a rename carries them.
     /// </summary>
-    private static System.Reflection.PropertyInfo[] TighteningFlags()
-        => typeof(SecurityProfileRequirements)
-            .GetProperties()
-            .Where(property => property.PropertyType == typeof(bool))
-            .Where(property => property.Name != nameof(SecurityProfileRequirements.ForbidRefreshTokenRotation))
-            .ToArray();
+    /// <remarks>
+    /// The case below walks EVERY property the type declares rather than only the booleans, because
+    /// a filter by type silently skips whatever is added in another shape - and the two controls
+    /// carrying values, the ceiling and the tolerance, are exactly the ones a bundle can be short of
+    /// while every boolean is set. A property this table does not mention has to be a boolean set to
+    /// <c>true</c>, so a new control of any shape fails until somebody decides what strict means for
+    /// it.
+    /// </remarks>
+    private static readonly Dictionary<string, object?> StrictestValues = new()
+    {
+        // The one flag that REMOVES a control, so demanding it would weaken the bundle.
+        [nameof(SecurityProfileRequirements.ForbidRefreshTokenRotation)] = false,
+
+        // The tightest bound and the tightest tolerance this type knows of.
+        [nameof(SecurityProfileRequirements.MaxClockSkew)] = ClockSkew.Fapi2Ceiling,
+        [nameof(SecurityProfileRequirements.DefaultClockSkew)] = ClockSkew.Fapi2,
+    };
+
+    /// <summary>
+    /// What a named control must hold to be at its strictest: whatever the table says, and demanded
+    /// otherwise. A control of any shape the table does not mention therefore fails until somebody
+    /// decides what strict means for it.
+    /// </summary>
+    /// <param name="control">The name of the control being asked about.</param>
+    private static object StrictestValue(string control)
+        => StrictestValues.TryGetValue(control, out var expected) ? expected! : Demanded;
+
+    /// <summary>
+    /// The strictest value of an ordinary control, which is one that is demanded.
+    /// </summary>
+    private const bool Demanded = true;
+
+    /// <summary>
+    /// Every control the type declares, which is what makes this a property of the TYPE rather than
+    /// a list kept in step by hand.
+    /// </summary>
+    private static System.Reflection.PropertyInfo[] Controls()
+        => typeof(SecurityProfileRequirements).GetProperties();
 
     /// <summary>
     /// The enumeration above finds something, so an empty set cannot be what makes the first case
     /// pass. A filter that matched nothing would report every control demanded over no controls.
     /// </summary>
     [Fact]
-    public void TheFlagsAreFound()
+    public void TheControlsAreFound()
     {
-        Assert.NotEmpty(TighteningFlags());
+        Assert.NotEmpty(Controls());
+    }
+
+    /// <summary>
+    /// And the table names only controls that exist, so a rename cannot leave an entry standing over
+    /// nothing while the case above goes on passing.
+    /// </summary>
+    [Fact]
+    public void TheTableNamesOnlyRealControls()
+    {
+        var names = Controls().Select(control => control.Name).ToHashSet();
+
+        Assert.All(StrictestValues.Keys, name => Assert.Contains(name, names));
     }
 }

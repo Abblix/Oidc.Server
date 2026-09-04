@@ -93,7 +93,7 @@ public sealed record SecurityProfileRequirements
     /// chose is a deadline this server has no reason to extend, because the grace exists for a clock
     /// that disagrees rather than for a token that is simply late.
     /// </remarks>
-    public ClockSkew DefaultClockSkew { get; init; } = ClockSkew.Default;
+    public ClockSkew DefaultClockSkew { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The tolerance that actually applies: what the caller configured where it configured

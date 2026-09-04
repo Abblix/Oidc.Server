@@ -57,10 +57,9 @@ public sealed class ClockSkewCeilingValidator : IValidateOptions<OidcOptions>
         {
             return ValidateOptionsResult.Fail(
                 $"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)} is {skew}, " +
-                $"above the {ceiling} the {options.DefaultSecurityProfile} profile allows a token to " +
-                $"be dated ahead of this server. The validator holds that bound regardless, so a " +
-                $"larger value here would widen only the other direction while reading as though it " +
-                $"widened both.");
+                $"above the {ceiling} the {options.DefaultSecurityProfile} profile allows. The value " +
+                $"is held to that bound in both directions whatever is configured here, so a larger " +
+                $"one widens nothing while reading as though it did.");
         }
 
         return ValidateOptionsResult.Success;

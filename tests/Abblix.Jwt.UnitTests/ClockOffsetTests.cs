@@ -210,20 +210,21 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// The case that measures the DEFAULT: no skew is supplied, so the tolerance comes from the
-    /// validation parameters themselves. Every other case here passes a value, which would keep them
-    /// green over a default of none.
+    /// The case that measures the DEFAULT: no skew is supplied, so the answer comes from the
+    /// validation parameters themselves, and it is NONE. A tolerance granted to a caller that never
+    /// asked would widen an expiry check for everyone enforcing a deadline of their own, which is
+    /// what most callers of this type are doing - so a deployment-wide answer belongs to the
+    /// security profile a host opts into, and a number a profile requires is the profile's to
+    /// supply.
     ///
-    /// The default belongs to no specification and is not meant to: it is the value the platform's
-    /// own token validator uses, so a caller arriving from there meets no surprise. A number a
-    /// profile requires is the profile's to supply, and taking one of those as the general default
-    /// would hold a caller to a profile it never selected.
+    /// The instant itself is inside the window, so this cannot be satisfied by a validator that
+    /// refuses everything.
     /// </summary>
     [Theory]
-    [InlineData(60, true)]
-    [InlineData(300, true)]
-    [InlineData(301, false)]
-    public async Task TheDefaultTolerance_ComesFromTheParameters(int secondsAhead, bool accepted)
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(300, false)]
+    public async Task TheDefaultTolerance_IsNone(int secondsAhead, bool accepted)
     {
         var result = await Validate(issuedAt: Now.AddSeconds(secondsAhead));
 
@@ -320,17 +321,16 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// And the default reaches that direction too: a skew is symmetric unless a profile makes it
-    /// otherwise, so naming it forward and leaving the other side unmeasured would be half a
-    /// criterion.
+    /// And the default is none in that direction too, which is half of the same criterion: naming
+    /// it forward and leaving the other side unmeasured would answer only half the property.
     ///
     /// The boundary differs from the forward one and is measured rather than assumed: expiry is
-    /// compared with <c>&lt;=</c>, so a token exactly the whole skew past its expiry is already
-    /// expired, while one exactly the whole skew ahead is still accepted.
+    /// compared with <c>&lt;=</c>, so a token at its expiry is already expired, while one at the
+    /// forward limit is still accepted.
     /// </summary>
     [Theory]
-    [InlineData(60, true)]
-    [InlineData(299, true)]
+    [InlineData(-1, true)]
+    [InlineData(0, false)]
     [InlineData(300, false)]
     public async Task TheDefaultTolerance_ReachesPastExpiryToo(int secondsPast, bool accepted)
     {

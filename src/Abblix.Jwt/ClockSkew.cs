@@ -26,22 +26,15 @@ namespace Abblix.Jwt;
 public readonly record struct ClockSkew
 {
     /// <summary>
-    /// The tolerance a caller gets by saying nothing: the same each way, and the value the
-    /// platform's own token validator uses.
+    /// No tolerance in either direction, and what a caller gets by saying nothing.
     /// </summary>
     /// <remarks>
-    /// The number belongs to no specification and is not meant to: it is the value a caller who has
-    /// never thought about clock offset already expects, so adopting it changes nothing for anyone
-    /// moving here from the platform's own validator. A tolerance a profile requires is the
-    /// profile's to name - taking one of those numbers as the general default would hold every
-    /// caller to a profile they never selected.
+    /// A default that granted time would widen an expiry check for every caller that never asked -
+    /// including one enforcing a deadline of its own, which is what most callers of this type are
+    /// doing. A tolerance is granted deliberately or not at all: a deployment-wide answer belongs to
+    /// the security profile a host opts into, and a number a profile requires is the profile's to
+    /// supply.
     /// </remarks>
-    public static readonly ClockSkew Default = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// No tolerance in either direction, for a caller measuring an instant rather than allowing for
-    /// a clock that disagrees.
-    /// </summary>
     public static readonly ClockSkew None = TimeSpan.Zero;
 
     /// <summary>
@@ -70,6 +63,11 @@ public readonly record struct ClockSkew
     /// prevent implementations switching off <c>iat</c> and <c>nbf</c> checks completely", so it
     /// belongs to the profile: a deployment outside one answers to RFC 7523 Section 3, which names
     /// no bound at all.
+    ///
+    /// The quoted sentence governs the forward direction; holding the backward one to the same
+    /// number is this server's decision rather than the specification's. A profile distrusting a
+    /// clock past some point one way has no reason to trust it further the other, and the alternative
+    /// is a ceiling that reads as a bound on the tolerance while leaving half of it unbounded.
     /// </remarks>
     public static readonly TimeSpan Fapi2Ceiling = TimeSpan.FromSeconds(60);
 

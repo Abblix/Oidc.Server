@@ -54,16 +54,24 @@ internal sealed partial class ConfiguredReplayCache(
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
-        // The WIDEST window any client could be accepted in, not the one the deployment's own
-        // profile supplies. A client may carry a profile of its own, and a client that opted out
-        // of a bounding one is accepted for longer than the deployment would be - so retaining for
-        // the deployment's window would let that client's assertion be replayed in the gap between
-        // the two. Under-retention is a replay hole; over-retention costs an entry held a while
-        // longer, which is why the asymmetry is resolved this way rather than by reading a profile
-        // this class has no client to look up.
+        // The WIDEST window any caller could still be accepted in, which is the LARGER of the two
+        // answers rather than whichever one happens to be set. The two are reached by different
+        // paths: the bearer grant honours this deployment's own setting, while a client assertion
+        // is accepted on the profile's window and never reads that setting at all. Taking the
+        // setting when it exists would therefore retain for thirty seconds what the assertion path
+        // goes on accepting for minutes, and the assertion stays replayable in the gap.
+        //
+        // Under-retention is a replay hole; over-retention costs an entry held a while longer. That
+        // asymmetry is why this takes the maximum rather than reading a profile it has no client to
+        // look up. The configured value is deliberately not bounded here for the same reason: a
+        // ceiling would only shorten the window.
         var unprofiled = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None);
-        var skewed = expiresAt + (options.CurrentValue.JwtBearer.ClockSkew
-                                  ?? unprofiled.DefaultClockSkew.Past);
+        var configured = options.CurrentValue.JwtBearer.ClockSkew ?? TimeSpan.Zero;
+        var widest = configured < unprofiled.DefaultClockSkew.Past
+            ? unprofiled.DefaultClockSkew.Past
+            : configured;
+
+        var skewed = expiresAt + widest;
 
         if (!await inner.TryReserveAsync(identifier, skewed, cancellationToken))
         {
