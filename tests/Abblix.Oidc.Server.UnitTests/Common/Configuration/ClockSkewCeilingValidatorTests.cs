@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 public class ClockSkewCeilingValidatorTests
 {
     private static ValidateOptionsResult Validate(
-        TimeSpan skew,
+        TimeSpan? skew,
         ClientSecurityProfile profile = ClientSecurityProfile.Fapi2)
         => new ClockSkewCeilingValidator().Validate(
             null,
@@ -106,15 +106,42 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
-    /// The default a host gets without doing anything passes its own guard. One that failed startup
-    /// would be a defect nobody meets until they read the options object.
+    /// Nothing set is not a value to refuse: it asks the profile to decide, and what the profile
+    /// decides is by construction what the profile allows. Refusing it would fail every deployment
+    /// held to a bounding profile over a number nobody chose - which is what a default written into
+    /// the options object would have been.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    public void NothingSet_Passes(ClientSecurityProfile profile)
+    {
+        Assert.False(Validate(null, profile).Failed);
+    }
+
+    /// <summary>
+    /// And what nothing-set resolves to: this server's own five minutes where no profile bounds it,
+    /// and the profile's bound where one does. Without this the guard above would be silent about a
+    /// resolution that could be anything.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, 300)]
+    [InlineData(ClientSecurityProfile.Fapi2, 60)]
+    public void NothingSet_ResolvesToTheProfilesAnswer(ClientSecurityProfile profile, int seconds)
+    {
+        var options = new JwtBearerOptions();
+
+        Assert.Equal(TimeSpan.FromSeconds(seconds), options.ResolveClockSkew(profile));
+    }
+
+    /// <summary>
+    /// A value this deployment set wins over both, which is the point of being able to set one.
     /// </summary>
     [Fact]
-    public void TheDefault_IsTenSecondsAndPasses()
+    public void AValueSet_WinsOverTheProfile()
     {
-        var options = new OidcOptions();
+        var options = new JwtBearerOptions { ClockSkew = TimeSpan.FromSeconds(30) };
 
-        Assert.Equal(TimeSpan.FromSeconds(10), options.JwtBearer.ClockSkew);
-        Assert.False(new ClockSkewCeilingValidator().Validate(null, options).Failed);
+        Assert.Equal(TimeSpan.FromSeconds(30), options.ResolveClockSkew(ClientSecurityProfile.Fapi2));
     }
 }

@@ -46,7 +46,8 @@ internal sealed partial class ConfiguredReplayCache(
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default)
     {
-        var skewed = expiresAt + options.CurrentValue.JwtBearer.ClockSkew;
+        var skewed = expiresAt + options.CurrentValue.JwtBearer.ResolveClockSkew(
+            options.CurrentValue.DefaultSecurityProfile);
 
         if (!await inner.TryReserveAsync(identifier, skewed, cancellationToken))
         {

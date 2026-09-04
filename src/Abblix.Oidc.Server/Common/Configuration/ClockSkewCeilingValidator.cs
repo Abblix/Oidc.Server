@@ -32,7 +32,11 @@ public sealed class ClockSkewCeilingValidator : IValidateOptions<OidcOptions>
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
-        var skew = options.JwtBearer.ClockSkew;
+        // Only a value this deployment set is worth refusing. Absence means it asked the profile to
+        // decide, and what the profile decides is by construction what the profile allows - refusing
+        // that would fail every deployment over a number nobody chose.
+        if (options.JwtBearer.ClockSkew is not { } skew)
+            return ValidateOptionsResult.Success;
 
         if (skew < TimeSpan.Zero)
         {

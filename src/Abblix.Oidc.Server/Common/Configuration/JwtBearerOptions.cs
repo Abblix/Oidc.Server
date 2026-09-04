@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -29,21 +32,51 @@ public record JwtBearerOptions
 	public IEnumerable<TrustedIssuer> TrustedIssuers { get; set; } = [];
 
 	/// <summary>
-	/// The clock skew tolerance applied to a bearer assertion, in both directions. Ten seconds,
-	/// the same as everywhere else, unless this deployment says otherwise.
+	/// The clock skew tolerance applied to a bearer assertion, in both directions. Absent unless
+	/// this deployment sets one, which leaves the answer to the security profile in force: five
+	/// minutes where none bounds it, and the bound itself where one does.
 	/// </summary>
 	/// <remarks>
-	/// RFC 7523 Section 3 allows for clock skew without naming a bound, so a deployment whose
-	/// assertions come from an issuer with a loosely-run clock may raise this - minutes are a
-	/// legitimate answer here, and were this server's own default until the tolerance became one
-	/// number for every kind of token.
-	///
-	/// Under a security profile that bounds how far ahead a token may be dated, the forward
-	/// direction is cut to that bound and a value above it is refused at startup, so the number here
-	/// cannot quietly mean one thing while the validator does another. FAPI 2.0 Security Profile
-	/// section 5.3.2.1 is the profile that does so, at sixty seconds.
+	/// <para>
+	/// An assertion arrives from an issuer whose clock this server does not run, which is why the
+	/// tolerance here is looser than the one applied to tokens minted closer to home. RFC 7523
+	/// Section 3 allows for clock skew without naming a bound, so five minutes is this server's
+	/// choice rather than the specification's - and it is only reachable where no profile says
+	/// otherwise. FAPI 2.0 Security Profile section 5.3.2.1 does say otherwise, at sixty seconds.
+	/// </para>
+	/// <para>
+	/// Absent rather than five minutes written here, because the two are not the same fact. A number
+	/// nobody chose cannot be told apart from one a deployment set on purpose, so a guard refusing a
+	/// value a profile will not honour would refuse the default as well - failing every FAPI
+	/// deployment at startup over a value it never touched. Absence says "decide for me"; a value
+	/// says "I mean this", and only the second is worth refusing.
+	/// </para>
+	/// <para>
+	/// It bounds two things, both about the same clock: how far a timestamp may sit either side of
+	/// this server's, and how much older than <see cref="MaxJwtAge"/> an assertion may be.
+	/// </para>
 	/// </remarks>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(10);
+	public TimeSpan? ClockSkew { get; set; }
+
+	/// <summary>
+	/// The tolerance applied where neither this deployment nor its security profile names one.
+	/// </summary>
+	public static readonly TimeSpan DefaultClockSkew = TimeSpan.FromMinutes(5);
+
+	/// <summary>
+	/// The tolerance actually applied to a bearer assertion: what this deployment set, or the
+	/// bound the profile in force names, or <see cref="DefaultClockSkew"/> where neither speaks.
+	/// </summary>
+	/// <remarks>
+	/// Every reader of the setting goes through here. Three readers each applying their own
+	/// fallback are three chances to disagree about what an absent value meant, and the
+	/// disagreement would surface as one check refusing an assertion another had just accepted.
+	/// </remarks>
+	/// <param name="profile">The security profile this deployment is held to.</param>
+	public TimeSpan ResolveClockSkew(ClientSecurityProfile profile)
+		=> ClockSkew
+		   ?? SecurityProfileRequirements.Resolve(profile).MaxClockOffsetAhead
+		   ?? DefaultClockSkew;
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.

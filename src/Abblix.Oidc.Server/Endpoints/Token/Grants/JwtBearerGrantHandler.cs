@@ -119,6 +119,14 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
+	/// The tolerance this deployment applies to a bearer assertion, resolved once so the two
+	/// checks that use it - the timestamp comparison and the age limit - cannot disagree about
+	/// what an unset value meant.
+	/// </summary>
+	private TimeSpan ResolveClockSkew()
+		=> issuerProvider.Options.ResolveClockSkew(oidcOptions.Value.DefaultSecurityProfile);
+
+	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
 	/// </summary>
 	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer);
@@ -151,8 +159,6 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(string assertion, ClientInfo clientInfo)
 	{
-		var options = issuerProvider.Options;
-
 		var validationResult = await jwtValidator.ValidateAsync(
 			assertion,
 			new()
@@ -165,7 +171,7 @@ public partial class JwtBearerGrantHandler(
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
-				ClockSkew = options.ClockSkew,
+				ClockSkew = ResolveClockSkew(),
 
 				// The bound belongs to the profile this deployment is held to, and is absent where it
 				// is held to none - RFC 7523 Section 3 names no bound of its own.
@@ -273,7 +279,7 @@ public partial class JwtBearerGrantHandler(
 		var now = timeProvider.GetUtcNow();
 		var jwtAge = now - issuedAt.Value;
 
-		if (jwtAge <= maxAge + options.ClockSkew)
+		if (jwtAge <= maxAge + ResolveClockSkew())
 			return ctx;
 
 		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
