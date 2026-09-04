@@ -84,6 +84,22 @@ public sealed record SecurityProfileRequirements
     public TimeSpan? MaxClockOffsetAhead { get; init; }
 
     /// <summary>
+    /// The tolerance the profile prescribes where a deployment names none of its own. Five minutes
+    /// unless a profile says otherwise, which is what a bearer assertion from an issuer whose clock
+    /// this server does not run has always been given.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="MaxClockOffsetAhead"/>, and the separation is the point: FAPI
+    /// 2.0 section 5.3.2.1 names both in one sentence - a server "shall accept JWTs with an iat
+    /// or nbf timestamp between 0 and 10 seconds in the future but shall reject JWTs with an
+    /// iat or nbf timestamp greater than 60 seconds in the future". Ten is what it prescribes;
+    /// sixty is the furthest anything may go. Folding them into one number makes the default
+    /// the most permissive value allowed rather than the value named, which is a different
+    /// posture wearing the same citation.
+    /// </remarks>
+    public TimeSpan PrescribedClockOffsetTolerance { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// The profile permits only the authorization-code response type, rejecting any implicit or
     /// hybrid response type that returns a token or id_token from the authorization endpoint.
     /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
@@ -145,6 +161,7 @@ public sealed record SecurityProfileRequirements
         // rather than to the server: a deployment outside it answers to RFC 7523 Section 3,
         // which names no bound at all.
         MaxClockOffsetAhead = TimeSpan.FromSeconds(60),
+        PrescribedClockOffsetTolerance = TimeSpan.FromSeconds(10),
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
@@ -287,6 +304,7 @@ public sealed record SecurityProfileRequirements
         // rather than to the server: a deployment outside it answers to RFC 7523 Section 3,
         // which names no bound at all.
         MaxClockOffsetAhead = TimeSpan.FromSeconds(60),
+        PrescribedClockOffsetTolerance = TimeSpan.FromSeconds(10),
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,

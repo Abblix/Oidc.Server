@@ -34,7 +34,7 @@ public record JwtBearerOptions
 	/// <summary>
 	/// The clock skew tolerance applied to a bearer assertion, in both directions. Absent unless
 	/// this deployment sets one, which leaves the answer to the security profile in force: five
-	/// minutes where none bounds it, and the bound itself where one does.
+	/// minutes where no profile is selected, and ten seconds under FAPI 2.0.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -59,13 +59,8 @@ public record JwtBearerOptions
 	public TimeSpan? ClockSkew { get; set; }
 
 	/// <summary>
-	/// The tolerance applied where neither this deployment nor its security profile names one.
-	/// </summary>
-	public static readonly TimeSpan DefaultClockSkew = TimeSpan.FromMinutes(5);
-
-	/// <summary>
-	/// The tolerance actually applied to a bearer assertion: what this deployment set, or the
-	/// bound the profile in force names, or <see cref="DefaultClockSkew"/> where neither speaks.
+	/// The tolerance actually applied to a bearer assertion: what this deployment set, or what the
+	/// profile in force prescribes.
 	/// </summary>
 	/// <remarks>
 	/// Every reader of the setting goes through here. Three readers each applying their own
@@ -74,9 +69,7 @@ public record JwtBearerOptions
 	/// </remarks>
 	/// <param name="profile">The security profile this deployment is held to.</param>
 	public TimeSpan ResolveClockSkew(ClientSecurityProfile profile)
-		=> ClockSkew
-		   ?? SecurityProfileRequirements.Resolve(profile).MaxClockOffsetAhead
-		   ?? DefaultClockSkew;
+		=> ClockSkew ?? SecurityProfileRequirements.Resolve(profile).PrescribedClockOffsetTolerance;
 
 	/// <summary>
 	/// Indicates whether the 'jti' (JWT ID) claim is required for replay protection.
