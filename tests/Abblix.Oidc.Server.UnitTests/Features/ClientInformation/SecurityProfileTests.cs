@@ -247,6 +247,36 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// The other control this walk owns, given its own case: a client authenticating with NOTHING is
+    /// the public client the profile excludes, and the floor reaches it too. The case above cannot
+    /// stand for this one - it uses a shared secret, which is a confidential client by RFC 6749 and
+    /// trips the key-based requirement alone, so removing the confidential-client arm would leave it
+    /// green.
+    /// </summary>
+    [Fact]
+    public void OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndAuthenticatesWithNothing_Fails()
+    {
+        var options = new OidcOptions
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
+            Clients =
+            [
+                new ClientInfo(TestConstants.DefaultClientId)
+                {
+                    SecurityProfile = ClientSecurityProfile.None,
+                    AllowedResponseTypes = [[ResponseTypes.Code]],
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+                },
+            ],
+        };
+
+        var result = new OidcOptionsSecurityProfileValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains("confidential clients only", result.FailureMessage!);
+    }
+
+    /// <summary>
     /// And the same client under a deployment naming no profile starts clean, without which the
     /// case above would be satisfied by a walk refusing every shared-secret client.
     /// </summary>

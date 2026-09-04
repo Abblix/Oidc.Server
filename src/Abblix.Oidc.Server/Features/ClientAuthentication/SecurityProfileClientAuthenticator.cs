@@ -78,7 +78,11 @@ internal partial class SecurityProfileClientAuthenticator(
         if (violations.Count == 0)
             return clientInfo;
 
-        LogRegistrationCannotSatisfyProfile(clientInfo.ClientId, profile, violations);
+        LogRegistrationCannotSatisfyProfile(
+            clientInfo.ClientId,
+            clientInfo.SecurityProfile,
+            options.Value.DefaultSecurityProfile,
+            violations);
         return null;
     }
 
@@ -86,10 +90,12 @@ internal partial class SecurityProfileClientAuthenticator(
         EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.RegistrationCannotSatisfyProfile,
         Level = LogLevel.Warning,
         Message = "The client {ClientId} authenticated, but its registration cannot satisfy the "
-                  + "{Profile} profile it is held to: {@Violations}")]
+                  + "controls it is held to - it names {ClientProfile} and this deployment holds "
+                  + "every client to {DeploymentProfile}: {@Violations}")]
     private partial void LogRegistrationCannotSatisfyProfile(
         string ClientId,
-        ClientSecurityProfile Profile,
+        ClientSecurityProfile? ClientProfile,
+        ClientSecurityProfile DeploymentProfile,
         IReadOnlyList<string> Violations);
 
     [LoggerMessage(

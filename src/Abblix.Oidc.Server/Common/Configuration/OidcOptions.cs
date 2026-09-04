@@ -536,10 +536,10 @@ public record OidcOptions
 	public DPoPOptions DPoP { get; set; } = new();
 
 	/// <summary>
-	/// The server-wide default security profile, applied to every client whose own
-	/// <see cref="ClientInfo.SecurityProfile"/> is left unset (<c>null</c>). A single-profile
+	/// The security profile this deployment holds EVERY client to, whatever
+	/// <see cref="ClientInfo.SecurityProfile"/> each one names for itself. A single-profile
 	/// deployment sets this once - for example to <see cref="ClientSecurityProfile.Fapi2"/> - and
-	/// every client is held to the FAPI 2.0 control bundle, whatever profile it names for itself.
+	/// every client is held to the FAPI 2.0 control bundle.
 	/// This is a floor rather than a default: a client can ask for more and no registration can take
 	/// it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/>
 	/// demands nothing, leaving clients governed by their individual metadata flags.
