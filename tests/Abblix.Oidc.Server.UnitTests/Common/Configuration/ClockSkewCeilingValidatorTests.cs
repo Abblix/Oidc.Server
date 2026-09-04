@@ -177,6 +177,29 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
+    /// The two numbers the profiles carry, named here rather than computed from the code that
+    /// supplies them. Every other case in this file compares one resolution against another and
+    /// would stay green if both moved together - so this is the only place the values themselves
+    /// are held to what was agreed: no profile grants five minutes either way, and FAPI 2.0 section
+    /// 5.3.2.1 grants nothing backward and ten seconds forward, bounded at sixty.
+    /// </summary>
+    [Fact]
+    public void TheProfilesCarryTheAgreedNumbers()
+    {
+        var unprofiled = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None);
+
+        Assert.Equal(TimeSpan.FromMinutes(5), unprofiled.DefaultClockSkew.Past);
+        Assert.Equal(TimeSpan.FromMinutes(5), unprofiled.DefaultClockSkew.Future);
+        Assert.Null(unprofiled.MaxClockSkew);
+
+        var fapi = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2);
+
+        Assert.Equal(TimeSpan.Zero, fapi.DefaultClockSkew.Past);
+        Assert.Equal(TimeSpan.FromSeconds(10), fapi.DefaultClockSkew.Future);
+        Assert.Equal(TimeSpan.FromSeconds(60), fapi.MaxClockSkew);
+    }
+
+    /// <summary>
     /// The ceiling is applied where the tolerance is resolved, so a value above it comes back cut
     /// down rather than travelling onward beside a bound somebody must remember to pass. This is the
     /// case that would go on passing if the bound were dropped from the resolution: the startup

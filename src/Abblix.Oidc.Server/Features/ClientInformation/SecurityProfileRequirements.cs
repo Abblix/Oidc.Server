@@ -89,11 +89,25 @@ public sealed record SecurityProfileRequirements
     /// held only by <see cref="MaxClockSkew"/>.
     /// </summary>
     /// <remarks>
+    /// Selecting no profile is a posture rather than the absence of one, and its answer is
+    /// <see cref="UnprofiledClockSkew"/>: an assertion arrives from an issuer whose clock this
+    /// server does not run, and RFC 7523 Section 3 allows for that offset without naming a bound.
+    ///
     /// Where a profile bounds freshness the two halves part company: an expiry the client itself
     /// chose is a deadline this server has no reason to extend, because the grace exists for a clock
     /// that disagrees rather than for a token that is simply late.
     /// </remarks>
-    public ClockSkew DefaultClockSkew { get; init; } = TimeSpan.FromMinutes(5);
+    public ClockSkew DefaultClockSkew { get; init; } = UnprofiledClockSkew;
+
+    /// <summary>
+    /// What a deployment held to no bounding profile grants either way.
+    /// </summary>
+    /// <remarks>
+    /// Generous because the clock it is measured against belongs to somebody else: an issuer this
+    /// server trusts but does not run. A profile that cares about freshness names its own window;
+    /// this is what is left when none does.
+    /// </remarks>
+    internal static readonly ClockSkew UnprofiledClockSkew = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The tolerance that actually applies: what the caller configured where it configured

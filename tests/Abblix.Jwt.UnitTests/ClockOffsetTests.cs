@@ -332,7 +332,7 @@ public class ClockOffsetTests
     [InlineData(-1, true)]
     [InlineData(0, false)]
     [InlineData(300, false)]
-    public async Task TheDefaultTolerance_ReachesPastExpiryToo(int secondsPast, bool accepted)
+    public async Task TheDefaultTolerance_GrantsNothingPastExpiryEither(int secondsPast, bool accepted)
     {
         var result = await Validate(expiresAt: Now.AddSeconds(-secondsPast));
 

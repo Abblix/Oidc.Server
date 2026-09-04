@@ -21,16 +21,16 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// an operator's runbook keys off.
 /// </summary>
 /// <remarks>
-/// The retention is the WIDEST window in which the thing an entry names could still be accepted:
-/// what the deployment configured, or - where it configured nothing - the tolerance a client held to
-/// no bounding profile receives. An entry must outlive that window, because a reservation that
-/// expires first is a replay hole rather than a tidy cache.
+/// The retention is the WIDEST window in which the thing an entry names could still be accepted,
+/// which is the LARGER of the two answers rather than whichever one is set. An entry must outlive
+/// that window, because a reservation that expires first is a replay hole rather than a tidy cache.
 ///
 /// It deliberately does not read a security profile. Nothing here knows which client a reservation
 /// belongs to, and a profile is a property of the client: one that opted out of a bounding profile
 /// is accepted for longer than the deployment's own profile would suggest, so retaining for the
-/// deployment's window would leave exactly that client replayable in the gap. Over-retention costs
-/// an entry held a while longer and cannot be a hole.
+/// deployment's window alone would leave exactly that client replayable in the gap. Over-retention
+/// costs an entry held a while longer and cannot be a hole, which is what settles the direction to
+/// err in.
 /// </remarks>
 /// <param name="logger">Records the two replay events.</param>
 /// <param name="inner">The storage the reservation actually lands in.</param>
@@ -58,8 +58,8 @@ internal sealed partial class ConfiguredReplayCache(
         // answers rather than whichever one happens to be set. The two are reached by different
         // paths: the bearer grant honours this deployment's own setting, while a client assertion
         // is accepted on the profile's window and never reads that setting at all. Taking the
-        // setting when it exists would therefore retain for thirty seconds what the assertion path
-        // goes on accepting for minutes, and the assertion stays replayable in the gap.
+        // setting would therefore retain for a window the assertion path goes on accepting
+        // past, and the assertion stays replayable in the gap.
         //
         // Under-retention is a replay hole; over-retention costs an entry held a while longer. That
         // asymmetry is why this takes the maximum rather than reading a profile it has no client to
