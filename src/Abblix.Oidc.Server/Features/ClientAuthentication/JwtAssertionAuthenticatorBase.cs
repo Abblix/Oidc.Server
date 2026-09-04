@@ -228,9 +228,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// the claim was granted.
     /// </summary>
     /// <remarks>
-    /// Its own method because the reservation is irreversible, and a method ending in the spend
-    /// cannot grow a check underneath it by accident: anything added to the caller lands before the
-    /// call rather than after it.
+    /// Its own method because the reservation is irreversible, and a method ending in the spend is
+    /// where a check added later is least likely to land underneath it: the natural place to add one
+    /// in the caller is before the call.
     /// </remarks>
     /// <param name="token">The assertion whose identifier is being claimed.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>

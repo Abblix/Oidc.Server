@@ -268,7 +268,7 @@ public class ClientMayTightenItselfTests
             clientProfile: ClientSecurityProfile.Fapi2,
             deploymentProfile: ClientSecurityProfile.None,
             unreadableIssuedAt: true,
-            options: ValidationOptions.RequireValidSignedTokens);
+            options: ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
         Assert.True(result.TryGetSuccess(out _));
     }
