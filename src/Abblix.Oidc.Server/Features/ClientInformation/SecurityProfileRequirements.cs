@@ -107,7 +107,7 @@ public sealed record SecurityProfileRequirements
     /// server trusts but does not run. A profile that cares about freshness names its own window;
     /// this is what is left when none does.
     /// </remarks>
-    internal static readonly ClockSkew UnprofiledClockSkew = TimeSpan.FromMinutes(5);
+    private static readonly ClockSkew UnprofiledClockSkew = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The tolerance that actually applies: what the caller configured where it configured

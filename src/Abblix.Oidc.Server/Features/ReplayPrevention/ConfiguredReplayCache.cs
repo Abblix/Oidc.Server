@@ -25,8 +25,8 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// which is the LARGER of the two answers rather than whichever one is set. An entry must outlive
 /// that window, because a reservation that expires first is a replay hole rather than a tidy cache.
 ///
-/// It deliberately does not read a security profile. Nothing here knows which client a reservation
-/// belongs to, and a profile is a property of the client: one that opted out of a bounding profile
+/// It deliberately does not read the CLIENT's profile. Nothing here knows which client a
+/// reservation belongs to, and a profile is a property of the client: one that opted out of a bounding profile
 /// is accepted for longer than the deployment's own profile would suggest, so retaining for the
 /// deployment's window alone would leave exactly that client replayable in the gap. Over-retention
 /// costs an entry held a while longer and cannot be a hole, which is what settles the direction to

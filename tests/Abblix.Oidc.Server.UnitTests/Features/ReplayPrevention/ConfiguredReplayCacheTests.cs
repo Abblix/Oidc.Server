@@ -37,7 +37,8 @@ public class ConfiguredReplayCacheTests
     private static readonly DateTimeOffset Expiry = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
-    /// Records the deadline it was handed, which is the only thing this class decides.
+    /// Records the deadline it was handed, which is what these cases are about. The class also emits
+    /// the two events an operator's runbook keys off, and nothing here holds it to those.
     /// </summary>
     private sealed class RecordingCache : IReplayCache
     {
