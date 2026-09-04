@@ -167,7 +167,7 @@ public class ProfileClockSkewReachesValidationTests
             issuerProvider.Object,
             serviceKeys.Object,
             Options.Create(new OidcOptions { DefaultSecurityProfile = profile }),
-             TimeProvider.System);
+            TimeProvider.System);
 
         await validator.ValidateAsync("header.payload.signature");
 

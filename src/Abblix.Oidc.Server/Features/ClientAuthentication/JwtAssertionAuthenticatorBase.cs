@@ -63,8 +63,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <remarks>
     /// The first pass ran under the deployment's own window, which is the widest any client can be
     /// given - a deployment-wide profile is a floor and a client may only tighten it. So this
-    /// narrows and never widens, and a client asking for the deployment's profile or for nothing at
-    /// all reaches the same answer twice.
+    /// narrows and never widens.
     ///
     /// Placed before the identifier is reserved, because a reservation is spent and cannot be given
     /// back: a refusal after it would burn the assertion's own identifier on a request this check

@@ -13,13 +13,13 @@ using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Microsoft.Extensions.DependencyInjection;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -33,8 +33,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// deployment's. A client asking to be held to a tighter profile could not be heard on this path.
 /// </summary>
 /// <remarks>
-/// The answer is a second pass once the client is known. These cases are about that pass: every
-/// assertion here carries the identifier and the expiry the specification demands and names the
+/// The subject is <see cref="ClientSecretJwtAuthenticator"/> rather than its sibling, because this is
+/// where the base class's second pass is the ONLY one: it validates through
+/// <see cref="IJsonWebTokenValidator"/> directly, while <see cref="PrivateKeyJwtAuthenticator"/> goes
+/// through the client JWT validator, which now performs the same check itself.
+///
+/// Every assertion here carries the identifier and the expiry the specification demands and names the
 /// issuer as its audience, so the only thing separating acceptance from refusal is which profile the
 /// client names for itself.
 /// </remarks>
@@ -42,15 +46,19 @@ public class ClientAssertionMayTightenItselfTests
 {
     private const string ClientId = "tightening_client";
     private static readonly string Issuer = TestConstants.DefaultIssuer.ToString();
-    private const string JwtAssertion = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+    private const string JwtAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
 
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
-    /// Dated ahead of every profile this server carries, and inside the window a deployment holding
-    /// clients to nothing grants.
+    /// Beyond every profile this server carries, and inside the window a deployment holding clients
+    /// to nothing grants.
     /// </summary>
-    private static readonly TimeSpan AheadOfEveryProfileButNone = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan BeyondEveryProfileButNone = TimeSpan.FromMinutes(1);
+
+    private readonly Mock<IJsonWebTokenValidator> tokenValidator = new(MockBehavior.Strict);
+    private readonly Mock<IClientInfoProvider> clientInfoProvider = new(MockBehavior.Strict);
+    private readonly Mock<IReplayCache> replayCache = new(MockBehavior.Strict);
 
     /// <summary>
     /// The case this exists for: a client naming FAPI 2.0 under a deployment naming nothing is held
@@ -58,14 +66,11 @@ public class ClientAssertionMayTightenItselfTests
     /// second pass this assertion authenticated the client.
     /// </summary>
     [Fact]
-    public async Task AClientNamingFapi2_IsHeldToItUnderADeploymentNamingNothing()
+    public async Task AClientNamingFapi2_IsHeldToItsOwnForwardWindow()
     {
-        var (authenticator, replayCache) = CreateAuthenticator();
-
         var result = await Authenticate(
-            authenticator,
             ClientSecurityProfile.Fapi2,
-            Now + AheadOfEveryProfileButNone);
+            issuedAt: Now + BeyondEveryProfileButNone);
 
         Assert.Null(result);
 
@@ -82,51 +87,145 @@ public class ClientAssertionMayTightenItselfTests
     /// above would be satisfied by a pass refusing every assertion dated ahead at all.
     /// </summary>
     [Fact]
-    public async Task AClientNamingNothing_KeepsTheDeploymentsWindow()
+    public async Task AClientNamingNothing_KeepsTheDeploymentsForwardWindow()
     {
-        var (authenticator, _) = CreateAuthenticator();
-
         var result = await Authenticate(
-            authenticator,
             clientProfile: null,
-            issuedAt: Now + AheadOfEveryProfileButNone);
+            issuedAt: Now + BeyondEveryProfileButNone);
 
         Assert.NotNull(result);
     }
 
     /// <summary>
-    /// And an assertion inside the tighter window authenticates the FAPI client too, or the case
+    /// The backward half, which is the larger of the two shifts: FAPI 2.0 grants a token no life at
+    /// all past the expiry its issuer chose, where a deployment naming nothing grants minutes.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_IsHeldToItsOwnExpiry()
+    {
+        var result = await Authenticate(
+            ClientSecurityProfile.Fapi2,
+            expiresAt: Now.AddSeconds(-1));
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// And the same expired assertion from a client naming nothing authenticates, which is what
+    /// makes the case above a statement about the profile rather than about expiry.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            expiresAt: Now.AddSeconds(-1));
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// The forward direction reaches <c>nbf</c> as well as <c>iat</c>: FAPI 2.0 section 5.3.2.1
+    /// names both, and this is the clause that answers for the first of them.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore()
+    {
+        var result = await Authenticate(
+            ClientSecurityProfile.Fapi2,
+            notBefore: Now + BeyondEveryProfileButNone);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// And the same post-dated assertion from a client naming nothing authenticates.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingNothing_KeepsTheDeploymentsWindowOnNotBefore()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            notBefore: Now + BeyondEveryProfileButNone);
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// A client naming the empty profile is not heard either way: it cannot loosen what the
+    /// deployment demands, and it demands nothing of its own.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingTheEmptyProfile_IsTreatedAsNamingNothing()
+    {
+        var result = await Authenticate(
+            ClientSecurityProfile.None,
+            issuedAt: Now + BeyondEveryProfileButNone);
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// And an assertion inside the tighter window authenticates the FAPI client too, or the cases
     /// above would be satisfied by a pass refusing every assertion from a client naming a profile.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsAnAssertionInsideItsOwnWindow()
     {
-        var (authenticator, _) = CreateAuthenticator();
-
         var result = await Authenticate(
-            authenticator,
             ClientSecurityProfile.Fapi2,
-            Now.AddSeconds(5));
+            issuedAt: Now.AddSeconds(5));
 
         Assert.NotNull(result);
     }
 
-    private readonly Mock<IClientJwtValidator> validator = new(MockBehavior.Strict);
-
     private async Task<ClientInfo?> Authenticate(
-        PrivateKeyJwtAuthenticator authenticator,
         ClientSecurityProfile? clientProfile,
-        DateTimeOffset issuedAt)
+        DateTimeOffset? issuedAt = null,
+        DateTimeOffset? expiresAt = null,
+        DateTimeOffset? notBefore = null)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
             SecurityProfile = clientProfile,
         };
 
-        validator
-            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(CreateAssertion(issuedAt), clientInfo));
+        clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(ClientId))
+            .ReturnsAsync(clientInfo);
+
+        var token = CreateAssertion(issuedAt, expiresAt, notBefore);
+
+        // The real validator drives these callbacks, and the assertion path depends on what they
+        // leave behind: the issuer callback is what resolves the client into the validation context.
+        tokenValidator
+            .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(
+                async (_, parameters) =>
+                {
+                    if (parameters.ValidateIssuer != null)
+                        await parameters.ValidateIssuer(ClientId);
+
+                    return token;
+                }));
+
+        replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var requestInfoProvider = new Mock<IRequestInfoProvider>();
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
+
+        var authenticator = new ClientSecretJwtAuthenticator(
+            Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
+            tokenValidator.Object,
+            clientInfoProvider.Object,
+            requestInfoProvider.Object,
+            new FixedClock(Now),
+            replayCache.Object,
+            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
+            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
 
         return await authenticator.TryAuthenticateClientAsync(new ClientRequest
         {
@@ -135,13 +234,16 @@ public class ClientAssertionMayTightenItselfTests
         });
     }
 
-    private static JsonWebToken CreateAssertion(DateTimeOffset issuedAt)
+    private static JsonWebToken CreateAssertion(
+        DateTimeOffset? issuedAt,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? notBefore)
     {
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject
             {
-                [JwtClaimTypes.Algorithm] = "RS256",
+                [JwtClaimTypes.Algorithm] = "HS256",
                 [JwtClaimTypes.Type] = "JWT",
             }),
             Payload = new JsonWebTokenPayload(new JsonObject
@@ -152,31 +254,13 @@ public class ClientAssertionMayTightenItselfTests
             }),
         };
 
-        token.Payload.IssuedAt = issuedAt;
-        token.Payload.ExpiresAt = Now.AddHours(1);
+        token.Payload.IssuedAt = issuedAt ?? Now;
+        token.Payload.ExpiresAt = expiresAt ?? Now.AddHours(1);
+        if (notBefore.HasValue)
+            token.Payload.NotBefore = notBefore.Value;
+
         token.Payload.Audiences = [Issuer];
         return token;
-    }
-
-    private (PrivateKeyJwtAuthenticator, Mock<IReplayCache>) CreateAuthenticator()
-    {
-        var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
-        replayCache
-            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(true);
-
-        var services = new ServiceCollection();
-        services.AddScoped(_ => validator.Object);
-
-        var authenticator = new PrivateKeyJwtAuthenticator(
-            Mock.Of<ILogger<PrivateKeyJwtAuthenticator>>(),
-            replayCache.Object,
-            services.BuildServiceProvider(),
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
-            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }),
-            new FixedClock(Now));
-
-        return (authenticator, replayCache);
     }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider

@@ -130,21 +130,27 @@ public partial class ClientJwtValidator(
         // token being validated and is not known until that has finished. A client naming a profile
         // of its own may be held to a tighter one, and this is the first line where there is a client
         // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
-        // wider than the one already applied, and a client naming nothing reaches the same answer
-        // twice.
-        var refusal = SecurityProfileRequirements
-            .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
-            .ClockSkewOrDefault()
-            .WhyRefused(
-                timeProvider.GetUtcNow(),
-                validatedToken.Payload.NotBefore,
-                validatedToken.Payload.ExpiresAt,
-                validatedToken.Payload.IssuedAt);
-
-        if (refusal != null)
+        // wider than the one already applied.
+        //
+        // Under the same flag as the pass above, and not merely for symmetry: a caller that opted
+        // out of time handling must not meet the timestamp accessors either, since they throw on a
+        // value outside the range DateTimeOffset can hold.
+        if (options.HasFlag(ValidationOptions.ValidateLifetime))
         {
-            LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, refusal);
-            return new JwtValidationError(JwtError.InvalidToken, refusal);
+            var refusal = SecurityProfileRequirements
+                .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
+                .ClockSkewOrDefault()
+                .WhyRefused(
+                    timeProvider.GetUtcNow(),
+                    validatedToken.Payload.NotBefore,
+                    validatedToken.Payload.ExpiresAt,
+                    validatedToken.Payload.IssuedAt);
+
+            if (refusal != null)
+            {
+                LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, refusal);
+                return new JwtValidationError(JwtError.InvalidToken, refusal);
+            }
         }
 
         LogValidationSucceeded(context.ClientInfo.ClientId);

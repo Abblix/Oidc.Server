@@ -56,7 +56,9 @@ public class ClientMayTightenItselfTests
     private static async Task<Result<ValidJsonWebToken, JwtValidationError>> Validate(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile deploymentProfile,
-        DateTimeOffset issuedAt)
+        DateTimeOffset? issuedAt = null,
+        DateTimeOffset? expiresAt = null,
+        DateTimeOffset? notBefore = null)
     {
         var token = new JsonWebToken
         {
@@ -65,11 +67,14 @@ public class ClientMayTightenItselfTests
             {
                 Issuer = ClientId,
                 ClientId = ClientId,
-                IssuedAt = issuedAt,
-                ExpiresAt = Now.AddHours(1),
+                IssuedAt = issuedAt ?? Now,
+                ExpiresAt = expiresAt ?? Now.AddHours(1),
                 Audiences = [Issuer],
             },
         };
+
+        if (notBefore.HasValue)
+            token.Payload.NotBefore = notBefore.Value;
 
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
@@ -165,6 +170,67 @@ public class ClientMayTightenItselfTests
             clientProfile: ClientSecurityProfile.Fapi2,
             deploymentProfile: ClientSecurityProfile.None,
             issuedAt: Now.AddSeconds(5));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The backward half, which is the larger of the two shifts: FAPI 2.0 grants a token no life at
+    /// all past the expiry its issuer chose, where a deployment naming nothing grants minutes.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_IsHeldToItsOwnExpiry()
+    {
+        var result = await Validate(
+            clientProfile: ClientSecurityProfile.Fapi2,
+            deploymentProfile: ClientSecurityProfile.None,
+            expiresAt: Now.AddSeconds(-1));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// And the same expired token from a client naming nothing is accepted, which is what makes the
+    /// case above a statement about the profile rather than about expiry.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
+    {
+        var result = await Validate(
+            clientProfile: null,
+            deploymentProfile: ClientSecurityProfile.None,
+            expiresAt: Now.AddSeconds(-1));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The forward direction reaches <c>nbf</c> as well as <c>iat</c>: FAPI 2.0 section 5.3.2.1
+    /// names both, and this is the clause that answers for the first of them.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore()
+    {
+        var result = await Validate(
+            clientProfile: ClientSecurityProfile.Fapi2,
+            deploymentProfile: ClientSecurityProfile.None,
+            notBefore: Now + AheadOfEveryProfileButNone);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("not yet valid", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// And the same post-dated token from a client naming nothing is accepted.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingNothing_KeepsTheDeploymentsWindowOnNotBefore()
+    {
+        var result = await Validate(
+            clientProfile: null,
+            deploymentProfile: ClientSecurityProfile.None,
+            notBefore: Now + AheadOfEveryProfileButNone);
 
         Assert.True(result.TryGetSuccess(out _));
     }
