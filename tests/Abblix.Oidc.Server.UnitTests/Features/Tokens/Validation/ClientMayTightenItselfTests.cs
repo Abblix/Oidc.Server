@@ -273,6 +273,24 @@ public class ClientMayTightenItselfTests
         Assert.True(result.TryGetSuccess(out _));
     }
 
+    /// <summary>
+    /// And a caller that did ask for lifetime validation is refused, not thrown at, when the token's
+    /// timestamps cannot be read: the validator underneath is whichever one the host registered, so
+    /// this pass cannot rely on it having read the claims first.
+    /// </summary>
+    [Fact]
+    public async Task ACallerAskingForLifetimeValidation_IsRefusedForAnUnreadableTimestamp()
+    {
+        var result = await Validate(
+            clientProfile: ClientSecurityProfile.Fapi2,
+            deploymentProfile: ClientSecurityProfile.None,
+            unreadableIssuedAt: true);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Contains("iat", error.ErrorDescription, StringComparison.Ordinal);
+    }
+
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;

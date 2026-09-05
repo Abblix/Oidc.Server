@@ -37,8 +37,19 @@ public static class JsonWebTokenExtensions
             return null;
 
         var value = node.AsValue();
-        var seconds = value.TryGetValue<int>(out var intValue) ? intValue : value.GetValue<long>();
-        return DateTimeOffset.FromUnixTimeSeconds(seconds);
+        if (value.TryGetValue<long>(out var seconds))
+            return DateTimeOffset.FromUnixTimeSeconds(seconds);
+
+        // RFC 7519 section 2 defines NumericDate as seconds since the epoch "other than that
+        // non-integer values can be represented", and a JSON number written with an exponent is a
+        // legal spelling of an integral one. Both arrive here as a double; the fraction is dropped,
+        // since a token does not become valid or expire between two whole seconds. A value that is
+        // not a number at all still fails the read, which is what a caller catching it expects.
+        var fractional = Math.Truncate(value.GetValue<double>());
+        if (fractional < long.MinValue || long.MaxValue < fractional)
+            throw new ArgumentOutOfRangeException(name, fractional, "The value is outside the range a NumericDate can hold");
+
+        return DateTimeOffset.FromUnixTimeSeconds((long)fractional);
     }
 
     /// <summary>

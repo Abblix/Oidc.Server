@@ -66,13 +66,43 @@ public class UnreadableTimestampTests
     [InlineData("""{"nbf": 99999999999999}""", "nbf")]
     [InlineData("""{"exp": "tomorrow"}""", "exp")]
     [InlineData("""{"iat": {"seconds": 1}}""", "iat")]
+    [InlineData("""{"exp": 1e30}""", "exp")]
     public async Task ATimestampThePayloadCannotRead_IsRefusedAsMalformedNamingTheClaim(string payload, string claim)
     {
         var result = await Validate(payload);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(JwtError.MalformedToken, error.Error);
+        Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains(claim, error.ErrorDescription, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// RFC 7519 section 2: a NumericDate is seconds since the epoch "other than that non-integer
+    /// values can be represented", and a JSON number written with an exponent is a legal spelling of
+    /// an integral one. Both are dates, not defects, and the token is judged on them.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"exp": 1893456000.5}""")]
+    [InlineData("""{"exp": 1.893456e9}""")]
+    [InlineData("""{"exp": 1893456000.999999}""")]
+    public async Task ANonIntegerNumericDate_IsReadAsADate(string payload)
+    {
+        var result = await Validate(payload);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// And a fractional date already in the past is refused as expired, not as unreadable: the
+    /// fraction is dropped rather than the value.
+    /// </summary>
+    [Fact]
+    public async Task ANonIntegerNumericDateInThePast_IsRefusedAsExpired()
+    {
+        var result = await Validate("""{"exp": 1700000000.5}""");
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

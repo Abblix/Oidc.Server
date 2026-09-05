@@ -242,20 +242,15 @@ internal sealed class ProofValidator(
     private static ProofError? TryGetIat(JsonWebTokenPayload payload, out DateTimeOffset issuedAt)
     {
         issuedAt = default;
-        DateTimeOffset? iatNullable;
-        try
+
+        // Read through the payload's own guarded reader rather than the accessor: the proof is
+        // validated without lifetime handling, so nothing before this line has touched the claim,
+        // and the accessor throws on a value it cannot read. A private list of the exceptions it
+        // throws is what stood here before, and the list was missing the one a number outside the
+        // representable range raises.
+        if (!payload.TryReadTimestamps(out _, out _, out var iatNullable, out var whyUnreadable))
         {
-            iatNullable = payload.IssuedAt;
-        }
-        // The accessor parses a Unix-time numeric out of the underlying JsonObject; a
-        // malformed iat surfaces as one of these conversion exceptions. Anything else
-        // (OperationCanceledException, OutOfMemoryException, ...) propagates so we
-        // don't mask unrelated bugs as «invalid iat».
-        catch (Exception ex) when (ex is FormatException or InvalidOperationException or OverflowException)
-        {
-            return new ProofError(
-                ProofErrorReasons.IssuedAtInvalid,
-                "iat claim is not a valid Unix-time numeric.");
+            return new ProofError(ProofErrorReasons.IssuedAtInvalid, whyUnreadable);
         }
 
         if (iatNullable is null)

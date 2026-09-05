@@ -618,9 +618,10 @@ internal class JsonWebTokenValidator(
             return token;
 
         // A timestamp the payload cannot read is the token's fault, not this server's, so it is
-        // refused as malformed rather than allowed to escape as an exception out of the request.
+        // refused rather than allowed to escape as an exception out of the request. The token itself
+        // parsed, which is why this is an invalid claim and not a malformed token.
         if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
-            return new JwtValidationError(JwtError.MalformedToken, whyUnreadable);
+            return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
 
         if (requireExpiration && !expiresAt.HasValue)
             return new JwtValidationError(JwtError.InvalidToken, "Missing expiration time in JWT payload");

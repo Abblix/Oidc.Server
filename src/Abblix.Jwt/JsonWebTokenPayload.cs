@@ -109,6 +109,9 @@ public class JsonWebTokenPayload(JsonObject json)
 			whyUnreadable = null;
 			return true;
 		}
+		// FormatException is what net8.0 raises for a number the reader cannot narrow, where later
+		// runtimes raise InvalidOperationException; the suite runs on the latest runtime alone, so
+		// removing that arm stays green here and breaks every net8.0 consumer.
 		catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException or FormatException)
 		{
 			// The value is quoted back rather than described: "not a NumericDate" tells a sender

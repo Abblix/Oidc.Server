@@ -226,7 +226,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        if (!await ReserveTheAssertionAsync(token, timestamps.ExpiresAt, clientInfo))
+        if (!await ReserveTheAssertionAsync(token, timestamps, clientInfo))
         {
             return null;
         }
@@ -253,9 +253,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// in the caller is before the call.
     /// </remarks>
     /// <param name="token">The assertion whose identifier is being claimed.</param>
-    /// <param name="expiresAt">The assertion's expiry, already read, which bounds the reservation.</param>
+    /// <param name="timestamps">The assertion's timestamps, already read; the expiry bounds the reservation.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>
-    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, DateTimeOffset? expiresAt, ClientInfo clientInfo)
+    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
@@ -272,7 +272,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.
-        if (expiresAt is not { } expiry)
+        if (timestamps.ExpiresAt is not { } expiry)
         {
             LogMissingExpiration(clientInfo.ClientId);
             return false;
