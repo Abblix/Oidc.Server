@@ -24,12 +24,18 @@ public static class JsonWebTokenExtensions
     /// <param name="name">The property name containing the Unix time seconds.</param>
     /// <returns>
     /// A nullable <see cref="DateTimeOffset"/> representing the date and time of the specified property,
-    /// or <c>null</c> if the property is not present or cannot be converted.
+    /// or <c>null</c> if the property is not present.
     /// </returns>
     /// <remarks>
     /// Unix time seconds are widely used for representing date and time in JSON objects, especially in JWTs.
     /// This method simplifies retrieving such values by converting them directly to <see cref="DateTimeOffset"/>.
+    /// A value that is present and cannot be read THROWS rather than answering null: a caller judging a token
+    /// somebody else wrote reads through <see cref="JsonWebTokenPayload.TryReadTimestamp"/> instead, which
+    /// names the claim in a refusal.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The value is not a number.</exception>
+    /// <exception cref="JsonException">The value is a JSON kind no number can be read from.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The number is outside the range a date can hold.</exception>
     public static DateTimeOffset? GetUnixTimeSeconds(this JsonObject json, string name)
     {
         var node = json[name];
@@ -39,8 +45,10 @@ public static class JsonWebTokenExtensions
         // A JsonValue parsed from text holds a JsonElement and converts to whatever numeric type is
         // asked for. One created in code holds the .NET primitive it was created from and answers
         // TryGetValue only for that exact type: a payload written as an int literal is a
-        // JsonValue<int>, which says no to long. So the integral types are asked for one by one
-        // before falling back to a double, and a decimal literal is read as a decimal first.
+        // JsonValue<int>, which says no to long. The two integral asks keep exactness for a value
+        // past what a double represents; everything else goes through serialization, which reads
+        // any numeric backing the same way rather than one primitive at a time - a list of
+        // primitives is never complete, and the one left off it is the one a consumer writes.
         var value = node.AsValue();
         if (value.TryGetValue<int>(out var intValue))
             return DateTimeOffset.FromUnixTimeSeconds(intValue);
@@ -54,10 +62,7 @@ public static class JsonWebTokenExtensions
         // toward zero, since a token does not become valid or expire between two whole seconds. A
         // value that is not a number at all still fails the read, which is what a caller catching
         // it expects.
-        var number = value.TryGetValue<decimal>(out var decimalValue)
-            ? (double)decimalValue
-            : value.GetValue<double>();
-        var fractional = Math.Truncate(number);
+        var fractional = Math.Truncate(value.Deserialize<double>());
         if (fractional < long.MinValue || long.MaxValue < fractional)
             throw new ArgumentOutOfRangeException(name, fractional, "The value is outside the range a NumericDate can hold");
 

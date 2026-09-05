@@ -111,4 +111,22 @@ public class LogoutTokenReplayWindowTests
 
         Assert.Contains(JwtClaimTypes.ExpiresAt, failure.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The accessors a receiver reaches for first answer null for a timestamp the transmitter wrote
+    /// and the payload cannot read, as for a claim the token does not carry: the window step has
+    /// already refused the token by name, and a handler must not be thrown at afterwards.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtClaimTypes.IssuedAt)]
+    [InlineData("toe")]
+    public void AnUnreadableTimestamp_ReadsAsAbsentFromTheReceiversAccessors(string claim)
+    {
+        var token = new JsonWebToken();
+        token.Payload.Json[claim] = 99999999999999L;
+
+        var set = new SecurityEventToken(token);
+
+        Assert.Null(claim == "toe" ? set.TimeOfEvent : set.IssuedAt);
+    }
 }

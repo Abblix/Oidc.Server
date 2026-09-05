@@ -43,6 +43,34 @@ public class InMemoryTimestampTests
         Assert.Equal(Expected, payload.IssuedAt);
     }
 
+    /// <summary>
+    /// The backings a list of primitives leaves off: a reader that names one type at a time reads
+    /// none of these, and the one a consumer writes is the one the list forgot.
+    /// </summary>
+    [Fact]
+    public void AnUnsignedIntegerLiteral_ReadsAsADate()
+    {
+        var payload = new JsonWebTokenPayload(new JsonObject { [JwtClaimTypes.IssuedAt] = 1700000000u });
+
+        Assert.Equal(Expected, payload.IssuedAt);
+    }
+
+    [Fact]
+    public void AnUnsignedLongLiteral_ReadsAsADate()
+    {
+        var payload = new JsonWebTokenPayload(new JsonObject { [JwtClaimTypes.IssuedAt] = 1700000000ul });
+
+        Assert.Equal(Expected, payload.IssuedAt);
+    }
+
+    [Fact]
+    public void AShortLiteral_ReadsAsADate()
+    {
+        var payload = new JsonWebTokenPayload(new JsonObject { [JwtClaimTypes.IssuedAt] = (short)1 });
+
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1), payload.IssuedAt);
+    }
+
     [Fact]
     public void ADoubleLiteral_ReadsAsADateWithTheFractionDropped()
     {

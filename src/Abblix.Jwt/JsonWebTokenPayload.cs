@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Abblix.Jwt;
@@ -123,11 +124,12 @@ public class JsonWebTokenPayload(JsonObject json)
 			whyUnreadable = null;
 			return true;
 		}
-		// The reader beneath raises InvalidOperationException for a value that is not a number and
-		// ArgumentOutOfRangeException for one no date can hold, the same on every runtime this
-		// package targets. FormatException is the documented failure of the numeric readers this
-		// rests on, kept so a future reader change cannot turn a refusal back into an exception.
-		catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException or FormatException)
+		// The reader beneath raises InvalidOperationException or JsonException for a value that is
+		// not a number and ArgumentOutOfRangeException for one no date can hold, the same on every
+		// runtime this package targets. FormatException is the documented failure of the numeric
+		// readers this rests on, kept so a future reader change cannot turn a refusal back into an
+		// exception.
+		catch (Exception ex) when (ex is InvalidOperationException or JsonException or ArgumentOutOfRangeException or FormatException)
 		{
 			// The value is quoted back rather than described: "not a NumericDate" tells a sender
 			// nothing about which of its two ways of writing a date this server meant.

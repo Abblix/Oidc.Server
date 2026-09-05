@@ -52,7 +52,7 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// <summary>
     /// The "iat" claim: when the SET was issued. REQUIRED (RFC 8417 Section 2.2).
     /// </summary>
-    public DateTimeOffset? IssuedAt => Token.Payload.IssuedAt;
+    public DateTimeOffset? IssuedAt => ReadOrNull(JwtClaimTypes.IssuedAt);
 
     /// <summary>
     /// The "jti" claim: the SET's unique identifier, unique within a particular event feed, by
@@ -104,7 +104,15 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// issued. OPTIONAL (RFC 8417 Section 2.2): by omitting it, the issuer declines to share an
     /// event time, and the value may be approximate where a profile says so.
     /// </summary>
-    public DateTimeOffset? TimeOfEvent => Token.Payload.Json.GetUnixTimeSeconds(IanaClaimTypes.Toe);
+    public DateTimeOffset? TimeOfEvent => ReadOrNull(IanaClaimTypes.Toe);
+
+    /// <summary>
+    /// A timestamp the transmitter wrote and the payload cannot read is not this receiver's to
+    /// throw at: the accessors answer null, as for a claim the token does not carry, and the
+    /// validation step that judges the claim has already refused the token by name.
+    /// </summary>
+    private DateTimeOffset? ReadOrNull(string claim)
+        => Token.Payload.TryReadTimestamp(claim, out var value, out _) ? value : null;
 
     private EventsCollection? _eventsView;
 

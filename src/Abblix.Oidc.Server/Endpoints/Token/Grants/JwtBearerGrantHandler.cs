@@ -141,7 +141,14 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
 	/// </summary>
-	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer);
+	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer)
+	{
+		/// <summary>
+		/// The assertion's expiry as ValidateExpiration read it, carried so that the replay reservation
+		/// keys off a value already read rather than reading the accessor a second time.
+		/// </summary>
+		public DateTimeOffset? ExpiresAt { get; init; }
+	}
 
 	/// <summary>
 	/// Validates that the assertion parameter is present and within size limits.
@@ -231,7 +238,7 @@ public partial class JwtBearerGrantHandler(
 			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
 
 		if (expiresAt.HasValue)
-			return ctx;
+			return ctx with { ExpiresAt = expiresAt };
 
 		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
 
@@ -323,10 +330,10 @@ public partial class JwtBearerGrantHandler(
 		}
 
 		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
-		// ValidateExpiration guarantees is present, and has already read from this same payload, so
-		// the accessor cannot throw here) and treat "already present" as a replay. One call avoids
-		// both the lost-TTL bug of a separate mark step and the read-then-write race.
-		if (await issuerProvider.IsReplayedAsync(jti, ctx.Jwt.Payload.ExpiresAt))
+		// ValidateExpiration guarantees is present and carries on the context) and treat "already
+		// present" as a replay. One call avoids both the lost-TTL bug of a separate mark step and
+		// the read-then-write race.
+		if (await issuerProvider.IsReplayedAsync(jti, ctx.ExpiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
