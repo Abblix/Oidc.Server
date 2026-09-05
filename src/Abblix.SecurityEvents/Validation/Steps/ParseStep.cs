@@ -1,0 +1,82 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using System.Buffers.Text;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Abblix.Jwt;
+
+namespace Abblix.SecurityEvents.Validation.Steps;
+
+/// <summary>
+/// Takes the compact serialization apart and parses its header and claims, WITHOUT trusting
+/// either: parsing establishes shape, and everything read here stays in the context's unverified
+/// half until the signature step speaks.
+/// </summary>
+/// <remarks>
+/// Parsing before signature verification is what lets the cheap rejections - wrong type, wrong
+/// issuer, present "exp" - run before any cryptography, and it is safe exactly because nothing
+/// acts on the parsed values beyond rejecting the token. Encrypted SETs are not supported by this
+/// version: none of the first consumers encrypts, and JWS-only keeps the parse step free of key
+/// material. A five-segment token reports that plainly rather than as a generic parse failure.
+/// </remarks>
+public sealed class ParseStep : ISecurityEventTokenValidator
+{
+    private const int JwsSegmentCount = 3;
+    private const int JweSegmentCount = 5;
+
+    /// <inheritdoc />
+    public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
+        SecurityEventTokenValidationContext context,
+        CancellationToken cancellationToken)
+    {
+        var segments = context.CompactToken.Split('.');
+
+        switch (segments.Length)
+        {
+            case JwsSegmentCount:
+                break;
+
+            case JweSegmentCount:
+                return ValueTask.FromResult<SecurityEventTokenValidationError?>(
+                    new SecurityEventTokenValidationError(
+                        SecurityEventTokenErrorCode.DecryptionFailed,
+                        "The token is JWE-encrypted, which this validation profile does not support."));
+
+            default:
+                return ValueTask.FromResult<SecurityEventTokenValidationError?>(
+                    new SecurityEventTokenValidationError(
+                        SecurityEventTokenErrorCode.MalformedToken,
+                        $"A compact JWS has {JwsSegmentCount} segments; this token has {segments.Length}."));
+        }
+
+        SecurityEventTokenValidationError? error = null;
+        try
+        {
+            context.UnverifiedHeader = new JsonWebTokenHeader(ParseSegment(segments[0], "header"));
+            context.UnverifiedPayload = new JsonWebTokenPayload(ParseSegment(segments[1], "claims"));
+            context.Establish(SecurityEventTokenValidationStates.Parsed);
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException)
+        {
+            error = new SecurityEventTokenValidationError(
+                SecurityEventTokenErrorCode.MalformedToken,
+                exception.Message);
+        }
+
+        return ValueTask.FromResult(error);
+    }
+
+    private static JsonObject ParseSegment(string segment, string name)
+    {
+        var json = Encoding.UTF8.GetString(Base64Url.DecodeFromChars(segment));
+
+        return JsonNode.Parse(json) as JsonObject
+            ?? throw new JsonException($"The token's {name} segment is not a JSON object.");
+    }
+}

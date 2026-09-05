@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.DependencyInjection</PackageId>
+    <Title>Abblix DependencyInjection</Title>
+    <Description>Dependency injection extensions for Microsoft.Extensions.DependencyInjection: decorators, service aliasing, composite service families, keyed registrations that let host registrations win, and pipelines you can edit after registration.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.DependencyInjection</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix Dependency-Injection DI IoC Inversion-of-Control Service-Lifetime Scoped Singleton Transient Composite Decorator Keyed-Services Service-Alias Microsoft-Extensions-DependencyInjection dotnet OpenID Identity TryAddEnumerable Composition-Root</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>Helpers a library needs to be a good citizen in a host's container. Decorate a service without re-registering it; alias one contract to another registration so both resolve to the same instance; compose a family of implementations into one composite behind its contract, then list, insert, trim or replace its members in place after registration - the same call works whether or not the family has been composed yet. Library defaults use try-add semantics, so whatever the host registered first wins. Per-call dependency overrides let a factory construct a service with one explicit value and everything else from the container. The DI layer behind Abblix OIDC Server, usable on its own. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,68 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
+
+namespace Abblix.Oidc.Server.Features.LogoutNotification;
+
+/// <summary>
+/// Implements the functionality to send logout tokens to clients via back-channel communication,
+/// adhering to the OpenID Connect back-channel logout specification.
+/// </summary>
+/// <param name="logger">The logger to use for logging information about the logout token sending process.</param>
+/// <param name="backChannelHttpClient">The HTTP client used for sending the logout tokens to clients over the
+/// back channel.</param>
+public partial class BackChannelLogoutTokenSender(
+    ILogger<BackChannelLogoutTokenSender> logger,
+    HttpClient backChannelHttpClient) : ILogoutTokenSender
+{
+    /// <summary>
+    /// Asynchronously sends a logout token directly to a client over the back channel.
+    /// </summary>
+    /// <param name="clientInfo">Information about the client to which the logout token is sent.</param>
+    /// <param name="logoutToken">The logout token to be sent.</param>
+    /// <returns>A task representing the asynchronous operation of sending the logout token.</returns>
+    /// <remarks>
+    /// This method constructs a back-channel HTTP POST request containing the logout token
+    /// and sends it to the client's back-channel logout URI.
+    /// It ensures that the HTTP response indicates successful delivery of the logout token.
+    /// </remarks>
+    public async Task SendBackChannelLogoutAsync(ClientInfo clientInfo, EncodedJsonWebToken logoutToken)
+    {
+        var logoutOptions = clientInfo.BackChannelLogout.NotNull(nameof(clientInfo.BackChannelLogout));
+
+        var parameters = new KeyValuePair<string, string>[]
+        {
+            new ("logout_token", logoutToken.EncodedJwt),
+        };
+
+        using var content = new FormUrlEncodedContent(parameters);
+        using var response = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
+
+        LogRequestSent(parameters, logoutOptions.Uri, response.StatusCode);
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException ex) when (ex is { StatusCode: { } statusCode })
+        {
+            // The error record must precede the rethrow: the exception is swallowed per client
+            // upstream (a logout must not fail because one client is down), so this log line is
+            // the operator's only account of which URI refused and with what status. The filter
+            // binds the status the exception carries - inside this try it always carries one,
+            // since EnsureSuccessStatusCode throws only over a received response. The URI must
+            // come from local scope: the exception does not carry one.
+            LogSendFailed(logoutOptions.Uri, statusCode);
+            throw;
+        }
+    }
+}

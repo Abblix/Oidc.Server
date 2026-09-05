@@ -1,0 +1,279 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.Model;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
+
+/// <summary>
+/// Unit tests for <see cref="TokenContextValidatorComposite"/> verifying composite
+/// validator pattern for token validation.
+/// </summary>
+public class TokenContextValidatorCompositeTests
+{
+    private static TokenValidationContext CreateContext()
+    {
+        var tokenRequest = new TokenRequest();
+        var clientRequest = new ClientRequest();
+        return new TokenValidationContext(tokenRequest, clientRequest);
+    }
+
+    /// <summary>
+    /// Verifies successful validation when no validators provided.
+    /// Empty validator list should succeed.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoValidators_ShouldSucceed()
+    {
+        // Arrange
+        var validator = new TokenContextValidatorComposite([]);
+        var context = CreateContext();
+
+        // Act
+        var error = await validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Verifies successful validation when all validators succeed.
+    /// All validators should be called in sequence.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAllValidatorsSucceeding_ShouldSucceed()
+    {
+        // Arrange
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object,
+            validator3.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(error);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies error when first validator fails.
+    /// First error should be returned immediately.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenFirstValidatorFails_ShouldReturnError()
+    {
+        // Arrange
+        var error1 = new OidcError(ErrorCodes.InvalidRequest, "First validator error");
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error1);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Same(error1, error);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// Verifies error when middle validator fails.
+    /// Previous validators should be called, subsequent ones should not.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenMiddleValidatorFails_ShouldReturnError()
+    {
+        // Arrange
+        var error2 = new OidcError(ErrorCodes.InvalidClient, "Second validator error");
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error2);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object,
+            validator3.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Same(error2, error);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator3.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// Verifies error when last validator fails.
+    /// All previous validators should be called.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenLastValidatorFails_ShouldReturnError()
+    {
+        // Arrange
+        var error3 = new OidcError(ErrorCodes.UnauthorizedClient, "Third validator error");
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(error3);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object,
+            validator3.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Same(error3, error);
+        validator1.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies validators are called in order.
+    /// Execution order should match array order.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ShouldCallValidatorsInOrder()
+    {
+        // Arrange
+        var callOrder = new List<int>();
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator3 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(1)))
+            .ReturnsAsync((OidcError?)null);
+        validator2
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(2)))
+            .ReturnsAsync((OidcError?)null);
+        validator3
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((_, _) => callOrder.Add(3)))
+            .ReturnsAsync((OidcError?)null);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object,
+            validator3.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(new[] { 1, 2, 3 }, callOrder);
+    }
+
+    /// <summary>
+    /// Verifies same context is passed to all validators.
+    /// Context should be shared across validation chain.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ShouldPassSameContextToAllValidators()
+    {
+        // Arrange
+        var capturedContexts = new List<TokenValidationContext>();
+        var validator1 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        var validator2 = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+
+        validator1
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((ctx, _) => capturedContexts.Add(ctx)))
+            .ReturnsAsync((OidcError?)null);
+        validator2
+            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(new Action<TokenValidationContext, CancellationToken>((ctx, _) => capturedContexts.Add(ctx)))
+            .ReturnsAsync((OidcError?)null);
+
+        var composite = new TokenContextValidatorComposite([
+            validator1.Object,
+            validator2.Object
+        ]);
+        var context = CreateContext();
+
+        // Act
+        await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(2, capturedContexts.Count);
+        Assert.Same(context, capturedContexts[0]);
+        Assert.Same(context, capturedContexts[1]);
+    }
+
+    /// <summary>
+    /// Verifies single validator in composite.
+    /// Composite should work with one validator.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithSingleValidator_ShouldWork()
+    {
+        // Arrange
+        var validator = new Mock<ITokenContextValidator>(MockBehavior.Strict);
+        validator.Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>())).ReturnsAsync((OidcError?)null);
+
+        var composite = new TokenContextValidatorComposite([validator.Object]);
+        var context = CreateContext();
+
+        // Act
+        var error = await composite.ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(error);
+        validator.Verify(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+}

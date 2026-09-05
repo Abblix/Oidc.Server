@@ -1,0 +1,67 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+
+/// <summary>
+/// Validates an RFC 7592 §2.2 update request: authenticates the registration access token and
+/// confirms the client exists, then validates the supplied replacement metadata via the
+/// update-specific keyed <see cref="IRegisterClientRequestValidator"/>. Also enforces the
+/// RFC 7592 §2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
+/// </summary>
+/// <param name="clientRequestValidator">Validator for the registration access token.</param>
+/// <param name="registrationRequestValidator">Update-flow metadata validator
+/// (keyed by <see cref="RegistrationKey"/>).</param>
+public class UpdateClientRequestValidator(
+    IClientRequestValidator clientRequestValidator,
+    [FromKeyedServices(UpdateClientRequestValidator.RegistrationKey)] IRegisterClientRequestValidator registrationRequestValidator)
+    : IUpdateClientRequestValidator
+{
+    /// <summary>
+    /// DI service key under which the update-specific
+    /// <see cref="IRegisterClientRequestValidator"/> is registered, allowing the same
+    /// validator interface to be used for both register and update flows.
+    /// </summary>
+    public const string RegistrationKey = nameof(UpdateClientRequestValidator);
+
+    /// <inheritdoc />
+    public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(UpdateClientRequest request)
+    {
+        // First validate client authentication (registration_access_token)
+        var clientValidation = await clientRequestValidator.ValidateAsync(request.ClientRequest);
+        var validClientRequest = clientValidation;
+
+        if (validClientRequest.TryGetFailure(out var clientError))
+            return clientError;
+
+        var clientInfo = validClientRequest.GetSuccess();
+
+        // RFC 7592 Section 2.2: client_id in request body must match authenticated client
+        if (request.RegistrationRequest.ClientId != clientInfo.ClientInfo.ClientId)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The client_id in the request body must match the authenticated client");
+        }
+
+        // Validate the registration request metadata using update-specific validator
+        var registrationValidation = await registrationRequestValidator.ValidateAsync(request.RegistrationRequest);
+
+        return registrationValidation.MapSuccess(
+            validRegistration => new ValidUpdateClientRequest(
+                request,
+                clientInfo.ClientInfo,
+                validRegistration.Model));
+    }
+}

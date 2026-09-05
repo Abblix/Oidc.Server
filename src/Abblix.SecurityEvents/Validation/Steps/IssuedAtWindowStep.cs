@@ -1,0 +1,70 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using Abblix.Jwt;
+
+namespace Abblix.SecurityEvents.Validation.Steps;
+
+/// <summary>
+/// Requires the "iat" claim to be present - it is REQUIRED (RFC 8417 Section 2.2) - and within
+/// the receiver's freshness window on either side of its clock.
+/// </summary>
+/// <remarks>
+/// A SET records history, so freshness is not about token expiry - a SET deliberately has no
+/// "exp" - but about bounding what a replay cache must remember: a token older than the window
+/// fails here, so the cache can evict identifiers older than the window instead of keeping all of
+/// them forever. The same tolerance forgives clock skew for a token from the near future, the
+/// caution RFC 8417 Section 5.3 raises about treating timestamps as exact across distributed
+/// systems.
+/// </remarks>
+/// <param name="clock">The receiver's clock; a test hands in a fake to pin the window.</param>
+public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventTokenValidator
+{
+    /// <inheritdoc />
+    public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
+        SecurityEventTokenValidationContext context,
+        CancellationToken cancellationToken)
+    {
+        context.Require(SecurityEventTokenValidationStates.SignatureVerified);
+
+        // The token was verified without lifetime handling, so nothing before this step has read
+        // the claim, and the accessor throws on a value it cannot read. A value the transmitter
+        // wrote is the transmitter's fault and is refused, never thrown at.
+        if (!context.Token!.Token.Payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var issuedAtClaim, out var whyUnreadable))
+        {
+            return ValueTask.FromResult<SecurityEventTokenValidationError?>(
+                new SecurityEventTokenValidationError(SecurityEventTokenErrorCode.MalformedToken, whyUnreadable));
+        }
+
+        var now = clock.GetUtcNow();
+        var tolerance = context.Options.IssuedAtTolerance;
+
+        var description = issuedAtClaim switch
+        {
+            null => $"The claims carry no '{JwtClaimTypes.IssuedAt}' member (RFC 8417 Section 2.2).",
+            var issuedAt when issuedAt > now + tolerance =>
+                $"The token claims to be issued at {issuedAt:O}, further in the future than the "
+                + $"{tolerance} tolerance allows.",
+            var issuedAt when issuedAt < now - tolerance =>
+                $"The token was issued at {issuedAt:O}, older than the {tolerance} tolerance allows.",
+            _ => null,
+        };
+
+        SecurityEventTokenValidationError? error;
+        if (description is null)
+        {
+            context.Establish(SecurityEventTokenValidationStates.IssuedAtVerified);
+            error = null;
+        }
+        else
+        {
+            error = new SecurityEventTokenValidationError(SecurityEventTokenErrorCode.IatOutOfRange, description);
+        }
+
+        return ValueTask.FromResult(error);
+    }
+}

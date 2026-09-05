@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <OutputType>Exe</OutputType>
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+        <PackageReference Include="Microsoft.Extensions.Logging" />
+        <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="xunit.v3.mtp-v2" />
+        <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+        <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+        <PackageReference Update="SonarAnalyzer.CSharp">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" />
+
+        <!-- The CAEP profile policy and the dispatcher that consults it ship in packages that do not
+             reference each other, so only a test holding both can prove the pair actually runs. -->
+        <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <!-- One statement of what a host is promised, compiled into every package's suite. -->
+        <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+        <Compile Include="..\Shared\FlakyOriginHandler.cs">
+          <Link>Shared\FlakyOriginHandler.cs</Link>
+        </Compile>
+    </ItemGroup>
+</Project>

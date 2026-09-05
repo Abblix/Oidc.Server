@@ -1,0 +1,114 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+namespace Abblix.Oidc.Server.Common.Configuration;
+
+/// <summary>
+/// Flags representing the various OpenID Connect (OIDC) endpoints that the provider can expose.
+/// These flags enable fine-grained control over which endpoints are enabled or disabled.
+/// </summary>
+[Flags]
+public enum OidcEndpoints
+{
+	/// <summary>
+	/// All OIDC endpoints are available, covering the full range of OpenID Connect operations.
+	/// </summary>
+	All = Configuration | Keys | Authorize | Token | UserInfo | CheckSession | EndSession | Revocation |
+	      Introspection | RegisterClient | PushedAuthorizationRequest | BackChannelAuthentication | DeviceAuthorization,
+
+	/// <summary>
+	/// The base set of endpoints for a typical OpenID Provider: discovery, JWKS, the interactive authorization and
+	/// token core, PAR, UserInfo and RP-initiated logout. This is the default value of
+	/// <see cref="OidcOptions.EnabledEndpoints"/> - the minimal functional provider on top of which the opt-in
+	/// endpoints are added. It deliberately excludes the six opt-in endpoints - <see cref="CheckSession"/>,
+	/// <see cref="Revocation"/>, <see cref="Introspection"/>, <see cref="RegisterClient"/>,
+	/// <see cref="BackChannelAuthentication"/> and <see cref="DeviceAuthorization"/> - each of which is niche,
+	/// security-sensitive or carries its own grant, and is enabled by a dedicated <c>AddX()</c> call that both
+	/// registers the feature and re-enables its flag. A server that opts into none of them exposes exactly this set
+	/// and neither advertises nor validates an endpoint it was never asked to serve.
+	/// </summary>
+	Base = Configuration | Keys | Authorize | Token | UserInfo | EndSession | PushedAuthorizationRequest,
+
+	/// <summary>
+	/// The configuration endpoint, used by clients to dynamically discover information about the OpenID Provider.
+	/// This typically provides metadata such as available endpoints, supported grant types, and signing algorithms.
+	/// </summary>
+	Configuration = 1 << 0,
+
+	/// <summary>
+	/// The keys endpoint, which provides public keys for validating the signatures of issued tokens.
+	/// It is essential for clients to verify the integrity and authenticity of tokens.
+	/// </summary>
+	Keys = 1 << 1,
+
+	/// <summary>
+	/// The authorization endpoint, where user authentication and consent is initiated.
+	/// This is the entry point for most OpenID Connect flows, particularly for obtaining authorization codes.
+	/// </summary>
+	Authorize = 1 << 2,
+
+	/// <summary>
+	/// The token endpoint, used to exchange authorization codes for tokens such as access tokens and ID tokens.
+	/// It also supports other grant types like client credentials and refresh tokens.
+	/// </summary>
+	Token = 1 << 3,
+
+	/// <summary>
+	/// The user info endpoint, where authenticated user claims are retrieved after a successful authentication process.
+	/// It provides information such as the user's name, email, and other identity claims.
+	/// </summary>
+	UserInfo = 1 << 4,
+
+	/// <summary>
+	/// The check session endpoint, typically used in single sign-on (SSO) scenarios to monitor the user's session state.
+	/// It helps in detecting if the user session is still active or if the user has logged out.
+	/// </summary>
+	CheckSession = 1 << 5,
+
+	/// <summary>
+	/// The end session endpoint, which allows clients to log the user out from the OpenID Provider.
+	/// It is used to terminate the user's session and notify relying parties of the logout event.
+	/// </summary>
+	EndSession = 1 << 6,
+
+	/// <summary>
+	/// The revocation endpoint, where clients can revoke access or refresh tokens.
+	/// This is a security measure to invalidate tokens that are no longer needed or in cases of token compromise.
+	/// </summary>
+	Revocation = 1 << 7,
+
+	/// <summary>
+	/// The introspection endpoint, where clients can check the status of a token (e.g., whether it is active or expired).
+	/// It provides detailed information about the token such as its expiration time and associated scopes.
+	/// </summary>
+	Introspection = 1 << 8,
+
+	/// <summary>
+	/// The client registration endpoint, which allows dynamic registration of clients.
+	/// Clients can use this endpoint to register themselves with the OpenID Provider, typically during setup.
+	/// </summary>
+	RegisterClient = 1 << 9,
+
+	/// <summary>
+	/// The pushed authorization request endpoint, where clients can pre-register authorization requests with the provider.
+	/// It provides an additional layer of security in certain authorization flows.
+	/// </summary>
+	PushedAuthorizationRequest = 1 << 10,
+
+	/// <summary>
+	/// The backchannel authentication endpoint, used in CIBA (Client-Initiated Backchannel Authentication) flows.
+	/// It allows clients to initiate out-of-band authentication requests, often via a separate user device.
+	/// </summary>
+	BackChannelAuthentication = 1 << 11,
+
+	/// <summary>
+	/// The device authorization endpoint, used in Device Authorization Grant (RFC 8628) flows.
+	/// It allows devices with limited input capabilities to obtain user authorization via a secondary device.
+	/// </summary>
+	DeviceAuthorization = 1 << 12,
+}

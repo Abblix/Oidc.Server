@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.Utils</PackageId>
+    <Title>Abblix Utils</Title>
+    <Description>Utility library for .NET from Abblix: a result type for validation chains, a URI builder with query composition, validation attributes, RFC 6750 authentication challenges, Base32 and Base64URL encoding, secure random values and JSON converters. Usable on its own.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Utils</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix Utilities String-Manipulation URI-Parsing JSON-Serialization Cryptography Data-Encoding Extensions Secure-Random Custom-JSON-Converters Base32-Encoding dotnet OpenID OAuth2 Identity Helpers</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>Small types that keep protocol code readable. A result carries either a value or a typed error through a chain of checks, so a validator returns one thing and never throws for a bad input. An absolute address builder composes query strings safely; address and string extensions cover the cases that come up on the wire. Validation attributes check absolute addresses, allowed values and required elements at binding time. A challenge builder writes RFC 6750 authentication responses correctly escaped, and a sanitiser strips control characters before a value reaches a log. Secure random generation, Base32 and Base64URL encoding and custom JSON converters round it out. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Abblix.Utils.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

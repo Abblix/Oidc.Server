@@ -1,0 +1,103 @@
+name: Test shards
+
+# One shard per test project, run in parallel, so the wall-clock is the slowest single project
+# rather than the sum of all of them. Called by every workflow that needs the suite, so the shard
+# definition exists once: a second copy would drift, and a drifted CI copy fails silently - the
+# tests stay green locally and simply never run.
+#
+# Deliberately does NOT expose an aggregate gate. A job inside a called workflow appears as
+# "<caller job> / <job name>", so a required status check cannot live here without its name
+# changing. Callers keep their own aggregate job and depend on this one.
+on:
+  workflow_call:
+    outputs:
+      projects:
+        description: JSON array of the test projects that were run.
+        value: ${{ jobs.discover.outputs.projects }}
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    uses: ./.github/workflows/discover-test-projects.yml
+
+  shard:
+    needs: discover
+    name: Tests (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    # 5 minutes per shard: the slowest runs a little over three, so this leaves room while still
+    # catching a runaway sooner than a single whole-suite wall would.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    strategy:
+      # Report every shard's result; do not cancel siblings when one fails.
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.discover.outputs.projects) }}
+    env:
+      PROJECT: ${{ matrix.project }}
+    steps:
+      # harden-runner in audit mode: this may restore, build and test untrusted fork-PR code, so
+      # capture baseline egress for later review.
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer (referenced in Directory.Build.props) reads the latest tag plus commit height
+          # from git to derive the version, so the shallow clone has to be disabled.
+          fetch-depth: 0
+          # No git push here, and this may run untrusted fork-PR code, so strip the GITHUB_TOKEN
+          # from the runner git config after checkout.
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: '10.x'
+        timeout-minutes: 3
+      - name: Cache NuGet packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+        timeout-minutes: 3
+      - name: Restore
+        run: dotnet restore "tests/$PROJECT/$PROJECT.csproj"
+        timeout-minutes: 3
+      - name: Test
+        # --no-restore reuses the restore above; the project's dependency closure still builds here,
+        # so allow more room than the 3-minute step baseline for the largest shard.
+        #
+        # The new dotnet test experience (Microsoft.Testing.Platform runner, opted in via global.json)
+        # takes MTP options directly, without the VSTest separator. --results-directory resolves from
+        # the working directory (repo root), so files land beside the projects that produced them.
+        #
+        # The settings file excludes generated sources from the MEASUREMENT: a LoggerMessage partial
+        # carries a branch no test can take both sides of, and counting them ranks the package that
+        # logs the most as the least tested one.
+        run: |
+          dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore \
+            --report-trx --report-trx-filename test-results.trx \
+            --coverage --coverage-output-format cobertura \
+            --coverage-settings tests/code-coverage.settings.xml \
+            --results-directory ./tests/results
+        timeout-minutes: 5
+      # A RED run only. Nobody opens these after a green one, and the storage they take is shared
+      # across the account: six of them per run, a hundred in three hours, all younger than the
+      # retention window - so the window cannot help, because there is nothing old to expire.
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results-${{ matrix.project }}
+          path: |
+            tests/results/*.trx
+            tests/results/**/*.cobertura.xml
+          retention-days: 3
+        timeout-minutes: 3

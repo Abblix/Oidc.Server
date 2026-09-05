@@ -1,4 +1,4 @@
-# Pre-commit hooks for GitHub Actions workflow safety.
+# Pre-commit hooks: workflow safety, committed-text hygiene and C# documentation.
 #
 # One-time setup per clone:
 #   pip install pre-commit
@@ -7,10 +7,21 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended; CI re-runs the same checks):
+# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs actionlint and
+# the inline-secrets check; EVERY OTHER hook here runs in this clone or nowhere. Said as the condition
+# rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
 #   git commit --no-verify
 #
-# Rules and rationale: ../Docs/wiki/github-actions-security-checklist.md
+# actionlint through this hook has twice failed to finish inside ten minutes, while the same binary
+# on the same file answers in one second when run directly, and the stalled processes had used 0.2s
+# of CPU - so they were blocked rather than working. The cause is not known; stdin was the obvious
+# suspect and a direct run without it redirected finishes anyway.
+#
+# It is one of the two hooks CI re-runs, so skip that ONE (SKIP=actionlint) rather than reaching for
+# --no-verify, which drops the five that run in this clone or nowhere - and run the binary yourself,
+# or its two halves: actionlint -shellcheck= for the schema, shellcheck on the extracted run: body.
+#
+# Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
   - repo: https://github.com/rhysd/actionlint
@@ -28,3 +39,42 @@ repos:
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
         pass_filenames: false
+      - id: take-once-consumers
+        name: "Refuse an unreviewed consumer of the take-once protocol"
+        entry: python .github/scripts/lint-take-once-consumers.py
+        language: python
+        pass_filenames: false
+        # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
+        # check, or the list is edited by whoever is not looking at what it holds.
+        files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
+      - id: msbuild-xml-parses
+        name: "Refuse a build XML file that does not parse"
+        entry: python .github/scripts/lint-msbuild-xml.py
+        language: python
+        # The XML the BUILD reads, by extension. Not every XML file tracked here: the .DotSettings
+        # documents are Rider's and break nothing, and an earlier version of this sentence claimed
+        # otherwise because it was checked with a search over *.xml, which could not have seen them.
+        # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
+        # content is the general answer, and this is the cheap one.
+        files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
+      - id: no-split-doc-comments
+        name: "Block a doc comment that documents two members"
+        entry: python .github/scripts/lint-no-split-doc-comments.py
+        language: python
+        types: [c#]
+      - id: no-cr-in-blobs
+        name: "Block carriage returns in committed text"
+        entry: python .github/scripts/lint-no-cr-in-blobs.py
+        language: python
+        # `types: [text]` hands the binary question to pre-commit's identify library instead of
+        # re-deriving it in the hook. Two earlier attempts to decide it locally - a NUL-byte
+        # heuristic, then git's own diff output - both flagged committed PDFs that carry CR
+        # harmlessly, and a check that fires on files nobody can fix gets waved away.
+        types: [text]
+      - id: no-bom-change
+        name: "Block a byte-order mark appearing or disappearing"
+        entry: python .github/scripts/lint-no-bom-change.py
+        language: python
+        # Same delegation as above: pre-commit's identify library decides what is text, rather than
+        # this hook re-deriving it and disagreeing with its neighbour on the same file.
+        types: [text]

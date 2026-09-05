@@ -1,0 +1,160 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Jwt.ExternalKeys;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+
+namespace Abblix.Jwt.Vault;
+
+/// <summary>
+/// Registers the HashiCorp Vault / OpenBao Transit custodian for any host that signs or decrypts JSON Web Tokens,
+/// whether or not it is an OpenID Provider.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers Vault / OpenBao Transit as the custodian of the host's keys and opens the placement choice that
+    /// completes the wiring. This call is only the transport: it points a client at the Vault server and carries
+    /// the auth token. Which keys are used - and whether their private halves ever enter this process - is the
+    /// placement call chained onto the returned builder, which must follow: a custodian without one fails at
+    /// startup rather than silently falling back to whatever keys the configuration carries. Chain both calls
+    /// AFTER <c>AddJsonWebTokens</c> (the OIDC registration performs it), which the placement call composes onto.
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <param name="configureOptions">Configures the Vault address, auth token and Transit mount.</param>
+    /// <returns>The builder whose placement call completes the wiring.</returns>
+    /// <example>
+    /// <code>
+    /// services
+    ///     .AddVaultCustodian(vault =&gt; configuration.GetSection("Vault").Bind(vault))
+    ///     .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    /// </code>
+    /// </example>
+    public static IKeyCustodianBuilder AddVaultCustodian(
+        this IServiceCollection services,
+        Action<VaultTransitOptions> configureOptions)
+    {
+        services.Configure(configureOptions);
+        services.AddVaultTransport();
+
+        // Singular contract, TryAdd so a host that brought its own custodian keeps it, as the repo's DI rule
+        // requires.
+        services.TryAddSingleton<IKeyCustodian, TransitCustodian>();
+
+        return services.RequireKeyPlacement();
+    }
+
+    /// <summary>
+    /// Keeps the ring of minted keys in this Vault's KV version 2 engine, on the same server that holds the key
+    /// protecting them.
+    /// </summary>
+    /// <param name="builder">The builder returned by <c>UseKeysInProcess</c>.</param>
+    /// <param name="configureOptions">Configures the KV mount and the path the ring lives under.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    /// <remarks>
+    /// It hangs off the minting placement rather than the service collection because a ring belongs to it and to
+    /// no other: the placement where the custodian holds every key has nothing to store.
+    /// <para>
+    /// The engine must be KV v2. Its <c>cas=0</c> write is the insert-if-absent the ring is built on, and it is
+    /// what makes exactly one pod mint a period without a lock service. What lands there is a JWE the server
+    /// sealed to the custodian's key, so the engine holds ciphertext and never a secret.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection PersistRingToVaultKeyValue(
+        this IMintedKeysBuilder builder,
+        Action<VaultKeyValueOptions>? configureOptions = null)
+    {
+        var services = builder.Services;
+        services.Configure(configureOptions ?? (_ => { }));
+        services.AddVaultTransport();
+
+        // Singular contract, pinned so a host that brings its own ring keeps it: see the custodian registration.
+        services.TryAddSingleton<IKeyRingStore, KeyValueStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the one named client both engines resolve, once however many of them are wired.
+    /// </summary>
+    /// <remarks>
+    /// The ring rides the same server and token as the custodian - one Vault holds both the key that protects the
+    /// ring and the ring itself - so a second client would only mean a second connection pool to the same place,
+    /// and a second copy of the auth, redaction and lifetime settings to keep in step. Handler rotation is off and
+    /// <see cref="SocketsHttpHandler.PooledConnectionLifetime"/> recycles the connections underneath instead,
+    /// because the consumers hold their client for their own lifetime - the pattern Microsoft recommends for a
+    /// long-lived HttpClient.
+    /// </remarks>
+    private static void AddVaultTransport(this IServiceCollection services)
+    {
+        // AddHttpClient appends its configuration rather than replacing it, so a second call would run the whole
+        // chain twice - two token handlers on the request, redaction applied twice. The token handler's own
+        // registration, the first thing this does, is the mark that the transport has already been wired.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TokenHandler)))
+            return;
+
+        services.TryAddTransient<TokenHandler>();
+
+        // Startup validation of the authentication section: the section is optional, but a present one must
+        // name exactly one auth method, complete enough to log in with. Refusing at startup names the option;
+        // refusing at the first login names nothing and retries forever.
+        services.AddOptions<VaultTransitOptions>()
+            .Validate(
+                options => options.Authentication is not { Kubernetes: null, AppRole: null },
+                $"{nameof(VaultTransitOptions.Authentication)} is configured without an auth method: set either " +
+                $"{nameof(VaultAuthenticationOptions.Kubernetes)} or {nameof(VaultAuthenticationOptions.AppRole)}.")
+            .Validate(
+                options => options.Authentication is not { Kubernetes: not null, AppRole: not null },
+                $"{nameof(VaultTransitOptions.Authentication)} names both auth methods; exactly one of " +
+                $"{nameof(VaultAuthenticationOptions.Kubernetes)} and {nameof(VaultAuthenticationOptions.AppRole)} " +
+                $"must be set.")
+            .Validate(
+                options => options.Authentication?.Kubernetes is not { Role: null or "" },
+                $"Kubernetes authentication needs {nameof(KubernetesAuthenticationOptions.Role)} set to the Vault " +
+                $"role bound to the pod's service account.")
+            .Validate(
+                options => options.Authentication?.AppRole is not { RoleId: null or "" } and
+                           not { SecretId: null or "" },
+                $"AppRole authentication needs both {nameof(AppRoleAuthenticationOptions.RoleId)} and " +
+                $"{nameof(AppRoleAuthenticationOptions.SecretId)} set.")
+            .ValidateOnStart();
+
+        // The token's owners: the source everything reads through - refreshing on use, so no background
+        // service and no dependency on a running host - and the login that mints tokens for it. The
+        // source also needs a clock, which the package supplies for itself; a host that registered its
+        // own TimeProvider keeps it.
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<TokenSource>();
+        services.TryAddSingleton<LoginClient>();
+
+        services.AddHttpClient(VaultTransport.HttpClientName, (provider, http) =>
+        {
+            // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
+            // different ones, so each spells its own into every path.
+            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
+            http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
+        })
+        .AddHttpMessageHandler<TokenHandler>()
+
+        // The token is a bearer credential that can sign as this provider. IHttpClientFactory's own logging
+        // writes request headers at Trace and redacts nothing by default, so debugging a Vault connectivity
+        // problem - exactly when Trace gets turned on - would print it in the clear.
+        .RedactLoggedHeaders([TokenHandler.TokenHeaderName])
+        .ConfigurePrimaryHttpMessageHandler(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>();
+            return new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = options.Value.PooledConnectionLifetime,
+            };
+        })
+        .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+    }
+}

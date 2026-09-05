@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+        <!-- Shared ASP.NET-Core-neutral transport code consumed by the MVC and Minimal API adapters. It ships as
+             part of each adapter's NuGet package (its assembly is embedded into them), never as a standalone
+             package, so it is deliberately not packable. -->
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The transport adapters and this assembly's own tests reach its internals; nothing outside does. -->
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc" />
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi" />
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.AspNetCore.UnitTests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+        <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+        <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+    </ItemGroup>
+
+</Project>

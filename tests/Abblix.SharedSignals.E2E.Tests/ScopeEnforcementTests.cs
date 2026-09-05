@@ -1,0 +1,315 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Net;
+using System.Net.Http.Json;
+using Abblix.Jwt;
+using Abblix.SecurityEvents.Infrastructure;
+using Abblix.SharedSignals.Infrastructure;
+using Abblix.SharedSignals.MinimalApi;
+using Abblix.SharedSignals.Transmitter;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Xunit;
+
+namespace Abblix.SharedSignals.E2E.Tests;
+
+/// <summary>
+/// The read-versus-manage split, driven through a real host rather than through the predicate.
+/// </summary>
+/// <remarks>
+/// The CAEP Interoperability Profile Section 2.7.2 requires a transmitter to verify that a token's
+/// authorization is sufficient for what was asked, and Section 2.7.3 says what sufficient means. This
+/// library applies the split per route and takes the granted scopes from the host, because it never sees
+/// a token itself.
+/// </remarks>
+public sealed class ScopeEnforcementTests
+{
+    private const string Issuer = "https://transmitter.example";
+    private const string SomeEvent = "https://tenant.example.com/events/membership-changed";
+
+    /// <summary>
+    /// Reading is what <c>ssf.read</c> is for, and it is enough for both operations the profile names -
+    /// Read Stream Configuration and Get Stream Status - plus poll, which is this library's own reading
+    /// of a route the profile does not assign.
+    /// </summary>
+    /// <remarks>
+    /// A row each, because a summary claiming two are covered while one is driven is how a route quietly
+    /// tightens to <c>ssf.manage</c> and refuses a conformant read-only receiver with the suite green.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf/stream")]
+    [InlineData("/ssf/status")]
+    public async Task AReadScopedCaller_MayReach(string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read);
+
+        using var response = await host.GetTestClient().GetAsync(route, cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Poll delivers a receiver its own events. The profile assigns it no scope, and this library reads
+    /// it as <c>ssf.read</c>.
+    /// </summary>
+    /// <remarks>
+    /// Which is a deliberate exception rather than a pure read: a poll acknowledges, and that releases
+    /// the transmitter from retaining the acknowledged events, so this scope can empty a queue. Whose
+    /// queue depends on issue 462 - the outbox is keyed by stream id alone, so two receivers naming one
+    /// stream share it. The route comment gives the reasoning; the row is here because the alternative -
+    /// requiring <c>ssf.manage</c> to poll - would make every receiver hold the scope that deletes
+    /// streams.
+    /// </remarks>
+    [Fact]
+    public async Task AReadScopedCaller_MayPoll()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read);
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/poll/stream-1"), cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The refusal a caller with no identity gets is the 401 from the handler, not a 403 from the scope
+    /// filter - even with scope checking switched on.
+    /// </summary>
+    /// <remarks>
+    /// The filter runs before the handler that checks identity, so without an explicit pass-through it
+    /// answers "your scope is too narrow" to a request carrying no token at all. RFC 6750 Section 3.1
+    /// forbids naming an error there, and operationally it is worse than wrong: a receiver whose token
+    /// expired is sent to fetch a scope it already holds, and a client library that re-authenticates on
+    /// 401 and gives up on 403 stops retrying the one condition retrying would fix.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnidentifiedCaller_GetsTheBare401_EvenWithScopeCheckingOn()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read, identified: false);
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/verify"), cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.DoesNotContain("error", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The lower bound on the read routes: a caller holding neither scope is refused them, and told which
+    /// one to ask for.
+    /// </summary>
+    /// <remarks>
+    /// Without this the read rows assert only that <c>ssf.read</c> is ENOUGH, never that anything is
+    /// required - so a route that quietly stopped declaring a scope would ship green. Deleting
+    /// <c>.RequiresScope</c> from poll used to leave the whole suite passing.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf/stream")]
+    [InlineData("/ssf/status")]
+    public async Task ACallerWithAnUnrelatedScope_IsRefusedTheReadRoutes(string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync("urn:example:something-else");
+
+        using var response = await host.GetTestClient().GetAsync(route, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The same for poll, which is the route whose scope this library assigns rather than the profile.
+    /// </summary>
+    [Fact]
+    public async Task ACallerWithAnUnrelatedScope_IsRefusedPoll()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync("urn:example:something-else");
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/poll/stream-1"), cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// And is not enough for anything that changes one. This is the direction that matters: a symmetric
+    /// check would let a read-only receiver delete somebody's stream.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "/ssf/stream")]
+    [InlineData("DELETE", "/ssf/stream")]
+    [InlineData("PATCH", "/ssf/stream")]
+    [InlineData("PUT", "/ssf/stream")]
+    [InlineData("POST", "/ssf/status")]
+    [InlineData("POST", "/ssf/subjects:add")]
+    [InlineData("POST", "/ssf/subjects:remove")]
+    [InlineData("POST", "/ssf/verify")]
+    public async Task AReadScopedCaller_IsRefusedAnythingThatChangesAStream(string method, string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Read);
+
+        using var response = await host.GetTestClient().SendAsync(Request(method, route), cancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // RFC 6750 Section 3.1 names the code, and the scope attribute is what tells the receiver what to
+        // ask its authorization server for. Without it a 403 is a dead end.
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Contains("insufficient_scope", challenge.Parameter!);
+        Assert.Contains($"scope=\"{SsfScopes.Manage}\"", challenge.Parameter!);
+    }
+
+    /// <summary>
+    /// The control for the row above: the same requests with the wider scope are not refused, so the 403
+    /// is the scope check rather than the request being malformed.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "/ssf/stream")]
+    [InlineData("PATCH", "/ssf/stream")]
+    [InlineData("POST", "/ssf/verify")]
+    public async Task AManageScopedCaller_IsNotRefused(string method, string route)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Manage);
+
+        using var response = await host.GetTestClient().SendAsync(Request(method, route), cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(response.Headers.WwwAuthenticate);
+    }
+
+    /// <summary>
+    /// Manage covers read, per the profile's own sentence, so the wider scope is never refused the
+    /// narrower operation.
+    /// </summary>
+    [Fact]
+    public async Task AManageScopedCaller_MayAlsoRead()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(SsfScopes.Manage);
+
+        using var response = await host.GetTestClient().GetAsync("/ssf/stream", cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A host that never set the selector gets what it had before this option existed. Without this row,
+    /// making the check unconditional would pass every test above and break every deployment that
+    /// authorizes some other way.
+    /// </summary>
+    [Fact]
+    public async Task AHostThatSelectsNoScopes_EnforcesNothing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(grantedScope: null);
+
+        using var response = await host.GetTestClient()
+            .SendAsync(Request("POST", "/ssf/verify"), cancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    private static HttpRequestMessage Request(string method, string route)
+        => new(new HttpMethod(method), route)
+        {
+            Content = JsonContent.Create(new
+            {
+                stream_id = "stream-1",
+                status = "enabled",
+                subject = new { format = "opaque", id = "subject-1" },
+            }),
+        };
+
+    /// <summary>
+    /// A route the HOST adds to the returned group is NOT scope-checked, while its neighbours refuse the
+    /// same caller.
+    /// </summary>
+    /// <remarks>
+    /// This pins a documented gap rather than a wanted behaviour, which is the only honest way to leave
+    /// it: the filter judges a route by the requirement it declares, which for a host route is none, so
+    /// it is let through. The fail-open branch is deliberate, because refusing a route with no metadata
+    /// would refuse exactly this one.
+    /// <para>
+    /// The comparison is the whole row, and it is careful about what it proves. Asserting the host
+    /// route's 200 alone would pass on a deployment where scope checking is off entirely; the
+    /// neighbouring 403 for the SAME caller on the SAME host is what says the checking is on and the
+    /// host's route was admitted anyway. What no assertion here can show is the filter executing on that
+    /// particular route - an admitted request leaves no trace of it, which is the whole point.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARouteTheHostAddsToTheGroup_IsNotScopeChecked()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            "urn:example:something-else",
+            configureGroup: group => group.MapGet("/host-added", () => Results.Ok("served")));
+        var client = host.GetTestClient();
+
+        using var refused = await client.GetAsync("/ssf/stream", cancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+
+        using var admitted = await client.GetAsync("/ssf/host-added", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
+    }
+
+    private static async Task<WebApplication> StartAsync(
+        string? grantedScope,
+        bool identified = true,
+        Action<RouteGroupBuilder>? configureGroup = null)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Logging.ClearProviders();
+
+        builder.Services.AddSecurityEvents(o =>
+            o.SigningKeySource = _ => Task.FromResult<JsonWebKey>(
+                JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
+
+        builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
+        {
+            Issuer = Issuer,
+            EventsSupported = [SomeEvent],
+            JwksUri = new Uri($"{Issuer}/jwks"),
+        });
+
+        builder.Services.AddSingleton(new SharedSignalsEndpointOptions
+        {
+            ReceiverIdSelector = _ => identified ? "receiver-1" : null,
+            GrantedScopesSelector = grantedScope is null
+                ? null
+                : _ => [grantedScope],
+        });
+
+        var app = builder.Build();
+        // Mapped first and configured second: a null-conditional call does not evaluate its ARGUMENT
+        // either, so folding these into one line maps no routes at all when no host route is added.
+        var group = app.MapSharedSignalsTransmitterEndpoints();
+        configureGroup?.Invoke(group);
+        await app.StartAsync();
+        return app;
+    }
+}

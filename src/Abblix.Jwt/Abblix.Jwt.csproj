@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.JWT</PackageId>
+    <Title>Abblix JWT</Title>
+    <Description>JWT, JWS, JWE and JWK library for .NET built on the platform's own cryptography, with no dependency on Microsoft.IdentityModel. Sign, encrypt and validate tokens, manage JSON Web Keys, and keep signing keys in HashiCorp Vault, OpenBao or Azure Key Vault.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix JWT JSON-Web-Token JOSE JWS JWE JWK JWKS Signing Encryption Validation Authentication Security Token API-Security OAuth OAuth2 Access-Token Identity Web-Security JWK-Thumbprint DPoP dotnet RFC7515 RFC7516 RFC7517 RFC7518 RFC7519</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>A JWT and JOSE toolkit that uses the .NET cryptographic primitives and System.Text.Json directly, so a token round-trips with no second serializer and no key-model translation. Sign and verify with every RSA, ECDSA and HMAC algorithm of RFC 7518; encrypt with every key-management algorithm of RFC 7516, including AES key wrapping and opt-in password-based encryption with a bounded work factor; publish and consume JSON Web Keys and key sets with thumbprints and typed header accessors; process critical headers; prevent replay of single-use tokens. Keys can live outside the process: a custodian seam lets HashiCorp Vault, OpenBao Transit or Azure Key Vault hold the private half, served by the companion packages. Clock tolerance travels as one value with separate past and future halves, so a FAPI 2.0 window is expressed exactly. The token layer behind Abblix OIDC Server, usable on its own. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Hosting.Abstractions carries only IHostedService and BackgroundService, which the key ring's refresh
+         service needs. Options carries IOptions<>, which the ring reads its rollover window from.
+         Caching.Abstractions carries only IDistributedCache, the store the replay cache reserves identifiers
+         in; the store itself is the host's to register. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="..\..\EXTERNAL_KEYS.md" Link="EXTERNAL_KEYS.md" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="System.Linq.Async" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="System.Linq.Async" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Abblix.Jwt.UnitTests" />
+  </ItemGroup>
+
+</Project>

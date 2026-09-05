@@ -1,0 +1,46 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Text.Json;
+using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Oidc.Server.Mvc.Attributes;
+using Microsoft.Extensions.Primitives;
+using Abblix.Utils;
+
+namespace Abblix.Oidc.Server.Mvc.Binders;
+
+/// <summary>
+/// A model binder that uses JSON serialization to bind data to objects.
+/// </summary>
+/// <remarks>
+/// This model binder utilizes the System.Text.Json.JsonSerializer to deserialize
+/// the incoming data into the specified type. It is particularly useful for scenarios
+/// where the incoming request data is in JSON format and needs to be converted into
+/// complex objects. This binder can be applied to various types of data sources such as
+/// query strings, form data, or headers, allowing for flexible data binding from JSON content.
+/// </remarks>
+[Binds(typeof(JsonObjectAttribute))]
+public class JsonSerializerModelBinder : ModelBinderBase
+{
+    /// <summary>
+    /// Attempts to parse the incoming data and convert it to the specified type using JSON deserialization.
+    /// </summary>
+    /// <param name="type">The type of object to which the data should be bound.</param>
+    /// <param name="values">The data to be bound, represented as a collection of string values.</param>
+    /// <param name="result">The resulting object after deserialization, if successful.</param>
+    /// <returns>Returns true if deserialization is successful; otherwise, false.</returns>
+    protected override bool TryParse(Type type, StringValues values, out object? result)
+    {
+        // The base binder returns before this is reached when the value provider held nothing, so a set with no
+        // values cannot arrive here - and a set with values converts to a string. See ModelBinderBase.TryParse.
+        var stringValue = ((string?)values).NotNull(nameof(values));
+
+        result = JsonSerializer.Deserialize(stringValue, type);
+        return true;
+    }
+}

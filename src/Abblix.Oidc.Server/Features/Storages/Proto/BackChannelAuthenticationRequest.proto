@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+import "Features/Storages/Proto/AuthorizedGrant.proto";
+
+// Status of a backchannel authentication request
+enum BackChannelAuthenticationStatus {
+  // Request is pending user action
+  PENDING = 0;
+
+  // User has denied the request
+  DENIED = 1;
+
+  // Request has been successfully authenticated
+  AUTHENTICATED = 2;
+}
+
+// The end users a request will accept, as a message so that "none in particular" and
+// "nobody" stay distinguishable across the store.
+message AcceptedSubjects {
+  repeated string values = 1;
+}
+
+// Represents a backchannel authentication request (CIBA protocol)
+message BackChannelAuthenticationRequest {
+  // The authorized grant associated with this authentication request
+  AuthorizedGrant authorized_grant = 1;
+
+  // Next time the client should poll for updates
+  optional google.protobuf.Timestamp next_poll_at = 2;
+
+  // Current status of the authentication request
+  BackChannelAuthenticationStatus status = 3;
+
+  // Absolute expiration time for this authentication request
+  google.protobuf.Timestamp expires_at = 4;
+
+  // Client notification endpoint (ping/push delivery): the URL that receives the
+  // CIBA callback. Absent for poll mode.
+  optional string client_notification_endpoint = 5;
+
+  // Client notification token (ping/push delivery): the bearer secret the callback
+  // authenticates with. Absent for poll mode.
+  optional string client_notification_token = 6;
+
+  // The end users the request will accept, spelled as the requesting client sees them.
+  // Carried across the store because the end user authenticates later, out of band, and
+  // the session reported then has to be one the request asked about.
+  //
+  // Wrapped in a message rather than a bare repeated field because absence and emptiness
+  // mean opposite things here: absent is "no constraint", while empty is "accepts nobody",
+  // which a request reaches by naming a value outside its own list of values. A repeated
+  // field cannot tell the two apart, so the constraint would vanish on the way back.
+  AcceptedSubjects requested_subjects = 7;
+
+  // The authorization_details the client asked for, serialised as a JSON string, kept apart
+  // from the ones on the grant. The grant carries what will be issued, and the host replaces
+  // it when the end user narrows the request; this is what that answer is judged against, and
+  // it stays as the request-time validators left it. Absent means a request written before this
+  // field existed, which is not the same as a request that asked for nothing: that one is stored as
+  // an empty array. Same scheme as the device authorization request.
+  optional string requested_authorization_details_json = 8;
+}

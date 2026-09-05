@@ -2,21 +2,31 @@ name: Publish dev build to GitHub Packages
 
 # Triggered on every push to develop and to any release/* branch, so a release branch
 # can be integration-tested against downstream consumers without cherry-picking its
-# fixes back to develop first. MinVer (configured in Directory.Build.props) computes the
-# package version from git tags + commit height; this workflow just packs and pushes the
-# resulting .nupkg files to nuget.pkg.github.com/Abblix.
+# fixes back to develop first. MinVer (configured in Directory.Build.props) computes the package
+# version; this workflow just packs and pushes the resulting .nupkg files to
+# nuget.pkg.github.com/Abblix.
 #
-# Example version (with MinVerMinimumMajorMinor=2.3 and DefaultPreReleaseIdentifiers=dev.0):
-#   pre-tag develop, 5 commits since v2.2  ->  2.3.0-dev.0.5
-#   tagged v2.3.0-beta1                    ->  2.3.0-beta1
-#   tagged v2.3.0                          ->  2.3.0
+# Directory.Build.props' MinVerMinimumMajorMinor is the ONE place that decides the line; the numbers
+# below are an illustration of it and nothing reads them. The run summary derives its range from the
+# version actually built, so these examples can mislead a READER of this file - which is why they are
+# kept current - but they are no longer what reaches a consumer.
 #
-# Note: develop and release/* publish into the same 2.3.0-dev.* pre-release line, so a
-# consumer floating 2.3.0-dev.* resolves the highest commit height across both branches.
+# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
+#   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
+#   a release, version supplied by hand ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
+#
+# MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
+# which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
+# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the number after dev.0 is MinVer's height:
+# the FIRST-PARENT distance back to the root, not a count of everything reachable. Checkable at
+# any commit - height + 1 == git rev-list --count --first-parent HEAD.
+#
+# Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
+# consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
 # To gate deterministically against a specific branch build, pin the exact version.
 #
-# Releases (canonical 2.3.0, 2.3.0-beta1, etc.) flow through the manual
-# enhanced-release.yml — this workflow does not produce them.
+# Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
+# enhanced-release.yml - this workflow does not produce them.
 
 on:
   push:
@@ -32,21 +42,34 @@ on:
       - '**/*.sln'
       - 'NuGet.config'
       - '.github/workflows/publish-dev-builds.yml'
+  # Deleting a package entry to change its published casing leaves every floating
+  # reference with nothing to resolve until the next push. A manual run closes that
+  # window without inventing a commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # Only the latest develop commit needs to land in the feed; cancel an
-  # in-progress run if a newer commit arrives.
+  # Publishing mutates the package feed - never cancel a run mid-push, or the
+  # feed is left with a partial package set; queue the newer commit's run
+  # instead (--skip-duplicate keeps the re-push idempotent).
   group: publish-dev-builds-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   pack-and-publish:
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Sized from the worst observation plus 20%, rounded up. Completed runs took 269s and 284s
+    # (build ~105s, test ~130s, the rest under 30s together), and two more were cut off at 306s and
+    # 316s, which are lower bounds on what they would have taken - so 316s is the figure to size
+    # from, not the fastest run. The earlier ceiling of 5 minutes was set from a measurement with no
+    # headroom, and the job silently outgrew it, leaving the feed without those commits' packages.
+    # Worth knowing when it happens again: a job timeout is reported as "cancelled" with the same
+    # wording as a manual stop, so the only thing identifying it is the duration landing exactly on
+    # the ceiling.
+    timeout-minutes: 7
     permissions:
       contents: read
       packages: write
@@ -81,11 +104,100 @@ jobs:
 
         timeout-minutes: 3
       - name: Test
+        # The whole suite in one pass over the tree this job just built. Sharding it the way
+        # pr-tests does would be slower here, not faster: a shard restores and builds its own
+        # dependency closure, where this reuses the build above. Measured at 202s for the slowest
+        # shard against 123s for this step.
+        #
+        # The suite runs on this path because a squash merge produces a new commit on top of
+        # wherever develop had moved to, so what lands on the branch is a state no pull request
+        # tested, and no other workflow tests develop itself.
         run: dotnet test --no-build -c Release --verbosity normal
 
-        timeout-minutes: 3
+        timeout-minutes: 5
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg
+        # `pack --no-build` on the multi-targeted family csprojs trips NETSDK1085 on the .NET 10.0.301 SDK
+        # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner
+        # per-TFM pack. Drop --no-build; the earlier Build step left everything up to date, so pack's build
+        # is an incremental no-op. GeneratePackageOnBuild=false stops the on-build pack double-running.
+        run: dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false
+
+        timeout-minutes: 3
+      - name: Refuse to publish a release version
+        run: |
+          set -euo pipefail
+          # This workflow publishes DEV builds. A version carrying no dev identifier means a release
+          # tag sits on the commit, and those belong to enhanced-release.yml, behind its approval
+          # gate. Without this step such a package would reach the feed past that gate, and the
+          # approved publish afterwards uses --skip-duplicate and would no-op over it.
+          if [ ! -f Directory.Build.props ]; then
+            echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
+            exit 1
+          fi
+
+          # MSBuild evaluates the property; a pattern would read one spelling of the tag and miss a
+          # Condition on the element, padding, a later re-declaration or a commented-out copy - each
+          # of which would refuse a good build for a cause that is not there. Configuration is passed
+          # because the file is read standing alone here and in a project's context during the build;
+          # that closes one such difference, not all of them. stderr is kept: -getProperty puts the
+          # value alone on stdout, and discarding the rest would leave this step refusing with no
+          # cause in the log.
+          rc=0
+          EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
+          if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
+            echo "Could not evaluate MinVerMinimumMajorMinor from Directory.Build.props - there is nothing to check the built version against." >&2
+            exit 1
+          fi
+
+          # find may fail without ending the step, so a missing nupkg/ reaches the arm below rather
+          # than ending the run here with no output at all - find's own message is discarded on the
+          # next line, so the arm's sentence is the only one there would be.
+          rc=0
+          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' 2>/dev/null | sort | sed -n 1p) || rc=$?
+          [ "$rc" -eq 0 ] || PKG=""
+          BASE=$(basename "$PKG" .nupkg)
+
+          # The version is the FIRST version-shaped suffix. Taking the last loses the tail of a
+          # pre-release identifier that has three parts, and what is left then reads as a release or
+          # as a version off this line, depending on the identifier. This assumes
+          # no segment of a package id begins with a digit, and none here does; one that did would be
+          # taken as the start of the version, usually refused and in a contrived case published.
+          VERSION=""
+          REST=$BASE
+          while [ -n "$REST" ]; do
+            case "$REST" in
+              [0-9]*.[0-9]*.[0-9]*) VERSION=$REST; break ;;
+            esac
+            case "$REST" in
+              *.*) REST=${REST#*.} ;;
+              *) REST="" ;;
+            esac
+          done
+
+          if [ -z "$VERSION" ]; then
+            if [ -z "$PKG" ]; then
+              echo "Pack produced no package - nothing to publish and nothing to read a version from." >&2
+            else
+              echo "Refusing to publish: no version could be read out of '$PKG'." >&2
+            fi
+            exit 1
+          fi
+
+          # Both criteria on the version: the dev identifier, and the line this repository builds.
+          case "$VERSION" in
+            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*)
+              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              exit 1
+              ;;
+            *)
+              # Off the line, and the two causes cannot be told apart from here.
+              echo "Refusing to publish $VERSION: it is not on the $EXPECTED line this repository builds." >&2
+              echo "Either the version line moved and this workflow was not told, or '$PKG' is not a name this step can read." >&2
+              exit 1
+              ;;
+          esac
 
         timeout-minutes: 3
       - name: Push to GitHub Packages
@@ -105,18 +217,68 @@ jobs:
       - name: Summary
         run: |
           set -euo pipefail
-          # Pick any one package — they all share the same MinVer-derived version.
-          PKG=$(find nupkg -maxdepth 1 -name 'Abblix.Oidc.Server.*.nupkg' | head -1 || true)
+          # Any package: they all carry the same MinVer version. Matched by SHAPE rather than by
+          # name, because the name was wrong in two ways at once and both were silent.
+          #
+          # The glob said Abblix.Oidc.Server while the ids are Abblix.OIDC.Server - PackageId
+          # uppercases OIDC, JWT and MVC, and the runner is case-sensitive, so find matched nothing,
+          # PKG was empty, and this whole block has never run. The summary an operator was reading
+          # about was not merely stale; it was never printed at all.
+          #
+          # And once the case is corrected the name is still the wrong key: Abblix.OIDC.Server is a
+          # PREFIX of Abblix.OIDC.Server.MVC, so head -1 over the family can hand back a file whose
+          # remainder is "MVC.2.4.0-dev.0.469" - a version string with a package fragment inside it.
+          # (The casing is unpredictable in general: PackageId also uppercases API, CAEP and RISC.)
+          #
+          # A version has a shape, so take the trailing three-part number and let the name be
+          # whatever it is. sort makes the pick deterministic rather than dependent on directory
+          # order.
+          # sed -n 1p rather than head -1: head closes the pipe after one line, so a long enough
+          # listing gives sort a SIGPIPE, pipefail turns that into 141, and set -e kills the step
+          # with no summary written. Driven at 20000 files to see it. sed reads to the end.
+          PKG=$(find nupkg -maxdepth 1 -name '*.nupkg' | sort | sed -n 1p)
           if [ -n "$PKG" ]; then
-            VERSION=$(basename "$PKG" .nupkg | sed 's|^Abblix.Oidc.Server.||')
+            VERSION=$(basename "$PKG" .nupkg | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+[^ ]*)$/\1/')
+
+            # The extraction is greedy, so it takes the LAST version-shaped tail. That is right for
+            # every name here, digits in the name included, and it stops being right if the
+            # pre-release ever gains a third identifier - MinVerDefaultPreReleaseIdentifiers of
+            # "dev.0.0" would make 2.4.0-dev.0.0.469 extract as 0.0.469. Anchoring from the left
+            # instead just moves the hazard onto names containing digits, so the answer is not a
+            # cleverer pattern but a CHECK on what came out: anything that is not a version stops
+            # the summary and says why, rather than printing a range nobody can resolve.
+            case "$VERSION" in
+              [0-9]*.[0-9]*.[0-9]*) ;;
+              *)
+                echo "Could not read a version out of $PKG - got '$VERSION'." >&2
+                exit 1
+                ;;
+            esac
             {
               echo "## Dev build published"
               echo ""
-              echo "Version: \`$VERSION\` (derived by MinVer from git tags + height)"
+              echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
               echo ""
               echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
               echo ""
-              echo "Consumers floating \`2.3.0-dev.*\` will pick this up on next \`dotnet restore\`."
+              # The floating range comes from the version in hand, so the two cannot disagree. A
+              # literal here read 2.3 while the build produced 2.4, and a consumer who follows a
+              # range that has stopped publishing is not told: the range still resolves, to its last
+              # build, so restore succeeds and the version simply never moves again.
+              #
+              # The WHOLE three-part number, not major.minor with a zero patch appended. NuGet floats
+              # only the release label, so 2.4.0-dev.* does not resolve 2.4.1-dev.0.3 - and 2.4.1 is
+              # what MinVer produces as soon as a v2.4 tag is reachable, which is every day between
+              # the release and the next bump of MinVerMinimumMajorMinor. Re-asserting the patch
+              # would have rebuilt the same silent failure inside the fix for it.
+              #
+              # Only for a dev build. A tagged pre-release arrives here with no dev identifier, and a
+              # sentence about floating would be advice about a line it is not on.
+              case "$VERSION" in
+                *-dev.*)
+                  echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
+                  ;;
+              esac
             } >> "$GITHUB_STEP_SUMMARY"
           fi
         timeout-minutes: 3

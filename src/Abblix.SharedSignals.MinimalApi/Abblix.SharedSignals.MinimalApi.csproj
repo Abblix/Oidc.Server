@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.SharedSignals.MinimalAPI</PackageId>
+    <Title>Abblix Shared Signals Minimal API</Title>
+    <Description>ASP.NET Core Minimal API integration for Abblix Shared Signals: the SSF 1.0 transmitter endpoints - configuration, streams, subjects, verification and poll - and the receiver push intake as route handlers, with no MVC dependency.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SharedSignals.MinimalApi</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix Shared-Signals SSF OpenID Security-Event-Token SET RFC8935 RFC8936 CAEP RISC Event-Stream Transmitter Receiver Security Identity AspNetCore Minimal-API dotnet Continuous-Access-Evaluation Zero-Trust Stream-Management Webhook OIDC</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>The Shared Signals endpoints as route handlers. For a transmitter: configuration discovery, stream management, subject management, verification and poll delivery. For a receiver: the push intake a transmitter posts to. Each validates through the Shared Signals and Security Events cores before handing on, declares the statuses it answers, and needs no MVC framework in the host. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.SharedSignals\Abblix.SharedSignals.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

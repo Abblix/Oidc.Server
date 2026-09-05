@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <IsPackable>true</IsPackable>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+        <!-- Embed the shared Abblix.Oidc.Server.AspNetCore assembly into this package (see the target below). -->
+        <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
+        <PackageId>Abblix.OIDC.Server.MVC</PackageId>
+        <Title>Abblix OIDC Server Model-View-Controller</Title>
+        <Description>ASP.NET Core MVC integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Controllers, model binding and routing for every protocol endpoint: add it to a controller-based application and get a complete identity provider.</Description>
+        <Authors>Abblix LLP</Authors>
+        <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Identity-Provider IdP Authorization-Server Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore MVC dotnet Federation Claims WebApi PKCE DPoP PAR JARM CIBA Device-Flow Token-Exchange FAPI Proof-of-Possession</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+        <PackageReleaseNotes>Every protocol endpoint as an MVC controller - authorization, token, introspection, revocation, discovery, keys, UserInfo, pushed authorization, device authorization, CIBA, dynamic client registration and management, end-session and check-session - with routes you can move, JARM and signed introspection responses, and a default cross-origin policy for the OIDC endpoints so a browser client works without extra configuration. Endpoints beyond the core set are opt-in. Referencing both transport adapters is refused at startup with a message naming the package to drop. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+        <PackageIcon>Abblix.png</PackageIcon>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+
+        <!-- Deterministic builds for reproducible binaries -->
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+        <!-- SourceLink for symbol packages -->
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+        <PackageReference Update="SonarAnalyzer.CSharp">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+    
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+        <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+        <ProjectReference Include="..\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+        <!-- Shared ASP.NET-Core-neutral code. PrivateAssets=all keeps it out of the package dependency graph;
+             the IncludeAspNetCoreSharedInPackage target below embeds its assembly into this package. -->
+        <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" PrivateAssets="all" />
+        <!-- Build-time only: generates the MVC binding models from the core request models.
+             Not a runtime dependency, so it stays out of the package dependency graph. -->
+        <ProjectReference Include="..\Abblix.Oidc.Server.SourceGenerators.Mvc\Abblix.Oidc.Server.SourceGenerators.Mvc.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc.UnitTests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+        <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+        <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- The shared Abblix.Oidc.Server.AspNetCore project is referenced with PrivateAssets=all (no package
+         dependency) and is not packable on its own. Embed its assembly into this package's lib folder so the
+         consumer gets it; otherwise it would be missing at runtime. -->
+    <Target Name="IncludeAspNetCoreSharedInPackage" DependsOnTargets="ResolveReferences">
+        <ItemGroup>
+            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)"
+                                  Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Abblix.Oidc.Server.AspNetCore'" />
+        </ItemGroup>
+    </Target>
+
+</Project>

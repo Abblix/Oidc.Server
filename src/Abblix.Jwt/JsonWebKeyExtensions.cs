@@ -1,0 +1,457 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
+namespace Abblix.Jwt;
+
+/// <summary>
+/// Provides extension methods for the JsonWebKey model to simplify the process of populating its properties from different sources.
+/// These methods enable easy conversion between JsonWebKey and various cryptographic representations.
+/// </summary>
+public static class JsonWebKeyExtensions
+{
+	/// <summary>
+	/// Converts an X509Certificate2 to a JsonWebKey. The private keys can be optionally included in the conversion.
+	/// </summary>
+	/// <param name="certificate">The X509Certificate2 to convert.</param>
+	/// <param name="includePrivateKeys">Indicates whether to include private keys in the conversion.</param>
+	/// <returns>A JsonWebKey representing the certificate.</returns>
+	public static JsonWebKey ToJsonWebKey(this X509Certificate2 certificate, bool includePrivateKeys = false)
+	{
+		// Try ECDSA first
+		var ecdsaPublicKey = certificate.GetECDsaPublicKey();
+		if (ecdsaPublicKey != null)
+		{
+			var ecdsaPrivateKey = includePrivateKeys ? certificate.GetECDsaPrivateKey() : null;
+
+			var jwk = new EllipticCurveJsonWebKey
+			{
+				Usage = certificate.GetKeyUsage(),
+				KeyId = certificate.Thumbprint,
+			}
+				.Apply(ecdsaPublicKey.ExportParameters(false))
+				.Apply(certificate);
+
+			if (ecdsaPrivateKey != null)
+			{
+				jwk = jwk.Apply(ecdsaPrivateKey.ExportParameters(true));
+			}
+
+			return jwk;
+		}
+
+		// Fall back to RSA
+		var rsaPublicKey = certificate.GetRSAPublicKey();
+		if (rsaPublicKey != null)
+		{
+			var rsaPrivateKey = includePrivateKeys ? certificate.GetRSAPrivateKey() : null;
+
+			var jwk = new RsaJsonWebKey
+			{
+				Usage = certificate.GetKeyUsage(),
+				KeyId = certificate.Thumbprint,
+			}.Apply(rsaPublicKey.ExportParameters(false)).Apply(certificate);
+
+			if (rsaPrivateKey != null)
+			{
+				jwk = jwk.Apply(rsaPrivateKey.ExportParameters(true));
+			}
+
+			return jwk;
+		}
+
+		throw new InvalidOperationException($"Certificate does not contain a supported public key algorithm");
+	}
+
+	/// <summary>
+	/// Derives the JWK <c>use</c> value from a certificate's Key Usage extension. A certificate that permits both
+	/// signing and encryption maps to no <c>use</c> (<c>null</c>): RFC 7517 §4.2 makes <c>use</c> a single value,
+	/// so an unrestricted key is expressed by omitting <c>use</c>, never by a multi-valued string. A certificate
+	/// with no Key Usage extension defaults to signing.
+	/// </summary>
+	private static string? GetKeyUsage(this X509Certificate2 certificate)
+	{
+		const string defaultUsage = PublicKeyUsages.Signature;
+
+		var keyUsage = certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
+		if (keyUsage == null)
+			return defaultUsage;
+
+		var sig = keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.DigitalSignature);
+
+		// Either encipherment flag marks an encryption key. HasFlag(A | B) would demand both flags, so test the bits.
+		var enc =
+			keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment) ||
+			keyUsage.KeyUsages.HasFlag(X509KeyUsageFlags.DataEncipherment);
+
+		return (sig, enc) switch
+		{
+			(true, true) => null, // permits both: omit use per RFC 7517 §4.2, never a multi-valued "sig enc"
+			(true, false) => PublicKeyUsages.Signature,
+			(false, true) => PublicKeyUsages.Encryption,
+			_ => defaultUsage,
+		};
+	}
+
+	/// <summary>
+	/// Applies X509Certificate2 properties to a JsonWebKey.
+	/// </summary>
+	/// <typeparam name="T">The type of JsonWebKey (must be a subclass).</typeparam>
+	/// <param name="jwk">The JsonWebKey to which the certificate properties are to be applied.</param>
+	/// <param name="certificate">The X509Certificate2 providing the properties.</param>
+	/// <returns>The updated JsonWebKey with applied certificate properties.</returns>
+	public static T Apply<T>(this T jwk, X509Certificate2 certificate) where T : JsonWebKey
+	{
+		jwk.Certificates = [certificate.RawData];
+		jwk.Thumbprint = certificate.GetCertHash();
+		return jwk;
+	}
+
+	/// <summary>
+	/// Applies RSA parameters to an RsaJsonWebKey.
+	/// </summary>
+	/// <param name="jwk">The RsaJsonWebKey to which the RSA parameters are to be applied.</param>
+	/// <param name="parameters">The RSAParameters providing the RSA key information.</param>
+	/// <returns>The updated RsaJsonWebKey with applied RSA parameters.</returns>
+	public static RsaJsonWebKey Apply(this RsaJsonWebKey jwk, RSAParameters parameters)
+	{
+		jwk.Exponent = parameters.Exponent;
+		jwk.Modulus = parameters.Modulus;
+
+		jwk.PrivateExponent = parameters.D;
+		jwk.FirstPrimeFactor = parameters.P;
+		jwk.SecondPrimeFactor = parameters.Q;
+		jwk.FirstFactorCrtExponent = parameters.DP;
+		jwk.SecondFactorCrtExponent = parameters.DQ;
+		jwk.FirstCrtCoefficient = parameters.InverseQ;
+
+		return jwk;
+	}
+
+	/// <summary>
+	/// Applies Elliptic Curve parameters to an EllipticCurveJsonWebKey.
+	/// </summary>
+	/// <param name="jwk">The EllipticCurveJsonWebKey to which the EC parameters are to be applied.</param>
+	/// <param name="parameters">The ECParameters providing the Elliptic Curve key information.</param>
+	/// <returns>The updated EllipticCurveJsonWebKey with applied Elliptic Curve parameters.</returns>
+	public static EllipticCurveJsonWebKey Apply(this EllipticCurveJsonWebKey jwk, ECParameters parameters)
+	{
+		var curveOid = parameters.Curve.Oid;
+
+		jwk.Curve = curveOid.Value switch
+		{
+			EllipticCurveOids.P256 => EllipticCurveTypes.P256,
+			EllipticCurveOids.P384 => EllipticCurveTypes.P384,
+			EllipticCurveOids.P521 => EllipticCurveTypes.P521,
+			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
+		};
+
+		jwk.Algorithm ??= curveOid.Value switch
+		{
+			EllipticCurveOids.P256 => SigningAlgorithms.ES256,
+			EllipticCurveOids.P384 => SigningAlgorithms.ES384,
+			EllipticCurveOids.P521 => SigningAlgorithms.ES512,
+			_ => throw new InvalidOperationException($"The OID [{curveOid.Value}] {curveOid.FriendlyName} is not supported"),
+		};
+
+		jwk.X = parameters.Q.X;
+		jwk.Y = parameters.Q.Y;
+
+		if (parameters.D != null)
+			jwk.PrivateKey = parameters.D;
+
+		return jwk;
+	}
+
+	/// <summary>
+	/// Converts an RsaJsonWebKey to an RSA object, which represents an RSA public and private key pair or just a public key.
+	/// </summary>
+	/// <param name="key">The RsaJsonWebKey to be converted.</param>
+	/// <returns>An RSA object based on the provided RsaJsonWebKey.</returns>
+	public static RSA ToRsa(this RsaJsonWebKey key)
+	{
+		var rsa = RSA.Create();
+		rsa.ImportParameters(key.ToRsaParameters());
+		return rsa;
+	}
+
+	/// <summary>
+	/// The smallest RSA modulus RFC 7518 permits. Four sections state it, one per family: Section 3.3
+	/// and Section 3.5 for signing, Section 4.2 and Section 4.3 for key encryption. Almost the same
+	/// words - 3.3 and 4.3 govern several algorithms and say "these", 3.5 and 4.2 govern one and say
+	/// "this". One number here, so the sites that enforce it cannot drift apart.
+	/// </summary>
+	public const int MinimumRsaKeyBits = 2048;
+
+	/// <summary>
+	/// The smallest RSA modulus RFC 7518 requires for <paramref name="algorithm"/>, in bits, or
+	/// <c>null</c> when that document sets no size requirement for it.
+	/// </summary>
+	/// <remarks>
+	/// The floor is per FAMILY, not per key type: Sections 3.3, 3.5, 4.2 and 4.3 each state it for their
+	/// own algorithms, and Section 3.4 - ECDSA - states none at all. A caller reporting on a key has to
+	/// ask about whatever algorithm the header named, and take "no floor here" for an answer, or it ends
+	/// up citing a requirement that document does not make.
+	/// <para>
+	/// The same nine algorithms as <see cref="RsaSectionFor"/>, and a row pins the two lists together:
+	/// this one answering null where that one names a section would leave the seam refusing a key while
+	/// the report says nothing about it.
+	/// </para>
+	/// </remarks>
+	internal static int? MinimumRsaKeyBitsFor(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 or
+			SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 or
+			EncryptionAlgorithms.KeyManagement.Rsa1_5 or EncryptionAlgorithms.KeyManagement.RsaOaep or
+			EncryptionAlgorithms.KeyManagement.RsaOaep256 => MinimumRsaKeyBits,
+		_ => null,
+	};
+
+	/// <summary>
+	/// The smallest HMAC key RFC 7518 Section 3.2 permits for <paramref name="algorithm"/>, in bits, or
+	/// <c>null</c> when the algorithm is not one of the HMAC family.
+	/// </summary>
+	/// <remarks>
+	/// "A key of the same size as the hash output" is the rule, so the number is the algorithm's own.
+	/// Null rather than a throw, because the two callers ask different questions: the signer knows it is
+	/// an HMAC algorithm and turns null into its own refusal, while a caller REPORTING on a key needs to
+	/// ask about any algorithm and take "no floor of this family" for an answer.
+	/// </remarks>
+	internal static int? MinimumHmacKeyBits(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.HS256 => 256,
+		SigningAlgorithms.HS384 => 384,
+		SigningAlgorithms.HS512 => 512,
+		_ => null,
+	};
+
+	/// <summary>
+	/// The RFC 7518 section that carries the key-size requirement for <paramref name="algorithm"/>.
+	/// </summary>
+	/// <remarks>
+	/// A refusal has to send the operator to the paragraph that refused them. Sections 3 and 4 are
+	/// container headings and state no size requirement at all, so citing either leaves the reader
+	/// looking at a table of algorithm names and no MUST - which reads as the library inventing the rule.
+	/// </remarks>
+	/// <exception cref="ArgumentException">The algorithm is not one this library enforces a floor for.</exception>
+	public static string RsaSectionFor(string algorithm) => SectionOrNull(algorithm)
+		?? throw new ArgumentException($"No RSA key-size section is known for {algorithm}.", nameof(algorithm));
+
+	/// <summary>
+	/// The WHOLE citation phrase, ready to drop into a refusal message - "per RFC 7518 Section 3.3", or
+	/// "for RSA signatures" when the algorithm has no section of its own.
+	/// </summary>
+	/// <remarks>
+	/// Two differences from <see cref="RsaSectionFor"/>, and both matter at a call site. This one never
+	/// throws, because an unknown algorithm must not replace the refusal the operator was about to read
+	/// with a complaint about the citation - and it is reachable, since an RSA key carrying no
+	/// <c>alg</c> resolves to <c>SigningAlgorithms.None</c>. And this one carries the words "per RFC
+	/// 7518" itself, where <see cref="RsaSectionFor"/> returns the bare section and leaves them to the
+	/// caller. Interpolate this one into a sentence that writes them too and the message says them twice.
+	/// </remarks>
+	public static string RsaSectionForOrNothing(string algorithm)
+		=> SectionOrNull(algorithm) is { } section ? $"per RFC 7518 {section}" : "for RSA signatures";
+
+	private static string? SectionOrNull(string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or SigningAlgorithms.RS384 or SigningAlgorithms.RS512 => "Section 3.3",
+		SigningAlgorithms.PS256 or SigningAlgorithms.PS384 or SigningAlgorithms.PS512 => "Section 3.5",
+		EncryptionAlgorithms.KeyManagement.Rsa1_5 => "Section 4.2",
+		EncryptionAlgorithms.KeyManagement.RsaOaep or EncryptionAlgorithms.KeyManagement.RsaOaep256
+			=> "Section 4.3",
+		_ => null,
+	};
+
+	/// <summary>
+	/// The real bit length of the key's modulus, ignoring any leading zero octets.
+	/// </summary>
+	/// <remarks>
+	/// <c>RSA.KeySize</c> is not this number, and how far it differs depends on the platform. It reports
+	/// the key as the importer built it: Windows CNG keeps a left-padded modulus at its padded length and
+	/// reports twice the real strength, while Linux (OpenSSL) strips the leading zeros and reports the
+	/// true one. So a size check written against that property refuses a downgraded key on one operating
+	/// system and admits it on another - which is a worse failure than either, because the deployment
+	/// that admits it looks identical to the one that does not, and the forgery arrives later from
+	/// whoever factored the real modulus.
+	/// <para>
+	/// Measuring the modulus itself removes the platform from the question. It is also never larger than
+	/// <c>RSA.KeySize</c>, so switching to it can only add refusals, never remove one.
+	/// </para>
+	/// <para>
+	/// RFC 7518 Section 2 requires the minimal encoding - "The octet sequence MUST utilize the minimum
+	/// number of octets needed to represent the value" - which is what this measurement follows. Padding
+	/// far enough to matter is NOT something a library does by accident: the one benign quirk the
+	/// specification records is a single extra zero octet (Section 6.3.1.1, "returning 257 octets for a
+	/// 2048-bit key"), and one octet moves neither check in either direction. Sixty-four of them is a
+	/// malformed or hostile JWKS entry.
+	/// </para>
+	/// <para>
+	/// The leading octet contributes only the bits from its own highest set bit down, which is what makes
+	/// this the modulus's true length rather than a rounded-up octet count.
+	/// </para>
+	/// </remarks>
+	public static int ModulusBitLength(this RsaJsonWebKey key)
+	{
+		var modulus = key.Modulus;
+		if (modulus is null)
+			return 0;
+
+		var first = 0;
+		while (first < modulus.Length && modulus[first] == 0)
+			first++;
+
+		if (first == modulus.Length)
+			return 0;
+
+		var bitsInLeadingOctet = 8;
+		for (var mask = 0x80; mask != 0 && (modulus[first] & mask) == 0; mask >>= 1)
+			bitsInLeadingOctet--;
+
+		return (modulus.Length - first - 1) * 8 + bitsInLeadingOctet;
+	}
+
+	/// <summary>
+	/// Converts an RsaJsonWebKey to RSAParameters, which represent the key parameters used in RSA cryptographic operations.
+	/// </summary>
+	/// <param name="key">The RsaJsonWebKey to be converted.</param>
+	/// <returns>An RSAParameters object based on the provided RsaJsonWebKey.</returns>
+	public static RSAParameters ToRsaParameters(this RsaJsonWebKey key) => new()
+	{
+		Modulus = key.Modulus,
+		Exponent = key.Exponent,
+		D = key.PrivateExponent,
+		P = key.FirstPrimeFactor,
+		Q = key.SecondPrimeFactor,
+		DP = key.FirstFactorCrtExponent,
+		DQ = key.SecondFactorCrtExponent,
+		InverseQ = key.FirstCrtCoefficient,
+	};
+
+	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to an ECDsa object,
+	/// which represents an ECDSA public and private key pair or just a public key.
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECDsa object based on the provided EllipticCurveJsonWebKey.</returns>
+	public static ECDsa ToEcdsa(this EllipticCurveJsonWebKey key)
+	{
+		var ecdsa = ECDsa.Create();
+		ecdsa.ImportParameters(key.ToEcParameters());
+		return ecdsa;
+	}
+
+	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to an ECDiffieHellman object for ECDH key agreement
+	/// operations (e.g. the ECDH-ES family of JWE key management algorithms).
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECDiffieHellman object based on the provided EllipticCurveJsonWebKey.</returns>
+	public static ECDiffieHellman ToEcdh(this EllipticCurveJsonWebKey key)
+	{
+		var ecdh = ECDiffieHellman.Create();
+		ecdh.ImportParameters(key.ToEcParameters());
+		return ecdh;
+	}
+
+	/// <summary>
+	/// Converts an EllipticCurveJsonWebKey to ECParameters,
+	/// which represent the key parameters used in ECDSA cryptographic operations.
+	/// Supports P-256, P-384, and P-521 curves as defined in NIST standards.
+	/// </summary>
+	/// <param name="key">The EllipticCurveJsonWebKey to be converted.</param>
+	/// <returns>An ECParameters object based on the provided EllipticCurveJsonWebKey.</returns>
+	/// <exception cref="InvalidOperationException">Thrown when the curve type is not supported.</exception>
+	public static ECParameters ToEcParameters(this EllipticCurveJsonWebKey key)
+	{
+		var curve = key.Curve switch
+		{
+			EllipticCurveTypes.P256 => ECCurve.NamedCurves.nistP256,
+			EllipticCurveTypes.P384 => ECCurve.NamedCurves.nistP384,
+			EllipticCurveTypes.P521 => ECCurve.NamedCurves.nistP521,
+			_ => throw new InvalidOperationException(
+				$"Unsupported elliptic curve: {key.Curve}. " +
+				$"Supported curves: {EllipticCurveTypes.P256}, {EllipticCurveTypes.P384}, {EllipticCurveTypes.P521}"),
+		};
+
+		return new ECParameters
+		{
+			Curve = curve,
+			Q = new ECPoint
+			{
+				X = key.X ?? throw new InvalidOperationException("X coordinate is required for elliptic curve key"),
+				Y = key.Y ?? throw new InvalidOperationException("Y coordinate is required for elliptic curve key"),
+			},
+			D = key.PrivateKey, // Optional private key component
+		};
+	}
+
+	/// <summary>
+	/// Whether this key can carry out the given algorithm - JWS signing or JWE key management - judged by the
+	/// key's own material rather than by what it declares.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, so a key may simply not say what it is for - and a key
+	/// imported from a certificate never does. Such a key is not "unknown", it is answerable: RFC 7518 section 3.1
+	/// binds each algorithm to a key type, and section 3.4 binds each ECDSA algorithm to one curve. Asking the
+	/// material is therefore exact, and it is the only question that matters at the point of use, since a
+	/// declaration is a claim while the material is the fact.
+	/// </remarks>
+	/// <param name="key">The key to test.</param>
+	/// <param name="algorithm">The JWS algorithm the caller needs.</param>
+	/// <returns>True when the key's type, and for ECDSA its curve, match what the algorithm requires.</returns>
+	public static bool SupportsAlgorithm(this JsonWebKey key, string algorithm) => algorithm switch
+	{
+		SigningAlgorithms.RS256 or
+		SigningAlgorithms.RS384 or
+		SigningAlgorithms.RS512 or
+
+		SigningAlgorithms.PS256 or
+		SigningAlgorithms.PS384 or
+		SigningAlgorithms.PS512 => key.KeyType == JsonWebKeyTypes.Rsa,
+
+		SigningAlgorithms.ES256 => key.IsCurve(EllipticCurveTypes.P256),
+		SigningAlgorithms.ES384 => key.IsCurve(EllipticCurveTypes.P384),
+		SigningAlgorithms.ES512 => key.IsCurve(EllipticCurveTypes.P521),
+
+		SigningAlgorithms.HS256 or
+		SigningAlgorithms.HS384 or
+		SigningAlgorithms.HS512 => key.KeyType == JsonWebKeyTypes.Octet,
+
+		// JWE key management, RFC 7518 section 4.1. The same question, asked of the recipient's key.
+		EncryptionAlgorithms.KeyManagement.Rsa1_5 or
+		EncryptionAlgorithms.KeyManagement.RsaOaep or
+		EncryptionAlgorithms.KeyManagement.RsaOaep256 => key.KeyType == JsonWebKeyTypes.Rsa,
+
+		// Key agreement needs a curve, and any of the three will do: unlike ECDSA, the algorithm name does
+		// not pin one, so the curve is carried in the ephemeral key instead.
+		EncryptionAlgorithms.KeyManagement.EcdhEs or
+		EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW or
+		EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW or
+		EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => key.KeyType == JsonWebKeyTypes.EllipticCurve,
+
+		EncryptionAlgorithms.KeyManagement.Aes128KW or
+		EncryptionAlgorithms.KeyManagement.Aes192KW or
+		EncryptionAlgorithms.KeyManagement.Aes256KW or
+		EncryptionAlgorithms.KeyManagement.Aes128Gcmkw or
+		EncryptionAlgorithms.KeyManagement.Aes192Gcmkw or
+		EncryptionAlgorithms.KeyManagement.Aes256Gcmkw or
+		EncryptionAlgorithms.KeyManagement.Dir or
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW or
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW or
+		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => key.KeyType == JsonWebKeyTypes.Octet,
+
+		// "none" carries no key, and an unregistered name is one this library cannot perform: in both cases
+		// no key qualifies, which is the answer rather than a reason to guess.
+		_ => false,
+	};
+
+	/// <summary>Whether the key is an elliptic-curve key on exactly the named curve.</summary>
+	private static bool IsCurve(this JsonWebKey key, string curve)
+		=> key is EllipticCurveJsonWebKey ec && ec.Curve == curve;
+}

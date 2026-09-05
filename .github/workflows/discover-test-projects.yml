@@ -1,0 +1,58 @@
+name: Discover test projects
+
+# The list of test projects is derived from the projects themselves, never kept by hand. A
+# hand-written list fails in one direction only: a new test project is simply absent from it, its
+# tests stay green locally, never execute in CI, and that is indistinguishable from being covered.
+#
+# Called by every workflow that shards tests, so the derivation exists once. Duplicating the job
+# would reintroduce the same drift one level up.
+on:
+  workflow_call:
+    outputs:
+      projects:
+        description: JSON array of test project names, suitable for a matrix via fromJSON.
+        value: ${{ jobs.discover.outputs.projects }}
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover test projects
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    outputs:
+      projects: ${{ steps.list.outputs.projects }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: List test projects
+        id: list
+        # IsTestProject is the honest marker: every test project sets it and neither E2E test host
+        # does, so hosts are excluded without naming them. Failing on an empty list keeps a broken
+        # query from producing a green run that tested nothing - the failure mode this job exists
+        # to prevent.
+        run: |
+          projects=$(grep -rl '<IsTestProject>true</IsTestProject>' tests --include='*.csproj' \
+            | xargs -r -n1 basename \
+            | sed 's/\.csproj$//' \
+            | sort \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          count=$(echo "$projects" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "No test projects found - the discovery query is wrong, or the checkout is empty." >&2
+            exit 1
+          fi
+          echo "Discovered $count test projects:"
+          echo "$projects" | jq -r '.[]'
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3

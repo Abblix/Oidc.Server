@@ -1,0 +1,415 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Abblix.Utils.Json;
+
+namespace Abblix.Oidc.Server.Model;
+
+/// <summary>
+/// The response returned from the client registration endpoint per RFC 7591 §3.2.1 and OIDC Dynamic Client
+/// Registration §3.2, echoing the registered metadata together with server-issued credentials and the URL
+/// of the client configuration endpoint (RFC 7592) for subsequent management operations.
+/// Unregistered metadata is omitted from the JSON per RFC 7591 §3.2.1, not emitted as an explicit null.
+/// </summary>
+[JsonIgnoreNulls]
+public record ClientRegistrationResponse
+{
+    /// <summary>
+    /// The unique Client Identifier. It must not be currently valid for any other registered client.
+    /// This identifier is critical for client identification and for securing client-to-server communication.
+    /// </summary>
+    [Required]
+    [JsonPropertyName(Parameters.ClientId)]
+    public required string ClientId { get; init; }
+
+    /// <summary>
+    /// The client secret. This value must not be assigned to multiple clients and is used for authenticating the client with the server.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientSecret)]
+    public string? ClientSecret { get; init; }
+
+    /// <summary>
+    /// The registration access token that can be used at the Client Configuration Endpoint to perform subsequent operations on the client registration.
+    /// </summary>
+    [JsonPropertyName(Parameters.RegistrationAccessToken)]
+    public string? RegistrationAccessToken { get; init; }
+
+    /// <summary>
+    /// The location of the Client Configuration Endpoint where the registration access token can be used for subsequent operations.
+    /// </summary>
+    [JsonPropertyName(Parameters.RegistrationClientUri)]
+    public Uri? RegistrationClientUri { get; init; }
+
+    /// <summary>
+    /// The time at which the Client Identifier was issued. Represented as the number of seconds since Unix Epoch (1970-01-01T0:0:0Z) in UTC.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientIdIssuedAt)]
+    [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
+    public DateTimeOffset? ClientIdIssuedAt { get; init; }
+
+    /// <summary>
+    /// The time at which the client_secret will expire. Represented as the number of seconds since Unix Epoch (1970-01-01T0:0:0Z) in UTC.
+    /// A value of 0 indicates that the secret does not expire.
+    /// </summary>
+    [Required]
+    [JsonPropertyName(Parameters.ClientSecretExpiresAt)]
+    [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
+    public DateTimeOffset ClientSecretExpiresAt { get; init; }
+
+    /// <summary>
+    /// The URI for initiating the client's login process.
+    /// </summary>
+    [JsonPropertyName(Parameters.InitiateLoginUri)]
+    public Uri? InitiateLoginUri { get; init; }
+
+    /// <summary>
+    /// The authentication method used by the client at the token endpoint.
+    /// Possible values include "client_secret_basic", "client_secret_post", "client_secret_jwt",
+    /// "private_key_jwt", "tls_client_auth", "self_signed_tls_client_auth", or "none".
+    /// Per OpenID Connect Dynamic Client Registration Section 2.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
+    public string? TokenEndpointAuthMethod { get; init; }
+
+    /// <summary>
+    /// The registered scope values per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.Scope)]
+    [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+    public string[]? Scope { get; init; }
+
+    /// <summary>
+    /// The software identifier per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareId)]
+    public string? SoftwareId { get; init; }
+
+    /// <summary>
+    /// The software version per RFC 7591 Section 2.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareVersion)]
+    public string? SoftwareVersion { get; init; }
+
+    /// <summary>
+    /// The software statement JWT echoed back per RFC 7591 Section 3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
+    public string? SoftwareStatement { get; init; }
+
+    /// <summary>
+    /// The type of application for which the client is registered (<c>web</c>, <c>native</c>).
+    /// Optional - server may assign a default. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.ApplicationType)]
+    public string? ApplicationType { get; init; }
+
+    /// <summary>
+    /// The URIs where the client expects to receive responses after user authentication.
+    /// Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.RedirectUris)]
+    public Uri[]? RedirectUris { get; init; }
+
+    /// <summary>
+    /// The registered grant types, including server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.GrantTypes)]
+    public string[]? GrantTypes { get; init; }
+
+    /// <summary>
+    /// The registered response type combinations (each entry space-separated), including
+    /// server-assigned defaults. Per RFC 7591 §2/§3.2.1.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.ResponseTypes)]
+    [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
+    public string[][]? ResponseTypes { get; init; }
+
+    /// <summary>
+    /// The human-readable name of the client. Optional client metadata. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientName)]
+    public string? ClientName { get; init; }
+
+    /// <summary>
+    /// URL that references a logo for the client. Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.LogoUri)]
+    public Uri? LogoUri { get; init; }
+
+    /// <summary>
+    /// The type of subject identifier used (<c>public</c>, <c>pairwise</c>).
+    /// Optional. Per OpenID Connect Core §8.
+    /// </summary>
+    [JsonPropertyName(Parameters.SubjectType)]
+    public string? SubjectType { get; init; }
+
+    /// <summary>
+    /// URL using <c>https</c> scheme used in calculating pseudonymous identifiers for
+    /// pairwise subject type. Optional. Per OpenID Connect Core §8.1.
+    /// </summary>
+    [JsonPropertyName(Parameters.SectorIdentifierUri)]
+    public Uri? SectorIdentifierUri { get; init; }
+
+    /// <summary>
+    /// URL for the client's JSON Web Key Set document.
+    /// Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.JwksUri)]
+    public Uri? JwksUri { get; init; }
+
+    /// <summary>
+    /// JWE <c>alg</c> algorithm for encrypting UserInfo responses.
+    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.UserInfoEncryptedResponseAlg)]
+    public string? UserInfoEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>enc</c> algorithm for encrypting UserInfo responses.
+    /// Optional. Per OpenID Connect Core §5.6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.UserInfoEncryptedResponseEnc)]
+    public string? UserInfoEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// JWS algorithm for signing introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
+    public string? IntrospectionSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>alg</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
+    public string? IntrospectionEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE <c>enc</c> algorithm for encrypting introspection responses. Optional. Per RFC 9701 §6.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
+    public string? IntrospectionEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// Array of contact email addresses for people responsible for this client.
+    /// Optional. Per RFC 7591 §2.
+    /// </summary>
+    [JsonPropertyName(Parameters.Contacts)]
+    public string[]? Contacts { get; init; }
+
+    /// <summary>
+    /// Array of <c>request_uri</c> values pre-registered by the client.
+    /// Optional. Per OpenID Connect Core §6.2.
+    /// </summary>
+    [JsonPropertyName(Parameters.RequestUris)]
+    public Uri[]? RequestUris { get; init; }
+
+    /// <summary>
+    /// Exact Subject Distinguished Name required when using <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSubjectDn)]
+    public string? TlsClientAuthSubjectDn { get; init; }
+
+    /// <summary>
+    /// Required DNS Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanDns)]
+    public string[]? TlsClientAuthSanDns { get; init; }
+
+    /// <summary>
+    /// Required URI Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanUri)]
+    public Uri[]? TlsClientAuthSanUri { get; init; }
+
+    /// <summary>
+    /// Required IP Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanIp)]
+    public string[]? TlsClientAuthSanIp { get; init; }
+
+    /// <summary>
+    /// Required email Subject Alternative Names for <c>tls_client_auth</c> per RFC 8705.
+    /// </summary>
+    [JsonPropertyName(Parameters.TlsClientAuthSanEmail)]
+    public string[]? TlsClientAuthSanEmail { get; init; }
+
+    /// <summary>
+    /// Whether access tokens issued to this client are sender-constrained via DPoP per
+    /// RFC 9449 §5.2 (<c>dpop_bound_access_tokens</c>). Echoes the registered value of
+    /// <c>ClientInfo.RequireDPoP</c>.
+    /// </summary>
+    [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
+    public bool? DpopBoundAccessTokens { get; init; }
+
+    /// <summary>
+    /// Whether PAR is the only way this client may start an authorization flow per RFC 9126 §6.
+    /// Echoes <c>ClientInfo.RequirePushedAuthorizationRequests</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests)]
+    public bool? RequirePushedAuthorizationRequests { get; init; }
+
+    /// <summary>
+    /// Whether this client must deliver authorization parameters as a signed request object per
+    /// RFC 9101 §10.5. Echoes <c>ClientInfo.RequireSignedRequestObject</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.RequireSignedRequestObject)]
+    public bool? RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// Whether access tokens are certificate-bound whenever the token request arrives over mutual
+    /// TLS per RFC 8705 §3.4. Echoes <c>ClientInfo.TlsClientCertificateBoundAccessTokens</c>.
+    /// </summary>
+    [JsonPropertyName(ClientRegistrationRequest.Parameters.TlsClientCertificateBoundAccessTokens)]
+    public bool? TlsClientCertificateBoundAccessTokens { get; init; }
+
+    /// <summary>
+    /// The per-client allowlist of authorization-detail <c>type</c> values this client may
+    /// use in RFC 9396 Rich Authorization Requests (<c>authorization_details_types</c>,
+    /// RFC 9396 §10). Echoes the registered value of
+    /// <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
+    public string[]? AuthorizationDetailsTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: per-client allowlist of RFC 8693 <c>subject_token_type</c> URIs this
+    /// client may submit to the Token Exchange grant. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedSubjectTokenTypes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
+    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: default-deny per-client allowlist of RFC 8693 <c>audience</c> values
+    /// this client may request when exchanging a token. Echoes
+    /// <see cref="Features.ClientInformation.ClientInfo.TokenExchangeAllowedAudiences"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.TokenExchangeAudiences)]
+    public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
+    /// Wire-level member names of the client registration response (RFC 7591 §3.2.1, RFC 7592 §3,
+    /// OIDC Dynamic Client Registration §3.2).
+    /// </summary>
+    /// <remarks>
+    /// Public for the same reason <see cref="ClientRegistrationRequest.Parameters"/> is: these are the member
+    /// names of a published wire contract, and a consumer reading the response has to name them somehow. Left
+    /// private, every caller spells the literal again, which is how a member name drifts between the server
+    /// that writes it and the code that reads it.
+    /// </remarks>
+    public static class Parameters
+    {
+        /// <summary>The <c>client_id</c> response member carrying the issued client identifier.</summary>
+        public const string ClientId = "client_id";
+
+        /// <summary>The <c>client_id_issued_at</c> response member giving the issue time as Unix seconds.
+        /// </summary>
+        public const string ClientIdIssuedAt = "client_id_issued_at";
+
+        /// <summary>The <c>client_secret</c> response member carrying the issued client secret.</summary>
+        public const string ClientSecret = "client_secret";
+
+        /// <summary>The <c>client_secret_expires_at</c> response member giving the secret expiration time
+        /// as Unix seconds; <c>0</c> means the secret does not expire.</summary>
+        public const string ClientSecretExpiresAt = "client_secret_expires_at";
+
+        /// <summary>The <c>registration_access_token</c> response member (RFC 7592) used to authorize
+        /// subsequent operations on the client configuration endpoint.</summary>
+        public const string RegistrationAccessToken = "registration_access_token";
+
+        /// <summary>The <c>registration_client_uri</c> response member (RFC 7592) locating the client
+        /// configuration endpoint for this registration.</summary>
+        public const string RegistrationClientUri = "registration_client_uri";
+
+        /// <summary>The <c>initiate_login_uri</c> echoed registration metadata member.</summary>
+        public const string InitiateLoginUri = "initiate_login_uri";
+
+        /// <summary>The <c>token_endpoint_auth_method</c> echoed registration metadata member.</summary>
+        public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>The <c>application_type</c> echoed registration metadata member.</summary>
+        public const string ApplicationType = "application_type";
+
+        /// <summary>The <c>redirect_uris</c> echoed registration metadata member.</summary>
+        public const string RedirectUris = "redirect_uris";
+
+        /// <summary>The <c>client_name</c> echoed registration metadata member.</summary>
+        public const string ClientName = "client_name";
+
+        /// <summary>The <c>logo_uri</c> echoed registration metadata member.</summary>
+        public const string LogoUri = "logo_uri";
+
+        /// <summary>The <c>subject_type</c> echoed registration metadata member.</summary>
+        public const string SubjectType = "subject_type";
+
+        /// <summary>The <c>sector_identifier_uri</c> echoed registration metadata member.</summary>
+        public const string SectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>The <c>jwks_uri</c> echoed registration metadata member.</summary>
+        public const string JwksUri = "jwks_uri";
+
+        /// <summary>The <c>userinfo_encrypted_response_alg</c> echoed registration metadata member.</summary>
+        public const string UserInfoEncryptedResponseAlg = "userinfo_encrypted_response_alg";
+
+        /// <summary>The <c>userinfo_encrypted_response_enc</c> echoed registration metadata member.</summary>
+        public const string UserInfoEncryptedResponseEnc = "userinfo_encrypted_response_enc";
+
+        /// <summary>The <c>introspection_signed_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionSignedResponseAlg = "introspection_signed_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_alg</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg";
+
+        /// <summary>The <c>introspection_encrypted_response_enc</c> echoed registration metadata member (RFC 9701 §6).</summary>
+        public const string IntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc";
+
+        /// <summary>The <c>contacts</c> echoed registration metadata member.</summary>
+        public const string Contacts = "contacts";
+
+        /// <summary>The <c>request_uris</c> echoed registration metadata member.</summary>
+        public const string RequestUris = "request_uris";
+
+        /// <summary>The <c>tls_client_auth_subject_dn</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
+        public const string TlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+
+        /// <summary>The <c>tls_client_auth_san_dns</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
+        public const string TlsClientAuthSanDns = "tls_client_auth_san_dns";
+
+        /// <summary>The <c>tls_client_auth_san_uri</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
+        public const string TlsClientAuthSanUri = "tls_client_auth_san_uri";
+
+        /// <summary>The <c>tls_client_auth_san_ip</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
+        public const string TlsClientAuthSanIp = "tls_client_auth_san_ip";
+
+        /// <summary>The <c>tls_client_auth_san_email</c> echoed registration metadata member (RFC 8705).
+        /// </summary>
+        public const string TlsClientAuthSanEmail = "tls_client_auth_san_email";
+
+        /// <summary>The <c>dpop_bound_access_tokens</c> echoed registration metadata member (RFC 9449 §5.2).
+        /// </summary>
+        public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>The <c>authorization_details_types</c> echoed registration metadata member
+        /// (RFC 9396 §10).</summary>
+        public const string AuthorizationDetailsTypes = "authorization_details_types";
+
+        /// <summary>The <c>token_exchange_subject_token_types</c> echoed registration metadata member
+        /// (non-standard extension).</summary>
+        public const string TokenExchangeSubjectTokenTypes = "token_exchange_subject_token_types";
+
+        /// <summary>The <c>token_exchange_audiences</c> echoed registration metadata member
+        /// (non-standard extension).</summary>
+        public const string TokenExchangeAudiences = "token_exchange_audiences";
+    }
+}

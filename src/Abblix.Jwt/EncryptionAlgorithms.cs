@@ -1,0 +1,185 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+namespace Abblix.Jwt;
+
+/// <summary>
+/// JWE algorithm identifiers ("alg" and "enc" header values) defined in RFC 7516 (JWE) and
+/// RFC 7518 Sections 4 (key management) and 5 (content encryption).
+/// Constants on this class are recognized by the library; some are listed but not yet supported
+/// because their underlying primitives are not provided by .NET (see remarks on each member).
+/// </summary>
+public static class EncryptionAlgorithms
+{
+	/// <summary>
+	/// Key management algorithms ("alg" parameter in the JWE header). These wrap or derive
+	/// the Content Encryption Key (CEK) that is then used by a content encryption algorithm.
+	/// </summary>
+	public static class KeyManagement
+	{
+		/// <summary>
+		/// RSAES-PKCS1-v1_5 key encryption (RFC 7518 Section 4.2). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.Pkcs1</c>.
+		/// Kept for interoperability with legacy peers; OAEP variants should be preferred
+		/// because PKCS#1 v1.5 padding is vulnerable to chosen-ciphertext attacks (Bleichenbacher)
+		/// and NIST SP 800-131A Rev. 2 disallows it for key transport.
+		/// Opt-in: enabled by <c>AddRsaPkcs1KeyManagement</c>, not by default.
+		/// </summary>
+		public const string Rsa1_5 = "RSA1_5";
+
+		/// <summary>
+		/// RSAES-OAEP with SHA-1 and MGF1-SHA-1 (RFC 7518 Section 4.3). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.OaepSHA1</c>.
+		/// Use when interoperating with peers that have not adopted RSA-OAEP-256;
+		/// otherwise prefer <see cref="RsaOaep256"/>.
+		/// </summary>
+		public const string RsaOaep = "RSA-OAEP";
+
+		/// <summary>
+		/// RSAES-OAEP with SHA-256 and MGF1-SHA-256 (RFC 7518 Section 4.3). Backed by .NET <c>RSA</c>
+		/// with <c>RSAEncryptionPadding.OaepSHA256</c>. Recommended choice for new RSA-based JWE deployments.
+		/// </summary>
+		public const string RsaOaep256 = "RSA-OAEP-256";
+
+		/// <summary>
+		/// AES Key Wrap with a 128-bit key (RFC 7518 Section 4.4). The CEK is wrapped with the
+		/// RFC 3394 AES Key Wrap construction over the platform AES-ECB primitive; the wrap's own
+		/// integrity check register protects the wrapped key, so no extra header parameters are used.
+		/// </summary>
+		public const string Aes128KW = "A128KW";
+
+		/// <summary>
+		/// AES Key Wrap with a 192-bit key (RFC 7518 Section 4.4). See <see cref="Aes128KW"/>.
+		/// </summary>
+		public const string Aes192KW = "A192KW";
+
+		/// <summary>
+		/// AES Key Wrap with a 256-bit key (RFC 7518 Section 4.4). See <see cref="Aes128KW"/>.
+		/// Recommended choice when a peer requires plain AES Key Wrap; otherwise prefer
+		/// <see cref="Aes256Gcmkw"/> for authenticated wrapping with a random IV.
+		/// </summary>
+		public const string Aes256KW = "A256KW";
+
+		/// <summary>
+		/// Direct use of a shared symmetric key as the Content Encryption Key (RFC 7518 Section 4.5).
+		/// No key wrap is performed and the JWE "encrypted_key" is the empty octet sequence.
+		/// The shared key length must match the key size required by the chosen content encryption algorithm.
+		/// </summary>
+		public const string Dir = "dir";
+
+		/// <summary>
+		/// Elliptic Curve Diffie-Hellman Ephemeral Static key agreement in Direct Key Agreement mode
+		/// (RFC 7518 Section 4.6). The CEK is derived from the ephemeral-static agreement via the
+		/// Concat KDF (computed natively by <c>ECDiffieHellman.DeriveKeyFromHash</c>) and the JWE
+		/// Encrypted Key is empty. Supports the NIST curves P-256, P-384 and P-521.
+		/// </summary>
+		public const string EcdhEs = "ECDH-ES";
+
+		/// <summary>
+		/// ECDH-ES key agreement wrapping the CEK with AES-128 Key Wrap (RFC 7518 Section 4.6).
+		/// The agreement derives a 128-bit KEK that wraps a random CEK per RFC 3394.
+		/// </summary>
+		public const string EcdhEsAes128KW = "ECDH-ES+A128KW";
+
+		/// <summary>
+		/// ECDH-ES key agreement wrapping the CEK with AES-192 Key Wrap (RFC 7518 Section 4.6).
+		/// See <see cref="EcdhEsAes128KW"/>.
+		/// </summary>
+		public const string EcdhEsAes192KW = "ECDH-ES+A192KW";
+
+		/// <summary>
+		/// ECDH-ES key agreement wrapping the CEK with AES-256 Key Wrap (RFC 7518 Section 4.6).
+		/// See <see cref="EcdhEsAes128KW"/>. Recommended choice for EC-key-based JWE deployments.
+		/// </summary>
+		public const string EcdhEsAes256KW = "ECDH-ES+A256KW";
+
+		/// <summary>
+		/// AES-GCM Key Wrap with a 128-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
+		/// The 96-bit IV and 128-bit authentication tag are carried in the JOSE header parameters
+		/// <c>iv</c> and <c>tag</c> (RFC 7518 Section 4.7.1); the JWE Encrypted Key is the wrapped-CEK ciphertext.
+		/// </summary>
+		public const string Aes128Gcmkw = "A128GCMKW";
+
+		/// <summary>
+		/// AES-GCM Key Wrap with a 192-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
+		/// </summary>
+		public const string Aes192Gcmkw = "A192GCMKW";
+
+		/// <summary>
+		/// AES-GCM Key Wrap with a 256-bit key (RFC 7518 Section 4.7). Backed by .NET <c>AesGcm</c>.
+		/// Recommended choice when both peers can share a symmetric key.
+		/// </summary>
+		public const string Aes256Gcmkw = "A256GCMKW";
+
+		/// <summary>
+		/// PBES2 with HMAC SHA-256 and AES-128 Key Wrap (RFC 7518 Section 4.8). The KEK is derived
+		/// from a password with PBKDF2 (native <c>Rfc2898DeriveBytes.Pbkdf2</c>) using the
+		/// 'p2s'/'p2c' header parameters, then wraps the CEK per RFC 3394. Inbound iteration counts
+		/// are bounded to keep an attacker-supplied token from demanding arbitrary PBKDF2 work.
+		/// Opt-in: the PBES2 family is enabled by <c>AddPbes2KeyManagement</c>, not by default -
+		/// accepting password-based key management from token producers is an explicit hosting decision.
+		/// </summary>
+		public const string Pbes2HmacSha256Aes128KW = "PBES2-HS256+A128KW";
+
+		/// <summary>
+		/// PBES2 with HMAC SHA-384 and AES-192 Key Wrap (RFC 7518 Section 4.8).
+		/// See <see cref="Pbes2HmacSha256Aes128KW"/>.
+		/// </summary>
+		public const string Pbes2HmacSha384Aes192KW = "PBES2-HS384+A192KW";
+
+		/// <summary>
+		/// PBES2 with HMAC SHA-512 and AES-256 Key Wrap (RFC 7518 Section 4.8).
+		/// See <see cref="Pbes2HmacSha256Aes128KW"/>.
+		/// </summary>
+		public const string Pbes2HmacSha512Aes256KW = "PBES2-HS512+A256KW";
+	}
+
+	/// <summary>
+	/// Content encryption algorithms ("enc" parameter in the JWE header). These encrypt the
+	/// JWE payload using the Content Encryption Key produced by the key management algorithm.
+	/// </summary>
+	public static class ContentEncryption
+	{
+		/// <summary>
+		/// AES-128-CBC with HMAC-SHA-256 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA256</c>; the 256-bit CEK is split into a
+		/// 128-bit MAC key and a 128-bit AES key.
+		/// </summary>
+		public const string Aes128CbcHmacSha256 = "A128CBC-HS256";
+
+		/// <summary>
+		/// AES-192-CBC with HMAC-SHA-384 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA384</c>; uses a 384-bit CEK.
+		/// </summary>
+		public const string Aes192CbcHmacSha384 = "A192CBC-HS384";
+
+		/// <summary>
+		/// AES-256-CBC with HMAC-SHA-512 authentication (RFC 7518 Section 5.2). Backed by .NET
+		/// <c>Aes</c> in CBC/PKCS7 mode and <c>HMACSHA512</c>; uses a 512-bit CEK.
+		/// Default content encryption used by this library when issuing encrypted tokens.
+		/// </summary>
+		public const string Aes256CbcHmacSha512 = "A256CBC-HS512";
+
+		/// <summary>
+		/// AES-128 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag. Single-pass authenticated encryption.
+		/// </summary>
+		public const string Aes128Gcm = "A128GCM";
+
+		/// <summary>
+		/// AES-192 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag.
+		/// </summary>
+		public const string Aes192Gcm = "A192GCM";
+
+		/// <summary>
+		/// AES-256 in Galois/Counter Mode (RFC 7518 Section 5.3). Backed by .NET <c>AesGcm</c>
+		/// with a 96-bit IV and 128-bit authentication tag. Recommended where peers support GCM.
+		/// </summary>
+		public const string Aes256Gcm = "A256GCM";
+	}
+}

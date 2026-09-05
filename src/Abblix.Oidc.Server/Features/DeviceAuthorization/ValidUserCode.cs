@@ -1,0 +1,30 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Text.Json.Nodes;
+
+namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
+
+/// <summary>
+/// Indicates that the user code was successfully verified and the request is pending authorization.
+/// </summary>
+/// <param name="ClientId">The client identifier that initiated the device authorization request.</param>
+/// <param name="Scope">The requested scopes for the authorization.</param>
+/// <param name="Resources">The requested resources (RFC 8707) for the authorization.</param>
+/// <param name="AuthorizationDetails">RFC 9396 §3 Rich Authorization Requests array from
+/// the original /device_authorization request. The host's user-verification UI renders these
+/// for consent and threads the user's decision onto the AuthorizedGrant's AuthorizationContext.
+/// Nothing else does: approving with a grant that carries none issues a token with no
+/// <c>authorization_details</c> at all, which RFC 9396 §9 leaves a resource server unable to
+/// enforce. The approval logs that at warning level rather than repairing it, since only this
+/// page knows what it showed the user.</param>
+public record ValidUserCode(
+    string ClientId,
+    string[] Scope,
+    Uri[]? Resources,
+    JsonArray? AuthorizationDetails) : UserCodeVerificationResult;

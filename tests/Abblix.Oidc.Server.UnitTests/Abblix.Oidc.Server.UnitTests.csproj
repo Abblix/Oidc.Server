@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One licence, two test assemblies. Linked rather than copied so the unit and end-to-end suites can
+         never drift onto different terms and disagree about what the product allows. -->
+    <EmbeddedResource Include="../Resources/test-license.jwt" Link="Resources/test-license.jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
+    <!-- Direct reference: the transports reference this project with PrivateAssets="all",
+         so AuthenticationSchemeAdapter does not flow transitively -->
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
+  </ItemGroup>
+
+
+    <ItemGroup>
+        <!-- One statement of what a host is promised, compiled into every package's suite. -->
+        <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+        <Compile Include="..\Shared\FlakyOriginHandler.cs">
+          <Link>Shared\FlakyOriginHandler.cs</Link>
+        </Compile>
+    </ItemGroup>
+</Project>

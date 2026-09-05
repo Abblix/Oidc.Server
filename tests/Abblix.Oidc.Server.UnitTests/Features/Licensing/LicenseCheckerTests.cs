@@ -1,0 +1,188 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Licensing;
+
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
+
+/// <summary>
+/// Tests for LicenseChecker enforcement of client and issuer licensing constraints.
+/// </summary>
+/// <remarks>
+/// WARNING: LicenseChecker uses static state (LicenseManager, known clients/issuers dictionaries).
+/// - Licenses added in one test persist and affect subsequent tests
+/// - Known clients/issuers accumulate across all tests in the test run
+/// - Tests use unique GUIDs to minimize interference but cannot be fully isolated
+/// - Test assertions account for accumulated state from previous tests
+///
+/// This is an inherent limitation of testing static classes with mutable state.
+/// The tests verify correct behavior but are not completely independent.
+/// </remarks>
+public class LicenseCheckerTests
+{
+    private static void AddTestLicense()
+    {
+        LicenseChecker.AddLicense(new License
+        {
+            ClientLimit = null,
+            IssuerLimit = null,
+            NotBefore = DateTimeOffset.MinValue,
+            ExpiresAt = DateTimeOffset.MaxValue
+        });
+    }
+
+
+    #region CheckClientLicense Tests
+
+    /// <summary>
+    /// Verifies that CheckClientLicense returns null when clientInfo parameter is null.
+    /// </summary>
+    [Fact]
+    public void CheckClientLicense_NullClientInfo_ReturnsNull()
+    {
+        // Arrange
+        ClientInfo? clientInfo = null;
+
+        // Act
+        var result = clientInfo.CheckClientLicense();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// Verifies that CheckClientLicense serves distinct clients under a licence that sets no client limit.
+    /// </summary>
+    [Fact]
+    public void CheckClientLicense_WithoutClientLimit_AllowsClients()
+    {
+        // Static state in LicenseChecker accumulates across tests; under default capacity
+        // pressure, prior pollution can make new clients return null. Register a permissive
+        // test fixture so this positive-path assertion is meaningful regardless of state.
+        AddTestLicense();
+
+        // Arrange - use unique IDs to avoid colliding with prior tests' known IDs
+        var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
+        var client1 = new ClientInfo($"{uniquePrefix}-test-client-1");
+        var client2 = new ClientInfo($"{uniquePrefix}-test-client-2");
+
+        // Act
+        var result1 = client1.CheckClientLicense();
+        var result2 = client2.CheckClientLicense();
+
+        // Assert
+        Assert.NotNull(result1);
+        Assert.Equal(client1.ClientId, result1.ClientId);
+        Assert.NotNull(result2);
+        Assert.Equal(client2.ClientId, result2.ClientId);
+    }
+
+    /// <summary>
+    /// Verifies that CheckClientLicense allows the same client multiple times (idempotent).
+    /// </summary>
+    [Fact]
+    public void CheckClientLicense_SameClientMultipleTimes_AllowsRepeatedAccess()
+    {
+        AddTestLicense();
+
+        // Arrange
+        var clientId = $"test-client-repeated-{Guid.NewGuid()}";
+        var client1 = new ClientInfo(clientId);
+        var client2 = new ClientInfo(clientId);
+
+        // Act
+        var result1 = client1.CheckClientLicense();
+        var result2 = client2.CheckClientLicense();
+
+        // Assert
+        Assert.NotNull(result1);
+        Assert.Equal(clientId, result1.ClientId);
+        Assert.NotNull(result2);
+        Assert.Equal(clientId, result2.ClientId);
+    }
+
+
+    /// <summary>
+    /// Verifies that CheckClientLicense allows unlimited clients when ClientLimit is null.
+    /// </summary>
+    [Fact]
+    public void CheckClientLicense_UnlimitedLicense_AllowsAllClients()
+    {
+        // Arrange - Add unlimited license
+        var unlimitedLicense = new License
+        {
+            ClientLimit = null, // No limit
+            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        };
+        LicenseChecker.AddLicense(unlimitedLicense);
+
+        var uniquePrefix = Guid.NewGuid().ToString("N")[..8];
+        var clients = new List<ClientInfo>();
+        for (var i = 1; i <= 10; i++)
+        {
+            clients.Add(new ClientInfo($"{uniquePrefix}-unlimited-{i}"));
+        }
+
+        // Act
+        var results = clients.Select(c => c.CheckClientLicense()).ToList();
+
+        // Assert - All clients should be allowed
+        Assert.All(results, result => Assert.NotNull(result));
+    }
+
+    /// <summary>
+    /// Verifies that WithLicenseCheck extension method works correctly.
+    /// </summary>
+    [Fact]
+    public async Task WithLicenseCheck_ValidClient_ReturnsClient()
+    {
+        AddTestLicense();
+
+        // Arrange
+        var clientId = $"async-client-{Guid.NewGuid()}";
+        var clientTask = Task.FromResult<ClientInfo?>(new ClientInfo(clientId));
+
+        // Act
+        var result = await clientTask.WithLicenseCheck();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(clientId, result.ClientId);
+    }
+
+    /// <summary>
+    /// Verifies that WithLicenseCheck extension method returns null for null client.
+    /// </summary>
+    [Fact]
+    public async Task WithLicenseCheck_NullClient_ReturnsNull()
+    {
+        // Arrange
+        var clientTask = Task.FromResult<ClientInfo?>(null);
+
+        // Act
+        var result = await clientTask.WithLicenseCheck();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    #endregion
+
+    // CheckIssuer is exercised in LicenseEnforcementTests, which runs alone and starts from a known point -
+    // the only way to reach an issuer limit deliberately, since the checker keeps what it has seen in
+    // process-wide statics that every other test in the assembly also writes to.
+}

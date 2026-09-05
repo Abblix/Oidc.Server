@@ -1,0 +1,131 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.JwtBearer;
+
+/// <summary>
+/// Integration test that reproduces the exact scenario from Oidc.Server:
+/// AddSecureHttpFetch() followed by AddJwtBearerServices() and JwtBearerIssuerProvider resolution.
+/// </summary>
+public class AddSecureHttpFetchIntegrationTests
+{
+    [Fact]
+    public void AddSecureHttpFetch_ThenAddJwtBearerServices_ShouldResolveJwtBearerIssuerProvider()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Add required dependencies
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache(); // Required by DistributedJwtReplayCache
+        services.AddSingleton(System.TimeProvider.System); // Required by DistributedJwtReplayCache
+        services.AddOptions();
+        services.AddLogging();
+
+        // Act - Reproduce exact scenario from ServiceCollectionExtensions
+        services.AddSecureHttpFetch(); // Registers ISecureHttpFetcher as Transient
+        services.AddJwtBearerGrant(); // Calls DecorateKeyed with "JwtBearerJwks" key
+
+        // Build service provider
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Assert - JwtBearerIssuerProvider should resolve successfully with keyed ISecureHttpFetcher
+        var exception = Record.Exception(() =>
+        {
+            var provider = serviceProvider.GetRequiredService<IJwtBearerIssuerProvider>();
+            Assert.NotNull(provider);
+        });
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void KeyedSecureHttpFetcher_ShouldBeCachingDecorator()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton(System.TimeProvider.System);
+        services.AddOptions();
+        services.AddLogging();
+
+        // Act
+        services.AddSecureHttpFetch();
+        services.AddJwtBearerGrant();
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Assert - Keyed service should be decorated with caching
+        var keyedFetcher = serviceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(
+            KeySetOwners.Issuer);
+
+        Assert.NotNull(keyedFetcher);
+        Assert.IsType<CachingSecureHttpFetcherDecorator>(keyedFetcher);
+    }
+
+    /// <summary>
+    /// Every consumer that fetches a key set gets a cached fetcher of its own, not just the JWT bearer grant.
+    /// Asserted per consumer because the defect this pins was precisely that they differed: caching hung off a
+    /// single service key, and the other three fetched over the network on every use.
+    /// </summary>
+    [Theory]
+    [InlineData(KeySetOwners.Client)]
+    [InlineData(KeySetOwners.Resource)]
+    [InlineData(KeySetOwners.SoftwareStatementIssuer)]
+    [InlineData(KeySetOwners.Issuer)]
+    public void EveryKeySetConsumer_ResolvesACachingFetcher(string consumer)
+    {
+        var services = new ServiceCollection();
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton(System.TimeProvider.System);
+        services.AddOptions();
+        services.AddLogging();
+
+        services.AddSecureHttpFetch();
+        services.AddJwtBearerGrant();
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        var fetcher = serviceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(consumer);
+
+        Assert.IsType<CachingSecureHttpFetcherDecorator>(fetcher);
+    }
+
+    [Fact]
+    public void NonKeyedSecureHttpFetcher_ShouldBeBaseImplementation()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddMemoryCache();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton(System.TimeProvider.System);
+        services.AddOptions();
+        services.AddLogging();
+
+        // Act
+        services.AddSecureHttpFetch();
+        services.AddJwtBearerGrant();
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Assert - Non-keyed service should be base SecureHttpFetcher
+        var baseFetcher = serviceProvider.GetRequiredService<ISecureHttpFetcher>();
+
+        Assert.NotNull(baseFetcher);
+        Assert.IsType<SecureHttpFetcher>(baseFetcher);
+    }
+}

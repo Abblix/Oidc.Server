@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.SecurityEvents</PackageId>
+    <Title>Abblix Security Events</Title>
+    <Description>Security Event Tokens (RFC 8417) for .NET with Subject Identifiers (RFC 9493), push (RFC 8935) and poll (RFC 8936) delivery, and OpenID Back-Channel Logout. Build, sign, deliver and validate security events between identity providers and relying parties.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix Security-Event-Token SET SecEvent RFC8417 RFC9493 Subject-Identifier Shared-Signals SSF CAEP RISC JWT Security Identity dotnet RFC8935 RFC8936 Back-Channel-Logout Replay-Protection Webhook OAuth2 OIDC</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>The event layer of the Shared Signals stack, usable on its own. A typed model of a Security Event Token with a builder and a composable validation profile over Abblix JWT, so a token is refused for a missing identifier, a wrong audience or a replay before any handler sees it. Every registered Subject Identifier format has a typed model with polymorphic JSON handling. Delivery models cover push, where the transmitter posts each token, and poll, where the receiver collects and acknowledges them; keys are resolved from the counterparty's JWKS. OpenID Back-Channel Logout rides on the same core, so a relying party validates logout tokens with the same code that validates any other security event. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Declared directly because this package uses them directly - IServiceCollection and
+         ActivatorUtilities, the options pattern, the LoggerMessage source generator - rather than
+         leaning on what happens to flow transitively through Abblix.Jwt today. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+    <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+
+    <ItemGroup>
+        <!-- The tests read EffectiveSigningAlgorithms, which is internal because a host reads the
+             property it set rather than the resolution behind it. A visible internal beats making the
+             resolution public, and beats a test asserting the same thing through a second door. -->
+        <InternalsVisibleTo Include="Abblix.SecurityEvents.UnitTests" />
+    </ItemGroup>
+
+</Project>

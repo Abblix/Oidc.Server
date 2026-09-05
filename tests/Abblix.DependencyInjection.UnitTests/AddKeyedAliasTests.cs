@@ -1,0 +1,302 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using System;
+using System.Linq;
+using Abblix.DependencyInjection.UnitTests.Model;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Abblix.DependencyInjection.UnitTests;
+
+/// <summary>
+/// Tests for the AddKeyedAlias extension method to verify keyed service aliasing with proper instance resolution.
+/// </summary>
+public class AddKeyedAliasTests
+{
+	private const string TestKey = "test-key";
+
+	/// <summary>
+	/// Verifies that resolving keyed aliases from different interfaces returns the same instance.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_WhenResolvingWithSameKey_ReturnsSameInstance()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+
+		services.AddKeyedSingleton<ServiceA>(key);
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+		services.AddKeyedAlias<IAliasService, ServiceA>(key, key);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Act
+		var service = serviceProvider.GetRequiredKeyedService<ServiceA>(key);
+		var primaryService = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key);
+		var aliasService = serviceProvider.GetRequiredKeyedService<IAliasService>(key);
+
+		// Assert - All should be the same instance
+		Assert.Same(service, primaryService);
+		Assert.Same(service, aliasService);
+		Assert.Same(primaryService, aliasService);
+	}
+
+	/// <summary>
+	/// Verifies that aliasing from non-keyed to keyed service works correctly.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_FromNonKeyedToKeyed_ReturnsCorrectInstance()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = "my-key";
+
+		services.AddSingleton<ServiceA>();
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key, sourceKey: null);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Act
+		var service = serviceProvider.GetRequiredService<ServiceA>();
+		var primaryService = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key);
+
+		// Assert - Should be the same instance
+		Assert.Same(service, primaryService);
+	}
+
+	/// <summary>
+	/// Verifies that different keys result in different service instances for Transient lifetime.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_WithTransientLifetime_ReturnsDifferentInstances()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key1 = "key1";
+		const string key2 = "key2";
+
+		services.AddKeyedTransient<ServiceA>(key1);
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key1, key1);
+
+		services.AddKeyedTransient<ServiceA>(key2);
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key2, key2);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Act
+		var service1 = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key1);
+		var service2 = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key2);
+
+		// Assert - Different keys should return different instances
+		Assert.NotSame(service1, service2);
+	}
+
+	/// <summary>
+	/// Verifies that TryAddKeyedAlias honors a pre-existing registration of the alias
+	/// service type under the same key: the earlier registration wins and the alias is skipped.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_WhenAliasKeyAlreadyRegistered_PreregistrationWins()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+		var preregistered = new ServiceA();
+
+		services.AddKeyedSingleton<IPrimaryService>(key, preregistered);
+		services.AddKeyedSingleton<ServiceA>(key);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+
+		// Assert - the pre-registration stays the only (IPrimaryService, key) descriptor
+		Assert.Single(services, d => d.ServiceType == typeof(IPrimaryService) && Equals(d.ServiceKey, key));
+
+		var serviceProvider = services.BuildServiceProvider();
+		Assert.Same(preregistered, serviceProvider.GetRequiredKeyedService<IPrimaryService>(key));
+	}
+
+	/// <summary>
+	/// Verifies that with no prior registration TryAddKeyedAlias behaves exactly like
+	/// AddKeyedAlias: the alias resolves to the same instance as the source registration.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_WhenAbsent_RegistersAlias()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+
+		services.AddKeyedSingleton<ServiceA>(key);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Assert
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key));
+	}
+
+	/// <summary>
+	/// Verifies that TryAddKeyedAlias deduplicates on the (service type, key) pair, not the
+	/// service type alone: an alias under a different key is still added.
+	/// </summary>
+	[Fact]
+	public void TryAddKeyedAlias_DifferentKey_StillAdds()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key1 = "key1";
+		const string key2 = "key2";
+
+		services.AddKeyedSingleton<ServiceA>(key1);
+		services.AddKeyedSingleton<ServiceA>(key2);
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key1, key1);
+
+		// Act
+		services.TryAddKeyedAlias<IPrimaryService, ServiceA>(key2, key2);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Assert - both keys resolve, each through its own source
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key1),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key1));
+		Assert.Same(
+			serviceProvider.GetRequiredKeyedService<ServiceA>(key2),
+			serviceProvider.GetRequiredKeyedService<IPrimaryService>(key2));
+	}
+
+	/// <summary>
+	/// Verifies that AddKeyedAlias preserves the lifetime of the original registration.
+	/// </summary>
+	[Theory]
+	[InlineData(ServiceLifetime.Transient)]
+	[InlineData(ServiceLifetime.Scoped)]
+	[InlineData(ServiceLifetime.Singleton)]
+	public void AddKeyedAlias_PreservesOriginalLifetime(ServiceLifetime lifetime)
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = TestKey;
+
+		switch (lifetime)
+		{
+			case ServiceLifetime.Transient:
+				services.AddKeyedTransient<ServiceA>(key);
+				break;
+			case ServiceLifetime.Scoped:
+				services.AddKeyedScoped<ServiceA>(key);
+				break;
+			case ServiceLifetime.Singleton:
+				services.AddKeyedSingleton<ServiceA>(key);
+				break;
+		}
+
+		services.AddKeyedAlias<IAliasService, ServiceA>(key, key);
+
+		// Act
+		var aliasDescriptor = services.Last(d => d.ServiceType == typeof(IAliasService) && Equals(d.ServiceKey, key));
+
+		// Assert
+		Assert.Equal(lifetime, aliasDescriptor.Lifetime);
+	}
+
+	/// <summary>
+	/// Verifies that AddKeyedAlias throws when source service is not registered.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_WhenSourceNotRegistered_ThrowsException()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = "missing-key";
+
+		// Act & Assert
+		var exception = Assert.Throws<InvalidOperationException>(
+			() => services.AddKeyedAlias<IAliasService, ServiceA>(key, key));
+
+		Assert.Contains("No registration found", exception.Message);
+		Assert.Contains(nameof(ServiceA), exception.Message);
+	}
+
+	/// <summary>
+	/// Verifies that for Scoped lifetime, the same instance is returned within a scope
+	/// but different instances across different scopes.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_WithScoped_ReturnsSameInstanceWithinScope()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key = "scoped-key";
+
+		services.AddKeyedScoped<ServiceA>(key);
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key, key);
+		services.AddKeyedAlias<IAliasService, ServiceA>(key, key);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Act & Assert - Within same scope
+		using (var scope1 = serviceProvider.CreateScope())
+		{
+			var primaryService = scope1.ServiceProvider.GetRequiredKeyedService<IPrimaryService>(key);
+			var aliasService = scope1.ServiceProvider.GetRequiredKeyedService<IAliasService>(key);
+
+			Assert.Same(primaryService, aliasService);
+		}
+
+		// Act & Assert - Different scopes get different instances
+		IPrimaryService instance1;
+		using (var scope2 = serviceProvider.CreateScope())
+		{
+			instance1 = scope2.ServiceProvider.GetRequiredKeyedService<IPrimaryService>(key);
+		}
+
+		IPrimaryService instance2;
+		using (var scope3 = serviceProvider.CreateScope())
+		{
+			instance2 = scope3.ServiceProvider.GetRequiredKeyedService<IPrimaryService>(key);
+		}
+
+		Assert.NotSame(instance1, instance2);
+	}
+
+	/// <summary>
+	/// Verifies that multiple keyed services can be aliased and resolved as a collection.
+	/// </summary>
+	[Fact]
+	public void AddKeyedAlias_MultipleKeysWithSameType_ReturnsAllInstances()
+	{
+		// Arrange
+		var services = new ServiceCollection();
+		const string key1 = "primary";
+		const string key2 = "secondary";
+
+		services.AddKeyedSingleton<ServiceA>(key1);
+		services.AddKeyedAlias<IPrimaryService, ServiceA>(key1, key1);
+
+		services.AddKeyedSingleton<ServiceB>(key2);
+		services.AddKeyedAlias<IPrimaryService, ServiceB>(key2, key2);
+
+		var serviceProvider = services.BuildServiceProvider();
+
+		// Act
+		var service1 = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key1);
+		var service2 = serviceProvider.GetRequiredKeyedService<IPrimaryService>(key2);
+
+		// Assert - Different keys return different types
+		Assert.IsType<ServiceA>(service1);
+		Assert.IsType<ServiceB>(service2);
+		Assert.NotSame(service1, service2);
+	}
+}

@@ -1,0 +1,164 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Abblix.Oidc.Server.Features.Licensing;
+
+/// <summary>
+/// A specialized logger for licensing checks, extending the standard logging functionality to include
+/// throttling capabilities for repetitive log messages.
+/// </summary>
+/// <remarks>
+/// This is a singleton that lives for the application lifetime. The internal timer is intentionally
+/// not disposed as the instance is never explicitly disposed.
+/// </remarks>
+internal class LicenseLogger: ILogger
+{
+    private LicenseLogger()
+    {
+        _timer = new Timer(
+            CleanupExpiredEntries,
+            _nextAllowedTimes,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
+    }
+
+    /// <summary>
+    /// Timer callback that removes expired throttle entries from the dictionary.
+    /// </summary>
+    /// <param name="state">The <see cref="ConcurrentDictionary{TKey,TValue}"/> containing throttle entries.</param>
+    /// <remarks>
+    /// This method is invoked periodically by the timer to clean up entries that have passed their throttle period,
+    /// preventing unbounded memory growth.
+    /// </remarks>
+    private static void CleanupExpiredEntries(object? state)
+    {
+        var nextAllowedTimes = (ConcurrentDictionary<object, DateTimeOffset>)state.NotNull(nameof(state));
+        var utcNow = DateTimeOffset.UtcNow;
+
+        var keysToRemove = nextAllowedTimes
+            .Where(kvp => kvp.Value < utcNow)
+            .Select(kvp => kvp.Key)
+            .ToArray();
+
+        foreach (var key in keysToRemove)
+        {
+            nextAllowedTimes.TryRemove(key, out _);
+        }
+    }
+
+    public static LicenseLogger Instance { get; } = new();
+
+    /// <summary>
+    /// Logs a message by delegating to the underlying logger.
+    /// </summary>
+    /// <typeparam name="TState">The type of the object to log.</typeparam>
+    /// <param name="logLevel">The severity level of the log message.</param>
+    /// <param name="eventId">The event ID of the log message.</param>
+    /// <param name="state">The state related to the log message.</param>
+    /// <param name="exception">The exception related to the log message, if any.</param>
+    /// <param name="formatter">A function to create a string message from the state and exception.</param>
+    /// <remarks>
+    /// This method does not implement throttling directly. Callers must use <see cref="IsAllowed"/> to check
+    /// if logging should be throttled before calling this method.
+    /// </remarks>
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        try
+        {
+            _logger.Log(logLevel, eventId, state, exception, formatter);
+        }
+        catch (Exception failure) when (failure is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Reporting must never become the outcome. This logger is a process-wide singleton whose underlying
+            // ILogger is rebound by every host that starts and released by none, so it can outlive the provider
+            // chain it was given - a disposed provider then throws on write. Letting that escape would turn a
+            // logging fault into the caller's failure, and at these call sites the caller is a licence decision:
+            // the request would fail with an unrelated exception in place of the decision that was actually
+            // reached. The decision stands; only the record of it is lost.
+        }
+    }
+
+    /// <summary>
+    /// Checks if logging at the specified log level is enabled.
+    /// </summary>
+    /// <param name="logLevel">The log level to check.</param>
+    /// <returns>True if logging is enabled at the specified log level; otherwise, false.</returns>
+    public bool IsEnabled(LogLevel logLevel)
+        => _logger.IsEnabled(logLevel);
+
+    /// <summary>
+    /// Begins a logical operation scope.
+    /// </summary>
+    /// <typeparam name="TState">The type of the state for the scope.</typeparam>
+    /// <param name="state">The state for the new scope.</param>
+    /// <returns>An IDisposable representing the scope.</returns>
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        => _logger.BeginScope(state);
+
+    private const string LoggerName = "Abblix.Oidc.Server";
+    private ILogger _logger = NullLogger.Instance;
+    private readonly ConcurrentDictionary<object, DateTimeOffset> _nextAllowedTimes = new();
+
+    [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Timer must be kept alive to prevent garbage collection")]
+    [SuppressMessage("SonarLint", "S4487:Unread private fields should be removed", Justification = "Timer must be kept alive to prevent garbage collection")]
+    private readonly Timer _timer;
+
+    /// <summary>
+    /// Initializes the logger with a specific logger factory.
+    /// </summary>
+    /// <param name="loggerFactory">The factory used to create the underlying logger instance.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="loggerFactory"/> is null.</exception>
+    internal void Init(ILoggerFactory loggerFactory)
+    {
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _logger = loggerFactory.CreateLogger(LoggerName);
+    }
+
+    /// <summary>
+    /// Determines whether a log write operation is allowed based on the specified key and period.
+    /// </summary>
+    /// <param name="key">The key identifying the log operation, used to prevent repetitive logging of similar messages.</param>
+    /// <param name="utcNow">The current UTC time, used to calculate the time elapsed since the last log write.</param>
+    /// <param name="period">The period within which repetitive log messages are throttled.</param>
+    /// <returns>True if the log write operation is allowed; otherwise, false.</returns>
+    /// <remarks>
+    /// This method helps to throttle logging by allowing log messages to be written only if a specified period has elapsed
+    /// since the last log write for a given key. This prevents flooding the log with repetitive messages.
+    /// Uses atomic operations to avoid race conditions in concurrent scenarios.
+    /// </remarks>
+    public bool IsAllowed(object key, DateTimeOffset utcNow, TimeSpan period)
+    {
+        var newTime = utcNow + period;
+
+        // Use explicit CAS primitives rather than AddOrUpdate's delegate form:
+        // AddOrUpdate may invoke its factory lambdas on retry after a failed CAS,
+        // and any side effect set inside the factory (e.g. wasAllowed=true) then
+        // leaks into the update branch, incorrectly signalling a successful grant.
+        while (true)
+        {
+            if (_nextAllowedTimes.TryGetValue(key, out var existingTime))
+            {
+                if (existingTime >= utcNow)
+                    return false;
+
+                if (_nextAllowedTimes.TryUpdate(key, newTime, existingTime))
+                    return true;
+            }
+            else if (_nextAllowedTimes.TryAdd(key, newTime))
+            {
+                return true;
+            }
+        }
+    }
+}

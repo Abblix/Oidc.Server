@@ -1,0 +1,63 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Text.Json;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Model;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Model;
+
+public class ClientRegistrationRequestTest
+{
+    [Fact]
+    public void DeserializeClientRegistrationRequestTest()
+    {
+        const string json =
+        """
+        {
+            "client_name": "dynamic_client_1 RqxLk9BdhK8qC3z",
+            "grant_types": [
+                "implicit"
+            ],
+            "jwks": {
+                "keys": [
+                    {
+                        "kty": "RSA",
+                        "e": "AQAB",
+                        "use": "sig",
+                        "alg": "RS256",
+                        "n": "gUOdYo2PpUUnZzozIPJ-7mK2Z5jYBxjj_5iB2TDnElt8yUc-mcCeOQrsaswPgKx2KMSJ50kwrFHHEuNyiDhgNMgtmJ98RuhggXaPF1fmmHss_Wc1OSqyGYLWbEzYGsRck5yTVP4xsPYAeP5xkkLze_FXJvwITNu2aGxXEYwokkrcWgL3AsXtYKClIwmacHhVNEMn-ALe3sMTifx4F8TqmNAlD4FPga094txHJNo2Ho6z4kn5L4uq_WXklDjaIDOqQZtdn0emXig3RHQcOtepFcXt7pcK9E2M3kxKFOMPpY8c4kaDfQ41jv23vbm9oDTh5s3TB0ZwcKJXj4-06gwTWw"
+                    }
+                ]
+            },
+            "token_endpoint_auth_method": "client_secret_basic",
+            "response_types": [
+                "id_token token"
+            ],
+            "redirect_uris": [
+                "https://www.certification.openid.net/test/a/Abblix/callback"
+            ],
+            "contacts": [
+                "certification@oidf.org"
+            ]
+        }
+        """;
+        var req = JsonSerializer.Deserialize<ClientRegistrationRequest>(json);
+        Assert.NotNull(req);
+        Assert.Equal("dynamic_client_1 RqxLk9BdhK8qC3z", req.ClientName);
+        Assert.Equal(["implicit"], req.GrantTypes);
+        Assert.Equal([["id_token", "token"]], req.ResponseTypes);
+        Assert.Equal(["certification@oidf.org"], req.Contacts!);
+        
+        Assert.NotNull(req.Jwks);
+        var jwk = Assert.Single(req.Jwks.Keys);
+        var rsaKey = Assert.IsType<RsaJsonWebKey>(jwk);
+        Assert.Equal("RSA", rsaKey.KeyType);
+    }
+}

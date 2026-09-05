@@ -1,0 +1,92 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Mvc.ActionResults;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Utils;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+
+namespace Abblix.Oidc.Server.Mvc.Formatters;
+
+/// <summary>
+/// Formatter for user information responses.
+/// </summary>
+public class UserInfoResponseFormatter(
+    TimeProvider clock,
+    IClientJwtFormatter clientJwtFormatter,
+    IIssuerProvider issuerProvider,
+    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
+{
+    /// <summary>
+    /// Asynchronously formats the response for a user information request.
+    /// </summary>
+    /// <remarks>
+    /// This method handles different types of user information responses and formats them
+    /// into appropriate HTTP action results.
+    /// </remarks>
+    /// <param name="request">The user information request.</param>
+    /// <param name="response">The response from the user information endpoint.</param>
+    /// <returns>
+    /// A task that returns the formatted user information response.
+    /// </returns>
+    public async Task<ActionResult> FormatResponseAsync(
+        UserInfoRequest request,
+        Result<UserInfoFoundResponse, OidcError> response)
+    {
+        return await response.MatchAsync(
+            onSuccess: FormatSuccessAsync,
+            onFailure: error => Task.FromResult(
+                error.Format(
+                    StatusCodes.Status401Unauthorized,
+                    issuerProvider.GetIssuer(),
+                    DPoPAlgorithms.Allowed,
+                    advertiseBearer: true)));
+    }
+
+    private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)
+    {
+        if (found.ClientInfo.UserInfoSignedResponseAlgorithm == SigningAlgorithms.None)
+        {
+            return new JsonResult(found.User);
+        }
+
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = found.ClientInfo.UserInfoSignedResponseAlgorithm },
+            Payload = new JsonWebTokenPayload(found.User)
+            {
+                Issuer = found.Issuer,
+                IssuedAt = clock.GetUtcNow(),
+                Audiences = [found.ClientInfo.ClientId],
+            }
+        };
+
+        // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
+        var jwt = await clientJwtFormatter.FormatAsync(
+            token,
+            found.ClientInfo,
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+
+        return new ContentResult
+        {
+            ContentType = MediaTypes.Jwt,
+            Content = jwt,
+        };
+    }
+}

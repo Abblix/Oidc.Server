@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Abblix.SecurityEvents.RISC</PackageId>
+    <Title>Abblix Security Events RISC</Title>
+    <Description>OpenID RISC 1.0 (Risk Incident Sharing and Coordination) event dictionary for .NET: typed models for credential compromise, account disabled, enabled and purged, identifier changed and recycled, opt-out and recovery events, over Abblix Security Events.</Description>
+    <Authors>Abblix LLP</Authors>
+    <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.RISC</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Abblix RISC Risk-Incident-Sharing OpenID Security-Event-Token SET Shared-Signals SSF Credential-Compromise Account-Takeover Account-Disabled Identifier-Changed Security Identity dotnet RISC-1.0 Account-Recovery Opt-Out RFC8417 OIDC</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+    <PackageReleaseNotes>The events of the Risk Incident Sharing and Coordination profile as typed payloads with their registered event type identifiers: credential compromise, account disabling, enabling and deletion, identifier change and recycling, opt-out and account recovery. Registered over the Security Events core in one call; the same models serve a Shared Signals transmitter and receiver, which is how an identity provider tells a relying party that an account was taken over. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageIcon>Abblix.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Deterministic builds for reproducible binaries -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink for symbol packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
+    <!-- RISC 1.0 Section 2.7 defines credential_type by reference to the CAEP Credential Change
+         event's value set, so the dependency on the CAEP dictionary is the specification's own. -->
+    <ProjectReference Include="..\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSES\Apache-2.0.txt" Pack="true" PackagePath="LICENSE.txt" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

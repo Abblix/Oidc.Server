@@ -1,0 +1,94 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.SecurityEvents.Delivery;
+using Abblix.SharedSignals.Model;
+
+namespace Abblix.SharedSignals.Transmitter;
+
+/// <summary>
+/// The transmitter's half of one poll exchange (RFC 8936, carried by SSF 1.0 Section 6.1.2):
+/// release what the receiver acknowledged, then answer with what waits. A host adapter owns
+/// routing, authentication and any long-poll waiting; this type answers from the queue as it
+/// is.
+/// </summary>
+/// <param name="outbox">The queues being served.</param>
+public sealed class PollEndpointHandler(IEventOutbox outbox)
+{
+    /// <summary>
+    /// Handles one poll request for one stream.
+    /// </summary>
+    /// <remarks>
+    /// An acknowledgement releases retention, and only an acknowledgement does: RFC 8936
+    /// Section 2.2 says of "ack" that "the SET Transmitter is released from any obligation to
+    /// retain the SET", and says no such thing of "setErrs". An error report is released only when
+    /// the code says redelivery cannot change the answer - the same reading the push sender
+    /// applies, so one registry does not decide two ways in one package. A receiver whose
+    /// credentials lapsed reports "access_denied" and keeps its events. A stream that
+    /// is not enabled serves nothing except status announcements - the pause holds events
+    /// (SSF 1.0 Section 8.1.2.1), and the announcement is what Section 8.1.5 still owes the
+    /// receiver after the stop.
+    /// </remarks>
+    /// <param name="stream">The stream being polled.</param>
+    /// <param name="request">What the receiver acknowledges and asks for.</param>
+    /// <param name="cancellationToken">Cancels outbox I/O.</param>
+    public async Task<PollResponse> HandleAsync(
+        StreamState stream,
+        PollRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var released = new List<string>(request.Acknowledged ?? []);
+        if (request.Errors is { Count: > 0 } errors)
+        {
+            released.AddRange(
+                errors.Where(reported => DeliveryErrorCodes.IsFinal(reported.Value?.Error))
+                    .Select(reported => reported.Key));
+        }
+
+        if (released.Count > 0)
+        {
+            await outbox.AcknowledgeAsync(
+                stream.ReceiverId, stream.StreamId, released, cancellationToken);
+        }
+
+        // Zero asks for nothing: the acknowledge-only poll (RFC 8936 Section 2.2). The "sets"
+        // object still travels, empty - it is never absent (Section 2.3). A negative value asks
+        // for nothing either, and is answered the same way rather than falling through: Take with
+        // a negative count yields nothing while the "moreAvailable" below still reports a queue,
+        // and a receiver reading that answer polls again forever with no way to see why.
+        if (request.MaxEvents is <= 0)
+        {
+            return new PollResponse();
+        }
+
+        IReadOnlyList<OutboxItem> pending =
+            await outbox.PendingAsync(stream.ReceiverId, stream.StreamId, null, cancellationToken);
+        if (stream.Status != StreamStatuses.Enabled)
+        {
+            pending = [.. pending.Where(item => item.IsStatusAnnouncement)];
+        }
+
+        IEnumerable<OutboxItem> page = pending;
+        if (request.MaxEvents is { } maxEvents)
+        {
+            page = page.Take(maxEvents);
+        }
+
+        var sets = page.ToDictionary(item => item.JwtId, item => item.CompactToken, StringComparer.Ordinal);
+
+        return new PollResponse
+        {
+            Sets = sets,
+            // Omitted means false (RFC 8936 Section 2.3), so false stays off the wire.
+            MoreAvailable = pending.Count > sets.Count ? true : null,
+        };
+    }
+}

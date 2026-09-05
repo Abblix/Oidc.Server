@@ -2,7 +2,10 @@ name: PR tests
 
 on:
   pull_request:
-    branches: ["master", "develop"]
+    # The filter reads the BASE branch, so a release branch has to be named here or its pull
+    # requests get no run at all - which renders as a short, green check list rather than as a
+    # failure, because the checks with no base filter still post.
+    branches: ["master", "develop", "release/**"]
 
 permissions:
   contents: read
@@ -12,13 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Unit tests
+  shards:
+    # The shards themselves live in a called workflow, shared with the dev-build publish, so the
+    # suite is defined once. The project list inside it is derived from the projects, not written
+    # by hand, so a new test project cannot be left out.
+    uses: ./.github/workflows/test-shards.yml
+
+  build:
+    # Every framework the packages ship, which the suite structurally cannot see: each test project
+    # targets net10.0 alone, so anything that compiles there and refuses on net8.0 or net9.0 - a
+    # language feature of a newer version, a BCL type that arrived later - passes every shard. Such a
+    # refusal used to surface only after the merge, in the job that packs the dev build, where it
+    # stops publishing without failing anything a pull request can see: consumers floating the
+    # prerelease range then keep restoring the last good build and notice nothing.
+    name: Build all target frameworks
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
-      # harden-runner in audit mode: this workflow restores/builds/tests
-      # untrusted fork-PR code, so capture baseline egress for later review.
+      # harden-runner in audit mode: this may restore and build untrusted fork-PR code, so capture
+      # baseline egress for later review.
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
@@ -26,20 +43,22 @@ jobs:
         timeout-minutes: 3
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # MinVer (referenced in Directory.Build.props) reads the latest tag
-          # plus commit height from git to derive the version. fetch-depth: 0
-          # disables the shallow clone so all tags and commits are visible.
+          # MinVer (referenced in Directory.Build.props) reads the latest tag plus commit height
+          # from git to derive the version, so the shallow clone has to be disabled.
           fetch-depth: 0
-          # No git push here, and the workflow runs untrusted fork-PR code, so
-          # strip the GITHUB_TOKEN from the runner git config after checkout.
+          # No git push here, and this may run untrusted fork-PR code, so strip the GITHUB_TOKEN
+          # from the runner git config after checkout.
           persist-credentials: false
-
         timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.x'
-
+          # Every target framework the projects declare, because the point of this job is to compile
+          # all of them: the 10.x SDK builds net8.0 and net9.0 only with their runtime packs present.
+          dotnet-version: |
+            8.x
+            9.x
+            10.x
         timeout-minutes: 3
       - name: Cache NuGet packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -47,34 +66,34 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
           restore-keys: ${{ runner.os }}-nuget-
-
         timeout-minutes: 3
       - name: Restore
         run: dotnet restore Abblix.Oidc.slnx
-
         timeout-minutes: 3
       - name: Build
-        run: dotnet build Abblix.Oidc.slnx --configuration Release --no-restore
+        # Release, matching what the dev-build publish compiles: a configuration-conditional
+        # analyser or a Release-only warning-as-error must fail here rather than after the merge.
+        run: dotnet build Abblix.Oidc.slnx --no-restore -c Release
+        timeout-minutes: 3
 
-        timeout-minutes: 3
-      - name: Test
-        run: |
-          dotnet test Abblix.Oidc.slnx --configuration Release --no-build -- \
-            --report-trx --report-trx-filename test-results.trx \
-            --coverage --coverage-output-format cobertura \
-            --results-directory ./TestResults
-
-      # `dotnet test Abblix.Oidc.slnx -- --results-directory ./TestResults` resolves
-      # the relative path PER TEST PROJECT (each MTP runner uses its own working
-      # directory), not at solution root. Files land at <Project>/TestResults/.
-        timeout-minutes: 3
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-results
-          path: |
-            **/TestResults/*.trx
-            **/TestResults/**/*.cobertura.xml
-          retention-days: 7
-        timeout-minutes: 3
+  test:
+    # Single required status check aggregating the shards and the multi-framework build: it succeeds
+    # only when both did. It stays a job of THIS workflow on purpose - a job inside a called workflow
+    # is reported as "<caller job> / <job name>", which would rename the check that branch protection
+    # requires and leave every pull request waiting for a check that no longer appears. The name is
+    # narrower than what it now covers, and stays that way for the same reason: renaming it silently
+    # detaches branch protection from the only gate a pull request has.
+    name: Unit tests
+    needs: [shards, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # The gate only inspects the other jobs' results; it never touches the repo or the GITHUB_TOKEN.
+    permissions: {}
+    steps:
+      - name: Fail if any shard failed
+        if: needs.shards.result != 'success'
+        run: exit 1
+      - name: Fail if the multi-framework build failed
+        if: needs.build.result != 'success'
+        run: exit 1

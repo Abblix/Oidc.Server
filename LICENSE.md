@@ -9,6 +9,8 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 ## 1. Definitions
 1.1. **"Software"** refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The Software is certified by the OpenID Foundation ([openid.net/certification](https://openid.net/certification/)). The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license). In the event the specified URL becomes unavailable, the full text of this Agreement may be obtained by contacting the Copyright Holder at the addresses specified in Section 16.
 
+   **Components not covered.** The repository named above also hosts components the Copyright Holder distributes under separate open-source licences. Such a component is not part of the Software and is not governed by this Agreement. A component states its licence in its package manifest (the `PackageLicenseExpression` or `PackageLicenseFile` element) and in the SPDX identifier carried by each of its source files; where either names a licence other than this Agreement, that licence governs the component exclusively, and nothing in this Agreement limits, conditions or revokes the rights it grants. Where a component is governed by this Agreement, the fact that it is distributed together with, or depends upon, an open-source component grants no rights in the Software beyond those set out here.
+
 1.2. **"System"** refers to an operating system, virtual machine, or equipment, including a server, on which the Software is installed and/or used.
 
 1.3. **"User"** or **"You"** refers to a natural or legal person who installs and/or uses the Software on their behalf or legally owns a copy of the Software. If the Software was downloaded or acquired on behalf of a legal entity, the term "User" or "You" refers to the legal entity for which the Software was downloaded or acquired, and is accepting this Agreement through an authorized representative.
@@ -52,35 +54,45 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
    
    (c) Distribute, sublicense, sell, rent, lease, or lend the Software;
    
-   (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls.
-
-2.3. You may not use the Software in commercial projects, except as provided in Section 2.5. If you wish to use the Software for non-commercial purposes, you may download and access the Software free of charge, subject to all license terms and technical limits specified in Section 2.3.1. Examples of non-commercial projects include:
-
-   (a) Free educational projects;
+   (d) Remove, obscure, or circumvent copyright, proprietary notices, or access controls;
    
-   (b) Games without monetization;
+   (e) Offer the Software, or a wrapper around it, to third parties as a hosted authentication service;
    
-   (c) Internal testing or evaluation of the Software before purchasing a commercial license, provided such use does not occur in production environments and does not generate revenue.
+   (f) Use the source code of the Software, in whole or in part, to develop a product competing with the Software.
 
-If your product generates revenue through advertising, paid subscriptions, or any commercial means, you may not use the Software under the free non-commercial license.
+2.2.1. **Security Research Exception.** Subsections 2.2(a) and 2.2(b) do not apply to good-faith security research conducted in accordance with the Security Policy published in the Software's official repository (SECURITY.md), which is incorporated into this Agreement by reference under Section 11.4(c). For that purpose You may modify, instrument, decompile and analyse the Software on installations You control, and the Copyright Holder will not treat such work as a breach of this Agreement. This exception does not permit distribution of the Software or of any derivative work, and Section 2.2(c) and 2.2(d) continue to apply in full.
 
-2.3.1. **Non-Commercial License Technical Limits.** Non-commercial licenses granted at no charge are subject to the following technical restrictions:
+2.3. **Free of Charge Use.** You may download and use the Software free of charge, subject to all license terms and the technical limits specified in Section 2.3.1, in each of the following cases:
 
-   (a) **Client Limit**: Maximum **2 (two)** unique client applications may be used;
+   (a) Your company had less than USD 1,000,000 in annual revenue in its last completed financial year and has raised less than USD 1,000,000 in outside funding, counting investment, grants and the sale of a stake in aggregate. Both conditions must hold; exceeding either one moves commercial production use to Section 2.5;
    
-   (b) **Issuer Limit**: Maximum **1 (one)** issuer may be used;
+   (b) You are a non-profit organization, an educational institution, or an individual using the Software in a personal project, whatever your size;
    
-   (c) **Enforcement**: These limits are enforced according to the License Limit Enforcement Framework specified in Section 2.7. Violations must be remedied by either:
+   (c) You use the Software in an open-source project that is itself non-commercial;
    
-   (i) reducing the number of clients or issuers to compliant levels, or
+   (d) You deploy the Software in a development, testing or staging environment, whatever your size. Such environments are free of charge for everyone, including companies above the thresholds in Section 2.3(a). An environment accessible to external end users, or serving production traffic, is a production environment and is not covered by this subsection.
+
+Commercial production use is permitted free of charge under this Section: passing the thresholds in Section 2.3(a), not the presence of revenue, is what makes a paid license necessary.
+
+2.3.1. **Technical Limits of Free of Charge Use.** Use free of charge under Section 2.3 is subject to the following technical restrictions:
+
+   (a) **Issuer Limit**: Maximum 1 (one) production issuer may be used;
+   
+   (b) **No limit on client applications, users or nodes**: the number of unique client applications, of end users, and of servers running one issuer is unrestricted;
+   
+   (c) **No limit on functionality**: every protocol, profile and feature of the Software is available, and none is withheld from use free of charge;
+   
+   (d) **Enforcement**: The limit in Subsection (a) is enforced by technical means as described in Section 2.7. Violations must be remedied by either:
+   
+   (i) reducing the number of production issuers to a compliant level, or
    
    (ii) upgrading to a commercial license under Section 2.5 or Section 2.6.
 
 2.4. If the laws of your country prohibit you from using the Software, you are not authorized to use it, and you agree to comply with all applicable laws and regulations concerning your use of the Software.
 
-2.5. If you wish to use the Software in commercial projects, or if your projects have a commercial component in any way, you may download and use the Software during the term upon payment of the applicable license fee, in accordance with the terms of this Agreement.
+2.5. If you use the Software in commercial production and none of the cases in Section 2.3 applies to you, you may download and use the Software during the term upon payment of the applicable license fee, in accordance with the terms of this Agreement.
 
-2.6. **Commercial Licenses.** Commercial license types (Standard, Redistribution) are available for commercial use. Current pricing, terms, and license comparisons are available at [abblix.com/abblix-oidc-server-pricing](https://www.abblix.com/abblix-oidc-server-pricing). The specific terms of your license are governed by your purchase agreement. In the event of conflict between this License Agreement and your purchase agreement, the purchase agreement shall control.
+2.6. **Commercial Licenses.** Two commercial license types cover internal use: Pro, which permits 1 (one) production issuer, and Enterprise, which permits an unrestricted number of independent production issuers. Neither restricts the number of client applications, end users, nodes or features, and each carries the support terms stated at the address below. Redistribution is a separate license type, required when the Software reaches third parties inside a product You sell or deploy at customer sites; internal use is not redistribution, however many of Your own applications a single deployment serves. Current pricing, terms, and license comparisons are available at [abblix.com/en/oidc-server/pricing](https://www.abblix.com/en/oidc-server/pricing). The specific terms of your license are governed by your purchase agreement. In the event of conflict between this License Agreement and your purchase agreement, the purchase agreement shall control.
 
 2.7. **License Enforcement.** You are solely responsible for monitoring your usage and ensuring compliance with license limits. The Software may enforce limits through technical means, including warnings, feature restrictions, or denial of service. Failure to comply may result in termination under Section 3.5.
 
@@ -111,7 +123,7 @@ If your product generates revenue through advertising, paid subscriptions, or an
 
 3.6. **License Keys.** All license keys are generated exclusively by the Copyright Holder and cannot be self-generated, transferred, or modified. You are responsible for maintaining the confidentiality of your license keys. License keys expire on the date specified; renewal requires explicit request to the Copyright Holder.
 
-3.7. **Software Updates.** Updates and maintenance terms for commercial licenses are specified in your purchase agreement. Free License users receive the Software "as is" without any commitment to updates, support, or maintenance.
+3.7. **Software Updates.** Updates and maintenance terms for commercial licenses are specified in your purchase agreement. Users of the Software free of charge under Section 2.3 receive it "as is", with no guaranteed response time and no commitment to updates or maintenance; community channels remain open to them.
 
 ## 4. Data Processing
 
@@ -148,7 +160,7 @@ If your product generates revenue through advertising, paid subscriptions, or an
 
 For commercial licenses, the aggregate liability of the Copyright Holder under any provision of this License Agreement shall not exceed the license fees paid by You for the most recent license term.
 
-For non-commercial licenses granted at no charge, the Copyright Holder shall have no liability whatsoever.
+For licenses granted at no charge under Section 2.3, the Copyright Holder shall have no liability whatsoever.
 
 9.2. **Enforceability.** The limitations set forth in this Section 9 shall apply to the fullest extent permitted by applicable law. Some jurisdictions do not allow the limitation or exclusion of liability for incidental or consequential damages; in such jurisdictions, the above limitation may not apply to You, and the Copyright Holder's liability shall be limited to the maximum extent permitted by applicable law.
 

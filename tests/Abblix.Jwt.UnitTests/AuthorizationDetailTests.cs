@@ -1,0 +1,334 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using System.Text.Json.Nodes;
+using Xunit;
+
+namespace Abblix.Jwt.UnitTests;
+
+/// <summary>
+/// Unit tests for <see cref="AuthorizationDetail"/> as a thin wrapper over a
+/// <see cref="JsonNode"/> claim element and the <see cref="JsonWebTokenPayload.AuthorizationDetails"/>
+/// accessor. Verifies that the wrapper's typed property accessors read from and write to the
+/// underlying JSON in place - so member order and type-specific extension members survive the
+/// authorize → code → token round-trip byte-exact.
+/// </summary>
+public class AuthorizationDetailTests
+{
+    // RFC 9396 §2.2 example types / actions reused across fixtures.
+    private const string PaymentInitiationType = "payment_initiation";
+    private const string InitiateAction = "initiate";
+
+
+    [Fact]
+    public void IanaClaimTypes_AuthorizationDetails_Constant_HasExpectedWireValue()
+    {
+        Assert.Equal("authorization_details", IanaClaimTypes.AuthorizationDetails);
+    }
+
+    [Fact]
+    public void TypedAccessors_ReadFromUnderlyingJson()
+    {
+        var json = (JsonObject)JsonNode.Parse(
+            """
+            {
+              "type": "payment_initiation",
+              "locations": ["https://api.bank.example/payments"],
+              "actions": ["initiate", "status"],
+              "datatypes": ["iban"],
+              "identifier": "txn-4521",
+              "privileges": ["read", "write"]
+            }
+            """)!;
+        var detail = new AuthorizationDetail(json);
+
+        Assert.Equal(PaymentInitiationType, detail.Type);
+        Assert.Equal(["https://api.bank.example/payments"], detail.Locations);
+        Assert.Equal([InitiateAction, "status"], detail.Actions);
+        Assert.Equal(["iban"], detail.Datatypes);
+        Assert.Equal("txn-4521", detail.Identifier);
+        Assert.Equal(["read", "write"], detail.Privileges);
+    }
+
+    [Fact]
+    public void TypedSetters_MutateUnderlyingJsonInPlace()
+    {
+        var json = new JsonObject();
+        var detail = new AuthorizationDetail(json)
+        {
+            Type = PaymentInitiationType,
+            Actions = [InitiateAction, "status"],
+        };
+
+        Assert.Equal(PaymentInitiationType, json["type"]?.GetValue<string>());
+        // Multi-element arrays land as a JsonArray; single-element collapses to a string per
+        // the OAuth single-or-array convention shared with audience / amr.
+        Assert.IsType<JsonArray>(json["actions"]);
+        Assert.Equal(2, json["actions"]!.AsArray().Count);
+
+        // Setter on wrapper writes through to the same underlying JsonObject reference.
+        Assert.Same(json, detail.Json);
+    }
+
+    [Fact]
+    public void TypeSpecificMembers_AccessedDirectlyViaJson()
+    {
+        // RFC 9396 §2.2 extension members (per-type payload like PSD2 instructedAmount /
+        // creditorAccount) live in the wrapper's Json as ordinary JSON members; per-type
+        // validators read and write them directly through the System.Text.Json.Nodes API.
+        var json = (JsonObject)JsonNode.Parse(
+            """
+            {
+              "type": "payment_initiation",
+              "actions": ["initiate"],
+              "instructedAmount": { "currency": "EUR", "amount": "500.00" },
+              "creditorAccount": { "iban": "DE02100100109307118603" },
+              "lineItems": [{ "id": "li-1", "qty": 2 }, { "id": "li-2", "qty": 1 }]
+            }
+            """)!;
+        var detail = new AuthorizationDetail(json);
+
+        Assert.Equal(PaymentInitiationType, detail.Type);
+        Assert.Equal([InitiateAction], detail.Actions);
+        Assert.Equal("EUR", detail.Json["instructedAmount"]?["currency"]?.GetValue<string>());
+        Assert.Equal("500.00", detail.Json["instructedAmount"]?["amount"]?.GetValue<string>());
+        Assert.Equal("DE02100100109307118603", detail.Json["creditorAccount"]?["iban"]?.GetValue<string>());
+        Assert.IsType<JsonArray>(detail.Json["lineItems"]);
+        Assert.Equal(2, detail.Json["lineItems"]?.AsArray().Count);
+    }
+
+    [Fact]
+    public void Payload_AuthorizationDetails_ReadsArrayFromUnderlyingClaim()
+    {
+        var json = new JsonObject
+        {
+            [IanaClaimTypes.AuthorizationDetails] = JsonNode.Parse(
+                """
+                [
+                  { "type": "payment_initiation", "actions": ["initiate"], "amount": "500.00" },
+                  { "type": "account_information", "locations": ["https://api.bank.example/accounts"] }
+                ]
+                """),
+        };
+        var payload = new JsonWebTokenPayload(json);
+
+        var details = payload.AuthorizationDetails?.ToArray();
+
+        Assert.NotNull(details);
+        Assert.Equal(2, details.Length);
+
+        Assert.Equal(PaymentInitiationType, details[0].Type);
+        Assert.Equal([InitiateAction], details[0].Actions);
+        Assert.Equal("500.00", details[0].Json["amount"]?.GetValue<string>());
+
+        Assert.Equal("account_information", details[1].Type);
+        Assert.Equal(["https://api.bank.example/accounts"], details[1].Locations);
+    }
+
+    [Fact]
+    public void Payload_AuthorizationDetails_SetterBuildsArrayFromWrappers()
+    {
+        var details = new[]
+        {
+            new AuthorizationDetail((JsonObject)JsonNode.Parse(
+                """
+                { "type": "payment_initiation", "actions": ["initiate"],
+                  "instructedAmount": { "currency": "EUR", "amount": "500.00" } }
+                """)!),
+            new AuthorizationDetail(new JsonObject())
+            {
+                Type = "account_information",
+                Locations = ["https://api.bank.example/accounts"],
+            },
+        };
+
+        var payload = new JsonWebTokenPayload(new JsonObject())
+        {
+            AuthorizationDetails = details,
+        };
+
+        Assert.IsType<JsonArray>(payload.Json[IanaClaimTypes.AuthorizationDetails]);
+
+        var round = payload.AuthorizationDetails?.ToArray();
+
+        Assert.NotNull(round);
+        Assert.Equal(2, round.Length);
+        Assert.Equal(PaymentInitiationType, round[0].Type);
+        Assert.Equal([InitiateAction], round[0].Actions);
+        Assert.Equal("EUR", round[0].Json["instructedAmount"]?["currency"]?.GetValue<string>());
+        Assert.Equal("account_information", round[1].Type);
+        Assert.Equal(["https://api.bank.example/accounts"], round[1].Locations);
+    }
+
+    [Fact]
+    public void Payload_AuthorizationDetails_SetNullRemovesClaim()
+    {
+        var payload = new JsonWebTokenPayload(new JsonObject())
+        {
+            AuthorizationDetails =
+            [
+                new AuthorizationDetail(new JsonObject()) { Type = "x" }
+            ],
+        };
+        Assert.True(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+
+        payload.AuthorizationDetails = null;
+
+        Assert.False(payload.Json.ContainsKey(IanaClaimTypes.AuthorizationDetails));
+        Assert.Null(payload.AuthorizationDetails);
+    }
+
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{ "authorization_details": null }""")]
+    [InlineData("""{ "authorization_details": "not-an-array" }""")]
+    [InlineData("""{ "authorization_details": { "type": "payment_initiation" } }""")]
+    public void Payload_AuthorizationDetails_AbsentOrMalformedYieldsNull(string wire)
+    {
+        var json = (JsonObject)JsonNode.Parse(wire)!;
+        var payload = new JsonWebTokenPayload(json);
+
+        Assert.Null(payload.AuthorizationDetails);
+    }
+
+    /// <summary>
+    /// A member whose JSON type is not the one RFC 9396 section 2.2 gives it reads as unstated, rather
+    /// than throwing out of a property getter.
+    /// </summary>
+    /// <remarks>
+    /// The entry is attacker-shaped: <c>authorization_details</c> is carried as schemaless JSON, so
+    /// every member arrives as whatever the request said it was. A getter that throws on the mismatch
+    /// turns a request the specification answers with <c>invalid_authorization_details</c> into an
+    /// unhandled exception, and it does so inside the per-type validators hosts are asked to write,
+    /// where nothing is placed to catch it.
+    /// Reading it as unstated is not the same as accepting it: the entry then carries no type, and an
+    /// entry with no type is refused. What changes is which layer decides, and in which language.
+    /// </remarks>
+    [Theory]
+    [InlineData("""{ "type": 123 }""")]
+    [InlineData("""{ "type": true }""")]
+    [InlineData("""{ "type": ["payment_initiation"] }""")]
+    [InlineData("""{ "type": { "name": "payment_initiation" } }""")]
+    [InlineData("""{ "type": null }""")]
+    public void AuthorizationDetail_AMemberOfTheWrongJsonType_ReadsAsUnstated(string wire)
+    {
+        var detail = new AuthorizationDetail((JsonObject)JsonNode.Parse(wire)!);
+
+        Assert.Null(detail.Type);
+    }
+
+    /// <summary>
+    /// The same holds for the other common-data members, which the per-type validators read too, and a
+    /// single string still stands for a one-element list.
+    /// </summary>
+    /// <remarks>
+    /// The string-for-a-list reading is deliberate and long-standing across this library's JWT accessors,
+    /// so it is pinned here rather than treated as the same defect: it is a value the member can carry,
+    /// not a type it cannot be read as. What must not happen either way is a throw out of the getter.
+    /// </remarks>
+    [Fact]
+    public void AuthorizationDetail_MembersOfTheWrongJsonType_DoNotThrow()
+    {
+        var wire = """
+                   {
+                     "type": "payment_initiation",
+                     "locations": 7,
+                     "actions": "initiate",
+                     "identifier": 42
+                   }
+                   """;
+
+        var detail = new AuthorizationDetail((JsonObject)JsonNode.Parse(wire)!);
+
+        Assert.Equal(PaymentInitiationType, detail.Type);
+        Assert.Empty(detail.Locations ?? []);
+        Assert.Equal([InitiateAction], detail.Actions);
+        Assert.Null(detail.Identifier);
+    }
+
+    /// <summary>
+    /// A single value assigned to an array member is written as an array of one, not as a bare string.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §2.2 defines locations, actions, datatypes and privileges as arrays of strings, and the
+    /// count of what a host happens to grant does not change that. The case matters because narrowing is
+    /// what these setters exist for: a validator that keeps one location out of three is the ordinary
+    /// path, and it is exactly the path that used to emit a shape no resource server owes us a reading of.
+    /// </remarks>
+    [Theory]
+    [InlineData("locations", "https://api.bank.example/payments")]
+    [InlineData("actions", InitiateAction)]
+    [InlineData("datatypes", "contacts")]
+    [InlineData("privileges", "admin")]
+    public void AuthorizationDetail_ArrayMemberWithOneValue_IsWrittenAsAnArray(string member, string value)
+    {
+        var detail = new AuthorizationDetail(new JsonObject { ["type"] = PaymentInitiationType });
+
+        switch (member)
+        {
+            case "locations": detail.Locations = [value]; break;
+            case "actions": detail.Actions = [value]; break;
+            case "datatypes": detail.Datatypes = [value]; break;
+            case "privileges": detail.Privileges = [value]; break;
+            default: throw new ArgumentOutOfRangeException(nameof(member), member, "Unknown array member");
+        }
+
+        Assert.Equal($$"""{"type":"{{PaymentInitiationType}}","{{member}}":["{{value}}"]}""",
+            detail.Json.ToJsonString());
+    }
+
+    /// <summary>
+    /// An empty collection removes the member rather than writing an empty array.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9396 §2.2 makes every one of these members optional, so absence is the honest way to say
+    /// "none" - and it keeps the behaviour a caller already had before the single-value case was fixed,
+    /// which is what stops that fix from being a second, silent change.
+    /// </remarks>
+    [Fact]
+    public void AuthorizationDetail_ArrayMemberSetToEmpty_RemovesTheMember()
+    {
+        var detail = new AuthorizationDetail(new JsonObject
+        {
+            ["type"] = PaymentInitiationType,
+            ["locations"] = new JsonArray("https://api.bank.example/payments"),
+        });
+
+        detail.Locations = [];
+
+        Assert.Equal($$"""{"type":"{{PaymentInitiationType}}"}""", detail.Json.ToJsonString());
+        Assert.Null(detail.Locations);
+    }
+
+    /// <summary>
+    /// <c>ToTypedArray</c> answers null for a null array and never for one that is not null.
+    /// </summary>
+    /// <remarks>
+    /// The conversion drops every element it cannot read, so an array of nothing readable comes back
+    /// EMPTY rather than null - which is the case a caller is most likely to get wrong, and the one the
+    /// <c>NotNullIfNotNull</c> attribute now promises the compiler. An attribute is a claim the compiler
+    /// enforces at every call site and cannot check inside the method, so if the body ever started
+    /// answering null for an empty result the promise would become a lie that only crashes a caller.
+    ///
+    /// Both directions are asserted, because a test of the null case alone would also pass over a method
+    /// that answered null for everything.
+    /// </remarks>
+    [Fact]
+    public void ToTypedArray_AnswersNullOnlyForANullArray()
+    {
+        Assert.Null(((JsonArray?)null).ToTypedArray());
+
+        Assert.Empty(new JsonArray().ToTypedArray());
+
+        // Nothing here is a JSON object, so every element is dropped and the result is empty rather
+        // than null.
+        Assert.Empty(new JsonArray(JsonValue.Create(PaymentInitiationType), JsonValue.Create(1)).ToTypedArray());
+
+        var readable = new JsonArray(new JsonObject { ["type"] = PaymentInitiationType });
+        Assert.Equal(PaymentInitiationType, Assert.Single(readable.ToTypedArray()).Type);
+    }
+}

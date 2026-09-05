@@ -1,11 +1,12 @@
 name: Lint workflows
 
 on:
+  # Both jobs below are required status checks on the protected branches, so they must run on every
+  # pull request targeting one. A path filter here made them required-but-absent for any PR outside
+  # .github/, and a missing check can never be satisfied - the only way to merge was an admin bypass,
+  # on every such PR. A required check has to be one CI can actually produce.
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/scripts/lint-no-inline-secrets.py'
-      - '.github/codeql/**'
+    branches: [master, develop]
   push:
     branches: [master, develop]
   workflow_dispatch:
@@ -35,7 +36,7 @@ jobs:
 
       # --only-binary :all: skips arbitrary setup-script execution at install
       # time (closes Sonar S8541). --require-hashes + pinned requirements file
-      # locks both the resolved version and the artifact bytes — a malicious
+      # locks both the resolved version and the artifact bytes - a malicious
       # PyPI release with the same version cannot pass the hash check (closes
       # Sonar S8544).
         timeout-minutes: 3
@@ -50,6 +51,26 @@ jobs:
 
         timeout-minutes: 3
     timeout-minutes: 5
+  license-headers:
+    name: Licence headers carry an SPDX identifier
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+        timeout-minutes: 3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+        timeout-minutes: 3
+      # The checker uses only the standard library, so there is nothing to install and
+      # no third-party code runs here.
+      - name: Check licence headers
+        run: python .github/scripts/lint-license-headers.py
+        timeout-minutes: 3
+    timeout-minutes: 5
   actionlint:
     name: actionlint (schema + shellcheck)
     runs-on: ubuntu-latest
@@ -57,6 +78,10 @@ jobs:
       contents: read
     env:
       ACTIONLINT_VERSION: '1.7.10'
+      # The checksum is mandatory: without it the step trusts whatever the network returns
+      # and runs it with the job's permissions. When bumping the version, take the sum from
+      # actionlint_<version>_checksums.txt of that same release.
+      ACTIONLINT_SHA256: 'f4c76b71db5755a713e6055cbb0857ed07e103e028bda117817660ebadb4386f'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -66,6 +91,7 @@ jobs:
       - name: Install actionlint
         run: |
           curl --proto '=https' -fsSL -o actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum --check --strict
           tar -xzf actionlint.tar.gz actionlint
           chmod +x actionlint
 

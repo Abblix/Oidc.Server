@@ -1,0 +1,144 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using CryptographicOperations = System.Security.Cryptography.CryptographicOperations;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Hashing;
+using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
+
+namespace Abblix.Oidc.Server.Features.ClientAuthentication;
+
+/// <summary>
+/// Serves as a base class for client authentication, utilizing client ID and secret. It validates
+/// clients against a known list of clients, ensuring that the client secret provided during the authentication
+/// process matches the stored secret for the client. This class supports various hash algorithms for
+/// secure secret comparison and handles client secret expiration.
+/// </summary>
+public abstract partial class ClientSecretAuthenticator(
+	ILogger<ClientSecretAuthenticator> logger,
+	IClientInfoProvider clientInfoProvider,
+	TimeProvider clock,
+	IHashService hashService)
+{
+	/// <summary>
+	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
+	/// against stored values, considering the authentication method and secret expiration.
+	/// </summary>
+	/// <param name="clientId">Client ID for identification.</param>
+	/// <param name="secret">Client secret for verification.</param>
+	/// <param name="authenticationMethod">Authentication method used, ensuring compatibility with client configuration.</param>
+	/// <returns>
+	/// Authenticated client information if successful; otherwise, null.
+	/// </returns>
+	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, string? secret, string authenticationMethod)
+	{
+		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
+		{
+			return null;
+		}
+
+		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+		if (client == null)
+		{
+			LogClientNotFound(clientId);
+			return null;
+		}
+
+		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
+			LogWrongAuthMethod(clientId);
+			return null;
+		}
+
+		if (client is not { ClientSecrets.Length: > 0 })
+		{
+			LogNoSecretsConfigured(clientId);
+			return null;
+		}
+
+		if (!TryValidateClientSecret(client, secret))
+		{
+			return null;
+		}
+
+		return client;
+	}
+
+	/// <summary>
+	/// Validates a provided client secret against stored secrets for a given client. This method supports
+	/// secure comparison by hashing the provided secret and comparing it with stored hashes.
+	/// </summary>
+	/// <param name="client">The client whose secret is to be validated.</param>
+	/// <param name="secret">The secret provided for validation.</param>
+	/// <returns>
+	/// True if the secret matches a stored hash and is not expired; otherwise, false.
+	/// </returns>
+	private bool TryValidateClientSecret(ClientInfo client, string secret)
+	{
+		// We store only client secret hashes, so we have to hash the raw secret to compare. And we do it lazy.
+		var matchingSha512Secrets = FindMatchingSecrets(
+			client, clientSecret => clientSecret.Sha512Hash, HashAlgorithm.Sha512, secret);
+
+		var matchingSha256Secrets = FindMatchingSecrets(
+			client, clientSecret => clientSecret.Sha256Hash, HashAlgorithm.Sha256, secret);
+
+		var matchingSecret = matchingSha512Secrets.Concat(matchingSha256Secrets)
+			.MaxBy(item => item.ExpiresAt);
+
+		if (matchingSecret == null)
+		{
+			LogNoMatchingSecret(client.ClientId);
+			return false; // Invalid secret
+		}
+
+		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < clock.GetUtcNow())
+		{
+			LogSecretExpired(client.ClientId);
+			return false; // Secret is expired
+		}
+
+		LogAuthenticated(client.ClientId);
+		return true;
+	}
+
+	/// <summary>
+	/// Identifies stored secrets that match a provided secret value for a client. It hashes the provided
+	/// secret using the specified algorithm and compares it against stored hashes.
+	/// </summary>
+	/// <param name="client">Client owning the secrets.</param>
+	/// <param name="hashSelector">Function selecting the hash from a client secret.</param>
+	/// <param name="hashAlgorithm">Algorithm used for hashing the provided secret.</param>
+	/// <param name="secretValue">Secret value to hash and compare.</param>
+	/// <returns>
+	/// Enumerable of matching client secrets.
+	/// </returns>
+	private IEnumerable<ClientSecret> FindMatchingSecrets(
+		ClientInfo client,
+		Func<ClientSecret, byte[]?> hashSelector,
+		HashAlgorithm hashAlgorithm,
+		string secretValue)
+	{
+		var validSecretHashes =
+			from clientSecret in client.ClientSecrets
+			let secretHash = hashSelector(clientSecret)
+			where secretHash != null
+			select (clientSecret, secretHash);
+
+		byte[]? hash = null;
+		foreach (var (clientSecret, validSecretHash) in validSecretHashes)
+		{
+			hash ??= hashService.Sha(hashAlgorithm, secretValue);
+
+			// Constant-time compare of the secret hashes (both are fixed-length digests of the
+			// same algorithm) so the token endpoint does not leak a timing oracle on the hash.
+			if (CryptographicOperations.FixedTimeEquals(validSecretHash, hash))
+				yield return clientSecret;
+		}
+	}
+}

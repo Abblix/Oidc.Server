@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Coverage settings for the test shards.
+
+Generated sources are excluded from the MEASUREMENT, not from the build. A LoggerMessage partial
+carries one branch per log call - the compiler's "is this level enabled" test - and no test can
+take both sides of it, because the level is fixed by the run. Counted, those branches drag down
+whichever package logs the most, which then reads as the least tested one: before this file,
+34 of the 160 untaken branches in Abblix.Jwt.Vault were generated logging.
+
+Excluding by source path rather than by module keeps the hand-written half of every partial class
+measured: LoginClient.cs is counted, LoginClient's LoggerMessage.g.cs is not.
+-->
+<Configuration>
+  <CodeCoverage>
+    <Sources>
+      <Exclude>
+        <Source>.*\.g\.cs$</Source>
+      </Exclude>
+    </Sources>
+  </CodeCoverage>
+</Configuration>

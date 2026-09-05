@@ -1,0 +1,538 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
+using Google.Protobuf.WellKnownTypes;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
+
+/// <summary>
+/// Tests for JsonNodeExtensions protobuf conversion methods.
+/// </summary>
+public class JsonNodeExtensionsTests
+{
+    #region ObjectToProtoValue / ProtoValueToObject Tests
+
+    [Fact]
+    public void ObjectToProtoValue_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((object?)null).ToValue();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ProtoValueToObject_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((Value?)null).ToObject();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_Bool_RoundTrip()
+    {
+        // Arrange
+        var value = true;
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.BoolValue, proto.KindCase);
+        Assert.IsType<bool>(result);
+        Assert.Equal(value, result);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_String_RoundTrip()
+    {
+        // Arrange
+        var value = "test@example.com";
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.StringValue, proto.KindCase);
+        Assert.IsType<string>(result);
+        Assert.Equal(value, result);
+    }
+
+    [Theory]
+    [InlineData(42)]
+    [InlineData(0)]
+    [InlineData(-100)]
+    [InlineData(int.MaxValue)]
+    [InlineData(int.MinValue)]
+    public void ObjectToProtoValue_Int_PreservesType(int value)
+    {
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.NumberValue, proto.KindCase);
+        Assert.IsType<int>(result);
+        Assert.Equal(value, result);
+    }
+
+    [Theory]
+    [InlineData(42L)]
+    [InlineData(long.MaxValue)]
+    [InlineData(long.MinValue)]
+    public void ObjectToProtoValue_Long_PreservesType(long value)
+    {
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.NumberValue, proto.KindCase);
+
+        // Note: values within int range will be converted to int
+        if (value is >= int.MinValue and <= int.MaxValue)
+        {
+            Assert.IsType<int>(result);
+            Assert.Equal((int)value, result);
+        }
+        else
+        {
+            Assert.IsType<long>(result);
+            Assert.Equal(value, result);
+        }
+    }
+
+    [Theory]
+    [InlineData(3.14)]
+    [InlineData(-2.5)]
+    [InlineData(0.001)]
+    public void ObjectToProtoValue_Double_RoundTrip(double value)
+    {
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.NumberValue, proto.KindCase);
+        Assert.IsType<double>(result);
+        Assert.Equal(value, (double)result, 0.0001);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_Float_ConvertsToDouble()
+    {
+        // Arrange
+        var value = 3.14f;
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.NumberValue, proto.KindCase);
+        Assert.IsType<double>(result);
+        Assert.Equal(value, (double)result, 0.0001);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_Decimal_ConvertsToDouble()
+    {
+        // Arrange
+        var value = 123.456m;
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.NumberValue, proto.KindCase);
+        Assert.IsType<double>(result);
+        Assert.Equal((double)value, (double)result, 0.0001);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_JsonObject_RoundTrip()
+    {
+        // Arrange
+        var value = new JsonObject
+        {
+            ["name"] = "John",
+            ["age"] = 42,
+            ["active"] = true
+        };
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.StructValue, proto.KindCase);
+        Assert.IsType<JsonObject>(result);
+
+        var jsonResult = (JsonObject)result;
+        Assert.Equal("John", jsonResult["name"]!.GetValue<string>());
+        Assert.Equal(42, jsonResult["age"]!.GetValue<int>());
+        Assert.True(jsonResult["active"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_Array_RoundTrip()
+    {
+        // Arrange
+        object[] value = ["apple", "banana", "cherry"];
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.Equal(Value.KindOneofCase.ListValue, proto.KindCase);
+        Assert.IsType<object[]>(result);
+
+        var arrayResult = (object[])result;
+        Assert.Equal(3, arrayResult.Length);
+        Assert.Equal("apple", arrayResult[0]);
+        Assert.Equal("banana", arrayResult[1]);
+        Assert.Equal("cherry", arrayResult[2]);
+    }
+
+    [Fact]
+    public void ObjectToProtoValue_MixedArray_PreservesTypes()
+    {
+        // Arrange
+        object[] value = ["text", 42, true, 3.14];
+
+        // Act
+        var proto = value.ToValue();
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        var arrayResult = (object[])result!;
+        Assert.Equal(4, arrayResult.Length);
+        Assert.IsType<string>(arrayResult[0]);
+        Assert.Equal("text", arrayResult[0]);
+        Assert.IsType<int>(arrayResult[1]);
+        Assert.Equal(42, arrayResult[1]);
+        Assert.True(Assert.IsType<bool>(arrayResult[2]));
+        Assert.IsType<double>(arrayResult[3]);
+        Assert.Equal(3.14, (double)arrayResult[3], 0.0001);
+    }
+
+    #endregion
+
+    #region ToProtoStruct / ToJsonObject Tests
+
+    [Fact]
+    public void ToProtoStruct_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((JsonObject?)null).ToStruct();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ToJsonObject_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((Struct?)null).ToJsonObject();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ToProtoStruct_EmptyObject_RoundTrip()
+    {
+        // Arrange
+        var jsonObject = new JsonObject();
+
+        // Act
+        var proto = jsonObject.ToStruct();
+        var result = proto.ToJsonObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ToProtoStruct_NestedObject_RoundTrip()
+    {
+        // Arrange
+        var jsonObject = new JsonObject
+        {
+            ["user"] = new JsonObject
+            {
+                ["name"] = "John Doe",
+                ["email"] = "john@example.com",
+                ["settings"] = new JsonObject
+                {
+                    ["theme"] = "dark",
+                    ["notifications"] = true
+                }
+            },
+            ["roles"] = new JsonArray("admin", "user")
+        };
+
+        // Act
+        var proto = jsonObject.ToStruct();
+        var result = proto.ToJsonObject();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+
+        var user = result["user"]!.AsObject();
+        Assert.Equal("John Doe", user["name"]!.GetValue<string>());
+        Assert.Equal("john@example.com", user["email"]!.GetValue<string>());
+
+        var settings = user["settings"]!.AsObject();
+        Assert.Equal("dark", settings["theme"]!.GetValue<string>());
+        Assert.True(settings["notifications"]!.GetValue<bool>());
+
+        var roles = result["roles"]!.AsArray();
+        Assert.Equal(2, roles.Count);
+        Assert.Equal("admin", roles[0]!.GetValue<string>());
+        Assert.Equal("user", roles[1]!.GetValue<string>());
+    }
+
+    #endregion
+
+    #region ObjectArrayToProtoListValue / ProtoListValueToObjectArray Tests
+
+    [Fact]
+    public void ObjectArrayToProtoListValue_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((object[]?)null).ToListValue();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ProtoListValueToObjectArray_Null_ReturnsNull()
+    {
+        // Act
+        var result = ((ListValue?)null).ToObjectArray();
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ObjectArrayToProtoListValue_Empty_RoundTrip()
+    {
+        // Arrange
+        var array = Array.Empty<object>();
+
+        // Act
+        var proto = array.ToListValue();
+        var result = proto.ToObjectArray();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ObjectArrayToProtoListValue_StringArray_RoundTrip()
+    {
+        // Arrange
+        object[] array = ["en-US", "en-GB", "en"];
+
+        // Act
+        var proto = array.ToListValue();
+        var result = proto.ToObjectArray();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Length);
+        Assert.Equal("en-US", result[0]);
+        Assert.Equal("en-GB", result[1]);
+        Assert.Equal("en", result[2]);
+    }
+
+    [Fact]
+    public void ObjectArrayToProtoListValue_NumberArray_PreservesIntType()
+    {
+        // Arrange
+        object[] array = [1, 2, 3, 42, 100];
+
+        // Act
+        var proto = array.ToListValue();
+        var result = proto.ToObjectArray();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+        Assert.Equal(5, result.Length);
+
+        foreach (var item in result)
+        {
+            Assert.IsType<int>(item);
+        }
+
+        Assert.Equal(1, result[0]);
+        Assert.Equal(42, result[3]);
+    }
+
+    [Fact]
+    public void ObjectArrayToProtoListValue_ComplexArray_RoundTrip()
+    {
+        // Arrange
+        object[] array =
+        [
+            "text",
+            42,
+            true,
+            new JsonObject { ["nested"] = "value" }
+        ];
+
+        // Act
+        var proto = array.ToListValue();
+        var result = proto.ToObjectArray();
+
+        // Assert
+        Assert.NotNull(proto);
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Length);
+        Assert.IsType<string>(result[0]);
+        Assert.IsType<int>(result[1]);
+        Assert.IsType<bool>(result[2]);
+        Assert.IsType<JsonObject>(result[3]);
+
+        var nested = (JsonObject)result[3];
+        Assert.Equal("value", nested["nested"]!.GetValue<string>());
+    }
+
+    #endregion
+
+    #region Type Preservation Edge Cases
+
+    [Theory]
+    [InlineData(0.0)]      // Should become int 0
+    [InlineData(1.0)]      // Should become int 1
+    [InlineData(42.0)]     // Should become int 42
+    [InlineData(-5.0)]     // Should become int -5
+    public void NumberTypePreservation_WholeNumberDouble_BecomesInt(double value)
+    {
+        // Act
+        var proto = Value.ForNumber(value);
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.IsType<int>(result);
+        Assert.Equal((int)value, result);
+    }
+
+    [Theory]
+    [InlineData(1.5)]
+    [InlineData(3.14159)]
+    [InlineData(-2.7)]
+    public void NumberTypePreservation_FractionalDouble_StaysDouble(double value)
+    {
+        // Act
+        var proto = Value.ForNumber(value);
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.IsType<double>(result);
+        Assert.Equal(value, (double)result, 0.0001);
+    }
+
+    [Fact]
+    public void NumberTypePreservation_LargeWholeNumber_BecomesLong()
+    {
+        // Arrange - number larger than int.MaxValue but whole
+        var value = int.MaxValue + 1000.0;
+
+        // Act
+        var proto = Value.ForNumber(value);
+        var result = proto.ToObject();
+
+        // Assert
+        Assert.IsType<long>(result);
+        Assert.Equal((long)value, result);
+    }
+
+    #endregion
+
+    /// <summary>
+    /// The dictionary pair of the bridge: <c>ToStruct(IDictionary)</c> and <c>ToDictionary(Struct)</c>.
+    /// </summary>
+    /// <remarks>
+    /// Retained without a call site: the one production consumer of this bridge, <c>AuthSessionMapper</c>,
+    /// carries its additional claims as a <c>JsonObject</c> and uses the JsonObject overloads in both
+    /// directions. Since the type became internal these are reachable only from inside this library, so the
+    /// question of whether to keep them is now ours alone - they are exercised so that whoever answers it, or
+    /// becomes their first caller, does not have to find out how they behave.
+    /// The round trip is asserted rather than either direction alone, because the number handling is where a
+    /// pair like this loses information: protobuf carries every number as a double, so a whole one has to be
+    /// recognised on the way back or an integer claim returns as a fraction.
+    /// </remarks>
+    [Fact]
+    public void DictionaryRoundTrip_PreservesValuesAndTheirTypes()
+    {
+        var source = new Dictionary<string, object>
+        {
+            ["sub"] = "user-1",
+            ["email_verified"] = true,
+            ["auth_time"] = 1700000000L,
+            ["issued_ticks"] = 9_000_000_000L,
+            ["score"] = 1.5,
+        };
+
+        var result = source.ToStruct().ToDictionary();
+
+        Assert.Equal("user-1", result["sub"]);
+        Assert.True((bool)result["email_verified"]);
+        Assert.Equal(1.5, result["score"]);
+
+        // Protobuf carries every number as a double, so the way back picks the narrowest whole type that
+        // holds the value: a Unix timestamp comes back an int even though it went in a long, and only a
+        // value too large for int stays one. Asserting the types is the point - a claim that changes shape
+        // across a storage round trip is the defect this pair can have.
+        Assert.Equal(1700000000, result["auth_time"]);
+        Assert.Equal(9_000_000_000L, result["issued_ticks"]);
+    }
+
+    [Fact]
+    public void ToStruct_OfNothing_ProducesAnEmptyStruct()
+        => Assert.Empty(((IDictionary<string, object>?)null).ToStruct().Fields);
+
+    [Fact]
+    public void ToDictionary_OfNothing_ProducesAnEmptyDictionary()
+        => Assert.Empty(((Struct?)null).ToDictionary());
+}

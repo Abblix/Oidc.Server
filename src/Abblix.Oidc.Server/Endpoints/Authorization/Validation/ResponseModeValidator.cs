@@ -1,0 +1,99 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
+
+
+
+namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+
+/// <summary>
+/// Verifies that an explicit <c>response_mode</c> is compatible with the OAuth 2.0 flow
+/// derived from <c>response_type</c> (OAuth 2.0 Multiple Response Types §2.1, OAuth 2.0
+/// Form Post Response Mode). For the authorization-code flow any of <c>query</c>,
+/// <c>fragment</c>, <c>form_post</c> is allowed; flows that issue tokens at the
+/// authorization endpoint (implicit, hybrid) refuse <c>query</c> because credentials
+/// must not appear in the URL query string.
+/// After that flow-compatibility check, when the client configures an explicit
+/// <see cref="Features.ClientInformation.ClientInfo.AllowedResponseModes"/> allow-list the effective response
+/// mode must be a member of it, letting a host pin the delivery channel and close a response-mode downgrade
+/// (RFC 9700).
+/// </summary>
+public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
+{
+	/// <inheritdoc />
+	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+	{
+		var responseMode = context.Request.ResponseMode;
+		if (responseMode.HasValue())
+		{
+			if (!IsResponseModeAllowed(responseMode, context.FlowType))
+			{
+				LogIncompatibleResponseMode(responseMode, context.Request.ResponseType);
+
+				return context.InvalidRequest("The response mode is not supported");
+			}
+
+			context.ResponseMode = responseMode;
+		}
+
+		// Optional per-client allow-list. The effective mode is context.ResponseMode: the explicit
+		// response_mode set just above, or the flow default FlowTypeValidator placed there when the
+		// parameter was omitted - so omitting response_mode cannot slip past a configured restriction.
+		var allowedModes = context.ClientInfo.AllowedResponseModes;
+		if (allowedModes is { Length: > 0 } && Array.IndexOf(allowedModes, context.ResponseMode) < 0)
+		{
+			LogResponseModeNotAllowedForClient(context.ResponseMode, context.ClientInfo.ClientId);
+
+			return context.InvalidRequest("The response mode is not allowed for the client");
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Determines if the specified response mode is allowed for the given flow type.
+	/// </summary>
+	/// <param name="responseMode">The response mode to validate.</param>
+	/// <param name="flowType">The flow type associated with the authorization request.</param>
+	/// <returns>A boolean value indicating whether the response mode is allowed for the specified flow type.</returns>
+	private static bool IsResponseModeAllowed(string responseMode, FlowTypes flowType)
+	{
+		// JARM (.jwt) modes are accepted whenever their base delivery mode is: each maps to a base mode and
+		// is then subject to the same flow-compatibility rules as its plaintext counterpart - so query.jwt
+		// inherits query's prohibition for token-bearing flows (JARM §2.3.1). The `jwt` shortcut resolves to
+		// query for the code flow and fragment otherwise (JARM §2.3.4), both of which are acceptable.
+		if (responseMode.IsJwtMode())
+		{
+			responseMode = responseMode switch
+			{
+				ResponseModes.QueryJwt => ResponseModes.Query,
+				ResponseModes.FragmentJwt => ResponseModes.Fragment,
+				ResponseModes.FormPostJwt => ResponseModes.FormPost,
+				ResponseModes.Jwt when flowType == FlowTypes.AuthorizationCode => ResponseModes.Query,
+				ResponseModes.Jwt => ResponseModes.Fragment,
+				_ => responseMode,
+			};
+		}
+
+		return flowType switch
+		{
+			FlowTypes.AuthorizationCode => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
+			FlowTypes.Implicit or FlowTypes.Hybrid => responseMode is ResponseModes.FormPost or ResponseModes.Fragment,
+			// The none response type returns no credentials, so every delivery mode is safe - including
+			// query, which OAuth 2.0 Multiple Response Type Encoding Practices §4 makes its default.
+			FlowTypes.None => responseMode is ResponseModes.Query or ResponseModes.FormPost or ResponseModes.Fragment,
+			_ => throw new UnexpectedTypeException(nameof(flowType), flowType.GetType()),
+		};
+	}
+}

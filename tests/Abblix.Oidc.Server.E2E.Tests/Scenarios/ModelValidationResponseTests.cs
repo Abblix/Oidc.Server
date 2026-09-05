@@ -1,0 +1,65 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Net;
+using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Model;
+using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+
+namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
+
+/// <summary>
+/// End-to-end guard for the OAuth-shaped rendering of model-layer validation failures on the OIDC
+/// endpoints. A value that breaks a declarative <c>[AllowedValues]</c> constraint (here <c>prompt</c>) is
+/// rejected by <c>[ApiController]</c> model validation before the handler runs. The response must be the
+/// OAuth error envelope <c>{ "error": "invalid_request", ... }</c> served as <c>application/json</c>, not
+/// the framework-default <c>ValidationProblemDetails</c> (<c>application/problem+json</c>) that omits the
+/// <c>error</c> code OAuth/OIDC clients read. Without the <c>[ReturnsOidcInvalidRequest]</c> attribute on the
+/// controller this test fails: the problem+json body carries no <c>error</c> key and the wrong media type.
+/// </summary>
+public class ModelValidationResponseTests(TestFactory factory) : TestBase(factory)
+{
+    [Fact]
+    public async Task Authorize_WithInvalidPromptValue_ReturnsOAuthInvalidRequestJson()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var (_, challenge) = GeneratePkcePair();
+        var authorizeUri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+
+            // Not one of the spec-fixed prompt values, so the generated model's [AllowedValues] rejects it
+            // at the model-binding layer, before redirect_uri is validated - hence a direct response, not a
+            // redirect with an error.
+            [AuthorizationRequest.Parameters.Prompt] = "bogus",
+        });
+
+        var response = await client.GetAsync(authorizeUri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // The decisive check: OAuth JSON, not the [ApiController] default ValidationProblemDetails, whose
+        // media type is application/problem+json and whose body carries no OAuth error code.
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = JsonNode.Parse(raw)!.AsObject();
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(body[ResponseParameters.ErrorDescription]?.GetValue<string>()));
+    }
+}

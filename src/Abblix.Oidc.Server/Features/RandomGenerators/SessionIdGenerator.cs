@@ -1,0 +1,34 @@
+﻿// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Utils;
+using Microsoft.Extensions.Options;
+
+using System.Buffers.Text;
+
+namespace Abblix.Oidc.Server.Features.RandomGenerators;
+
+/// <summary>
+/// Implements the <see cref="ISessionIdGenerator"/> interface to generate unique session identifiers.
+/// The session IDs are generated using a cryptographically strong random number generator and are encoded
+/// to be safely included in HTTP URLs, avoiding characters that might cause issues in URLs.
+/// </summary>
+public class SessionIdGenerator(IOptions<OidcOptions> options) : ISessionIdGenerator
+{
+	/// <summary>
+	/// Generates a new session identifier. The method employs a cryptographically strong random number generator
+	/// to produce a sequence of bytes, which are then URL-encoded to ensure they can be safely used within HTTP URLs.
+	/// This approach ensures that the session identifiers are highly unlikely to collide and are secure for use in
+	/// web applications.
+	/// </summary>
+	/// <returns>A string representing a URL-safe, cryptographically strong random session identifier. The identifier
+	/// is encoded in a way that makes it suitable for use in HTTP URLs, cookies, or any other URL-based contexts.</returns>
+	public string GenerateSessionId()
+		=> Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(options.Value.SessionIdLength));
+}

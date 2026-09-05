@@ -1,0 +1,355 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using System.Text;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+
+namespace Abblix.Utils.UnitTests;
+
+/// <summary>
+/// Tests for <see cref="DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
+/// Verifies the get-and-remove protocol admits one claimer at a time, which narrows the window in which
+/// two callers both take one value rather than closing it.
+/// </summary>
+public class DistributedCacheExtensionsTests
+{
+	private static IDistributedCache CreateCache()
+	{
+		var options = Options.Create(new MemoryDistributedCacheOptions());
+		return new MemoryDistributedCache(options);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_ValueExists_ReturnsValueAndRemovesIt()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "test-key";
+		var value = Encoding.UTF8.GetBytes("test-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+
+		// Act
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		// Assert
+		Assert.NotNull(result);
+		Assert.Equal(value, result);
+
+		// Verify value was removed
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
+		Assert.Null(afterRemove);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_ValueDoesNotExist_ReturnsNull()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "nonexistent-key";
+
+		// Act
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		// Assert
+		Assert.Null(result);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_ConcurrentCalls_OnlyOneSucceeds()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "concurrent-key";
+		var value = Encoding.UTF8.GetBytes("concurrent-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+
+		// Act - simulate race condition with 10 concurrent threads
+		var tasks = Enumerable.Range(0, 10)
+			.Select(_ => cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken))
+			.ToArray();
+
+		var results = await Task.WhenAll(tasks);
+
+		// Assert - exactly one thread should succeed
+		var successfulResults = results.Where(r => r != null).ToArray();
+		Assert.Single(successfulResults);
+		Assert.Equal(value, successfulResults[0]);
+
+		// All other results should be null
+		Assert.Equal(9, results.Count(r => r == null));
+
+		// Verify value was removed
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
+		Assert.Null(afterRemove);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_LockExpires_DoesNotLeakLocks()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "lock-expiry-key";
+		var value = Encoding.UTF8.GetBytes("lock-expiry-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+
+		// Act
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		// Assert - operation succeeded
+		Assert.NotNull(result);
+		Assert.Equal(value, result);
+
+		// Wait for lock to expire (5 seconds + buffer)
+		await Task.Delay(TimeSpan.FromSeconds(6), TestContext.Current.CancellationToken);
+
+		// Verify lock was cleaned up (either explicitly or via expiration)
+		var lockKey = $"lock:{key}";
+		var lockValue = await cache.GetAsync(lockKey, TestContext.Current.CancellationToken);
+		Assert.Null(lockValue);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_MultipleKeys_IndependentOperations()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key1 = "key1";
+		const string key2 = "key2";
+		var value1 = Encoding.UTF8.GetBytes("value1");
+		var value2 = Encoding.UTF8.GetBytes("value2");
+		await cache.SetAsync(key1, value1, TestContext.Current.CancellationToken);
+		await cache.SetAsync(key2, value2, TestContext.Current.CancellationToken);
+
+		// Act - concurrent operations on different keys
+		var task1 = cache.TryGetAndRemoveAsync(key1, cancellationToken: TestContext.Current.CancellationToken);
+		var task2 = cache.TryGetAndRemoveAsync(key2, cancellationToken: TestContext.Current.CancellationToken);
+		var results = await Task.WhenAll(task1, task2);
+
+		// Assert - both should succeed independently
+		Assert.NotNull(results[0]);
+		Assert.NotNull(results[1]);
+		Assert.Equal(value1, results[0]);
+		Assert.Equal(value2, results[1]);
+
+		// Verify both values were removed
+		Assert.Null(await cache.GetAsync(key1, TestContext.Current.CancellationToken));
+		Assert.Null(await cache.GetAsync(key2, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_EmptyValue_ReturnsEmptyArray()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "empty-key";
+		var emptyValue = Array.Empty<byte>();
+		await cache.SetAsync(key, emptyValue, TestContext.Current.CancellationToken);
+
+		// Act
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		// Assert
+		Assert.NotNull(result);
+		Assert.Empty(result);
+
+		// Verify value was removed
+		var afterRemove = await cache.GetAsync(key, TestContext.Current.CancellationToken);
+		Assert.Null(afterRemove);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_CancellationToken_PassedToUnderlyingOperations()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "cancellation-key";
+		var value = Encoding.UTF8.GetBytes("cancellation-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+		using var cts = new CancellationTokenSource();
+
+		// Act - verify method accepts cancellation token without throwing
+		var result = await cache.TryGetAndRemoveAsync(key, cancellationToken: cts.Token);
+
+		// Assert - operation should complete successfully
+		Assert.NotNull(result);
+		Assert.Equal(value, result);
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_NullCache_ThrowsArgumentNullException()
+	{
+		// Arrange
+		IDistributedCache? cache = null;
+
+		// Act & Assert
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache!.TryGetAndRemoveAsync("key", cancellationToken: TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_NullKey_ThrowsArgumentNullException()
+	{
+		// Arrange
+		var cache = CreateCache();
+
+		// Act & Assert
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache.TryGetAndRemoveAsync(null!, cancellationToken: TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_HighConcurrency_AllButOneThreadLose()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "high-concurrency-key";
+		var value = Encoding.UTF8.GetBytes("high-concurrency-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+
+		// Act - simulate high concurrency with 100 threads
+		var tasks = Enumerable.Range(0, 100)
+			.Select(_ => cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken))
+			.ToArray();
+
+		var results = await Task.WhenAll(tasks);
+
+		// Assert - exactly one thread wins
+		var winners = results.Where(r => r != null).ToArray();
+		Assert.Single(winners);
+		Assert.Equal(value, winners[0]);
+
+		// All losers get null
+		Assert.Equal(99, results.Count(r => r == null));
+	}
+
+	[Fact]
+	public async Task TryGetAndRemoveAsync_SequentialCalls_SecondCallReturnsNull()
+	{
+		// Arrange
+		var cache = CreateCache();
+		const string key = "sequential-key";
+		var value = Encoding.UTF8.GetBytes("sequential-value");
+		await cache.SetAsync(key, value, TestContext.Current.CancellationToken);
+
+		// Act
+		var firstResult = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+		var secondResult = await cache.TryGetAndRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		// Assert
+		Assert.NotNull(firstResult);
+		Assert.Equal(value, firstResult);
+		Assert.Null(secondResult);
+	}
+
+	[Fact]
+	public async Task TryRemoveAsync_KeyDoesNotExist_ReturnsFalse()
+	{
+		// The documented contract is "false if ... the key didn't exist". Without a value-existence
+		// check the protocol only verified its own lock token survived and wrongly reported success,
+		// breaking exactly-once removal across non-overlapping lock windows - which RFC 6749 4.1.2 requires
+		// of an authorization code, and which this codebase additionally chooses for a device_code.
+		var cache = CreateCache();
+
+		var result = await cache.TryRemoveAsync("nonexistent-key", cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.False(result);
+	}
+
+	[Fact]
+	public async Task TryRemoveAsync_KeyExists_RemovesAndReturnsTrue()
+	{
+		var cache = CreateCache();
+		const string key = "present-key";
+		await cache.SetAsync(key, Encoding.UTF8.GetBytes("v"), TestContext.Current.CancellationToken);
+
+		var result = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.True(result);
+		Assert.Null(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryRemoveAsync_SecondSequentialCall_ReturnsFalse()
+	{
+		// Exactly-once: the first removal wins, a second (non-overlapping) removal of the same key must
+		// report false. Pre-fix the second call still saw its own lock token survive and returned true.
+		var cache = CreateCache();
+		const string key = "once-key";
+		await cache.SetAsync(key, Encoding.UTF8.GetBytes("v"), TestContext.Current.CancellationToken);
+
+		var first = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+		var second = await cache.TryRemoveAsync(key, cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.True(first);
+		Assert.False(second);
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NewKey_MarksAndReturnsTrue()
+	{
+		var cache = CreateCache();
+		const string key = "first-sighting";
+
+		var result = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+
+		Assert.True(result);
+		Assert.NotNull(await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_SecondSequentialCall_ReturnsFalse()
+	{
+		var cache = CreateCache();
+		const string key = "repeat-sighting";
+
+		var first = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+		var second = await cache.TryAddAsync(
+			key, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+
+		Assert.True(first);
+		Assert.False(second);
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NonPositiveTimeToLive_StillMarks()
+	{
+		// The floor is what makes this pass: without it the requested value would reach
+		// DistributedCacheEntryOptions.AbsoluteExpirationRelativeToNow, whose setter rejects
+		// anything non-positive, and the sighting would throw instead of being recorded.
+		var cache = CreateCache();
+
+		Assert.True(await cache.TryAddAsync(
+			"zero-ttl", TimeSpan.Zero, TestContext.Current.CancellationToken));
+		Assert.True(await cache.TryAddAsync(
+			"negative-ttl", TimeSpan.FromSeconds(-30), TestContext.Current.CancellationToken));
+
+		Assert.NotNull(await cache.GetAsync("zero-ttl", TestContext.Current.CancellationToken));
+		Assert.NotNull(await cache.GetAsync("negative-ttl", TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NullCache_ThrowsArgumentNullException()
+	{
+		IDistributedCache? cache = null;
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache!.TryAddAsync("key", TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TryAddAsync_NullKey_ThrowsArgumentNullException()
+	{
+		var cache = CreateCache();
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache.TryAddAsync(null!, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
+	}
+}

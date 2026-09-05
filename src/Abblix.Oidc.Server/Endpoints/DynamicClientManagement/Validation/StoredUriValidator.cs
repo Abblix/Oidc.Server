@@ -1,0 +1,101 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Common;
+using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
+
+namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+
+/// <summary>
+/// Refuses a registration carrying a relative URI in any member, so no address is stored on a client
+/// without something having read it.
+/// </summary>
+/// <remarks>
+/// Every URI member is named here, including the ones another validator also looks at. Those others are
+/// each GATED on something that is not the address - a pairwise subject type, a TLS authentication
+/// method, a backchannel delivery mode, a grant type that redirects - so a registration naming none of
+/// those walks past them with the member stored. What is asked here is asked unconditionally.
+/// <para>
+/// What makes this a defect rather than tidiness is <c>frontchannel_logout_uri</c>. A relative value
+/// reaches <c>FrontChannelLogoutService</c>, which builds the logout page's frame-source policy with
+/// <see cref="Uri.GetLeftPart"/> - and that raises on a relative URI, unconditionally, at logout rather
+/// than at registration.
+/// </para>
+/// <para>
+/// ABSOLUTENESS only. The scheme requirements in this pipeline are conditional - a native client's
+/// redirect URI carries its own, a fetched address answers to the deployment's policy - and the
+/// validators that own those conditions already state them. What is unconditional is that a stored
+/// address must name somewhere.
+/// </para>
+/// <para>
+/// The list is written out rather than reflected over, because a reader of this file should be able to
+/// see what is checked. What keeps it from falling behind - which it did twice while it was shorter - is
+/// <c>UriMemberCoverageTests</c>, which finds every URI member on the model by its TYPE and requires
+/// this validator to refuse a relative value in each. A member added without a line here fails that row.
+/// </para>
+/// </remarks>
+public class StoredUriValidator : SyncClientRegistrationContextValidator
+{
+    /// <summary>
+    /// Returns an <c>invalid_client_metadata</c> error naming the first member that carries a relative
+    /// URI; <c>null</c> when every member is absent or absolute.
+    /// </summary>
+    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    {
+        var request = context.Request;
+
+        return Validate(Parameters.LogoUri, request.LogoUri)
+            ?? Validate(Parameters.ClientUri, request.ClientUri)
+            ?? Validate(Parameters.PolicyUri, request.PolicyUri)
+            ?? Validate(Parameters.TosUri, request.TermsOfServiceUri)
+            ?? Validate(Parameters.JwksUri, request.JwksUri)
+            ?? Validate(Parameters.SectorIdentifierUri, request.SectorIdentifierUri)
+            ?? Validate(Parameters.InitiateLoginUri, request.InitiateLoginUri)
+            ?? Validate(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri)
+            ?? Validate(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri)
+            ?? Validate(Parameters.BackChannelClientNotificationEndpoint, request.BackChannelClientNotificationEndpoint)
+            ?? Validate(Parameters.RedirectUris, request.RedirectUris)
+            ?? Validate(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris)
+            ?? Validate(Parameters.RequestUris, request.RequestUris)
+            ?? Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri);
+    }
+
+    /// <summary>
+    /// A member the registration may omit: absent passes, present must be absolute.
+    /// </summary>
+    /// <remarks>
+    /// <c>null</c> means the member was not sent, and absence is not a bad address - almost every
+    /// registration omits most of these, so refusing null here refuses nearly everything. Measured on
+    /// the way to this shape: writing the test as <c>uri is not { IsAbsoluteUri: true }</c>, which is
+    /// correct for an ELEMENT, turned 58 of 218 end-to-end rows red.
+    /// </remarks>
+    private static OidcError? Validate(string name, Uri? uri)
+        => uri is { IsAbsoluteUri: false } ? Relative(name) : null;
+
+    /// <summary>
+    /// An array member the registration may omit: absent or empty passes, and every element that
+    /// is present must be an absolute URI.
+    /// </summary>
+    /// <remarks>
+    /// The element test is the mirror image of the one for a single member above, and that is the
+    /// point rather than an accident. A null ELEMENT fails here: the array was sent and one of its
+    /// entries names nothing, which is a bad value rather than an absent one. That entry is
+    /// reachable because a registration body is attacker-shaped JSON and the deserializer honours
+    /// no annotation against it.
+    /// </remarks>
+    private static OidcError? Validate(string name, Uri[]? uris)
+    {
+        if (uris is not null && uris.Any(uri => uri is not { IsAbsoluteUri: true }))
+            return Relative(name);
+
+        return null;
+    }
+
+    private static OidcError Relative(string member)
+        => ErrorFactory.InvalidClientMetadata($"The {member} is not an absolute URI");
+}

@@ -1,0 +1,224 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Model;
+
+namespace Abblix.Oidc.Server.Common;
+
+/// <summary>
+/// Represents the context of an authorization process, encapsulating the key parameters required for processing
+/// authorization requests.
+/// </summary>
+/// <remarks>
+/// This record is pivotal for tracking the state of an authorization request throughout its lifecycle.
+/// It encapsulates details that are critical for the secure issuance of authorization codes and tokens,
+/// while ensuring compliance with OAuth 2.0 and OpenID Connect protocols. The context facilitates
+/// not just the validation of requests at the token endpoint, but also supports secure interactions
+/// by incorporating mechanisms like PKCE and nonce values to mitigate common attack vectors such as
+/// code injection and replay attacks. Furthermore, it carries information about requested scopes and claims,
+/// enabling fine-grained access control and personalized identity assertion in accordance with the client's needs
+/// and the authorization server's policies.
+/// </remarks>
+public record AuthorizationContext
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthorizationContext"/> class.
+    /// </summary>
+    /// <param name="clientId">
+    /// The unique identifier of the client making the authorization request.
+    /// </param>
+    /// <param name="scope">
+    /// An array of scope values requested by the client, representing the access permissions being sought.
+    /// </param>
+    /// <param name="requestedClaims">
+    /// Optional claims that the client is requesting as part of the authorization process,
+    /// providing additional information about the user's identity.
+    /// </param>
+    /// <param name="resources">
+    /// Optional RFC 8707 resource indicators (absolute URIs) the issued token is bound to. This is
+    /// the single construction point every path funnels the resource set through: the direct grants
+    /// (client_credentials, password, jwt-bearer, token-exchange), the authorize/CIBA/device path
+    /// (via the <see cref="ScopeDefinition"/>/<see cref="ResourceDefinition"/> overload below), and
+    /// the JWT round-trip. An empty set is canonicalized to <c>null</c> (no audience restriction).
+    /// </param>
+    [JsonConstructor]
+    public AuthorizationContext(
+        string clientId, string[] scope, RequestedClaims? requestedClaims, Uri[]? resources = null)
+    {
+        ClientId = clientId;
+        Scope = scope;
+        RequestedClaims = requestedClaims;
+        Resources = resources is { Length: > 0 } ? resources : null;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthorizationContext"/> class with a client ID,
+    /// a collection of scopes, and optional requested claims.
+    /// </summary>
+    /// <param name="clientId">The unique identifier of the client making the authorization request.</param>
+    /// <param name="scopes">An array of scope definitions requested by the client.</param>
+    /// <param name="resources">An array of resource definitions associated with the authorization request.</param>
+    /// <param name="requestedClaims">Optional claims requested by the client for the authorization process.</param>
+    public AuthorizationContext(
+        string clientId,
+        ScopeDefinition[] scopes,
+        ResourceDefinition[] resources,
+        RequestedClaims? requestedClaims)
+        : this(
+            clientId,
+            GetScopeNames(scopes, resources),
+            requestedClaims,
+            Array.ConvertAll(resources, resource => resource.Resource))
+    {
+    }
+
+    /// <summary>
+    /// Extracts unique scope names from the provided scope and resource definitions.
+    /// This method aggregates scopes defined in both scopes and resources to ensure
+    /// there are no duplicates, returning them as an array of strings.
+    /// </summary>
+    /// <param name="scopes">An array of scope definitions to extract names from.</param>
+    /// <param name="resources">An array of resource definitions to extract names from.</param>
+    /// <returns>
+    /// An array of unique scope names represented as strings, combining those from scopes
+    /// and resources.
+    /// </returns>
+    private static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
+    {
+        return scopes
+            .Concat(resources.SelectMany(rd => rd.Scopes))
+            .Select(sd => sd.Scope)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The unique identifier for the client making the authorization request, as registered in the authorization server.
+    /// This identifier is crucial for linking the authorization request and the issued tokens to a specific
+    /// client application.
+    /// </summary>
+    public string ClientId { get; init; }
+
+    /// <summary>
+    /// Defines the scope of access requested by the client. Scopes are used to specify the level of access or
+    /// permissions that the client is requesting on the user's behalf.
+    /// They play a key role in enforcing the principle of least privilege.
+    /// </summary>
+    public string[] Scope { get; init; }
+
+    /// <summary>
+    /// Optional. Specifies the individual Claims requested by the client, providing detailed instructions
+    /// for the authorization server on the Claims to be returned, either in the ID Token or via the UserInfo endpoint.
+    /// </summary>
+    public RequestedClaims? RequestedClaims { get; init; }
+
+    /// <summary>
+    /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
+    /// for mutual TLS client authentication. When present, access tokens carry a confirmation
+    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 §3.1).
+    /// </summary>
+    public string? CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
+    /// Legacy alias for <see cref="CertificateSha256Thumbprint"/>: forwards to the same backing
+    /// storage so existing JSON blobs and downstream callers initialising this property still
+    /// resolve correctly, while the deprecation warning steers new code to the canonical name.
+    /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
+    /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
+    /// </summary>
+    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
+        Justification = "Permanent backward-compat alias; removal is a major-version concern.")]
+    public string? X509CertificateSha256Thumbprint
+    {
+        get => CertificateSha256Thumbprint;
+        init => CertificateSha256Thumbprint = value;
+    }
+
+    /// <summary>
+    /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
+    /// bound to this authorization (RFC 9449 §6.1). When present, access tokens carry a
+    /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the
+    /// specific key the client demonstrated control of at the token endpoint.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
+
+    /// <summary>
+    /// The URI where the authorization response should be sent. This URI must match one of the registered redirects URI
+    /// for the client application, ensuring that authorization responses are delivered to the correct destination
+    /// securely.
+    /// </summary>
+    public Uri? RedirectUri { get; init; }
+
+    /// <summary>
+    /// A string value used to associate a client session with an ID Token, mitigating replay attacks by ensuring
+    /// that an ID Token cannot be used in a different context than the one it was intended for.
+    /// </summary>
+    public string? Nonce { get; init; }
+
+    /// <summary>
+    /// The high-entropy cryptographic string provided by the client, used in the PKCE (Proof Key for Code Exchange)
+    /// extension to secure the exchange of the authorization code for a token,
+    /// especially in public clients and mobile applications.
+    /// </summary>
+    public string? CodeChallenge { get; init; }
+
+    /// <summary>
+    /// Specifies the transformation method applied to the 'code_verifier' when generating the 'code_challenge',
+    /// enhancing the security of PKCE by allowing the authorization server to verify the code exchange authenticity.
+    /// </summary>
+    public string? CodeChallengeMethod { get; init; }
+
+    /// <summary>
+    /// The resources for which the authorization is granted.
+    /// These resources are typically URIs that identify specific services or data that the client is authorized
+    /// to access.
+    /// </summary>
+    public Uri[]? Resources { get; init; }
+
+    /// <summary>
+    /// The RFC 9396 Rich Authorization Requests array stored as a raw <see cref="JsonArray"/>.
+    /// This is the source of truth - preserved byte-exact (member order, type-specific payload)
+    /// through the authorize → code → token round-trip and protobuf persistence, without lossy
+    /// typed deserialise / re-serialise cycles.
+    /// </summary>
+    public JsonArray? AuthorizationDetails { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
+    /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
+    /// non-Token-Exchange grants.
+    /// </summary>
+    public JsonObject? Actor { get; init; }
+
+    /// <summary>
+    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// names of the relying party for which the requested token is intended. Distinct from
+    /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
+    /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
+    /// </summary>
+    public string[]? Audiences { get; init; }
+
+    /// <summary>
+    /// Splits the authorization context into its constructor triple, enabling pattern-style
+    /// destructuring at the call site.
+    /// </summary>
+    /// <param name="clientId">Receives the <see cref="ClientId"/>.</param>
+    /// <param name="scope">Receives the <see cref="Scope"/> array.</param>
+    /// <param name="requestedClaims">Receives the optional <see cref="RequestedClaims"/>.</param>
+    public void Deconstruct(out string clientId, out string[] scope, out RequestedClaims? requestedClaims)
+    {
+        clientId = ClientId;
+        scope = Scope;
+        requestedClaims = RequestedClaims;
+    }
+}

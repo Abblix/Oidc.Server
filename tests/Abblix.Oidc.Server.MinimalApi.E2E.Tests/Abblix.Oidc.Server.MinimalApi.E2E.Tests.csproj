@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <DefineConstants>$(DefineConstants);MINIMAL_API_TRANSPORT</DefineConstants>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Update="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- The scenarios both adapters must answer identically are written once, in the MVC suite,
+       and compiled here against this project's own TestFactory. The name is the seam: each
+       project supplies its own, bound to its own host, so one source file exercises both
+       transports. TestFactory itself is therefore the one file NOT shared. -->
+  <ItemGroup>
+    <Compile Include="..\Abblix.Oidc.Server.E2E.Tests\**\*.cs"
+             Exclude="..\Abblix.Oidc.Server.E2E.Tests\TestFactory.cs;..\Abblix.Oidc.Server.E2E.Tests\bin\**;..\Abblix.Oidc.Server.E2E.Tests\obj\**"
+             Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />
+  </ItemGroup>
+
+</Project>

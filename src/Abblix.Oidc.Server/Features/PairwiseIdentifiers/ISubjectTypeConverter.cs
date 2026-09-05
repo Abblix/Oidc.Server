@@ -1,0 +1,54 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Features.ClientInformation;
+
+namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+
+/// <summary>
+/// Defines the interface for a service that converts user subject identifiers according to the client's specified
+/// subject type. This conversion ensures that the subject identifier presented to the client is in the format
+/// that the client expects, based on its configuration.
+/// </summary>
+/// <remarks>
+/// The implementation of this interface should support various subject types, such as "public" or "pairwise",
+/// and provide appropriate conversions based on the OpenID Connect specifications.
+/// </remarks>
+public interface ISubjectTypeConverter
+{
+    /// <summary>
+    /// Lists the subject types that this converter supports. This typically includes "public" and "pairwise"
+    /// among others, depending on the OpenID Connect implementation specifics.
+    /// </summary>
+    IEnumerable<string> SubjectTypesSupported { get; }
+
+    /// <summary>
+    /// Converts the real subject identifier into the client-facing one based on the client's subject type: a
+    /// pairwise client gets a reversible, per-sector pseudonym; a public client gets the subject unchanged.
+    /// </summary>
+    /// <param name="subject">The original subject identifier of the end-user.</param>
+    /// <param name="clientInfo">Information about the client for which the subject identifier is being transformed.
+    /// </param>
+    /// <returns>The transformed subject identifier suitable for the client's subject type.</returns>
+    string Convert(string subject, ClientInfo clientInfo);
+
+    /// <summary>
+    /// Recovers the real subject identifier from the client-facing one produced by <see cref="Convert"/>: a
+    /// pairwise client's pseudonym is opened back to the real subject; a public client's subject is returned
+    /// unchanged. The <paramref name="clientInfo"/> must be the client the subject was sealed for, as its sector
+    /// binds the pseudonym.
+    /// </summary>
+    /// <param name="subject">The client-facing subject identifier (pairwise pseudonym or real subject).</param>
+    /// <param name="clientInfo">The client the subject was issued for.</param>
+    /// <returns>The real subject identifier, or <c>null</c> when a pairwise pseudonym cannot be opened (malformed,
+    /// sealed for a different sector, or produced under a different pairwise salt) so the caller can reject the
+    /// token at the protocol level.</returns>
+    /// <exception cref="System.InvalidOperationException">Thrown only when pairwise identifiers are not configured
+    /// but a pairwise client is asked to recover, which is a server misconfiguration rather than a bad token.</exception>
+    string? ConvertBack(string subject, ClientInfo clientInfo);
+}

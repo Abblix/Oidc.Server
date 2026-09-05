@@ -1,0 +1,90 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>true</ImplicitUsings>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageId>Abblix.OIDC.Server</PackageId>
+        <Title>Abblix OIDC Server</Title>
+        <Description>OpenID Connect and OAuth 2.0 server for ASP.NET Core, certified by the OpenID Foundation. Add a complete identity provider and authorization server to your own .NET application: every OIDC flow, PKCE, PAR, DPoP, JARM, CIBA, device flow, token exchange and FAPI 2.0. Runs on .NET 8, 9 and 10.</Description>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Authors>Abblix LLP</Authors>
+        <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Abblix OIDC OpenID OpenID-Connect OpenID-Provider Identity-Provider IdP Authorization-Server Authentication Authorization Security Identity OAuth OAuth2 SSO Single-Sign-On ASP.NET AspNetCore dotnet Federation Claims WebApi PKCE DPoP PAR JARM CIBA Device-Flow Token-Exchange FAPI Proof-of-Possession</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
+        <PackageReleaseNotes>Run a certified OpenID Provider inside your own ASP.NET Core application instead of operating a separate identity product. Abblix OIDC Server is a library: it builds on the standard .NET dependency injection container, stores nothing you do not choose to store, and passes the OpenID Foundation conformance suite in every login and logout profile. What you get: authorization code with PKCE, hybrid and implicit flows, client credentials, device authorization, CIBA, token exchange (RFC 8693) and Rich Authorization Requests (RFC 9396); pushed authorization requests, signed and encrypted request objects, JARM responses and sender-constrained tokens through DPoP or mutual TLS; dynamic client registration and management, discovery and Authorization Server Metadata (RFC 8414), token introspection and revocation, front-channel and back-channel logout, session management. New in 2.4: a per-client security profile that enforces the FAPI 2.0 control set as one setting, revocation of every token issued to a user or within a session, cross-client introspection for protected resources, opt-in endpoints, strict request-object processing (RFC 9101), per-client requirements for PAR, signed request objects and certificate-bound tokens, independent signing and encryption settings per token type, an allow list for outbound fetches, and refresh tokens that rotate by default (RFC 9700). Host it through the MVC or the Minimal API integration package. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+        <PackageIcon>Abblix.png</PackageIcon>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+
+        <!-- Deterministic builds for reproducible binaries -->
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+        <!-- SourceLink for symbol packages -->
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <!-- Analyzer rules deliberately not actioned in code, so the project builds warning-free:
+         - S1133: the [Obsolete]-marked APIs are intentional; the "remove deprecated code" reminder
+           does not apply while the API is still published.
+         - S3241: a fluent IServiceCollection extension keeps its return value for chaining even
+           where a given call site ignores it. -->
+    <PropertyGroup>
+        <NoWarn>$(NoWarn);S1133;S3241</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include=".\Features\SessionManagement\Resources\checkSession.html" />
+      <EmbeddedResource Include=".\Features\LogoutNotification\Resources\frontChannelLogout.html" />
+      <EmbeddedResource Include=".\Features\Licensing\Resources\Abblix Licensing.pem" />
+      <None Include="..\..\Abblix.png" Link="Abblix.png" Pack="true" PackagePath="" />
+      <None Include="..\..\LICENSE.md" Link="LICENSE.md" Pack="true" PackagePath="" />
+      <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+      <PackageReference Include="Microsoft.Extensions.Http" />
+      <PackageReference Include="Microsoft.Extensions.Options" />
+      <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+      <PackageReference Update="SonarAnalyzer.CSharp">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Google.Protobuf" />
+      <PackageReference Include="Grpc.Tools" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- Access="Internal" keeps the generated message types out of the public API. They are the on-disk
+           shape of what the storages persist, not a contract any host programs against, and every mapper that
+           touches them is already internal. Left public they would be the only place Google.Protobuf reaches
+           this package's public surface, which makes replacing the serialisation format a breaking change for
+           consumers who never used it. -->
+      <Protobuf Include="Features\Storages\Proto\*.proto" GrpcServices="None" Access="Internal" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Abblix.DependencyInjection\Abblix.DependencyInjection.csproj" />
+      <ProjectReference Include="..\Abblix.Jwt\Abblix.Jwt.csproj" />
+      <ProjectReference Include="..\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
+    </ItemGroup>
+
+</Project>
