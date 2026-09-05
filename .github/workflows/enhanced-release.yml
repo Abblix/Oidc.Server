@@ -153,8 +153,15 @@ jobs:
         # what killed a release build that needed most of it.
         timeout-minutes: 10
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL"
-        timeout-minutes: 3
+        # Not `--no-build`: on the multi-targeted family projects the outer no-build does not reach
+        # the inner per-framework pack, which then invokes Build and fails with NETSDK1085 ("NoBuild
+        # set but Build target invoked"). The Build step above left everything up to date, so the
+        # build pack performs is an incremental no-op under the same version override, and
+        # GeneratePackageOnBuild=false keeps that build from packing a second time. The dev-build
+        # workflow packs the same way for the same reason.
+        run: dotnet pack --no-restore -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL" -p:GeneratePackageOnBuild=false
+        # Above the step baseline: pack re-enters the build of every packable project first.
+        timeout-minutes: 10
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
