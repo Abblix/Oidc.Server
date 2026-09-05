@@ -69,18 +69,18 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// back: a refusal after it would burn the assertion's own identifier on a request this check
     /// was going to reject.
     /// </remarks>
-    /// <param name="token">The assertion whose timestamps are being judged.</param>
+    /// <param name="timestamps">The assertion's timestamps, already read.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>
-    private bool TimestampsSatisfyTheClientsOwnProfile(JsonWebToken token, ClientInfo clientInfo)
+    private bool TimestampsSatisfyTheClientsOwnProfile(AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         var refusal = SecurityProfileRequirements
             .For(clientInfo, options.Value.DefaultSecurityProfile)
             .ClockSkewOrDefault()
             .WhyRefused(
                 timeProvider.GetUtcNow(),
-                token.Payload.NotBefore,
-                token.Payload.ExpiresAt,
-                token.Payload.IssuedAt);
+                timestamps.NotBefore,
+                timestamps.ExpiresAt,
+                timestamps.IssuedAt);
 
         if (refusal is null)
             return true;
@@ -210,18 +210,38 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
-        if (!TimestampsSatisfyTheClientsOwnProfile(token, clientInfo))
+        // Read once for both consumers below, and refused rather than thrown where the payload
+        // cannot read them: the validator an override chose may not have looked at these claims,
+        // and a malformed date is the assertion's fault, not a fault in this server.
+        if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
+        {
+            LogTimestampUnreadable(clientInfo.ClientId, whyUnreadable);
+            return null;
+        }
+
+        var timestamps = new AssertionTimestamps(notBefore, expiresAt, issuedAt);
+
+        if (!TimestampsSatisfyTheClientsOwnProfile(timestamps, clientInfo))
         {
             return null;
         }
 
-        if (!await ReserveTheAssertionAsync(token, clientInfo))
+        if (!await ReserveTheAssertionAsync(token, timestamps.ExpiresAt, clientInfo))
         {
             return null;
         }
 
         return clientInfo;
     }
+
+    /// <summary>
+    /// The three timestamps an assertion may carry, read once so that no later step meets the
+    /// accessors again.
+    /// </summary>
+    private readonly record struct AssertionTimestamps(
+        DateTimeOffset? NotBefore,
+        DateTimeOffset? ExpiresAt,
+        DateTimeOffset? IssuedAt);
 
     /// <summary>
     /// Claims the assertion's identifier so it cannot be presented a second time, answering whether
@@ -233,8 +253,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// in the caller is before the call.
     /// </remarks>
     /// <param name="token">The assertion whose identifier is being claimed.</param>
+    /// <param name="expiresAt">The assertion's expiry, already read, which bounds the reservation.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>
-    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, ClientInfo clientInfo)
+    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, DateTimeOffset? expiresAt, ClientInfo clientInfo)
     {
         // OIDC Core §9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
@@ -251,7 +272,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.
-        if (token is not { Payload.ExpiresAt: { } expiresAt })
+        if (expiresAt is not { } expiry)
         {
             LogMissingExpiration(clientInfo.ClientId);
             return false;
@@ -260,7 +281,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
         // One call avoids the read-then-write race a separate status check + mark step would leave
         // between two concurrent presenters of the same assertion.
-        if (!await replayCache.TryReserveAsync(jwtId, expiresAt))
+        if (!await replayCache.TryReserveAsync(jwtId, expiry))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
             return false;

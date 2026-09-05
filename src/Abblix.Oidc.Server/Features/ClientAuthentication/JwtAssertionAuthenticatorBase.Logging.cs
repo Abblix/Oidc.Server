@@ -95,4 +95,10 @@ partial class JwtAssertionAuthenticatorBase
         string ClientId,
         string[] Audiences,
         string IssuerIdentifier);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TimestampUnreadable,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} carries a timestamp that cannot be read: {WhyUnreadable}")]
+    private partial void LogTimestampUnreadable(string ClientId, string WhyUnreadable);
 }

@@ -612,22 +612,21 @@ internal class JsonWebTokenValidator(
         var requireExpiration = parameters.Options.HasFlag(ValidationOptions.RequireExpirationTime);
         var validateLifetime = parameters.Options.HasFlag(ValidationOptions.ValidateLifetime);
 
-        // Neither flag set means the claims are not this caller's business, and reading them is
-        // not free of consequence: the accessors throw on a timestamp outside DateTimeOffset's
-        // range, which a caller who opted out of time handling should never have to meet.
+        // Neither flag set means the claims are not this caller's business, so they are not read
+        // at all: a caller who opted out of time handling is not told the token's dates are wrong.
         if (!requireExpiration && !validateLifetime)
             return token;
 
-        var notBefore = token.Payload.NotBefore;
-        var expiresAt = token.Payload.ExpiresAt;
+        // A timestamp the payload cannot read is the token's fault, not this server's, so it is
+        // refused as malformed rather than allowed to escape as an exception out of the request.
+        if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
+            return new JwtValidationError(JwtError.MalformedToken, whyUnreadable);
 
         if (requireExpiration && !expiresAt.HasValue)
             return new JwtValidationError(JwtError.InvalidToken, "Missing expiration time in JWT payload");
 
         if (!validateLifetime)
             return token;
-
-        var issuedAt = token.Payload.IssuedAt;
 
         if (!notBefore.HasValue && !expiresAt.HasValue && !issuedAt.HasValue)
             return token;
