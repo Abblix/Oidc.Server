@@ -8,6 +8,10 @@
 - Minimal API integration: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
 - External signing keys: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
 - Security events and Shared Signals: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
+- A per-client security profile enforcing the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0.html) control set as one setting: a server-wide profile is a floor no client can step under, and a client may hold itself to more
+- Revocation of every token issued to a user or within one session, and cross-client token introspection for protected resources ([RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662))
+- Opt-in endpoint registration, Authorization Server Metadata at its OAuth 2.0 well-known address ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)), strict request-object processing ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)), and per-client requirements for pushed authorization requests, signed request objects and certificate-bound tokens
+- Independent signing and encryption settings per token type, an allow list for outbound fetches, and refresh tokens that rotate by default ([RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700))
 
 ## Implemented Standards
 
