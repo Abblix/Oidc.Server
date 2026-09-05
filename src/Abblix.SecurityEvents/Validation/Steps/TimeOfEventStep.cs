@@ -27,7 +27,9 @@ public sealed class TimeOfEventStep : ISecurityEventTokenValidator
         SecurityEventTokenValidationContext context,
         CancellationToken cancellationToken)
     {
-        context.Require(SecurityEventTokenValidationStates.Parsed);
+        // A refusal on a claim's value is a judgement of the issuer's words, and those are only the
+        // issuer's once the signature has been checked: the same precondition its neighbour holds.
+        context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
         var error = context.Token!.Token.Payload.TryReadTimestamp(IanaClaimTypes.Toe, out _, out var whyUnreadable)
             ? null

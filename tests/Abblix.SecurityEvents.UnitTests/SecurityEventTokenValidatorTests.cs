@@ -426,7 +426,7 @@ public class SecurityEventTokenValidatorTests
         {
             Payload = new JsonWebTokenPayload(JsonNode.Parse(claimsJson)!.AsObject()),
         });
-        context.Establish(SecurityEventTokenValidationStates.Parsed);
+        context.Establish(SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.SignatureVerified);
 
         var error = await new TimeOfEventStep().ValidateAsync(context, TestContext.Current.CancellationToken);
 

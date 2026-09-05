@@ -104,9 +104,10 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// <summary>
     /// The "toe" claim: when the event itself occurred, as opposed to when the SET about it was
     /// issued. OPTIONAL (RFC 8417 Section 2.2): by omitting it, the issuer declines to share an
-    /// event time, and the value may be approximate where a profile says so. Null on a token the
-    /// validation pipeline has passed means exactly that omission, since the pipeline refuses a
-    /// value it cannot read; on a token constructed outside it, null may also mean such a value.
+    /// event time, and the value may be approximate where a profile says so. Null on a token a
+    /// pipeline including <see cref="Validation.Steps.TimeOfEventStep"/> has passed means exactly
+    /// that omission, since that step refuses a value it cannot read; on a token constructed outside
+    /// such a pipeline, null may also mean such a value.
     /// </summary>
     public DateTimeOffset? TimeOfEvent => ReadOrNull(IanaClaimTypes.Toe);
 
