@@ -9,23 +9,6 @@
 - External signing keys: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
 - Security events and Shared Signals: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
 
-## What's New in Version 2.3
-
-🚀 Features
-- Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)): fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant
-- Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)): impersonation and delegation with multiple subject- and actor-token formats
-- DPoP sender-constrained tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)): signature-based proof of possession for public clients that cannot use mTLS
-- Certificate-bound access token verification ([RFC 8705](https://datatracker.ietf.org/doc/html/rfc8705) Section 3): resource-server check that a presented token matches the client certificate
-- JARM: signed, optionally encrypted JWT authorization responses
-- JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)): signed introspection responses via content negotiation
-- JWE-encrypted request objects ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)): confidential request parameters in the front channel and by reference
-- Signed authorization server metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)): opt-in, integrity-protected discovery document
-
-✏️ Improvements
-- Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591))
-- Token-class confusion defense via opt-in token-type pinning ([RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725)), JWS key pinned to its declared algorithm ([RFC 8725 Section 3.1](https://datatracker.ietf.org/doc/html/rfc8725)), enforced HMAC key length ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518))
-- Authorization-response issuer parameter ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)) advertised in discovery
-
 ## Implemented Standards
 
 Abblix OIDC Server implements the following standards for authorization and security:

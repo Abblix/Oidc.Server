@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SharedSignals</PackageId>
     <Title>Abblix Shared Signals</Title>
-    <Description>OpenID Shared Signals Framework (SSF) 1.0 for .NET: transmitter and receiver in one package - transmitter configuration discovery, event stream management, subjects and verification, plus push (RFC 8935) and poll (RFC 8936) delivery over the Abblix Security Events core.</Description>
+    <Description>OpenID Shared Signals Framework (SSF) 1.0 for .NET: transmitter and receiver in one package. Discover a transmitter, manage event streams and subjects, verify delivery, and send or receive CAEP and RISC events by push or poll.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SharedSignals</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Initial release: the OpenID Shared Signals Framework (SSF) 1.0 for .NET, transmitter and receiver in one package. Transmitter configuration discovery, event stream management, subjects and verification, plus push (RFC 8935) and poll (RFC 8936) delivery over the Abblix Security Events core. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>Both roles of the Shared Signals Framework. As a transmitter: publish configuration discovery, let receivers create, read, update and delete event streams, add and remove the subjects each stream is about, answer verification requests, and deliver events by push or hold them for poll. As a receiver: find a transmitter, open and configure a stream, manage its subjects, request verification and consume events from either delivery mode. Built over the Security Events core, with the CAEP and RISC dictionaries naming the events, so two parties agree on what an event means without a private contract. An event outbox on Redis is available for transmitters that run as several replicas. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

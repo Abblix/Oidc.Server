@@ -7,15 +7,6 @@
 ✏️ Improvements
 - Referencing both transport adapters is refused at startup with a message naming which package to drop, instead of every OIDC request failing with `AmbiguousMatchException` once the new Minimal API sibling joins the dependency graph
 
-## What's New in Version 2.3
-
-🚀 Features
-- JARM: MVC support for signed, optionally encrypted JWT authorization responses
-- JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)): content-negotiated signed introspection responses
-
-✏️ Improvements
-- Request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
-
 ## Key Features
 
 - Standard MVC Integration: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
