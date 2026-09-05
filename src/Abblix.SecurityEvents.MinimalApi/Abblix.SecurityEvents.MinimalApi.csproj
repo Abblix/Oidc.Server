@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SecurityEvents.MinimalAPI</PackageId>
     <Title>Abblix Security Events Minimal API</Title>
-    <Description>ASP.NET Core Minimal API integration for Abblix Security Events: maps the OpenID Connect Back-Channel Logout intake as a route handler, with no MVC dependency.</Description>
+    <Description>ASP.NET Core Minimal API integration for Abblix Security Events: receive OpenID Back-Channel Logout tokens and pushed Security Event Tokens (RFC 8935) as route handlers, with no MVC dependency.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.MinimalApi</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Initial release: ASP.NET Core Minimal API integration for Abblix Security Events. Maps the OpenID Connect Back-Channel Logout intake and the RFC 8935 push delivery endpoint as route handlers, with no MVC dependency. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The intake side of security events as route handlers: the OpenID Back-Channel Logout endpoint a relying party exposes, and the push delivery endpoint of RFC 8935 that a transmitter posts to. Each validates the token through the Security Events core before handing it on, answers with the status codes the specifications prescribe, and needs no MVC framework in the host. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

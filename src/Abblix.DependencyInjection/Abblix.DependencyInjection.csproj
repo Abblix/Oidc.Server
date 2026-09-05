@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.DependencyInjection</PackageId>
     <Title>Abblix DependencyInjection</Title>
-    <Description>Dependency-injection helpers for .NET: service aliasing, composition, decorators, and keyed registration that lets host registrations win. The DI layer behind Abblix OIDC Server, usable on its own.</Description>
+    <Description>Dependency injection extensions for Microsoft.Extensions.DependencyInjection: decorators, service aliasing, composite service families, keyed registrations that let host registrations win, and pipelines you can edit after registration.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.DependencyInjection</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Code quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>Helpers a library needs to be a good citizen in a host's container. Decorate a service without re-registering it; alias one contract to another registration so both resolve to the same instance; compose a family of implementations into one composite behind its contract, then list, insert, trim or replace its members in place after registration - the same call works whether or not the family has been composed yet. Library defaults use try-add semantics, so whatever the host registered first wins. Per-call dependency overrides let a factory construct a service with one explicit value and everything else from the container. The DI layer behind Abblix OIDC Server, usable on its own. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SecurityEvents</PackageId>
     <Title>Abblix Security Events</Title>
-    <Description>Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493) for .NET: a typed model of every registered identifier format with polymorphic JSON handling, plus a typed token model, builder and composable validation profile over the Abblix JWT core, delivery models for push (RFC 8935) and poll (RFC 8936), JWKS-based key resolution and replay protection. The event layer of the Shared Signals stack, usable on its own.</Description>
+    <Description>Security Event Tokens (RFC 8417) for .NET with Subject Identifiers (RFC 9493), push (RFC 8935) and poll (RFC 8936) delivery, and OpenID Back-Channel Logout. Build, sign, deliver and validate security events between identity providers and relying parties.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Initial release: Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493) for .NET. A typed token model, builder and composable validation profile over the Abblix JWT core, delivery models for push (RFC 8935) and poll (RFC 8936), JWKS-based key resolution and replay protection. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The event layer of the Shared Signals stack, usable on its own. A typed model of a Security Event Token with a builder and a composable validation profile over Abblix JWT, so a token is refused for a missing identifier, a wrong audience or a replay before any handler sees it. Every registered Subject Identifier format has a typed model with polymorphic JSON handling. Delivery models cover push, where the transmitter posts each token, and poll, where the receiver collects and acknowledges them; keys are resolved from the counterparty's JWKS. OpenID Back-Channel Logout rides on the same core, so a relying party validates logout tokens with the same code that validates any other security event. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SecurityEvents.RISC</PackageId>
     <Title>Abblix Security Events RISC</Title>
-    <Description>The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for Abblix Security Events: typed payload models and event type identifiers for credential compromise, account disabling and deletion, identifier change and recycling, opt-out and recovery events, registered over the Security Events core in one call.</Description>
+    <Description>OpenID RISC 1.0 (Risk Incident Sharing and Coordination) event dictionary for .NET: typed models for credential compromise, account disabled, enabled and purged, identifier changed and recycled, opt-out and recovery events, over Abblix Security Events.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.RISC</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Initial release: the OpenID RISC Profile 1.0 event dictionary for Abblix Security Events. Typed payload models and event type identifiers for credential compromise, account disabling and deletion, identifier change and recycling, opt-out and recovery, registered over the Security Events core in one call. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The events of the Risk Incident Sharing and Coordination profile as typed payloads with their registered event type identifiers: credential compromise, account disabling, enabling and deletion, identifier change and recycling, opt-out and account recovery. Registered over the Security Events core in one call; the same models serve a Shared Signals transmitter and receiver, which is how an identity provider tells a relying party that an account was taken over. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

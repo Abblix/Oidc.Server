@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.JWT</PackageId>
     <Title>Abblix JWT</Title>
-    <Description>A JWT and JOSE toolkit for .NET: token signing, encryption, validation, custom claims, and JSON Web Key handling. The token layer behind Abblix OIDC Server, usable on its own.</Description>
+    <Description>JWT, JWS, JWE and JWK library for .NET built on the platform's own cryptography, with no dependency on Microsoft.IdentityModel. Sign, encrypt and validate tokens, manage JSON Web Keys, and keep signing keys in HashiCorp Vault, OpenBao or Azure Key Vault.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Jwt</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>JWE-encrypted token handling, JOSE critical-header processing (RFC 7515), JWS verification key pinned to its declared algorithm (RFC 7517), enforced HMAC key length (RFC 7518), typed accessors for JWS header parameters, and granular key-resolution diagnostics. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>A JWT and JOSE toolkit that uses the .NET cryptographic primitives and System.Text.Json directly, so a token round-trips with no second serializer and no key-model translation. Sign and verify with every RSA, ECDSA and HMAC algorithm of RFC 7518; encrypt with all seventeen key-management algorithms of RFC 7516, including AES key wrapping and opt-in password-based encryption with a bounded work factor; publish and consume JSON Web Keys and key sets with thumbprints and typed header accessors; process critical headers; prevent replay of single-use tokens. Keys can live outside the process: a custodian seam lets HashiCorp Vault, OpenBao Transit or Azure Key Vault hold the private half, served by the companion packages. Clock tolerance travels as one value with separate past and future halves, so a FAPI 2.0 window is expressed exactly. The token layer behind Abblix OIDC Server, usable on its own. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
