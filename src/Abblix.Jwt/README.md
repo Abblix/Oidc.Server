@@ -5,7 +5,7 @@ A JWT and JOSE toolkit for .NET, built entirely on the platform's cryptographic 
 ## What's New in Version 2.4
 
 🚀 Features
-- Complete JWE key management: all seventeen key-management algorithms of [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518) section 4, including AES key wrapping ([RFC 3394](https://datatracker.ietf.org/doc/html/rfc3394)) and opt-in password-based encryption with a bounded work factor
+- Complete JWE key management: every key-management algorithm of [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518) section 4, including AES key wrapping ([RFC 3394](https://datatracker.ietf.org/doc/html/rfc3394)) and opt-in password-based encryption with a bounded work factor
 - External signing keys: a custodian seam through which the private half of a key is held outside the process, served by [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) for HashiCorp Vault and OpenBao Transit and [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) for Azure Key Vault
 - Replay prevention for single-use tokens, with one store serving every token profile
 

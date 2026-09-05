@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>The eight events of the Continuous Access Evaluation Profile as typed payloads with their registered event type identifiers, so a transmitter emits and a receiver handles a session revocation or a credential change without hand-writing claim names. Registered over the Security Events core in one call; the same models serve a Shared Signals transmitter and receiver. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The events of the Continuous Access Evaluation Profile as typed payloads with their registered event type identifiers, so a transmitter emits and a receiver handles a session revocation or a credential change without hand-writing claim names. Registered over the Security Events core in one call; the same models serve a Shared Signals transmitter and receiver. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
