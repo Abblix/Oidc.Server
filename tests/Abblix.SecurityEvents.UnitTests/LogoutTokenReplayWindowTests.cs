@@ -84,4 +84,31 @@ public class LogoutTokenReplayWindowTests
 
         Assert.Equal(expiresAt + options.IssuedAtTolerance, cache.ReservedUntil);
     }
+
+    /// <summary>
+    /// The token was verified without lifetime handling, so this validator is the first reader of
+    /// its expiry - and a value no date can hold is the provider's fault, refused with the failure
+    /// every other defect of the token gets rather than thrown out of the intake.
+    /// </summary>
+    [Fact]
+    public async Task AnExpiryOutsideTheRepresentableRange_IsAValidationFailure()
+    {
+        var token = new JsonWebToken();
+        token.Payload.Issuer = Issuer;
+        token.Payload.Audiences = [ClientId];
+        token.Payload.JwtId = "jti-1";
+        token.Payload.Subject = "user_456";
+        token.Payload.IssuedAt = Now;
+        token.Payload.Json[JwtClaimTypes.ExpiresAt] = 99999999999999L;
+
+        var validator = new LogoutTokenValidator(
+            new AcceptingProfile(new SecurityEventToken(token)),
+            new BackChannelLogoutValidationOptions { ExpectedAudience = ClientId, ExpectedIssuers = [Issuer] },
+            new RecordingReplayCache());
+
+        var failure = await Assert.ThrowsAsync<LogoutTokenValidationException>(
+            () => validator.ValidateAsync("a.b.c", TestContext.Current.CancellationToken));
+
+        Assert.Contains(JwtClaimTypes.ExpiresAt, failure.Message, StringComparison.Ordinal);
+    }
 }

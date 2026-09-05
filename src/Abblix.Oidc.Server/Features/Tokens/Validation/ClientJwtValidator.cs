@@ -144,7 +144,7 @@ public partial class ClientJwtValidator(
             if (!validatedToken.Payload.TryReadTimestamps(
                     out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
             {
-                LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, whyUnreadable);
+                LogTimestampUnreadable(context.ClientInfo.ClientId, whyUnreadable);
                 return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
             }
 

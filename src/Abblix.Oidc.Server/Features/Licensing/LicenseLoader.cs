@@ -87,11 +87,17 @@ public static class LicenseLoader
             throw new InvalidOperationException("The JWT type is not valid");
         }
 
+        if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out _, out var whyUnreadable)
+            || !token.Payload.TryReadTimestamp("grace_period", out var gracePeriod, out whyUnreadable))
+        {
+            throw new InvalidOperationException($"The license can't be validated: {whyUnreadable}");
+        }
+
         var license = new License
         {
-            NotBefore = token.Payload.NotBefore,
-            ExpiresAt = token.Payload.ExpiresAt,
-            GracePeriod = token.Payload.Json.GetUnixTimeSeconds("grace_period"),
+            NotBefore = notBefore,
+            ExpiresAt = expiresAt,
+            GracePeriod = gracePeriod,
             ClientLimit = token.Payload["client_limit"]?.GetValue<int>(),
             IssuerLimit = token.Payload["issuer_limit"]?.GetValue<int>(),
             ValidIssuers = token.Payload.Json.GetArrayOfStrings("valid_issuers").ToHashSet(StringComparer.Ordinal),

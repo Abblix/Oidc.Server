@@ -248,7 +248,7 @@ internal sealed class ProofValidator(
         // and the accessor throws on a value it cannot read. A private list of the exceptions it
         // throws is what stood here before, and the list was missing the one a number outside the
         // representable range raises.
-        if (!payload.TryReadTimestamps(out _, out _, out var iatNullable, out var whyUnreadable))
+        if (!payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var iatNullable, out var whyUnreadable))
         {
             return new ProofError(ProofErrorReasons.IssuedAtInvalid, whyUnreadable);
         }

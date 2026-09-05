@@ -36,16 +36,28 @@ public static class JsonWebTokenExtensions
         if (node == null)
             return null;
 
+        // A JsonValue parsed from text holds a JsonElement and converts to whatever numeric type is
+        // asked for. One created in code holds the .NET primitive it was created from and answers
+        // TryGetValue only for that exact type: a payload written as an int literal is a
+        // JsonValue<int>, which says no to long. So the integral types are asked for one by one
+        // before falling back to a double, and a decimal literal is read as a decimal first.
         var value = node.AsValue();
+        if (value.TryGetValue<int>(out var intValue))
+            return DateTimeOffset.FromUnixTimeSeconds(intValue);
+
         if (value.TryGetValue<long>(out var seconds))
             return DateTimeOffset.FromUnixTimeSeconds(seconds);
 
         // RFC 7519 section 2 defines NumericDate as seconds since the epoch "other than that
         // non-integer values can be represented", and a JSON number written with an exponent is a
-        // legal spelling of an integral one. Both arrive here as a double; the fraction is dropped,
-        // since a token does not become valid or expire between two whole seconds. A value that is
-        // not a number at all still fails the read, which is what a caller catching it expects.
-        var fractional = Math.Truncate(value.GetValue<double>());
+        // legal spelling of an integral one. Both arrive here as a double; the fraction is dropped
+        // toward zero, since a token does not become valid or expire between two whole seconds. A
+        // value that is not a number at all still fails the read, which is what a caller catching
+        // it expects.
+        var number = value.TryGetValue<decimal>(out var decimalValue)
+            ? (double)decimalValue
+            : value.GetValue<double>();
+        var fractional = Math.Truncate(number);
         if (fractional < long.MinValue || long.MaxValue < fractional)
             throw new ArgumentOutOfRangeException(name, fractional, "The value is outside the range a NumericDate can hold");
 

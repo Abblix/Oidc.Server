@@ -101,7 +101,21 @@ public class JsonWebTokenPayload(JsonObject json)
 		       && TryReadTimestamp(JwtClaimTypes.IssuedAt, out issuedAt, out whyUnreadable);
 	}
 
-	private bool TryReadTimestamp(string claim, out DateTimeOffset? value, [NotNullWhen(false)] out string? whyUnreadable)
+	/// <summary>
+	/// Reads one timestamp claim by name, answering false with the reason instead of throwing where
+	/// it cannot be read.
+	/// </summary>
+	/// <remarks>
+	/// For a caller that judges one claim and must say nothing about the others: a DPoP proof is
+	/// refused on its <c>iat</c> alone, and a refusal naming a claim it never looked at would be
+	/// wrong twice over.
+	/// </remarks>
+	/// <param name="claim">The claim name, one of the registered timestamp claims or any other
+	/// claim holding a NumericDate.</param>
+	/// <param name="value">The claim's value, or null where the token carries none.</param>
+	/// <param name="whyUnreadable">Which claim could not be read and what it held, or null where it was read.</param>
+	/// <returns>True where the claim was read, or is absent.</returns>
+	public bool TryReadTimestamp(string claim, out DateTimeOffset? value, [NotNullWhen(false)] out string? whyUnreadable)
 	{
 		try
 		{
@@ -109,9 +123,10 @@ public class JsonWebTokenPayload(JsonObject json)
 			whyUnreadable = null;
 			return true;
 		}
-		// FormatException is what net8.0 raises for a number the reader cannot narrow, where later
-		// runtimes raise InvalidOperationException; the suite runs on the latest runtime alone, so
-		// removing that arm stays green here and breaks every net8.0 consumer.
+		// The reader beneath raises InvalidOperationException for a value that is not a number and
+		// ArgumentOutOfRangeException for one no date can hold, the same on every runtime this
+		// package targets. FormatException is the documented failure of the numeric readers this
+		// rests on, kept so a future reader change cannot turn a refusal back into an exception.
 		catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException or FormatException)
 		{
 			// The value is quoted back rather than described: "not a NumericDate" tells a sender

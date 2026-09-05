@@ -31,10 +31,19 @@ public sealed class IssuedAtWindowStep(TimeProvider clock) : ISecurityEventToken
     {
         context.Require(SecurityEventTokenValidationStates.SignatureVerified);
 
+        // The token was verified without lifetime handling, so nothing before this step has read
+        // the claim, and the accessor throws on a value it cannot read. A value the transmitter
+        // wrote is the transmitter's fault and is refused, never thrown at.
+        if (!context.Token!.Token.Payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var issuedAtClaim, out var whyUnreadable))
+        {
+            return ValueTask.FromResult<SecurityEventTokenValidationError?>(
+                new SecurityEventTokenValidationError(SecurityEventTokenErrorCode.MalformedToken, whyUnreadable));
+        }
+
         var now = clock.GetUtcNow();
         var tolerance = context.Options.IssuedAtTolerance;
 
-        var description = context.Token!.IssuedAt switch
+        var description = issuedAtClaim switch
         {
             null => $"The claims carry no '{JwtClaimTypes.IssuedAt}' member (RFC 8417 Section 2.2).",
             var issuedAt when issuedAt > now + tolerance =>
