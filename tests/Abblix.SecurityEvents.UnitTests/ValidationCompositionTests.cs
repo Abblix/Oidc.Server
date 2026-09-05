@@ -65,7 +65,7 @@ public class ValidationCompositionTests
     }
 
     [Fact]
-    public void DefaultPipeline_HoldsTheTenStepsInOrder()
+    public void DefaultPipeline_HoldsTheStepsInOrder()
     {
         Assert.Equal(
             [
@@ -78,6 +78,7 @@ public class ValidationCompositionTests
                 typeof(SignatureStep),
                 typeof(AudienceStep),
                 typeof(IssuedAtWindowStep),
+                typeof(TimeOfEventStep),
                 typeof(PayloadDeserializationStep),
             ],
             PipelineTypes(HostWithProfile()));
