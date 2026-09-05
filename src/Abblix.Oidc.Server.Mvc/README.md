@@ -4,7 +4,12 @@
 
 ## What's New in Version 2.4
 
+🚀 Features
+- Opt-in registration of the endpoints beyond the core set: dynamic client registration, CIBA, check session, revocation, introspection and device authorization
+- Authorization Server Metadata served at its OAuth 2.0 well-known address ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))
+
 ✏️ Improvements
+- A default cross-origin policy for the OIDC endpoints, so a browser client reads discovery, the key set and the token and UserInfo responses without the host configuring anything
 - Referencing both transport adapters is refused at startup with a message naming which package to drop, instead of every OIDC request failing with `AmbiguousMatchException` once the new Minimal API sibling joins the dependency graph
 
 ## Key Features
