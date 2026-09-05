@@ -81,7 +81,9 @@ jobs:
           fi
           echo "MinVer override version: $VERSION_FULL"
 
-          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # The release's own tag is on HEAD by now, so it is excluded - otherwise the release
+          # is reported as its own predecessor and the fallback changelog spans nothing.
+          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 --exclude "v$VERSION" 2>/dev/null || echo "")
           if [ -n "$PREVIOUS_VERSION" ]; then
             PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
             echo "Previous version: $PREVIOUS_VERSION"
@@ -139,13 +141,19 @@ jobs:
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
-        timeout-minutes: 3
+        # Above the step baseline: the whole solution builds here in one job, and the baseline is
+        # what killed a release build that needed most of it.
+        timeout-minutes: 10
       - name: Test
         run: |
           dotnet test --no-build -c Release --verbosity normal -- \
             --report-trx --report-trx-filename test-results.trx \
             --results-directory ./tests/results
-        timeout-minutes: 3
+        # Above the step baseline: every test project of the solution runs here in ONE job, where
+        # the pull-request pipeline shards them across many. The baseline cancelled a release run
+        # mid-suite, which the job reports as "cancelled" with the surviving suites listed as
+        # orphan processes - not as a test failure.
+        timeout-minutes: 20
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
