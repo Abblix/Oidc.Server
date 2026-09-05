@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -50,6 +51,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
+/// <param name="oidcOptions">Carries the deployment's clock tolerance and the default security
+/// profile a client without one of its own falls back to.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -57,7 +60,8 @@ public partial class JwtBearerGrantHandler(
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider) : IAuthorizationGrantHandler
+	TimeProvider timeProvider,
+	IOptions<OidcOptions> oidcOptions) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -115,9 +119,36 @@ public partial class JwtBearerGrantHandler(
 	}
 
 	/// <summary>
+	/// The tolerance applied to this client's bearer assertion, resolved once so the two checks that
+	/// use it - the timestamp comparison and the age limit - cannot disagree about what an unset
+	/// value meant.
+	/// </summary>
+	/// <remarks>
+	/// The CLIENT's profile decides, falling back to the deployment's, the way every other reader of
+	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
+	/// client that asks for a tighter window than the deployment demands.
+	/// </remarks>
+	private ClockSkew ResolveClockSkew(ClientInfo clientInfo)
+		=> issuerProvider.Options.ResolveClockSkew(Profile(clientInfo));
+
+	/// <summary>
+	/// The control bundle this client is held to: what the deployment demands of everyone,
+	/// tightened by whatever the client names for itself.
+	/// </summary>
+	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
+		=> SecurityProfileRequirements.For(clientInfo, oidcOptions.Value.DefaultSecurityProfile);
+
+	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
 	/// </summary>
-	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer);
+	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer)
+	{
+		/// <summary>
+		/// The assertion's expiry as ValidateExpiration read it, carried so that the replay reservation
+		/// keys off a value already read rather than reading the accessor a second time.
+		/// </summary>
+		public DateTimeOffset? ExpiresAt { get; init; }
+	}
 
 	/// <summary>
 	/// Validates that the assertion parameter is present and within size limits.
@@ -147,8 +178,6 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(string assertion, ClientInfo clientInfo)
 	{
-		var options = issuerProvider.Options;
-
 		var validationResult = await jwtValidator.ValidateAsync(
 			assertion,
 			new()
@@ -161,7 +190,9 @@ public partial class JwtBearerGrantHandler(
 				ValidateIssuer = ValidateIssuer,
 				ValidateAudience = ValidateAudience,
 				ResolveIssuerSigningKeys = issuerProvider.GetSigningKeysAsync,
-				ClockSkew = options.ClockSkew,
+				// The tolerance belongs to the profile this CLIENT is held to, ceiling included -
+				// RFC 7523 Section 3 names no ceiling of its own.
+				ClockSkew = ResolveClockSkew(clientInfo),
 			});
 
 		return validationResult.MapFailure(failure =>
@@ -200,8 +231,14 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	private Result<ValidationContext, OidcError> ValidateExpiration(ValidationContext ctx, ClientInfo clientInfo)
 	{
-		if (ctx.Jwt.Payload.ExpiresAt.HasValue)
-			return ctx;
+		// Through the guarded reader rather than the accessor: the validator that ran first is
+		// whichever one the host registered, which may not have read this claim, and a value the
+		// issuer wrote is refused rather than thrown at.
+		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.ExpiresAt, out var expiresAt, out var whyUnreadable))
+			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
+
+		if (expiresAt.HasValue)
+			return ctx with { ExpiresAt = expiresAt };
 
 		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
 
@@ -252,7 +289,9 @@ public partial class JwtBearerGrantHandler(
 		if (options.MaxJwtAge is not { } maxAge)
 			return ctx;
 
-		var issuedAt = ctx.Jwt.Payload.IssuedAt;
+		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var issuedAt, out var whyUnreadable))
+			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
+
 		if (issuedAt == null)
 		{
 			LogMissingIssuedAt(clientInfo.ClientId, ctx.Issuer);
@@ -264,7 +303,7 @@ public partial class JwtBearerGrantHandler(
 		var now = timeProvider.GetUtcNow();
 		var jwtAge = now - issuedAt.Value;
 
-		if (jwtAge <= maxAge + options.ClockSkew)
+		if (jwtAge <= maxAge + ResolveClockSkew(clientInfo).Past)
 			return ctx;
 
 		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);
@@ -291,9 +330,10 @@ public partial class JwtBearerGrantHandler(
 		}
 
 		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
-		// ValidateExpiration guarantees is present) and treat "already present" as a replay. One call
-		// avoids both the lost-TTL bug of a separate mark step and the read-then-write race.
-		if (await issuerProvider.IsReplayedAsync(jti, ctx.Jwt.Payload.ExpiresAt))
+		// ValidateExpiration guarantees is present and carries on the context) and treat "already
+		// present" as a replay. One call avoids both the lost-TTL bug of a separate mark step and
+		// the read-then-write race.
+		if (await issuerProvider.IsReplayedAsync(jti, ctx.ExpiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");

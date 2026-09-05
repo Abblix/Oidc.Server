@@ -17,6 +17,9 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -30,13 +33,18 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
+/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
+/// <param name="options">Supplies the server-wide default security profile.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
-    IReplayCache replayCache) : JwtAssertionAuthenticatorBase(logger, replayCache)
+    IReplayCache replayCache,
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options, clock)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
@@ -68,6 +76,10 @@ public partial class ClientSecretJwtAuthenticator(
                 // "Expires At entity that limits the time window during which the assertion can be
                 // used", and RFC 7523 Section 3 item 4 states it as a MUST on the exp claim.
                 Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
+
+                // The tolerance belongs to the profile this deployment is held to, ceiling
+                // included - RFC 7523 Section 3 names no ceiling of its own.
+                ClockSkew = DefaultProfileRequirements.ClockSkewOrDefault(),
                 ValidateAudience = ValidateAudience,
                 ValidateIssuer = issuer => ValidateIssuer(issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(issuer, context),
@@ -158,7 +170,7 @@ public partial class ClientSecretJwtAuthenticator(
             yield break;
         }
 
-        var utcNow = clock.GetUtcNow();
+        var utcNow = Clock.GetUtcNow();
         foreach (var clientSecret in client.ClientSecrets)
         {
             if (clientSecret.ExpiresAt.HasValue && clientSecret.ExpiresAt.Value < utcNow)

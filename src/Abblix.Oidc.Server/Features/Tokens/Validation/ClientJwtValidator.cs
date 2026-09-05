@@ -13,6 +13,9 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Common.Configuration;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -35,6 +38,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
+/// <param name="oidcOptions">Carries the security profile every client is held to, and the default
+/// a client without one of its own falls back to.</param>
+/// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
+/// the client is known.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the options carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
@@ -42,8 +51,13 @@ public partial class ClientJwtValidator(
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
     IIssuerProvider issuerProvider,
-    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtValidator
+    IAuthServiceKeysProvider serviceKeysProvider,
+    IOptions<OidcOptions> oidcOptions,
+    TimeProvider timeProvider) : IClientJwtValidator
 {
+    private SecurityProfileRequirements Profile
+        => SecurityProfileRequirements.Resolve(oidcOptions.Value.DefaultSecurityProfile);
+
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
     /// and cryptographic signatures. This method is used in scenarios such as private JWT client authentication
@@ -74,6 +88,9 @@ public partial class ClientJwtValidator(
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).
                 ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+                // The tolerance belongs to the profile this deployment is held to, ceiling
+                // included.
+                ClockSkew = Profile.ClockSkewOrDefault(),
             });
 
         if (result.TryGetFailure(out var error))
@@ -107,6 +124,40 @@ public partial class ClientJwtValidator(
         {
             LogClientNotDetermined();
             return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
+        }
+
+        // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
+        // token being validated and is not known until that has finished. A client naming a profile
+        // of its own may be held to a tighter one, and this is the first line where there is a client
+        // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
+        // wider than the one already applied.
+        //
+        // The same flag the pass above reads, because the caller's options are handed to it
+        // unchanged where the validation parameters are built. Not symmetry for its own sake: a
+        // caller that opted out of time handling must not meet the timestamp accessors either,
+        // since they throw on a value outside the range DateTimeOffset can hold.
+        if (options.HasFlag(ValidationOptions.ValidateLifetime))
+        {
+            // Read through the same door the first pass uses rather than the accessors: the first
+            // pass belongs to whichever validator the host registered, which may not have read these
+            // claims, and an unreadable one is a refusal here as it is there.
+            if (!validatedToken.Payload.TryReadTimestamps(
+                    out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
+            {
+                LogTimestampUnreadable(context.ClientInfo.ClientId, whyUnreadable);
+                return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
+            }
+
+            var refusal = SecurityProfileRequirements
+                .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
+                .ClockSkewOrDefault()
+                .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
+
+            if (refusal != null)
+            {
+                LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, refusal);
+                return new JwtValidationError(JwtError.InvalidToken, refusal);
+            }
         }
 
         LogValidationSucceeded(context.ClientInfo.ClientId);

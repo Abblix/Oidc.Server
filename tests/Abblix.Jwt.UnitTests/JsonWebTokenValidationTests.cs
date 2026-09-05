@@ -1174,7 +1174,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenWithExpiredExpOnly_FailsValidation()
     {
-        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
         var token = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
@@ -1188,7 +1188,8 @@ public class JsonWebTokenValidationTests
         };
 
         var jwt = await IssueToken(token, SigningKey);
-        await Task.Delay(100, TestContext.Current.CancellationToken); // Token already expired (created 2 minutes ago)
+        // Expired, and by more than the default tolerance.
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = CreateValidationParameters(SigningKey);

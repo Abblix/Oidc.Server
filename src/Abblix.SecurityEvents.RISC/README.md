@@ -1,6 +1,6 @@
 # Abblix.SecurityEvents.RISC
 
-The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the fourteen RISC events, registered over the Security Events core in one call. RISC is how providers protect a shared user together - a credential found in a breach or an account hijacked at one provider becomes a signal every other provider holding the same identifier can act on.
+The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the RISC events, registered over the Security Events core in one call. RISC is how providers protect a shared user together - a credential found in a breach or an account hijacked at one provider becomes a signal every other provider holding the same identifier can act on.
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack, and explains why account-level incidents travel the same envelope and the same streams as session events.
 

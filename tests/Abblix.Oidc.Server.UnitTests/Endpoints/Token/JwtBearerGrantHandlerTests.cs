@@ -24,6 +24,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 
@@ -674,7 +675,8 @@ public class JwtBearerGrantHandlerTests
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
-			timeProvider);
+			timeProvider,
+			Options.Create(new OidcOptions()));
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}
@@ -940,6 +942,31 @@ public class JwtBearerGrantHandlerTests
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(["api.read"], grant.Context.Scope);
+	}
+
+	/// <summary>
+	/// The assertion comes from a third-party issuer through whichever validator the host registered,
+	/// so an issued-at no date can hold reaches the age check unread - and is refused as a grant
+	/// error rather than thrown out of the token endpoint.
+	/// </summary>
+	[Fact]
+	public async Task MaxJwtAge_WithAnIatOutsideTheRepresentableRange_ShouldReject()
+	{
+		var fixedTime = new DateTimeOffset(2024, 11, 20, 15, 30, 0, TimeSpan.Zero);
+		var (handler, mocks) = CreateHandler(fixedTime: fixedTime, maxJwtAge: TimeSpan.FromMinutes(10));
+		var jwt = CreateValidJwt();
+		jwt.Payload.Json[JwtClaimTypes.IssuedAt] = 99999999999999L;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+
+		var result = await handler.AuthorizeAsync(
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+		Assert.Contains(JwtClaimTypes.IssuedAt, error.ErrorDescription, StringComparison.Ordinal);
 	}
 
 	/// <summary>

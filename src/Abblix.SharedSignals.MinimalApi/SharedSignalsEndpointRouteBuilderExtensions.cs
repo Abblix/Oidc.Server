@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Net.Mime;
 using System.Text.Json.Nodes;
 
 namespace Abblix.SharedSignals.MinimalApi;
@@ -127,17 +128,103 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // stand in this place asserted the bound without its condition.
         group.AddEndpointFilter(EnforceScopeAsync);
 
-        group.MapPost(Routes.Stream, CreateStreamAsync).RequiresScope(SsfScopes.Manage);
-        group.MapGet(Routes.Stream, GetStreamsAsync).RequiresScope(SsfScopes.Read);
-        group.MapPatch(Routes.Stream, UpdateStreamAsync).RequiresScope(SsfScopes.Manage);
-        group.MapPut(Routes.Stream, ReplaceStreamAsync).RequiresScope(SsfScopes.Manage);
-        group.MapDelete(Routes.Stream, DeleteStreamAsync).RequiresScope(SsfScopes.Manage);
-        group.MapGet(Routes.Status, GetStatusAsync).RequiresScope(SsfScopes.Read);
-        group.MapPost(Routes.Status, UpdateStatusAsync).RequiresScope(SsfScopes.Manage);
-        group.MapPost(Routes.AddSubject, AddSubjectAsync).RequiresScope(SsfScopes.Manage);
-        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync).RequiresScope(SsfScopes.Manage);
-        group.MapPost(Routes.Verify, RequestVerificationAsync).RequiresScope(SsfScopes.Manage);
-        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync).RequiresScope(SsfScopes.Read);
+        // The two refusals that belong to the GROUP rather than to any handler: 401 where nothing named
+        // the caller, 403 where the caller was named and its token carries neither scope the route
+        // needs. Declared once here, so a route added later inherits them instead of restating them.
+        group.Answers(StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+
+        group.MapPost(Routes.Stream, CreateStreamAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status201Created)
+            .Answers(
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        // The read is the one route whose success carries two shapes: the configuration when
+        // "stream_id" names a stream, an array of them when it names none (SSF 1.0 Section 8.1.1.2).
+        // A response type is one type, so this declares the status without one rather than picking
+        // the half that would make a generated client wrong on the other.
+        group.MapGet(Routes.Stream, GetStreamsAsync)
+            .RequiresScope(SsfScopes.Read)
+            .Answers(StatusCodes.Status200OK, StatusCodes.Status404NotFound);
+
+        group.MapPatch(Routes.Stream, UpdateStreamAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status200OK)
+            .Answers(
+                StatusCodes.Status202Accepted,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        group.MapPut(Routes.Stream, ReplaceStreamAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .AnswersWithBody<StreamConfiguration>(StatusCodes.Status200OK)
+            .Answers(
+                StatusCodes.Status202Accepted,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        group.MapDelete(Routes.Stream, DeleteStreamAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .Answers(
+                StatusCodes.Status204NoContent,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound);
+
+        group.MapGet(Routes.Status, GetStatusAsync)
+            .RequiresScope(SsfScopes.Read)
+            .AnswersWithBody<StreamStatus>(StatusCodes.Status200OK)
+            .Answers(StatusCodes.Status400BadRequest, StatusCodes.Status404NotFound);
+
+        group.MapPost(Routes.Status, UpdateStatusAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .AnswersWithBody<StreamStatus>(StatusCodes.Status200OK)
+            .Answers(
+                StatusCodes.Status202Accepted,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        // Adding a subject answers 200 with no body (SSF 1.0 Section 8.1.3.2), so the success is
+        // declared as a status rather than as a shape.
+        group.MapPost(Routes.AddSubject, AddSubjectAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .Answers(
+                StatusCodes.Status200OK,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        group.MapPost(Routes.RemoveSubject, RemoveSubjectAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .Answers(
+                StatusCodes.Status204NoContent,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType);
+
+        group.MapPost(Routes.Verify, RequestVerificationAsync)
+            .RequiresScope(SsfScopes.Manage)
+            .Answers(
+                StatusCodes.Status204NoContent,
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status409Conflict,
+                StatusCodes.Status415UnsupportedMediaType,
+                StatusCodes.Status429TooManyRequests);
+
+        group.MapPost($"{Routes.Poll}/{{streamId}}", PollAsync)
+            .RequiresScope(SsfScopes.Read)
+            .AnswersWithBody<PollResponse>(StatusCodes.Status200OK)
+            .Answers(
+                StatusCodes.Status400BadRequest,
+                StatusCodes.Status404NotFound,
+                StatusCodes.Status415UnsupportedMediaType);
 
         // Said out loud because a stream STORES its poll address: the transmitter mints it at create time
         // and a receiver polls it for as long as the stream lives, so an address that does not lead back
@@ -186,12 +273,19 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
         var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
-        return endpoints.MapGet(
+        // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
+        // discovery has to work before a receiver has any. Declared all the same, because an
+        // undeclared status is INFERRED into the document rather than left out, and an inference that
+        // happens to be right is indistinguishable from one that is not.
+        var document = endpoints.MapGet(
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
             (SharedSignalsTransmitterOptions current, PollEndpointLocator pollEndpoints) =>
                 Results.Json(ConfigurationDocumentOf(current, pollEndpoints, advertisedPrefix)));
+
+        document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
+        return document;
     }
 
     /// <summary>
@@ -629,9 +723,61 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// <summary>
     /// Records which scope a route requires, so the filter below can read it back off the endpoint.
     /// </summary>
-    private static void RequiresScope<TBuilder>(this TBuilder builder, string scope)
+    private static TBuilder RequiresScope<TBuilder>(this TBuilder builder, string scope)
         where TBuilder : IEndpointConventionBuilder
-        => builder.WithMetadata(new RequiredScope(scope));
+    {
+        builder.WithMetadata(new RequiredScope(scope));
+        return builder;
+    }
+
+    /// <summary>
+    /// Records the statuses a route answers, so a client generated from this surface has a branch for
+    /// every answer it can meet and none for an answer it cannot.
+    /// </summary>
+    /// <remarks>
+    /// Bodiless on purpose: the Stream Management API defines no error body - SSF 1.0 Section 8.1 gives
+    /// its outcomes as status codes and nothing else. <see cref="AnswersWithBody{TBody}"/> is for the
+    /// successes that do carry one.
+    /// <para>
+    /// A refusal says something beyond its status exactly when it is built as a
+    /// <see cref="ChallengeResult"/>, which carries a <c>WWW-Authenticate</c> line naming the reason.
+    /// Three places build one: <see cref="Unauthenticated"/>, <see cref="EnforceScopeAsync"/> and
+    /// <see cref="MissingRequiredParameter"/>. Everything else is a bare status - anything rendered by
+    /// <see cref="Render{TBody}"/>, whose <c>ManagementResult</c> description is dropped there because
+    /// it exists for the operator's logs rather than for the wire, and the framework's own refusals
+    /// besides.
+    /// </para>
+    /// <para>
+    /// Said as a property rather than as a list of codes on purpose: 400 is on BOTH sides of it. The
+    /// one for a required parameter that names nothing is a challenge, and the one for a delivery
+    /// method this transmitter cannot serve is bare, so any enumeration by status code is wrong about
+    /// one of them whichever side it puts 400 on.
+    /// </para>
+    /// </remarks>
+    private static void Answers<TBuilder>(this TBuilder builder, params int[] statusCodes)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        foreach (var statusCode in statusCodes)
+        {
+            // typeof(void), not the parameterless form. A response type whose Type is null is
+            // DISCARDED by the API description pipeline every OpenAPI generator reads, and the
+            // operation then falls back to an inferred 200 - so the declaration reaches the endpoint,
+            // reads correct at the call site, and publishes nothing. void is how the framework's own
+            // Produces(int) says "this status carries no body".
+            builder.WithMetadata(new ProducesResponseTypeMetadata(statusCode, typeof(void)));
+        }
+    }
+
+    /// <summary>
+    /// Records a status whose response carries a body, and the type of that body.
+    /// </summary>
+    private static RouteHandlerBuilder AnswersWithBody<TBody>(
+        this RouteHandlerBuilder builder, int statusCode)
+    {
+        builder.WithMetadata(new ProducesResponseTypeMetadata(
+            statusCode, typeof(TBody), [MediaTypeNames.Application.Json]));
+        return builder;
+    }
 
     private sealed record RequiredScope(string Scope);
 

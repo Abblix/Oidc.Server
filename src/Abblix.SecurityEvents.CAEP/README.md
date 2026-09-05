@@ -1,6 +1,6 @@
 # Abblix.SecurityEvents.CAEP
 
-The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the eight CAEP events, registered over the Security Events core in one call. CAEP is how cooperating services keep reacting to each other AFTER login - one provider revokes a session or sees a risk level shift, and every subscribed service learns of it without waiting for the next authentication.
+The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the CAEP events, registered over the Security Events core in one call. CAEP is how cooperating services keep reacting to each other AFTER login - one provider revokes a session or sees a risk level shift, and every subscribed service learns of it without waiting for the next authentication.
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack: the envelope underneath it, the streams that carry it, and what a receiver does with a session event once it arrives.
 
@@ -59,7 +59,7 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 ## Claiming the interoperability profile
 
 `reason_admin` is optional in CAEP 1.0 and required of a transmitter by the CAEP Interoperability Profile
-1.0: each of the three use cases in its Section 3 demands a non-empty object. The type cannot carry that
+1.0: each of the use cases in its Section 3 demands a non-empty object. The type cannot carry that
 rule, because the base specification permits the member's absence - Section 2 makes the common claims
 optional, Section 3.1.1 defines none of its own for `session-revoked` - so an empty payload is well-formed
 and a receiver has to be able to hold one.
@@ -71,7 +71,7 @@ profile:
 services.AddSingleton<IEventPayloadPolicy, CaepInteropProfilePolicy>();
 ```
 
-The dispatcher then refuses the three events unless the member is populated, before anything is minted,
+The dispatcher then refuses those events unless the member is populated, before anything is minted,
 and says which event and what is missing. A host that registers nothing emits CAEP 1.0 events, which is a
 smaller claim and a valid one.
 

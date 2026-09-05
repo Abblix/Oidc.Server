@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 

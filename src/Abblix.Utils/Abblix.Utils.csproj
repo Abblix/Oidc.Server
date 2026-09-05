@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.Utils</PackageId>
     <Title>Abblix Utils</Title>
-    <Description>Utility types shared across the Abblix OpenID Connect and OAuth 2.0 libraries: URI and string helpers, secure random generation, and custom JSON converters. Usable on its own.</Description>
+    <Description>Utility library for .NET from Abblix: a result type for validation chains, a URI builder with query composition, validation attributes, RFC 6750 authentication challenges, Base32 and Base64URL encoding, secure random values and JSON converters. Usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Utils</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Base64URL handling migrated to the runtime primitive (with a .NET 8 polyfill) for a cleaner allocation profile, plus code-quality improvements and dependency updates. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>Small types that keep protocol code readable. A result carries either a value or a typed error through a chain of checks, so a validator returns one thing and never throws for a bad input. An absolute address builder composes query strings safely; address and string extensions cover the cases that come up on the wire. Validation attributes check absolute addresses, allowed values and required elements at binding time. A challenge builder writes RFC 6750 authentication responses correctly escaped, and a sanitiser strips control characters before a value reaches a log. Secure random generation, Base32 and Base64URL encoding and custom JSON converters round it out. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

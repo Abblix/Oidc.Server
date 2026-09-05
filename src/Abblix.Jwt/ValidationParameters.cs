@@ -38,9 +38,10 @@ public record ValidationParameters
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
 
 	/// <summary>
-	/// Time window applied to accommodate clock discrepancies when validating timestamps.
+	/// How far this token's timestamps may sit either side of this clock and still be honoured.
+	/// None unless the caller says otherwise.
 	/// </summary>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.Zero;
+	public ClockSkew ClockSkew { get; set; } = ClockSkew.None;
 
 	/// <summary>
 	/// Token-type values (per RFC 7515 section 4.1.9 <c>typ</c> header) that the JWT MUST match.

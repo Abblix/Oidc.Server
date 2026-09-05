@@ -29,15 +29,46 @@ public static class SecurityProfileConsistency
     /// rather than merely tightened.
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
-    /// <param name="profile">The effective profile governing the client.</param>
+    /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    /// <remarks>
+    /// The BUNDLE rather than a profile name, because a client is held to the deployment's profile
+    /// tightened by its own and no enum value names that combination. Taking a name here would put
+    /// the resolution inside this method, where it would silently undo whichever floor its caller
+    /// had just applied - and the two controls below are the ones nothing else enforces, so the
+    /// gap would show up as a client authenticating with a shared secret under a profile that
+    /// admits no such client.
+    /// </remarks>
     public static IReadOnlyList<string> FindViolations(
         IReadOnlyList<string[]> allowedResponseTypes,
-        ClientSecurityProfile profile)
+        string tokenEndpointAuthMethod,
+        SecurityProfileRequirements requirements)
     {
-        if (!SecurityProfileRequirements.Resolve(profile).RequireCodeResponseTypeOnly)
-            return [];
-
         var violations = new List<string>();
+
+        // RFC 6749 draws the line at whether the client can hold a credential at all, and the
+        // registered authentication method is where that shows: a client authenticating with
+        // nothing IS the public client the profile excludes.
+        if (requirements.RequireConfidentialClient &&
+            tokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+        {
+            violations.Add(
+                "the FAPI 2.0 Security Profile admits confidential clients only, " +
+                "but the client authenticates with none at the token endpoint");
+        }
+
+        // Both surviving methods prove possession of a key. Every other method the server offers
+        // proves possession of a shared secret, which is what the profile removes.
+        if (requirements.RequireKeyBasedClientAuthentication &&
+            !KeyBasedAuthenticationMethods.Contains(tokenEndpointAuthMethod))
+        {
+            violations.Add(
+                "the FAPI 2.0 Security Profile requires client authentication by mutual TLS or a " +
+                $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
+        }
+
+        if (!requirements.RequireCodeResponseTypeOnly)
+            return violations;
 
         // A single-element "code" entry, matched case-insensitively to stay consistent with the
         // token-bearing check below (both ultimately use HasFlag's OrdinalIgnoreCase comparison).
@@ -59,4 +90,16 @@ public static class SecurityProfileConsistency
 
         return violations;
     }
+
+    /// <summary>
+    /// The client authentication methods that prove possession of a key rather than of a shared
+    /// secret: mutual TLS in both its forms (RFC 8705 section 2) and the private key JWT assertion
+    /// (OpenID Connect Core section 9).
+    /// </summary>
+    private static readonly string[] KeyBasedAuthenticationMethods =
+    [
+        ClientAuthenticationMethods.TlsClientAuth,
+        ClientAuthenticationMethods.SelfSignedTlsClientAuth,
+        ClientAuthenticationMethods.PrivateKeyJwt,
+    ];
 }

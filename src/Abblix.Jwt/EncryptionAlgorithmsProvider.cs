@@ -22,8 +22,8 @@ namespace Abblix.Jwt;
 /// <remarks>
 /// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenEncryptor"/>: an
 /// encryptor registered for any other <see cref="JsonWebKey"/> subtype is unreachable at run time,
-/// so it is deliberately not advertised. The enumeration order (RSA, EC, octet) preserves the order
-/// the built-in algorithms have always appeared in published discovery documents.
+/// so it is deliberately not advertised. The enumeration order (RSA, EC, octet) is the order these
+/// algorithms appear in the discovery document, which consumers read verbatim.
 /// </remarks>
 internal sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvider)
 {

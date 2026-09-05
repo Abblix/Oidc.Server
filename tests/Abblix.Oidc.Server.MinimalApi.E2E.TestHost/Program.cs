@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.NoneFlow;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -70,7 +71,12 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
         Mint(TestConstants.EmptyAllowlistClientId, secret, redirect, [], idTokenRar: false),
-        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false),
+        // Doubles as the protected resource in the introspection scenarios: RFC 7662 section 4 has such a
+        // caller "specifically authorized to call the introspection endpoint", which is what this permission is.
+        Mint(TestConstants.UnrestrictedClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            AllowCrossClientIntrospection = true,
+        },
         // RFC 9449 mandatory-binding client: token endpoint rejects any request without a valid proof.
         Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
         // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.
@@ -87,6 +93,31 @@ builder.Services.AddOidcServices(options =>
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+
+        // Client restricted to the none response type (OAuth 2.0 Multiple Response Type Encoding
+        // Practices section 4): /authorize authorizes the request but returns no code or token, so the
+        // client carries no grant type and requires no PKCE.
+        new ClientInfo(TestConstants.NoneResponseTypeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            RedirectUris = [redirect],
+            AllowedResponseTypes = [[ResponseTypes.None]],
+            PkceRequired = false,
+        },
+
+        // Client that opts in to the per-client response-mode allow-list, pinned to form_post, used to
+        // prove the response-mode downgrade backstop end to end: query/fragment (and an omitted
+        // response_mode that inherits the query default) are rejected, form_post is accepted.
+        new ClientInfo(TestConstants.ResponseModePinnedClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            RedirectUris = [redirect],
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            AllowedResponseModes = [ResponseModes.FormPost],
         },
     ];
 
@@ -141,6 +172,10 @@ builder.Services.AddOidcServices(options =>
 });
 
 builder.Services.AddRichAuthorizationRequests();
+
+// Opt into the OAuth 2.0 none response type (OAuth 2.0 Multiple Response Type Encoding Practices
+// section 4) so the none-response-type client can drive the credential-less authorization flow.
+builder.Services.EnableNoneFlow();
 builder.Services.AddAuthorizationDetailValidator<PaymentInitiationValidator>(TestConstants.PaymentInitiationType);
 
 // Test-mode service replacements: turn the host into a non-interactive OIDC provider that

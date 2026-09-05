@@ -62,7 +62,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
     // The member every size test pads with: named once so the boundary cases and the oversized cases
     // measure the same document rather than two that happen to look alike.
+#if !MINIMAL_API_TRANSPORT
     private const string VendorPad = "x_vendor_blob";
+#endif
 
     private static JsonObject NewClientMetadata(string clientName) => new()
     {
@@ -608,6 +610,12 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(registered[ResponseMembers.ClientId]);
     }
 
+    // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same
+    // outcome by a route the in-memory server does not translate: a binding throw propagates to the
+    // caller instead of becoming a status, and the request-size limit is endpoint metadata that only
+    // Kestrel enforces. Both are asserted for that transport in its own suite, against the mechanism
+    // it actually uses. Compiled out here rather than deleted, so the exclusion names its reason.
+#if !MINIMAL_API_TRANSPORT
     /// <summary>
     /// An oversized body is refused before it is bound. This is the only place a bound can work: model
     /// binding materializes the unmodelled members ahead of every validator, so a bound
@@ -627,7 +635,12 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
+#endif
 
+    // The request-size limit is endpoint metadata that only Kestrel enforces, so the boundary this
+    // asserts is invisible to the in-memory server the Minimal API suite runs on. That transport
+    // asserts the metadata itself instead, which is the mechanism it actually has.
+#if !MINIMAL_API_TRANSPORT
     /// <summary>
     /// The boundary itself, from both sides, over a body that declares no length - which is the case that
     /// forces the server to measure rather than believe what it was told.
@@ -677,7 +690,14 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(expected, response.StatusCode);
     }
+#endif
 
+    // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same
+    // outcome by a route the in-memory server does not translate: a binding throw propagates to the
+    // caller instead of becoming a status, and the request-size limit is endpoint metadata that only
+    // Kestrel enforces. Both are asserted for that transport in its own suite, against the mechanism
+    // it actually uses. Compiled out here rather than deleted, so the exclusion names its reason.
+#if !MINIMAL_API_TRANSPORT
     /// <summary>
     /// The update endpoint carries the same bound. It binds the same model, and it does so ahead of the
     /// registration access token check, so an unbounded one would leave the hole next door to the fix.
@@ -700,6 +720,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
+#endif
 
     [Fact]
     public async Task A_client_can_read_its_own_registration()

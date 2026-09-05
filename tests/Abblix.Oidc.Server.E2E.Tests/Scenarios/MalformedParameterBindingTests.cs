@@ -37,9 +37,17 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </remarks>
 public class MalformedParameterBindingTests(TestFactory factory) : TestBase(factory)
 {
+#if !MINIMAL_API_TRANSPORT
     private static async Task<HttpResponseMessage> GetAsync(HttpClient client, string url)
         => await client.GetAsync(url, TestContext.Current.CancellationToken);
+#endif
 
+    // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same
+    // outcome by a route the in-memory server does not translate: a binding throw propagates to the
+    // caller instead of becoming a status, and the request-size limit is endpoint metadata that only
+    // Kestrel enforces. Both are asserted for that transport in its own suite, against the mechanism
+    // it actually uses. Compiled out here rather than deleted, so the exclusion names its reason.
+#if !MINIMAL_API_TRANSPORT
     /// <summary>
     /// A locale list sent twice. Whatever the server decides, it must decide - not fail.
     /// </summary>
@@ -70,7 +78,14 @@ public class MalformedParameterBindingTests(TestFactory factory) : TestBase(fact
             "the authorization endpoint fail: " +
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
+#endif
 
+    // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same
+    // outcome by a route the in-memory server does not translate: a binding throw propagates to the
+    // caller instead of becoming a status, and the request-size limit is endpoint metadata that only
+    // Kestrel enforces. Both are asserted for that transport in its own suite, against the mechanism
+    // it actually uses. Compiled out here rather than deleted, so the exclusion names its reason.
+#if !MINIMAL_API_TRANSPORT
     /// <summary>
     /// The claims parameter carries JSON, so it goes through a different binder than the locale list - one that
     /// deserializes. It gets the same treatment when repeated.
@@ -102,6 +117,7 @@ public class MalformedParameterBindingTests(TestFactory factory) : TestBase(fact
             $"a repeated JSON parameter produced {(int)response.StatusCode}: " +
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
+#endif
 
     /// <summary>
     /// An Authorization header naming a scheme this server does not speak. Measured rather than assumed: the

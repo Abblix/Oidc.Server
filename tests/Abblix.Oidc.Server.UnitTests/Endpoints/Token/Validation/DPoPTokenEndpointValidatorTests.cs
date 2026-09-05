@@ -168,11 +168,13 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
-    /// A client that explicitly selects None opts out of a server-wide FAPI 2.0 default, so a missing
-    /// proof is accepted (opportunistic) rather than rejected.
+    /// A client selecting None under a server-wide FAPI 2.0 default is still held to it, so a missing
+    /// proof is refused rather than treated as opportunistic. The profile demands a
+    /// sender-constrained token of every client the deployment serves, and a registration naming a
+    /// profile that demands nothing adds nothing to that.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_MissingHeaderExplicitNoneOverridesGlobalDefaultFapi2_ReturnsNull()
+    public async Task ValidateAsync_MissingHeaderExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
     {
         _opts.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
         var context = CreateContext(
@@ -182,8 +184,7 @@ public class DPoPTokenEndpointValidatorTests
 
         var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
 
-        Assert.Null(error);
-        Assert.Null(context.ProofKeyThumbprint);
+        AssertProofRejected(error, context);
     }
 
     [Fact]

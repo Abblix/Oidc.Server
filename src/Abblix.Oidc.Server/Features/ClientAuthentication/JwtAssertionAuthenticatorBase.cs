@@ -14,6 +14,9 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.Issuer;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -23,14 +26,99 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
+/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
+/// <param name="options">Supplies the server-wide default security profile.</param>
+/// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
-    IReplayCache replayCache) : IClientAuthenticator
+    IReplayCache replayCache,
+    IIssuerProvider issuerProvider,
+    IOptions<OidcOptions> options,
+    TimeProvider timeProvider) : IClientAuthenticator
 {
+    /// <summary>
+    /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
+    /// reads the same instant rather than capturing a second copy of the same dependency.
+    /// </summary>
+    protected TimeProvider Clock => timeProvider;
+
     /// <summary>
     /// Specifies the client authentication methods supported by this authenticator.
     /// </summary>
     public abstract IEnumerable<string> ClientAuthenticationMethodsSupported { get; }
+
+    /// <summary>
+    /// The control bundle this deployment's default profile mandates, for a derived authenticator
+    /// building its own validation parameters. Read from the same options this class validates
+    /// against, so the two cannot disagree.
+    /// </summary>
+    protected SecurityProfileRequirements DefaultProfileRequirements
+        => SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile);
+
+    /// <summary>
+    /// Answers whether the assertion's timestamps sit inside the window the profile governing THIS
+    /// CLIENT allows, which the validator could not ask: the client is identified from the assertion
+    /// it is validating, so its profile is not known until the validation has finished.
+    /// </summary>
+    /// <remarks>
+    /// The first pass ran under the deployment's own window, which is the widest any client can be
+    /// given - a deployment-wide profile is a floor and a client may only tighten it. So this
+    /// narrows and never widens.
+    ///
+    /// Placed before the identifier is reserved, because a reservation is spent and cannot be given
+    /// back: a refusal after it would burn the assertion's own identifier on a request this check
+    /// was going to reject.
+    /// </remarks>
+    /// <param name="timestamps">The assertion's timestamps, already read.</param>
+    /// <param name="clientInfo">The client the assertion authenticates.</param>
+    private bool TimestampsSatisfyTheClientsOwnProfile(AssertionTimestamps timestamps, ClientInfo clientInfo)
+    {
+        var refusal = SecurityProfileRequirements
+            .For(clientInfo, options.Value.DefaultSecurityProfile)
+            .ClockSkewOrDefault()
+            .WhyRefused(
+                timeProvider.GetUtcNow(),
+                timestamps.NotBefore,
+                timestamps.ExpiresAt,
+                timestamps.IssuedAt);
+
+        if (refusal is null)
+            return true;
+
+        LogTimestampsOutsideTheClientsProfile(clientInfo.ClientId, refusal);
+        return false;
+    }
+
+    /// <summary>
+    /// Answers whether the assertion's audience is one the profile governing this client admits.
+    /// </summary>
+    /// <remarks>
+    /// FAPI 2.0 section 5.3.2.1 narrows what may stand there: a server held to the profile "shall
+    /// only accept its issuer identifier value (as defined in [RFC8414]) as a string". Both halves
+    /// matter. The value must be the issuer rather than any address this server answers on, and it
+    /// must be alone rather than one entry among several, so an assertion minted for a different
+    /// recipient cannot be replayed here by naming both. Outside the profile the wider reading the
+    /// underlying specification permits is left untouched, which is why this answers true there
+    /// rather than checking anything.
+    /// </remarks>
+    private bool AudienceSatisfiesTheProfile(JsonWebToken token, ClientInfo clientInfo)
+    {
+        if (!SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile)
+                .RequireIssuerAudienceInClientAssertion)
+        {
+            return true;
+        }
+
+        var issuerIdentifier = issuerProvider.GetIssuer();
+        var audiences = token.Payload.Audiences.ToArray();
+        if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
+        {
+            return true;
+        }
+
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, audiences, issuerIdentifier);
+        return false;
+    }
 
     /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
@@ -117,6 +205,58 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return null;
         }
 
+        if (!AudienceSatisfiesTheProfile(token, clientInfo))
+        {
+            return null;
+        }
+
+        // Read once for both consumers below, and refused rather than thrown where the payload
+        // cannot read them: the validator an override chose may not have looked at these claims,
+        // and a malformed date is the assertion's fault, not a fault in this server.
+        if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
+        {
+            LogTimestampUnreadable(clientInfo.ClientId, whyUnreadable);
+            return null;
+        }
+
+        var timestamps = new AssertionTimestamps(notBefore, expiresAt, issuedAt);
+
+        if (!TimestampsSatisfyTheClientsOwnProfile(timestamps, clientInfo))
+        {
+            return null;
+        }
+
+        if (!await ReserveTheAssertionAsync(token, timestamps, clientInfo))
+        {
+            return null;
+        }
+
+        return clientInfo;
+    }
+
+    /// <summary>
+    /// The three timestamps an assertion may carry, read once so that no later step meets the
+    /// accessors again.
+    /// </summary>
+    private readonly record struct AssertionTimestamps(
+        DateTimeOffset? NotBefore,
+        DateTimeOffset? ExpiresAt,
+        DateTimeOffset? IssuedAt);
+
+    /// <summary>
+    /// Claims the assertion's identifier so it cannot be presented a second time, answering whether
+    /// the claim was granted.
+    /// </summary>
+    /// <remarks>
+    /// Its own method because the reservation is irreversible, and a method ending in the spend is
+    /// where a check added later is least likely to land underneath it: the natural place to add one
+    /// in the caller is before the call.
+    /// </remarks>
+    /// <param name="token">The assertion whose identifier is being claimed.</param>
+    /// <param name="timestamps">The assertion's timestamps, already read; the expiry bounds the reservation.</param>
+    /// <param name="clientInfo">The client the assertion authenticates.</param>
+    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, AssertionTimestamps timestamps, ClientInfo clientInfo)
+    {
         // OIDC Core section 9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
         // assertion without it: single-use replay protection is impossible without a unique id,
@@ -125,29 +265,29 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (token is not { Payload.JwtId: { } jwtId })
         {
             LogMissingJti(clientInfo.ClientId);
-            return null;
+            return false;
         }
 
         // RFC 7523 section 3: the assertion MUST contain an 'exp' claim that limits the window during
         // which it can be used; the generic lifetime check treats a token with neither 'nbf' nor
         // 'exp' as valid, so this enforces the assertion-specific MUST and is also what bounds
         // the replay-cache entry's TTL.
-        if (token is not { Payload.ExpiresAt: { } expiresAt })
+        if (timestamps.ExpiresAt is not { } expiry)
         {
             LogMissingExpiration(clientInfo.ClientId);
-            return null;
+            return false;
         }
 
         // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
         // One call avoids the read-then-write race a separate status check + mark step would leave
         // between two concurrent presenters of the same assertion.
-        if (!await replayCache.TryReserveAsync(jwtId, expiresAt))
+        if (!await replayCache.TryReserveAsync(jwtId, expiry))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
-            return null;
+            return false;
         }
 
-        return clientInfo;
+        return true;
     }
 
     /// <summary>

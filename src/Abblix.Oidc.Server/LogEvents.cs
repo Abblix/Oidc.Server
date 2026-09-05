@@ -203,6 +203,9 @@ internal static class LogEvents
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
+            public const int AudienceIsNotTheIssuerAlone = Base + 12;
+            public const int TimestampsOutsideTheClientsProfile = Base + 13;
+            public const int TimestampUnreadable = Base + 14;
         }
 
         /// <summary>
@@ -264,7 +267,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/ClientAuthentication/TlsMetadataClientAuthenticator.cs</c> -
         /// RFC 8705 tls_client_auth via Subject DN / SAN matching
-        /// (sub-range 3085-3099).
+        /// (sub-range 3085-3089).
         /// </summary>
         public static class TlsMetadataClientAuthenticator
         {
@@ -272,6 +275,27 @@ internal static class LogEvents
 
             public const int NoTlsMetadataConfigured = Base + 1;
             public const int Authenticated = Base + 2;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientAuthentication/SecurityProfileClientAuthenticator.cs</c> - the security
+        /// profile a stored registration is held to: what it fails, and what it names
+        /// (sub-range 3090-3099).
+        /// </summary>
+        public static class SecurityProfileClientAuthenticator
+        {
+            private const int Base = 3090;
+
+            public const int RegistrationCannotSatisfyProfile = Base + 1;
+            public const int ProfileIsNotOneThisServerDefines = Base + 2;
+
+            /// <summary>
+            /// The same refusal for a client that names no profile of its own. A number of its own
+            /// rather than a second wording under <see cref="RegistrationCannotSatisfyProfile"/>, so
+            /// that the absent case is selected by an id that is PRESENT rather than by the absence
+            /// of a field - and so that this record goes on naming one shape per number.
+            /// </summary>
+            public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
         }
     }
 
@@ -340,6 +364,8 @@ internal static class LogEvents
             public const int ClientNotDetermined = Base + 3;
             public const int ValidationSucceeded = Base + 4;
             public const int AudienceValidationFailed = Base + 5;
+            public const int TimestampsOutsideTheClientsProfile = Base + 6;
+            public const int TimestampUnreadable = Base + 7;
         }
 
         /// <summary>

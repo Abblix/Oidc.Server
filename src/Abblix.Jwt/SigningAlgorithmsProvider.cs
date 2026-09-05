@@ -20,8 +20,8 @@ namespace Abblix.Jwt;
 /// <remarks>
 /// The enumerated key types mirror the dispatch switch in <see cref="JsonWebTokenSigner"/>: a signer
 /// registered for any other <see cref="JsonWebKey"/> subtype is unreachable at run time, so it is
-/// deliberately not advertised. The enumeration order (none, RSA, EC, octet) preserves the order the
-/// built-in algorithms have always appeared in published discovery documents.
+/// deliberately not advertised. The enumeration order (none, RSA, EC, octet) is the order these
+/// algorithms appear in the discovery document, which consumers read verbatim.
 /// </remarks>
 internal sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider)
 {

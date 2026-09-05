@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
+namespace Abblix.Oidc.Server.E2E.Tests;
 
 /// <summary>
 /// Boots the Minimal API TestHost OIDC provider in-memory. The host wires the framework-neutral
@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// generated request models' <c>BindAsync</c> and the <c>IResult</c> formatters over a real ASP.NET
 /// Core request pipeline - the same way a consumer of the Abblix.Oidc.Server.MinimalApi package would.
 /// </summary>
-public sealed class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     /// <summary>
     /// The in-memory TestServer base address. It is HTTPS on purpose: MapOidcEndpoints enforces TLS on the OIDC

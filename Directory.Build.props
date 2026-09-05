@@ -17,9 +17,11 @@
        from git tags. The latest tag sets the base; commits since it bump the patch and
        append the height and the pre-release suffix.
 
-       MinVerMinimumMajorMinor pins the develop branch's NEXT-target line ahead of the release
-       that will carry it, so dev builds publish under that line from the first commit and a
-       downstream consumer can float on it immediately. Bump it when the next target moves.
+       MinVerMinimumMajorMinor names the line dev builds publish under. It moves when a release is
+       CUT, never while one is being prepared: until the tag exists, the work on these branches IS
+       that release, and a consumer floating on its range is waiting for exactly this work. Moved
+       early, the range they float on stops being filled by anybody and the fix they are waiting for
+       silently never arrives - the restore keeps resolving, to the last build before the move.
 
        MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
        range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A

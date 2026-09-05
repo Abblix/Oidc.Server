@@ -1,6 +1,6 @@
 # Abblix.SecurityEvents.MinimalAPI
 
-ASP.NET Core Minimal API integration for `Abblix.SecurityEvents`. It maps the two endpoints that
+ASP.NET Core Minimal API integration for `Abblix.SecurityEvents`. It maps the endpoints that
 receive a token and nothing more: `MapBackChannelLogoutEndpoint` for OpenID Connect Back-Channel
 Logout 1.0, and `MapPushDeliveryEndpoint` for RFC 8935 push delivery. The request and response rules
 live in the core, so this package is the transport and the route pattern.

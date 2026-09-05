@@ -48,6 +48,12 @@ public class AuthServiceJwtValidator(
 				ValidateAudience = ValidateAudienceAsync,
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+
+				// No profile tolerance here, and the absence is a decision. These are tokens this
+				// server issued and reads back, so the freshness a profile bounds is not the
+				// question: a tolerance tight enough for a third party would turn one node running
+				// ahead of another into a refusal of this server's own refresh token, which is an
+				// operational hazard rather than the requirement.
 			});
 	}
 

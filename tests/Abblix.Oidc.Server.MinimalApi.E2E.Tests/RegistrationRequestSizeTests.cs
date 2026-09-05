@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 

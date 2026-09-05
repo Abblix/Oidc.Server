@@ -84,4 +84,49 @@ public class LogoutTokenReplayWindowTests
 
         Assert.Equal(expiresAt + options.IssuedAtTolerance, cache.ReservedUntil);
     }
+
+    /// <summary>
+    /// The token was verified without lifetime handling, so this validator is the first reader of
+    /// its expiry - and a value no date can hold is the provider's fault, refused with the failure
+    /// every other defect of the token gets rather than thrown out of the intake.
+    /// </summary>
+    [Fact]
+    public async Task AnExpiryOutsideTheRepresentableRange_IsAValidationFailure()
+    {
+        var token = new JsonWebToken();
+        token.Payload.Issuer = Issuer;
+        token.Payload.Audiences = [ClientId];
+        token.Payload.JwtId = "jti-1";
+        token.Payload.Subject = "user_456";
+        token.Payload.IssuedAt = Now;
+        token.Payload.Json[JwtClaimTypes.ExpiresAt] = 99999999999999L;
+
+        var validator = new LogoutTokenValidator(
+            new AcceptingProfile(new SecurityEventToken(token)),
+            new BackChannelLogoutValidationOptions { ExpectedAudience = ClientId, ExpectedIssuers = [Issuer] },
+            new RecordingReplayCache());
+
+        var failure = await Assert.ThrowsAsync<LogoutTokenValidationException>(
+            () => validator.ValidateAsync("a.b.c", TestContext.Current.CancellationToken));
+
+        Assert.Contains(JwtClaimTypes.ExpiresAt, failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The accessors a receiver reaches for first answer null for a timestamp the transmitter wrote
+    /// and the payload cannot read, as for a claim the token does not carry: the window step has
+    /// already refused the token by name, and a handler must not be thrown at afterwards.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtClaimTypes.IssuedAt)]
+    [InlineData("toe")]
+    public void AnUnreadableTimestamp_ReadsAsAbsentFromTheReceiversAccessors(string claim)
+    {
+        var token = new JsonWebToken();
+        token.Payload.Json[claim] = 99999999999999L;
+
+        var set = new SecurityEventToken(token);
+
+        Assert.Null(claim == "toe" ? set.TimeOfEvent : set.IssuedAt);
+    }
 }

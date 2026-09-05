@@ -623,8 +623,8 @@ public class AuthenticationCompletionHandlerTests
     /// configuration error and marks the request Denied.
     /// </summary>
     /// <remarks>
-    /// Ping, not push, which the handler this builds has always been; the name said otherwise. Push
-    /// removes instead of denying: the two tests above are its clauses.
+    /// Ping, not push: this builds the ping handler, and push removes instead of denying - the two
+    /// tests above are its clauses.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()

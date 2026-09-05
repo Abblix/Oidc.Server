@@ -13,7 +13,7 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
         <PackageId>Abblix.OIDC.Server.MinimalAPI</PackageId>
         <Title>Abblix OIDC Server Minimal API</Title>
-        <Description>ASP.NET Core Minimal API integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Maps its protocol endpoints as Minimal API route handlers, with no MVC dependency.</Description>
+        <Description>ASP.NET Core Minimal API integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Every protocol endpoint as a route handler with no MVC dependency: the lightest way to host an identity provider in .NET.</Description>
         <Authors>Abblix LLP</Authors>
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -22,7 +22,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>Initial release: ASP.NET Core Minimal API integration for the Abblix OIDC Server. Maps the OpenID Connect and OAuth 2.0 endpoints as route handlers via AddOidcMinimalApi/MapOidcEndpoints, offering the same protocol coverage as the MVC integration without a dependency on the MVC framework. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+        <PackageReleaseNotes>Every protocol endpoint as a Minimal API route handler - authorization, token, introspection, revocation, discovery, keys, UserInfo, pushed authorization, device authorization, CIBA, dynamic client registration and management, end-session and check-session - with the same protocol coverage as the MVC integration and no dependency on the MVC framework. Routes can be moved through options, a default cross-origin policy lets browser clients reach the OIDC endpoints without extra configuration, and the endpoints beyond the core set are opt-in. A host references one transport adapter; referencing both is refused at startup with a message naming the package to drop. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

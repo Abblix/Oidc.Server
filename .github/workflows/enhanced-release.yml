@@ -81,7 +81,9 @@ jobs:
           fi
           echo "MinVer override version: $VERSION_FULL"
 
-          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # The release's own tag is on HEAD by now, so it is excluded - otherwise the release
+          # is reported as its own predecessor and the fallback changelog spans nothing.
+          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 --exclude "v$VERSION" 2>/dev/null || echo "")
           if [ -n "$PREVIOUS_VERSION" ]; then
             PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
             echo "Previous version: $PREVIOUS_VERSION"
@@ -95,8 +97,16 @@ jobs:
 
         timeout-minutes: 3
     timeout-minutes: 5
-  build-and-test:
+  # The same shards every pull request runs, one job per test project, so the release meets the
+  # suite on the rig that already proved this commit rather than on a single job with a wall of
+  # its own. The shards build each project from the same commit; what they prove is the source,
+  # and the packed binaries below are built from it once more under the release version.
+  tests:
     needs: versioning
+    uses: ./.github/workflows/test-shards.yml
+
+  build-and-pack:
+    needs: [versioning, tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -139,24 +149,19 @@ jobs:
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
-        timeout-minutes: 3
-      - name: Test
-        run: |
-          dotnet test --no-build -c Release --verbosity normal -- \
-            --report-trx --report-trx-filename test-results.trx \
-            --results-directory ./tests/results
-        timeout-minutes: 3
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-results
-          path: 'tests/results/*.trx'
-          retention-days: 7
-        timeout-minutes: 3
+        # Above the step baseline: the whole solution builds here in one job, and the baseline is
+        # what killed a release build that needed most of it.
+        timeout-minutes: 10
       - name: Pack
-        run: dotnet pack --no-build -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL"
-        timeout-minutes: 3
+        # Not `--no-build`: on the multi-targeted family projects the outer no-build does not reach
+        # the inner per-framework pack, which then invokes Build and fails with NETSDK1085 ("NoBuild
+        # set but Build target invoked"). The Build step above left everything up to date, so the
+        # build pack performs is an incremental no-op under the same version override, and
+        # GeneratePackageOnBuild=false keeps that build from packing a second time. The dev-build
+        # workflow packs the same way for the same reason.
+        run: dotnet pack --no-restore -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL" -p:GeneratePackageOnBuild=false
+        # Above the step baseline: pack re-enters the build of every packable project first.
+        timeout-minutes: 10
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
@@ -173,7 +178,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   test-getting-started:
-    needs: [versioning, build-and-test]
+    needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -247,7 +252,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   create-release:
-    needs: [versioning, build-and-test, test-getting-started]
+    needs: [versioning, build-and-pack, test-getting-started]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:
@@ -340,19 +345,9 @@ jobs:
             echo "## Initial Release" > CHANGELOG.md
           fi
 
-          {
-            echo ""
-            echo "## NuGet Packages"
-            for pkg in nupkg/*.nupkg; do
-              basename=$(basename "$pkg" .nupkg)
-              echo "- $basename"
-            done
-
-            echo ""
-            echo "Available on:"
-            echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)"
-            echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)"
-          } >> CHANGELOG.md
+          # Nothing is appended to the notes. The release body is the tag's annotation and no more:
+          # the packages are the release's own assets, listed right under the body by GitHub, and a
+          # section repeating their names is a list that goes stale the day a package is added.
         timeout-minutes: 3
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
@@ -371,7 +366,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   publish-github-packages:
-    needs: [versioning, build-and-test, test-getting-started, create-release]
+    needs: [versioning, build-and-pack, test-getting-started, create-release]
     runs-on: ubuntu-latest
     # Same approval gate as NuGet.org: no package leaves the build for any
     # registry without passing the publish-packages environment reviewers.
@@ -425,7 +420,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   publish-nuget-org:
-    needs: [versioning, build-and-test, test-getting-started, create-release]
+    needs: [versioning, build-and-pack, test-getting-started, create-release]
     runs-on: ubuntu-latest
     environment: publish-packages
     permissions:

@@ -101,7 +101,12 @@ public static class ServiceCollectionExtensions
         // or enable JWT Bearer still resolve the dependency.
         services.AddReplayPrevention();
 
-        return services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
+        services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
+
+        // Outermost, so it sees every client whichever credential form got it through. The
+        // configuration paths cannot: a client registered dynamically before a profile was turned
+        // on lives in the store and is re-read by nobody.
+        return services.Decorate<IClientAuthenticator, SecurityProfileClientAuthenticator>();
     }
 
     /// <summary>
@@ -153,6 +158,9 @@ public static class ServiceCollectionExtensions
         // a broken endpoint rather than as the misconfiguration it is.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RegistrationRequestSizeValidator>());
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewCeilingValidator>());
 
         // TryAddAlias: a host that pre-registers its own client store must win over the
         // OidcOptions-backed default (issue #226) - same host-first contract as TryAdd* seams.
@@ -422,6 +430,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddClientJwt(this IServiceCollection services)
     {
         services.TryAddSingleton<IClientJwtValidator, ClientJwtValidator>();
+
+        // The validator judges a client JWT's timestamps against this clock. Registered here rather
+        // than relied upon from elsewhere: this method is public and a host may call it on a
+        // collection that has nothing else of ours in it.
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
         services.TryAddSingleton<IResponseJwtBuilder, ResponseJwtBuilder>();
         return services;

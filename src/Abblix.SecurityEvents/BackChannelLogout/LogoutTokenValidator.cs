@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
@@ -89,7 +90,12 @@ public sealed class LogoutTokenValidator(
                 "The Logout Token carries no jti, so it cannot be told apart from a replay of itself.");
         }
 
-        var expiresAt = token.Token.Payload.ExpiresAt
+        if (!token.Token.Payload.TryReadTimestamp(JwtClaimTypes.ExpiresAt, out var expiresAtClaim, out var whyUnreadable))
+        {
+            throw new LogoutTokenValidationException(whyUnreadable);
+        }
+
+        var expiresAt = expiresAtClaim
                         ?? throw new LogoutTokenValidationException(
                             "The Logout Token carries no expiry, so there is no window to remember it for.");
 

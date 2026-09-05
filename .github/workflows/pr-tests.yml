@@ -2,7 +2,10 @@ name: PR tests
 
 on:
   pull_request:
-    branches: ["master", "develop"]
+    # The filter reads the BASE branch, so a release branch has to be named here or its pull
+    # requests get no run at all - which renders as a short, green check list rather than as a
+    # failure, because the checks with no base filter still post.
+    branches: ["master", "develop", "release/**"]
 
 permissions:
   contents: read

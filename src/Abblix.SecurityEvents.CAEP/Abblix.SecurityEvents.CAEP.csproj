@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.SecurityEvents.CAEP</PackageId>
     <Title>Abblix Security Events CAEP</Title>
-    <Description>The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for Abblix Security Events: typed payload models and event type identifiers for session-revoked, token-claims-change, credential-change, assurance-level-change, device-compliance-change, session-established, session-presented and risk-level-change, registered over the Security Events core in one call.</Description>
+    <Description>OpenID CAEP 1.0 (Continuous Access Evaluation Profile) event dictionary for .NET: typed models for session revoked, token claims change, credential change, assurance level change, device compliance change, session established, session presented and risk level change, over Abblix Security Events.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.SecurityEvents.CAEP</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
@@ -18,7 +18,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Initial release: the OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for Abblix Security Events. Typed payload models and event type identifiers for the eight CAEP events, registered over the Security Events core in one call. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The events of the Continuous Access Evaluation Profile as typed payloads with their registered event type identifiers, so a transmitter emits and a receiver handles a session revocation or a credential change without hand-writing claim names. Registered over the Security Events core in one call; the same models serve a Shared Signals transmitter and receiver. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 

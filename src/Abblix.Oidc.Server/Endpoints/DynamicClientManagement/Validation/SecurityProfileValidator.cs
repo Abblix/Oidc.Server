@@ -33,7 +33,8 @@ public class SecurityProfileValidator(IOptions<OidcOptions> options) : SyncClien
     {
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
-            options.Value.DefaultSecurityProfile);
+            context.Request.TokenEndpointAuthMethod,
+            SecurityProfileRequirements.Resolve(options.Value.DefaultSecurityProfile));
 
         return violations.Count == 0
             ? null

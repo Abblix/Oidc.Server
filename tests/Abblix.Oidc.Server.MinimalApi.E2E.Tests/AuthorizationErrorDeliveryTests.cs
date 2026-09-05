@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
+using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
