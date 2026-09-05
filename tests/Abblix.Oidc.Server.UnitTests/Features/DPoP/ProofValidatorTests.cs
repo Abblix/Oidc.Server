@@ -249,6 +249,24 @@ public class ProofValidatorTests
         Assert.Equal(ProofErrorReasons.IssuedAtOutOfWindow, error.Reason);
     }
 
+    /// <summary>
+    /// A proof is validated without lifetime handling, so its issued-at is read here first - and the
+    /// proof is signed with the key in its own header, so the value is whatever the sender wrote. One
+    /// outside the range a date can hold was an unhandled exception; it is a refusal.
+    /// </summary>
+    [Theory]
+    [InlineData(99999999999999L)]
+    [InlineData(-99999999999999L)]
+    public async Task ValidateAsync_IatOutsideTheRepresentableRange_ReturnsIatInvalid(long raw)
+    {
+        var proof = new DPoPProofBuilder(_time.GetUtcNow()) { RawIat = raw }.Build();
+
+        var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ProofErrorReasons.IssuedAtInvalid, error.Reason);
+    }
+
     [Fact]
     public async Task ValidateAsync_IatAfterToleranceWindow_ReturnsIatOutOfWindow()
     {

@@ -175,6 +175,7 @@ public class ValidationProfileTests
             .Use<IssuerAllowlistStep>()
             .Use<AudienceStep>()
             .Use<IssuedAtWindowStep>()
+            .Use<TimeOfEventStep>()
             .Use<PayloadDeserializationStep>());
 
         using var provider = services.BuildServiceProvider();

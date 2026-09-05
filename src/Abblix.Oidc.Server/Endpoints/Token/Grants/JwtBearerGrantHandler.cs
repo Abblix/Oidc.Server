@@ -141,7 +141,14 @@ public partial class JwtBearerGrantHandler(
 	/// <summary>
 	/// Contains validated JWT data passed through the validation pipeline.
 	/// </summary>
-	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer);
+	private sealed record ValidationContext(JsonWebToken Jwt, string Subject, string Issuer, TrustedIssuer? TrustedIssuer)
+	{
+		/// <summary>
+		/// The assertion's expiry as ValidateExpiration read it, carried so that the replay reservation
+		/// keys off a value already read rather than reading the accessor a second time.
+		/// </summary>
+		public DateTimeOffset? ExpiresAt { get; init; }
+	}
 
 	/// <summary>
 	/// Validates that the assertion parameter is present and within size limits.
@@ -224,8 +231,14 @@ public partial class JwtBearerGrantHandler(
 	/// </summary>
 	private Result<ValidationContext, OidcError> ValidateExpiration(ValidationContext ctx, ClientInfo clientInfo)
 	{
-		if (ctx.Jwt.Payload.ExpiresAt.HasValue)
-			return ctx;
+		// Through the guarded reader rather than the accessor: the validator that ran first is
+		// whichever one the host registered, which may not have read this claim, and a value the
+		// issuer wrote is refused rather than thrown at.
+		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.ExpiresAt, out var expiresAt, out var whyUnreadable))
+			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
+
+		if (expiresAt.HasValue)
+			return ctx with { ExpiresAt = expiresAt };
 
 		LogMissingExpiration(clientInfo.ClientId, ctx.Issuer);
 
@@ -276,7 +289,9 @@ public partial class JwtBearerGrantHandler(
 		if (options.MaxJwtAge is not { } maxAge)
 			return ctx;
 
-		var issuedAt = ctx.Jwt.Payload.IssuedAt;
+		if (!ctx.Jwt.Payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out var issuedAt, out var whyUnreadable))
+			return new OidcError(ErrorCodes.InvalidGrant, whyUnreadable);
+
 		if (issuedAt == null)
 		{
 			LogMissingIssuedAt(clientInfo.ClientId, ctx.Issuer);
@@ -315,9 +330,10 @@ public partial class JwtBearerGrantHandler(
 		}
 
 		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
-		// ValidateExpiration guarantees is present) and treat "already present" as a replay. One call
-		// avoids both the lost-TTL bug of a separate mark step and the read-then-write race.
-		if (await issuerProvider.IsReplayedAsync(jti, ctx.Jwt.Payload.ExpiresAt))
+		// ValidateExpiration guarantees is present and carries on the context) and treat "already
+		// present" as a replay. One call avoids both the lost-TTL bug of a separate mark step and
+		// the read-then-write race.
+		if (await issuerProvider.IsReplayedAsync(jti, ctx.ExpiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");

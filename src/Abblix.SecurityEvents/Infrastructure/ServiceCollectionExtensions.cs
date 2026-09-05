@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, SignatureStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, AudienceStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, IssuedAtWindowStep>(),
+        ServiceDescriptor.Singleton<ISecurityEventTokenValidator, TimeOfEventStep>(),
         ServiceDescriptor.Singleton<ISecurityEventTokenValidator, PayloadDeserializationStep>(),
     ];
 
@@ -356,6 +357,7 @@ public static class ServiceCollectionExtensions
                 .Use<LogoutEventStep>()
                 .Use<AudienceStep>()
                 .Use<IssuedAtWindowStep>()
+                .Use<TimeOfEventStep>()
                 .Use<PayloadDeserializationStep>();
 
             // Declared beside the listing that adds them, so the two statements cannot drift.

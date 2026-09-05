@@ -125,6 +125,7 @@ public class SecurityEventTokenValidatorTests
             new SignatureStep(verifier ?? new AcceptingVerifier()),
             new AudienceStep(),
             new IssuedAtWindowStep(new FakeTimeProvider(Now)),
+            new TimeOfEventStep(),
             new PayloadDeserializationStep(registry),
         ]);
     }
@@ -374,6 +375,62 @@ public class SecurityEventTokenValidatorTests
 
         var error = await ValidateExpectingError(compact);
         Assert.Equal(SecurityEventTokenErrorCode.IatOutOfRange, error.Code);
+    }
+
+    /// <summary>
+    /// The SET is verified without lifetime handling, so the issued-at window step is the first
+    /// reader of the claim - and a value no date can hold, written by the transmitter, was an
+    /// unhandled exception out of the intake. It is a refusal naming the claim.
+    /// </summary>
+    [Fact]
+    public async Task IssuedAtOutsideTheRepresentableRange_IsMalformedNamingTheClaim()
+    {
+        var header = Base64Url.EncodeToString("""{"typ":"secevent+jwt","alg":"none"}"""u8);
+        var payload = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(
+            """{"iss":"https://tenant.example.com","jti":"1","iat":99999999999999,"aud":"https://receiver.example.com/events","events":{"https://tenant.example.com/events/membership-changed":{}}}"""));
+
+        var error = await ValidateExpectingError($"{header}.{payload}.sig");
+
+        Assert.Equal(SecurityEventTokenErrorCode.MalformedToken, error.Code);
+        Assert.Contains("iat", error.Description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The event time is optional and unjudged, so a step exists only to refuse a value the receiver
+    /// cannot read - which no other step looks at, and which a receiver's own accessor would
+    /// otherwise turn into silent absence.
+    /// </summary>
+    [Fact]
+    public async Task TimeOfEventOutsideTheRepresentableRange_IsMalformedNamingTheClaim()
+    {
+        var header = Base64Url.EncodeToString("""{"typ":"secevent+jwt","alg":"none"}"""u8);
+        var payload = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(
+            """{"iss":"https://tenant.example.com","jti":"1","iat":1754040000,"toe":99999999999999,"aud":"https://receiver.example.com/events","events":{"https://tenant.example.com/events/membership-changed":{}}}"""));
+
+        var error = await ValidateExpectingError($"{header}.{payload}.sig");
+
+        Assert.Equal(SecurityEventTokenErrorCode.MalformedToken, error.Code);
+        Assert.Contains("toe", error.Description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And a readable event time, or none, passes the step: the step judges readability alone.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"toe": 1754040000}""")]
+    [InlineData("""{}""")]
+    public async Task AReadableOrAbsentTimeOfEvent_PassesTheStep(string claimsJson)
+    {
+        var context = new SecurityEventTokenValidationContext("a.b.c", DefaultOptions());
+        context.Token = new SecurityEventToken(new JsonWebToken
+        {
+            Payload = new JsonWebTokenPayload(JsonNode.Parse(claimsJson)!.AsObject()),
+        });
+        context.Establish(SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.SignatureVerified);
+
+        var error = await new TimeOfEventStep().ValidateAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
     }
 
     [Fact]

@@ -205,6 +205,7 @@ internal static class LogEvents
             public const int OtherKindPresentedAsAssertion = Base + 11;
             public const int AudienceIsNotTheIssuerAlone = Base + 12;
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
+            public const int TimestampUnreadable = Base + 14;
         }
 
         /// <summary>
@@ -364,6 +365,7 @@ internal static class LogEvents
             public const int ValidationSucceeded = Base + 4;
             public const int AudienceValidationFailed = Base + 5;
             public const int TimestampsOutsideTheClientsProfile = Base + 6;
+            public const int TimestampUnreadable = Base + 7;
         }
 
         /// <summary>

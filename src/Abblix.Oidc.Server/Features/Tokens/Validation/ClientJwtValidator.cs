@@ -138,14 +138,20 @@ public partial class ClientJwtValidator(
         // since they throw on a value outside the range DateTimeOffset can hold.
         if (options.HasFlag(ValidationOptions.ValidateLifetime))
         {
+            // Read through the same door the first pass uses rather than the accessors: the first
+            // pass belongs to whichever validator the host registered, which may not have read these
+            // claims, and an unreadable one is a refusal here as it is there.
+            if (!validatedToken.Payload.TryReadTimestamps(
+                    out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
+            {
+                LogTimestampUnreadable(context.ClientInfo.ClientId, whyUnreadable);
+                return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
+            }
+
             var refusal = SecurityProfileRequirements
                 .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
                 .ClockSkewOrDefault()
-                .WhyRefused(
-                    timeProvider.GetUtcNow(),
-                    validatedToken.Payload.NotBefore,
-                    validatedToken.Payload.ExpiresAt,
-                    validatedToken.Payload.IssuedAt);
+                .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 
             if (refusal != null)
             {

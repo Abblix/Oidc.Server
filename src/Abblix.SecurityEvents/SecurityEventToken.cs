@@ -50,9 +50,11 @@ public sealed class SecurityEventToken(JsonWebToken token)
     public string? Issuer => Token.Payload.Issuer;
 
     /// <summary>
-    /// The "iat" claim: when the SET was issued. REQUIRED (RFC 8417 Section 2.2).
+    /// The "iat" claim: when the SET was issued. REQUIRED (RFC 8417 Section 2.2). Null on a token
+    /// the validation pipeline has passed means the claim is absent, which the pipeline refuses; on
+    /// a token constructed outside it, null may also mean a value the payload cannot read.
     /// </summary>
-    public DateTimeOffset? IssuedAt => Token.Payload.IssuedAt;
+    public DateTimeOffset? IssuedAt => ReadOrNull(JwtClaimTypes.IssuedAt);
 
     /// <summary>
     /// The "jti" claim: the SET's unique identifier, unique within a particular event feed, by
@@ -102,9 +104,20 @@ public sealed class SecurityEventToken(JsonWebToken token)
     /// <summary>
     /// The "toe" claim: when the event itself occurred, as opposed to when the SET about it was
     /// issued. OPTIONAL (RFC 8417 Section 2.2): by omitting it, the issuer declines to share an
-    /// event time, and the value may be approximate where a profile says so.
+    /// event time, and the value may be approximate where a profile says so. Null on a token a
+    /// pipeline including <see cref="Validation.Steps.TimeOfEventStep"/> has passed means exactly
+    /// that omission, since that step refuses a value it cannot read; on a token constructed outside
+    /// such a pipeline, null may also mean such a value.
     /// </summary>
-    public DateTimeOffset? TimeOfEvent => Token.Payload.Json.GetUnixTimeSeconds(IanaClaimTypes.Toe);
+    public DateTimeOffset? TimeOfEvent => ReadOrNull(IanaClaimTypes.Toe);
+
+    /// <summary>
+    /// A timestamp the transmitter wrote and the payload cannot read is not this receiver's to
+    /// throw at: the accessors answer null, and the validation steps that judge these two claims
+    /// have already refused such a token by name before a receiver reads it.
+    /// </summary>
+    private DateTimeOffset? ReadOrNull(string claim)
+        => Token.Payload.TryReadTimestamp(claim, out var value, out _) ? value : null;
 
     private EventsCollection? _eventsView;
 

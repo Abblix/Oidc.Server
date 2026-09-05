@@ -37,6 +37,12 @@ internal sealed class DPoPProofBuilder
     public string? Htu { get; init; } = "https://auth.example.com/token";
     public string? Jti { get; init; } = $"test-jti-{Guid.NewGuid():N}";
     public DateTimeOffset? Iat { get; init; }
+
+    /// <summary>
+    /// Written into the payload verbatim in place of <see cref="Iat"/>, for a case about a value the
+    /// typed accessor would never produce.
+    /// </summary>
+    public JsonNode? RawIat { get; init; }
     public string? Ath { get; init; }
     public bool CorruptSignature { get; init; }
 
@@ -72,7 +78,7 @@ internal sealed class DPoPProofBuilder
         if (Htm is not null) payload["htm"] = Htm;
         if (Htu is not null) payload["htu"] = Htu;
         if (Jti is not null) payload["jti"] = Jti;
-        payload["iat"] = (Iat ?? _now).ToUnixTimeSeconds();
+        payload["iat"] = RawIat ?? (Iat ?? _now).ToUnixTimeSeconds();
         if (Ath is not null) payload["ath"] = Ath;
 
         var headerB64 = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(header.ToJsonString()));

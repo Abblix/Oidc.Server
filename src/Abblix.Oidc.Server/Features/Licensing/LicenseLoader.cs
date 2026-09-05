@@ -87,16 +87,35 @@ public static class LicenseLoader
             throw new InvalidOperationException("The JWT type is not valid");
         }
 
-        var license = new License
+        LicenseChecker.AddLicense(ReadLicense(token.Payload));
+    }
+
+    /// <summary>
+    /// Reads the licence terms out of a verified payload, refusing with the same message every other
+    /// licence fault gets where a timestamp cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Its own method, and internal, so that the read can be driven with a payload alone: the
+    /// verification above needs a licence signed with the licensing key, which no test holds.
+    /// </remarks>
+    /// <param name="payload">The verified licence payload.</param>
+    internal static License ReadLicense(JsonWebTokenPayload payload)
+    {
+        if (!payload.TryReadTimestamps(out var notBefore, out var expiresAt, out _, out var whyUnreadable)
+            || !payload.TryReadTimestamp("grace_period", out var gracePeriod, out whyUnreadable))
         {
-            NotBefore = token.Payload.NotBefore,
-            ExpiresAt = token.Payload.ExpiresAt,
-            GracePeriod = token.Payload.Json.GetUnixTimeSeconds("grace_period"),
-            ClientLimit = token.Payload["client_limit"]?.GetValue<int>(),
-            IssuerLimit = token.Payload["issuer_limit"]?.GetValue<int>(),
-            ValidIssuers = token.Payload.Json.GetArrayOfStrings("valid_issuers").ToHashSet(StringComparer.Ordinal),
+            throw new InvalidOperationException($"The license can't be validated: {whyUnreadable}");
+        }
+
+        return new License
+        {
+            NotBefore = notBefore,
+            ExpiresAt = expiresAt,
+            GracePeriod = gracePeriod,
+            ClientLimit = payload["client_limit"]?.GetValue<int>(),
+            IssuerLimit = payload["issuer_limit"]?.GetValue<int>(),
+            ValidIssuers = payload.Json.GetArrayOfStrings("valid_issuers").ToHashSet(StringComparer.Ordinal),
         };
-        LicenseChecker.AddLicense(license);
     }
 
     /// <summary>

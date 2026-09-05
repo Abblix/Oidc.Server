@@ -196,6 +196,7 @@ public static class ServiceCollectionExtensions
                 .Use<AudienceStep>()
                 .Use<StreamIssuerStep>()
                 .Use<IssuedAtWindowStep>()
+                .Use<TimeOfEventStep>()
                 .Use<PayloadDeserializationStep>()
                 .Use<CriticalSubjectMembersStep>();
 
