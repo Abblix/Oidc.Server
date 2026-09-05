@@ -345,19 +345,9 @@ jobs:
             echo "## Initial Release" > CHANGELOG.md
           fi
 
-          {
-            echo ""
-            echo "## NuGet Packages"
-            for pkg in nupkg/*.nupkg; do
-              basename=$(basename "$pkg" .nupkg)
-              echo "- $basename"
-            done
-
-            echo ""
-            echo "Available on:"
-            echo "- [NuGet.org](https://www.nuget.org/packages?q=Abblix)"
-            echo "- [GitHub Packages](https://github.com/Abblix/Oidc.Server/packages)"
-          } >> CHANGELOG.md
+          # Nothing is appended to the notes. The release body is the tag's annotation and no more:
+          # the packages are the release's own assets, listed right under the body by GitHub, and a
+          # section repeating their names is a list that goes stale the day a package is added.
         timeout-minutes: 3
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
