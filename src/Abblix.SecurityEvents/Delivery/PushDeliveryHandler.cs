@@ -19,11 +19,13 @@ namespace Abblix.SecurityEvents.Delivery;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The order inside is the security order. Validation decides first; the replay cache is asked
-/// only about a token that proved itself, so an attacker cannot burn identifiers with forgeries;
-/// and the sink consumes only what both let through. A repeat is acknowledged without
-/// re-processing - RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier
-/// responses, so a duplicate is the protocol working, not failing.
+/// The order inside is the security order. Validation decides first, so an attacker cannot burn
+/// replay identifiers with forgeries; the sink then consumes what validation let through; and only
+/// a token the sink accepted is written to the replay cache. Nothing on this path READS that cache,
+/// so a redelivery reaches the sink again - RFC 8935 Section 2 lets a transmitter redeliver
+/// regardless of earlier responses, and <see cref="ISecurityEventSink"/> answers for it by
+/// requiring idempotent processing. Why the write cannot come earlier, and why that is the only
+/// correct order available here, is on <c>RecordAsync</c>.
 /// </para>
 /// <para>
 /// Nothing here knows which profile of SET it carries. RFC 8935 is a delivery specification and
