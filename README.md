@@ -65,7 +65,6 @@ dotnet add package Abblix.OIDC.Server.MVC
 ```csharp
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Mvc;
-using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
