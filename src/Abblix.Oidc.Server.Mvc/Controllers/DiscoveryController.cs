@@ -45,6 +45,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
 [RequireHttps]
 [ReturnsOidcInvalidRequest]
+[ReturnsCustodianFailureStatus]
 [SkipStatusCodePages]
 [EnableCors(OidcConstants.CorsPolicyName)]
 [SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
