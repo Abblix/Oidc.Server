@@ -113,7 +113,12 @@ public class DocSampleTests
         // The control: the directory really was read, so an empty listing does not pass as "no orphans".
         Assert.NotEmpty(files);
 
-        var enrolled = Enrolment.Compiled.Select(sample => sample.Copy).ToHashSet(StringComparer.Ordinal);
+        // Both enrolments, because the directory holds both kinds of copy: a README copy left out of
+        // this set would be reported as an orphan, and the obvious repair - a second directory - would
+        // put it beyond the row that catches orphans at all.
+        var enrolled = Enrolment.Compiled.Select(sample => sample.Copy)
+            .Concat(Enrolment.ReadmeCompiled.Select(sample => sample.Copy))
+            .ToHashSet(StringComparer.Ordinal);
 
         var orphans = files.Where(file => !enrolled.Contains(file!)).ToArray();
 

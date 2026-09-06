@@ -114,4 +114,34 @@ public static class Enrolment
     /// </para>
     /// </remarks>
     public const int Unenrolled = 12;
+
+    /// <summary>
+    /// The README samples whose text is compiled, each with a copy under <c>Samples/</c>.
+    /// </summary>
+    /// <remarks>
+    /// A README ships INSIDE the package, so its snippets reach every consumer while no compiler reads
+    /// them. The quick-start below is the one that proved it: it called a constant from a library
+    /// <c>Abblix.Jwt</c> had deliberately stopped depending on, and a reader with only the packages got
+    /// a compiler error on the first line that mattered.
+    /// </remarks>
+    public static IReadOnlyList<ReadmeSample> ReadmeCompiled { get; } =
+    [
+        new("README.md", 0, "ReadmeQuickstart.cs"),
+    ];
+
+    /// <summary>
+    /// How many C# blocks the shipping READMEs carry that nothing here compiles.
+    /// </summary>
+    /// <remarks>
+    /// The same bargain as <see cref="Unenrolled"/> and for the same reason: a gate covering one snippet
+    /// out of fifty-six is honest only while the fifty-five are counted, and the count is what turns a
+    /// new uncompiled snippet into a failing row rather than into silence.
+    /// <para>
+    /// Most of the remainder are fragments rather than pastable programs - a line configuring a service
+    /// with <c>services</c> arriving from nowhere - so enrolling one means writing the wrapper that
+    /// supplies its ambient names, exactly as a doc-comment sample does. The number falls one at a time
+    /// as that work is done.
+    /// </para>
+    /// </remarks>
+    public const int ReadmeUnenrolled = 55;
 }
