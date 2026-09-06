@@ -113,7 +113,12 @@ public class DocSampleTests
         // The control: the directory really was read, so an empty listing does not pass as "no orphans".
         Assert.NotEmpty(files);
 
-        var enrolled = Enrolment.Compiled.Select(sample => sample.Copy).ToHashSet(StringComparer.Ordinal);
+        // Both enrolments, because the directory holds both kinds of copy: a README copy left out of
+        // this set would be reported as an orphan, and the obvious repair - a second directory - would
+        // put it beyond the row that catches orphans at all.
+        var enrolled = Enrolment.Compiled.Select(sample => sample.Copy)
+            .Concat(Enrolment.ReadmeCompiled.Select(sample => sample.Copy))
+            .ToHashSet(StringComparer.Ordinal);
 
         var orphans = files.Where(file => !enrolled.Contains(file!)).ToArray();
 
@@ -221,9 +226,15 @@ public class DocSampleTests
     public void NoStubShadowsATypeTheLibraryShips()
     {
         var beside = Path.GetDirectoryName(typeof(DocSampleTests).Assembly.Location)!;
+        // Both test assemblies are excluded, and for the same reason: neither ships, so neither can
+        // shadow a name a consumer sees. The companion carries no types at all - it exists to let the
+        // SDK state the web template's implicit usings - and counting it would put this row one above
+        // the number of libraries there are.
+        string[] notLibraries = ["Abblix.DocSamples", "Abblix.DocSamples.WebTemplate"];
+
         var libraries = Directory
             .EnumerateFiles(beside, "Abblix.*.dll")
-            .Where(path => Path.GetFileNameWithoutExtension(path) != "Abblix.DocSamples")
+            .Where(path => !notLibraries.Contains(Path.GetFileNameWithoutExtension(path)))
             .Select(Assembly.LoadFrom)
             .ToArray();
 

@@ -52,6 +52,26 @@
         <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
+    <!-- The web template's implicit usings, computed by the SDK rather than written down. Kept out of
+         the reference list below on purpose: that list is read by rows asserting every referenced
+         project put its documentation beside the output, and this one is not a library and documents
+         nothing.
+
+         Ordinary metadata, NOT AdditionalProperties. Those are the global properties the referenced
+         project is BUILT with, so a reference carrying them asks for a second instance of that project:
+         measured on a solution build, the companion was produced twice into the same bin/Debug, with
+         nothing sequencing the two writers. The line that answers this is the one naming a finished
+         assembly ("<project> -> <path>"), one per built instance and target framework; the "is building"
+         lines count REQUESTS and stay at one id however many instances there are.
+
+         Metadata also puts the name where somebody can find its reader: the filter below matches on it,
+         while a filter keyed on AdditionalProperties being non-empty would work whatever the name
+         said. -->
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj"
+                          ExcludeFromReferenceList="true" />
+    </ItemGroup>
+
     <!-- The reference list, written by MSBuild rather than recovered from a copy of this file: a
          test asserts every referenced project put its documentation beside the output, and hand-
          parsing Include paths meant splitting them on a separator. The previous attempt did that
@@ -60,7 +80,7 @@
     <ItemGroup>
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
             <_Parameter1>ReferencedProjects</_Parameter1>
-            <_Parameter2>@(ProjectReference->'%(Filename)')</_Parameter2>
+            <_Parameter2>@(ProjectReference->WithMetadataValue('ExcludeFromReferenceList', '')->'%(Filename)')</_Parameter2>
         </AssemblyAttribute>
     </ItemGroup>
 
