@@ -439,8 +439,9 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// mapped.
     /// </summary>
     /// <remarks>
-    /// Both statements below are about creating and guarding streams, and a host may have that surface
-    /// without the document or the document without that surface: streams declared in configuration need
+    /// Both statements below are about the management routes - the scope filter guards every one of
+    /// them, reads and poll included, and the subjects mode decides what a stream created there covers.
+    /// A host may have that surface without the document or the document without that surface: streams declared in configuration need
     /// the document so a receiver can find them and never map the management routes, while a deployment
     /// whose canonical address is answered by a gateway maps the routes with
     /// <see cref="SharedSignalsEndpointOptions.MapWellKnownConfiguration"/> off. Attached to the document,
