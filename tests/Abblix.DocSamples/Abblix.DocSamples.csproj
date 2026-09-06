@@ -58,10 +58,15 @@
          nothing.
 
          Ordinary metadata, NOT AdditionalProperties. Those are the global properties the referenced
-         project is BUILT with, so asking for it under a set of its own invites a second instance of it
-         writing into the same obj/ and bin/. Metadata also puts the name where somebody can find its
-         reader: the filter below matches on it, while a filter keyed on AdditionalProperties being
-         non-empty would work whatever the name said. -->
+         project is BUILT with, so a reference carrying them asks for a second instance of that project:
+         measured on a solution build, the companion was produced twice into the same bin/Debug, with
+         nothing sequencing the two writers. The line that answers this is the one naming a finished
+         assembly ("<project> -> <path>"), one per built instance and target framework; the "is building"
+         lines count REQUESTS and stay at one id however many instances there are.
+
+         Metadata also puts the name where somebody can find its reader: the filter below matches on it,
+         while a filter keyed on AdditionalProperties being non-empty would work whatever the name
+         said. -->
     <ItemGroup>
         <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj"
                           ExcludeFromReferenceList="true" />
