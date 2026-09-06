@@ -93,6 +93,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             endpoints.MapSharedSignalsConfigurationDocument();
         }
 
+        WarnIfTheManagementApiIsOutsideTheCaepProfile(
+            endpoints.ServiceProvider,
+            endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>(),
+            endpointOptions);
+
         var group = endpoints.MapGroup(endpointOptions.ManagementPrefix.Value ?? string.Empty);
 
         // Every management response travels uncacheable, as the specification's own examples
@@ -270,7 +275,7 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var options = endpoints.ServiceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
 
-        WarnIfOutsideTheCaepProfile(endpoints.ServiceProvider, options);
+        WarnIfTheDocumentIsOutsideTheCaepProfile(endpoints.ServiceProvider, options);
         var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
         // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
@@ -412,12 +417,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     /// purpose and a warning it cannot act on is one it learns to ignore. A conformance run failing 2.3.7
     /// against a clean startup log is therefore possible, and this is the configuration that does it.
     /// </remarks>
-    private static void WarnIfOutsideTheCaepProfile(
+    private static void WarnIfTheDocumentIsOutsideTheCaepProfile(
         IServiceProvider services, SharedSignalsTransmitterOptions options)
     {
-        var logger = services.GetService<ILoggerFactory>()
-            ?.CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
-
+        var logger = LoggerOf(services);
         if (logger is null)
             return;
 
@@ -429,14 +432,40 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         // needing to know what.
         if (options.AuthorizationSchemes is { Count: > 0 } schemes && !schemes.Any(IsOAuth))
             LogOAuthSchemeNotAdvertised(logger, schemes.Count);
+    }
 
-        if ((services.GetService<SharedSignalsEndpointOptions>() ?? DefaultEndpointOptions)
-            .GrantedScopesSelector is null)
+    /// <summary>
+    /// The half of the profile check that is about the Stream Management API, run where that API is
+    /// mapped.
+    /// </summary>
+    /// <remarks>
+    /// Both statements below are about creating and guarding streams, and a host may have that surface
+    /// without the document or the document without that surface: streams declared in configuration need
+    /// the document so a receiver can find them and never map the management routes, while a deployment
+    /// whose canonical address is answered by a gateway maps the routes with
+    /// <see cref="SharedSignalsEndpointOptions.MapWellKnownConfiguration"/> off. Attached to the document,
+    /// these warnings were wrong in both directions at once - noise for the first host, silence for the
+    /// second - and the second is the one exposing stream creation.
+    /// </remarks>
+    private static void WarnIfTheManagementApiIsOutsideTheCaepProfile(
+        IServiceProvider services,
+        SharedSignalsTransmitterOptions options,
+        SharedSignalsEndpointOptions endpointOptions)
+    {
+        var logger = LoggerOf(services);
+        if (logger is null)
+            return;
+
+        if (endpointOptions.GrantedScopesSelector is null)
             LogScopeCheckingDisabled(logger);
 
         if (options.DefaultSubjectsMode is StreamSubjectsMode.None)
             LogNoSubjectsIncludedByDefault(logger);
     }
+
+    private static ILogger? LoggerOf(IServiceProvider services)
+        => services.GetService<ILoggerFactory>()
+            ?.CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
 
     private static bool IsOAuth(JsonObject scheme)
         => scheme.TryGetPropertyValue(TransmitterConfiguration.ParameterNames.SpecUrn, out var urn)
