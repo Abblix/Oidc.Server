@@ -27,6 +27,10 @@
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
         <OutputType>Library</OutputType>
+
+        <!-- Serves nothing, so the web SDK's asset manifest would arrive beside the tests for no
+             reader at all. -->
+        <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     </PropertyGroup>
 
     <!-- Read AFTER the SDK's own props, which is where both halves of the list are declared: the base
