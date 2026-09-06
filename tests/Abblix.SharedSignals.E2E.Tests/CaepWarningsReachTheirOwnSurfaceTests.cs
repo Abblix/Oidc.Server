@@ -84,8 +84,9 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
 
     /// <summary>
     /// A host with both surfaces hears each warning once. This is the row a later edit would break by
-    /// moving the management checks back under the document, where they would then fire twice for the
-    /// host that maps both.
+    /// duplicating the management checks under the document while leaving them where they are, so the
+    /// host that maps both hears them twice. Moving them back is a different edit, caught by the two
+    /// single-surface rows above.
     /// </summary>
     [Fact]
     public async Task AHostMappingBothSurfaces_HearsEachWarningOnce()
