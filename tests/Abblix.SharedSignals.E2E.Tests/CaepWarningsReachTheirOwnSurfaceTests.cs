@@ -46,7 +46,7 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
 
         await using var host = await StartAsync(recorder, app => app.MapSharedSignalsConfigurationDocument());
 
-        Assert.DoesNotContain(recorder.Warnings, message => message.Contains("scope"));
+        Assert.DoesNotContain(recorder.Warnings, message => message.Contains("GrantedScopesSelector"));
         Assert.DoesNotContain(recorder.Warnings, message => message.Contains("DefaultSubjectsMode"));
     }
 
@@ -78,8 +78,25 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
             app => app.MapSharedSignalsTransmitterEndpoints(),
             new SharedSignalsEndpointOptions { MapWellKnownConfiguration = false });
 
-        Assert.Contains(recorder.Warnings, message => message.Contains("scope"));
+        Assert.Contains(recorder.Warnings, message => message.Contains("GrantedScopesSelector"));
         Assert.Contains(recorder.Warnings, message => message.Contains("DefaultSubjectsMode"));
+    }
+
+    /// <summary>
+    /// A host with both surfaces hears each warning once. This is the row a later edit would break by
+    /// moving the management checks back under the document, where they would then fire twice for the
+    /// host that maps both.
+    /// </summary>
+    [Fact]
+    public async Task AHostMappingBothSurfaces_HearsEachWarningOnce()
+    {
+        var recorder = new RecordingProvider();
+
+        await using var host = await StartAsync(recorder, app => app.MapSharedSignalsTransmitterEndpoints());
+
+        Assert.Equal(1, recorder.Warnings.Count(message => message.Contains("jwks_uri")));
+        Assert.Equal(1, recorder.Warnings.Count(message => message.Contains("GrantedScopesSelector")));
+        Assert.Equal(1, recorder.Warnings.Count(message => message.Contains("DefaultSubjectsMode")));
     }
 
     private static async Task<WebApplication> StartAsync(
