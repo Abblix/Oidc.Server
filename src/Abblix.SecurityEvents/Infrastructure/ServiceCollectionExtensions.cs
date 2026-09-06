@@ -440,6 +440,15 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// <para>
+    /// What it does depends on the path, and the name promises more than one of them delivers. Where a
+    /// caller offers a token to be TRUSTED - a DPoP proof, a client assertion, a logout token - the
+    /// reservation is read, and a second use of one identifier is refused. On push delivery it is only a
+    /// record of what this receiver accepted: <c>PushDeliveryHandler</c> writes after the sink and reads
+    /// nothing, because RFC 8935 Section 2 lets a transmitter redeliver and
+    /// <see cref="Delivery.ISecurityEventSink"/> answers for that by requiring idempotent processing. Registering
+    /// this cache therefore makes deliveries auditable; it does not make a non-idempotent sink safe.
+    /// </para>
+    /// <para>
     /// The store itself is the host's choice and is deliberately not registered here:
     /// <c>AddDistributedMemoryCache()</c> gives a single-instance receiver process-local
     /// behavior, Redis or another backend gives a scaled-out one a shared memory - the same
