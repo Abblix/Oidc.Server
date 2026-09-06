@@ -74,7 +74,7 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddOidcServices(options =>
 {
     options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig) };
+    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
 });
 ```
 
