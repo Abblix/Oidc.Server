@@ -1,0 +1,41 @@
+<!--
+    Exists to answer one question with the SDK rather than with a memory: which namespaces does a
+    project created from the ASP.NET Core web template import without being asked?
+
+    A README snippet is written for a reader whose project came from that template, and the gate over
+    those snippets has to know what their compiler sees. A list frozen in C# states it correctly on the
+    day it is written and silently stops being true the next time the SDK moves - and it fails in the
+    quiet direction: a namespace REMOVED from the template leaves a sample leaning on an import the
+    reader no longer has, with every row still green.
+
+    So the list is not written down anywhere. This project uses the same SDK the reader's project would,
+    lets MSBuild compute @(Using) from it, and writes the result into an assembly attribute that
+    Abblix.DocSamples reads. It compiles no source of its own: the assembly exists to carry that one
+    fact.
+-->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <IsPackable>false</IsPackable>
+
+        <!-- No sources, so nothing to document and nothing to run. The empty documentation file would
+             otherwise land beside the test output, where a row counts one file per library. -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <OutputType>Library</OutputType>
+    </PropertyGroup>
+
+    <!-- Read AFTER the SDK's own props, which is where both halves of the list are declared: the base
+         seven from Microsoft.NET.Sdk and the nine the web SDK adds on top. -->
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>WebTemplateImplicitUsings</_Parameter1>
+            <_Parameter2>@(Using)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+</Project>

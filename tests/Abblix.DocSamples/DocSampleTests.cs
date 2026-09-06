@@ -226,9 +226,15 @@ public class DocSampleTests
     public void NoStubShadowsATypeTheLibraryShips()
     {
         var beside = Path.GetDirectoryName(typeof(DocSampleTests).Assembly.Location)!;
+        // Both test assemblies are excluded, and for the same reason: neither ships, so neither can
+        // shadow a name a consumer sees. The companion carries no types at all - it exists to let the
+        // SDK state the web template's implicit usings - and counting it would put this row one above
+        // the number of libraries there are.
+        string[] notLibraries = ["Abblix.DocSamples", "Abblix.DocSamples.WebTemplate"];
+
         var libraries = Directory
             .EnumerateFiles(beside, "Abblix.*.dll")
-            .Where(path => Path.GetFileNameWithoutExtension(path) != "Abblix.DocSamples")
+            .Where(path => !notLibraries.Contains(Path.GetFileNameWithoutExtension(path)))
             .Select(Assembly.LoadFrom)
             .ToArray();
 

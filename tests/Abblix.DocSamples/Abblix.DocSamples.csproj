@@ -52,6 +52,15 @@
         <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
+    <!-- The web template's implicit usings, computed by the SDK rather than written down. Kept out of
+         the reference list below on purpose: that list is read by rows asserting every referenced
+         project put its documentation beside the output, and this one is not a library and documents
+         nothing. -->
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj"
+                          AdditionalProperties="ExcludeFromReferenceList=true" />
+    </ItemGroup>
+
     <!-- The reference list, written by MSBuild rather than recovered from a copy of this file: a
          test asserts every referenced project put its documentation beside the output, and hand-
          parsing Include paths meant splitting them on a separator. The previous attempt did that
@@ -60,7 +69,7 @@
     <ItemGroup>
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
             <_Parameter1>ReferencedProjects</_Parameter1>
-            <_Parameter2>@(ProjectReference->'%(Filename)')</_Parameter2>
+            <_Parameter2>@(ProjectReference->WithMetadataValue('AdditionalProperties', '')->'%(Filename)')</_Parameter2>
         </AssemblyAttribute>
     </ItemGroup>
 

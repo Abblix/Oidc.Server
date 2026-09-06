@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Reflection;
+
 namespace Abblix.DocSamples;
 
 /// <summary>
@@ -39,8 +41,8 @@ public sealed record ReadmeSample(string Readme, int Index, string Copy)
 /// The reader's project is what a snippet has to compile in, not this one. Two differences decide
 /// everything: the reader has the packages and nothing else, and the web template hands them a set of
 /// implicit usings that this test project does not have. So a copy declares those ambient namespaces
-/// explicitly, in a marked region, and <c>ReadmeSampleTests</c> holds that region to the template's own
-/// list - measured from a generated <c>GlobalUsings.g.cs</c> rather than recalled.
+/// explicitly, in a marked region, and <c>ReadmeSampleTests</c> holds that region to the list the SDK
+/// itself computes for a web project.
 /// </para>
 /// </remarks>
 public static class ReadmeSampleReader
@@ -49,30 +51,60 @@ public static class ReadmeSampleReader
     /// The namespaces a project created from the ASP.NET Core web template imports without being asked.
     /// </summary>
     /// <remarks>
-    /// Read out of the <c>GlobalUsings.g.cs</c> that <c>dotnet new web</c> produces on the target
-    /// framework, so it states what the reader's compiler sees rather than what anybody remembers of it.
-    /// A snippet may lean on these without showing them; anything else it needs it has to show.
+    /// Computed by MSBuild from the SDK this build is using, not written down here: the companion
+    /// project <c>Abblix.DocSamples.WebTemplate</c> is a web-SDK project whose whole purpose is to let
+    /// the SDK answer, and it writes <c>@(Using)</c> into an assembly attribute this reads.
+    /// <para>
+    /// A list frozen in source would be right on the day it was typed and would fail in the QUIET
+    /// direction afterwards. An import ADDED to the template makes this row refuse a legitimate copy,
+    /// which is loud; an import REMOVED - and <c>System.Net.Http.Json</c> is one that arrived by
+    /// version - leaves a sample leaning on something the reader no longer has, with every row green.
+    /// </para>
     /// </remarks>
-    public static IReadOnlySet<string> TemplateImplicitUsings { get; } = new HashSet<string>(
-        StringComparer.Ordinal)
+    public static IReadOnlySet<string> TemplateImplicitUsings { get; } = ReadTemplateUsings();
+
+    /// <summary>
+    /// The template's imports, as the companion project's build recorded them.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The attribute is missing or empty, which means the
+    /// companion project stopped being referenced or stopped writing it - and an empty set would make
+    /// every ambient namespace look invented rather than make this row pass, so it is worth saying
+    /// which of the two happened.</exception>
+    private static IReadOnlySet<string> ReadTemplateUsings()
     {
-        "Microsoft.AspNetCore.Builder",
-        "Microsoft.AspNetCore.Hosting",
-        "Microsoft.AspNetCore.Http",
-        "Microsoft.AspNetCore.Routing",
-        "Microsoft.Extensions.Configuration",
-        "Microsoft.Extensions.DependencyInjection",
-        "Microsoft.Extensions.Hosting",
-        "Microsoft.Extensions.Logging",
-        "System",
-        "System.Collections.Generic",
-        "System.IO",
-        "System.Linq",
-        "System.Net.Http",
-        "System.Net.Http.Json",
-        "System.Threading",
-        "System.Threading.Tasks",
-    };
+        const string Companion = "Abblix.DocSamples.WebTemplate";
+
+        Assembly companion;
+        try
+        {
+            companion = Assembly.Load(Companion);
+        }
+        catch (FileNotFoundException notFound)
+        {
+            // By name rather than by path, so the runtime resolves it the way it resolves every other
+            // reference. Missing means the project reference is gone, and saying so beats a set that
+            // arrives empty and makes every ambient namespace look invented.
+            throw new InvalidOperationException(
+                $"{Companion} is not beside the tests, so the web template's imports cannot be read.",
+                notFound);
+        }
+
+        var names = companion
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Where(metadata => metadata.Key == "WebTemplateImplicitUsings")
+            .SelectMany(metadata => (metadata.Value ?? string.Empty).Split(
+                ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (names.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The companion project carries no implicit usings, which no web-SDK project does: its "
+                + "attribute was renamed, or its item group moved above the SDK props it reads.");
+        }
+
+        return names;
+    }
 
     /// <summary>
     /// Every README that ships with a package: the repository's own, and one per library.
@@ -83,15 +115,19 @@ public static class ReadmeSampleReader
     /// </remarks>
     public static IReadOnlyList<string> Files(string repositoryRoot)
     {
-        var files = new List<string> { "README.md" };
-
-        files.AddRange(Directory
+        // The repository's own README goes through the same existence check as the rest. Listed
+        // unconditionally it would be reported as present by a method that had merely repeated the
+        // literal back, and the row asserting it is there would have measured nothing.
+        var candidates = Directory
             .EnumerateDirectories(Path.Combine(repositoryRoot, "src"))
             .Select(directory => Path.Combine(directory, "README.md"))
-            .Where(File.Exists)
-            .Select(path => Path.GetRelativePath(repositoryRoot, path).Replace('\\', '/')));
+            .Prepend(Path.Combine(repositoryRoot, "README.md"));
 
-        return files.OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        return candidates
+            .Where(File.Exists)
+            .Select(path => Path.GetRelativePath(repositoryRoot, path).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>
@@ -114,7 +150,7 @@ public static class ReadmeSampleReader
 
             if (!inside)
             {
-                if (trimmed is "```csharp" or "```cs")
+                if (LanguageOf(trimmed) is "csharp" or "cs")
                 {
                     inside = true;
                     current = [];
@@ -149,6 +185,28 @@ public static class ReadmeSampleReader
         .Sum(file => Blocks(Path.Combine(repositoryRoot, file)).Count);
 
     /// <summary>
+    /// The language a fence opens with, or null where the line opens no fence.
+    /// </summary>
+    /// <remarks>
+    /// The first word after the backticks, because a fence may carry attributes after its language
+    /// (<c>```csharp title="Program.cs"</c> renders in several site generators). Matching the whole line
+    /// would leave such a block uncounted, and an uncounted block is exactly the silence the remainder
+    /// count exists to break.
+    /// </remarks>
+    private static string? LanguageOf(string trimmed)
+    {
+        const string Fence = "```";
+
+        if (!trimmed.StartsWith(Fence, StringComparison.Ordinal))
+            return null;
+
+        var info = trimmed[Fence.Length..].Trim();
+        var space = info.IndexOf(' ');
+
+        return space < 0 ? info : info[..space];
+    }
+
+    /// <summary>
     /// One enrolled sample, split into the imports it shows and the code under them.
     /// </summary>
     /// <exception cref="InvalidOperationException">The README has no block at that index, which means
@@ -166,6 +224,27 @@ public static class ReadmeSampleReader
         }
 
         return Split(blocks[sample.Index]);
+    }
+
+    /// <summary>
+    /// The namespace a line imports, or null where the line is not a using directive at all.
+    /// </summary>
+    /// <remarks>
+    /// A using STATEMENT opens a scope and belongs to the body; only a directive names a namespace, and
+    /// the difference is the parenthesis rather than the keyword. Shared with the row that compares a
+    /// copy's imports, which would otherwise read <c>using var scope = provider.CreateScope();</c> as a
+    /// namespace and report a mismatch nobody could act on.
+    /// </remarks>
+    public static string? NamespaceOf(string line)
+    {
+        const string Directive = "using ";
+
+        var trimmed = line.Trim();
+
+        if (!trimmed.StartsWith(Directive, StringComparison.Ordinal) || !trimmed.EndsWith(';'))
+            return null;
+
+        return trimmed.Contains('(') ? null : trimmed[..^1][Directive.Length..].Trim();
     }
 
     /// <summary>
@@ -190,15 +269,10 @@ public static class ReadmeSampleReader
             if (line.Length == 0)
                 continue;
 
-            if (!line.StartsWith("using ", StringComparison.Ordinal) || !line.EndsWith(';'))
+            if (NamespaceOf(line) is not { } imported)
                 break;
 
-            // A using STATEMENT opens a scope and belongs to the body; only a directive names a
-            // namespace, and the difference is the parenthesis rather than the keyword.
-            if (line.Contains('('))
-                break;
-
-            usings.Add(line[..^1]["using ".Length..].Trim());
+            usings.Add(imported);
         }
 
         return (usings, block.Skip(index).ToArray());

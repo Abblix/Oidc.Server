@@ -116,9 +116,11 @@ public class ReadmeSampleTests
         var root = RepositoryRoot();
         var files = ReadmeSampleReader.Files(root);
 
-        // Two controls. A root found wrong, or a src/ that stopped being walked, reports zero blocks and
-        // reads exactly like a repository whose READMEs carry no code - which is the shape every quiet
-        // failure of this kind takes.
+        // Two controls, and each answers a different way of reading nothing. The repository's own
+        // README is listed only if it is really there, so the first row falls when the root is found
+        // wrong - which otherwise reads as a repository whose READMEs carry no code. The second is
+        // about the walk: src/ unread leaves exactly one file, and one file passes any assertion
+        // phrased as "some were found".
         Assert.Contains("README.md", files);
         Assert.True(files.Count > 1, "only the repository's own README was found, so src/ went unread");
 
@@ -150,10 +152,14 @@ public class ReadmeSampleTests
     /// <summary>
     /// The namespaces named by the using directives among these lines.
     /// </summary>
+    /// <remarks>
+    /// Through the same rule the reader applies to a README block, so a <c>using</c> that opens a scope
+    /// is not counted as an import on one side and skipped on the other.
+    /// </remarks>
     private static IReadOnlyList<string> Namespaces(IEnumerable<string> lines) => lines
-        .Select(line => line.Trim())
-        .Where(line => line.StartsWith("using ", StringComparison.Ordinal) && line.EndsWith(';'))
-        .Select(line => line[..^1]["using ".Length..].Trim())
+        .Select(ReadmeSampleReader.NamespaceOf)
+        .Where(name => name is not null)
+        .Select(name => name!)
         .ToArray();
 
     /// <summary>
