@@ -65,7 +65,6 @@ dotnet add package Abblix.OIDC.Server.MVC
 ```csharp
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Mvc;
-using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
@@ -74,7 +73,7 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddOidcServices(options =>
 {
     options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig) };
+    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) };
 });
 ```
 
