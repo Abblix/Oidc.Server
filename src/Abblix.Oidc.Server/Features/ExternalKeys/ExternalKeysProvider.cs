@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
@@ -47,17 +48,36 @@ public sealed class ExternalKeysProvider(
             ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
             : AsyncEnumerable.Empty<JsonWebKey>();
 
-    // Note: this lists the custodian's key versions on every call. Versions change on human timescales (a
-    // rotation), so a production deployment caches the enumeration for a short lifetime and recomputes only the
-    // produce-first ordering (cheap and time-dependent) per call. It is left uncached here to keep the seam
-    // obvious; a host layers its own caching over this provider.
+    // The last enumeration that succeeded, per key name. It is not an optimization: the published set is what
+    // relying parties verify already-issued tokens against, so letting a custodian outage empty it stops them
+    // validating tokens that are perfectly good. Serving the previous set instead costs freshness, and staleness
+    // is the direction the protocol is built to absorb - OpenID Connect Core 10.1.1 has a verifier re-fetch when
+    // it meets an unfamiliar kid, and asks the document to keep recently retired keys for a while anyway. A new
+    // version cannot appear while the custodian is unreachable, because nothing can sign with it either.
+    private readonly ConcurrentDictionary<string, IReadOnlyList<KeyVersion>> _lastPublished = new();
+
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
         string keyName,
         string usage,
         string algorithm,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
+        IReadOnlyList<KeyVersion> versions;
+        try
+        {
+            versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
+            _lastPublished[keyName] = versions;
+        }
+        catch (Exception failure)
+            when (failure is KeyCustodianUnavailableException or KeyCustodianFailedException)
+        {
+            // A cold start has nothing to fall back on, and saying so is the honest answer: the endpoint turns
+            // this into the status that says whether to come back.
+            if (!_lastPublished.TryGetValue(keyName, out var lastKnown))
+                throw;
+
+            versions = lastKnown;
+        }
 
         // Stamp the use and the configured algorithm on each version's bare public key (RSA or EC); keep the
         // version-specific kid the custodian set, falling back to the configured key name for a single-version

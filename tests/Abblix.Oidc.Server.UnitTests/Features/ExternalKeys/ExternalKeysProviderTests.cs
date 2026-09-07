@@ -175,6 +175,59 @@ public class ExternalKeysProviderTests
         return new ExternalKeysProvider(custodian, keys, options, timeProvider);
     }
 
+
+    [Fact]
+    public async Task ThePublishedSetSurvivesAnOutageOnceItHasBeenRead()
+    {
+        // The published set is what relying parties verify already-issued tokens against, so an outage that
+        // empties it stops them validating tokens that are perfectly good. A version cannot appear while the
+        // custodian is down either, because nothing can sign with it, so the previous set is not merely the
+        // best available answer - it is the right one.
+        using var rsa = RSA.Create(2048);
+        var version = BareVersion(new RsaJsonWebKey().Apply(rsa.ExportParameters(false)));
+        var custodian = new Mock<IKeyCustodian>();
+        var sealedUp = false;
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
+            .Returns(() => sealedUp
+                ? Throwing()
+                : new[] { version }.ToAsyncEnumerable());
+
+        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+
+        var first = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+        sealedUp = true;
+        var afterTheOutage = await SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(first.KeyId, afterTheOutage.KeyId);
+    }
+
+    [Fact]
+    public async Task AColdStartHasNothingToServeAndSaysSo()
+    {
+        // The control for the row above. Falling back to an empty set would publish a JWKS with no keys, which
+        // reads to a relying party as "this issuer signs nothing" rather than as an outage, and it would make
+        // the row above pass on a provider that swallows every failure.
+        var custodian = new Mock<IKeyCustodian>();
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))
+            .Returns(Throwing);
+
+        var provider = Provider(custodian.Object, TimeProvider.System, TimeSpan.FromHours(1));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => SingleAsync(provider.GetSigningKeys(), TestContext.Current.CancellationToken));
+    }
+
+    private static async IAsyncEnumerable<KeyVersion> Throwing()
+    {
+        await Task.Yield();
+        throw new KeyCustodianUnavailableException("list key versions", "sealed");
+#pragma warning disable CS0162 // Unreachable, and required: a method without a yield is not an iterator.
+        yield break;
+#pragma warning restore CS0162
+    }
+
     private static IKeyCustodian CustodianWith(string keyName, params KeyVersion[] versions)
     {
         var custodian = new Mock<IKeyCustodian>();
