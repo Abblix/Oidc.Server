@@ -90,7 +90,7 @@ use cases you claim, though - an unclaimed event carrying an empty object still 
 policy is a statement about the profile and not a validator for CAEP 1.0.
 
 Two things the policy does not reach. Naming a use case the profile does not define is refused when the
-policy is built, because a value it does not recognise would otherwise leave it registered, consulted and
+policy is built, because a value it does not recognize would otherwise leave it registered, consulted and
 refusing nothing. And `DispatchToStreamAsync` is not judged at all: it carries the framework's own
 verification and stream-updated signals, and its callers write state before dispatching, so a refusal
 there would fault mid-operation.

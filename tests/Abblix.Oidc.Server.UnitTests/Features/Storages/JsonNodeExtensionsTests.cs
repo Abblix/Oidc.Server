@@ -500,7 +500,7 @@ public class JsonNodeExtensionsTests
     /// becomes their first caller, does not have to find out how they behave.
     /// The round trip is asserted rather than either direction alone, because the number handling is where a
     /// pair like this loses information: protobuf carries every number as a double, so a whole one has to be
-    /// recognised on the way back or an integer claim returns as a fraction.
+    /// recognized on the way back or an integer claim returns as a fraction.
     /// </remarks>
     [Fact]
     public void DictionaryRoundTrip_PreservesValuesAndTheirTypes()

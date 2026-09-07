@@ -271,7 +271,7 @@ public class BackChannelLogoutProfileTests
 
         // The code by name. This row previously asserted only that it was NOT SignatureInvalid, and when
         // that was deleted it asserted nothing about the code at all - on the one path the ledger records
-        // as the source of a shipped-behaviour regression.
+        // as the source of a shipped-behavior regression.
         Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
         Assert.Contains(algorithm, error.Description, StringComparison.Ordinal);
         Assert.Contains(SigningAlgorithms.RS256, error.Description, StringComparison.Ordinal);

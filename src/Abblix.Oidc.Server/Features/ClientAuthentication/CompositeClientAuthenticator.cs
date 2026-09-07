@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This is intentionally a try-each composite rather than keyed-name DI by
 /// <c>token_endpoint_auth_method</c>: that method is not a discriminator present in the token
 /// request (it is the client's registered metadata), so it cannot be keyed on directly - each
-/// authenticator instead self-selects by recognising its own credential form. See the rationale
+/// authenticator instead self-selects by recognizing its own credential form. See the rationale
 /// at <see cref="ServiceCollectionExtensions.AddClientAuthentication"/>.
 /// </remarks>
 internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators)

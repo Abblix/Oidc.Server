@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// <summary>
 /// Verifies that <see cref="DefaultResourceIndicatorValidator"/> refuses a default that would put an unusable
 /// value in every access token's <c>aud</c> claim, rather than letting it surface later as a resource server
-/// rejecting tokens it cannot recognise.
+/// rejecting tokens it cannot recognize.
 /// </summary>
 public class DefaultResourceIndicatorValidatorTests
 {
@@ -75,7 +75,7 @@ public class DefaultResourceIndicatorValidatorTests
 
     /// <summary>
     /// A default naming a resource this server does not know produces tokens whose audience no resource server
-    /// recognises - and the request that named the same identifier explicitly would be refused as
+    /// recognizes - and the request that named the same identifier explicitly would be refused as
     /// <c>invalid_target</c>, so the two paths would disagree about one value.
     /// </summary>
     [Fact]

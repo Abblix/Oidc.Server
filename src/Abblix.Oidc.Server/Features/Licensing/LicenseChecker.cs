@@ -121,7 +121,7 @@ public static partial class LicenseChecker
 
         if (currentLicense.ValidIssuers is { Count: > 0 } && !currentLicense.ValidIssuers.Contains(issuer))
         {
-            // Throttled like every other licence log site. A misconfigured issuer is reported on every single
+            // Throttled like every other license log site. A misconfigured issuer is reported on every single
             // request, so an unthrottled Critical record here floods the log - and on Windows the Event Log -
             // with one entry per request, drowning the very message an operator needs to find.
             if (LicenseLogger.Instance.IsAllowed(new { issuer }, utcNow, TimeSpan.FromMinutes(15)))

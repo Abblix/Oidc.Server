@@ -58,7 +58,7 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Revoking_a_token_that_was_never_issued_still_answers_success()
     {
-        // RFC 7009 Section 2.2 requires 200 for a token the server does not recognise. The reason is not
+        // RFC 7009 Section 2.2 requires 200 for a token the server does not recognize. The reason is not
         // politeness: a distinguishable answer turns the endpoint into an oracle that tells an attacker
         // whether a guessed token exists, which is the one thing this endpoint must never reveal.
         var client = CreateClient();

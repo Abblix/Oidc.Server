@@ -57,11 +57,11 @@ public record ValidationParameters
 	/// "Matching of media type and subtype is ALWAYS case-insensitive". The general
 	/// string-comparison rules of RFC 7515 section 5.3 do not govern this parameter; that section
 	/// ends by exempting it by name.
-	/// The comparer carried by the set is NOT what produces this behaviour and is not consulted
+	/// The comparer carried by the set is NOT what produces this behavior and is not consulted
 	/// for matching - the validator compares explicitly, so that its rules cannot be widened or
 	/// narrowed by how a host happened to construct the collection. Supply any comparer, or none.
 	/// When this property is null or empty the validator skips the check, preserving
-	/// historical behaviour for callers that have not opted in.
+	/// historical behavior for callers that have not opted in.
 	/// </remarks>
 	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
 

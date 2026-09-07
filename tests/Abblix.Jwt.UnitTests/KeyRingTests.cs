@@ -50,7 +50,7 @@ public sealed class KeyRingTests : IDisposable
 
     /// <summary>An in-memory ring store, standing in for the shared one a deployment uses.</summary>
     /// <remarks>
-    /// It can also refuse to answer, which is how the refresh loop's behaviour under an outage is exercised:
+    /// It can also refuse to answer, which is how the refresh loop's behavior under an outage is exercised:
     /// <see cref="FailWith"/> is the store being down, <see cref="BlockUntilCancelled"/> is a call still in flight
     /// when the host shuts down. <see cref="Loads"/> counts through both, because the point of those tests is that
     /// the loop asks again.
@@ -62,7 +62,7 @@ public sealed class KeyRingTests : IDisposable
         /// <summary>What every subsequent load throws, or <c>null</c> while the store is healthy.</summary>
         public Exception? FailWith { get; set; }
 
-        /// <summary>Whether a load hangs until its token is cancelled, instead of answering.</summary>
+        /// <summary>Whether a load hangs until its token is canceled, instead of answering.</summary>
         public bool BlockUntilCancelled { get; set; }
 
         private int _loads;
@@ -224,7 +224,7 @@ public sealed class KeyRingTests : IDisposable
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
-        // The period id is derived, not random, so a second refresh recognises the period is served.
+        // The period id is derived, not random, so a second refresh recognizes the period is served.
         Assert.Single(store.Entries);
     }
 
@@ -546,7 +546,7 @@ public sealed class KeyRingTests : IDisposable
 
     /// <summary>
     /// The builder call reaches the ring. Everything above constructs the ring directly, which proves the
-    /// behaviour and nothing about the wiring - and a registration method that quietly reaches nobody reads
+    /// behavior and nothing about the wiring - and a registration method that quietly reaches nobody reads
     /// exactly like one that works.
     /// </summary>
     [Fact]
@@ -648,7 +648,7 @@ public sealed class KeyRingTests : IDisposable
 
     /// <summary>
     /// Shutting the host down while a refresh is in flight is not a failure and must not be reported as one. A
-    /// cancelled call would otherwise write an Error on every ordinary pod restart, which is how a log nobody
+    /// canceled call would otherwise write an Error on every ordinary pod restart, which is how a log nobody
     /// reads is made.
     /// </summary>
     [Fact]
@@ -664,7 +664,7 @@ public sealed class KeyRingTests : IDisposable
         await service.StartAsync(TestContext.Current.CancellationToken);
         await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-        // The next load hangs, so the refresh is still running when the host stops and its token is cancelled.
+        // The next load hangs, so the refresh is still running when the host stops and its token is canceled.
         store.BlockUntilCancelled = true;
         var loadsBeforeStop = store.Loads;
 

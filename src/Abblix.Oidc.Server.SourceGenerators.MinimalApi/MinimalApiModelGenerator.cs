@@ -236,7 +236,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var elementsRequired = ResolveTwin(compilation, validationNamespace, ElementsRequiredMarkerName, diagnostics);
             var allowedValues = ResolveTwin(compilation, validationNamespace, AllowedValuesMarkerName, diagnostics);
 
-            // The declarative markers are recognised on core models by their namespace; resolve it from an anchor
+            // The declarative markers are recognized on core models by their namespace; resolve it from an anchor
             // marker so a rename of the marker namespace fails loud here instead of silently unmatching every marker.
             var declarativeAnchor = ResolveExecutable(compilation, DeclarativeMarkerAnchor, diagnostics);
 
@@ -640,7 +640,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 } attributeClass &&
                 attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace);
 
-        // A declarative-binding attribute the generator does not recognise - renamed on the core side without
+        // A declarative-binding attribute the generator does not recognize - renamed on the core side without
         // updating the matching const here, or newly added - would silently drop its binding or validation. Each
         // such marker fails the build instead, mirroring the MVC generator's MarkerWithoutBinder guard.
         private void ReportUnrecognizedMarkers(IPropertySymbol property)

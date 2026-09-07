@@ -44,7 +44,7 @@ public sealed class DistributedJwtReplayCache(ReplayPrevention.IJwtReplayCache c
         // express atomically alongside the canonical write - so the shim
         // simulates it by inverting a recording call: any «replay = true»
         // outcome here was already recorded by an earlier call, never by this
-        // probe. Sequential callers see the historical behaviour; concurrent
+        // probe. Sequential callers see the historical behavior; concurrent
         // callers retain the historical race.
         return !await canonical.TryAddAsync(jti, expiresAt: null);
     }

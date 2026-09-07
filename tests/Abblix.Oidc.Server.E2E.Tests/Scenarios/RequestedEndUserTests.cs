@@ -137,7 +137,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// redirection. A validator placed before the redirect URI has been established cannot do that, and
     /// nothing inside the validator can tell - which is why this is asserted from a real host.
     /// <see cref="TestBase.AuthorizeAndExtractErrorAsync"/> fails the test on any response that is not a
-    /// redirect, so the assertion below is reached only if the refusal travelled the right way.
+    /// redirect, so the assertion below is reached only if the refusal traveled the right way.
     /// </remarks>
     [Fact]
     public async Task An_unusable_hint_is_refused_by_redirect_not_by_an_error_page()
@@ -340,7 +340,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// The verifier travels beside the request rather than inside it. This client is registered as requiring
     /// PKCE, so the code cannot be redeemed without it, and a verifier carried in the same dictionary would
     /// be sent to the authorization endpoint as a query parameter - where the server is told to ignore what
-    /// it does not recognise, so nothing would ever complain.
+    /// it does not recognize, so nothing would ever complain.
     /// </remarks>
     private static (Dictionary<string, string> Request, string Verifier) SilentRenewal()
     {

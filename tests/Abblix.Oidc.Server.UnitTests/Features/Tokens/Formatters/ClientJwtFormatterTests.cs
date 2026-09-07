@@ -207,7 +207,7 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// The whole flow for a token this overload recognises: signed with the service key the header's algorithm
+    /// The whole flow for a token this overload recognizes: signed with the service key the header's algorithm
     /// selects, then encrypted to the client's published key. Its neighbours each check one collaborator; this
     /// one requires all three to have been asked, exactly once.
     /// </summary>
@@ -302,7 +302,7 @@ public class ClientJwtFormatterTests
     /// </summary>
     /// <remarks>
     /// The untyped arm covers the ID TOKEN as well, and that is the counter-intuitive part worth stating: an ID
-    /// token carries no type of its own, so this overload cannot recognise it and gives it the userinfo
+    /// token carries no type of its own, so this overload cannot recognize it and gives it the userinfo
     /// registration rather than the id_token one. That is not a defect to fix here but the reason the overload
     /// is obsolete - inferring an encryption policy from a header no specification defines was never sound, and
     /// real issuance passes the policy explicitly.
@@ -338,7 +338,7 @@ public class ClientJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        // Act & Assert - a logout token is the one type this overload recognises, and it takes the id_token
+        // Act & Assert - a logout token is the one type this overload recognizes, and it takes the id_token
         // encryption metadata (both alg and enc).
         var logoutToken = new JsonWebToken
         {

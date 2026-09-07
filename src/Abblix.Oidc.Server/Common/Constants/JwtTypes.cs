@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// there looks exactly as authoritative as one that was actually standardised.
 /// <para>
 /// Changing a prefixed value is possible but not free: it changes what an already-issued token
-/// looks like, so tokens minted before the change stop being recognised.
+/// looks like, so tokens minted before the change stop being recognized.
 /// </para>
 /// </remarks>
 public static class JwtTypes

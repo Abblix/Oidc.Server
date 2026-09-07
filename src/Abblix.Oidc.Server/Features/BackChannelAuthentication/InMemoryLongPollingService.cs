@@ -97,7 +97,7 @@ public partial class InMemoryLongPollingService(
         finally
         {
             // A signaled waiter has already completed, so this is a no-op for it; for a timed-out
-            // or cancelled waiter it releases the still-pending task.
+            // or canceled waiter it releases the still-pending task.
             tcs.TrySetCanceled(cancellationToken);
 
             // Remove this waiter so a request abandoned by the user - one that expires by storage

@@ -60,7 +60,7 @@ Usage:
 🔒 Security
 -----------
 
-<!-- Describe the new behaviour or the requirement, never the hole it closes: a release body that names a
+<!-- Describe the new behavior or the requirement, never the hole it closes: a release body that names a
      vulnerability advertises it in every version published before this one. Never mention an issue that is
      still open. A fix a host need not act on ships silently - see SECURITY.md. -->
 <!-- Include security-related changes -->

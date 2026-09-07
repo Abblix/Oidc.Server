@@ -180,7 +180,7 @@ public class IdTokenHintParserTests
     /// expiry to this parser.
     /// </summary>
     /// <remarks>
-    /// Asserted rather than left to the behaviours they produce, because neither can be observed from here:
+    /// Asserted rather than left to the behaviors they produce, because neither can be observed from here:
     /// whether an expired hint is accepted and whether an audience naming somebody else is tolerated are
     /// both decided inside the validator this test mocks. What this pins is the instruction.
     /// <para>

@@ -84,7 +84,7 @@ public static class EndpointRouteBuilderExtensions
         // not be readable over plain HTTP either - a man-in-the-middle could rewrite the advertised endpoints or
         // jwks_uri and steer clients onto attacker infrastructure. A host that genuinely needs an ungated route -
         // a liveness/health probe - maps it outside MapOidcEndpoints; the library gates all of its own endpoints
-        // without exception. See RequireHttpsAsync for the redirect/refuse behaviour.
+        // without exception. See RequireHttpsAsync for the redirect/refuse behavior.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
         // RFC 6749 section 5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,

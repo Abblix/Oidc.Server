@@ -251,7 +251,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 				else if (IsExcludedFromWire(property))
 				{
 					// A payload-excluded property carrying a declarative marker the generator does
-					// not recognise would silently fall out of the model - fail the build instead,
+					// not recognize would silently fall out of the model - fail the build instead,
 					// so a renamed or mistyped marker cannot drop a parameter unnoticed.
 					if (HasDeclarativeMarker(property))
 					{

@@ -13,7 +13,7 @@ namespace Abblix.Jwt;
 /// semantics via <see cref="HandleAsync"/>. The JOSE header parameter name the handler
 /// implements is the DI key it is registered under - see
 /// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/> - so name
-/// and behaviour are inseparable: a name cannot be registered without a handler behind it.
+/// and behavior are inseparable: a name cannot be registered without a handler behind it.
 /// </summary>
 /// <remarks>
 /// <para>

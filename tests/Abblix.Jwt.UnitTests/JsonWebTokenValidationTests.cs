@@ -1380,7 +1380,7 @@ public class JsonWebTokenValidationTests
 
     /// <summary>
     /// Sanity baseline: when <see cref="ValidationParameters.ExpectedTokenTypes"/> is null,
-    /// the validator skips <c>typ</c> enforcement entirely - preserves historical behaviour
+    /// the validator skips <c>typ</c> enforcement entirely - preserves historical behavior
     /// for callers that have not opted in to the RFC 8725 section 3.11 hook.
     /// </summary>
     [Fact]
@@ -1504,7 +1504,7 @@ public class JsonWebTokenValidationTests
     /// This test asserted the opposite until 2026-07-20, citing RFC 7515 section 5.3 - which is
     /// the section that ends "Only the 'typ' and 'cty' member values defined in this
     /// specification do not use these comparison rules", exempting <c>typ</c> rather than
-    /// governing it. The assertion was holding the wrong behaviour in place.
+    /// governing it. The assertion was holding the wrong behavior in place.
     /// </remarks>
     [Fact]
     public async Task ExpectedTokenTypes_TypMatchesCaseInsensitively()
@@ -1730,7 +1730,7 @@ public class JsonWebTokenValidationTests
     /// RFC 8725 section 3.1 (alg-stripping on a captured token): take a genuinely RS256-signed token, rewrite
     /// its header 'alg' to 'none' and drop the signature. Under the default options (RequireSignedTokens)
     /// the downgraded token must be rejected as <see cref="JwtError.InvalidAlgorithm"/> - the captured
-    /// payload is not trusted just because the attacker relabelled it unsigned.
+    /// payload is not trusted just because the attacker relabeled it unsigned.
     /// </summary>
     [Fact]
     public async Task SignedJws_AlgStrippedToNone_RejectedWhenSigningRequired()

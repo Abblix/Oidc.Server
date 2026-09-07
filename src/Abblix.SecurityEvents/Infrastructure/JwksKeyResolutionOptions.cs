@@ -69,7 +69,7 @@ public sealed class JwksKeyResolutionOptions
     /// </para>
     /// <para>
     /// Answering null rather than throwing is what lets the selectors after it, and then the
-    /// convention, still run: a delegate that threw for an issuer it did not recognise would take
+    /// convention, still run: a delegate that threw for an issuer it did not recognize would take
     /// the fallback out for every other issuer, since nothing runs past a throw.
     /// </para>
     /// </remarks>

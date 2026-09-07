@@ -82,7 +82,7 @@ public partial class LogoutTokenService(
             .WithEvent(LogoutTokenEvents.BackChannelLogout);
 
         // Either identifier may be absent - the guard above requires one of the two - and an
-        // absent one stays off the wire entirely rather than travelling as an empty value.
+        // absent one stays off the wire entirely rather than traveling as an empty value.
         if (!string.IsNullOrEmpty(subjectId))
         {
             builder.WithSubject(subjectId);

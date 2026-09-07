@@ -97,7 +97,7 @@ public record OidcOptions
 	/// validating - an endpoint it was never asked to serve. Setting this to <see cref="OidcEndpoints.All"/> only
 	/// re-advertises and routes every endpoint - the handler for each opt-in endpoint (CheckSession, Revocation,
 	/// Introspection, dynamic client registration, CIBA, device authorization) is still registered solely by its
-	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behaviour only when combined with
+	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behavior only when combined with
 	/// all of those opt-in calls. Setting <c>All</c> without them advertises and routes endpoints whose handlers are
 	/// absent, so every request to such an endpoint fails at runtime.
 	/// </summary>
@@ -284,7 +284,7 @@ public record OidcOptions
 	/// told apart there from a deployment whose audiences arrive through RFC 8693 token exchange, where
 	/// they come from the client's own allowlist rather than from this list and the filter works.
 	///
-	/// Turn it on and an entry naming only other resource servers stops travelling to this one, which is
+	/// Turn it on and an entry naming only other resource servers stops traveling to this one, which is
 	/// what section 9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
 	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
 	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
@@ -360,7 +360,7 @@ public record OidcOptions
 	/// the strict RFC 9101 section 6.3 rule, where the authorization request is exactly the content of the object and
 	/// any parameter passed outside it is ignored ("the authorization server MUST only use the parameters in
 	/// the Request Object"). The strict rule suits FAPI-style OAuth deployments; as an OpenID Provider the
-	/// server defaults to the merge behaviour, since strict processing would drop parameters that existing
+	/// server defaults to the merge behavior, since strict processing would drop parameters that existing
 	/// OpenID Connect clients commonly pass outside the object. A client held to the FAPI 2.0 security profile
 	/// is processed strictly regardless of this global default.
 	/// This switch affects only parameter exclusivity; the other RFC 9101 section 6.3 requirement - that a
@@ -531,7 +531,7 @@ public record OidcOptions
 
 	/// <summary>
 	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the
-	/// <see cref="ProofValidator"/> behaviour and related primitives.
+	/// <see cref="ProofValidator"/> behavior and related primitives.
 	/// </summary>
 	public DPoPOptions DPoP { get; set; } = new();
 

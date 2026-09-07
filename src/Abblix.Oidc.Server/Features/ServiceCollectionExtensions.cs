@@ -150,7 +150,7 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServiceTokensAlgorithmsValidator>());
 
         // Refuse a default resource indicator that no resource server could accept, rather than minting every
-        // access token with an audience nothing recognises.
+        // access token with an audience nothing recognizes.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, DefaultResourceIndicatorValidator>());
 

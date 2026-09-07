@@ -40,7 +40,7 @@ public sealed class CaepInteropProfileDispatchTests
     private const string Issuer = "https://tr.example.com";
 
     /// <summary>
-    /// Each of the three use cases, because a policy that recognised only <c>session-revoked</c> would
+    /// Each of the three use cases, because a policy that recognized only <c>session-revoked</c> would
     /// pass a suite written for the event the specification happens to name first.
     /// </summary>
     [Theory]

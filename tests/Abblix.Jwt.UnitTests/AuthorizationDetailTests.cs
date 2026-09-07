@@ -286,7 +286,7 @@ public class AuthorizationDetailTests
     /// </summary>
     /// <remarks>
     /// RFC 9396 section 2.2 makes every one of these members optional, so absence is the honest way to say
-    /// "none" - and it keeps the behaviour a caller already had before the single-value case was fixed,
+    /// "none" - and it keeps the behavior a caller already had before the single-value case was fixed,
     /// which is what stops that fix from being a second, silent change.
     /// </remarks>
     [Fact]

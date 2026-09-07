@@ -299,7 +299,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// through this method - every claim has exactly one writer. "exp" is rejected
     /// outright: RFC 8417 Section 2.2 already advises against it for a token that records
     /// history, and Sections 4.1 and 4.2 make its ABSENCE the wall between a SET and the ID and
-    /// access tokens an attacker would like to pass one off as - this builder takes that defence
+    /// access tokens an attacker would like to pass one off as - this builder takes that defense
     /// as its own profile rule rather than leaving it to every caller.</exception>
     public SecurityEventTokenBuilder WithClaim(string name, JsonNode? value)
     {

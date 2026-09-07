@@ -201,7 +201,7 @@ public static class ServiceCollectionExtensions
     /// Registers an <see cref="ICriticalHeaderHandler"/> for a single JOSE header extension
     /// parameter listed in a JWS 'crit' array (RFC 7515 section 4.1.11). The parameter name is the
     /// DI key, so the registration cannot claim a name without a handler behind it - name and
-    /// behaviour are inseparable.
+    /// behavior are inseparable.
     /// </summary>
     /// <typeparam name="THandler">Concrete handler type.</typeparam>
     /// <param name="services">The service collection to register the handler in.</param>

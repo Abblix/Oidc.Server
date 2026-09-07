@@ -65,7 +65,7 @@ public sealed partial class PushDeliveryScheduler(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             // A pass that throws must not take the host down with it. The exception filter keeps
-            // shutdown silent: a cancelled pass is the host stopping, not a fault to report.
+            // shutdown silent: a canceled pass is the host stopping, not a fault to report.
             try
             {
                 await SweepAsync(stoppingToken);

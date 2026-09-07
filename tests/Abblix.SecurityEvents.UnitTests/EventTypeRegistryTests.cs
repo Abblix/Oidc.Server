@@ -106,7 +106,7 @@ public class EventTypeRegistryTests
     [Fact]
     public void TypedWithEvent_OfAnUnknownPayload_RetransmitsTheOriginalJson()
     {
-        // Forwarding an event a receiver did not recognise must put the EVENT's JSON back on the
+        // Forwarding an event a receiver did not recognize must put the EVENT's JSON back on the
         // wire, not a serialization of the passthrough wrapper.
         var original = new JsonObject { ["anything"] = 42 };
         var unknown = new UnknownEventPayload(original);

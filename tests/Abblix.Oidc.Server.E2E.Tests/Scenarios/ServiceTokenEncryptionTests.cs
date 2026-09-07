@@ -127,7 +127,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     /// It does not prove that the refusal comes from <c>ValidateOnStart</c>. Measured by mutation: removing
     /// that call leaves this test green, because something in the composition already reads
     /// <c>IOptions&lt;OidcOptions&gt;.Value</c> while the host starts. The call is kept as a stated contract
-    /// rather than a behaviour this test can observe.
+    /// rather than a behavior this test can observe.
     /// </remarks>
     [Fact]
     public void StartupIsRefusedWhenEncryptionIsRequiredWithoutAnyKey()

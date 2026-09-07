@@ -39,7 +39,7 @@ public static class HashCalculator
     /// so on up. ES512 is the one that looks irregular and is not - it signs with SHA-512, matching its
     /// name rather than its P-521 curve.
     /// A null result is a real answer, not a failure to compute: <c>none</c> has no digest, and neither
-    /// does an algorithm this library does not recognise. The two sides then part ways, which is why
+    /// does an algorithm this library does not recognize. The two sides then part ways, which is why
     /// the decision is left here to the caller - an issuer omits the claim, while a client MUST refuse
     /// to treat the binding as satisfied, since "no hash was computable" and "the hash matched" would
     /// otherwise look the same to it.

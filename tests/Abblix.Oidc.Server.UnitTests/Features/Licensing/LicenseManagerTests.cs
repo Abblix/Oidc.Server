@@ -368,7 +368,7 @@ public class LicenseManagerTests
 
         Assert.Contains("https://only.example.com", record.Message, StringComparison.Ordinal);
 
-        // The day the successor STARTS, not the day the current licence expires. Merging a licence that
+        // The day the successor STARTS, not the day the current license expires. Merging a license that
         // names issuers with one that names none yields the named set, so the restriction begins five
         // days before the expiry - and a record naming the expiry would have an operator serving other
         // issuers for those five days while the checker throws on every one of them.
@@ -408,7 +408,7 @@ public class LicenseManagerTests
             Report(manager, utcNow),
             r => r.EventId.Id == LogEvents.Licensing.LicenseManager.RenewalGrantsLess);
 
-        // Day 5 plus a tick is when the thousand-client licence leaves the merge. Day 10 is when the
+        // Day 5 plus a tick is when the thousand-client license leaves the merge. Day 10 is when the
         // other one does, and by then nothing changes.
         Assert.Contains(utcNow.AddDays(5).ToString("R"), record.Message, StringComparison.Ordinal);
         Assert.Contains("clients 1000 -> 500", record.Message, StringComparison.Ordinal);
@@ -459,13 +459,13 @@ public class LicenseManagerTests
     }
 
     /// <summary>
-    /// The record is throttled, so a deployment consulting its licences per request gets one a day.
+    /// The record is throttled, so a deployment consulting its licenses per request gets one a day.
     /// </summary>
     /// <remarks>
     /// The key has to be built from VALUES. A merge allocates a fresh set for the issuers and
-    /// <see cref="License"/> compares that member by reference, so a key holding merged licences is a new
+    /// <see cref="License"/> compares that member by reference, so a key holding merged licenses is a new
     /// value on every scan and the window never closes - twenty warnings in twenty consults, measured,
-    /// against a control of one. And the path runs per request: a merge carrying a grace-period licence
+    /// against a control of one. And the path runs per request: a merge carrying a grace-period license
     /// reads as expired, so every consult rescans.
     /// </remarks>
     [Fact]
@@ -592,12 +592,12 @@ public class LicenseManagerTests
     /// An expiry at the last representable moment is not a fault, whatever offset it carries.
     /// </summary>
     /// <remarks>
-    /// There is no tick after it, and asking for one throws out of a licence check - a licensing question
+    /// There is no tick after it, and asking for one throws out of a license check - a licensing question
     /// answered with a server fault. Nothing follows it either, so it is simply not a moment the merge
     /// can change at.
     /// <para>
     /// The OFFSET is the half a zero-offset row cannot see, and the guard was written from a suite that
-    /// has only those: a licence file carries unix seconds, so <c>LicenseLoader</c> can produce nothing
+    /// has only those: a license file carries unix seconds, so <c>LicenseLoader</c> can produce nothing
     /// else, and at offset zero the clock time and the instant coincide. <see cref="License"/> and
     /// <see cref="LicenseManager.AddLicense"/> are public, so a host supplies one directly - and a value
     /// whose CLOCK time is maximal under a positive offset sits strictly below
@@ -606,7 +606,7 @@ public class LicenseManagerTests
     /// </para>
     /// <para>
     /// Driven through <c>ReportLoadedLicenses</c> rather than <c>TryGetCurrentLicenseLimit</c>, which is
-    /// the trap the row below already names and which caught the first version of THIS row: a licence
+    /// the trap the row below already names and which caught the first version of THIS row: a license
     /// expiring in the year 9999 is cached and never stale, so that method returns before it scans
     /// anything and the row passes over a build that still throws. This path runs at startup through
     /// <c>LicenseLoadingService</c>, so it is also where a deployment would meet it first.
@@ -705,7 +705,7 @@ public class LicenseManagerTests
     }
 
     /// <summary>
-    /// The original zero-offset case, kept because it is the one a licence file can actually produce.
+    /// The original zero-offset case, kept because it is the one a license file can actually produce.
     /// </summary>
     [Fact]
     public void A_maximal_expiry_with_a_perpetual_successor_does_not_fault()
@@ -719,7 +719,7 @@ public class LicenseManagerTests
         manager.AddLicense(new License { NotBefore = utcNow.AddDays(5), ClientLimit = 5 });
 
         // Through the reporting entry, not through TryGetCurrentLicenseLimit: with an expiry that far
-        // away the cached licence is never stale, so that method returns before it scans anything and
+        // away the cached license is never stale, so that method returns before it scans anything and
         // the row would pass over a build that still throws.
         Assert.Null(Record.Exception(() => manager.ReportLoadedLicenses(utcNow)));
     }
@@ -1628,7 +1628,7 @@ public class LicenseManagerTests
     /// </summary>
     /// <remarks>
     /// Starting before the current license ends is not the same as carrying the deployment past it. An
-    /// add-on bought alongside, or a short licence issued by mistake, begins inside the window and is over
+    /// add-on bought alongside, or a short license issued by mistake, begins inside the window and is over
     /// first - so the expiry is still coming, the warning is still true, and suppressing it would spend the
     /// last advance notice the deployment gets. What follows is the free tier, which allows one issuer and
     /// throws on every other one this server has seen.

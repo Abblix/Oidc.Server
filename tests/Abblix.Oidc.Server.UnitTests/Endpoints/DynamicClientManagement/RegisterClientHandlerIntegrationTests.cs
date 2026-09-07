@@ -78,7 +78,7 @@ public class RegisterClientHandlerIntegrationTests
             // the test focuses on the response_types / grant_types support gates added by
             // this PR. With RequireInitialAccessToken = true the InitialAccessTokenValidator
             // fires first and short-circuits with «invalid_token» before any support gate
-            // sees the request - masking the very behaviour we want to verify.
+            // sees the request - masking the very behavior we want to verify.
             opts.RequireInitialAccessToken = false;
 
             // A test that exercises the initial access token gate re-enables it here.

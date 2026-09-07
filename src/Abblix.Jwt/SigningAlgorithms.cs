@@ -97,7 +97,7 @@ public static class SigningAlgorithms
 	public const string HS512 = "HS512";
 
 	/// <summary>
-	/// The set of every <c>alg</c> identifier this library recognises. Per RFC 7515 section 5.3 and
+	/// The set of every <c>alg</c> identifier this library recognizes. Per RFC 7515 section 5.3 and
 	/// section 10.13 the comparison is byte-exact, so case-variants like <c>None</c>/<c>NONE</c> are
 	/// not members of this set and must be rejected as unknown algorithms - not silently
 	/// stream into the signature-verification path where they would surface as the

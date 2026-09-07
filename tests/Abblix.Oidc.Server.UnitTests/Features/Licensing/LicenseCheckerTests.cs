@@ -64,7 +64,7 @@ public class LicenseCheckerTests
     }
 
     /// <summary>
-    /// Verifies that CheckClientLicense serves distinct clients under a licence that sets no client limit.
+    /// Verifies that CheckClientLicense serves distinct clients under a license that sets no client limit.
     /// </summary>
     [Fact]
     public void CheckClientLicense_WithoutClientLimit_AllowsClients()

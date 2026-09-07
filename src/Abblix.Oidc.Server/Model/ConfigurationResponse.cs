@@ -95,7 +95,7 @@ public record ConfigurationResponse
         public const string ClaimsParameterSupported = "claims_parameter_supported";
 
         /// <summary>The <c>scopes_supported</c> metadata field listing scope values the provider
-        /// recognises.</summary>
+        /// recognizes.</summary>
         public const string ScopesSupported = "scopes_supported";
 
         /// <summary>The <c>claims_supported</c> metadata field listing claim names the provider may

@@ -143,7 +143,7 @@ public class TokenStatusValidatorDecoratorTests
 
     /// <summary>
     /// Tokens without a family claim (access tokens, ID tokens - anything that is not a rotating refresh token)
-    /// keep the pre-existing single-token behaviour: a used token is rejected, but no family cascade fires. This
+    /// keep the pre-existing single-token behavior: a used token is rejected, but no family cascade fires. This
     /// proves the family logic is inert for non-refresh tokens rather than reaching for a null family key.
     /// </summary>
     [Fact]

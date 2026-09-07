@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// By default this leaves <see cref="ConsentDefinition.AuthorizationDetails"/> as <c>null</c>
 /// on <see cref="UserConsents.Granted"/>, which the processor interprets as "legacy provider /
 /// passthrough" and emits the post-validator <c>authorization_details</c> from the request
-/// (preserving PR #135 byte-exact behaviour the existing E2E tests exercise).
+/// (preserving PR #135 byte-exact behavior the existing E2E tests exercise).
 /// <para>
 /// Per-test, scenarios opt in to consent-side narrow / deny by sending the
 /// <see cref="TestConsentOverrideMiddleware.HeaderName"/> header on their HTTP requests; the

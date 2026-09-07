@@ -52,7 +52,7 @@ public interface IJwtReplayCache
     /// provides only a probabilistic guarantee: two concurrent presenters of the
     /// same jti can both observe a miss before either writes. The race window is
     /// bounded by the cache round-trip and RFC 9449 section 11.1 accepts probabilistic
-    /// replay defence - but hosts that need strict atomicity should override the
+    /// replay defense - but hosts that need strict atomicity should override the
     /// registration with a backend-aware implementation that bypasses
     /// <see cref="Microsoft.Extensions.Caching.Distributed.IDistributedCache"/> and
     /// talks to the chosen backend's atomic primitive directly.

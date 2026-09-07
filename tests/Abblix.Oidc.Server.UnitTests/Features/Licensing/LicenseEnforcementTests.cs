@@ -39,7 +39,7 @@ public sealed class LicenseEnforcementTests : IDisposable
 
     public LicenseEnforcementTests() => TestLicense.ResetChecker();
 
-    /// <summary>Leaves the assembly's licence in place for everything that runs afterwards.</summary>
+    /// <summary>Leaves the assembly's license in place for everything that runs afterwards.</summary>
     public void Dispose() => TestLicense.ResetChecker();
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void An_issuer_the_licence_does_not_name_is_refused()
     {
-        // The whitelist is what ties a licence to the deployment it was issued for. Without it, a licence file
+        // The whitelist is what ties a license to the deployment it was issued for. Without it, a license file
         // works wherever it is copied.
         Assert.Throws<InvalidOperationException>(() => LicenseChecker.CheckIssuer(UnlicensedIssuer));
     }
@@ -71,10 +71,10 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void An_issuer_beyond_the_licensed_count_is_refused_every_time()
     {
-        // A licence that caps the number of issuers without naming them, which is the only arrangement under
-        // which the count is ever consulted: a licence that names its issuers refuses an unknown one on the
+        // A license that caps the number of issuers without naming them, which is the only arrangement under
+        // which the count is ever consulted: a license that names its issuers refuses an unknown one on the
         // name, before anything is counted. Written this way after the first attempt, which reused the
-        // assembly's licence, turned out to exercise the whitelist while claiming to test the count.
+        // assembly's license, turned out to exercise the whitelist while claiming to test the count.
         ArrangeLicenceThatCountsIssuers();
 
         Assert.Equal(TestLicense.Issuer, LicenseChecker.CheckIssuer(TestLicense.Issuer));
@@ -90,9 +90,9 @@ public sealed class LicenseEnforcementTests : IDisposable
     [Fact]
     public void A_client_is_accepted_while_the_licence_sets_no_client_limit()
     {
-        // The assembly licence carries no client_limit, so clients are unbounded. Worth pinning: were a later
-        // licence to introduce one, the whole suite would start tripping it, and the failure would look like
-        // anything except a change of licence terms.
+        // The assembly license carries no client_limit, so clients are unbounded. Worth pinning: were a later
+        // license to introduce one, the whole suite would start tripping it, and the failure would look like
+        // anything except a change of license terms.
         var client = new ClientInfo("some-client");
 
         Assert.Same(client, client.CheckClientLicense());
@@ -103,8 +103,8 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         // The one limit the free tier has. Its sibling below pins the client half of the same fallback, and
         // that asymmetry is how this went missing: every other test reaching CheckIssuer either runs under the
-        // assembly licence, and so is refused on the whitelist before anything is counted, or supplies a
-        // licence of its own carrying the limit. None of them asks the fallback what it allows, so the
+        // assembly license, and so is refused on the whitelist before anything is counted, or supplies a
+        // license of its own carrying the limit. None of them asks the fallback what it allows, so the
         // constant could be deleted outright with the whole suite still green - measured, not assumed.
         ArrangeInstallationWithNoLicence();
 
@@ -125,7 +125,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         // is process-wide and fifteen minutes long, so whichever test reached the limit first consumed the
         // only record any test could observe, and every later one found the decision taken in silence.
         //
-        // On a licence of its own rather than on the unlicensed fallback, so that this test and the fallback
+        // On a license of its own rather than on the unlicensed fallback, so that this test and the fallback
         // test fail for different reasons: removing the fallback's limit must not be able to take this one
         // down with it, or the two stop measuring two things.
         ArrangeLicenceThatCountsIssuers();
@@ -153,28 +153,28 @@ public sealed class LicenseEnforcementTests : IDisposable
     }
 
     /// <summary>
-    /// Puts the checker where an installation is before any licence has been supplied.
+    /// Puts the checker where an installation is before any license has been supplied.
     /// </summary>
     /// <remarks>
-    /// The assembly installs its licence before the first test runs, so reaching the state a deployment
+    /// The assembly installs its license before the first test runs, so reaching the state a deployment
     /// starts in means removing it. That state is the subject of the two tests below rather than a
     /// convenience for them: it is the only state in which the fallback is ever consulted.
     /// </remarks>
     private static void ArrangeInstallationWithNoLicence() => TestLicense.ClearChecker();
 
     /// <summary>
-    /// Puts the checker on a licence that caps the number of issuers and names none of them, which is the
+    /// Puts the checker on a license that caps the number of issuers and names none of them, which is the
     /// only arrangement under which that count is ever consulted.
     /// </summary>
     /// <remarks>
-    /// A licence that names its issuers refuses an unknown one on the name, before anything is counted, and
-    /// licences accumulate rather than replace one another - so the assembly's licence and its whitelist have
+    /// A license that names its issuers refuses an unknown one on the name, before anything is counted, and
+    /// licenses accumulate rather than replace one another - so the assembly's license and its whitelist have
     /// to go before this one is added. That is the whole reason a test of the count reaches into the
     /// checker's state at all, and saying it once here keeps it out of the test bodies, which then read as
     /// what they need rather than as how the statics are arranged.
     ///
     /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock
-    /// itself and cannot be driven from here, so the licence is simply made wide enough to cover any run.
+    /// itself and cannot be driven from here, so the license is simply made wide enough to cover any run.
     /// </remarks>
     private static void ArrangeLicenceThatCountsIssuers()
     {
@@ -191,9 +191,9 @@ public sealed class LicenseEnforcementTests : IDisposable
     public void An_installation_running_before_a_licence_is_supplied_still_serves_every_client()
     {
         // The terms meter company size and production issuers, never client applications, so the fallback an
-        // installation runs on before any licence is supplied must not count clients either. Written against
-        // the fallback itself - no licence is added after the clear - because that is the only state in which
-        // it is ever consulted, and a licence carrying no client limit would pass whatever the fallback said.
+        // installation runs on before any license is supplied must not count clients either. Written against
+        // the fallback itself - no license is added after the clear - because that is the only state in which
+        // it is ever consulted, and a license carrying no client limit would pass whatever the fallback said.
         ArrangeInstallationWithNoLicence();
 
         for (var index = 0; index < 20; index++)
@@ -262,8 +262,8 @@ public sealed class LicenseEnforcementTests : IDisposable
         // Enforcement must not depend on reporting succeeding. The logger written through here is a
         // process-wide singleton whose underlying logger is rebound by every host that starts and released by
         // none, so it can be left pointing at a provider that is gone - which throws on write. Were that
-        // allowed to escape, the licence decision would be replaced by an unrelated exception from the logging
-        // stack, and the request would fail for a reason having nothing to do with the licence.
+        // allowed to escape, the license decision would be replaced by an unrelated exception from the logging
+        // stack, and the request would fail for a reason having nothing to do with the license.
         LicenseLogger.Instance.Init(new ThrowingLoggerFactory());
         try
         {

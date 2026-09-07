@@ -451,12 +451,12 @@ public class RedemptionSerializationTests
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(holder));
 
-		// If the cancelled waiter had over-released, two callers could now be inside at once. Drive the
+		// If the canceled waiter had over-released, two callers could now be inside at once. Drive the
 		// same arrangement again and require it to still serialize.
 		//
 		// The counts run on from the first arrangement, because entries are counted cumulatively rather
 		// than as a queue depth: the holder was the first, so a is the second and b would be the third.
-		// The cancelled waiter is not among them - it never got in, which is the property above.
+		// The canceled waiter is not among them - it never got in, which is the property above.
 		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("again"), TestContext.Current.CancellationToken);
 
 		var a = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);

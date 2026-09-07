@@ -36,7 +36,7 @@ internal sealed class MyDeviceAuthHandler : IUserDeviceAuthenticationHandler
         ValidBackChannelAuthenticationRequest request)
     {
         // A body the compiler accepts and nothing calls. What the sample documents is the REGISTRATION
-        // of a handler, not what a handler does, so inventing plausible behaviour here would add text
+        // of a handler, not what a handler does, so inventing plausible behavior here would add text
         // no doc comment carries and nothing verifies.
         throw new NotSupportedException(
             $"{nameof(MyDeviceAuthHandler)} stands in for an integrator's handler and is never invoked.");

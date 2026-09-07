@@ -148,7 +148,7 @@ public sealed partial class PushDeliverySender(
                     {
                         // The receiver objects to this transmitter, not to this event: leave it queued so a
                         // later pass can deliver it once the credentials or the grant are put right.
-                        // Non-null by construction: IsFinal answers false only for a code it recognises.
+                        // Non-null by construction: IsFinal answers false only for a code it recognizes.
                         LogReceiverObjected(stream.StreamId, verdict!.Error, Readable(verdict.Description));
                         break;
                     }

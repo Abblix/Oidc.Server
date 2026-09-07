@@ -1761,7 +1761,7 @@ public class AuthorizationRequestProcessorTests
     {
         // Backward compat: a provider that has not been updated for #142 leaves
         // Granted.AuthorizationDetails as null. Emission falls back to the request's
-        // (post-validator) AuthorizationDetails so PR #135 behaviour is preserved.
+        // (post-validator) AuthorizationDetails so PR #135 behavior is preserved.
         var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var request = CreateRequest(authorizationDetails: requestedAd);
         var session = CreateAuthSession();

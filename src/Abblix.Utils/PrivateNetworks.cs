@@ -49,7 +49,7 @@ public static class PrivateNetworks
     ];
 
     /// <summary>
-    /// Top-level domains commonly used for networks of an organisation's own.
+    /// Top-level domains commonly used for networks of an organization's own.
     /// </summary>
     private static readonly string[] BlockedTlds = [
         ".local",

@@ -57,7 +57,7 @@ public class SsrfValidatingHttpMessageHandler(
             throw new HttpRequestException($"SSRF protection: {rejection}");
         }
 
-        // DNS rebinding (TOCTOU) defence: for a resolvable hostname (not an IP literal, already checked
+        // DNS rebinding (TOCTOU) defense: for a resolvable hostname (not an IP literal, already checked
         // above), re-resolve immediately before the request and reject if any address is private.
         //
         // A destination the host named is exempt here as well as above, and it has to be: such a service is

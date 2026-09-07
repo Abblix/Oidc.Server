@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Nonces;
 /// <summary>
 /// Tests for <see cref="RollingHmacNonceService"/>. Cover the issue/validate
 /// round-trip, the three failure categories of <see cref="NonceValidationFailure"/>,
-/// behaviour across the rotation boundary, and the multi-instance contract that
+/// behavior across the rotation boundary, and the multi-instance contract that
 /// instances sharing an <see cref="IDistributedCache"/> can verify each other's
 /// nonces.
 /// </summary>

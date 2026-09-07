@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// semantics. Per RFC 9449 section 11.3 a brief mismatch during the rotation race
 /// surfaces to the DPoP client as a single retry with a fresh
 /// <c>DPoP-Nonce</c> header, which is the protocol's intended recovery path;
-/// other consumers of this service get the analogous one-retry behaviour
+/// other consumers of this service get the analogous one-retry behavior
 /// through their own challenge-response loop.
 /// </remarks>
 public partial class RollingHmacNonceService(

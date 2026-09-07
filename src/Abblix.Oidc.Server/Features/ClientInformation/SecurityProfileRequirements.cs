@@ -116,7 +116,7 @@ public sealed record SecurityProfileRequirements
     /// </summary>
     /// <remarks>
     /// The bound is applied HERE rather than carried onward beside the value, so that no reader can
-    /// take one without the other. A ceiling travelling as a second field is a ceiling somebody
+    /// take one without the other. A ceiling traveling as a second field is a ceiling somebody
     /// forgets to pass, and the omission reads as a deployment allowed to be looser rather than as
     /// the mistake it is.
     /// </remarks>
@@ -135,7 +135,7 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
     /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
-    /// Core section 6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
+    /// Core section 6.1 merge behavior. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
     /// Enforced by <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     public bool RequireStrictRequestObjectProcessing { get; init; }

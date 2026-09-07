@@ -37,7 +37,7 @@ public static class LogEvents
 
         /// <summary>
         /// A logout request was refused; the message carries the error code and the description
-        /// that travelled back to the provider.
+        /// that traveled back to the provider.
         /// </summary>
         public const int RequestRefused = Base + 1;
     }

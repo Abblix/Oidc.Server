@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 /// </summary>
 /// <remarks>
 /// Asserted by driving the composed chain rather than by looking for a handler type: a pipeline that is present but
-/// not invoked would pass a structural check, and what a host is promised is behaviour. The primary handler is
+/// not invoked would pass a structural check, and what a host is promised is behavior. The primary handler is
 /// replaced with a stub, which is why the SSRF guarantee is not what this file measures - that belongs to
 /// <see cref="OutboundHttpClientSsrfWiringTests"/> and is asserted separately there.
 /// </remarks>

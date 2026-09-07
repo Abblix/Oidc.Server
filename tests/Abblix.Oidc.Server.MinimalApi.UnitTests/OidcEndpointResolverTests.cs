@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 /// too so that host code needing an OIDC endpoint's URL survives a change of adapter.
 /// </summary>
 /// <remarks>
-/// The twin of the MVC suite's file of the same name, asserting the same behaviours through the other
+/// The twin of the MVC suite's file of the same name, asserting the same behaviors through the other
 /// mechanism. Where MVC resolves a tokenized route template, this side asks <see cref="LinkGenerator"/> for the
 /// endpoint the route was mapped under - which is why the name it asks for is what these tests pin. A wrong
 /// name does not fail loudly; it returns null, or worse, another endpoint's address.
