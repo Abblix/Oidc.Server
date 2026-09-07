@@ -23,7 +23,7 @@ dotnet add package Abblix.SecurityEvents.RISC
 | `credential-compromise` | `CredentialCompromisePayload` |
 | `opt-in` | `OptInPayload` |
 | `opt-out-initiated` | `OptOutInitiatedPayload` |
-| `opt-out-canceled` | `OptOutCancelledPayload` |
+| `opt-out-cancelled` | `OptOutCancelledPayload` |
 | `opt-out-effective` | `OptOutEffectivePayload` |
 | `recovery-activated` | `RecoveryActivatedPayload` |
 | `recovery-information-changed` | `RecoveryInformationChangedPayload` |
