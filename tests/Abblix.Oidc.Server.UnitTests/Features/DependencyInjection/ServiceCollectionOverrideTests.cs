@@ -10,8 +10,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
-
-using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Jwt.Encryption;
 using Abblix.Jwt.ReplayPrevention;

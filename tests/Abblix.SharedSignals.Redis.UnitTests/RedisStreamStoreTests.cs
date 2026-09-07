@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;

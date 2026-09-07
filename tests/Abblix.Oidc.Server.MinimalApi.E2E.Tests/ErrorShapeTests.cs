@@ -11,7 +11,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Net.Http.Headers;

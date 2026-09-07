@@ -10,7 +10,6 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model.Delivery;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Xunit;
 

@@ -16,7 +16,6 @@ using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.SharedSignals.Events;

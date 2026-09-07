@@ -9,7 +9,6 @@ using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.BackChannelLogout;
 using Abblix.SecurityEvents.Validation;
-using Abblix.Utils;
 using Xunit;
 
 namespace Abblix.SecurityEvents.UnitTests;

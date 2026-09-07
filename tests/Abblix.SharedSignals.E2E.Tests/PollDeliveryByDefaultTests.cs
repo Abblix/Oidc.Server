@@ -17,7 +17,6 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

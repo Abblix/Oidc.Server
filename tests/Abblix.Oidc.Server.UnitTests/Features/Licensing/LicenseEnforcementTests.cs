@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using System.Collections.Generic;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;

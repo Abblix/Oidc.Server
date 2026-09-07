@@ -11,7 +11,6 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
-using Abblix.SharedSignals;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;

@@ -7,12 +7,7 @@
 
 // Spelled out rather than left to ImplicitUsings, because this file is compiled into suites that do not enable it.
 using System;
-using System.Net;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http.Resilience;
 using Polly;
 
 // A namespace of its own, not the namespace of whichever suite it was last edited from: this file is linked into
