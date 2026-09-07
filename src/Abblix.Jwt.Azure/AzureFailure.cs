@@ -13,18 +13,20 @@ using Azure;
 namespace Abblix.Jwt.Azure;
 
 /// <summary>
-/// Decides which of the library's two custodian failures a Key Vault answer is, so an endpoint can say whether
+/// Decides which of the library's two custodian failures an Azure answer is, so an endpoint can say whether
 /// the caller should come back. Only this package can make that call: the endpoint sees an exception, and the
-/// status that separates "the vault is busy" from "this identity may not do that" is the service's alone.
+/// status that separates "the service is busy" from "this identity may not do that" is the service's alone.
+/// Both Azure services this package talks to come through here - the vault that holds the keys, and the
+/// storage account that holds the ring of sealed ones - because both answer with the same SDK failure.
 /// </summary>
 internal static class AzureFailure
 {
     /// <summary>
-    /// Whether a status is one that a later attempt may find cleared. Key Vault throttles per vault and says so
-    /// with 429, and a service having a bad time answers 5xx; a request timeout means the service gave up
-    /// waiting for a request rather than reading one it disliked (RFC 9110 section 15.5.9). None of those is
-    /// about the request. A 401 or 403 is a grant that is missing, a 404 a key that is not there, and a 400 a
-    /// request that was wrong - all of which meet the same answer next time.
+    /// Whether a status is one that a later attempt may find cleared. A throttled service answers 429 and one
+    /// having a bad time answers 5xx; a request timeout means the service gave up waiting for a request rather
+    /// than reading one it disliked (RFC 9110 section 15.5.9). None of those is about the request. A 401 or 403
+    /// is a grant that is missing, a 404 a key or an entry that is not there, and a 400 a request that was
+    /// wrong - all of which meet the same answer next time.
     /// </summary>
     /// <param name="status">The status the service answered with, or zero when it never answered. Zero is not
     /// an HTTP status: it is what the SDK reports for an attempt that failed before any answer, and those
@@ -37,7 +39,7 @@ internal static class AzureFailure
             or >= (int)HttpStatusCode.InternalServerError;
 
     /// <summary>
-    /// Reports a Key Vault failure as one of the two, so it arrives at an endpoint that can read it.
+    /// Reports an Azure failure as one of the two, so it arrives at an endpoint that can read it.
     /// </summary>
     /// <param name="operation">What was being asked of the vault, named for the log line.</param>
     /// <param name="call">The call.</param>
@@ -57,7 +59,7 @@ internal static class AzureFailure
             throw IsTemporary(failure, cancellationToken)
                 ? new KeyCustodianUnavailableException(
                     operation,
-                    $"Key Vault could not be asked to {operation}.",
+                    $"Azure could not be asked to {operation}.",
                     retryAfter: null,
                     failure)
                 : new KeyCustodianFailedException(operation, failure);

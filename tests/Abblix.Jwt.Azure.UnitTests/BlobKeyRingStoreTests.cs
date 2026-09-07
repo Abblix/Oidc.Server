@@ -47,6 +47,29 @@ public sealed class BlobKeyRingStoreTests : IDisposable
             () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
     }
 
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporaryWhenMinting()
+    {
+        // The mint path carries its own classification, and only its own row can say so: the read path being
+        // classified proves nothing about this one, which is what made the claim about this change too wide.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporaryWhenRemoving()
+    {
+        // And the removal path too. Its only other row asserts that an absent entry raises nothing, so without
+        // this one the classification could be dropped there and the suite would stay green.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).RemoveAsync("any", TestContext.Current.CancellationToken));
+    }
+
     private BlobKeyRingStore StoreOver(StubHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler);

@@ -19,9 +19,10 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests;
 
 /// <summary>
-/// The MVC adapter's half of what a caller is told when the keys the server signs with cannot be reached. The
-/// two adapters answer the same request, so they owe the same answer: a host that swaps one for the other and
-/// finds its clients behaving differently has been given a difference nobody chose.
+/// What a caller is told when the keys the server signs with cannot be reached. The two adapters answer the same
+/// request, so they owe the same answer: a host that swaps one for the other and finds its clients behaving
+/// differently has been given a difference nobody chose. This file is compiled into both suites and binds to
+/// whichever host factory the project supplies, so the two cannot drift apart by an edit to one of them.
 /// </summary>
 public sealed class CustodianFailureShapeTests
 {
