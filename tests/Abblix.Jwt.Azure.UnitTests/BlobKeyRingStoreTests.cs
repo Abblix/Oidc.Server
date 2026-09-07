@@ -53,7 +53,9 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     {
         // The mint path carries its own classification, and only its own row can say so: the read path being
         // classified proves nothing about this one, which is what made the claim about this change too wide.
-        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+        // The container create is allowed to succeed, so the failure happens on the upload - the call this row
+        // is named for, rather than the one the read path already covers.
+        var handler = Blob(_ => throw new HttpRequestException("no route to host"));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
             () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
@@ -142,11 +144,23 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     {
         // A 409 also carries ContainerBeingDeleted and LeaseAlreadyPresent. Reading either as "someone won" would
         // make this pod discard a key nobody stored, and the period would end up with no key at all.
-        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
+        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "LeaseAlreadyPresent"));
         var store = StoreOver(handler);
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AContainerBeingDeletedIsTemporary()
+    {
+        // The one failure the status cannot place: a container answers 409 while its delete finishes, and the
+        // create that follows succeeds. Read from the status alone it joins the refusals that never clear, and
+        // the caller is told not to come back from a condition that ends by itself in seconds.
+        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
     }
 
     [Fact]

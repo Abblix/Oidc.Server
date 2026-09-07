@@ -9,6 +9,7 @@
 using System.Net;
 using Abblix.Jwt.ExternalKeys;
 using Azure;
+using Azure.Storage.Blobs.Models;
 
 namespace Abblix.Jwt.Azure;
 
@@ -31,7 +32,7 @@ internal static class AzureFailure
     /// <param name="status">The status the service answered with, or zero when it never answered. Zero is not
     /// an HTTP status: it is what the SDK reports for an attempt that failed before any answer, and those
     /// attempts reach this method inside the aggregated retry failure. Driven by the row that unplugs the
-    /// transport: without zero here, a vault that cannot be reached is read as permanent.</param>
+    /// transport: without zero here, a service that cannot be reached is read as permanent.</param>
     internal static bool IsTransient(int status)
         => status is 0
             or (int)HttpStatusCode.RequestTimeout
@@ -41,7 +42,7 @@ internal static class AzureFailure
     /// <summary>
     /// Reports an Azure failure as one of the two, so it arrives at an endpoint that can read it.
     /// </summary>
-    /// <param name="operation">What was being asked of the vault, named for the log line.</param>
+    /// <param name="operation">What was being asked of the service, named for the log line.</param>
     /// <param name="call">The call.</param>
     /// <param name="cancellationToken">The caller's token, which tells its cancellation apart from a timeout of
     /// ours.</param>
@@ -67,13 +68,13 @@ internal static class AzureFailure
     }
 
     /// <summary>
-    /// Whether this exception is the vault answering, or failing to. Anything else - an algorithm this package
-    /// does not map, a defect of our own - keeps travelling untouched, because reshaping it would hide a fault
+    /// Whether this exception is one of the two services answering, or failing to. Anything else - an algorithm this
+    /// package does not map, a defect of our own - keeps traveling untouched, because reshaping it would hide a fault
     /// that is not the custodian's behind a status that says it is.
     /// </summary>
     /// <remarks>
     /// The SDK retries a failed request itself and, when every attempt fails, reports them together. Both
-    /// questions therefore read through that wrapper: without it a vault that could not be reached arrives as a
+    /// questions therefore read through that wrapper: without it a service that could not be reached arrives as a
     /// shape nothing recognizes and escapes unclassified, which is the failure this seam exists to prevent.
     /// </remarks>
     private static bool IsCustodianFailure(Exception exception, CancellationToken cancellationToken)
@@ -92,6 +93,15 @@ internal static class AzureFailure
             _ => false,
         };
 
+
+    /// <summary>
+    /// The failures a status cannot place, because the two services share a status and mean different things
+    /// by it. A container being deleted answers 409 while the delete finishes, and the create that follows
+    /// succeeds - so it is temporary, while the other things 409 carries on this path are not.
+    /// </summary>
+    private static bool IsTransientErrorCode(string? errorCode)
+        => errorCode == BlobErrorCode.ContainerBeingDeleted;
+
     /// <summary>
     /// Whether waiting may cure it. An aggregated failure is temporary when any attempt inside it was: the SDK
     /// keeps retrying past a transient answer, so the last attempt is not the whole story.
@@ -102,7 +112,8 @@ internal static class AzureFailure
             AggregateException aggregate =>
                 aggregate.InnerExceptions.Any(inner => IsTemporary(inner, cancellationToken)),
 
-            RequestFailedException failure => IsTransient(failure.Status),
+            RequestFailedException failure =>
+                IsTransient(failure.Status) || IsTransientErrorCode(failure.ErrorCode),
             HttpRequestException => true,
             IOException => true,
             OperationCanceledException => !cancellationToken.IsCancellationRequested,
