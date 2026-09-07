@@ -75,6 +75,7 @@ public class ExternalKeysWiringTests
     public void PlacementChosenBeforeTheServerRegistration_IsStillServed()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);

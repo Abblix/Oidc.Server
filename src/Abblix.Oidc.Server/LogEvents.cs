@@ -752,6 +752,17 @@ internal static class LogEvents
 
             public const int PrivateKeyStrippedFromPublishedSet = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Features/ExternalKeys/ExternalKeysProvider.cs</c> - what the published key set does when the
+        /// custodian cannot be asked for it (sub-range 9080-9099).
+        /// </summary>
+        public static class ExternalKeysProvider
+        {
+            private const int Base = 9080;
+
+            public const int ServingLastKnownKeys = Base + 1;
+        }
     }
 
     /// <summary>
@@ -849,5 +860,6 @@ internal static class LogEvents
 
             public const int GrantedAuthorizationDetailsRefused = Base;
         }
+
     }
 }

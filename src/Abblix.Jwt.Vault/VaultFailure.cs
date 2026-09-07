@@ -39,31 +39,4 @@ internal static class VaultFailure
             OperationCanceledException => !cancellationToken.IsCancellationRequested,
             _ => false,
         };
-
-    /// <summary>
-    /// Runs a call to Vault, reporting a transport failure as the custodian being temporarily unable rather than
-    /// letting the transport's own exception escape to an endpoint that cannot read it.
-    /// </summary>
-    /// <param name="operation">What was being asked of Vault, named for the log line.</param>
-    /// <param name="call">The call.</param>
-    /// <param name="cancellationToken">The caller's token, which is what tells its cancellation apart from a
-    /// timeout of ours.</param>
-    internal static async Task<T> TransportGuarded<T>(
-        string operation,
-        Func<Task<T>> call,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await call();
-        }
-        catch (Exception exception) when (IsTransientTransport(exception, cancellationToken))
-        {
-            throw new KeyCustodianUnavailableException(
-                operation,
-                $"The vault could not be reached to {operation}.",
-                retryAfter: null,
-                exception);
-        }
-    }
 }

@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
@@ -28,7 +29,8 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// a token produced with a version it lacks. One provider serves any custodian, so the Vault and Azure packages
 /// carry no key provider of their own.
 /// </summary>
-public sealed class ExternalKeysProvider(
+public sealed partial class ExternalKeysProvider(
+    ILogger<ExternalKeysProvider> logger,
     IKeyCustodian custodian,
     CustodianHeldKeys keys,
     IOptions<OidcOptions> options,
@@ -50,10 +52,19 @@ public sealed class ExternalKeysProvider(
 
     // The last enumeration that succeeded, per key name. It is not an optimization: the published set is what
     // relying parties verify already-issued tokens against, so letting a custodian outage empty it stops them
-    // validating tokens that are perfectly good. Serving the previous set instead costs freshness, and staleness
-    // is the direction the protocol is built to absorb - OpenID Connect Core 10.1.1 has a verifier re-fetch when
-    // it meets an unfamiliar kid, and asks the document to keep recently retired keys for a while anyway. A new
-    // version cannot appear while the custodian is unreachable, because nothing can sign with it either.
+    // validating tokens that are perfectly good, which is a wider outage than the one that caused it. Serving
+    // the previous set costs freshness, and OpenID Connect Core 10.1.1 asks the document to keep recently
+    // retired keys for a while anyway.
+    //
+    // Only a TEMPORARY failure is served from here, and the distinction is not bookkeeping. A permanent one is
+    // an operator disabling a key or revoking this identity's read on it, so falling back would keep publishing
+    // a key that was deliberately retired, keep offering it to sign with, and keep advertising an encryption
+    // key nothing can unwrap with - for the life of the process, since only a later success replaces the entry.
+    //
+    // The staleness runs both ways, and this instance cannot tell which it is in: the failure caught here is
+    // ITS failure, not the custodian's, so another instance may have rotated meanwhile and this set would miss
+    // the new version. KeyRingRefreshService says the same of the minted-key path. That is why the fallback is
+    // reported rather than silent.
     private readonly ConcurrentDictionary<string, IReadOnlyList<KeyVersion>> _lastPublished = new();
 
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
@@ -68,14 +79,14 @@ public sealed class ExternalKeysProvider(
             versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
             _lastPublished[keyName] = versions;
         }
-        catch (Exception failure)
-            when (failure is KeyCustodianUnavailableException or KeyCustodianFailedException)
+        catch (KeyCustodianUnavailableException failure)
         {
             // A cold start has nothing to fall back on, and saying so is the honest answer: the endpoint turns
             // this into the status that says whether to come back.
             if (!_lastPublished.TryGetValue(keyName, out var lastKnown))
                 throw;
 
+            LogServingLastKnownKeys(keyName, lastKnown.Count, failure);
             versions = lastKnown;
         }
 

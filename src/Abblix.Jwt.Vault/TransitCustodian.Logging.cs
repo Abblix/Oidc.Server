@@ -22,7 +22,8 @@ partial class TransitCustodian
     [LoggerMessage(
         EventId = LogEvents.TransitCustodian.CustodianFailed,
         Level = LogLevel.Error,
-        Message = "Vault Transit could not answer for '{Path}'. Temporary: {Temporary}. A temporary failure is " +
-                  "answered with 503 and a retry hint; anything else with 500, because waiting will not help.")]
+        Message = "Vault Transit could not answer for '{Path}'. Temporary: {Temporary}, which is what decides " +
+                  "whether a caller is told to come back. What the caller actually receives is decided upstream: " +
+                  "a published key set already read can be served instead of the failure.")]
     private partial void LogCustodianFailed(string path, bool temporary, Exception exception);
 }
