@@ -95,10 +95,17 @@ internal static class AzureFailure
 
 
     /// <summary>
-    /// The failures a status cannot place, because the two services share a status and mean different things
-    /// by it. A container being deleted answers 409 while the delete finishes, and the create that follows
-    /// succeeds - so it is temporary, while the other things 409 carries on this path are not.
+    /// The failures a status cannot place, because STORAGE uses one status for two unrelated things: 409 is
+    /// both the mint race, which the ring reads as an answer, and a container whose delete has not finished,
+    /// which clears on its own. The vault does not answer 409 on any path this package drives, so widening
+    /// this method is about storage codes and nothing else.
     /// </summary>
+    /// <remarks>
+    /// Temporary here does not mean brief: a container delete is documented to take at least tens of seconds,
+    /// and the create is answered 409 until it finishes. The caller is told to come back rather than told to
+    /// give up, which is the distinction this whole classification carries; how long is a separate question the
+    /// service does not answer either.
+    /// </remarks>
     private static bool IsTransientErrorCode(string? errorCode)
         => errorCode == BlobErrorCode.ContainerBeingDeleted;
 

@@ -142,8 +142,10 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task TryAddAsync_Throws_WhenA409MeansSomethingElse()
     {
-        // A 409 also carries ContainerBeingDeleted and LeaseAlreadyPresent. Reading either as "someone won" would
-        // make this pod discard a key nobody stored, and the period would end up with no key at all.
+        // The filter reads the error code, not the status: a 409 that is not the race must not be read as
+        // "someone won", or this pod discards a key nobody stored and the period ends up with no key at all.
+        // The code below is chosen for being neither the race nor the transient one - the ring takes no leases,
+        // so it is an illustration of a third 409 rather than one this path produces.
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "LeaseAlreadyPresent"));
         var store = StoreOver(handler);
 
@@ -154,9 +156,13 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task AContainerBeingDeletedIsTemporary()
     {
-        // The one failure the status cannot place: a container answers 409 while its delete finishes, and the
-        // create that follows succeeds. Read from the status alone it joins the refusals that never clear, and
-        // the caller is told not to come back from a condition that ends by itself in seconds.
+        // The one failure the status cannot place: 409 is both the mint race and a container whose delete has
+        // not finished, and only the second clears on its own. Read from the status alone it joins the refusals
+        // that never clear, and the caller is told never to come back from a condition that does end.
+        //
+        // The stub answers the upload rather than the container create, because the classifier is one for both
+        // and the create path is pinned by its own row. A regression reaching only the create would not show
+        // here.
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
