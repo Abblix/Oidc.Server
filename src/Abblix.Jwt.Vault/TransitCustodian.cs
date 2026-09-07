@@ -60,7 +60,7 @@ internal sealed partial class TransitCustodian(
         var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
         var path = $"{Mount}/sign/{name}";
 
-        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        using var response = await SendGuardedAsync(HttpMethod.Post, path, request, cancellationToken);
         response.EnsureSuccess(path);
 
         var signature = response.Body(path).RootElement.GetProperty("data").GetProperty("signature").GetString()!;
@@ -151,7 +151,7 @@ internal sealed partial class TransitCustodian(
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
         var path = $"{Mount}/decrypt/{name}";
 
-        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        using var response = await SendGuardedAsync(HttpMethod.Post, path, request, cancellationToken);
         if (response.Status == HttpStatusCode.BadRequest)
         {
             LogUnwrapRejected(keyId);
@@ -194,7 +194,7 @@ internal sealed partial class TransitCustodian(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var path = $"{Mount}/keys/{keyName}";
-        using var response = await _httpClient.SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
+        using var response = await SendGuardedAsync(HttpMethod.Get, path, body: null, cancellationToken);
         response.EnsureSuccess(path);
 
         var data = response.Body(path).RootElement.GetProperty("data");
@@ -245,5 +245,31 @@ internal sealed partial class TransitCustodian(
         }
 
         throw new NotSupportedException($"The Vault Transit store does not publish key type '{keyType}'.");
+    }
+
+    /// <summary>
+    /// Sends a request to Vault, reporting a failure that never reached it as the custodian being temporarily
+    /// unable. Without this the transport exception escapes to an endpoint that cannot read it, and the caller
+    /// is told nothing it can act on. The status answers are classified separately, by
+    /// <see cref="ApiResponse.Failure"/>.
+    /// </summary>
+    private async Task<ApiResponse> SendGuardedAsync(
+        HttpMethod method,
+        string path,
+        object? body,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _httpClient.SendAsync(method, path, body, cancellationToken);
+        }
+        catch (Exception exception) when (VaultFailure.IsTransientTransport(exception, cancellationToken))
+        {
+            throw new KeyCustodianUnavailableException(
+                path,
+                $"The vault at '{path}' could not be reached.",
+                retryAfter: null,
+                exception);
+        }
     }
 }

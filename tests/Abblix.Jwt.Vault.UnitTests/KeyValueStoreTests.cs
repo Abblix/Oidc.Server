@@ -127,7 +127,7 @@ public sealed class KeyValueStoreTests : IDisposable
 
         var store = StoreOver(handler);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
     }
 

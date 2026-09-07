@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Jwt.Vault.UnitTests;
 
@@ -187,7 +188,7 @@ public sealed class VaultTransitClientTests : IDisposable
             HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
         var client = ClientOver(handler);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => client.UnwrapKeyAsync(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(() => client.UnwrapKeyAsync(
             "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [1], TestContext.Current.CancellationToken));
     }
@@ -205,9 +206,36 @@ public sealed class VaultTransitClientTests : IDisposable
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
             status, new { errors = new[] { "not a decryption failure" } }));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ClientOver(handler).UnwrapKeyAsync(
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler).UnwrapKeyAsync(
             "oidc-enc:1", EncryptionAlgorithms.KeyManagement.RsaOaep256, new JsonWebTokenHeader(new JsonObject()),
             [1], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AFailureThatNeverReachedVaultIsAlsoTemporary()
+    {
+        // A connection that could not be made says nothing about the request, and the next one may well succeed.
+        // Left as the transport's own exception it would escape to an endpoint that cannot read it, and the caller
+        // would be told nothing at all.
+        var handler = new StubHttpMessageHandler((_, _) => throw new HttpRequestException("no route to host"));
+
+        var failure = await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler).SignAsync(
+            "oidc-sign:1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+
+        Assert.IsType<HttpRequestException>(failure.InnerException);
+    }
+
+    [Fact]
+    public async Task TheCallersOwnCancellationIsNotACustodianFailure()
+    {
+        // The control for the row above: cancelling is the caller getting what it asked for, so dressing it as the
+        // custodian being unavailable would report a shutdown as an outage for as long as the logs are read.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        var handler = new StubHttpMessageHandler((_, _) => throw new OperationCanceledException());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ClientOver(handler).SignAsync(
+            "oidc-sign:1", SigningAlgorithms.RS256, [1], cancelled.Token));
     }
 
     [Fact]
