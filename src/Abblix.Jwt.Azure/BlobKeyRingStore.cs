@@ -96,7 +96,23 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
             "remove a key from the ring",
             async () =>
             {
-                await container.GetBlobClient(id).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+                try
+                {
+                    await container.GetBlobClient(id).DeleteAsync(cancellationToken: cancellationToken);
+                }
+                catch (RequestFailedException failure)
+                    when (failure.Status == (int)HttpStatusCode.NotFound
+                          && failure.ErrorCode == BlobErrorCode.BlobNotFound)
+                {
+                    // Two pods may retire the same expired key: removing what is already gone is the outcome
+                    // both wanted.
+                    //
+                    // Written out rather than left to the SDK's delete-if-exists, which answers the same way
+                    // to a container that is gone - and that is not the outcome anybody wanted. It would be
+                    // reported as a retirement that happened, while the next load is what discovers the
+                    // container is missing.
+                }
+
                 return true;
             },
             cancellationToken);

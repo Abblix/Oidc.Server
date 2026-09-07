@@ -251,6 +251,33 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         Assert.Null(error);
     }
 
+    [Fact]
+    public async Task RemoveAsync_Fails_WhenTheContainerIsGone()
+    {
+        // A container that is gone answers 404 as well, and the SDK's delete-if-exists cannot tell the two
+        // apart. Reporting that as done says the key was retired when nothing was asked of anything, and the
+        // operator learns of the missing container only on the next load.
+        var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Fails_WhenA404CarriesNoErrorCode()
+    {
+        // A proxy in front of the account can answer 404 without the header the code is read from. The ring
+        // then cannot tell a retired entry from a missing container, and it fails rather than reporting a
+        // shorter ring: a ring short of an entry is indistinguishable from one that has been trimmed, and
+        // the empty end of that scale starts a mint. This row exists to make that choice deliberate.
+        var handler = Blob(request => request.RequestUri!.Query.Contains("comp=list", StringComparison.Ordinal)
+            ? Xml(BlobList(Entry.Id))
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
     private static HttpResponseMessage BlobError(HttpStatusCode status, string errorCode)
     {
         var response = new HttpResponseMessage(status);
