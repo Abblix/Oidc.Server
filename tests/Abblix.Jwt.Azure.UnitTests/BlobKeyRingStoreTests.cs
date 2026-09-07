@@ -185,15 +185,16 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task LoadAsync_Fails_WhenTheListingFindsNoContainer()
     {
-        // The load touches the container three times - it creates it, lists it, and reads each entry - and
-        // the listing was the one nothing drove: the row below answers the listing successfully and 404s
-        // the read. The listing is unguarded on purpose, so a guard added there later would swallow the
-        // same loss and hand back an empty ring, which is the signal that starts a mint.
+        // The load creates the container, lists it, then reads each listed entry, and the listing was the
+        // call nothing drove: the row below answers the listing successfully and 404s the read. The listing
+        // is unguarded on purpose, so a guard added there later would swallow the same loss and hand back
+        // an empty ring, which is the signal that starts a mint.
         var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
     }
+
     [Fact]
     public async Task LoadAsync_Fails_WhenTheContainerIsGone()
     {
