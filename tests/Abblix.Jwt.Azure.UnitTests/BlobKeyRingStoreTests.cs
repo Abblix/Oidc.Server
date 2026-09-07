@@ -255,9 +255,22 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     public async Task RemoveAsync_Fails_WhenTheContainerIsGone()
     {
         // A container that is gone answers 404 as well, and the SDK's delete-if-exists cannot tell the two
-        // apart. Reporting that as done says the key was retired when nothing was asked of anything, and the
-        // operator learns of the missing container only on the next load.
+        // apart. Reporting that as done says the key was retired when nothing was asked of anything - and
+        // no later step says otherwise, because the load path re-creates the container and reads it empty,
+        // which is the signal that starts a mint.
         var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RemoveAsync_Fails_WhenA404CarriesNoErrorCode()
+    {
+        // The same stripped header as below, on the path that also reads the code. Without this row the
+        // two sides drift: the removal could be widened to treat a codeless 404 as an absent entry and
+        // the suite would not notice, while the identical widening on the load path is caught.
+        var handler = Blob(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));

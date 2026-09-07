@@ -108,9 +108,10 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
                     // both wanted.
                     //
                     // Written out rather than left to the SDK's delete-if-exists, which answers the same way
-                    // to a container that is gone - and that is not the outcome anybody wanted. It would be
-                    // reported as a retirement that happened, while the next load is what discovers the
-                    // container is missing.
+                    // to a container that is gone - and that is not the outcome anybody wanted. Nothing else
+                    // would surface the loss either: the load path opens by creating the container, so the
+                    // next refresh re-creates it, reads it empty, and an empty ring is the signal that starts
+                    // a mint. This catch is the only place a container that vanished stays visible.
                 }
 
                 return true;
