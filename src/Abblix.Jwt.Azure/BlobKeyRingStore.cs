@@ -32,7 +32,11 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     : IKeyRingStore
 {
     /// <inheritdoc />
-    public async Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+        => AzureFailure.Classified<IReadOnlyList<StoredKey>>(
+            "read the key ring", () => LoadCoreAsync(cancellationToken), cancellationToken);
+
+    private async Task<IReadOnlyList<StoredKey>> LoadCoreAsync(CancellationToken cancellationToken)
     {
         // A ring nobody has minted into yet is the normal bootstrap: the first pod is meant to find it empty.
         await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
@@ -48,7 +52,11 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+    public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+        => AzureFailure.Classified(
+            "add a key to the ring", () => TryAddCoreAsync(key, cancellationToken), cancellationToken);
+
+    private async Task<bool> TryAddCoreAsync(StoredKey key, CancellationToken cancellationToken)
     {
         await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
 
@@ -83,8 +91,15 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     }
 
     /// <inheritdoc />
-    public async Task RemoveAsync(string id, CancellationToken cancellationToken)
-        => await container.GetBlobClient(id).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    public Task RemoveAsync(string id, CancellationToken cancellationToken)
+        => AzureFailure.Classified(
+            "remove a key from the ring",
+            async () =>
+            {
+                await container.GetBlobClient(id).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+                return true;
+            },
+            cancellationToken);
 
     /// <summary>Reads one entry, tolerating one deleted between the listing and the read.</summary>
     private async Task<StoredKey?> ReadAsync(string id, CancellationToken cancellationToken)

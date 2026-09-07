@@ -34,6 +34,19 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         CreatedAt = new DateTimeOffset(2026, 7, 17, 0, 0, 0, TimeSpan.Zero),
     };
 
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporary()
+    {
+        // The ring rides the same reading as the keys themselves: a connection that could not be made says
+        // nothing about the request. Left as the SDK's own exception it reaches a caller that cannot read it,
+        // and the Vault side of this ring already answers the same way.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
     private BlobKeyRingStore StoreOver(StubHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler);
@@ -109,7 +122,7 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
         var store = StoreOver(handler);
 
-        await Assert.ThrowsAsync<RequestFailedException>(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
     }
 
@@ -121,7 +134,7 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         var handler = Blob(_ => BlobError(HttpStatusCode.Forbidden, "AuthorizationPermissionMismatch"));
         var store = StoreOver(handler);
 
-        await Assert.ThrowsAsync<RequestFailedException>(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
     }
 
