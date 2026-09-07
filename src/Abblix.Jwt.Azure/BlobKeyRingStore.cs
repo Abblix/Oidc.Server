@@ -112,10 +112,16 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
 
             return new StoredKey { Id = id, Jwe = entry.Jwe, CreatedAt = entry.CreatedAt };
         }
-        catch (RequestFailedException failure) when (failure.Status == (int)HttpStatusCode.NotFound)
+        catch (RequestFailedException failure)
+            when (failure.Status == (int)HttpStatusCode.NotFound
+                  && failure.ErrorCode == BlobErrorCode.BlobNotFound)
         {
             // Retired between the listing and this read, which is a race the caller does not care about: the key
             // is gone either way.
+            //
+            // The error code, not the status alone: a container removed under a running deployment answers 404
+            // ContainerNotFound on every entry, and reading those as absent would hand the caller an empty ring
+            // - which is the bootstrap signal that starts minting a fresh period over a ring nobody read.
             return null;
         }
     }

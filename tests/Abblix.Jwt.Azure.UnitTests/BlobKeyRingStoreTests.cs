@@ -10,7 +10,6 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Abblix.Jwt.ExternalKeys;
-using Azure;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -160,13 +159,39 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         // not finished, and only the second clears on its own. Read from the status alone it joins the refusals
         // that never clear, and the caller is told never to come back from a condition that does end.
         //
-        // The stub answers the upload rather than the container create, because the classifier is one for both
-        // and the create path is pinned by its own row. A regression reaching only the create would not show
-        // here.
+        // This row answers the upload; the container create has its own below, because the two calls reach
+        // the classifier by different paths and a regression touching one would leave the other green.
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
             () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AContainerBeingDeletedIsTemporaryWhenTheContainerIsCreated()
+    {
+        // The create is where a container mid-delete is actually met: every operation opens with it, and it
+        // is the call that cannot proceed until the delete finishes.
+        var handler = new StubHttpMessageHandler(request => request.Method == HttpMethod.Put
+            ? BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted")
+            : Xml(BlobList(Entry.Id)));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Fails_WhenTheContainerIsGone()
+    {
+        // A container removed under a running deployment answers 404 on every entry. Read by status alone
+        // each entry looks retired, the ring comes back empty, and empty is the bootstrap signal that starts
+        // minting - so a wrong read here does not fail, it silently issues a key.
+        var handler = Blob(request => request.RequestUri!.Query.Contains("comp=list", StringComparison.Ordinal)
+            ? Xml(BlobList(Entry.Id))
+            : BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
