@@ -107,12 +107,9 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
                     // Two pods may retire the same expired key: removing what is already gone is the outcome
                     // both wanted.
                     //
-                    // Written out rather than left to the SDK's delete-if-exists, which answers the same way
-                    // to a container that is gone - and that is not the outcome anybody wanted. The load path
-                    // does raise a container that vanishes mid-refresh, but one that vanished earlier it
-                    // repairs instead: it opens by creating the container, reads it empty, and an empty ring
-                    // is the signal that starts a mint. So this is where the loss is reported rather than
-                    // quietly made good.
+                    // Written out rather than left to the SDK's delete-if-exists, which answers a container
+                    // that is gone the same way - and that would report a retirement against a container
+                    // where nothing was retired.
                 }
 
                 return true;
