@@ -12,7 +12,7 @@ namespace Abblix.SecurityEvents.Subjects;
 /// <summary>
 /// Identifies a subject by several Subject Identifiers at once, each naming the same entity
 /// (RFC 9493 Section 3.2.8). It is meant for the case where a transmitter has shared a variety of
-/// identifiers with a receiver and does not know which of them the receiver will recognise.
+/// identifiers with a receiver and does not know which of them the receiver will recognize.
 /// </summary>
 /// <remarks>
 /// Presenting several identifiers together tells the receiver that they belong to one subject,

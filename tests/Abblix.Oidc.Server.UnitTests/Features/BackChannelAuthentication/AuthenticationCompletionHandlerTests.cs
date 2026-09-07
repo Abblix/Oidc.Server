@@ -1193,7 +1193,7 @@ public class AuthenticationCompletionHandlerTests
     /// <para>
     /// A row per mode, because the guard lives in the base and what must NOT run is each mode's own
     /// delivery. Loud rather than silent: nothing on this seam returns a value, so a host that was
-    /// relying on the old behaviour learns about it from an exception rather than from a token set the
+    /// relying on the old behavior learns about it from an exception rather than from a token set the
     /// end user refused.
     /// </para>
     /// </remarks>

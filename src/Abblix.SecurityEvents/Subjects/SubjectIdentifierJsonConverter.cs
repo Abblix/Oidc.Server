@@ -128,7 +128,7 @@ public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdenti
     /// subtype, and they terminate only because that request is NOT routed back here. The base
     /// implementation currently answers with exact type equality, which provides that guarantee,
     /// but the guarantee is this converter's termination condition, so it is stated here rather
-    /// than inherited from behaviour that lives only in convention.
+    /// than inherited from behavior that lives only in convention.
     /// </remarks>
     public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(SubjectIdentifier);
 
@@ -186,7 +186,7 @@ public sealed class SubjectIdentifierJsonConverter : JsonConverter<SubjectIdenti
         catch (ArgumentException exception)
         {
             // The constructors are the single enforcement site for the member rules; here their
-            // verdict is only re-labelled for the wire, where "this document is invalid" is a
+            // verdict is only re-labeled for the wire, where "this document is invalid" is a
             // JsonException by the serializer's own convention.
             throw new JsonException(exception.Message, exception);
         }

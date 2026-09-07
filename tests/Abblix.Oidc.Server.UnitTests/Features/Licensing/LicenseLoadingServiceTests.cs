@@ -194,7 +194,7 @@ public class LicenseLoadingServiceTests
         var service = new LicenseLoadingService(loggerFactory, provider, TimeProvider.System);
         using var cts = new CancellationTokenSource();
 
-        // Act - the token is already cancelled when enumeration starts, so the first await inside the sequence
+        // Act - the token is already canceled when enumeration starts, so the first await inside the sequence
         // observes it. Cancelling on a timer instead raced the delay above: under a loaded run the timer callback
         // is queued behind everything else, the delay wins, and the test fails for want of a free thread rather
         // than for anything about the code. Same path through the service, no clock involved.
@@ -206,7 +206,7 @@ public class LicenseLoadingServiceTests
     }
 
     /// <summary>
-    /// Verifies that StartAsync completes normally with null provider even if token is cancelled.
+    /// Verifies that StartAsync completes normally with null provider even if token is canceled.
     /// </summary>
     [Fact]
     public async Task StartAsync_WithCancelledTokenAndNullProvider_CompletesSuccessfully()
@@ -374,7 +374,7 @@ public class LicenseLoadingServiceTests
     }
 
     /// <summary>
-    /// Either public licence registration builds a container the hosted service can be activated from.
+    /// Either public license registration builds a container the hosted service can be activated from.
     /// </summary>
     /// <remarks>
     /// Both methods are public and take an <c>IServiceCollection</c>, so a host may call one on a

@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 /// <c>token_endpoint_auth_methods_supported</c> to client_secret_basic.
 /// Before this, all eleven were declared non-nullable with a null-forgiving initialiser, which swore they were
 /// always present while nothing enforced it. A custom <see cref="IConfigurationHandler"/> that left one out
-/// produced no error at all: the null travelled into the wire model, whose null-omitting serialisation dropped
+/// produced no error at all: the null traveled into the wire model, whose null-omitting serialisation dropped
 /// the field, so a discovery document could silently ship without a REQUIRED member and answer 200.
 /// </remarks>
 public record ConfigurationResponse

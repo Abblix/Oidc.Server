@@ -128,7 +128,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// the two would make the widening check at completion compare a value against itself, which cannot
     /// refuse anything - and it would do so silently, because the shipped storage serialises both and
     /// separates them, so the defect would wait for the first host that registers an in-memory
-    /// <c>IEntityStorage</c>. Reference identity is asserted through the behaviour it decides rather than
+    /// <c>IEntityStorage</c>. Reference identity is asserted through the behavior it decides rather than
     /// on its own, so the test still means something if the copy is made somewhere else.
     /// </remarks>
     [Fact]

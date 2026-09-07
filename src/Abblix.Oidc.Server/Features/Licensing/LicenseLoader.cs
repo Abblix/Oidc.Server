@@ -64,7 +64,7 @@ public static class LicenseLoader
             new ValidationParameters
             {
                 // RequireValidIssuer, not RequireIssuer: the delegate below is what decides whether this
-                // licence was issued by us, and only ValidateIssuer runs it. The flag used to be RequireIssuer
+                // license was issued by us, and only ValidateIssuer runs it. The flag used to be RequireIssuer
                 // alone and the delegate ran regardless, because the validator treated either flag as an
                 // instruction to check. Once presence and validity became separate questions, this had to say
                 // which one it meant.
@@ -91,14 +91,14 @@ public static class LicenseLoader
     }
 
     /// <summary>
-    /// Reads the licence terms out of a verified payload, refusing with the same message every other
-    /// licence fault gets where a timestamp cannot be read.
+    /// Reads the license terms out of a verified payload, refusing with the same message every other
+    /// license fault gets where a timestamp cannot be read.
     /// </summary>
     /// <remarks>
     /// Its own method, and internal, so that the read can be driven with a payload alone: the
-    /// verification above needs a licence signed with the licensing key, which no test holds.
+    /// verification above needs a license signed with the licensing key, which no test holds.
     /// </remarks>
-    /// <param name="payload">The verified licence payload.</param>
+    /// <param name="payload">The verified license payload.</param>
     internal static License ReadLicense(JsonWebTokenPayload payload)
     {
         if (!payload.TryReadTimestamps(out var notBefore, out var expiresAt, out _, out var whyUnreadable)

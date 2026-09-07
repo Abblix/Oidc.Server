@@ -21,7 +21,7 @@ instance, several endpoints become opt-in, and clients configured for pairwise s
 fix, we will tell you what stands between your version and it.
 
 Where upgrading is genuinely not an option, we can build a patch release for the specific 2.x version you run.
-That is commercial work under your purchase agreement, not part of the standard licence, so write to
+That is commercial work under your purchase agreement, not part of the standard license, so write to
 [info@abblix.com](mailto:info@abblix.com) and we will scope it. A version that has passed end of support
 cannot be brought back into support by request.
 
@@ -79,9 +79,9 @@ Whichever route you take, tell us:
   from your report without a fix, or we cannot agree a date, you are free to publish, and doing so costs you
   nothing under this policy.
 
-These timings cover the handling of vulnerability reports, from anyone, licence or no licence: a defect in
+These timings cover the handling of vulnerability reports, from anyone, license or no license: a defect in
 this library is our problem before it is yours. They are not technical support. Support and maintenance are
-governed by your licence and purchase agreement, and Section 3.7 of the [licence](LICENSE.md) is explicit that
+governed by your license and purchase agreement, and Section 3.7 of the [license](LICENSE.md) is explicit that
 use free of charge under Section 2.3, commercial or not, carries no commitment to either.
 
 We do not run a paid bug bounty.
@@ -90,10 +90,10 @@ We do not run a paid bug bounty.
 
 This section is incorporated by reference into the Abblix License Agreement under its Section 11.4(c), and it
 binds Abblix LLP. Within its scope we will not bring or support legal action against you, and we will not
-treat your research as a breach of the licence.
+treat your research as a breach of the license.
 
 For good-faith security research under this policy, and notwithstanding Sections 2.2(a) and 2.2(b) of the
-[licence](LICENSE.md), you may modify, instrument, decompile and analyse the Software, fuzzing included, on
+[license](LICENSE.md), you may modify, instrument, decompile and analyze the Software, fuzzing included, on
 an installation you control. Nothing else in those sections is waived. What we ask in return:
 
 - **Test against an installation you control.** Providers built on this library are deployed and operated by

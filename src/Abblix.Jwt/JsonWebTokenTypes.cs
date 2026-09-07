@@ -48,7 +48,7 @@ public static class JsonWebTokenTypes
 	// generic JWT that the JWT library writes. What a vendor value does instead is break at a version
 	// boundary - an ID token issued before a rename is refused after it, which is how RP-initiated logout
 	// stopped working across two servers of different builds. Every kind this class names is listed
-	// in Known below, and an ID token is recognised by not being one of them.
+	// in Known below, and an ID token is recognized by not being one of them.
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -56,7 +56,7 @@ public static class JsonWebTokenTypes
 	/// <remarks>
 	/// FIXED BY SPECIFICATION - MUST NOT be changed. Registered with IANA as <c>application/logout+jwt</c> by
 	/// the OpenID Foundation and required by OpenID Connect Back-Channel Logout, which the relying parties we
-	/// notify implement. A different value would leave every one of them unable to recognise the token.
+	/// notify implement. A different value would leave every one of them unable to recognize the token.
 	/// </remarks>
 	public const string LogoutToken = "logout+jwt";
 

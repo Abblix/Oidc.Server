@@ -315,7 +315,7 @@ public class ProofValidatorTests
     public async Task ValidateAsync_JtiTooShort_ReturnsJtiMissing()
     {
         // RFC 9449 section 11.1 RECOMMENDS at least 96 bits of effective entropy in the jti
-        // claim - anything shorter is rejected to harden the replay defence.
+        // claim - anything shorter is rejected to harden the replay defense.
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "short" }.Build();
 
         var result = await _sut.ValidateAsync(proof, cancellationToken: Ct);

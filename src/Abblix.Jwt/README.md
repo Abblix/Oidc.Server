@@ -88,7 +88,7 @@ services.AddSingleton<IReplayCache>(provider =>
     provider.CreateService<DistributedReplayCache>(Dependency.Override("MyApp:ReplayPrevention:")));
 ```
 
-The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behaviour and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
+The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behavior and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
 
 ## External keys
 

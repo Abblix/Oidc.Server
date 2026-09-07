@@ -195,8 +195,8 @@ public class IdTokenHintValidatorTests
     /// <para>
     /// The last two cases are the ones that pin the design. Both are permitted elsewhere - one is what a
     /// client assertion is, the other what a request object is - and both must still be refused here, which
-    /// works only because the catalogue names every type and each position states its own exceptions. Drop
-    /// either from the catalogue to spare its own position, and it starts passing as an ID token too.
+    /// works only because the catalog names every type and each position states its own exceptions. Drop
+    /// either from the catalog to spare its own position, and it starts passing as an ID token too.
     /// </para>
     /// </remarks>
     [Theory]

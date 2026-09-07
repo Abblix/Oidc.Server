@@ -172,7 +172,7 @@ public class RsaKeyFloorTests
     /// does not check out, and <c>Verify</c> returning false is what says that. What was wrong was the
     /// silence around it. The case is not a hostile peer but a rotation - a key ring holding one retired
     /// sub-floor key signs new tokens with the leading key and fails every token signed before the
-    /// upgrade, all of them labelled as tampering, with nothing anywhere naming a size.
+    /// upgrade, all of them labeled as tampering, with nothing anywhere naming a size.
     /// <para>
     /// Driven through the real signer rather than through the reporting method, because the property is
     /// that the two arrive together: a test calling the reporter directly would pass over a build where

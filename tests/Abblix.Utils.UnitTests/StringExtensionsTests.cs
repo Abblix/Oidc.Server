@@ -87,7 +87,7 @@ public class StringExtensionsTests
 
     /// <summary>
     /// The refusal names the value, which is the whole reason this exists instead of a bare null-forgiving
-    /// operator: a null travelling on fails somewhere else, and the message there names nothing.
+    /// operator: a null traveling on fails somewhere else, and the message there names nothing.
     /// </summary>
     [Theory]
     [InlineData(null)]

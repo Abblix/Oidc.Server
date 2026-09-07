@@ -37,7 +37,7 @@ public static class AuthorizationContextExtensions
     /// RFC 9068 Section 3: "If the request does not include a `resource` parameter, the authorization server
     /// MUST use a default resource indicator in the `aud` claim." With no default supplied the context is
     /// returned untouched and the audience later falls back to the issuer (see <see cref="ApplyTo"/>) - the
-    /// behaviour changes only where a host states the default, because that value is read by every resource
+    /// behavior changes only where a host states the default, because that value is read by every resource
     /// server in the deployment.
     /// A context that already names a resource or an audience is returned unchanged: it says who the token is
     /// for, and this only fills a gap.
@@ -144,7 +144,7 @@ public static class AuthorizationContextExtensions
         // A lone audience naming this server, or the client that asked for the token, is what the write side
         // puts there when the request named no resource - so reading it back must not produce a resource
         // nobody requested, or a refresh would silently narrow the new token to it. The client identifier is
-        // still recognised here because tokens issued before the fallback became the issuer name the client,
+        // still recognized here because tokens issued before the fallback became the issuer name the client,
         // and they stay valid until they expire.
         Uri[]? resources = null;
         if (audiences.Length != 1 || (audiences[0] != payload.Issuer && audiences[0] != payload.ClientId))

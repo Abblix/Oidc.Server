@@ -94,7 +94,7 @@ public class IntrospectionRequestProcessor(
 	/// cannot be matched against what another resource sees.
 	/// <para>
 	/// A caller that is not pairwise gets nothing. Its own subject type says it sees users under their real
-	/// identifiers, which is a statement about the tokens issued to it, not a licence to learn the identity of
+	/// identifiers, which is a statement about the tokens issued to it, not a license to learn the identity of
 	/// a user who authorized somebody else.
 	/// </para>
 	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not

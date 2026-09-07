@@ -71,7 +71,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
     {
         // Abblix-side defensive posture: RFC 9449 section 7.1's check list "the public key of
         // the DPoP proof matches the public key to which the access token is bound"
-        // has no defined behaviour when the token carries no cnf.jkt at all (nothing
+        // has no defined behavior when the token carries no cnf.jkt at all (nothing
         // to match against). Abblix chooses to reject so a Bearer-issued token cannot
         // silently sneak through the DPoP scheme and bypass logging/policy gates that
         // key off presentation mode. Not a spec MUST -- a deliberate posture.

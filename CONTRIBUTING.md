@@ -10,13 +10,13 @@ Abblix OIDC Server is a source-available commercial product, developed in-house 
 
 That is not a judgement on the quality of outside work. It is how we keep a security-critical identity library coherent and accountable.
 
-## Packages under an open-source licence
+## Packages under an open-source license
 
-Part of this repository is distributed under the Apache License 2.0. Each package names its licence in its manifest, and every source file repeats it in an SPDX identifier, so you never have to guess: read the header of the file in front of you.
+Part of this repository is distributed under the Apache License 2.0. Each package names its license in its manifest, and every source file repeats it in an SPDX identifier, so you never have to guess: read the header of the file in front of you.
 
-An open licence answers what you may do with the code. It does not change how the project is developed, and the two are separate questions. We do not merge external pull requests into the Apache-2.0 packages either, for the reason above and for one more: remaining the sole author is what lets us release future versions under the licence we choose. Accepting outside code would end that quietly, and it is not a decision that should happen as a side effect of a merge.
+An open license answers what you may do with the code. It does not change how the project is developed, and the two are separate questions. We do not merge external pull requests into the Apache-2.0 packages either, for the reason above and for one more: remaining the sole author is what lets us release future versions under the license we choose. Accepting outside code would end that quietly, and it is not a decision that should happen as a side effect of a merge.
 
-You are free to fork an Apache-2.0 package and change it in your own copy. That is what the licence grants, and we are not asking you to refrain. What we will not do is take the change back into this repository. If you found a defect there, an issue with a reproduction is worth more to us than a patch, because it lets us fix it for everyone.
+You are free to fork an Apache-2.0 package and change it in your own copy. That is what the license grants, and we are not asking you to refrain. What we will not do is take the change back into this repository. If you found a defect there, an issue with a reproduction is worth more to us than a patch, because it lets us fix it for everyone.
 
 ## How you can help
 
@@ -24,7 +24,7 @@ These are the contributions we value most:
 
 - **Report a bug.** Open a [GitHub issue](https://github.com/Abblix/Oidc.Server/issues) with the library version, your .NET version, your configuration, the request sequence, and what you expected versus what happened. A clear reproduction is the fastest path to a fix.
 - **Suggest a feature or improvement.** Open an [issue](https://github.com/Abblix/Oidc.Server/issues), or post in [Ideas](https://github.com/Abblix/Oidc.Server/discussions/categories/ideas) describing the use case. That is where we ask what to build next, and we read it when planning. We cannot build everything, and we say so when we decide against something.
-- **Point out a specification gap.** If something diverges from an RFC or an OpenID Connect specification, tell us which clause, and where our behaviour departs from it. Abblix OIDC Server is certified by the OpenID Foundation, and the standards it implements are listed in the [documentation](https://docs.abblix.com/docs/implemented-standards): a divergence from a clause is a defect, and we treat it as one.
+- **Point out a specification gap.** If something diverges from an RFC or an OpenID Connect specification, tell us which clause, and where our behavior departs from it. Abblix OIDC Server is certified by the OpenID Foundation, and the standards it implements are listed in the [documentation](https://docs.abblix.com/docs/implemented-standards): a divergence from a clause is a defect, and we treat it as one.
 - **Ask a question.** [Q&A](https://github.com/Abblix/Oidc.Server/discussions/categories/q-a) is the place for integration questions and design conversations.
 
 ## Security issues

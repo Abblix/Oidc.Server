@@ -178,7 +178,7 @@ public class ClockSkewCeilingValidatorTests
 
     /// <summary>
     /// The ceiling is applied where the tolerance is resolved, so a value above it comes back cut
-    /// down rather than travelling onward beside a bound somebody must remember to pass. This is the
+    /// down rather than traveling onward beside a bound somebody must remember to pass. This is the
     /// case that would go on passing if the bound were dropped from the resolution: the startup
     /// guard below refuses such a value only for the SERVER's own profile, while a client carrying a
     /// profile of its own reaches this path with a value nothing refused.

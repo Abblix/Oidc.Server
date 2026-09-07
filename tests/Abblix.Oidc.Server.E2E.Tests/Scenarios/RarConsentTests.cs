@@ -106,7 +106,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
     public async Task Consent_passthrough_when_provider_grants_null_preserves_request_value()
     {
         // No Override -> provider leaves Granted.AuthorizationDetails as null -> processor
-        // falls back to the post-validator request value (PR #135 baseline behaviour).
+        // falls back to the post-validator request value (PR #135 baseline behavior).
         // Explicit anchor for the contract; functionally same path as the byte-exact tests
         // above, but stated as a #142 acceptance criterion in its own right.
         var tokenResponse = await PerformParFlowAsync(

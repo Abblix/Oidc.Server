@@ -58,7 +58,7 @@ internal sealed partial class KeyRingRefreshService(
             catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {
                 // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
-                // Letting it escape would end ExecuteAsync, and the host's default behaviour for a faulted
+                // Letting it escape would end ExecuteAsync, and the host's default behavior for a faulted
                 // background service is to stop the process - so the pods would leave one after another over a
                 // single rotation window while still holding perfectly good keys.
                 LogRefreshFailed(exception, period);

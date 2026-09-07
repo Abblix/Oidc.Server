@@ -32,7 +32,7 @@ public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// first-access would otherwise build the host more than once - each build mints a fresh
     /// signing key and gets its own isolated in-memory stores, so a token issued through one
     /// build fails signature validation (or grant lookup) against another. Forcing the build here,
-    /// single-threaded, removes that race. This is test-infrastructure correctness, not behaviour.
+    /// single-threaded, removes that race. This is test-infrastructure correctness, not behavior.
     /// </summary>
     public ValueTask InitializeAsync()
     {

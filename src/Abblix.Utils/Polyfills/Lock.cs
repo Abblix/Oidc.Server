@@ -25,7 +25,7 @@ namespace System.Threading;
 public sealed class Lock
 {
     /// <summary>
-    /// What Monitor actually locks on. The polyfill cannot pass itself, because the compiler recognises the
+    /// What Monitor actually locks on. The polyfill cannot pass itself, because the compiler recognizes the
     /// name System.Threading.Lock and refuses monitor-based locking on it - the very confusion the real type
     /// exists to prevent.
     /// </summary>

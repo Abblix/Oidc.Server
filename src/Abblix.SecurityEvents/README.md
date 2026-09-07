@@ -26,7 +26,7 @@ cannot be written.
 
 RFC 8417 Section 2.2 rates `exp` NOT RECOMMENDED for a token that records
 history, and Sections 4.1 and 4.2 make omitting it one of the layers that keep a SET from being
-passed off as an ID or access token - defence in depth alongside explicit typing and a distinct
+passed off as an ID or access token - defense in depth alongside explicit typing and a distinct
 audience, all of which this package applies.
 
 ```csharp

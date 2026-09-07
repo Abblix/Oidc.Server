@@ -248,7 +248,7 @@ public sealed class ScopeEnforcementTests
     /// same caller.
     /// </summary>
     /// <remarks>
-    /// This pins a documented gap rather than a wanted behaviour, which is the only honest way to leave
+    /// This pins a documented gap rather than a wanted behavior, which is the only honest way to leave
     /// it: the filter judges a route by the requirement it declares, which for a host route is none, so
     /// it is let through. The fail-open branch is deliberate, because refusing a route with no metadata
     /// would refuse exactly this one.

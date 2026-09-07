@@ -40,7 +40,7 @@ public class CachingSecureHttpFetcherDecorator(
 
 		// A non-positive lifetime means caching off, and it has to be handled here: MemoryCache does not read
 		// TimeSpan.Zero as "do not store", so a host zeroing the setting to force fresh fetches would get a
-		// stored entry instead of the behaviour it asked for.
+		// stored entry instead of the behavior it asked for.
 		if (result.TryGetSuccess(out var value) && cacheDuration > TimeSpan.Zero)
 		{
 			// Keyed on the URI alone, because one address is one document. What differs between consumers is

@@ -122,7 +122,7 @@ public class AddVaultCustodianTests
         var signature = await custodian.SignAsync(
             "oidc-sign:1", "RS256", [1, 2, 3], TestContext.Current.CancellationToken);
 
-        // The signature could only have come from the stub, so the custodian's request travelled through the
+        // The signature could only have come from the stub, so the custodian's request traveled through the
         // handler the host chained onto the published name.
         Assert.Equal(SignatureBytes, signature);
         Assert.Equal(1, hostHandler.Requests);

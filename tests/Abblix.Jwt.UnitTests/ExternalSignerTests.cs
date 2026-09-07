@@ -17,7 +17,7 @@ namespace Abblix.Jwt.UnitTests;
 /// Verifies external (key-custodian) signing: a signing key published public-only, whose private half lives
 /// behind a host <c>IKeyCustodian</c> on the composed crypto seam, produces a token that
 /// validates against the public key - proving the library never loads private material yet issues a
-/// verifiable signature. Also verifies the fail-closed behaviour when a public-only key has no external
+/// verifiable signature. Also verifies the fail-closed behavior when a public-only key has no external
 /// signer wired.
 /// </summary>
 public class ExternalSignerTests

@@ -145,7 +145,7 @@ internal sealed partial class LoginClient(
 
     /// <summary>
     /// A failure that retrying can cure, as opposed to an answer from Vault: a connection error, the
-    /// client's own timeout - which surfaces as cancellation without the caller's token being cancelled -
+    /// client's own timeout - which surfaces as cancellation without the caller's token being canceled -
     /// or a credential file that cannot be read right now.
     /// </summary>
     private static bool IsRecoverableFailure(Exception exception, CancellationToken cancellationToken)

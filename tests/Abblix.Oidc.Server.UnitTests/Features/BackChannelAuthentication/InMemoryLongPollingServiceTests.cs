@@ -88,7 +88,7 @@ public class InMemoryLongPollingServiceTests
 
         Assert.Equal(1, InnerWaiterCount(service, authReqId));
 
-        // Release the persistent waiter (WhenAny returns the cancelled timeout task, so the method
+        // Release the persistent waiter (WhenAny returns the canceled timeout task, so the method
         // returns false rather than throwing) and confirm the key is then dropped.
         await cts.CancelAsync();
         Assert.False(await persistentWait);

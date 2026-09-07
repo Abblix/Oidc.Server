@@ -76,7 +76,7 @@ public abstract class ModelBinderBase : IModelBinder
 	/// case, and it could not run: the coverage stayed at zero through the whole suite while the tests passed,
 	/// which is the shape a defensive branch takes when it guards something already guaranteed. Worse than
 	/// unused, it would have answered a broken invariant with a silent "did not bind" while the two
-	/// implementations without such a guard threw - one contract, two behaviours, in the case nobody tests.</para>
+	/// implementations without such a guard threw - one contract, two behaviors, in the case nobody tests.</para>
 	///
 	/// <para>An implementation that wants the guarantee stated in code asserts it (<c>NotNull</c>) rather than
 	/// branching on it: an assertion fails loudly if the invariant ever breaks, and reads as a claim about this

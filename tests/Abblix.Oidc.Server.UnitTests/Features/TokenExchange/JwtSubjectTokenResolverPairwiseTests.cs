@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// pairwise client, its <c>sub</c> is that client's per-sector pseudonym, and the resolver must look the client up
 /// and open the pseudonym back to the real subject. The general resolver tests exercise only the public pass-through
 /// path (no settings, no client), so this fills the gap. It runs in the License collection because the client lookup
-/// runs a licence check.
+/// runs a license check.
 /// </summary>
 public class JwtSubjectTokenResolverPairwiseTests
 {

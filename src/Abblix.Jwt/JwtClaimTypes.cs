@@ -80,7 +80,7 @@ public static class JwtClaimTypes
 
     /// <summary>
     /// "x5t" header parameter (RFC 7515 Section 4.1.7): base64url-encoded SHA-1 thumbprint of
-    /// the DER encoding of the corresponding X.509 certificate. Discouraged in favour of
+    /// the DER encoding of the corresponding X.509 certificate. Discouraged in favor of
     /// <see cref="X509Sha256Thumbprint"/> per RFC 7515 section 10.11.
     /// </summary>
     public const string X509Sha1Thumbprint = "x5t";

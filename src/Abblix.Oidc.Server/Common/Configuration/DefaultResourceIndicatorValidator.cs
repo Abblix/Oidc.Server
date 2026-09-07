@@ -37,7 +37,7 @@ public sealed class DefaultResourceIndicatorValidator : IValidateOptions<OidcOpt
         }
 
         // A default naming a resource this server does not know produces tokens whose audience no resource
-        // server recognises, and the request that would have named it explicitly is refused as
+        // server recognizes, and the request that would have named it explicitly is refused as
         // invalid_target - so the two paths would disagree about the same identifier.
         var known = options.Resources is { Length: > 0 } resources &&
                     Array.Exists(resources, resource => resource.Resource == defaultResource);

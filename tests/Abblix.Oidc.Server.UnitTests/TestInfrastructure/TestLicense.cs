@@ -17,10 +17,10 @@ using Abblix.Oidc.Server.Features.Licensing;
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 /// <summary>
-/// Installs the generated test licence for the whole assembly, and names the terms every test lives inside.
+/// Installs the generated test license for the whole assembly, and names the terms every test lives inside.
 /// </summary>
 /// <remarks>
-/// The suite runs under a real licence loaded the way a deployment loads one, not under lifted limits. A test
+/// The suite runs under a real license loaded the way a deployment loads one, not under lifted limits. A test
 /// that removes a limit proves the product works without that limit, which is not the product that ships, and
 /// it leaves the limit's own code unreachable so defects can live there indefinitely.
 ///
@@ -32,13 +32,13 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 internal static class TestLicense
 {
     /// <summary>
-    /// The only issuer the test licence recognises. A test that needs an issuer uses this one; any other value
-    /// is refused by the licence, which is the correct behaviour and not something to work around.
+    /// The only issuer the test license recognizes. A test that needs an issuer uses this one; any other value
+    /// is refused by the license, which is the correct behavior and not something to work around.
     /// </summary>
     public const string Issuer = "https://auth.example.com";
 
     /// <summary>
-    /// How many distinct issuers the licence allows. Named here because a test that exercises the limit needs
+    /// How many distinct issuers the license allows. Named here because a test that exercises the limit needs
     /// to know where it sits, and reading it from the JWT at runtime would hide the number from the reader.
     /// </summary>
     public const int IssuerLimit = 1;
@@ -47,7 +47,7 @@ internal static class TestLicense
 
     /// <summary>
     /// Brings <see cref="LicenseChecker"/> back to the state it holds at process start, then reinstalls the
-    /// test licence.
+    /// test license.
     /// </summary>
     /// <remarks>
     /// Everything the checker knows lives in process-wide statics that accumulate and are never released. That
@@ -57,7 +57,7 @@ internal static class TestLicense
     ///
     /// The reach-in lives here rather than behind a hook in the product, because a reset exists only for tests
     /// and test-only code does not belong in a shipped assembly. Note what this does and does not do: it
-    /// restores a known starting point and puts the real licence back. It never removes a limit.
+    /// restores a known starting point and puts the real license back. It never removes a limit.
     /// </remarks>
     internal static void ResetChecker()
     {
@@ -66,10 +66,10 @@ internal static class TestLicense
     }
 
     /// <summary>
-    /// Empties the checker without installing any licence, so a test can supply terms of its own.
+    /// Empties the checker without installing any license, so a test can supply terms of its own.
     /// </summary>
     /// <remarks>
-    /// Needed because licences accumulate rather than replace one another: adding a licence while the
+    /// Needed because licenses accumulate rather than replace one another: adding a license while the
     /// assembly's is still in place merges the two, and a whitelist from either of them then applies. A test
     /// that wants to reach the issuer-count limit has to arrive with no whitelist at all, since the whitelist
     /// is consulted first and refuses an unknown issuer before any counting happens.
@@ -131,7 +131,7 @@ internal static class TestLicense
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
         // Blocking on purpose: a module initializer cannot await, and nothing may observe LicenseChecker before
-        // the licence is in place - a check that runs first would be answered by the free licence instead.
+        // the license is in place - a check that runs first would be answered by the free license instead.
         LicenseLoader.LoadAsync(reader.ReadToEnd()).GetAwaiter().GetResult();
     }
 }

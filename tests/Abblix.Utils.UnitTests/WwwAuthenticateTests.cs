@@ -10,7 +10,7 @@ using Xunit;
 namespace Abblix.Utils.UnitTests;
 
 /// <summary>
-/// The <c>WWW-Authenticate</c> grammar, which two packages under two licences now share.
+/// The <c>WWW-Authenticate</c> grammar, which two packages under two licenses now share.
 /// </summary>
 /// <remarks>
 /// The quoting is the part worth pinning. A realm or description carrying a quotation mark or a backslash

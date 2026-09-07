@@ -107,7 +107,7 @@ public class SubjectIdentifierNegativeTests
         // Deserializing into a CONCRETE declared type bypasses the polymorphic converter, so the
         // "format" member is not consulted there: the caller already named the type, and the wire
         // value binds to nothing (the Format property is read-only). This pins that door's
-        // behaviour so it reads as a decision, not an accident - the polymorphic door is the wire
+        // behavior so it reads as a decision, not an accident - the polymorphic door is the wire
         // door, and code that reads untrusted input must declare the base type.
         var parsed = JsonSerializer.Deserialize<EmailSubject>(
             """{"format":"phone_number","email":"user@example.com"}""");

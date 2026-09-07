@@ -26,7 +26,7 @@ internal sealed record LogRecord(LogLevel Level, EventId EventId, string Message
 /// </summary>
 /// <remarks>
 /// Shared because a record is the only observable a decision taken in a log leaves behind. Where the
-/// product reports rather than returns - a licence limit refused, a licence expired - asserting that the
+/// product reports rather than returns - a license limit refused, a license expired - asserting that the
 /// decision happened means asserting the write, and a test without a recorder can only observe silence,
 /// which is what an unreported decision looks like too.
 /// </remarks>

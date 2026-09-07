@@ -18,14 +18,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
 /// Refuses a second redemption of an authorization code, and revokes the tokens the first one issued, in
-/// compliance with OAuth 2.0 security best practices. Two defences, split by WHEN the repeat arrives
+/// compliance with OAuth 2.0 security best practices. Two defenses, split by WHEN the repeat arrives
 /// rather than by where: the claim refuses one arriving beside the first, and the issued tokens written
 /// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
 /// Neither is complete on its own terms. The claim reads the value under the same hold of the gate that
 /// removes it, so on ONE node two callers cannot be handed the same grant; across processes the gate
-/// holds nothing and both can be, which is issue 435. And the write-back is what the second defence
+/// holds nothing and both can be, which is issue 435. And the write-back is what the second defense
 /// rests on, so a first redemption that ends without issuing tokens leaves nothing for it to catch. The
 /// refusal this class returns is the same string either way.
 /// <para>

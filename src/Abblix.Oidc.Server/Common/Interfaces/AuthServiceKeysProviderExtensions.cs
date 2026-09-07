@@ -33,7 +33,7 @@ public static partial class AuthServiceKeysProviderExtensions
         // Strip any private material first, then keep only keys that still have a publishable public half. A
         // symmetric key's only material is its shared secret, so once stripped it has nothing left to publish and
         // is dropped here: it can never reach the public JWKS, even if a provider hands it over carrying the secret.
-        // Each surviving key is then stamped with its role's use, so every published key is explicitly labelled.
+        // Each surviving key is then stamped with its role's use, so every published key is explicitly labeled.
         var signingKeys = await provider.GetSigningKeys()
             .Select(key => PublicOnly(key, logger))
             .Where(key => key.HasPublicKey)

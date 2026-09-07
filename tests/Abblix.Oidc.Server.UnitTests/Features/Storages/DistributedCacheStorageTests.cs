@@ -327,7 +327,7 @@ public class DistributedCacheStorageTests
 
     /// <summary>
     /// Verifies that SetAsync passes provided cancellation token to cache.
-    /// Cancellation tokens allow operations to be cancelled when needed.
+    /// Cancellation tokens allow operations to be canceled when needed.
     /// </summary>
     [Fact]
     public async Task SetAsync_WithProvidedToken_ShouldPassTokenToCache()
@@ -646,7 +646,7 @@ public class DistributedCacheStorageTests
 
     /// <summary>
     /// Verifies that RemoveAsync passes provided cancellation token to cache.
-    /// Cancellation tokens allow removal operations to be cancelled when needed.
+    /// Cancellation tokens allow removal operations to be canceled when needed.
     /// </summary>
     [Fact]
     public async Task RemoveAsync_WithProvidedToken_ShouldPassTokenToCache()

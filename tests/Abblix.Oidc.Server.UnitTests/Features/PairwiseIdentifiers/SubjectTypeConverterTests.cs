@@ -329,7 +329,7 @@ public class SubjectTypeConverterTests
     /// CIBA Core 1.0 Section 4 puts the jwks_uri in the redirect URI's place for poll and ping, and the
     /// backchannel_client_notification_endpoint for push. Without this the client_id fallback was
     /// reached, making identifiers per-client where the specification makes them per-sector - which is
-    /// the whole point of a sector, so two genuinely-one-deployment clients could not recognise a user
+    /// the whole point of a sector, so two genuinely-one-deployment clients could not recognize a user
     /// as the same person.
     /// </remarks>
     [Theory]

@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// whether an identifier has been seen.
 /// </summary>
 /// <remarks>
-/// The only behaviour left here is the one the current contract deliberately dropped: an absent
+/// The only behavior left here is the one the current contract deliberately dropped: an absent
 /// expiry. The moved contract requires its caller to say when an identifier stops being worth
 /// remembering, because a cache that guesses either outlives or forgets the window its caller
 /// actually validates against. This shim keeps guessing on its callers' behalf, with the hour the

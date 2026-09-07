@@ -52,7 +52,7 @@ public class LogEventUniquenessTests
     /// </summary>
     /// <remarks>
     /// A uniqueness check over an empty set passes, and a walk that stops descending - a class nested one
-    /// level deeper than it expected, a field kind it does not recognise - reports exactly that. The number
+    /// level deeper than it expected, a field kind it does not recognize - reports exactly that. The number
     /// is the instrument's own pulse rather than a fact about the product, so it is meant to be edited
     /// whenever an event is added; what it refuses is the edit nobody made.
     /// </remarks>

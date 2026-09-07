@@ -117,7 +117,7 @@ public class PushDeliverySchedulerTests
 
     /// <summary>
     /// Every instance of the application runs the scheduler, so what keeps two of them from POSTing
-    /// one stream's queue twice over is the claim - and the case is modelled by holding that claim
+    /// one stream's queue twice over is the claim - and the case is modeled by holding that claim
     /// the way another instance would.
     /// </summary>
     /// <remarks>

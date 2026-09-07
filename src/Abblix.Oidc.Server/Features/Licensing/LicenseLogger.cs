@@ -83,7 +83,7 @@ internal class LicenseLogger: ILogger
             // Reporting must never become the outcome. This logger is a process-wide singleton whose underlying
             // ILogger is rebound by every host that starts and released by none, so it can outlive the provider
             // chain it was given - a disposed provider then throws on write. Letting that escape would turn a
-            // logging fault into the caller's failure, and at these call sites the caller is a licence decision:
+            // logging fault into the caller's failure, and at these call sites the caller is a license decision:
             // the request would fail with an unrelated exception in place of the decision that was actually
             // reached. The decision stands; only the record of it is lost.
         }

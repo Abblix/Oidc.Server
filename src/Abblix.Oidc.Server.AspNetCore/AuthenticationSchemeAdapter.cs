@@ -105,7 +105,7 @@ public class AuthenticationSchemeAdapter(
 	/// <remarks>
 	/// The cookie-backed authentication scheme carries a single signed-in identity, so this stream yields at most one
 	/// session - the one represented by the current request's cookie. Multiple concurrent user accounts per browser
-	/// session are not modelled by this adapter.
+	/// session are not modeled by this adapter.
 	/// </remarks>
 	/// <returns>
 	/// An asynchronous stream of <see cref="AuthSession"/> instances representing the user's current

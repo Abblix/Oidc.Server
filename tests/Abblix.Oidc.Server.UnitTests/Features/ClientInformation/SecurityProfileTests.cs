@@ -98,7 +98,7 @@ public class SecurityProfileTests
 
     /// <summary>
     /// The code-only check is case-insensitive, matching the runtime flow-type validator: a
-    /// non-canonical "Code" casing is still recognised as the authorization-code response type.
+    /// non-canonical "Code" casing is still recognized as the authorization-code response type.
     /// </summary>
     [Fact]
     public void FindViolations_Fapi2CodeOnlyNonCanonicalCasing_NoViolations()

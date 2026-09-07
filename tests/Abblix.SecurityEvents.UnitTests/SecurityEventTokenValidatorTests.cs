@@ -113,7 +113,7 @@ public class SecurityEventTokenValidatorTests
         }
 
         // The default profile assembled by hand, in its required order: these tests judge the
-        // steps' behaviour, and the composition machinery has its own suite.
+        // steps' behavior, and the composition machinery has its own suite.
         return new CompositeSecurityEventTokenValidator(
         [
             new ParseStep(),

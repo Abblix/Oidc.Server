@@ -82,7 +82,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// Introspection validates the audience of the token it is given, so a token minted for a named resource
-    /// has to be recognised there too - the resource is the consumer, and reporting the token inactive would
+    /// has to be recognized there too - the resource is the consumer, and reporting the token inactive would
     /// tell the caller it was never issued.
     /// </summary>
     [Fact]

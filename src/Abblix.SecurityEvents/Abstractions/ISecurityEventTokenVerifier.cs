@@ -31,7 +31,7 @@ public interface ISecurityEventTokenVerifier
     /// <param name="compactToken">The token as received, in compact serialization.</param>
     /// <param name="keyId">
     /// The "kid" the token's header names, when the caller has already parsed it - the signature
-    /// step has - so a caching key resolver can recognise a rollover without re-parsing the
+    /// step has - so a caching key resolver can recognize a rollover without re-parsing the
     /// token.</param>
     /// <param name="cancellationToken">Cancels key retrieval mid-flight.</param>
     /// <returns>

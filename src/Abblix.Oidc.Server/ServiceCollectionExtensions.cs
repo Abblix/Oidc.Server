@@ -59,7 +59,7 @@ public static class ServiceCollectionExtensions
 			// Makes validation a stated contract rather than a side effect. Without it the registered
 			// IValidateOptions validators run on whoever first reads the options value, and today something in
 			// this composition already reads it while the host starts, so removing this line changes no
-			// observable behaviour (measured: the end-to-end startup-refusal test stays green without it).
+			// observable behavior (measured: the end-to-end startup-refusal test stays green without it).
 			// That is a property of the current wiring rather than a guarantee. The day the last startup-time
 			// reader becomes lazy, a contradictory configuration would boot, report healthy and fail on live
 			// traffic instead.

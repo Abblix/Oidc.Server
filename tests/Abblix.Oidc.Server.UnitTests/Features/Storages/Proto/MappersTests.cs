@@ -321,7 +321,7 @@ public class MappersTests
         var proto = context.ToProto();
 
         // Empty array is treated identically to null in protobuf storage - no point
-        // persisting an empty marker that yields the same observable behaviour.
+        // persisting an empty marker that yields the same observable behavior.
         Assert.False(proto.HasAuthorizationDetailsJson);
     }
 
@@ -391,7 +391,7 @@ public class MappersTests
         // and serialise to the wire bytes that pre-upgrade code would have produced. A current reader
         // must deserialise those bytes cleanly, with the new fields surfacing as null on the C# record.
         // Proto3 optional fields are designed to behave this way, but a regression test pins the
-        // observable behaviour so future schema additions can't accidentally break old storage.
+        // observable behavior so future schema additions can't accidentally break old storage.
         var preUpgradeProto = new Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationContext
         {
             ClientId = "client-123",
