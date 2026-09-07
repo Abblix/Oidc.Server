@@ -42,6 +42,18 @@ public sealed class KeyVaultClientTests : IDisposable
             httpClient);
     }
 
+
+    [Fact]
+    public async Task AVaultThatCannotBeReachedIsTemporary()
+    {
+        // A connection that could not be made says nothing about the request, and the next one may succeed.
+        // Reported as permanent it tells a caller never to come back from an outage that clears itself.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler).SignAsync(
+            "oidc-sign/1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+    }
+
     public void Dispose()
     {
         foreach (var httpClient in _httpClients)

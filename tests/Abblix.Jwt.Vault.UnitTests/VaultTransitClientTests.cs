@@ -233,6 +233,7 @@ public sealed class VaultTransitClientTests : IDisposable
 
     [Theory]
     [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
     [InlineData(HttpStatusCode.ServiceUnavailable)]
     [InlineData(HttpStatusCode.InternalServerError)]
     public async Task DecryptAsync_Throws_WhenTheFailureIsOurs(HttpStatusCode status)

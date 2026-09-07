@@ -278,16 +278,12 @@ internal sealed partial class TransitCustodian(
         {
             return await _httpClient.SendAsync(method, path, body, cancellationToken);
         }
-        catch (Exception exception) when (VaultFailure.IsTransientTransport(exception, cancellationToken))
+        catch (KeyCustodianUnavailableException unreachable)
         {
-            var unreachable = new KeyCustodianUnavailableException(
-                path,
-                $"The vault at '{path}' could not be reached.",
-                retryAfter: null,
-                exception);
-
+            // The transport classified it; this adds the line an operator reads, which the transport cannot
+            // write because it holds no logger and serves the key ring as well.
             LogCustodianFailed(path, temporary: true, unreachable);
-            throw unreachable;
+            throw;
         }
     }
 }

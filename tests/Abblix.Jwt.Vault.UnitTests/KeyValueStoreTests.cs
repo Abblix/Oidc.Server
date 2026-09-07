@@ -31,6 +31,18 @@ public sealed class KeyValueStoreTests : IDisposable
         CreatedAt = new DateTimeOffset(2026, 7, 17, 0, 0, 0, TimeSpan.Zero),
     };
 
+
+    [Fact]
+    public async Task AVaultThatCannotBeReachedIsReportedAsTemporaryHereToo()
+    {
+        // The key ring rides the same transport as the custodian, so it gets the same reading of a request that
+        // never arrived. Without this row the classification is proven for one caller and assumed for the other.
+        var handler = new StubHttpMessageHandler((_, _) => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
     private KeyValueStore StoreOver(StubHttpMessageHandler handler)
     {
         // The base address stops at /v1/, not at a mount: KV lives on a different mount than Transit, so the

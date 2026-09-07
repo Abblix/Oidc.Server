@@ -18,13 +18,20 @@ namespace Abblix.Jwt.Vault;
 internal static class VaultFailure
 {
     /// <summary>
-    /// Whether a status is one that a later attempt may find cleared. A sealed Vault answers 503, a standby
-    /// replica 429, and an unsealed server having a bad time answers 5xx; none of those is about the request.
-    /// Everything else - a rejected token, a denied path, a key that is not there - meets the same answer next
-    /// time, so it is not offered a retry.
+    /// Whether a status is one that a later attempt may find cleared. A sealed server answers 503 and one
+    /// having a bad time answers 5xx; 429 is the lease-quota refusal, which the next request may pass; and 412
+    /// is the answer Vault documents as "should be retried, perhaps with a little wait" - data this node has
+    /// not caught up on yet. None of those is about the request. Everything else - a rejected token, a denied
+    /// path, a key that is not there - meets the same answer next time, so it is not offered a retry.
     /// </summary>
+    /// <remarks>
+    /// The standby and replication codes Vault also defines belong to its health endpoint, which this package
+    /// never calls, so they are not read here. Naming them would describe a path the custodian does not take.
+    /// </remarks>
     internal static bool IsTransient(HttpStatusCode status)
-        => status is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError;
+        => status is HttpStatusCode.TooManyRequests
+            or HttpStatusCode.PreconditionFailed
+            or >= HttpStatusCode.InternalServerError;
 
     /// <summary>
     /// Whether a failure that never reached Vault may cure itself: a connection error, the client's own timeout

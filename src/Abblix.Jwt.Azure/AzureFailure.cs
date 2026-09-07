@@ -22,15 +22,19 @@ internal static class AzureFailure
     /// Whether a status is one that a later attempt may find cleared. Key Vault throttles per vault and says so
     /// with 429, and a service having a bad time answers 5xx; neither is about the request. A 401 or 403 is a
     /// grant that is missing, a 404 a key that is not there, and a 400 a request that was wrong - all of which
-    /// meet the same answer next time.
+    /// meet the same answer next time. A request timeout is temporary as well.
     /// </summary>
+    /// <param name="status">The status the service answered with, or zero when it never answered: the SDK
+    /// reports a request that did not reach the service with no status at all, and that says nothing about the
+    /// request either.</param>
     internal static bool IsTransient(int status)
-        => status is (int)HttpStatusCode.TooManyRequests or >= (int)HttpStatusCode.InternalServerError;
+        => status is 0
+            or (int)HttpStatusCode.RequestTimeout
+            or (int)HttpStatusCode.TooManyRequests
+            or >= (int)HttpStatusCode.InternalServerError;
 
     /// <summary>
-    /// Reports a Key Vault failure as one of the two, so it arrives at an endpoint that can read it. Anything
-    /// that is not the service answering - a connection that could not be made, the SDK's own timeout - is
-    /// temporary as well, for the same reason: it says nothing about the request.
+    /// Reports a Key Vault failure as one of the two, so it arrives at an endpoint that can read it.
     /// </summary>
     /// <param name="operation">What was being asked of the vault, named for the log line.</param>
     /// <param name="call">The call.</param>
@@ -45,39 +49,59 @@ internal static class AzureFailure
         {
             return await call();
         }
-        catch (RequestFailedException failure) when (IsTransient(failure.Status))
+        catch (Exception failure) when (IsCustodianFailure(failure, cancellationToken))
         {
-            throw new KeyCustodianUnavailableException(
-                operation,
-                $"Key Vault answered {failure.Status} while asked to {operation}.",
-                retryAfter: null,
-                failure);
-        }
-        catch (RequestFailedException failure)
-        {
-            throw new KeyCustodianFailedException(operation, failure);
-        }
-        catch (Exception failure) when (IsTransientTransport(failure, cancellationToken))
-        {
-            throw new KeyCustodianUnavailableException(
-                operation,
-                $"Key Vault could not be reached to {operation}.",
-                retryAfter: null,
-                failure);
+            throw IsTemporary(failure, cancellationToken)
+                ? new KeyCustodianUnavailableException(
+                    operation,
+                    $"Key Vault could not be asked to {operation}.",
+                    retryAfter: null,
+                    failure)
+                : new KeyCustodianFailedException(operation, failure);
         }
     }
 
     /// <summary>
-    /// Whether a failure that never reached the vault may cure itself: a connection error, or the SDK's own
-    /// timeout, which arrives as cancellation while the caller's token is not cancelled. A caller that did
-    /// cancel gets its own outcome back, not a report of an outage.
+    /// Whether this exception is the vault answering, or failing to. Anything else - an algorithm this package
+    /// does not map, a defect of our own - keeps travelling untouched, because reshaping it would hide a fault
+    /// that is not the custodian's behind a status that says it is.
     /// </summary>
-    private static bool IsTransientTransport(Exception exception, CancellationToken cancellationToken)
+    /// <remarks>
+    /// The SDK retries a failed request itself and, when every attempt fails, reports them together. Both
+    /// questions therefore read through that wrapper: without it a vault that could not be reached arrives as a
+    /// shape nothing recognizes and escapes unclassified, which is the failure this seam exists to prevent.
+    /// </remarks>
+    private static bool IsCustodianFailure(Exception exception, CancellationToken cancellationToken)
         => exception switch
         {
+            AggregateException aggregate =>
+                aggregate.InnerExceptions.Any(inner => IsCustodianFailure(inner, cancellationToken)),
+
+            RequestFailedException => true,
+            HttpRequestException => true,
+            IOException => true,
+
+            // A caller that cancelled gets its own outcome back, never a report of an outage.
+            OperationCanceledException => !cancellationToken.IsCancellationRequested,
+
+            _ => false,
+        };
+
+    /// <summary>
+    /// Whether waiting may cure it. An aggregated failure is temporary when any attempt inside it was: the SDK
+    /// keeps retrying past a transient answer, so the last attempt is not the whole story.
+    /// </summary>
+    private static bool IsTemporary(Exception exception, CancellationToken cancellationToken)
+        => exception switch
+        {
+            AggregateException aggregate =>
+                aggregate.InnerExceptions.Any(inner => IsTemporary(inner, cancellationToken)),
+
+            RequestFailedException failure => IsTransient(failure.Status),
             HttpRequestException => true,
             IOException => true,
             OperationCanceledException => !cancellationToken.IsCancellationRequested,
+
             _ => false,
         };
 }
