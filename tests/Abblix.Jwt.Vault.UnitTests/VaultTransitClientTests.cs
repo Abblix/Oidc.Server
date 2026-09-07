@@ -10,6 +10,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -30,6 +31,9 @@ public sealed class VaultTransitClientTests : IDisposable
     private readonly List<HttpClient> _httpClients = [];
 
     private TransitCustodian ClientOver(StubHttpMessageHandler handler)
+        => ClientOver(handler, NullLogger<TransitCustodian>.Instance);
+
+    private TransitCustodian ClientOver(StubHttpMessageHandler handler, ILogger<TransitCustodian> logger)
     {
         // The address stops at the server root, as the shared transport's does: the mount is the custodian's to
         // spell into every path, because the key ring rides this same client on a different one.
@@ -37,9 +41,43 @@ public sealed class VaultTransitClientTests : IDisposable
         _httpClients.Add(httpClient);
 
         return new TransitCustodian(
-            NullLogger<TransitCustodian>.Instance,
+            logger,
             new StubHttpClientFactory(httpClient),
             Options.Create(new VaultTransitOptions { TransitMount = "transit" }));
+    }
+
+
+    [Fact]
+    public async Task AFailureIsLoggedWhereTheVaultsAnswerIsStillVisible()
+    {
+        // The endpoint that answers 503 knows only that something threw. This line is the only place that
+        // names the path and says whether waiting helps, which is the difference between paging the identity
+        // team and paging whoever runs the vault.
+        var logger = new RecordingLogger<TransitCustodian>();
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.ServiceUnavailable, new { errors = new[] { "Vault is sealed" } }));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler, logger).SignAsync(
+            "oidc-sign:1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("transit/sign/oidc-sign", entry.Message);
+        Assert.Contains("Temporary: True", entry.Message);
+    }
+
+    [Fact]
+    public async Task AFailureThatWillNotClearSaysSoInTheSameLine()
+    {
+        // The control for the row above: without it the line could hard-code the word and still read as proof.
+        var logger = new RecordingLogger<TransitCustodian>();
+        var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(() => ClientOver(handler, logger).SignAsync(
+            "oidc-sign:1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+
+        Assert.Contains("Temporary: False", Assert.Single(logger.Entries).Message);
     }
 
     public void Dispose()

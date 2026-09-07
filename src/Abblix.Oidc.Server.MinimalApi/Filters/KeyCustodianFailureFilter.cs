@@ -20,14 +20,14 @@ namespace Abblix.Oidc.Server.MinimalApi.Filters;
 /// </summary>
 /// <remarks>
 /// The status carries the whole answer, because no registered OAuth error code describes a server that cannot
-/// fulfil a valid request: the IANA registry lists <c>server_error</c> for the authorization endpoint only, and
+/// fulfill a valid request: the IANA registry lists <c>server_error</c> for the authorization endpoint only, and
 /// the codes RFC 6749 section 5.2 enumerates all say what was wrong with the request. So this maps to the two
 /// HTTP statuses that already mean the two things a custodian failure can mean (RFC 9110 sections 15.6.1 and
 /// 15.6.4): 503 for a custodian that is temporarily unable, carrying <c>Retry-After</c> when it named an
 /// interval, and 500 for a failure that waiting will not resolve. Neither response derives a body from the
 /// exception.
 /// <para>
-/// It recognises the library's own two custodian exceptions and nothing else. Catching more would swallow
+/// It recognizes the library's own two custodian exceptions and nothing else. Catching more would swallow
 /// unrelated defects into a bare 500 and take that decision away from hosts that already have error handling of
 /// their own, which is a far larger change than this one. The log line lives at the custodian seam instead of
 /// here, where the custodian's own answer is still in hand.

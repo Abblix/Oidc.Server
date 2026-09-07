@@ -23,16 +23,16 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// </summary>
 /// <remarks>
 /// The status carries the whole answer, because no registered OAuth error code describes a server that cannot
-/// fulfil a valid request: the IANA registry lists <c>server_error</c> for the authorization endpoint alone, and
+/// fulfill a valid request: the IANA registry lists <c>server_error</c> for the authorization endpoint alone, and
 /// the codes RFC 6749 section 5.2 enumerates all say what was wrong with the request. So this maps to the two
 /// HTTP statuses that already mean the two things a custodian failure can mean (RFC 9110 sections 15.6.1 and
 /// 15.6.4): 503 for a custodian that is temporarily unable, carrying <c>Retry-After</c> when it named an
 /// interval, and 500 for a failure that waiting will not resolve. Neither response derives a body from the
 /// exception.
 /// <para>
-/// It recognises the library's own two custodian exceptions and nothing else, so an exception that never passed
-/// through the custodian seam keeps travelling to whatever the host has around it. Applied as a controller
-/// attribute for the same reason as its neighbour: it is pure controller metadata, mutating no global option, so
+/// It recognizes the library's own two custodian exceptions and nothing else, so an exception that never passed
+/// through the custodian seam keeps traveling to whatever the host has around it. Applied as a controller
+/// attribute for the same reason as its neighbor: it is pure controller metadata, mutating no global option, so
 /// the OIDC endpoints and the host's own cannot clobber each other.
 /// </para>
 /// </remarks>

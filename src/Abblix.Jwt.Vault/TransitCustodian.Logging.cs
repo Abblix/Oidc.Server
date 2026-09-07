@@ -18,4 +18,11 @@ partial class TransitCustodian
         Message = "Vault Transit rejected an unwrap for key '{KeyId}': the ciphertext is a wrong or tampered key, " +
                   "or the version that wrapped it has been retired. No key material is logged.")]
     private partial void LogUnwrapRejected(string keyId);
+
+    [LoggerMessage(
+        EventId = LogEvents.TransitCustodian.CustodianFailed,
+        Level = LogLevel.Error,
+        Message = "Vault Transit could not answer for '{Path}'. Temporary: {Temporary}. A temporary failure is " +
+                  "answered with 503 and a retry hint; anything else with 500, because waiting will not help.")]
+    private partial void LogCustodianFailed(string path, bool temporary, Exception exception);
 }

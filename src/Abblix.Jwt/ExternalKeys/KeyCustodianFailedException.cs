@@ -15,8 +15,8 @@ namespace Abblix.Jwt.ExternalKeys;
 /// <remarks>
 /// This is the seam's default reading of a failure it cannot place. A custodian says "not now" by throwing
 /// <see cref="KeyCustodianUnavailableException"/>; everything else arrives here, because a retry promised on a
-/// guess is worse than one not offered. The type exists so the endpoints can recognise a custodian failure at
-/// all: an exception that never passed through the seam is none of the library's business and keeps travelling
+/// guess is worse than one not offered. The type exists so the endpoints can recognize a custodian failure at
+/// all: an exception that never passed through the seam is none of the library's business and keeps traveling
 /// to whatever the host has around it.
 /// </remarks>
 public sealed class KeyCustodianFailedException : Exception
