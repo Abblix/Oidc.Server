@@ -159,8 +159,9 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         // not finished, and only the second clears on its own. Read from the status alone it joins the refusals
         // that never clear, and the caller is told never to come back from a condition that does end.
         //
-        // This row answers the upload; the container create has its own below, because the two calls reach
-        // the classifier by different paths and a regression touching one would leave the other green.
+        // This row answers the upload. The classification behind it is one and the same for every call, so
+        // the row below is not a second path being covered - it differs only in which SDK call raises and
+        // under which operation name the failure is reported.
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
@@ -170,8 +171,9 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task AContainerBeingDeletedIsTemporaryWhenTheContainerIsCreated()
     {
-        // The create is where a container mid-delete is actually met: every operation opens with it, and it
-        // is the call that cannot proceed until the delete finishes.
+        // The create is where a container mid-delete is actually met, and it is the call that cannot proceed
+        // until the delete finishes. Reading and minting both open with it; removal does not, so removal
+        // meets a half-deleted container only on the delete itself.
         var handler = new StubHttpMessageHandler(request => request.Method == HttpMethod.Put
             ? BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted")
             : Xml(BlobList(Entry.Id)));
