@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Jwt.Azure.UnitTests;
 
@@ -301,7 +302,7 @@ public sealed class KeyVaultClientTests : IDisposable
     {
         // The identity lost its Crypto User role. That is our fault, not the client's, and reporting it as a
         // failed decryption would tell every caller its JWE is bad while the vault is simply refusing us.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}"""));
     }
 
@@ -311,7 +312,7 @@ public sealed class KeyVaultClientTests : IDisposable
         // Key Vault throttles per vault, and this key sits on the token path, so 429 is routine rather than
         // exotic. Swallowing it as null would reject every encrypted token for as long as the throttle lasts,
         // silently, and blame the clients.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
     }
 
