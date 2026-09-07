@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Jwt.Vault;
@@ -62,6 +63,22 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
             request.Headers.Add(TokenHeaderName, token);
         }
 
-        return await base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancellationToken);
+
+        // A refusal of a token this deployment minted is about the credential, not the request, and the login
+        // that minted it renews on its own schedule - so waiting is exactly what helps. Read from the status
+        // alone it would be permanent, and the published keys would go with it. A deployment carrying a token
+        // it did not mint has nothing that will replace it, so its refusal keeps the ordinary reading.
+        if (token is not null &&
+            tokens.AuthenticationConfigured &&
+            response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            response.Dispose();
+            throw new KeyCustodianUnavailableException(
+                request.RequestUri?.AbsolutePath ?? "vault",
+                "The vault refused the token this deployment logged in for.");
+        }
+
+        return response;
     }
 }

@@ -85,6 +85,52 @@ public sealed class TokenHandlerTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+
+    [Fact]
+    public async Task ARefusedLoginTokenIsTemporary()
+    {
+        // An operator revoking the token, or a vault restart dropping it, refuses every data call until the lease
+        // clock renews. Read from the status alone that is permanent, and the published keys would be emptied with
+        // it; the condition is about the credential this deployment mints, and a login replaces it.
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions
+        {
+            Authentication = new VaultAuthenticationOptions
+            {
+                AppRole = new AppRoleAuthenticationOptions { RoleId = "r", SecretId = "s" },
+            },
+        });
+
+        var transport = new StubHttpMessageHandler((request, _) =>
+            request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(HttpStatusCode.OK, new
+                {
+                    auth = new { client_token = "s.minted", lease_duration = 3600, renewable = true },
+                })
+                : StubHttpMessageHandler.Json(
+                    HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
+
+        var client = ClientOver(monitor, transport);
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => client.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ARefusalOfAHostSuppliedTokenKeepsTheOrdinaryReading()
+    {
+        // The control. A deployment carrying a token it did not mint has nothing that will replace it, so calling
+        // its refusal temporary would promise a renewal that never comes.
+        var monitor = new OptionsMonitorStub(new VaultTransitOptions { Token = "s.host" });
+        var transport = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
+            HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
+
+        var client = ClientOver(monitor, transport);
+
+        var response = await client.GetAsync("transit/keys/oidc-sign", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     public void Dispose()
     {
         foreach (var httpClient in _httpClients)

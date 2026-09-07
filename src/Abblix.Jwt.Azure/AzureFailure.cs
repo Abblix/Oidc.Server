@@ -21,13 +21,15 @@ internal static class AzureFailure
 {
     /// <summary>
     /// Whether a status is one that a later attempt may find cleared. Key Vault throttles per vault and says so
-    /// with 429, and a service having a bad time answers 5xx; neither is about the request. A 401 or 403 is a
-    /// grant that is missing, a 404 a key that is not there, and a 400 a request that was wrong - all of which
-    /// meet the same answer next time. A request timeout is temporary as well.
+    /// with 429, and a service having a bad time answers 5xx; a request timeout means the service gave up
+    /// waiting for a request rather than reading one it disliked (RFC 9110 section 15.5.9). None of those is
+    /// about the request. A 401 or 403 is a grant that is missing, a 404 a key that is not there, and a 400 a
+    /// request that was wrong - all of which meet the same answer next time.
     /// </summary>
-    /// <param name="status">The status the service answered with, or zero when it never answered: the SDK
-    /// reports a request that did not reach the service with no status at all, and that says nothing about the
-    /// request either.</param>
+    /// <param name="status">The status the service answered with, or zero when it never answered. Zero is not
+    /// an HTTP status: it is what the SDK reports for an attempt that failed before any answer, and those
+    /// attempts reach this method inside the aggregated retry failure. Driven by the row that unplugs the
+    /// transport: without zero here, a vault that cannot be reached is read as permanent.</param>
     internal static bool IsTransient(int status)
         => status is 0
             or (int)HttpStatusCode.RequestTimeout

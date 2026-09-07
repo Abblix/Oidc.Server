@@ -54,6 +54,20 @@ public sealed class KeyVaultClientTests : IDisposable
             "oidc-sign/1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
     }
 
+
+    [Theory]
+    [InlineData(0, true)]     // never answered at all, which the SDK reports as no status
+    [InlineData(408, true)]   // the service gave up waiting for a request, not one it disliked
+    [InlineData(429, true)]   // throttled per vault
+    [InlineData(500, true)]
+    [InlineData(503, true)]
+    [InlineData(400, false)]  // the request was wrong, and will be next time
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    public void TheStatusesReadAsTemporaryAreTheOnesWaitingCanCure(int status, bool temporary)
+        => Assert.Equal(temporary, AzureFailure.IsTransient(status));
+
     public void Dispose()
     {
         foreach (var httpClient in _httpClients)
