@@ -173,5 +173,41 @@ public sealed class ManagementEndpointLocatorTests
         Assert.Equal("gateway.example", locator.Of(Route)!.Host);
     }
 
+    /// <summary>
+    /// The published TEXT of the address, which is what a receiver reads and caches.
+    /// </summary>
+    /// <remarks>
+    /// Asserted as a string because every other row here compares <c>Uri</c> objects, and <c>Uri</c>
+    /// equality ignores a default port: <c>https://gw.example/x</c> and <c>https://gw.example:443/x</c>
+    /// are equal, while the document publishes the second verbatim. A composition that keeps the port it
+    /// was handed - which is what a builder does - is invisible to the whole file without this row.
+    /// </remarks>
+    [Theory]
+    [InlineData("https://gateway.example/ssf", "https://gateway.example/ssf/stream")]
+    [InlineData("https://gateway.example:8443/ssf", "https://gateway.example:8443/ssf/stream")]
+    public void ThePublishedText_CarriesNoPortTheHostDidNotWrite(string @base, string expected)
+    {
+        var locator = new ManagementEndpointLocator(BareOptions() with
+        {
+            ManagementApiBase = new Uri(@base),
+        });
+
+        Assert.Equal(expected, locator.Of(Route)!.OriginalString);
+    }
+
+    /// <summary>
+    /// A base that could not be advertised faithfully is refused when the locator is built, which is
+    /// where the deployment finds out rather than a receiver.
+    /// </summary>
+    [Theory]
+    [InlineData("/ssf", UriKind.Relative)]
+    [InlineData("https://gateway.example/ssf?v=1", UriKind.Absolute)]
+    [InlineData("https://gateway.example/ssf#top", UriKind.Absolute)]
+    public void ABaseThatCannotBeAdvertised_IsRefused(string @base, UriKind kind)
+    {
+        Assert.Throws<ArgumentException>(() => new ManagementEndpointLocator(
+            BareOptions() with { ManagementApiBase = new Uri(@base, kind) }));
+    }
+
     private static SharedSignalsTransmitterOptions BareOptions() => new() { Issuer = Issuer };
 }

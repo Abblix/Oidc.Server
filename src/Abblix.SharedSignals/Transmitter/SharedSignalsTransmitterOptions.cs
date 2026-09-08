@@ -98,10 +98,11 @@ public sealed record SharedSignalsTransmitterOptions
     /// <para>
     /// The base keeps its own path, and a trailing slash makes no difference: both
     /// <c>https://gw.example/ssf</c> and <c>https://gw.example/ssf/</c> advertise
-    /// <c>https://gw.example/ssf/stream</c>. It has to be absolute and carry no query or fragment, both
-    /// refused at startup, because neither survives a route being appended. Beyond that nothing here can
-    /// reach the address to check it, so a base naming somewhere nothing answers is advertised as given -
-    /// the same trust <c>PollEndpointFactory</c> gets.
+    /// <c>https://gw.example/ssf/stream</c>. It has to be absolute and carry no query or fragment,
+    /// because neither survives a route being appended; both are refused when the locator that reads this
+    /// option is built, which reaches a host that registered its own options as well as one that passed
+    /// them in. Beyond that nothing here can reach the address to check it, so a base naming somewhere
+    /// nothing answers is advertised as given - the same trust <c>PollEndpointFactory</c> gets.
     /// </para>
     /// </remarks>
     public Uri? ManagementApiBase { get; init; }

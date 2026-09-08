@@ -138,28 +138,55 @@ public class SharedSignalsServiceCollectionTests
     [InlineData("/ssf", UriKind.Relative)]
     [InlineData("https://gateway.example/ssf?v=1", UriKind.Absolute)]
     [InlineData("https://gateway.example/ssf#top", UriKind.Absolute)]
-    public void AManagementBaseThatCannotBeAdvertised_IsRefusedAtStartup(string @base, UriKind kind)
+    public void AManagementBaseThatCannotBeAdvertised_IsRefused(string @base, UriKind kind)
     {
-        var services = SecurityEventsBase();
+        var provider = SecurityEventsBase()
+            .AddSharedSignalsTransmitter(
+                TransmitterOptions with { ManagementApiBase = new Uri(@base, kind) })
+            .BuildServiceProvider();
 
-        Assert.Throws<ArgumentException>(() => services.AddSharedSignalsTransmitter(
-            TransmitterOptions with { ManagementApiBase = new Uri(@base, kind) }));
+        Assert.Throws<ArgumentException>(provider.GetRequiredService<ManagementEndpointLocator>);
     }
 
     /// <summary>
-    /// The control: an absolute base with a path and nothing else is accepted, so the row above is
-    /// refusing the shapes it names rather than the option itself.
+    /// And the same for options the host registered itself, which is the route the registration cannot
+    /// see.
+    /// </summary>
+    /// <remarks>
+    /// The registration is handed an options argument and then registers it with TryAddSingleton, which
+    /// deliberately lets a host's own instance win - so a host wiring its options separately hands the
+    /// document a base the argument check never saw. Reading the container is what makes the refusal a
+    /// gate rather than advice.
+    /// </remarks>
+    [Fact]
+    public void AManagementBaseTheHostRegisteredItself_IsRefusedToo()
+    {
+        var provider = SecurityEventsBase()
+            .AddSingleton(TransmitterOptions with
+            {
+                ManagementApiBase = new Uri("https://gateway.example/ssf?v=1"),
+            })
+            .AddSharedSignalsTransmitter(TransmitterOptions)
+            .BuildServiceProvider();
+
+        Assert.Throws<ArgumentException>(provider.GetRequiredService<ManagementEndpointLocator>);
+    }
+
+    /// <summary>
+    /// The control: an absolute base with a path and nothing else is accepted, so the rows above are
+    /// refusing the shapes they name rather than the option itself.
     /// </summary>
     [Fact]
     public void AManagementBaseThatCanBeAdvertised_IsAccepted()
     {
-        var services = SecurityEventsBase();
-
-        var error = Record.Exception(() => services.AddSharedSignalsTransmitter(
-            TransmitterOptions with
+        var provider = SecurityEventsBase()
+            .AddSharedSignalsTransmitter(TransmitterOptions with
             {
                 ManagementApiBase = new Uri("https://gateway.example/ssf"),
-            }));
+            })
+            .BuildServiceProvider();
+
+        var error = Record.Exception(provider.GetRequiredService<ManagementEndpointLocator>);
 
         Assert.Null(error);
     }

@@ -41,11 +41,48 @@ namespace Abblix.SharedSignals.Transmitter;
 /// unconditional advertisement this type exists to end - the difference is that it takes a host saying so.
 /// </para>
 /// </remarks>
-/// <param name="options">The deployment's one-time decisions, holding the host's own address if it named
-/// one.</param>
-public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
+
+public sealed class ManagementEndpointLocator
 {
+    private readonly SharedSignalsTransmitterOptions _options;
     private Func<string, Uri>? _served;
+
+    /// <param name="options">The deployment's one-time decisions, holding the host's own address if it
+    /// named one.</param>
+    /// <exception cref="ArgumentException">The base could not be advertised faithfully: a relative one
+    /// has no path to append a route to, and a query or fragment cannot survive one being appended.
+    /// </exception>
+    /// <remarks>
+    /// The check sits here rather than beside the registration because the registration is handed an
+    /// options ARGUMENT while this type is built from whatever the container holds - and a host may have
+    /// registered its own, which the registration deliberately lets win. Checking the argument would
+    /// leave exactly that host ungated, and it is the one most likely to be naming a gateway.
+    /// </remarks>
+    public ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.ManagementApiBase is { } managementApiBase)
+        {
+            if (!managementApiBase.IsAbsoluteUri)
+            {
+                throw new ArgumentException(
+                    $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} must be an absolute "
+                    + "address: it is published to receivers, which hold nothing to resolve it against.",
+                    nameof(options));
+            }
+
+            if (managementApiBase.Query.Length > 0 || managementApiBase.Fragment.Length > 0)
+            {
+                throw new ArgumentException(
+                    $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} carries a query or "
+                    + "fragment, which cannot survive a route being appended to it. Name the base alone.",
+                    nameof(options));
+            }
+        }
+
+        _options = options;
+    }
 
     /// <summary>
     /// Declares where the management routes are mapped, so the configuration document names the
@@ -87,22 +124,30 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     /// that already ends in one to <c>/ssf</c> - makes the reference a network-path reference, which
     /// replaces the AUTHORITY: <c>https://gw.example//ssf</c> would advertise <c>https://ssf/stream</c>.
     /// <para>
-    /// Joining the parts makes the spelling of both sides stop mattering, so there is no rule here for a
-    /// caller to remember and none to enforce. A query or fragment on the base cannot survive an address
-    /// with a path appended to it, and is refused where the option is read rather than dropped here.
+    /// Joining the parts makes the SPELLING of both sides stop mattering - a leading separator on the
+    /// route, a trailing one on the base - so there is no spelling rule for a caller to remember. What the
+    /// base may CARRY is a different question and is not free: it has to be absolute and hold no query or
+    /// fragment, refused by this type's constructor, because neither of those survives a path being
+    /// appended.
     /// </para>
     /// </remarks>
     /// <param name="route">The route as the specification names it, relative to wherever the API hangs.
     /// </param>
     public Uri? Of(string route)
     {
-        if (options.ManagementApiBase is not { } host)
+        if (_options.ManagementApiBase is not { } host)
         {
             return _served?.Invoke(route);
         }
 
         var address = new UriBuilder(host);
         address.Path = $"{address.Path.TrimEnd('/')}/{route.TrimStart('/')}";
-        return address.Uri;
+
+        // Re-parsed, because UriBuilder keeps the port it was given in the TEXT of the address it
+        // builds, default or not - and that text is what the document publishes, so a base naming no
+        // port would be advertised with ":443" on every one of the five members. The two forms compare
+        // EQUAL as Uri, so nothing asserting on Uri can see the difference; only the published string
+        // can. An explicit non-default port survives the round trip.
+        return new Uri(address.Uri.AbsoluteUri);
     }
 }
