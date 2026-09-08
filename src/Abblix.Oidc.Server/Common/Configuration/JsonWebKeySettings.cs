@@ -38,7 +38,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// </para>
 /// <para>
 /// A native polymorphic binding via <c>[JsonPolymorphic]</c> + <c>[JsonDerivedType]</c>
-/// was considered and rejected after empirical verification on net8.0 / net9.0 / net10.0:
+/// was considered and rejected after empirical verification on the frameworks shipped at the time
+/// (net8.0, net9.0, net10.0):
 /// <c>Microsoft.Extensions.Configuration.Binder</c> does not honour these
 /// <c>System.Text.Json</c> attributes and still throws «Cannot create instance of
 /// abstract type» on <see cref="JsonWebKey"/>. The flat DTO is the practical workaround

@@ -64,7 +64,7 @@ internal sealed partial class TokenSource(
         TimeSpan FullLease);
 
     // Entered through EnterScope rather than with a lock statement: the statement form on this type is a
-    // C# 13 feature, and net8.0 compiles as C# 12 against the polyfill in Abblix.Utils.
+    // C# 13 feature.
     private readonly Lock _gate = new();
     private LeaseState? _state;
     private Task? _refresh;

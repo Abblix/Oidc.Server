@@ -30,13 +30,9 @@ internal static class AesKeyWrapPadded
     /// </summary>
     public static byte[] Wrap(byte[] keyEncryptionKey, ReadOnlySpan<byte> plaintext)
     {
-#if NET10_0_OR_GREATER
         using var aes = Aes.Create();
         aes.Key = keyEncryptionKey;
         return aes.EncryptKeyWrapPadded(plaintext);
-#else
-        return Rfc5649KeyWrap.Wrap(keyEncryptionKey, plaintext);
-#endif
     }
 
     /// <summary>
@@ -54,7 +50,6 @@ internal static class AesKeyWrapPadded
         if (wrapped.Length < 2 * SemiblockSize || wrapped.Length % SemiblockSize != 0)
             return false;
 
-#if NET10_0_OR_GREATER
         using var aes = Aes.Create();
         aes.Key = keyEncryptionKey;
         try
@@ -68,8 +63,5 @@ internal static class AesKeyWrapPadded
             plaintext = null;
             return false;
         }
-#else
-        return Rfc5649KeyWrap.TryUnwrap(keyEncryptionKey, wrapped, out plaintext);
-#endif
     }
 }

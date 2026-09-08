@@ -22,13 +22,16 @@ jobs:
     uses: ./.github/workflows/test-shards.yml
 
   build:
-    # Every framework the packages ship, which the suite structurally cannot see: each test project
-    # targets net10.0 alone, so anything that compiles there and refuses on net8.0 or net9.0 - a
-    # language feature of a newer version, a BCL type that arrived later - passes every shard. Such a
-    # refusal used to surface only after the merge, in the job that packs the dev build, where it
-    # stops publishing without failing anything a pull request can see: consumers floating the
-    # prerelease range then keep restoring the last good build and notice nothing.
-    name: Build all target frameworks
+    # The whole SOLUTION in Release, which the shards do not cover: they build what the test
+    # projects reach, and a project nothing references is compiled by nothing else a pull request
+    # runs. Every shipped project is reachable today, so this job currently agrees with the shards
+    # on every file - the difference is in what is MEASURED, and the day someone adds a project no
+    # test names, only this job sees it.
+    #
+    # It used to justify itself differently, by the frameworks: the suite ran on one and the
+    # packages shipped for three, so anything refused by an older compiler passed every shard and
+    # surfaced after the merge. That reason went with the other two frameworks.
+    name: Build the solution
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

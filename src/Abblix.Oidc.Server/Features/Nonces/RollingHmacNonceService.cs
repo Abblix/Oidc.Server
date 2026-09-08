@@ -87,7 +87,7 @@ public partial class RollingHmacNonceService(
         {
             // TryDecodeFromChars returns false only on insufficient destination
             // size; invalid characters and length-mod-4-of-1 surface as
-            // FormatException on both the .NET 9+ BCL and the net8.0 polyfill.
+            // FormatException from the BCL implementation.
             if (!Base64Url.TryDecodeFromChars(nonce.AsSpan(), decoded, out written))
             {
                 LogValidationFailed(NonceValidationFailure.Malformed);
