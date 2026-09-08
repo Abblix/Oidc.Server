@@ -36,6 +36,9 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     private const string Issuer = "https://transmitter.example";
     private const string DocumentRoute = "/.well-known/ssf-configuration";
 
+    /// <summary>Where a gateway in front of this transmitter serves the management API.</summary>
+    private const string Gateway = "https://gateway.example/ssf";
+
     /// <summary>
     /// A transmitter that serves its streams from configuration needs no Stream Management API, and the
     /// documentation on the document mapper invites mapping the document alone. Such a deployment must not
@@ -77,17 +80,17 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await StartAsync(
             app => app.MapSharedSignalsConfigurationDocument(),
-            ManagementEndpointLocator.Under(new Uri("https://gateway.example/ssf")));
+            ManagementEndpointLocator.Under(new Uri(Gateway)));
 
         var document = await ReadDocumentAsync(host, cancellationToken);
 
-        Assert.Equal("https://gateway.example/ssf/stream", document.ConfigurationEndpoint!.AbsoluteUri);
-        Assert.Equal("https://gateway.example/ssf/status", document.StatusEndpoint!.AbsoluteUri);
+        Assert.Equal($"{Gateway}/stream", document.ConfigurationEndpoint!.AbsoluteUri);
+        Assert.Equal($"{Gateway}/status", document.StatusEndpoint!.AbsoluteUri);
         Assert.Equal(
-            "https://gateway.example/ssf/subjects:add", document.AddSubjectEndpoint!.AbsoluteUri);
+            $"{Gateway}/subjects:add", document.AddSubjectEndpoint!.AbsoluteUri);
         Assert.Equal(
-            "https://gateway.example/ssf/subjects:remove", document.RemoveSubjectEndpoint!.AbsoluteUri);
-        Assert.Equal("https://gateway.example/ssf/verify", document.VerificationEndpoint!.AbsoluteUri);
+            $"{Gateway}/subjects:remove", document.RemoveSubjectEndpoint!.AbsoluteUri);
+        Assert.Equal($"{Gateway}/verify", document.VerificationEndpoint!.AbsoluteUri);
     }
 
     /// <summary>
@@ -107,12 +110,12 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await StartAsync(
             app => app.MapSharedSignalsTransmitterEndpoints(),
-            ManagementEndpointLocator.Under(new Uri("https://gateway.example/ssf")));
+            ManagementEndpointLocator.Under(new Uri(Gateway)));
 
         var document = await ReadDocumentAsync(host, cancellationToken);
 
-        Assert.Equal("https://gateway.example/ssf/stream", document.ConfigurationEndpoint!.AbsoluteUri);
-        Assert.Equal("https://gateway.example/ssf/verify", document.VerificationEndpoint!.AbsoluteUri);
+        Assert.Equal($"{Gateway}/stream", document.ConfigurationEndpoint!.AbsoluteUri);
+        Assert.Equal($"{Gateway}/verify", document.VerificationEndpoint!.AbsoluteUri);
     }
 
     /// <summary>
