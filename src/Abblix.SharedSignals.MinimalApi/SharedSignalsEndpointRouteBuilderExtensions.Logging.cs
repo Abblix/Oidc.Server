@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.SharedSignals;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.SharedSignals.MinimalApi;

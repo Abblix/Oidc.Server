@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Net;
-using Abblix.SecurityEvents;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;

@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
-using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;

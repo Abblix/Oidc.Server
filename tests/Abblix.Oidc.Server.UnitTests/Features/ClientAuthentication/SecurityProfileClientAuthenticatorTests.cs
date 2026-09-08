@@ -9,7 +9,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;

@@ -23,7 +23,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Linq;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;

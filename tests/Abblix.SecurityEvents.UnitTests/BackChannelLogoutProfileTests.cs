@@ -9,7 +9,6 @@ using System.Buffers.Text;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;

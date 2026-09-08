@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;

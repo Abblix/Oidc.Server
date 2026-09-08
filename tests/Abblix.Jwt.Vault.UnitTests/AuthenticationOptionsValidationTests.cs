@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

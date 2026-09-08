@@ -9,8 +9,6 @@
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
-using Abblix.SharedSignals.Receiver;
-using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Builder;
