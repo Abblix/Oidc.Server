@@ -19,9 +19,9 @@ namespace Abblix.SharedSignals.Transmitter;
 ///   <item><see cref="ServedAt"/> is what the mapping declared, because only the code that maps the
 ///   routes knows the prefix they went on, and what it declares is the ADVERTISED prefix, so a proxy
 ///   that rewrites paths is covered.</item>
-///   <item><see cref="SharedSignalsTransmitterOptions.ManagementApiBase"/> is where a host says the API
-///   is served when this deployment does not serve it - a gateway in front, or a host mapping its routes
-///   through some other framework. It wins.</item>
+///   <item><see cref="SharedSignalsTransmitterOptions.ManagementEndpointFactory"/> is where a host says
+///   the API is served when this deployment does not serve it - a gateway in front, or a host mapping
+///   its routes through some other framework. It wins.</item>
 /// </list>
 /// <para>
 /// A transmitter with neither source has no Stream Management API, and its document omits the five
@@ -30,68 +30,79 @@ namespace Abblix.SharedSignals.Transmitter;
 /// transmitter serving its streams from configuration has no management API by design.
 /// </para>
 /// <para>
-/// The host's source is a base address rather than the per-route delegate the poll endpoint takes,
-/// because the two questions differ: a poll address varies per stream and cannot be composed, while
-/// the five management routes are fixed by the specification and differ only in where they hang.
-/// Handing a host five delegates to fill in would invite four of them to be right.
-/// </para>
-/// <para>
-/// A host that names a base is TRUSTED with it, exactly as one naming a poll address is: nothing here
-/// can reach a gateway to check. So a base naming somewhere nothing answers produces the same 404 as the
-/// unconditional advertisement this type exists to end - the difference is that it takes a host saying so.
+/// Both sources are the same shape, and the address is composed by whoever knows where it lives rather
+/// than here. An earlier draft took a BASE from the host and appended the route to it, which cost three
+/// defects in as many review rounds: a base path resolved away, addresses moved to a different host by a
+/// doubled separator, and a default port written into the text the document publishes. None of those can
+/// reach a source that hands over the finished address, which is why the poll endpoint never had them.
 /// </para>
 /// </remarks>
-
-public sealed class ManagementEndpointLocator
+/// <param name="options">The deployment's one-time decisions, holding the host's own source if it named
+/// one.</param>
+public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
 {
-    private readonly SharedSignalsTransmitterOptions _options;
     private Func<string, Uri>? _served;
 
-    /// <param name="options">The deployment's one-time decisions, holding the host's own address if it
-    /// named one.</param>
-    /// <exception cref="ArgumentException">The base could not be advertised faithfully: a relative one
-    /// has no path to append a route to, and a query or fragment cannot survive one being appended.
-    /// </exception>
+    /// <summary>
+    /// A source that hangs the management routes under one base address, for the common gateway whose
+    /// five addresses differ only in their last segment.
+    /// </summary>
     /// <remarks>
-    /// The check sits here rather than beside the registration because the registration is handed an
-    /// options ARGUMENT while this type is built from whatever the container holds - and a host may have
-    /// registered its own, which the registration deliberately lets win. Checking the argument would
-    /// leave exactly that host ungated, and it is the one most likely to be naming a gateway.
+    /// Offered because composing an address against a base has three traps, and this library met all
+    /// three while trying to do it itself. A route is rooted, so resolving it against a base REPLACES the
+    /// base's path. A base whose path starts with two separators - what joining a base ending in one to
+    /// <c>/ssf</c> produces - makes the reference a network-path reference, which replaces the AUTHORITY,
+    /// so <c>https://gw.example//ssf</c> becomes <c>https://ssf/stream</c>. And a builder writes the port
+    /// it was handed into the TEXT of what it builds, default or not, so <c>:443</c> reaches the document
+    /// a receiver caches - invisible to anything comparing addresses as values, because they compare
+    /// equal.
+    /// <para>
+    /// A host is free to write its own delegate instead; this is here so that doing the ordinary thing
+    /// does not require meeting those three first.
+    /// </para>
     /// </remarks>
-    public ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
+    /// <param name="baseAddress">Where the management API hangs. Its own path is kept, and a trailing
+    /// separator makes no difference.</param>
+    /// <exception cref="ArgumentException">The address is relative, or carries a query or fragment -
+    /// neither survives a route being appended.</exception>
+    public static Func<string, Uri> Under(Uri baseAddress)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(baseAddress);
 
-        if (options.ManagementApiBase is { } managementApiBase)
+        if (!baseAddress.IsAbsoluteUri)
         {
-            if (!managementApiBase.IsAbsoluteUri)
-            {
-                throw new ArgumentException(
-                    $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} must be an absolute "
-                    + "address: it is published to receivers, which hold nothing to resolve it against.",
-                    nameof(options));
-            }
-
-            if (managementApiBase.Query.Length > 0 || managementApiBase.Fragment.Length > 0)
-            {
-                throw new ArgumentException(
-                    $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} carries a query or "
-                    + "fragment, which cannot survive a route being appended to it. Name the base alone.",
-                    nameof(options));
-            }
+            throw new ArgumentException(
+                "The management API base must be absolute: it is published to receivers, which hold "
+                + "nothing to resolve it against.",
+                nameof(baseAddress));
         }
 
-        _options = options;
-    }
+        if (baseAddress.Query.Length > 0 || baseAddress.Fragment.Length > 0)
+        {
+            throw new ArgumentException(
+                "The management API base carries a query or fragment, which cannot survive a route being "
+                + "appended to it. Name the base alone.",
+                nameof(baseAddress));
+        }
 
+        return route =>
+        {
+            var address = new UriBuilder(baseAddress);
+            address.Path = $"{address.Path.TrimEnd('/')}/{route.TrimStart('/')}";
+
+            // Re-parsed for the port: see the remarks above.
+            return new Uri(address.Uri.AbsoluteUri);
+        };
+    }
     /// <summary>
     /// Declares where the management routes are mapped, so the configuration document names the
     /// addresses that lead back to them.
     /// </summary>
     /// <remarks>
     /// Called by the code that maps the routes, at startup and before any document can be served. It is
-    /// not the host's call to make: a host naming its own address uses
-    /// <see cref="SharedSignalsTransmitterOptions.ManagementApiBase"/>, which this never overrides.
+    /// not the host's call to make: a host naming its own addresses uses
+    /// <see cref="SharedSignalsTransmitterOptions.ManagementEndpointFactory"/>, which this never
+    /// overrides.
     /// </remarks>
     /// <param name="managementEndpointOf">Derives the advertised address of one management route.</param>
     /// <exception cref="InvalidOperationException">The management API was already mapped. A transmitter
@@ -115,39 +126,7 @@ public sealed class ManagementEndpointLocator
     /// The advertised address of one management route, or null where this transmitter offers no
     /// management API.
     /// </summary>
-    /// <remarks>
-    /// Built from the base's own parts rather than by resolving the route against it, because reference
-    /// resolution throws the base away in three of the four spellings a host can write, and one of those
-    /// takes the HOST with it. A rooted reference replaces the whole path. A relative one drops the
-    /// base's last segment unless the base ends in a separator, that segment reading as a file rather
-    /// than a directory. And a path beginning with two separators - what a host gets by joining a base
-    /// that already ends in one to <c>/ssf</c> - makes the reference a network-path reference, which
-    /// replaces the AUTHORITY: <c>https://gw.example//ssf</c> would advertise <c>https://ssf/stream</c>.
-    /// <para>
-    /// Joining the parts makes the SPELLING of both sides stop mattering - a leading separator on the
-    /// route, a trailing one on the base - so there is no spelling rule for a caller to remember. What the
-    /// base may CARRY is a different question and is not free: it has to be absolute and hold no query or
-    /// fragment, refused by this type's constructor, because neither of those survives a path being
-    /// appended.
-    /// </para>
-    /// </remarks>
     /// <param name="route">The route as the specification names it, relative to wherever the API hangs.
     /// </param>
-    public Uri? Of(string route)
-    {
-        if (_options.ManagementApiBase is not { } host)
-        {
-            return _served?.Invoke(route);
-        }
-
-        var address = new UriBuilder(host);
-        address.Path = $"{address.Path.TrimEnd('/')}/{route.TrimStart('/')}";
-
-        // Re-parsed, because UriBuilder keeps the port it was given in the TEXT of the address it
-        // builds, default or not - and that text is what the document publishes, so a base naming no
-        // port would be advertised with ":443" on every one of the five members. The two forms compare
-        // EQUAL as Uri, so nothing asserting on Uri can see the difference; only the published string
-        // can. An explicit non-default port survives the round trip.
-        return new Uri(address.Uri.AbsoluteUri);
-    }
+    public Uri? Of(string route) => (options.ManagementEndpointFactory ?? _served)?.Invoke(route);
 }

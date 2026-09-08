@@ -13,7 +13,7 @@ namespace Abblix.SharedSignals.UnitTests;
 
 /// <summary>
 /// Which of the two sources of a management address wins, what a transmitter with neither answers, and
-/// the shape composed from a host's own base.
+/// what the offered composition produces for a host that uses it.
 /// </summary>
 public sealed class ManagementEndpointLocatorTests
 {
@@ -21,7 +21,7 @@ public sealed class ManagementEndpointLocatorTests
     private const string Route = "/stream";
 
     /// <summary>
-    /// A transmitter that neither maps the routes nor names a base serves no Stream Management API, and
+    /// A transmitter that neither maps the routes nor names a source serves no Stream Management API, and
     /// the configuration document leaves the five members out rather than naming addresses nothing
     /// answers.
     /// </summary>
@@ -43,80 +43,34 @@ public sealed class ManagementEndpointLocatorTests
     }
 
     /// <summary>
-    /// A host that names a base has the API served somewhere this deployment does not map, so the
+    /// A host that names a source has the API served somewhere this deployment does not map, so the
     /// document names it whether or not anything was mapped here.
     /// </summary>
     [Fact]
-    public void WithAHostsOwnBaseAndNoMapping_TheAddressIsStillNamed()
+    public void WithAHostsOwnSourceAndNoMapping_TheAddressIsStillNamed()
     {
         var locator = new ManagementEndpointLocator(BareOptions() with
         {
-            ManagementApiBase = new Uri("https://gateway.example/"),
+            ManagementEndpointFactory = route => new Uri($"https://gateway.example{route}"),
         });
 
         Assert.Equal(new Uri("https://gateway.example/stream"), locator.Of(Route));
     }
 
     /// <summary>
-    /// The host's base wins over the mapped address, as the poll endpoint's does: a deployment that maps
-    /// the routes internally and is reached through a gateway must advertise the gateway.
+    /// The host's source wins over the mapped address, as the poll endpoint's does: a deployment that
+    /// maps the routes internally and is reached through a gateway must advertise the gateway.
     /// </summary>
     [Fact]
-    public void WithBothSources_TheHostsBaseWins()
+    public void WithBothSources_TheHostsSourceWins()
     {
         var locator = new ManagementEndpointLocator(BareOptions() with
         {
-            ManagementApiBase = new Uri("https://gateway.example/"),
+            ManagementEndpointFactory = route => new Uri($"https://gateway.example{route}"),
         });
         locator.ServedAt(route => new Uri($"{Issuer}/ssf{route}"));
 
         Assert.Equal(new Uri("https://gateway.example/stream"), locator.Of(Route));
-    }
-
-    /// <summary>
-    /// A base with a path of its own keeps it. This is the case the option exists for and the one that
-    /// composition gets wrong by default.
-    /// </summary>
-    /// <remarks>
-    /// Every route here is rooted, and resolving a rooted reference against a base REPLACES the whole
-    /// path - with or without a trailing slash on the base. So a gateway at <c>/ssf</c> would be
-    /// advertised at the root, which is a 404 in a document receivers cache: the failure this type was
-    /// written to end, arriving through the option written to avoid it. Both spellings are driven
-    /// because a host will write either and neither is wrong.
-    /// </remarks>
-    [Theory]
-    [InlineData("https://gateway.example/ssf")]
-    [InlineData("https://gateway.example/ssf/")]
-    public void ABaseWithAPathOfItsOwn_KeepsIt(string @base)
-    {
-        var locator = new ManagementEndpointLocator(BareOptions() with
-        {
-            ManagementApiBase = new Uri(@base),
-        });
-
-        Assert.Equal(new Uri("https://gateway.example/ssf/stream"), locator.Of(Route));
-    }
-
-    /// <summary>
-    /// The route carrying a colon composes intact, and the specification names two routes that way.
-    /// </summary>
-    /// <remarks>
-    /// Not because a parser would read it as a scheme - it cannot, on a path built from parts. The row is
-    /// here because a colon is what any future composition would mangle first, whether by escaping the
-    /// segment or by going back to reference resolution, where a bare <c>subjects:add</c> IS read as a
-    /// scheme. It is the canary for that change, not a guard against today's code.
-    /// </remarks>
-    [Fact]
-    public void ARouteCarryingAColon_SurvivesComposition()
-    {
-        var locator = new ManagementEndpointLocator(BareOptions() with
-        {
-            ManagementApiBase = new Uri("https://gateway.example/ssf"),
-        });
-
-        Assert.Equal(
-            new Uri("https://gateway.example/ssf/subjects:add"),
-            locator.Of("/subjects:add"));
     }
 
     /// <summary>
@@ -134,43 +88,42 @@ public sealed class ManagementEndpointLocatorTests
     }
 
     /// <summary>
-    /// A route written without a leading separator composes the same way.
+    /// The offered composition keeps the base's own path, in both spellings, and for both spellings of
+    /// the route.
     /// </summary>
     /// <remarks>
-    /// The five routes this package advertises are all rooted, so this shape does not arise from the
-    /// mapping - but the method is public, and the two spellings fail in opposite directions under any
-    /// composition that cares: a rooted route resolved against a base discards its path, a relative one
-    /// concatenated to a path with no separator welds two segments into one.
+    /// Every route the document advertises is rooted, and resolving a rooted reference against a base
+    /// REPLACES the base's path; a relative one drops the base's last segment unless the base ends in a
+    /// separator. So three of the four spellings would advertise a gateway at the root. This is the trap
+    /// the helper exists to spare a host, which is why its rows live here rather than in the host.
     /// </remarks>
-    [Fact]
-    public void ARouteWithNoLeadingSeparator_ComposesTheSame()
+    [Theory]
+    [InlineData("https://gateway.example/ssf", "/stream")]
+    [InlineData("https://gateway.example/ssf/", "/stream")]
+    [InlineData("https://gateway.example/ssf", "stream")]
+    [InlineData("https://gateway.example/ssf/", "stream")]
+    public void UnderABase_KeepsThePathInEverySpelling(string @base, string route)
     {
-        var locator = new ManagementEndpointLocator(BareOptions() with
-        {
-            ManagementApiBase = new Uri("https://gateway.example/ssf"),
-        });
+        var of = ManagementEndpointLocator.Under(new Uri(@base));
 
-        Assert.Equal(new Uri("https://gateway.example/ssf/stream"), locator.Of("stream"));
+        Assert.Equal(new Uri("https://gateway.example/ssf/stream"), of(route));
     }
 
     /// <summary>
     /// A base whose path begins with two separators keeps its host.
     /// </summary>
     /// <remarks>
-    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it is a
-    /// spelling that arrives by accident rather than by intent. Composed as a reference it becomes a
-    /// network-path reference and replaces the AUTHORITY - <c>https://ssf/stream</c> - which sends the
+    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it is
+    /// a spelling that arrives by accident rather than by intent. Composed as a reference it becomes a
+    /// network-path reference and replaces the AUTHORITY - <c>https://ssf/stream</c> - sending the
     /// document's addresses to a host nobody named. The path stays odd; the host does not move.
     /// </remarks>
     [Fact]
-    public void ABaseWithADoubledSeparator_KeepsItsHost()
+    public void UnderABaseWithADoubledSeparator_KeepsItsHost()
     {
-        var locator = new ManagementEndpointLocator(BareOptions() with
-        {
-            ManagementApiBase = new Uri("https://gateway.example//ssf"),
-        });
+        var of = ManagementEndpointLocator.Under(new Uri("https://gateway.example//ssf"));
 
-        Assert.Equal("gateway.example", locator.Of(Route)!.Host);
+        Assert.Equal("gateway.example", of(Route).Host);
     }
 
     /// <summary>
@@ -185,28 +138,45 @@ public sealed class ManagementEndpointLocatorTests
     [Theory]
     [InlineData("https://gateway.example/ssf", "https://gateway.example/ssf/stream")]
     [InlineData("https://gateway.example:8443/ssf", "https://gateway.example:8443/ssf/stream")]
-    public void ThePublishedText_CarriesNoPortTheHostDidNotWrite(string @base, string expected)
+    public void UnderABase_ThePublishedTextCarriesNoPortTheHostDidNotWrite(string @base, string expected)
     {
-        var locator = new ManagementEndpointLocator(BareOptions() with
-        {
-            ManagementApiBase = new Uri(@base),
-        });
+        var of = ManagementEndpointLocator.Under(new Uri(@base));
 
-        Assert.Equal(expected, locator.Of(Route)!.OriginalString);
+        Assert.Equal(expected, of(Route).OriginalString);
     }
 
     /// <summary>
-    /// A base that could not be advertised faithfully is refused when the locator is built, which is
-    /// where the deployment finds out rather than a receiver.
+    /// The route carrying a colon composes intact, and the specification names two routes that way.
     /// </summary>
+    /// <remarks>
+    /// Not because a parser would read it as a scheme - it cannot, on a path built from parts. The row is
+    /// here because a colon is what any future composition would mangle first, whether by escaping the
+    /// segment or by going back to reference resolution, where a bare <c>subjects:add</c> IS read as a
+    /// scheme. It is the canary for that change, not a guard against today's code.
+    /// </remarks>
+    [Fact]
+    public void UnderABase_ARouteCarryingAColonSurvives()
+    {
+        var of = ManagementEndpointLocator.Under(new Uri("https://gateway.example/ssf"));
+
+        Assert.Equal(new Uri("https://gateway.example/ssf/subjects:add"), of("/subjects:add"));
+    }
+
+    /// <summary>
+    /// A base the composition could not use faithfully is refused where the host writes it.
+    /// </summary>
+    /// <remarks>
+    /// A relative base has no path to append a route to, and a query or fragment cannot survive one being
+    /// appended. Refused here rather than dropped, because dropping publishes an address the host did not
+    /// write into a document a receiver caches.
+    /// </remarks>
     [Theory]
     [InlineData("/ssf", UriKind.Relative)]
     [InlineData("https://gateway.example/ssf?v=1", UriKind.Absolute)]
     [InlineData("https://gateway.example/ssf#top", UriKind.Absolute)]
-    public void ABaseThatCannotBeAdvertised_IsRefused(string @base, UriKind kind)
+    public void UnderABaseThatCannotBeUsed_IsRefused(string @base, UriKind kind)
     {
-        Assert.Throws<ArgumentException>(() => new ManagementEndpointLocator(
-            BareOptions() with { ManagementApiBase = new Uri(@base, kind) }));
+        Assert.Throws<ArgumentException>(() => ManagementEndpointLocator.Under(new Uri(@base, kind)));
     }
 
     private static SharedSignalsTransmitterOptions BareOptions() => new() { Issuer = Issuer };

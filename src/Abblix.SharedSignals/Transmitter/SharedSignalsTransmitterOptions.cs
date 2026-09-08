@@ -88,24 +88,17 @@ public sealed record SharedSignalsTransmitterOptions
     /// </summary>
     /// <remarks>
     /// Set it when a gateway in front answers those routes, or when the host maps them through some
-    /// other framework - in both cases nothing else knows the address, and without it the
-    /// configuration document omits the five management members. It wins over the mapped address
-    /// wherever both exist, as <c>PollEndpointFactory</c> does.
+    /// other framework - in both cases nothing else knows the address, and without it the configuration
+    /// document omits the five management members. It wins over the mapped address wherever both exist,
+    /// as <c>PollEndpointFactory</c> does, and it is the same shape for the same reason: the host hands
+    /// over the finished address, so nothing here composes one and no spelling of a base or a route can
+    /// become an address the host did not write.
     /// <para>
     /// A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
     /// mapping declares. This is for an API served somewhere this deployment does not map at all.
     /// </para>
-    /// <para>
-    /// The base keeps its own path, and a trailing slash makes no difference: both
-    /// <c>https://gw.example/ssf</c> and <c>https://gw.example/ssf/</c> advertise
-    /// <c>https://gw.example/ssf/stream</c>. It has to be absolute and carry no query or fragment,
-    /// because neither survives a route being appended; both are refused when the locator that reads this
-    /// option is built, which reaches a host that registered its own options as well as one that passed
-    /// them in. Beyond that nothing here can reach the address to check it, so a base naming somewhere
-    /// nothing answers is advertised as given - the same trust <c>PollEndpointFactory</c> gets.
-    /// </para>
     /// </remarks>
-    public Uri? ManagementApiBase { get; init; }
+    public Func<string, Uri>? ManagementEndpointFactory { get; init; }
 
     /// <summary>
     /// Derives the "aud" of a receiver's streams from the receiver's identity. The default
