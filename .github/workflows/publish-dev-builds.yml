@@ -95,7 +95,9 @@ jobs:
           # No version here on purpose: with dotnet-version absent the action installs what
           # global.json names, which is the same file the local build resolves against. Naming a
           # version in each workflow is an enumeration - one of them is missed by a bump and that
-          # job keeps building on the old SDK, green, until something needs the new one.
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
           global-json-file: global.json
 
         timeout-minutes: 3
