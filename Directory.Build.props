@@ -23,6 +23,12 @@
        early, the range they float on stops being filled by anybody and the fix they are waiting for
        silently never arrives - the restore keeps resolving, to the last build before the move.
 
+       A line ABANDONED rather than cut is the other way it moves, and the reason is the same read
+       backwards: nobody is waiting for a release that will not happen, so leaving the property
+       behind would publish this work under a number it will never ship as. Before moving it that
+       way, look for consumers floating on the abandoned range - a range with none is why the move
+       costs nothing, and a range with some is the case the paragraph above is about.
+
        MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
        range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
        tagged release drops the suffix by itself.
@@ -67,7 +73,7 @@
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
        range written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build. -->
   <PropertyGroup>
-    <MinVerMinimumMajorMinor>2.5</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>3.0</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>
