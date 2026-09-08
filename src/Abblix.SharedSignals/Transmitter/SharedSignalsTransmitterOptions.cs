@@ -84,6 +84,21 @@ public sealed record SharedSignalsTransmitterOptions
     public Func<string, Uri>? PollEndpointFactory { get; init; }
 
     /// <summary>
+    /// Where the Stream Management API is served, for a deployment that does not serve it itself.
+    /// </summary>
+    /// <remarks>
+    /// Set it when a gateway in front answers those routes, or when the host maps them through some
+    /// other framework - in both cases nothing else knows the address, and without it the
+    /// configuration document omits the five management members. It wins over the mapped address
+    /// wherever both exist, as <c>PollEndpointFactory</c> does.
+    /// <para>
+    /// A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
+    /// mapping declares. This is for an API served somewhere this deployment does not map at all.
+    /// </para>
+    /// </remarks>
+    public Uri? ManagementApiBase { get; init; }
+
+    /// <summary>
     /// Derives the "aud" of a receiver's streams from the receiver's identity. The default
     /// uses the identity itself: "Values that uniquely identify the Receiver to the
     /// Transmitter MAY be used" (SSF 1.0 Section 4.1.8).
