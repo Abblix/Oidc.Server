@@ -30,10 +30,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// transmitter serving its streams from configuration has no management API by design.
 /// </para>
 /// <para>
-/// The host's source is a base address rather than the per-route delegate the poll endpoint takes,
-/// because the two questions differ: a poll address varies per stream and cannot be composed, while the
-/// five management routes are fixed by the specification and differ only in where they hang. Handing a
-/// host five delegates to fill in would invite four of them to be right.
+/// A host that names a base is TRUSTED with it, exactly as one naming a poll address is: nothing here
+/// can reach a gateway to check. So a base naming somewhere nothing answers produces the same 404 as the
+/// unconditional advertisement this type exists to end - the difference is that it takes a host saying so.
 /// </para>
 /// </remarks>
 /// <param name="options">The deployment's one-time decisions, holding the host's own address if it named
@@ -41,12 +40,6 @@ namespace Abblix.SharedSignals.Transmitter;
 public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
 {
     private Func<string, Uri>? _served;
-
-    /// <summary>
-    /// Whether this transmitter offers the Stream Management API at all - what decides whether the
-    /// configuration document names its five addresses.
-    /// </summary>
-    public bool IsOffered => options.ManagementApiBase is not null || _served is not null;
 
     /// <summary>
     /// Declares where the management routes are mapped, so the configuration document names the
@@ -79,8 +72,17 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     /// The advertised address of one management route, or null where this transmitter offers no
     /// management API.
     /// </summary>
+    /// <remarks>
+    /// The host's base keeps its own path, which is why the route is appended to it rather than resolved
+    /// against it. Uri reference resolution would DISCARD that path - every route here is rooted, and a
+    /// rooted reference replaces the whole path - so a gateway at <c>https://gw.example/ssf</c> would be
+    /// advertised as <c>https://gw.example/stream</c>, with or without a trailing slash. That is the very
+    /// failure this type exists to end, arriving through the option written to avoid it.
+    /// </remarks>
     /// <param name="route">The route as the specification names it, relative to wherever the API hangs.
     /// </param>
     public Uri? Of(string route)
-        => options.ManagementApiBase is { } host ? new Uri(host, route) : _served?.Invoke(route);
+        => options.ManagementApiBase is { } host
+            ? new Uri(host, host.AbsolutePath.TrimEnd('/') + route)
+            : _served?.Invoke(route);
 }

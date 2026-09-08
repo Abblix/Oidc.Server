@@ -95,6 +95,13 @@ public sealed record SharedSignalsTransmitterOptions
     /// A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
     /// mapping declares. This is for an API served somewhere this deployment does not map at all.
     /// </para>
+    /// <para>
+    /// The base keeps its own path, and a trailing slash makes no difference: both
+    /// <c>https://gw.example/ssf</c> and <c>https://gw.example/ssf/</c> advertise
+    /// <c>https://gw.example/ssf/stream</c>. Nothing here can reach the address to check it, so a base
+    /// naming somewhere nothing answers is advertised as given - the same trust
+    /// <c>PollEndpointFactory</c> gets.
+    /// </para>
     /// </remarks>
     public Uri? ManagementApiBase { get; init; }
 
