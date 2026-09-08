@@ -18,6 +18,16 @@ namespace Abblix.Jwt.Encryption;
 /// <para>
 /// Correctness of the rounds is pinned by the RFC 3394 section 4 vectors through <c>AesKeyWrapTests</c>.
 /// </para>
+/// <para>
+/// This is expected to become the base library's too, and then this type and its caller go the way the
+/// padded construction already did. The API is approved and implemented
+/// (https://github.com/dotnet/runtime/issues/130490), merged for the release after this one, and its
+/// pull request says it will be backported - which is an intention recorded in prose rather than a
+/// shipped fact, so the check is to look for <c>Aes.EncryptKeyWrap</c> on the first release candidate
+/// rather than to assume it. The reason the API exists is this exact situation: RFC 7518 defines the
+/// JWE key management algorithms strictly as RFC 3394, so every JOSE library keeps a copy of
+/// security-critical code that has no business being duplicated.
+/// </para>
 /// </summary>
 internal static class AesKeyWrapCore
 {
