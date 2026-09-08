@@ -109,27 +109,6 @@ public sealed class ManagementEndpointLocatorTests
         Assert.Equal(new Uri("https://gateway.example/ssf/stream"), of(route));
     }
 
-    /// <summary>
-    /// A base whose path begins with two separators keeps that path, odd as it is.
-    /// </summary>
-    /// <remarks>
-    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it
-    /// arrives by accident rather than by intent - and it is the shape where the two ways of composing
-    /// disagree most. Resolving a rooted route against it answers <c>https://gateway.example/stream</c>,
-    /// dropping the whole path; joining the parts keeps it.
-    /// <para>
-    /// The WHOLE address is asserted, not the host. Both compositions agree on the host here - a base
-    /// with that path still parses its authority correctly - so a row reading <c>.Host</c> passes
-    /// whatever the code does, which is what an assertion that cannot fail looks like.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public void UnderABaseWithADoubledSeparator_KeepsThatPath()
-    {
-        var of = ManagementEndpointLocator.Under(new Uri("https://gateway.example//ssf"));
-
-        Assert.Equal("https://gateway.example//ssf/stream", of(Route).AbsoluteUri);
-    }
 
     /// <summary>
     /// The published TEXT of the address, which is what a receiver reads and caches.
@@ -171,14 +150,16 @@ public sealed class ManagementEndpointLocatorTests
     /// A base the composition could not use faithfully is refused where the host writes it.
     /// </summary>
     /// <remarks>
-    /// A relative base has no path to append a route to, and a query or fragment cannot survive one being
-    /// appended. Refused here rather than dropped, because dropping publishes an address the host did not
-    /// write into a document a receiver caches.
+    /// A relative base has no path to append a route to, a query or fragment cannot survive one being
+    /// appended, and an empty path segment - what joining two configured pieces produces when both carry
+    /// the separator - is a path nothing routes to. Refused rather than dropped or tidied, because either
+    /// publishes an address the host did not write into a document a receiver caches.
     /// </remarks>
     [Theory]
     [InlineData("/ssf", UriKind.Relative)]
     [InlineData("https://gateway.example/ssf?v=1", UriKind.Absolute)]
     [InlineData("https://gateway.example/ssf#top", UriKind.Absolute)]
+    [InlineData("https://gateway.example//ssf", UriKind.Absolute)]
     public void UnderABaseThatCannotBeUsed_IsRefused(string @base, UriKind kind)
     {
         Assert.Throws<ArgumentException>(() => ManagementEndpointLocator.Under(new Uri(@base, kind)));

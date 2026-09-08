@@ -90,6 +90,19 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
                 nameof(baseAddress));
         }
 
+        // An empty path segment is what joining two configured pieces produces when both carry the
+        // separator, and it is not the address the host meant: routing matches segment by segment, so
+        // neither this framework nor a gateway in front answers "/ssf//stream" for a route at
+        // "/ssf/stream". Kept out rather than collapsed, because collapsing is this library editing an
+        // address a host wrote, and the other three refusals here are refusals for the same reason.
+        if (baseAddress.AbsolutePath.Contains("//", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The management API base has an empty path segment, which nothing will route to. Join the "
+                + "pieces with one separator.",
+                nameof(baseAddress));
+        }
+
         return route =>
         {
             var address = new UriBuilder(baseAddress);
