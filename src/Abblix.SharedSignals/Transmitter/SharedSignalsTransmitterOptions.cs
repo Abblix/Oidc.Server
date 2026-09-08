@@ -97,6 +97,16 @@ public sealed record SharedSignalsTransmitterOptions
     /// A proxy that merely REWRITES paths needs nothing here: <c>AdvertisedPrefix</c> is what the
     /// mapping declares. This is for an API served somewhere this deployment does not map at all.
     /// </para>
+    /// <para>
+    /// For the ordinary case - five addresses under one base - <c>ManagementEndpointLocator.Under</c>
+    /// returns a delegate that composes them, which is worth using rather than writing:
+    /// <c>new Uri(baseAddress, route)</c> reads correctly and drops part of the base in three of the four
+    /// spellings a host can write.
+    /// </para>
+    /// <para>
+    /// It is asked for each of the five routes, and the five are one claim: a delegate answering some of
+    /// them leaves the document advertising half a management API.
+    /// </para>
     /// </remarks>
     public Func<string, Uri>? ManagementEndpointFactory { get; init; }
 

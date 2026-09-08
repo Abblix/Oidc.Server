@@ -110,20 +110,25 @@ public sealed class ManagementEndpointLocatorTests
     }
 
     /// <summary>
-    /// A base whose path begins with two separators keeps its host.
+    /// A base whose path begins with two separators keeps that path, odd as it is.
     /// </summary>
     /// <remarks>
-    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it is
-    /// a spelling that arrives by accident rather than by intent. Composed as a reference it becomes a
-    /// network-path reference and replaces the AUTHORITY - <c>https://ssf/stream</c> - sending the
-    /// document's addresses to a host nobody named. The path stays odd; the host does not move.
+    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it
+    /// arrives by accident rather than by intent - and it is the shape where the two ways of composing
+    /// disagree most. Resolving a rooted route against it answers <c>https://gateway.example/stream</c>,
+    /// dropping the whole path; joining the parts keeps it.
+    /// <para>
+    /// The WHOLE address is asserted, not the host. Both compositions agree on the host here - a base
+    /// with that path still parses its authority correctly - so a row reading <c>.Host</c> passes
+    /// whatever the code does, which is what an assertion that cannot fail looks like.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void UnderABaseWithADoubledSeparator_KeepsItsHost()
+    public void UnderABaseWithADoubledSeparator_KeepsThatPath()
     {
         var of = ManagementEndpointLocator.Under(new Uri("https://gateway.example//ssf"));
 
-        Assert.Equal("gateway.example", of(Route).Host);
+        Assert.Equal("https://gateway.example//ssf/stream", of(Route).AbsoluteUri);
     }
 
     /// <summary>

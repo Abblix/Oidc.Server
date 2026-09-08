@@ -31,10 +31,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </para>
 /// <para>
 /// Both sources are the same shape, and the address is composed by whoever knows where it lives rather
-/// than here. An earlier draft took a BASE from the host and appended the route to it, which cost three
-/// defects in as many review rounds: a base path resolved away, addresses moved to a different host by a
-/// doubled separator, and a default port written into the text the document publishes. None of those can
-/// reach a source that hands over the finished address, which is why the poll endpoint never had them.
+/// than here. Composing one here would mean turning a base and a route into an address, which is a
+/// three-trap operation - see <see cref="Under"/> - and none of those traps can reach a source that
+/// hands over the finished address. That is why the poll endpoint has never had them either.
 /// </para>
 /// </remarks>
 /// <param name="options">The deployment's one-time decisions, holding the host's own source if it named
@@ -48,14 +47,20 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     /// five addresses differ only in their last segment.
     /// </summary>
     /// <remarks>
-    /// Offered because composing an address against a base has three traps, and this library met all
-    /// three while trying to do it itself. A route is rooted, so resolving it against a base REPLACES the
-    /// base's path. A base whose path starts with two separators - what joining a base ending in one to
-    /// <c>/ssf</c> produces - makes the reference a network-path reference, which replaces the AUTHORITY,
-    /// so <c>https://gw.example//ssf</c> becomes <c>https://ssf/stream</c>. And a builder writes the port
-    /// it was handed into the TEXT of what it builds, default or not, so <c>:443</c> reaches the document
-    /// a receiver caches - invisible to anything comparing addresses as values, because they compare
-    /// equal.
+    /// Offered because turning a base and a route into an address has three traps, and a host meeting them
+    /// publishes the results into a document receivers cache.
+    /// <list type="bullet">
+    ///   <item>Every route the specification names is ROOTED, and resolving a rooted reference against a
+    ///   base replaces the base's path entirely: <c>https://gw.example/ssf</c> answers
+    ///   <c>https://gw.example/stream</c>. A relative route loses the base's last segment instead, unless
+    ///   the base ends in a separator - so three of the four spellings drop part of the base.</item>
+    ///   <item>A path beginning with two separators, which a host produces by joining a base already
+    ///   ending in one to <c>/ssf</c>, makes a REFERENCE built from it a network-path reference, and that
+    ///   replaces the authority rather than the path.</item>
+    ///   <item>A builder writes the port it was handed into the TEXT of what it builds, default or not, so
+    ///   <c>:443</c> reaches the document - invisible to anything comparing addresses as values, because
+    ///   two addresses differing only in a default port compare equal.</item>
+    /// </list>
     /// <para>
     /// A host is free to write its own delegate instead; this is here so that doing the ordinary thing
     /// does not require meeting those three first.
@@ -94,6 +99,7 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
             return new Uri(address.Uri.AbsoluteUri);
         };
     }
+
     /// <summary>
     /// Declares where the management routes are mapped, so the configuration document names the
     /// addresses that lead back to them.
