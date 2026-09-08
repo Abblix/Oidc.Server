@@ -63,11 +63,13 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     /// names where the management API is served, and the document advertises exactly those addresses.
     /// </summary>
     /// <remarks>
-    /// The two halves are covered apart - that the locator prefers the host's source, and that a document
+    /// The two halves are covered apart - that the locator reads the host's source, and that a document
     /// with no source names nothing - and neither notices if the source stops reaching the document. This
-    /// row is the seam, and it asserts the addresses rather than their presence, because a member holding
-    /// the mapped address instead of the host's would satisfy a presence check and advertise a route this
-    /// deployment does not serve.
+    /// row is that seam. The addresses are asserted rather than their presence because the composed text
+    /// is what a receiver caches, and a presence check passes over an address assembled wrongly.
+    /// <para>
+    /// Nothing is mapped here, so this row says nothing about which source wins. That is the row below.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task ADocumentMappedAlone_NamesWhatTheHostSaidIsServed()
@@ -87,6 +89,32 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
             "https://gateway.example/ssf/subjects:remove", document.RemoveSubjectEndpoint!.AbsoluteUri);
         Assert.Equal("https://gateway.example/ssf/verify", document.VerificationEndpoint!.AbsoluteUri);
     }
+
+    /// <summary>
+    /// A transmitter reached through a gateway: it maps the management routes itself AND the host names
+    /// where the outside world reaches them. The document names the gateway.
+    /// </summary>
+    /// <remarks>
+    /// This is the deployment the option exists for, and the only place the precedence between the two
+    /// sources is visible in what a receiver actually reads. Reversing it - the mapping winning over the
+    /// host - publishes the internal addresses to the outside world, which no row above would notice:
+    /// the one that maps nothing has no mapped address to lose to, and the one that names no source has
+    /// no host address to be overridden.
+    /// </remarks>
+    [Fact]
+    public async Task AMappedTransmitterWhoseHostNamesAGateway_AdvertisesTheGateway()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            app => app.MapSharedSignalsTransmitterEndpoints(),
+            ManagementEndpointLocator.Under(new Uri("https://gateway.example/ssf")));
+
+        var document = await ReadDocumentAsync(host, cancellationToken);
+
+        Assert.Equal("https://gateway.example/ssf/stream", document.ConfigurationEndpoint!.AbsoluteUri);
+        Assert.Equal("https://gateway.example/ssf/verify", document.VerificationEndpoint!.AbsoluteUri);
+    }
+
     /// <summary>
     /// The control, and the half this change must not break: a transmitter that does map the management
     /// API still advertises it.
