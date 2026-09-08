@@ -244,6 +244,12 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(
             streamId => PollEndpointOf(pollLogger, pollAuthority, pollPrefix, streamId));
 
+        // And the same declaration for the management routes just mapped, which is what lets the
+        // configuration document name them. Without it the document has no way to tell this
+        // deployment from one that maps the document alone and serves no management API.
+        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(
+            route => new Uri(pollAuthority, pollPrefix.Add(route).Value!));
+
         return group;
     }
 
@@ -274,7 +280,6 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
         var issuer = new Uri(options.Issuer, UriKind.Absolute);
 
         WarnIfTheDocumentIsOutsideTheCaepProfile(endpoints.ServiceProvider, options);
-        var advertisedPrefix = AdvertisedPrefixOf(endpointOptions);
 
         // Answers 200 and only 200: it takes no parameter to get wrong and no credentials to lack -
         // discovery has to work before a receiver has any. Declared all the same, because an
@@ -284,8 +289,10 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             endpointOptions.ConfigurationDocumentRoute.HasValue
                 ? endpointOptions.ConfigurationDocumentRoute.Value
                 : TransmitterConfiguration.WellKnownAddress(issuer).AbsolutePath,
-            (SharedSignalsTransmitterOptions current, PollEndpointLocator pollEndpoints) =>
-                Results.Json(ConfigurationDocumentOf(current, pollEndpoints, advertisedPrefix)));
+            (SharedSignalsTransmitterOptions current,
+             PollEndpointLocator pollEndpoints,
+             ManagementEndpointLocator managementEndpoints) =>
+                Results.Json(ConfigurationDocumentOf(current, pollEndpoints, managementEndpoints)));
 
         document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
         return document;
@@ -622,18 +629,16 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// The configuration document (SSF 1.0 Section 7.1), composed from the deployment's options
-    /// and the very routes this class maps - single-sourced, so the advertisement cannot drift
-    /// from the mapping. Endpoint URLs live on the issuer's authority under the prefix.
+    /// The configuration document (SSF 1.0 Section 7.1), composed from the deployment's options and
+    /// what is actually served: every address comes from a locator that knows whether anything
+    /// answers there, so a deployment mapping the document alone advertises no management API and no
+    /// poll delivery rather than addresses that answer 404.
     /// </summary>
     private static TransmitterConfiguration ConfigurationDocumentOf(
         SharedSignalsTransmitterOptions options,
         PollEndpointLocator pollEndpoints,
-        PathString prefix)
+        ManagementEndpointLocator managementEndpoints)
     {
-        var authority = AuthorityOf(options);
-        Uri EndpointOf(string route) => new(authority, prefix.Add(route).Value!);
-
         var deliveryMethods = new List<string> { PushDeliveryMethod.MethodUri };
         if (pollEndpoints.IsOffered)
         {
@@ -646,11 +651,11 @@ public static partial class SharedSignalsEndpointRouteBuilderExtensions
             Issuer = options.Issuer,
             JwksUri = options.JwksUri,
             DeliveryMethodsSupported = deliveryMethods,
-            ConfigurationEndpoint = EndpointOf(Routes.Stream),
-            StatusEndpoint = EndpointOf(Routes.Status),
-            AddSubjectEndpoint = EndpointOf(Routes.AddSubject),
-            RemoveSubjectEndpoint = EndpointOf(Routes.RemoveSubject),
-            VerificationEndpoint = EndpointOf(Routes.Verify),
+            ConfigurationEndpoint = managementEndpoints.Of(Routes.Stream),
+            StatusEndpoint = managementEndpoints.Of(Routes.Status),
+            AddSubjectEndpoint = managementEndpoints.Of(Routes.AddSubject),
+            RemoveSubjectEndpoint = managementEndpoints.Of(Routes.RemoveSubject),
+            VerificationEndpoint = managementEndpoints.Of(Routes.Verify),
             AuthorizationSchemes = options.AuthorizationSchemes switch
             {
                 null => [OAuthAuthorizationScheme()],
