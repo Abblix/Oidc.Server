@@ -117,40 +117,46 @@ public class RequestedSubjectValidatorTests
     }
 
     /// <summary>
-    /// Both qualifiers disagreeing accept nobody, which is a request that cannot be answered positively.
+    /// Both qualifiers disagreeing is refused outright, since no end user can satisfy them at once.
     /// </summary>
     /// <remarks>
-    /// Recorded as an empty constraint rather than discarded as nonsense, because Section 5.5.1 already
-    /// prescribes the outcome: "If the Claim was sub, a mismatch MUST cause the authentication to fail".
-    /// Discarding it would answer the request for whichever end user happened to be logged in - the exact
-    /// failure the requirement exists to prevent.
+    /// Section 5.5.1 prescribes the outcome for a mismatch: "If the Claim was sub, a mismatch MUST cause
+    /// the authentication to fail". Discarding the constraint instead would answer the request for
+    /// whichever end user happened to be logged in - the exact failure the requirement exists to prevent.
+    /// The failure is stated here rather than left to the session filter finding nothing, which would send
+    /// the end user to authenticate for a request no authentication could ever answer.
     /// </remarks>
     [Fact]
-    public async Task BothQualifiersDisagreeing_AcceptNobody()
+    public async Task BothQualifiersDisagreeing_IsAnInvalidRequest()
     {
         var context = Context("""{"id_token":{"sub":{"value":"carol","values":["bob","alice"]}}}""");
 
-        Assert.Null(await _validator.ValidateAsync(context));
-        Assert.NotNull(context.RequestedSubjects);
-        Assert.Empty(context.RequestedSubjects);
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Null(context.RequestedSubjects);
     }
 
     /// <summary>
-    /// An empty <c>values</c> array accepts nobody, rather than reading as no constraint.
+    /// An empty <c>values</c> array is refused, rather than reading as no constraint.
     /// </summary>
     /// <remarks>
     /// A client that wrote <c>"values": []</c> stated a constraint with nothing in it. Reading that as "no
     /// constraint" would answer the request for whoever is logged in - the inversion this parameter exists
-    /// to prevent - so the fail-closed reading is the only safe one.
+    /// to prevent - so the only safe readings are a refusal or a set nobody satisfies, and the refusal is
+    /// the one the client can act on.
     /// </remarks>
     [Fact]
-    public async Task AnEmptyValuesArray_AcceptsNobody()
+    public async Task AnEmptyValuesArray_IsAnInvalidRequest()
     {
         var context = Context("""{"id_token":{"sub":{"values":[]}}}""");
 
-        Assert.Null(await _validator.ValidateAsync(context));
-        Assert.NotNull(context.RequestedSubjects);
-        Assert.Empty(context.RequestedSubjects);
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Null(context.RequestedSubjects);
     }
 
     /// <summary>

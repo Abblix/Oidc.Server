@@ -48,14 +48,14 @@ public interface IAuthorizationDetailsPolicy
     /// drives the allowlist branch.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>
-    /// On success - the raw <see cref="JsonArray"/> that survived validation (or <c>null</c>
-    /// when the input was null / empty / contained no typed entries - there is nothing to
-    /// forward in that case). On failure - a fully-formed <see cref="OidcError"/> with
+    /// On success - the raw <see cref="JsonArray"/> that survived validation, empty when there is
+    /// nothing to forward: the input carried no entries, or validation left none. On failure - a
+    /// fully-formed <see cref="OidcError"/> with
     /// <c>error = invalid_authorization_details</c> (RFC 9396 section 5) and the rejection
     /// description; the endpoint adapter forwards it as-is when its error type is
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.
     /// </returns>
-    Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token);
@@ -84,7 +84,7 @@ public interface IAuthorizationDetailsPolicy
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
     /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
-    Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
         ClientInfo client,
         CancellationToken token)

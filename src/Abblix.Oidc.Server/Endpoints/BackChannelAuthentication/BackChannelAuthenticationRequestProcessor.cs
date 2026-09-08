@@ -202,7 +202,9 @@ public class BackChannelAuthenticationRequestProcessor(
 		var hinted = request.IdToken?.Payload.Subject is { Length: > 0 } named ? new[] { named } : null;
 
 		var requested = request.Model.Claims.RequestedSubjects();
-		var accepted = requested.TryGetSuccess(out var subjects) ? subjects : [];
+		var accepted = requested.Match<string[]?>(
+			subjects => subjects.Length > 0 ? subjects : null,
+			_ => []);
 
 		return (hinted, accepted) switch
 		{

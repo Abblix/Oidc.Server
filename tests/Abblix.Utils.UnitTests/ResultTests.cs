@@ -154,13 +154,13 @@ public class ResultTests
     public void BindContinuesOnSuccessAndStopsOnFailure()
     {
         Assert.Equal(
-            "42", Ok().Bind(value => Result<string, string>.Success(value.ToString())).GetSuccess());
+            42L, Ok().Bind(value => Result<long, string>.Success(value)).GetSuccess());
 
         Assert.Equal(
-            "refused", No().Bind(value => Result<string, string>.Success(value.ToString())).GetFailure());
+            "refused", No().Bind(value => Result<long, string>.Success(value)).GetFailure());
 
         // A step that refuses turns the chain into that refusal.
-        Assert.Equal("second step said no", Ok().Bind(_ => Result<string, string>.Failure("second step said no"))
+        Assert.Equal("second step said no", Ok().Bind(_ => Result<long, string>.Failure("second step said no"))
             .GetFailure());
     }
 
@@ -180,13 +180,13 @@ public class ResultTests
     public async Task BindingAsynchronouslyContinuesOnSuccessAndStopsOnFailure()
     {
         Assert.Equal(
-            "42",
-            (await Ok().BindAsync(value => Task.FromResult(Result<string, string>.Success(value.ToString()))))
+            42L,
+            (await Ok().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
             .GetSuccess());
 
         Assert.Equal(
             "refused",
-            (await No().BindAsync(value => Task.FromResult(Result<string, string>.Success(value.ToString()))))
+            (await No().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
             .GetFailure());
     }
 

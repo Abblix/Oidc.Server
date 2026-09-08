@@ -94,8 +94,8 @@ internal static class GrantedRevalidation
         // thing: what is stored is not what may be issued.
         //
         // Both shapes are compared, because the two ways of answering are equally common: an edit IN PLACE
-        // shows on the probe, a rewritten entry shows in what comes back. Null means nothing to change,
-        // which is how every other caller reads it.
+        // shows on the probe, a rewritten entry shows in what comes back. An empty answer means nothing
+        // to change, which is how every other caller reads it.
         //
         // Compared STRUCTURALLY rather than as text. Deserialise, validate, return a fresh entry is the
         // natural way to write a validator in C#, and the interface invites it, so a validator that changed
@@ -108,7 +108,7 @@ internal static class GrantedRevalidation
         // runtimes will disagree about the same validator, which is worth knowing when one does.
         var revalidated = result.GetSuccess();
         var changed = !JsonNode.DeepEquals(probe, asStored) ||
-                      (revalidated is not null && !JsonNode.DeepEquals(revalidated, asStored));
+                      (revalidated.Count > 0 && !JsonNode.DeepEquals(revalidated, asStored));
 
         return changed
             ? Refusal(

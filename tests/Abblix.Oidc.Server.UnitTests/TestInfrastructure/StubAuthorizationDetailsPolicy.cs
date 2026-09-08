@@ -53,7 +53,7 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// <summary>How many times the granted-phase question was asked.</summary>
     public int GrantedCalls { get; private set; }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
@@ -67,14 +67,14 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
                     entry[cap.Member] = cap.Value;
             }
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>(raw);
+            return Task.FromResult<Result<JsonArray, OidcError>>(raw ?? new JsonArray());
         }
 
-        return Task.FromResult<Result<JsonArray?, OidcError>>(
+        return Task.FromResult<Result<JsonArray, OidcError>>(
             new OidcError(ErrorCodes.InvalidAuthorizationDetails, _refusal));
     }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
         ClientInfo client,
         CancellationToken token)

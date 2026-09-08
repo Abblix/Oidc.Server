@@ -308,13 +308,11 @@ public partial class BackChannelAuthenticationGrantHandler(
         // Note: This update is not atomic with the read above, see method remarks
         await storage.UpdateAsync(authenticationRequestId, authenticationRequest, expiresIn);
 
-        if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null)
+        if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null
+            && await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken)
+                is { } result)
         {
-            var result = await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken);
-            if (result != null)
-            {
-                return result;
-            }
+            return result;
         }
 
         return new OidcError(

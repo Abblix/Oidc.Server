@@ -114,27 +114,16 @@ public class ConsentConstraintEnforcer(
                 revalidation.GetFailure().ErrorDescription);
         }
 
-        // Nothing at all means nothing to change, which is how the request-time, CIBA and device
-        // validators read the same result, so the granted array stands as it was - but it is re-checked
-        // all the same. A validator that narrows by editing the entry IN PLACE, which is what every
-        // narrowing fixture in this repository does, has already written into this array by the time it
-        // answers, and the types read before the call are the only untouched copy of what was granted.
-        if (revalidated is null)
-        {
-            RefuseTypesOutside(grantedTypes, grantedAuthorizationDetails, nameof(IAuthorizationDetailsPolicy));
-            return grantedAuthorizationDetails;
-        }
-
-        // An EMPTY array is a different statement, and this request has already decided what it means:
-        // a consent decision granting no entries against a request that carried some answers
-        // access_denied, one step before this call. Reaching here with one says the validators removed
-        // every entry, so returning the granted set would put back exactly what they removed.
+        // The call above is guarded on a non-empty granted set, and this request has already decided
+        // what an empty answer means: a consent decision granting no entries against a request that
+        // carried some answers access_denied, one step before this call. So reaching here with one says
+        // the validators removed every entry, and returning the granted set would put back exactly what
+        // they removed.
         if (revalidated.Count == 0)
         {
             throw new InvalidOperationException(
-                "The per-type re-validation of the granted authorization_details returned an empty set. " +
-                "A policy signals 'nothing to change' by returning null; an empty array says every entry " +
-                "was removed, and there is no set left to issue a grant for.");
+                "The per-type re-validation of the granted authorization_details returned an empty set, " +
+                "so every entry was removed and there is no set left to issue a grant for.");
         }
 
         // What comes back is the decision, not a copy of what went in: a validator narrowing an entry

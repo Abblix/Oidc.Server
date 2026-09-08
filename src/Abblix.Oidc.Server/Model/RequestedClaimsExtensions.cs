@@ -19,9 +19,8 @@ namespace Abblix.Oidc.Server.Model;
 public static class RequestedClaimsExtensions
 {
     /// <summary>
-    /// The end users this request will accept for <c>sub</c>: <c>null</c> when it named none in particular,
-    /// an empty array when it named a combination nobody can satisfy, or a failure describing a malformed
-    /// qualifier.
+    /// The end users this request will accept for <c>sub</c>: an empty array when it named none in
+    /// particular, or a failure describing a qualifier that is malformed or that nobody can satisfy.
     /// </summary>
     /// <remarks>
     /// OpenID Connect Core 1.0 Section 3.1.2.2 names this and <c>id_token_hint</c> as two ways to make one
@@ -34,7 +33,9 @@ public static class RequestedClaimsExtensions
     /// Section 5.5.1 defines both qualifiers as OPTIONAL and says nothing about carrying them together, so a
     /// request doing so is read as stating both constraints: the subject has to be the one named by
     /// <c>value</c> AND one of those listed in <c>values</c>. Incompatible constraints leave nothing
-    /// acceptable, which is the guaranteed mismatch that same section already prescribes an outcome for.
+    /// acceptable, which is the guaranteed mismatch that same section prescribes an outcome for - said
+    /// here as a refusal naming the contradiction, rather than as a set that silently matches no session
+    /// and sends the end user to authenticate for a request that can never be answered.
     /// </para>
     /// <para>
     /// Only the <c>id_token</c> member is read, deliberately. Section 3.1.2.2 scopes the requirement to a
@@ -43,12 +44,12 @@ public static class RequestedClaimsExtensions
     /// mismatch rule then governs that response, not the authentication.
     /// </para>
     /// </remarks>
-    public static Result<string[]?, string> RequestedSubjects(this RequestedClaims? claims)
+    public static Result<string[], string> RequestedSubjects(this RequestedClaims? claims)
     {
         if (claims?.IdToken is not { } requested ||
             !requested.TryGetValue(IanaClaimTypes.Sub, out var details) ||
             details is null)
-            return (string[]?)null;
+            return Array.Empty<string>();
 
         string? value = null;
         if (details.Value is not null && !TryReadSubject(details.Value, out value))
@@ -69,14 +70,20 @@ public static class RequestedClaimsExtensions
 
         return (value, values) switch
         {
-            (null, null) => (string[]?)null,
+            (null, null) => Array.Empty<string>(),
+            (null, []) => NoAcceptableSubject,
             (null, { } many) => many,
-            ({ } one, null) => [one],
-            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal) ? [one] : [],
+            ({ } one, null) => new[] { one },
+            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
+                ? new[] { one }
+                : NoAcceptableSubject,
         };
     }
 
     private const string MalformedSubject = "The sub claim was requested with a value that is not a string";
+
+    private const string NoAcceptableSubject =
+        "The sub claim was requested with qualifiers no end user can satisfy at once";
 
     /// <summary>
     /// Reads a requested <c>sub</c> value, failing when the qualifier is not a string.

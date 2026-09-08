@@ -191,16 +191,16 @@ public class GrantedRevalidationTests
         }
     }
 
-    /// <summary>A dispatch of the shape a host may register: edits what it is handed, answers null.</summary>
+    /// <summary>A dispatch of the shape a host may register: edits what it is handed, answers an empty set.</summary>
     private sealed class InPlaceEditingPolicy : IAuthorizationDetailsPolicy
     {
-        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             if (raw?[0] is JsonObject entry)
                 entry["instructedAmount"]!["amount"] = "100.00";
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>((JsonArray?)null);
+            return Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
         }
     }
 }

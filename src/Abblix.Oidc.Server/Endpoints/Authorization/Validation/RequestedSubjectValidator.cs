@@ -45,7 +45,9 @@ public class RequestedSubjectValidator : SyncAuthorizationContextValidatorBase
         if (requested.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 
-        context.RequestedSubjects = requested.GetSuccess();
+        // An empty set means the request named nobody in particular, and the session filter reads an
+        // absent constraint rather than an empty one - an empty array there would accept nobody.
+        context.RequestedSubjects = requested.GetSuccess() is { Length: > 0 } subjects ? subjects : null;
         return null;
     }
 }

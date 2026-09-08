@@ -34,7 +34,7 @@ public class BackChannelAuthorizationDetailsValidator(
         if (!result.TryGetSuccess(out var validated))
             return result.GetFailure();
 
-        if (validated is not null)
+        if (validated.Count > 0)
             context.AuthorizationDetails = validated;
         return null;
     }

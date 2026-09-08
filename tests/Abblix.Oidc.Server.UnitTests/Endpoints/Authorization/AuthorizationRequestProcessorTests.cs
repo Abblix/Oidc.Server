@@ -72,7 +72,7 @@ public class AuthorizationRequestProcessorTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
 
         _timeProvider = new FakeTimeProvider();
 
@@ -1660,7 +1660,8 @@ public class AuthorizationRequestProcessorTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => CapAmount(ad, 800m));
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
+                CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 

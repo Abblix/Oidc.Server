@@ -33,7 +33,7 @@ public class AuthorizationDetailsRequestValidator(
         if (!result.TryGetSuccess(out var validated))
             return context.InvalidAuthorizationDetails(result.GetFailure().ErrorDescription);
 
-        if (validated is not null)
+        if (validated.Count > 0)
             context.AuthorizationDetails = validated;
         return null;
     }
