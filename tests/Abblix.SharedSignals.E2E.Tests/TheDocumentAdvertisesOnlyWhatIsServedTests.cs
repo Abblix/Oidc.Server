@@ -59,6 +59,35 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
     }
 
     /// <summary>
+    /// The deployment this option exists for, driven end to end: the document is mapped alone, the host
+    /// names where the management API is served, and the document advertises exactly those addresses.
+    /// </summary>
+    /// <remarks>
+    /// The two halves are covered apart - that the locator prefers the host's source, and that a document
+    /// with no source names nothing - and neither notices if the source stops reaching the document. This
+    /// row is the seam, and it asserts the addresses rather than their presence, because a member holding
+    /// the mapped address instead of the host's would satisfy a presence check and advertise a route this
+    /// deployment does not serve.
+    /// </remarks>
+    [Fact]
+    public async Task ADocumentMappedAlone_NamesWhatTheHostSaidIsServed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await StartAsync(
+            app => app.MapSharedSignalsConfigurationDocument(),
+            ManagementEndpointLocator.Under(new Uri("https://gateway.example/ssf")));
+
+        var document = await ReadDocumentAsync(host, cancellationToken);
+
+        Assert.Equal("https://gateway.example/ssf/stream", document.ConfigurationEndpoint!.AbsoluteUri);
+        Assert.Equal("https://gateway.example/ssf/status", document.StatusEndpoint!.AbsoluteUri);
+        Assert.Equal(
+            "https://gateway.example/ssf/subjects:add", document.AddSubjectEndpoint!.AbsoluteUri);
+        Assert.Equal(
+            "https://gateway.example/ssf/subjects:remove", document.RemoveSubjectEndpoint!.AbsoluteUri);
+        Assert.Equal("https://gateway.example/ssf/verify", document.VerificationEndpoint!.AbsoluteUri);
+    }
+    /// <summary>
     /// The control, and the half this change must not break: a transmitter that does map the management
     /// API still advertises it.
     /// </summary>
@@ -105,7 +134,9 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
         CancellationToken cancellationToken)
         => host.GetTestClient().GetFromJsonAsync<TransmitterConfiguration>(DocumentRoute, cancellationToken)!;
 
-    private static async Task<WebApplication> StartAsync(Action<WebApplication> map)
+    private static async Task<WebApplication> StartAsync(
+        Action<WebApplication> map,
+        Func<string, Uri>? managementEndpointFactory = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -116,6 +147,7 @@ public sealed class TheDocumentAdvertisesOnlyWhatIsServedTests
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = Issuer,
+            ManagementEndpointFactory = managementEndpointFactory,
         });
         builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {
