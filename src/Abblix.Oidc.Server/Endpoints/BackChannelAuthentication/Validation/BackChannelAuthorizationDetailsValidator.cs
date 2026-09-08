@@ -36,6 +36,8 @@ public class BackChannelAuthorizationDetailsValidator(
 
         if (validated.Count > 0)
             context.AuthorizationDetails = validated;
+        else if (context.Request.AuthorizationDetails is { Count: > 0 })
+            throw AuthorizationDetailsPolicyContract.EveryEntryDropped();
         return null;
     }
 }

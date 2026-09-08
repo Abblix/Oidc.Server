@@ -44,8 +44,15 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     public static StubAuthorizationDetailsPolicy Capping(string member, string value) =>
         new() { _cap = (member, value) };
 
+    /// <summary>
+    /// Answers with every entry removed - the shape the contract forbids, which a host implementation
+    /// can still produce and which reads as "nothing to forward" wherever it is not refused.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Emptying => new() { _empty = true };
+
     private string? _refusal;
     private (string Member, string Value)? _cap;
+    private bool _empty;
 
     /// <summary>What the last call was handed, so a test can see whether it was the live array.</summary>
     public JsonArray? LastSeen { get; private set; }
@@ -67,7 +74,8 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
                     entry[cap.Member] = cap.Value;
             }
 
-            return Task.FromResult<Result<JsonArray, OidcError>>(raw ?? new JsonArray());
+            return Task.FromResult<Result<JsonArray, OidcError>>(
+                _empty ? new JsonArray() : raw ?? new JsonArray());
         }
 
         return Task.FromResult<Result<JsonArray, OidcError>>(

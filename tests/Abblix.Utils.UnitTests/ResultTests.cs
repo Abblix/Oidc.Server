@@ -254,12 +254,13 @@ public class ResultTests
         var neither = default(Result<int, string>);
 
         // The getters name the state they met, rather than the arm the caller happened to ask for: a
-        // message saying "not a failure" sends whoever reads it to audit the failure path.
+        // message saying "not a failure" sends whoever reads it to audit the failure path. Asserted by
+        // what the message must SAY - a pair of "does not contain" passes for an empty message too.
         var onSuccess = Assert.Throws<InvalidOperationException>(() => neither.GetSuccess());
         var onFailure = Assert.Throws<InvalidOperationException>(() => neither.GetFailure());
         Assert.Equal(onSuccess.Message, onFailure.Message);
-        Assert.DoesNotContain("not a success", onSuccess.Message);
-        Assert.DoesNotContain("not a failure", onFailure.Message);
+        Assert.StartsWith(
+            "The result carries neither a success nor a failure.", onSuccess.Message, StringComparison.Ordinal);
 
         Assert.Throws<InvalidOperationException>(() => (int)neither);
         Assert.Throws<InvalidOperationException>(
@@ -276,9 +277,32 @@ public class ResultTests
         Assert.False(neither.TryGetFailure(out _));
 
         var (value, error) = neither;
-        Assert.Equal(default, value);
+        Assert.Equal(0, value);
         Assert.Null(error);
 
         Assert.Equal("a result carrying neither case", neither.ToString());
+    }
+
+    /// <summary>
+    /// A case built from a null value lands in that same state, rather than in a case whose value is null.
+    /// </summary>
+    /// <remarks>
+    /// The second door into it, and the one a caller can walk through by accident: a union stores its
+    /// content as an object and a type pattern does not match null, so there is nothing to tell the two
+    /// apart afterwards. Driven because the type documents it, and because a producer that hands null to
+    /// the factory is told nothing at the point where it could still be fixed - the refusal arrives at
+    /// whoever reads the result.
+    /// </remarks>
+    [Fact]
+    public void ACaseBuiltFromNullIsTheValueCarryingNeitherArm()
+    {
+        var fromNull = Result<string, int>.Success(null!);
+
+        Assert.False(fromNull.TryGetSuccess(out _));
+        Assert.False(fromNull.TryGetFailure(out _));
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => fromNull.GetSuccess());
+        Assert.StartsWith(
+            "The result carries neither a success nor a failure.", thrown.Message, StringComparison.Ordinal);
     }
 }

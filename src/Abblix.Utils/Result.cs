@@ -26,10 +26,16 @@ namespace Abblix.Utils;
 /// on which both accessors answer yes. Choose the failure type so that cannot happen.
 /// </para>
 /// <para>
-/// A union is a struct, so <c>default</c> is a value of this type that carries neither case, and nothing
-/// here produces one - the old hierarchy could not express that state at all. A member that must yield a
-/// value throws rather than inventing one; the <c>TryGet</c> pair answers <c>false</c> to both questions,
-/// deconstruction yields two defaults, and <c>ToString</c> says which state it found.
+/// A union is a struct, so <c>default</c> is a value of this type that carries neither case, and the old
+/// hierarchy could not express that state at all. It has a second door: a type pattern does not match
+/// null, so <c>Success(null)</c> - or a conversion from a null value - lands in the same state rather
+/// than in a success whose value is absent. A case that can be null therefore cannot be carried here,
+/// which is a property of the union rather than a rule this type imposes.
+/// <para>
+/// A member that must yield a value throws rather than inventing one; the <c>TryGet</c> pair answers
+/// <c>false</c> to both questions, deconstruction yields two defaults, and <c>ToString</c> says which
+/// state it found.
+/// </para>
 /// </para>
 /// </remarks>
 /// <typeparam name="TSuccess">The type of the success value.</typeparam>
@@ -352,5 +358,8 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     /// a failure nobody produced into a caller's hands.
     /// </remarks>
     private static InvalidOperationException NeitherCase()
-        => new("The result carries neither a success nor a failure, which is what default(Result<,>) is.");
+        => new(
+            "The result carries neither a success nor a failure. Either it is the default value of the "
+            + "type, or a case was built from a null value - a union stores its content as an object and "
+            + "a type pattern does not match null, so the two are the same state.");
 }
