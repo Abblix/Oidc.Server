@@ -54,9 +54,9 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     ///   base replaces the base's path entirely: <c>https://gw.example/ssf</c> answers
     ///   <c>https://gw.example/stream</c>. A relative route loses the base's last segment instead, unless
     ///   the base ends in a separator - so three of the four spellings drop part of the base.</item>
-    ///   <item>A path beginning with two separators, which a host produces by joining a base already
-    ///   ending in one to <c>/ssf</c>, makes a REFERENCE built from it a network-path reference, and that
-    ///   replaces the authority rather than the path.</item>
+    ///   <item>A path with an empty segment, which a host produces by joining a base already ending in a
+    ///   separator to <c>/ssf</c>, is refused rather than composed around: it is a path this framework
+    ///   does not route to, and one a proxy in front may or may not normalise.</item>
     ///   <item>A builder writes the port it was handed into the TEXT of what it builds, default or not, so
     ///   <c>:443</c> reaches the document - invisible to anything comparing addresses as values, because
     ///   two addresses differing only in a default port compare equal.</item>
@@ -68,8 +68,9 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     /// </remarks>
     /// <param name="baseAddress">Where the management API hangs. Its own path is kept, and a trailing
     /// separator makes no difference.</param>
-    /// <exception cref="ArgumentException">The address is relative, or carries a query or fragment -
-    /// neither survives a route being appended.</exception>
+    /// <exception cref="ArgumentException">The address cannot carry a route: it is relative, or carries
+    /// a query or fragment, neither of which survives one being appended, or its path has an empty
+    /// segment.</exception>
     public static Func<string, Uri> Under(Uri baseAddress)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
@@ -91,10 +92,14 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
         }
 
         // An empty path segment is what joining two configured pieces produces when both carry the
-        // separator, and it is not the address the host meant: routing matches segment by segment, so
-        // neither this framework nor a gateway in front answers "/ssf//stream" for a route at
-        // "/ssf/stream". Kept out rather than collapsed, because collapsing is this library editing an
-        // address a host wrote, and the other three refusals here are refusals for the same reason.
+        // separator, and it is almost never the address the host meant: this framework routes segment by
+        // segment, so it does not answer "/ssf//stream" for a route at "/ssf/stream". What sits in front
+        // may differ - a proxy that normalises duplicate separators would serve it - which is an argument
+        // for refusing rather than against: the address is published into a document a receiver caches
+        // and compares, and whether it happens to work depends on software this library cannot see.
+        //
+        // Kept out rather than collapsed, because collapsing is this library editing an address a host
+        // wrote, and the other three refusals here are refusals for the same reason.
         if (baseAddress.AbsolutePath.Contains("//", StringComparison.Ordinal))
         {
             throw new ArgumentException(
