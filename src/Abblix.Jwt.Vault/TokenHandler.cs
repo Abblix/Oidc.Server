@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
+using Abblix.Jwt.ExternalKeys;
+
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
@@ -41,6 +44,17 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
             return await base.SendAsync(request, cancellationToken);
 
         var token = await tokens.GetTokenAsync(cancellationToken);
+        if (token is null && tokens.AuthenticationConfigured)
+        {
+            // A deployment that logs in has no token only while a failed login waits out its backoff. Sending
+            // the request anyway draws Vault's answer to a request with no credentials, and that answer reads
+            // as permanent - the caller would be told never to come back over a login that is retrying. The
+            // condition is ours and it is temporary, so it is reported as what it is.
+            throw new KeyCustodianUnavailableException(
+                request.RequestUri?.AbsolutePath ?? "vault",
+                "The vault login has no token yet; a failed login is waiting out its backoff.");
+        }
+
         if (token is not null)
         {
             // Replace rather than add: the same request may be retried through this handler, and a second header
@@ -49,6 +63,22 @@ internal sealed class TokenHandler(TokenSource tokens) : DelegatingHandler
             request.Headers.Add(TokenHeaderName, token);
         }
 
-        return await base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancellationToken);
+
+        // A refusal of a token this deployment minted is about the credential, not the request, and the login
+        // that minted it renews on its own schedule - so waiting is exactly what helps. Read from the status
+        // alone it would be permanent, and the published keys would go with it. A deployment carrying a token
+        // it did not mint has nothing that will replace it, so its refusal keeps the ordinary reading.
+        if (token is not null &&
+            tokens.AuthenticationConfigured &&
+            response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            response.Dispose();
+            throw new KeyCustodianUnavailableException(
+                request.RequestUri?.AbsolutePath ?? "vault",
+                "The vault refused the token this deployment logged in for.");
+        }
+
+        return response;
     }
 }

@@ -96,12 +96,16 @@ public sealed partial class KeyVaultClient : IKeyCustodian
     /// Signs the JWS signing input with a Key Vault key under the given JWS algorithm. Key Vault hashes the data
     /// and returns the raw signature already in JWS wire format (R||S for EC).
     /// </summary>
-    public async Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
-    {
-        var client = GetCryptographyClient(keyId);
-        var result = await client.SignDataAsync(MapSignatureAlgorithm(algorithm), data, cancellationToken);
-        return result.Signature;
-    }
+    public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
+        => AzureFailure.Classified(
+            "sign",
+            async () =>
+            {
+                var client = GetCryptographyClient(keyId);
+                var result = await client.SignDataAsync(MapSignatureAlgorithm(algorithm), data, cancellationToken);
+                return result.Signature;
+            },
+            cancellationToken);
 
     private static SignatureAlgorithm MapSignatureAlgorithm(string algorithm) => algorithm switch
     {
@@ -126,10 +130,18 @@ public sealed partial class KeyVaultClient : IKeyCustodian
     /// the ciphertext, so a wrong key or tampered ciphertext is indistinguishable, which the seam's padding-oracle
     /// mitigation relies on. The JWE header is unused: an RSA unwrap needs only the ciphertext.
     /// </summary>
-    public async Task<byte[]?> UnwrapKeyAsync(
+    public Task<byte[]?> UnwrapKeyAsync(
         string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
     {
         var encryptionAlgorithm = MapEncryptionAlgorithm(algorithm);
+
+        // The rejected-ciphertext catch stays INSIDE the classification, and the order is the whole point: a 400
+        // must become null before anything reads it as a custodian failure, or the padding-oracle mitigation is
+        // gone. Everything the inner catch lets past is then classified as temporary or not.
+        return AzureFailure.Classified<byte[]?>("unwrap a key", UnwrapAsync, cancellationToken);
+
+        async Task<byte[]?> UnwrapAsync()
+        {
         try
         {
             var client = GetCryptographyClient(keyId);
@@ -145,6 +157,7 @@ public sealed partial class KeyVaultClient : IKeyCustodian
             // reporting them as one would tell the caller its client sent a bad JWE while the real fault is ours.
             LogUnwrapRejected(_logger, keyId);
             return null;
+        }
         }
     }
 
@@ -177,6 +190,21 @@ public sealed partial class KeyVaultClient : IKeyCustodian
     public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
         string keyName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Collected before yielding, because a yield cannot sit inside the catch that classifies the vault's
+        // refusal. A key has a handful of versions, so holding them costs nothing worth the alternative.
+        var versions = await AzureFailure.Classified(
+            "list key versions",
+            () => ReadKeyVersionsAsync(keyName, cancellationToken),
+            cancellationToken);
+
+        foreach (var version in versions)
+            yield return version;
+    }
+
+    private async Task<List<KeyVersion>> ReadKeyVersionsAsync(
+        string keyName, CancellationToken cancellationToken)
+    {
+        var versions = new List<KeyVersion>();
         await foreach (var properties in _keyClient.GetPropertiesOfKeyVersionsAsync(keyName, cancellationToken))
         {
             // A disabled version (rotated out, or not yet enabled) must not be published or produced with.
@@ -194,8 +222,10 @@ public sealed partial class KeyVaultClient : IKeyCustodian
 
             var key = await _keyClient.GetKeyAsync(keyName, properties.Version, cancellationToken);
             var publicKey = ImportPublicKey(key.Value.Key) with { KeyId = $"{keyName}/{properties.Version}" };
-            yield return new KeyVersion(publicKey, createdAt);
+            versions.Add(new KeyVersion(publicKey, createdAt));
         }
+
+        return versions;
     }
 
     // Imports a Key Vault public key into a public-only JWK of the matching type.

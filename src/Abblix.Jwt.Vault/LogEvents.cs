@@ -21,6 +21,9 @@ internal static class LogEvents
 
         /// <summary>Transit rejected an unwrap, so the CEK could not be recovered.</summary>
         public const int UnwrapRejected = Base + 1;
+
+        /// <summary>Transit could not answer, and the endpoints were told whether to come back.</summary>
+        public const int CustodianFailed = Base + 2;
     }
 
     /// <summary>KV key-ring events. Range 1100-1199.</summary>

@@ -10,7 +10,6 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Abblix.Jwt.ExternalKeys;
-using Azure;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -33,6 +32,44 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         Jwe = "header.wrappedkey.iv.ciphertext.tag",
         CreatedAt = new DateTimeOffset(2026, 7, 17, 0, 0, 0, TimeSpan.Zero),
     };
+
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporary()
+    {
+        // The ring rides the same reading as the keys themselves: a connection that could not be made says
+        // nothing about the request. Left as the SDK's own exception it reaches a caller that cannot read it,
+        // and the Vault side of this ring already answers the same way.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporaryWhenMinting()
+    {
+        // The mint path carries its own classification, and only its own row can say so: the read path being
+        // classified proves nothing about this one, which is what made the claim about this change too wide.
+        // The container create is allowed to succeed, so the failure happens on the upload - the call this row
+        // is named for, rather than the one the read path already covers.
+        var handler = Blob(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AStorageAccountThatCannotBeReachedIsTemporaryWhenRemoving()
+    {
+        // And the removal path too. Its only other row asserts that an absent entry raises nothing, so without
+        // this one the classification could be dropped there and the suite would stay green.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).RemoveAsync("any", TestContext.Current.CancellationToken));
+    }
 
     private BlobKeyRingStore StoreOver(StubHttpMessageHandler handler)
     {
@@ -104,13 +141,72 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task TryAddAsync_Throws_WhenA409MeansSomethingElse()
     {
-        // A 409 also carries ContainerBeingDeleted and LeaseAlreadyPresent. Reading either as "someone won" would
-        // make this pod discard a key nobody stored, and the period would end up with no key at all.
-        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
+        // The filter reads the error code, not the status: a 409 that is not the race must not be read as
+        // "someone won", or this pod discards a key nobody stored and the period ends up with no key at all.
+        // The code below is chosen for being neither the race nor the transient one - the ring takes no leases,
+        // so it is an illustration of a third 409 rather than one this path produces.
+        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "LeaseAlreadyPresent"));
         var store = StoreOver(handler);
 
-        await Assert.ThrowsAsync<RequestFailedException>(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AContainerBeingDeletedIsTemporary()
+    {
+        // The one failure the status cannot place: 409 is both the mint race and a container whose delete has
+        // not finished, and only the second clears on its own. Read from the status alone it joins the refusals
+        // that never clear, and the caller is told never to come back from a condition that does end.
+        //
+        // This row answers the upload. The classification behind it is one and the same for every call, so
+        // the row below is not a second path being covered - it differs only in which SDK call raises and
+        // under which operation name the failure is reported.
+        var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).TryAddAsync(Entry, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AContainerBeingDeletedIsTemporaryWhenTheContainerIsCreated()
+    {
+        // The create is where a container mid-delete is actually met, and it is the call that cannot proceed
+        // until the delete finishes. Reading and minting both open with it; removal does not, so removal
+        // meets a half-deleted container only on the delete itself.
+        var handler = new StubHttpMessageHandler(request => request.Method == HttpMethod.Put
+            ? BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted")
+            : Xml(BlobList(Entry.Id)));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Fails_WhenTheListingFindsNoContainer()
+    {
+        // The load creates the container, lists it, then reads each listed entry, and the listing was the
+        // call nothing drove: the row below answers the listing successfully and 404s the read. The listing
+        // is unguarded on purpose, so a guard added there later would swallow the same loss and hand back
+        // an empty ring, which is the signal that starts a mint.
+        var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Fails_WhenTheContainerIsGone()
+    {
+        // A container removed under a running deployment answers 404 on every entry. Read by status alone
+        // each entry looks retired, the ring comes back empty, and empty is the bootstrap signal that starts
+        // minting - so a wrong read here does not fail, it silently issues a key.
+        var handler = Blob(request => request.RequestUri!.Query.Contains("comp=list", StringComparison.Ordinal)
+            ? Xml(BlobList(Entry.Id))
+            : BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -121,7 +217,7 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         var handler = Blob(_ => BlobError(HttpStatusCode.Forbidden, "AuthorizationPermissionMismatch"));
         var store = StoreOver(handler);
 
-        await Assert.ThrowsAsync<RequestFailedException>(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
             () => store.TryAddAsync(Entry, TestContext.Current.CancellationToken));
     }
 
@@ -166,6 +262,44 @@ public sealed class BlobKeyRingStoreTests : IDisposable
             () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));
 
         Assert.Null(error);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_Fails_WhenTheContainerIsGone()
+    {
+        // A container that is gone answers 404 as well, and the SDK's delete-if-exists cannot tell the two
+        // apart. Reporting that as done says the key was retired when nothing was asked of anything.
+        var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RemoveAsync_Fails_WhenA404CarriesNoErrorCode()
+    {
+        // The same stripped header as below, on the path that also reads the code. Without this row the
+        // two sides drift: the removal could be widened to treat a codeless 404 as an absent entry and
+        // the suite would not notice, while the identical widening on the load path is caught.
+        var handler = Blob(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).RemoveAsync(Entry.Id, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Fails_WhenA404CarriesNoErrorCode()
+    {
+        // A proxy in front of the account can answer 404 without the header the code is read from. The ring
+        // then cannot tell a retired entry from a missing container, and it fails rather than reporting a
+        // shorter ring: a ring short of an entry is indistinguishable from one that has been trimmed, and
+        // the empty end of that scale starts a mint. This row exists to make that choice deliberate.
+        var handler = Blob(request => request.RequestUri!.Query.Contains("comp=list", StringComparison.Ordinal)
+            ? Xml(BlobList(Entry.Id))
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(
+            () => StoreOver(handler).LoadAsync(TestContext.Current.CancellationToken));
     }
 
     private static HttpResponseMessage BlobError(HttpStatusCode status, string errorCode)

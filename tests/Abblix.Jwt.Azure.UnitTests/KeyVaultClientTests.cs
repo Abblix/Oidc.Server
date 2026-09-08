@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Jwt.Azure.UnitTests;
 
@@ -40,6 +41,32 @@ public sealed class KeyVaultClientTests : IDisposable
             new StaticTokenCredential(),
             httpClient);
     }
+
+
+    [Fact]
+    public async Task AVaultThatCannotBeReachedIsTemporary()
+    {
+        // A connection that could not be made says nothing about the request, and the next one may succeed.
+        // Reported as permanent it tells a caller never to come back from an outage that clears itself.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler).SignAsync(
+            "oidc-sign/1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+    }
+
+
+    [Theory]
+    [InlineData(0, true)]     // never answered at all, which the SDK reports as no status
+    [InlineData(408, true)]   // the service gave up waiting for a request, not one it disliked
+    [InlineData(429, true)]   // throttled per vault
+    [InlineData(500, true)]
+    [InlineData(503, true)]
+    [InlineData(400, false)]  // the request was wrong, and will be next time
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    public void TheStatusesReadAsTemporaryAreTheOnesWaitingCanCure(int status, bool temporary)
+        => Assert.Equal(temporary, AzureFailure.IsTransient(status));
 
     public void Dispose()
     {
@@ -301,7 +328,7 @@ public sealed class KeyVaultClientTests : IDisposable
     {
         // The identity lost its Crypto User role. That is our fault, not the client's, and reporting it as a
         // failed decryption would tell every caller its JWE is bad while the vault is simply refusing us.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}"""));
     }
 
@@ -311,7 +338,7 @@ public sealed class KeyVaultClientTests : IDisposable
         // Key Vault throttles per vault, and this key sits on the token path, so 429 is routine rather than
         // exotic. Swallowing it as null would reject every encrypted token for as long as the throttle lasts,
         // silently, and blame the clients.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
     }
 

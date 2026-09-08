@@ -60,8 +60,8 @@ internal sealed partial class TransitCustodian(
         var request = BuildSignRequest(Convert.ToBase64String(data), algorithm, version);
         var path = $"{Mount}/sign/{name}";
 
-        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
-        response.EnsureSuccess(path);
+        using var response = await SendGuardedAsync(HttpMethod.Post, path, request, cancellationToken);
+        EnsureAnswered(response, path);
 
         var signature = response.Body(path).RootElement.GetProperty("data").GetProperty("signature").GetString()!;
 
@@ -151,14 +151,14 @@ internal sealed partial class TransitCustodian(
         var request = new { ciphertext = $"vault:v{version}:{Convert.ToBase64String(encryptedKey)}" };
         var path = $"{Mount}/decrypt/{name}";
 
-        using var response = await _httpClient.SendAsync(HttpMethod.Post, path, request, cancellationToken);
+        using var response = await SendGuardedAsync(HttpMethod.Post, path, request, cancellationToken);
         if (response.Status == HttpStatusCode.BadRequest)
         {
             LogUnwrapRejected(keyId);
             return null;
         }
 
-        response.EnsureSuccess(path);
+        EnsureAnswered(response, path);
         var plaintext = response.Body(path).RootElement.GetProperty("data").GetProperty("plaintext").GetString()!;
         return Convert.FromBase64String(plaintext);
     }
@@ -194,8 +194,8 @@ internal sealed partial class TransitCustodian(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var path = $"{Mount}/keys/{keyName}";
-        using var response = await _httpClient.SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
-        response.EnsureSuccess(path);
+        using var response = await SendGuardedAsync(HttpMethod.Get, path, body: null, cancellationToken);
+        EnsureAnswered(response, path);
 
         var data = response.Body(path).RootElement.GetProperty("data");
         var keyType = data.GetProperty("type").GetString()!;
@@ -245,5 +245,45 @@ internal sealed partial class TransitCustodian(
         }
 
         throw new NotSupportedException($"The Vault Transit store does not publish key type '{keyType}'.");
+    }
+
+    /// <summary>
+    /// Turns a failed answer into the exception the endpoints read, logging it here rather than at the endpoint:
+    /// this is the last place that still knows which custodian, which path, and whether the answer was an outage
+    /// or a refusal. A status some caller reads as an answer never arrives here.
+    /// </summary>
+    private void EnsureAnswered(ApiResponse response, string path)
+    {
+        if (response.IsSuccess)
+            return;
+
+        var failure = response.Failure(path);
+        LogCustodianFailed(path, VaultFailure.IsTransient(response.Status), failure);
+        throw failure;
+    }
+
+    /// <summary>
+    /// Sends a request to Vault, reporting a failure that never reached it as the custodian being temporarily
+    /// unable. Without this the transport exception escapes to an endpoint that cannot read it, and the caller
+    /// is told nothing it can act on. The status answers are classified separately, by
+    /// <see cref="ApiResponse.Failure"/>.
+    /// </summary>
+    private async Task<ApiResponse> SendGuardedAsync(
+        HttpMethod method,
+        string path,
+        object? body,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _httpClient.SendAsync(method, path, body, cancellationToken);
+        }
+        catch (KeyCustodianUnavailableException unreachable)
+        {
+            // The transport classified it; this adds the line an operator reads, which the transport cannot
+            // write because it holds no logger and serves the key ring as well.
+            LogCustodianFailed(path, temporary: true, unreachable);
+            throw;
+        }
     }
 }
