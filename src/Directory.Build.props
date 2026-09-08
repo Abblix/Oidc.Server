@@ -1,0 +1,17 @@
+<Project>
+
+  <!-- Chain to the repository-wide props, for the reason spelled out under tests/: MSBuild stops
+       searching upward at the FIRST Directory.Build.props it finds, so without this import every
+       project under src/ would silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
+
+  <!-- The frameworks the packages ship, in one place rather than repeated in every project. A
+       per-project copy is an enumeration, and an enumeration is escaped silently: a project added
+       later ships fewer frameworks than the rest and nothing says so, while a project MISSED by a
+       change to the set keeps building the old one and stays green. The two source generators
+       override this - they load into the compiler and must be netstandard2.0. -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+  </PropertyGroup>
+
+</Project>
