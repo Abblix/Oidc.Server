@@ -234,4 +234,51 @@ public class ResultTests
         Assert.Equal("42", Ok().ToString());
         Assert.Equal("refused", No().ToString());
     }
+
+    /// <summary>
+    /// The value carrying neither arm, which a union has and the hierarchy it replaced did not.
+    /// </summary>
+    /// <remarks>
+    /// Nothing in the library produces one, so every assertion here is about a value that arrives by
+    /// accident: an uninitialised field, a loose mock answering with the default of the return type, or
+    /// <c>GetValueOrDefault</c> on a nullable result. Each of those reads as an ordinary result at the
+    /// call site, so what the members do with it decides whether the mistake is reported or travels.
+    /// <para>
+    /// Driven because the type's own documentation says what this state does, and a sentence about a
+    /// state no test constructs is a claim rather than a behaviour.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheValueCarryingNeitherArmIsRefusedRatherThanAnswered()
+    {
+        var neither = default(Result<int, string>);
+
+        // The getters name the state they met, rather than the arm the caller happened to ask for: a
+        // message saying "not a failure" sends whoever reads it to audit the failure path.
+        var onSuccess = Assert.Throws<InvalidOperationException>(() => neither.GetSuccess());
+        var onFailure = Assert.Throws<InvalidOperationException>(() => neither.GetFailure());
+        Assert.Equal(onSuccess.Message, onFailure.Message);
+        Assert.DoesNotContain("not a success", onSuccess.Message);
+        Assert.DoesNotContain("not a failure", onFailure.Message);
+
+        Assert.Throws<InvalidOperationException>(() => (int)neither);
+        Assert.Throws<InvalidOperationException>(
+            () => neither.Match(value => $"ok:{value}", error => $"no:{error}"));
+        Assert.Throws<InvalidOperationException>(() => neither.MapSuccess(value => value + 1));
+        Assert.Throws<InvalidOperationException>(() => neither.MapFailure(error => error.Length));
+        Assert.Throws<InvalidOperationException>(
+            () => neither.Bind(value => Result<long, string>.Success(value)));
+        Assert.Throws<InvalidOperationException>(() => neither.Ensure(value => value > 0, "refused"));
+
+        // The pair that answers a question rather than producing a value says no to both, which is the
+        // only answer that is true of a value carrying neither arm.
+        Assert.False(neither.TryGetSuccess(out _));
+        Assert.False(neither.TryGetFailure(out _));
+
+        var (value, error) = neither;
+        Assert.Equal(default, value);
+        Assert.Null(error);
+
+        Assert.Equal("a result carrying neither case", neither.ToString());
+    }
 }

@@ -48,9 +48,11 @@ public interface IAuthorizationDetailsPolicy
     /// drives the allowlist branch.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>
-    /// On success - the raw <see cref="JsonArray"/> that survived validation, empty when there is
-    /// nothing to forward: the input carried no entries, or validation left none. On failure - a
-    /// fully-formed <see cref="OidcError"/> with
+    /// On success - the raw <see cref="JsonArray"/> that survived validation, empty only when the input
+    /// carried no entries to begin with, since there is nothing to forward in that case. An
+    /// implementation that would leave nothing of a non-empty input refuses instead: dropping every entry
+    /// says the request may not be honoured as asked, and callers read an empty answer to a non-empty
+    /// input as a fault rather than as consent. On failure - a fully-formed <see cref="OidcError"/> with
     /// <c>error = invalid_authorization_details</c> (RFC 9396 section 5) and the rejection
     /// description; the endpoint adapter forwards it as-is when its error type is
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.

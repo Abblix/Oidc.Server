@@ -333,9 +333,9 @@ public class ConsentConstraintEnforcerTests
     public async Task EnforceAsync_ValidatorEditsTheTypeInPlace_Throws()
     {
         // Every narrowing validator in this repository's own fixtures edits the entry IN PLACE and
-        // returns the same wrapper, and the typed wrappers alias the source nodes - so a policy that
-        // changed nothing it was asked about can still have rewritten the array it was handed. The
-        // types read before the call are the only untouched copy, and that path has to be guarded too.
+        // returns the same wrapper, and the typed wrappers alias the source nodes - so what a policy
+        // answers with can be the very array it rewrote, carrying a type nobody granted. The types read
+        // before the call are the only untouched copy, and that path has to be guarded too.
         var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var request = CreateRequest(authorizationDetails:
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));

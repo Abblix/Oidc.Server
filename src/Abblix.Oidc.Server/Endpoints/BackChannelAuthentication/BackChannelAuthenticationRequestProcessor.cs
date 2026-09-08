@@ -191,10 +191,10 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// what survives is their intersection - possibly nothing, which is the guaranteed mismatch Section 5.5.1
 	/// already prescribes an outcome for.
 	/// <para>
-	/// A malformed <c>claims</c> qualifier cannot be reported from here, because this runs after the request
-	/// was validated; the validator pipeline refuses one before anything reaches this method, so a failure
-	/// arriving here would mean the pipeline had changed underneath it. Treated as naming nobody, which
-	/// refuses rather than admits.
+	/// A <c>claims</c> qualifier that is malformed, or that no end user can satisfy, cannot be reported from
+	/// here, because this runs after the request was validated; the validator pipeline refuses either one
+	/// before anything reaches this method, so a failure arriving here would mean the pipeline had changed
+	/// underneath it. Treated as naming nobody, which refuses rather than admits.
 	/// </para>
 	/// </remarks>
 	private static string[]? NamedSubjects(ValidBackChannelAuthenticationRequest request)

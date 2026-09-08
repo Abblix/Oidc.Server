@@ -19,14 +19,17 @@ namespace Abblix.Utils;
 /// The pattern applies to the contained value, so a caller writes the case types themselves rather than
 /// wrappers around them.
 /// <para>
-/// The two case types must be DISTINCT for a given instantiation. <c>Result&lt;string, string&gt;</c>
-/// does not compile - the conversion from a string would be ambiguous - and that is a property of the
-/// union rather than a rule this type imposes.
+/// The two case types must be DISTINCT for a given instantiation, because a union tells its cases apart
+/// by type. Writing <c>Result&lt;string, string&gt;</c> outright does not compile - the conversion from a
+/// string would be ambiguous - but the combinators can still FORM one, since a generic instantiation is
+/// not checked that way: <c>Result&lt;int, string&gt;.MapSuccess</c> returning a string produces a value
+/// on which both accessors answer yes. Choose the failure type so that cannot happen.
 /// </para>
 /// <para>
-/// A union is a struct, so <c>default</c> is a value of this type that carries neither case. Nothing
-/// here produces one, and every member below refuses it rather than inventing an answer; the old
-/// hierarchy could not express that state at all, and this is what replaces its closedness.
+/// A union is a struct, so <c>default</c> is a value of this type that carries neither case, and nothing
+/// here produces one - the old hierarchy could not express that state at all. A member that must yield a
+/// value throws rather than inventing one; the <c>TryGet</c> pair answers <c>false</c> to both questions,
+/// deconstruction yields two defaults, and <c>ToString</c> says which state it found.
 /// </para>
 /// </remarks>
 /// <typeparam name="TSuccess">The type of the success value.</typeparam>
@@ -194,9 +197,12 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     /// <returns>The success value.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the result is a failure.</exception>
     public TSuccess GetSuccess()
-        => Value is TSuccess success
-            ? success
-            : throw new InvalidOperationException("The result is not a success.");
+        => Value switch
+        {
+            TSuccess success => success,
+            TFailure => throw new InvalidOperationException("The result is not a success."),
+            _ => throw NeitherCase(),
+        };
 
     /// <summary>
     /// Gets the failure value.
@@ -204,9 +210,12 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     /// <returns>The failure value.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the result is a success.</exception>
     public TFailure GetFailure()
-        => Value is TFailure failure
-            ? failure
-            : throw new InvalidOperationException("The result is not a failure.");
+        => Value switch
+        {
+            TFailure failure => failure,
+            TSuccess => throw new InvalidOperationException("The result is not a failure."),
+            _ => throw NeitherCase(),
+        };
 
     /// <summary>
     /// Determines whether the result is a failure.

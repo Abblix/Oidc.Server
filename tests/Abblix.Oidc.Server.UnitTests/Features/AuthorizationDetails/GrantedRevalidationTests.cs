@@ -113,7 +113,7 @@ public class GrantedRevalidationTests
     }
 
     /// <summary>
-    /// A dispatch that edits in place and answers "nothing to change" is a refusal too.
+    /// A dispatch that edits in place and answers an empty set is a refusal too.
     /// </summary>
     /// <remarks>
     /// The other half, which the shipped composite cannot produce - it always returns a fresh array - so it
@@ -122,9 +122,31 @@ public class GrantedRevalidationTests
     /// the edit would travel into the token unseen.
     /// </remarks>
     [Fact]
-    public async Task ADispatchThatEditsInPlaceAndAnswersNull_IsARefusal()
+    public async Task ADispatchThatEditsInPlaceAndAnswersAnEmptySet_IsARefusal()
     {
         IAuthorizationDetailsPolicy policy = new InPlaceEditingPolicy();
+
+        var refusal = await policy.RefuseAsync(
+            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(refusal);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+    }
+
+    /// <summary>
+    /// A dispatch that removes every entry is a refusal, even though it touched nothing it was handed.
+    /// </summary>
+    /// <remarks>
+    /// Removing an entry is how a validator says the grant may not be issued as stored, so answering an
+    /// empty set is a refusal however it is reached. The probe comparison cannot see this one - the array
+    /// the policy was handed comes back untouched - so the answer itself has to be read, and reading it by
+    /// COUNT is what makes an empty answer indistinguishable from "nothing to change". Without this the
+    /// grant is spent carrying exactly the entries the deployment's own policy deleted.
+    /// </remarks>
+    [Fact]
+    public async Task ADispatchThatRemovesEveryEntry_IsARefusal()
+    {
+        IAuthorizationDetailsPolicy policy = new EmptyingPolicy();
 
         var refusal = await policy.RefuseAsync(
             GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
@@ -202,5 +224,13 @@ public class GrantedRevalidationTests
 
             return Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
         }
+    }
+
+    /// <summary>A dispatch that leaves its input alone and answers with every entry removed.</summary>
+    private sealed class EmptyingPolicy : IAuthorizationDetailsPolicy
+    {
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            JsonArray? raw, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
     }
 }
