@@ -98,9 +98,14 @@ public sealed class ManagementEndpointLocatorTests
     }
 
     /// <summary>
-    /// The route carrying a colon composes intact. It is the one shape here that a URI parser can read as
-    /// something else - a scheme - and the specification names two routes that way.
+    /// The route carrying a colon composes intact, and the specification names two routes that way.
     /// </summary>
+    /// <remarks>
+    /// Not because a parser would read it as a scheme - it cannot, on a path built from parts. The row is
+    /// here because a colon is what any future composition would mangle first, whether by escaping the
+    /// segment or by going back to reference resolution, where a bare <c>subjects:add</c> IS read as a
+    /// scheme. It is the canary for that change, not a guard against today's code.
+    /// </remarks>
     [Fact]
     public void ARouteCarryingAColon_SurvivesComposition()
     {
@@ -126,6 +131,46 @@ public sealed class ManagementEndpointLocatorTests
 
         Assert.Throws<InvalidOperationException>(
             () => locator.ServedAt(route => new Uri($"{Issuer}/other{route}")));
+    }
+
+    /// <summary>
+    /// A route written without a leading separator composes the same way.
+    /// </summary>
+    /// <remarks>
+    /// The five routes this package advertises are all rooted, so this shape does not arise from the
+    /// mapping - but the method is public, and the two spellings fail in opposite directions under any
+    /// composition that cares: a rooted route resolved against a base discards its path, a relative one
+    /// concatenated to a path with no separator welds two segments into one.
+    /// </remarks>
+    [Fact]
+    public void ARouteWithNoLeadingSeparator_ComposesTheSame()
+    {
+        var locator = new ManagementEndpointLocator(BareOptions() with
+        {
+            ManagementApiBase = new Uri("https://gateway.example/ssf"),
+        });
+
+        Assert.Equal(new Uri("https://gateway.example/ssf/stream"), locator.Of("stream"));
+    }
+
+    /// <summary>
+    /// A base whose path begins with two separators keeps its host.
+    /// </summary>
+    /// <remarks>
+    /// This is what a host gets by joining a base already ending in a separator to <c>/ssf</c>, so it is a
+    /// spelling that arrives by accident rather than by intent. Composed as a reference it becomes a
+    /// network-path reference and replaces the AUTHORITY - <c>https://ssf/stream</c> - which sends the
+    /// document's addresses to a host nobody named. The path stays odd; the host does not move.
+    /// </remarks>
+    [Fact]
+    public void ABaseWithADoubledSeparator_KeepsItsHost()
+    {
+        var locator = new ManagementEndpointLocator(BareOptions() with
+        {
+            ManagementApiBase = new Uri("https://gateway.example//ssf"),
+        });
+
+        Assert.Equal("gateway.example", locator.Of(Route)!.Host);
     }
 
     private static SharedSignalsTransmitterOptions BareOptions() => new() { Issuer = Issuer };

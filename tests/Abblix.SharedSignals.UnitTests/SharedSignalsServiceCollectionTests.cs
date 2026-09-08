@@ -125,6 +125,45 @@ public class SharedSignalsServiceCollectionTests
     }
 
     /// <summary>
+    /// A management base that could not be advertised faithfully is refused where the deployment is
+    /// wired, not while it serves the document.
+    /// </summary>
+    /// <remarks>
+    /// The base becomes the five management addresses in a document a receiver reads once and caches, so
+    /// a value found unusable at serving time has already been published. A relative one has no path to
+    /// append a route to; a query or fragment cannot survive one being appended, and dropping either
+    /// silently advertises an address the host did not write.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ssf", UriKind.Relative)]
+    [InlineData("https://gateway.example/ssf?v=1", UriKind.Absolute)]
+    [InlineData("https://gateway.example/ssf#top", UriKind.Absolute)]
+    public void AManagementBaseThatCannotBeAdvertised_IsRefusedAtStartup(string @base, UriKind kind)
+    {
+        var services = SecurityEventsBase();
+
+        Assert.Throws<ArgumentException>(() => services.AddSharedSignalsTransmitter(
+            TransmitterOptions with { ManagementApiBase = new Uri(@base, kind) }));
+    }
+
+    /// <summary>
+    /// The control: an absolute base with a path and nothing else is accepted, so the row above is
+    /// refusing the shapes it names rather than the option itself.
+    /// </summary>
+    [Fact]
+    public void AManagementBaseThatCanBeAdvertised_IsAccepted()
+    {
+        var services = SecurityEventsBase();
+
+        var error = Record.Exception(() => services.AddSharedSignalsTransmitter(
+            TransmitterOptions with
+            {
+                ManagementApiBase = new Uri("https://gateway.example/ssf"),
+            }));
+
+        Assert.Null(error);
+    }
+    /// <summary>
     /// The Security Events core plus the two deployment-knowledge seams a real host wires with
     /// keys - faked here, because these tests measure wiring, not cryptography.
     /// </summary>

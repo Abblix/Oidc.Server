@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
         RequireSecurityEvents(services, nameof(AddSharedSignalsTransmitter));
+        RequireUsableManagementApiBase(options);
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(options);
@@ -293,6 +294,40 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     private static void AddSharedSignalsEventTypes(this IServiceCollection services)
         => services.Configure<SecurityEventsOptions>(options => options.Events.RegisterSharedSignalsEvents());
+
+    /// <summary>
+    /// Refuses a management base this deployment could not advertise faithfully.
+    /// </summary>
+    /// <remarks>
+    /// At startup rather than per request, because what the base becomes is the configuration document a
+    /// receiver reads once and caches: a value discovered to be unusable while serving that document has
+    /// already been published. A relative value has no path to append a route to at all, and a query or
+    /// fragment cannot survive an address with a route appended - so both are said out loud here instead
+    /// of being dropped where nobody sees it.
+    /// </remarks>
+    private static void RequireUsableManagementApiBase(SharedSignalsTransmitterOptions options)
+    {
+        if (options.ManagementApiBase is not { } managementApiBase)
+        {
+            return;
+        }
+
+        if (!managementApiBase.IsAbsoluteUri)
+        {
+            throw new ArgumentException(
+                $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} must be an absolute address: "
+                + "it is published to receivers, which hold nothing to resolve it against.",
+                nameof(options));
+        }
+
+        if (managementApiBase.Query.Length > 0 || managementApiBase.Fragment.Length > 0)
+        {
+            throw new ArgumentException(
+                $"{nameof(SharedSignalsTransmitterOptions.ManagementApiBase)} carries a query or fragment, "
+                + "which cannot survive a route being appended to it. Name the base alone.",
+                nameof(options));
+        }
+    }
 
     /// <summary>
     /// Both roles build on the Security Events core, and the marker of that call is the one

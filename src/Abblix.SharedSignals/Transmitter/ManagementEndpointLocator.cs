@@ -30,6 +30,12 @@ namespace Abblix.SharedSignals.Transmitter;
 /// transmitter serving its streams from configuration has no management API by design.
 /// </para>
 /// <para>
+/// The host's source is a base address rather than the per-route delegate the poll endpoint takes,
+/// because the two questions differ: a poll address varies per stream and cannot be composed, while
+/// the five management routes are fixed by the specification and differ only in where they hang.
+/// Handing a host five delegates to fill in would invite four of them to be right.
+/// </para>
+/// <para>
 /// A host that names a base is TRUSTED with it, exactly as one naming a poll address is: nothing here
 /// can reach a gateway to check. So a base naming somewhere nothing answers produces the same 404 as the
 /// unconditional advertisement this type exists to end - the difference is that it takes a host saying so.
@@ -73,16 +79,30 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     /// management API.
     /// </summary>
     /// <remarks>
-    /// The host's base keeps its own path, which is why the route is appended to it rather than resolved
-    /// against it. Uri reference resolution would DISCARD that path - every route here is rooted, and a
-    /// rooted reference replaces the whole path - so a gateway at <c>https://gw.example/ssf</c> would be
-    /// advertised as <c>https://gw.example/stream</c>, with or without a trailing slash. That is the very
-    /// failure this type exists to end, arriving through the option written to avoid it.
+    /// Built from the base's own parts rather than by resolving the route against it, because reference
+    /// resolution throws the base away in three of the four spellings a host can write, and one of those
+    /// takes the HOST with it. A rooted reference replaces the whole path. A relative one drops the
+    /// base's last segment unless the base ends in a separator, that segment reading as a file rather
+    /// than a directory. And a path beginning with two separators - what a host gets by joining a base
+    /// that already ends in one to <c>/ssf</c> - makes the reference a network-path reference, which
+    /// replaces the AUTHORITY: <c>https://gw.example//ssf</c> would advertise <c>https://ssf/stream</c>.
+    /// <para>
+    /// Joining the parts makes the spelling of both sides stop mattering, so there is no rule here for a
+    /// caller to remember and none to enforce. A query or fragment on the base cannot survive an address
+    /// with a path appended to it, and is refused where the option is read rather than dropped here.
+    /// </para>
     /// </remarks>
     /// <param name="route">The route as the specification names it, relative to wherever the API hangs.
     /// </param>
     public Uri? Of(string route)
-        => options.ManagementApiBase is { } host
-            ? new Uri(host, host.AbsolutePath.TrimEnd('/') + route)
-            : _served?.Invoke(route);
+    {
+        if (options.ManagementApiBase is not { } host)
+        {
+            return _served?.Invoke(route);
+        }
+
+        var address = new UriBuilder(host);
+        address.Path = $"{address.Path.TrimEnd('/')}/{route.TrimStart('/')}";
+        return address.Uri;
+    }
 }
