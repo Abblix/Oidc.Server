@@ -12,17 +12,21 @@ using System.Text;
 namespace Abblix.Utils.UnitTests;
 
 /// <summary>
-/// Contract tests for <see cref="Base64Url"/>. On net9.0+ exercises the BCL implementation;
-/// on net8.0 exercises the in-tree polyfill in <c>Abblix.Utils/Polyfills/Base64Url.cs</c>.
-/// The two sides MUST behave identically - these tests are the parity contract.
+/// What this library relies on <see cref="Base64Url"/> to enforce. They were written as a parity
+/// contract between the base libraries and two in-tree decoders of our own, and both of those are
+/// gone - what is left is the half that was never about our code.
 /// </summary>
 /// <remarks>
-/// BCL's <see cref="Base64Url.DecodeFromChars(System.ReadOnlySpan{char})"/> is strict on the alphabet (rejects standard-base64
-/// <c>+</c> and <c>/</c>) and on length-mod-4-equals-1 inputs, which fixes the main correctness gap
-/// in the legacy <c>HttpServerUtility.UrlTokenDecode</c>. The BCL is permissive on <c>=</c> padding
-/// and on whitespace inside the input - accepting them as compat tolerance. That residual leniency
-/// is wider than RFC 7515 section 3 strict mandates, but narrower than the legacy decoder, and is
-/// acceptable for the migration's scope. Tests assert what BCL actually enforces.
+/// <see cref="Base64Url.DecodeFromChars(System.ReadOnlySpan{char})"/> is strict on the alphabet,
+/// rejecting the standard-base64 <c>+</c> and <c>/</c>, and on inputs whose length leaves a
+/// remainder of one. That strictness is the property this library depends on: a decoder accepting
+/// two spellings of one payload breaks every check that compares BYTES rather than meaning - a
+/// replay cache keyed by the whole token, a jti hash, an at_hash binding.
+/// <para>
+/// It is permissive about <c>=</c> padding and about whitespace inside the input, which is wider
+/// than RFC 7515 section 3 mandates. That leniency is pinned here rather than argued with, because
+/// what these rows are for is noticing if it ever CHANGES.
+/// </para>
 /// </remarks>
 public class Base64UrlTests
 {

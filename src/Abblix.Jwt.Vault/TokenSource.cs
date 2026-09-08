@@ -63,8 +63,10 @@ internal sealed partial class TokenSource(
         DateTimeOffset RefreshAt,
         TimeSpan FullLease);
 
-    // Entered through EnterScope rather than with a lock statement: the statement form on this type is a
-    // C# 13 feature, and net8.0 compiles as C# 12 against the polyfill in Abblix.Utils.
+    // Entered through EnterScope rather than with a lock statement. Both compile here and do the same
+    // thing; the explicit scope is kept because it is visible at the call site which object is held,
+    // while a lock statement over this type reads identically to one over a plain object and hides that
+    // it is not taking a monitor.
     private readonly Lock _gate = new();
     private LeaseState? _state;
     private Task? _refresh;

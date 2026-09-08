@@ -11,14 +11,16 @@ namespace Abblix.Jwt.Encryption;
 
 /// <summary>
 /// AES Key Wrap with Padding (RFC 5649 / NIST SP 800-38F KWP): deterministic authenticated encryption of an
-/// arbitrary-length octet string. Routes to the platform on .NET 10, which ships the standard natively, and to the
-/// <see cref="Rfc5649KeyWrap"/> transcription on earlier target frameworks whose base class library does not.
+/// arbitrary-length octet string, over the base library's implementation of the standard.
 /// </summary>
 /// <remarks>
-/// The two paths implement the same standard, so they wrap and unwrap byte-for-byte identically; a value produced
-/// on one target framework opens on another. That equivalence is proven, not assumed: on .NET 10 the tests run the
-/// native and the transcribed implementations against the same RFC 5649 vectors and cross-check their outputs
-/// directly.
+/// A thin seam rather than an implementation: it exists so callers name one thing, and so the byte-exact contract
+/// has somewhere to be tested. This library once transcribed the standard itself, for frameworks whose base
+/// library had no implementation of it; that is what the seam used to choose between, and it no longer chooses.
+/// <para>
+/// The output is the standard's, pinned against the RFC 5649 section 4 vectors, which is what lets a key ring
+/// written by an older version of this library still open here.
+/// </para>
 /// </remarks>
 internal static class AesKeyWrapPadded
 {
@@ -30,13 +32,9 @@ internal static class AesKeyWrapPadded
     /// </summary>
     public static byte[] Wrap(byte[] keyEncryptionKey, ReadOnlySpan<byte> plaintext)
     {
-#if NET10_0_OR_GREATER
         using var aes = Aes.Create();
         aes.Key = keyEncryptionKey;
         return aes.EncryptKeyWrapPadded(plaintext);
-#else
-        return Rfc5649KeyWrap.Wrap(keyEncryptionKey, plaintext);
-#endif
     }
 
     /// <summary>
@@ -54,7 +52,6 @@ internal static class AesKeyWrapPadded
         if (wrapped.Length < 2 * SemiblockSize || wrapped.Length % SemiblockSize != 0)
             return false;
 
-#if NET10_0_OR_GREATER
         using var aes = Aes.Create();
         aes.Key = keyEncryptionKey;
         try
@@ -68,8 +65,5 @@ internal static class AesKeyWrapPadded
             plaintext = null;
             return false;
         }
-#else
-        return Rfc5649KeyWrap.TryUnwrap(keyEncryptionKey, wrapped, out plaintext);
-#endif
     }
 }

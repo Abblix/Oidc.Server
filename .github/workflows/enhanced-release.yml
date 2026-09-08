@@ -131,7 +131,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.0'
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
         timeout-minutes: 3
       - name: Log build context
         run: |
@@ -200,6 +206,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
+          # The samples prepared for the release being cut, rather than the default branch, which
+          # carries what people use TODAY and is built against the last released packages. This job
+          # substitutes the version under test into a sample and builds it, so the sample has to
+          # target the framework that version ships for and compile against its surface - and the
+          # default branch cannot, while it also has to keep working for everyone on the previous
+          # release.
+          #
+          # This line goes when that branch merges into the default one, which is part of shipping
+          # the release rather than an afterthought: left behind, it pins this check to a branch
+          # nobody updates any more, and the check keeps passing while proving less every month.
+          ref: release/3.0
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -212,7 +229,11 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.0'
+          # The working copy of THIS repository is under main-repo/, so the pin is there rather
+          # than at the workspace root. The GettingStarted build below runs outside that
+          # directory on purpose: it proves the published package works for a consumer, whose SDK
+          # is whatever they have rather than whatever we pinned.
+          global-json-file: main-repo/global.json
         timeout-minutes: 3
       - name: Setup local package source
         run: |
@@ -386,10 +407,27 @@ jobs:
           name: nuget-packages
           path: nupkg
         timeout-minutes: 3
+      # global.json is the one place naming the SDK, and this job has no working copy to read it
+      # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
+      # than naming a version here, which would drift from the build that produced the packages.
+      - name: Fetch the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: global.json
+          sparse-checkout-cone-mode: false
+          # Nothing here pushes, and this job holds a publishing token.
+          persist-credentials: false
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.0'
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
         timeout-minutes: 3
       - name: List packages to be published
         run: |
@@ -437,10 +475,27 @@ jobs:
           name: nuget-packages
           path: nupkg
         timeout-minutes: 3
+      # global.json is the one place naming the SDK, and this job has no working copy to read it
+      # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
+      # than naming a version here, which would drift from the build that produced the packages.
+      - name: Fetch the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: global.json
+          sparse-checkout-cone-mode: false
+          # Nothing here pushes, and this job holds a publishing token.
+          persist-credentials: false
+        timeout-minutes: 3
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.0'
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
         timeout-minutes: 3
       - name: List packages to be published
         run: |

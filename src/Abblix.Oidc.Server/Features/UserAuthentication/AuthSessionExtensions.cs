@@ -149,10 +149,6 @@ public static class AuthSessionExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static JsonNode Clone(JsonNode node)
     {
-#if NET8_0_OR_GREATER
         return node.DeepClone();
-#else
-        return JsonNode.Parse(node.ToJsonString())!;
-#endif
     }
 }

@@ -32,7 +32,7 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
                 continue;
 
             var results = new List<ValidationResult>();
-            if (!Validator.TryValidateObject(argument, new ValidationContext(argument), results, validateAllProperties: true))
+            if (!await Validator.TryValidateObjectAsync(argument, new ValidationContext(argument), results, validateAllProperties: true))
                 (failures ??= []).AddRange(results);
         }
 

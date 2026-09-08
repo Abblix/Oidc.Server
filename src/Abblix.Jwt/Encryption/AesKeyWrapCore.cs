@@ -10,12 +10,24 @@ using System.Security.Cryptography;
 namespace Abblix.Jwt.Encryption;
 
 /// <summary>
-/// The RFC 3394 section 2.2 wrapping rounds, shared by plain AES Key Wrap (<see cref="AesKeyWrap"/>, initial register the
-/// fixed A6A6... value) and AES Key Wrap with Padding (<see cref="Rfc5649KeyWrap"/>, initial register the RFC 5649
-/// Alternative Initial Value). Both wrap constructions differ only in that initial register and the check applied to
-/// it after unwrapping; the six-round transformation over the register and the data semiblocks is identical, so it
-/// lives here once. Correctness of the shared rounds is pinned twice over - by the RFC 3394 section 4 vectors through
-/// <c>AesKeyWrapTests</c> and by the RFC 5649 section 4 vectors through <c>AesKeyWrapPaddedTests</c>.
+/// The RFC 3394 section 2.2 wrapping rounds, used by plain AES Key Wrap (<see cref="AesKeyWrap"/>, whose initial
+/// register is the fixed A6A6... value). The padded construction of RFC 5649 differs only in that register and in
+/// the check applied to it after unwrapping, and it is the base library's to implement rather than this
+/// library's - see <see cref="AesKeyWrapPadded"/>. The rounds stayed here when the transcription of the padded
+/// construction went, because the plain construction still needs them and is still ours.
+/// <para>
+/// Correctness of the rounds is pinned by the RFC 3394 section 4 vectors through <c>AesKeyWrapTests</c>.
+/// </para>
+/// <para>
+/// This is expected to become the base library's too, and then this type and its caller go the way the
+/// padded construction already did. The API is approved and implemented
+/// (https://github.com/dotnet/runtime/issues/130490), merged for the release after this one, and its
+/// pull request says it will be backported - which is an intention recorded in prose rather than a
+/// shipped fact, so the check is to look for <c>Aes.EncryptKeyWrap</c> on the first release candidate
+/// rather than to assume it. The reason the API exists is this exact situation: RFC 7518 defines the
+/// JWE key management algorithms strictly as RFC 3394, so every JOSE library keeps a copy of
+/// security-critical code that has no business being duplicated.
+/// </para>
 /// </summary>
 internal static class AesKeyWrapCore
 {

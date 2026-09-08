@@ -102,11 +102,7 @@ public static class CertificateForwardingExtensions
     private static X509Certificate2 LoadCertificate2(string value)
     {
         var bytes = Convert.FromBase64String(NormalizeBase64(value));
-#if NET9_0_OR_GREATER
             return X509CertificateLoader.LoadCertificate(bytes);
-#else
-        return new X509Certificate2(bytes);
-#endif
     }
 
     /// <summary>

@@ -11,7 +11,7 @@
        change to the set keeps building the old one and stays green. The two source generators
        override this - they load into the compiler and must be netstandard2.0. -->
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net11.0</TargetFrameworks>
   </PropertyGroup>
 
 </Project>

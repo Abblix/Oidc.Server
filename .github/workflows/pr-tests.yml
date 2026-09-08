@@ -22,13 +22,16 @@ jobs:
     uses: ./.github/workflows/test-shards.yml
 
   build:
-    # Every framework the packages ship, which the suite structurally cannot see: each test project
-    # targets net10.0 alone, so anything that compiles there and refuses on net8.0 or net9.0 - a
-    # language feature of a newer version, a BCL type that arrived later - passes every shard. Such a
-    # refusal used to surface only after the merge, in the job that packs the dev build, where it
-    # stops publishing without failing anything a pull request can see: consumers floating the
-    # prerelease range then keep restoring the last good build and notice nothing.
-    name: Build all target frameworks
+    # The whole SOLUTION in Release, which the shards do not cover: they build what the test
+    # projects reach, and a project nothing references is compiled by nothing else a pull request
+    # runs. Every shipped project is reachable today, so this job currently agrees with the shards
+    # on every file - the difference is in what is MEASURED, and the day someone adds a project no
+    # test names, only this job sees it.
+    #
+    # It used to justify itself differently, by the frameworks: the suite ran on one and the
+    # packages shipped for three, so anything refused by an older compiler passed every shard and
+    # surfaced after the merge. That reason went with the other two frameworks.
+    name: Build the solution
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,12 +56,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          # Every target framework the projects declare, because the point of this job is to compile
-          # all of them: the 10.x SDK builds net8.0 and net9.0 only with their runtime packs present.
-          dotnet-version: |
-            8.x
-            9.x
-            10.x
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
         timeout-minutes: 3
       - name: Cache NuGet packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
