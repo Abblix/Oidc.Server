@@ -11,11 +11,20 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests.Encryption;
 
 /// <summary>
-/// Known-answer tests for AES Key Wrap with Padding (RFC 5649). The two RFC 5649 section 4 vectors pin the multi-block and
-/// the single-block wrapping paths of the <see cref="Rfc5649KeyWrap"/> transcription byte-exact, and a cross-check
-/// proves the transcription and the platform implementation (used on .NET 10 via <see cref="AesKeyWrapPadded"/>)
-/// agree, so a value wrapped on one target framework opens on another.
+/// Known-answer tests for AES Key Wrap with Padding, against the two vectors RFC 5649 section 4
+/// publishes.
 /// </summary>
+/// <remarks>
+/// The vectors belong to the specification rather than to any implementation of it, which is why they
+/// outlived the transcription they were first written against. What they hold is that a value this
+/// library wraps is the value the standard says it should be - and therefore that a key ring written
+/// by an older version of this library, or by anything else implementing the same standard, still
+/// opens here.
+/// <para>
+/// The two are chosen for different paths through the algorithm: twenty octets is more than one
+/// semiblock and runs the RFC 3394 rounds, seven octets is a single padded semiblock and does not.
+/// </para>
+/// </remarks>
 public class AesKeyWrapPaddedTests
 {
     // RFC 5649 section 4: the AES-192 key encryption key shared by both example vectors.
@@ -31,65 +40,44 @@ public class AesKeyWrapPaddedTests
     [InlineData(
         "466f7250617369",
         "afbeb0f07dfbf5419200f2ccb50bb24f")]
-    public void Rfc5649KeyWrap_MatchesRfc5649Vector(string plaintextHex, string expectedWrappedHex)
+    public void MatchesRfc5649Vector(string plaintextHex, string expectedWrappedHex)
     {
         var plaintext = Convert.FromHexString(plaintextHex.Replace(" ", ""));
         var expectedWrapped = Convert.FromHexString(expectedWrappedHex);
 
-        var wrapped = Rfc5649KeyWrap.Wrap(Rfc5649Kek, plaintext);
+        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, plaintext);
         Assert.Equal(expectedWrapped, wrapped);
 
-        Assert.True(Rfc5649KeyWrap.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
+        Assert.True(AesKeyWrapPadded.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
         Assert.Equal(plaintext, recovered);
     }
 
+    /// <summary>
+    /// A wrapped value carries its own integrity check, so a changed byte does not decrypt to
+    /// something plausible - it is refused.
+    /// </summary>
     [Fact]
-    public void Rfc5649KeyWrap_TamperedValue_FailsToUnwrap()
+    public void TamperedValue_FailsToUnwrap()
     {
-        var wrapped = Rfc5649KeyWrap.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
-        wrapped[0] ^= 0x01;
+        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
+        wrapped[0] ^= 0xff;
 
-        Assert.False(Rfc5649KeyWrap.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
-        Assert.Null(recovered);
-    }
-
-    [Fact]
-    public void Rfc5649KeyWrap_WrongKey_FailsToUnwrap()
-    {
-        var wrapped = Rfc5649KeyWrap.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
-        var wrongKeyEncryptionKey = Convert.FromHexString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
-
-        Assert.False(Rfc5649KeyWrap.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var recovered));
+        Assert.False(AesKeyWrapPadded.TryUnwrap(Rfc5649Kek, wrapped, out var recovered));
         Assert.Null(recovered);
     }
 
     /// <summary>
-    /// The transcription and the dispatcher (which is the native platform implementation on .NET 10) wrap to the
-    /// same bytes across the padding boundaries - lengths that fall inside a semiblock, exactly on it, and spanning
-    /// several - proving the two implementations of RFC 5649 are interchangeable.
+    /// And the same for the right value under the wrong key, which is what a key ring entry looks like
+    /// after a rotation the reader does not know about.
     /// </summary>
-    [Theory]
-    [InlineData(1)]
-    [InlineData(7)]
-    [InlineData(8)]
-    [InlineData(9)]
-    [InlineData(16)]
-    [InlineData(20)]
-    [InlineData(31)]
-    [InlineData(64)]
-    public void Rfc5649KeyWrap_AgreesWithDispatcher(int plaintextLength)
+    [Fact]
+    public void WrongKey_FailsToUnwrap()
     {
-        var keyEncryptionKey = Convert.FromHexString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
-        var plaintext = new byte[plaintextLength];
-        for (var i = 0; i < plaintextLength; i++)
-            plaintext[i] = (byte)(i * 7 + 1);
+        var wrapped = AesKeyWrapPadded.Wrap(Rfc5649Kek, Convert.FromHexString("466f7250617369"));
+        var wrongKeyEncryptionKey =
+            Convert.FromHexString("000102030405060708090a0b0c0d0e0f1011121314151617");
 
-        var transcribed = Rfc5649KeyWrap.Wrap(keyEncryptionKey, plaintext);
-        var dispatched = AesKeyWrapPadded.Wrap(keyEncryptionKey, plaintext);
-
-        Assert.Equal(dispatched, transcribed);
-
-        Assert.True(AesKeyWrapPadded.TryUnwrap(keyEncryptionKey, transcribed, out var recovered));
-        Assert.Equal(plaintext, recovered);
+        Assert.False(AesKeyWrapPadded.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var recovered));
+        Assert.Null(recovered);
     }
 }
