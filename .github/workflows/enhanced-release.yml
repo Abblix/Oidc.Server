@@ -206,6 +206,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
+          # The samples prepared for the release being cut, rather than the default branch, which
+          # carries what people use TODAY and is built against the last released packages. This job
+          # substitutes the version under test into a sample and builds it, so the sample has to
+          # target the framework that version ships for and compile against its surface - and the
+          # default branch cannot, while it also has to keep working for everyone on the previous
+          # release.
+          #
+          # This line goes when that branch merges into the default one, which is part of shipping
+          # the release rather than an afterthought: left behind, it pins this check to a branch
+          # nobody updates any more, and the check keeps passing while proving less every month.
+          ref: release/3.0
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
