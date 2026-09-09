@@ -62,11 +62,14 @@ jobs:
           # job keeps building on the old SDK, green, until something needs the new one. The
           # version itself still moves by hand, but it moves in one place.
           #
-          # That file also turns roll-forward OFF, which is what makes "the same SDK" true rather
-          # than nearly true: with it on, the runner installed a whole feature band ahead of the
-          # version named, and the difference surfaced as an obsoletion that reproduces only on the
-          # SDK the runner chose: red here, green wherever the named version was the one installed,
-          # for a reason no diff contained.
+          # That file also sets roll-forward to "disable", which is what makes "the same SDK" true
+          # rather than nearly true. This action treats one literal value specially: on
+          # "latestFeature" it drops the pinned build and installs the newest one on that channel,
+          # which was a later prerelease of the same feature band. The difference surfaced as an
+          # obsoletion reproducing only on the SDK the runner chose - red here, green wherever the
+          # named version was the one installed, for a reason no diff contained. The tell is the
+          # "--channel" argument in this step own log rather than a version comparison: the two
+          # builds carry the same band, so comparing them says nothing happened.
           global-json-file: global.json
         timeout-minutes: 3
       - name: Cache NuGet packages
