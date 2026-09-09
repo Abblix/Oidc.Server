@@ -32,7 +32,11 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.6.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
+    <!-- No SourceLink package: the SDK has carried it since .NET 8, and the properties that drive it
+         (PublishRepositoryUrl, EmbedUntrackedSources) live in each project as before. Referencing it
+         explicitly pulls Microsoft.Build.Tasks.Git in, which carries an advisory - and with auditing
+         set to fail on a low-severity finding, a restore against fresh advisory data turns every
+         packable project red. -->
     <!-- xunit.v3 picks the Microsoft Testing Platform major version by package variant: the plain
          xunit.v3 metapackage targets MTP v1, while xunit.v3.mtp-v2 targets MTP v2. We reference the
          mtp-v2 variant (below) so the current Microsoft.Testing.Extensions.*, which require MTP 2.x,

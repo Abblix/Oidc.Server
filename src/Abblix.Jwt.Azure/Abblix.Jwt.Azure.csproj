@@ -37,7 +37,6 @@
     <PackageReference Include="Azure.Security.KeyVault.Keys" />
     <PackageReference Include="Azure.Storage.Blobs" />
     <PackageReference Include="Microsoft.Extensions.Http" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     <PackageReference Update="SonarAnalyzer.CSharp">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
