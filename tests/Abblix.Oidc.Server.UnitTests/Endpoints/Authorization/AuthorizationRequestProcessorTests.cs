@@ -1742,10 +1742,11 @@ public class AuthorizationRequestProcessorTests
     /// every time instead of one run in a thousand. The shipped collection hands a walker a snapshot
     /// and cannot refuse one, while copying out reads the size first and takes the contents after.
     /// </remarks>
-    private sealed class GrowsWhileMeasured(params string[] items) : ICollection<string>
+    private sealed class GrowsWhileMeasured(int growOnMeasure, params string[] items)
+        : ICollection<string>
     {
         private readonly List<string> _items = [..items];
-        private bool _grown;
+        private int _measures;
 
         public int Count
         {
@@ -1753,11 +1754,8 @@ public class AuthorizationRequestProcessorTests
             {
                 var answer = _items.Count;
 
-                if (!_grown)
-                {
-                    _grown = true;
-                    _items.Add("arrived-during-the-read");
-                }
+                if (++_measures == growOnMeasure)
+                    _items.Add($"arrived-during-read-{growOnMeasure}");
 
                 return answer;
             }
@@ -1779,18 +1777,24 @@ public class AuthorizationRequestProcessorTests
     /// <remarks>
     /// The question is not what the list says but HOW it is read. Asking for the size and then copying
     /// into an array of that size fails when the size moved in between; walking the collection asks it
-    /// for a view it is prepared to give, which the shipped one always is. The window is the one that
-    /// matters: this request's client is already recorded on the session and the store has not been
-    /// told, so a read that throws here loses the request AND the record, and the client is missing
-    /// from the logout that session drives.
+    /// for a view it is prepared to give, which the shipped collection always is.
+    /// <para>
+    /// Driven at both reads, because they are two different moments and only one of them is the bad
+    /// one. The first happens before the provider is handed the session; the second after this
+    /// request's client is already recorded and before the store has been told, so a read that throws
+    /// there loses the request AND the record, and the client is missing from the logout that session
+    /// drives. A fixture growing under the first read leaves the second one unguarded.
+    /// </para>
     /// </remarks>
-    [Fact]
-    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed(int whichRead)
     {
         var request = CreateRequest();
         var session = CreateAuthSession() with
         {
-            AffectedClientIds = new GrowsWhileMeasured(TestConstants.DefaultClientId),
+            AffectedClientIds = new GrowsWhileMeasured(whichRead, TestConstants.DefaultClientId),
         };
 
         var consents = CreateConsents();
@@ -1833,6 +1837,11 @@ public class AuthorizationRequestProcessorTests
         Assert.NotNull(capture.Grant);
         Assert.Equal(2, session.AffectedClientIds.Count);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+
+        // What the response tells the client to watch names each client once, however many times the
+        // session happens to list it - one client does not deserve two front-channel logout calls.
+        var authenticated = Assert.IsType<SuccessfullyAuthenticated>(await _processor.ProcessAsync(request));
+        Assert.Equal([TestConstants.DefaultClientId], authenticated.AffectedClientIds);
     }
 
     /// <summary>
