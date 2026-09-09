@@ -64,8 +64,9 @@ jobs:
           #
           # That file also turns roll-forward OFF, which is what makes "the same SDK" true rather
           # than nearly true: with it on, the runner installed a whole feature band ahead of the
-          # version named, and the difference surfaced as an obsoletion nobody could reproduce -
-          # a build red here and green on every machine, for a reason no diff contained.
+          # version named, and the difference surfaced as an obsoletion that reproduces only on the
+          # SDK the runner chose: red here, green wherever the named version was the one installed,
+          # for a reason no diff contained.
           global-json-file: global.json
         timeout-minutes: 3
       - name: Cache NuGet packages
