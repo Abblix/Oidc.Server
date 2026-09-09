@@ -128,17 +128,27 @@ public class AuthorizationRequestProcessor(
 
 		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
-		// lent deliberately AffectedClientIds: what the provider leaves in this list is compared against
-		// the copy above, and whatever it took out goes back before anything else runs.
-		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
+		UserConsents userConsents;
+		try
+		{
+			// lent deliberately AffectedClientIds: what the provider leaves in this list is compared
+			// against the copy above, and whatever it took out goes back below, whichever way this ends.
+			userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
+		}
+		finally
+		{
+			// Put back whatever the provider took out of the list of clients this session touches, before
+			// anything else can happen. That list is what logout iterates to reach each client, and the
+			// provider was never asked about the clients already on it. Only ever ADDED to: an entry the
+			// provider put there stays, since removing it would lose a client for the same reason.
+			//
+			// In a finally, because a throw is the one way out of here that no return below covers, and a
+			// host that keeps the session object between requests would carry the provider's edit onward
+			// with nothing left to undo it.
+			foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
+				authSession.AffectedClientIds.Add(id);
+		}
 
-		foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
-			authSession.AffectedClientIds.Add(id);
-
-		// Put back whatever the provider took out of the list of clients this session touches, before
-		// anything else can return. That list is what logout iterates to reach each client, and the
-		// provider was never asked about the clients already on it. Only ever ADDED to: an entry the
-		// provider put there stays, since removing it would lose a client for the same reason.
 		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
 		if (userConsents.Pending is { Scopes.Length: > 0 }
 			or { Resources.Length: > 0 }
@@ -234,12 +244,15 @@ public class AuthorizationRequestProcessor(
 		if (!authSession.AffectedClientIds.Contains(clientId))
 			authSession.AffectedClientIds.Add(clientId);
 
-		// Written whenever the session carries more than the copy taken before the provider saw it, which
-		// is what the store handed over. Asked as one question about the SESSION rather than about this
-		// client: a provider that named another client changed the object and told the store nothing, and
-		// that client is then missing from logout exactly like one this request would have added. Nothing
-		// above removes and nothing adds twice, so a difference is a difference in count.
-		if (authSession.AffectedClientIds.Count != alreadyAffected.Length)
+		// Written whenever the session names a client the copy did not, and the copy is what the store
+		// handed over. Asked as one question about the SESSION rather than about this client: a provider
+		// that named another client changed the object and told the store nothing, and that client is then
+		// missing from logout exactly like one this request would have added.
+		//
+		// Compared as sets, because who the session touches is a set even where the collection holding
+		// them is not: a list that arrived carrying one client twice must not read as changed, and must
+		// not read as shortened when a provider drops one of the copies.
+		if (!authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal).SetEquals(alreadyAffected))
 			await authSessionService.SignInAsync(authSession);
 
 		// What the response tells the client to watch: what this server knows the session touches, which is

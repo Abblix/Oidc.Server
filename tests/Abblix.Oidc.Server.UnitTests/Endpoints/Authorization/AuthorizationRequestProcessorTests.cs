@@ -155,7 +155,8 @@ public class AuthorizationRequestProcessorTests
         {
             AuthContextClassRef = acr,
             // AffectedClientIds is left at its default on purpose: hard-coding a List here would test the
-            // fixture's collection rather than the one a session actually carries.
+            // fixture's collection rather than the one a session actually carries - except where that
+            // collection IS the subject, which is what the two tests about a host-supplied list are for.
         };
     }
 
@@ -1623,6 +1624,71 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.Single(session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+    /// <summary>
+    /// A consent provider that throws still leaves the session carrying what the store gave it.
+    /// </summary>
+    /// <remarks>
+    /// The one way out of the method that no refusal covers. A host that keeps the session object
+    /// between requests would otherwise carry whatever the provider did to this list onward, with
+    /// nothing left to undo it, and the clients it dropped are the ones logout can no longer reach.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderThatThrows_StillKeepsTheClientsTheStoreGave()
+    {
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ThrowsAsync(new InvalidOperationException("the consent provider gave up"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+
+        Assert.Contains(bystander, session.AffectedClientIds);
+    }
+
+    /// <summary>
+    /// A session that arrived carrying one client twice is neither written nor shortened.
+    /// </summary>
+    /// <remarks>
+    /// Who a session touches is a set even where the collection holding them is not, and a host may
+    /// supply a list that already holds a duplicate from before this was guarded. Counted rather than
+    /// compared as a set, a provider dropping one of the copies would read as a session that lost a
+    /// client, and that shortened list would be written to the store.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ASessionArrivingWithADuplicate_IsNotWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+            },
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Remove(TestConstants.DefaultClientId))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
     }
     /// <summary>
