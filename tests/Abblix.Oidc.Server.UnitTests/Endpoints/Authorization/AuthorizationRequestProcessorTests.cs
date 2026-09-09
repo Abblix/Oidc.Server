@@ -1048,9 +1048,10 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(request);
 
         // Assert
+        Assert.IsType<SuccessfullyAuthenticated>(result);
         _authSessionService.Verify(s => s.SignInAsync(It.IsAny<AuthSession>()), Times.Never);
     }
 
@@ -1761,6 +1762,8 @@ public class AuthorizationRequestProcessorTests
             }
         }
 
+        public int Measures => _measures;
+
         public bool IsReadOnly => false;
         public void Add(string item) => _items.Add(item);
         public void Clear() => _items.Clear();
@@ -1787,23 +1790,35 @@ public class AuthorizationRequestProcessorTests
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed(int whichRead)
+    [InlineData(1, 0)]
+    [InlineData(2, 1)]
+    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed(
+        int whichRead, int expectedWrites)
     {
         var request = CreateRequest();
-        var session = CreateAuthSession() with
-        {
-            AffectedClientIds = new GrowsWhileMeasured(whichRead, TestConstants.DefaultClientId),
-        };
+        var clients = new GrowsWhileMeasured(whichRead, TestConstants.DefaultClientId);
+        var session = CreateAuthSession() with { AffectedClientIds = clients };
 
         var consents = CreateConsents();
         SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         var result = await _processor.ProcessAsync(request);
+        var measures = clients.Measures;
 
         Assert.IsType<SuccessfullyAuthenticated>(result);
         Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+
+        // The case numbers are positions in the sequence of size reads, not the sites themselves, so
+        // another read anywhere on this path moves both cases onto a different pair and leaves the
+        // guarded one unguarded with the theory still green. Pinning the count turns that into a
+        // failure. Taken before the assertions above, so it counts what the request did.
+        Assert.Equal(2, measures);
+
+        // The two cases differ in what the store is told, and that difference is the point of the
+        // second window: an arrival inside both snapshots leaves the session unchanged, while one
+        // landing between them is a real change and must be written. Without this, taking both
+        // snapshots from the same read would leave every case passing.
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Exactly(expectedWrites));
     }
 
     /// <summary>
@@ -1831,16 +1846,18 @@ public class AuthorizationRequestProcessorTests
         var consents = CreateConsents();
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(request);
 
         // The negative says nothing on its own unless the request reached the point that would write.
         Assert.NotNull(capture.Grant);
         Assert.Equal(2, session.AffectedClientIds.Count);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
 
-        // What the response tells the client to watch names each client once, however many times the
-        // session happens to list it - one client does not deserve two front-channel logout calls.
-        var authenticated = Assert.IsType<SuccessfullyAuthenticated>(await _processor.ProcessAsync(request));
+        // The response names each client once, however many times the session happens to list it.
+        // The end-session processor walks the session own list rather than this one, so no
+        // notification the library sends is saved here; what changes is what a host reading the
+        // response is told to watch.
+        var authenticated = Assert.IsType<SuccessfullyAuthenticated>(result);
         Assert.Equal([TestConstants.DefaultClientId], authenticated.AffectedClientIds);
     }
 
@@ -1867,7 +1884,7 @@ public class AuthorizationRequestProcessorTests
         };
 
         var consents = CreateConsents();
-        SetupSuccessfulAuthCodeFlow(request, session, consents);
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
@@ -1876,6 +1893,8 @@ public class AuthorizationRequestProcessorTests
 
         await _processor.ProcessAsync(request);
 
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
     }
     /// <summary>
