@@ -1536,6 +1536,38 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// A consent provider that drops the client from the session leaves it recorded there all the same.
+    /// </summary>
+    /// <remarks>
+    /// The provider is handed the live session, and the list of clients a session touches is what logout
+    /// iterates to reach them. Whether this client still has to be written is a question about the
+    /// session as it now stands, not about the copy taken before the provider saw it: judged from the
+    /// copy, a client the provider removed reads as one already recorded, so nothing is written and the
+    /// end user's logout never reaches it.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderRemovingTheClient_RecordsItAnyway()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId);
+
+        var consents = CreateConsents();
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Remove(TestConstants.DefaultClientId))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+        Assert.NotNull(capture.Grant);
+    }
+
+    /// <summary>
     /// Wires up the strict Mocks for a successful authorization-code flow and returns a
     /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
     /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from

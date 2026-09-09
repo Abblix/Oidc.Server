@@ -222,13 +222,17 @@ public class AuthorizationRequestProcessor(
 
 		// Mark the client as affected by this session and update the session's state.
 		// Ensures the client is tied to the current session, updating its state to include the session's client ID.
-		// Built from what was read before the provider saw the session, so the answer says what this
-		// server knows the session touches. The live session is still the thing that gets persisted -
-		// what a store keeps is its own business - but it is not what this response is derived from.
-		var clientIsNewToTheSession = !alreadyAffected.Contains(clientId);
-		string[] affectedClientIds = clientIsNewToTheSession ? [..alreadyAffected, clientId] : alreadyAffected;
+		// What the response tells the client to watch, built from the copy taken before the provider saw
+		// the session: this answer says what this server knows the session touches, and the provider is
+		// not one of the things it learns that from.
+		string[] affectedClientIds = alreadyAffected.Contains(clientId)
+			? alreadyAffected
+			: [..alreadyAffected, clientId];
 
-		if (clientIsNewToTheSession)
+		// Whether the session still has to be written asks the LIVE session instead, because it is a
+		// question about what is missing NOW: this list is what logout iterates to reach each client, so a
+		// provider that dropped the entry has to have it put back rather than be taken at its word.
+		if (!authSession.AffectedClientIds.Contains(clientId))
 		{
 			authSession.AffectedClientIds.Add(clientId);
 			await authSessionService.SignInAsync(authSession);

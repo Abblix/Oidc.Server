@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 /// looks like a request, it just no longer says what was asked for.
 /// <para>
 /// The shape is an ORDER of statements inside one method, which is why this walks the syntax rather than
-/// the text. What it does NOT see is listed on <see cref="TheShapesThisTestCannotSee"/>.
+/// the text. What it does NOT see is listed on <see cref="TheShapesThisWalkerCannotSee"/>, and what it
+/// cannot even READ is asserted by <see cref="EverySourceIsParsedOrKnownToBeUnreadable"/>.
 /// </para>
 /// </remarks>
 public class ValueHandedToAHostSeamTests
@@ -53,33 +54,57 @@ public class ValueHandedToAHostSeamTests
         => string.Concat(node.ToString().Where(c => !char.IsWhiteSpace(c)));
 
     /// <summary>
-    /// The marker a site uses to say the read-back is the point, and why.
+    /// The marker a site uses to say that touching the value afterwards is the point, and why.
     /// </summary>
     /// <remarks>
-    /// Touching a value after handing it to a store is sometimes the whole intent - echoing what was
-    /// registered, including the defaults the server assigned, or writing the change that gets
-    /// persisted. The walker cannot tell that from a yardstick somebody moved, so the site says which
+    /// Reading a value back after handing it to a store is sometimes the whole intent - echoing what was
+    /// registered, including the defaults the server assigned - and so is writing the change that gets
+    /// persisted. The walker cannot tell either from a yardstick somebody moved, so the site says which
     /// it is, at the site, with a reason.
     /// <para>
-    /// The marker NAMES the member it excuses, so it stays a silence about one thing rather than about
-    /// the call: a read of something else added later is reported as if the marker were not there. And
-    /// a marker describing nothing fails, so one left behind by a later edit is not a silence anybody
-    /// keeps.
+    /// The marker NAMES the members it excuses, comma-separated, so it stays a silence about those and not
+    /// about the call: a read of anything else is reported as if the marker were not there. And every name
+    /// it carries must match a read that is still there, so a marker outliving what it excused fails
+    /// rather than going on excusing whatever lands next.
     /// </para>
     /// </remarks>
-    private const string Declared = "// lent deliberately";
+    private const string Declared = "lent deliberately ";
 
-    private static bool IsDeclared(SyntaxNode call, string member)
+    /// <summary>The members a statement declares, as written above it.</summary>
+    /// <remarks>
+    /// The comment block above the statement is read as ONE line, so a list too long for a line of code
+    /// wraps the way prose does. The names run to the colon, and what follows the colon is the reason,
+    /// which nothing here reads - it is for whoever arrives at the site.
+    /// </remarks>
+    private static string[] MembersDeclaredOn(SyntaxNode statement)
+    {
+        var trivia = statement.GetLeadingTrivia().ToString();
+        if (!trivia.Contains(Declared, StringComparison.Ordinal)) return [];
+
+        var joined = string.Join(' ', trivia
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Select(line => line.StartsWith("//", StringComparison.Ordinal) ? line[2..] : line));
+
+        var start = joined.IndexOf(Declared, StringComparison.Ordinal);
+        if (start < 0) return [];
+
+        var names = joined[(start + Declared.Length)..];
+        var end = names.IndexOf(':');
+        return end < 0
+            ? []
+            : names[..end].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>The members the site around one call declares.</summary>
+    private static IReadOnlyCollection<string> DeclaredMembers(SyntaxNode call)
     {
         for (var node = call; node is not null; node = node.Parent)
         {
-            if (node is not StatementSyntax) continue;
-
-            var leading = node.GetLeadingTrivia().ToString();
-            return leading.Contains($"{Declared} {member}:", StringComparison.Ordinal);
+            if (node is StatementSyntax) return MembersDeclaredOn(node);
         }
 
-        return false;
+        return [];
     }
 
     private static string RepositoryRoot()
@@ -92,7 +117,7 @@ public class ValueHandedToAHostSeamTests
         return directory.FullName;
     }
 
-    private static IReadOnlyList<(string Path, CompilationUnitSyntax Root)> LibrarySources()
+    private static IReadOnlyList<(string Path, SyntaxTree Tree)> LibrarySources()
     {
         var source = Path.Combine(RepositoryRoot(), "src");
         var files = Directory
@@ -101,30 +126,87 @@ public class ValueHandedToAHostSeamTests
                            && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
             .ToArray();
 
-        // A file that cannot be read hides every occurrence in it from every walker, and reads exactly
-        // like a clean one - so the count is asserted rather than trusted.
+        // A file that cannot be read hides every occurrence in it from every walker, and reads exactly like
+        // a clean one - so the count is asserted rather than trusted. It is a weak control on its own; the
+        // one that proves the matcher reaches a positive is the declaration count.
         Assert.True(files.Length > 1000, $"only {files.Length} library sources found - wrong root?");
 
         return files
-            .Select(path => (path, (CompilationUnitSyntax)CSharpSyntaxTree.ParseText(File.ReadAllText(path)).GetRoot()))
+            // The path travels with the tree, so a node can say which file it came from - two of the
+            // assertions below name a site, and a tree parsed without one names nothing.
+            .Select(path => (path, CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path)))
             .ToArray();
     }
 
+    private static IEnumerable<SyntaxNode> After(SyntaxNode body, SyntaxNode call)
+        => body.DescendantNodes().Where(node => node.SpanStart > call.Span.End);
+
     /// <summary>
-    /// Every offending pair, as "file(line): the call, then the read".
+    /// Every lendable member of <paramref name="lent"/> read after the call, once each.
     /// </summary>
-    private static (IReadOnlyList<string> Offences, int Declared) Walk(
-        IReadOnlyList<(string Path, CompilationUnitSyntax Root)> sources)
+    /// <remarks>
+    /// Two shapes, because the repository writes both: an ordinary member access, and a property pattern,
+    /// where the member never appears as an access rooted at the value - <c>x is { Members.Count: 0 }</c>
+    /// carries the same read and none of the syntax the first shape is found by.
+    /// </remarks>
+    private static IEnumerable<(string Member, SyntaxNode Where)> ReadsAfter(
+        SyntaxNode body, SyntaxNode call, string lent, IReadOnlySet<string> lendable)
     {
+        var found = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
+
+        bool RootedAtTheLoan(SyntaxNode expression)
+        {
+            var text = Normalized(expression);
+            return text == lent || text.StartsWith(lent + ".", StringComparison.Ordinal);
+        }
+
+        foreach (var access in After(body, call).OfType<MemberAccessExpressionSyntax>())
+        {
+            var member = access.Name.Identifier.ValueText;
+            if (lendable.Contains(member) && RootedAtTheLoan(access))
+                found.TryAdd(member, access);
+        }
+
+        foreach (var pattern in After(body, call).OfType<IsPatternExpressionSyntax>())
+        {
+            if (!RootedAtTheLoan(pattern.Expression)) continue;
+
+            foreach (var named in pattern.Pattern.DescendantNodesAndSelf())
+            {
+                var member = named switch
+                {
+                    NameColonSyntax name => name.Name.Identifier.ValueText,
+                    ExpressionColonSyntax { Expression: IdentifierNameSyntax id } => id.Identifier.ValueText,
+                    ExpressionColonSyntax { Expression: MemberAccessExpressionSyntax access }
+                        => Normalized(access).Split('.')[0],
+                    _ => null,
+                };
+
+                if (member is not null && lendable.Contains(member))
+                    found.TryAdd(member, named);
+            }
+        }
+
+        return found.Select(entry => (entry.Key, entry.Value));
+    }
+
+    /// <summary>
+    /// Every offence, and every declared member that still describes a read.
+    /// </summary>
+    private static (IReadOnlyList<string> Offences, IReadOnlySet<string> Honoured) Walk(
+        IReadOnlyList<(string Path, SyntaxTree Tree)> sources)
+    {
+        var roots = sources.Select(s => (s.Path, Root: s.Tree.GetRoot())).ToArray();
+
         // The population comes from the artefact, never from a list somebody appends to: a method declared
         // on an interface is a method a host can supply the body of.
-        var seamMethods = sources
+        var seamMethods = roots
             .SelectMany(s => s.Root.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
             .SelectMany(i => i.Members.OfType<MethodDeclarationSyntax>())
             .Select(m => m.Identifier.ValueText)
             .ToHashSet(StringComparer.Ordinal);
 
-        var mutableMembers = sources
+        var lendable = roots
             .SelectMany(s => s.Root.DescendantNodes())
             .SelectMany(node => node switch
             {
@@ -137,14 +219,14 @@ public class ValueHandedToAHostSeamTests
             .ToHashSet(StringComparer.Ordinal);
 
         var offences = new List<string>();
-        var declared = 0;
+        var honoured = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var (path, root) in sources)
-        foreach (var body in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        foreach (var (path, root) in roots)
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (body.Body is not { } statements) continue;
+            if (method.Body is not { } body) continue;
 
-            foreach (var awaited in statements.DescendantNodes().OfType<AwaitExpressionSyntax>())
+            foreach (var awaited in body.DescendantNodes().OfType<AwaitExpressionSyntax>())
             {
                 if (awaited.Expression is not InvocationExpressionSyntax
                     {
@@ -154,39 +236,34 @@ public class ValueHandedToAHostSeamTests
 
                 if (!seamMethods.Contains(called)) continue;
 
+                var declared = DeclaredMembers(call);
+                var lentAt = call.SyntaxTree.GetLineSpan(call.Span).StartLinePosition.Line + 1;
+
                 foreach (var argument in call.ArgumentList.Arguments)
                 {
+                    if (argument.Expression is LiteralExpressionSyntax) continue;
+
                     var lent = Normalized(argument.Expression);
-                    if (lent.Length == 0 || argument.Expression is LiteralExpressionSyntax) continue;
+                    if (lent.Length == 0) continue;
 
-                    var readBack = statements
-                        .DescendantNodes()
-                        .Where(node => node.SpanStart > awaited.Span.End)
-                        .OfType<MemberAccessExpressionSyntax>()
-                        .FirstOrDefault(access =>
-                            mutableMembers.Contains(access.Name.Identifier.ValueText)
-                            && (Normalized(access) == lent
-                                || Normalized(access).StartsWith(lent + ".", StringComparison.Ordinal)));
-
-                    if (readBack is null) continue;
-
-                    if (IsDeclared(call, readBack.Name.Identifier.ValueText))
+                    foreach (var (member, where) in ReadsAfter(body, awaited, lent, lendable))
                     {
-                        declared++;
-                        break;
-                    }
+                        if (declared.Contains(member))
+                        {
+                            honoured.Add($"{path}({lentAt}):{member}");
+                            continue;
+                        }
 
-                    var lentAt = call.SyntaxTree.GetLineSpan(call.Span).StartLinePosition.Line + 1;
-                    var readAt = readBack.SyntaxTree.GetLineSpan(readBack.Span).StartLinePosition.Line + 1;
-                    offences.Add(
-                        $"{Path.GetFileName(path)}({lentAt}): {called} was handed {lent}, "
-                        + $"then line {readAt} read {Normalized(readBack)}");
-                    break;
+                        var readAt = where.SyntaxTree.GetLineSpan(where.Span).StartLinePosition.Line + 1;
+                        offences.Add(
+                            $"{Path.GetFileName(path)}({lentAt}): {called} was handed {lent}, "
+                            + $"then line {readAt} read {member}");
+                    }
                 }
             }
         }
 
-        return (offences, declared);
+        return (offences, honoured);
     }
 
     /// <summary>
@@ -205,24 +282,69 @@ public class ValueHandedToAHostSeamTests
     }
 
     /// <summary>
-    /// Every declaration that the read-back is deliberate describes a read-back that is still there.
+    /// Every member a site declares deliberate is a member it still reads.
     /// </summary>
     /// <remarks>
-    /// A marker is a silence, so it has to expire on its own. Left behind by an edit that removed the
-    /// read it excused, it would go on excusing whatever lands there next - and the walker would report
-    /// clean about a site nobody has looked at since.
+    /// A marker is a silence, so it has to expire on its own. Left behind by an edit that removed the read
+    /// it excused, it would go on excusing whatever lands there next - and the walker would report clean
+    /// about a site nobody has looked at since. This is also the walker's real positive control: it proves
+    /// the matcher reaches a positive on named sites, which a file count cannot.
     /// </remarks>
     [Fact]
-    public void EveryDeclarationOfADeliberateLoanStillDescribesOne()
+    public void EveryDeclaredMemberStillDescribesARead()
     {
         var sources = LibrarySources();
-        var (_, declared) = Walk(sources);
+        var (_, honoured) = Walk(sources);
 
+        // Counted the way the walker reads them, over the same statements, so the two cannot disagree
+        // about what a declaration says - only about whether it still describes anything.
         var written = sources
-            .SelectMany(s => s.Root.DescendantTrivia())
-            .Count(trivia => trivia.ToString().Contains(Declared, StringComparison.Ordinal));
+            .SelectMany(s => s.Tree.GetRoot().DescendantNodes().OfType<StatementSyntax>())
+            .SelectMany(statement => MembersDeclaredOn(statement)
+                .Select(member => $"{Path.GetFileName(statement.SyntaxTree.FilePath)}"
+                    + $"({statement.SyntaxTree.GetLineSpan(statement.Span).StartLinePosition.Line + 1})"
+                    + $":{member}"))
+            .ToArray();
 
-        Assert.Equal(written, declared);
+        Assert.True(
+            written.Length > 0,
+            "no site declares a deliberate loan, so nothing proves the walker matches");
+
+        // Named rather than counted: a number tells you the two disagree, and the name tells you which
+        // declaration stopped describing a read.
+        var describing = honoured.Select(entry => entry[(entry.LastIndexOf('\\') + 1)..]).ToHashSet();
+        var stale = written.Where(entry => !describing.Contains(entry)).Order().ToArray();
+
+        Assert.True(
+            stale.Length == 0,
+            "A site declares a deliberate loan of a member it no longer reads:"
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>
+    /// Every source parses, except the ones this walker knows its parser is too old to read.
+    /// </summary>
+    /// <remarks>
+    /// Syntax-tree error recovery is silent: a file the parser cannot read produces a tree with nothing in
+    /// it and is walked exactly like an empty one, so the walker reports clean about whatever it contains.
+    /// The analyzer package pinned for this suite predates the union syntax the library is written in,
+    /// which is why the list below is not empty.
+    /// <para>
+    /// The list is exact on purpose. When the parser learns the syntax, this assertion is what fails, and
+    /// the failure says to delete the entry rather than leaving a permanent hole nobody re-reads.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EverySourceIsParsedOrKnownToBeUnreadable()
+    {
+        var unreadable = LibrarySources()
+            .Where(s => s.Tree.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error))
+            .Select(s => Path.GetFileName(s.Path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["Result.cs"], unreadable);
     }
 
     /// <summary>
@@ -231,12 +353,17 @@ public class ValueHandedToAHostSeamTests
     /// <remarks>
     /// It sees only awaited calls, so a synchronous seam passes; only calls written as a member access, so
     /// one through a delegate or an extension-method chain passes; and only reads in the same method body,
-    /// so a value stored on a field and read by another member passes. It also decides mutability from the
-    /// declared type text rather than from a resolved symbol, so a type alias or a custom collection is not
-    /// recognised.
+    /// so a value stored on a field and read by another member passes. A read reached through a LOCAL ALIAS
+    /// passes as well, since the walker matches the text of the expression rather than following what it
+    /// refers to, and one assignment defeats it. It also decides lendability from the declared type text
+    /// rather than from a resolved symbol, so a type alias or a custom collection is not recognised, while
+    /// a name declared mutably ANYWHERE counts as mutable everywhere - which errs towards reporting.
+    /// <para>
+    /// It reports on branches that cannot both run, since it compares positions rather than paths.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheShapesThisTestCannotSee()
+    public void TheShapesThisWalkerCannotSee()
     {
         // A statement of scope rather than a check, and it is here so the list has a place a reader lands
         // on from the failure message above.
