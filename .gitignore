@@ -395,3 +395,4 @@ RELEASE_NOTES*
 !*.sln.DotSettings
 !*.csproj.DotSettings
 
+docs/
