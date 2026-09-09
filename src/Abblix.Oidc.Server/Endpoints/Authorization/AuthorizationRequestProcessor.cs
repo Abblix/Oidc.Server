@@ -126,11 +126,13 @@ public class AuthorizationRequestProcessor(
 		// Which clients this session already touches, read before the provider is handed the session.
 		string[] alreadyAffected = [..authSession.AffectedClientIds];
 
-		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
-		// The 'prompt=consent' case is not forgotten but processed inside this call.
 		UserConsents userConsents;
 		try
 		{
+			// Retrieve user consents (i.e., permissions granted for requested
+			// scopes/resources/authorization_details). The 'prompt=consent' case is not forgotten but
+			// processed inside this call.
+			//
 			// lent deliberately AffectedClientIds: what the provider leaves in this list is compared
 			// against the copy above, and whatever it took out goes back below, whichever way this ends.
 			userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
@@ -251,7 +253,9 @@ public class AuthorizationRequestProcessor(
 		//
 		// Compared as sets, because who the session touches is a set even where the collection holding
 		// them is not: a list that arrived carrying one client twice must not read as changed, and must
-		// not read as shortened when a provider drops one of the copies.
+		// not read as shortened when a provider drops one of the copies. Ordinal, matching the comparer
+		// the shipped session uses - taking the host collection's instead would put its own idea of
+		// sameness between this answer and the store's.
 		if (!authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal).SetEquals(alreadyAffected))
 			await authSessionService.SignInAsync(authSession);
 

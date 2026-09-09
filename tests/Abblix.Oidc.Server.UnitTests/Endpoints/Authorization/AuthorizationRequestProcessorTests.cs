@@ -156,7 +156,7 @@ public class AuthorizationRequestProcessorTests
             AuthContextClassRef = acr,
             // AffectedClientIds is left at its default on purpose: hard-coding a List here would test the
             // fixture's collection rather than the one a session actually carries - except where that
-            // collection IS the subject, which is what the two tests about a host-supplied list are for.
+            // collection IS the subject, which is what the tests supplying their own collection are for.
         };
     }
 
@@ -1657,6 +1657,48 @@ public class AuthorizationRequestProcessorTests
         Assert.Contains(bystander, session.AffectedClientIds);
     }
 
+    /// <summary>
+    /// A client the provider names is written even when the session arrived carrying a duplicate.
+    /// </summary>
+    /// <remarks>
+    /// The dangerous half of the same divergence, and the one that loses a client rather than writing
+    /// one too often: a list arriving with two copies of a client, and a provider that drops one of them
+    /// while naming somebody new, keeps its length. Measured by length, the session reads as unchanged
+    /// and the newcomer never reaches the store, which is the absence from logout this whole guard is
+    /// about.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ADuplicateTradedForANewClient_IsWritten()
+    {
+        const string newcomer = "newcomer-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+            },
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() =>
+            {
+                session.AffectedClientIds.Remove(TestConstants.DefaultClientId);
+                session.AffectedClientIds.Add(newcomer);
+            })
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(newcomer, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
     /// <summary>
     /// A session that arrived carrying one client twice is neither written nor shortened.
     /// </summary>
