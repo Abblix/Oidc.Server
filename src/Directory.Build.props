@@ -14,4 +14,17 @@
     <TargetFrameworks>net11.0</TargetFrameworks>
   </PropertyGroup>
 
+  <!-- What every assembly built here owes, whether or not it is packed on its own: a build that does
+       not depend on the directory it ran in, and symbols that point at this repository rather than at
+       the machine. Kept here rather than per project because a per-project copy is an enumeration and
+       this one had already been escaped twice - by the shared transport assembly, which ships inside
+       both adapter packages and whose published symbols therefore named a build directory, and by the
+       two source generators, which ship nowhere but were built the same way. -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
 </Project>

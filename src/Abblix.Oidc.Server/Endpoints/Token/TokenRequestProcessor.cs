@@ -77,6 +77,11 @@ public class TokenRequestProcessor(
 				"The requested resource is not among the resources granted by the resource owner.");
 		}
 
+		// Read before the token service is handed the context: the response advertises what was granted,
+		// and a service that narrowed the context in place would have this answer say what it decided
+		// rather than what the end user did.
+		string[] grantedScope = [..authContext.Scope];
+
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
@@ -126,7 +131,7 @@ public class TokenRequestProcessor(
 			grantType != GrantTypes.ClientCredentials &&
 			grantType != GrantTypes.TokenExchange;
 
-		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OfflineAccess))
+		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess))
 		{
 			var refreshContext = request.AuthorizedGrant.Context with
 			{
@@ -160,7 +165,7 @@ public class TokenRequestProcessor(
 					: null);
 		}
 
-		if (mayIssueDerivedTokens && authContext.Scope.HasFlag(Scopes.OpenId))
+		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
 		{
 			// The bindings exist only when the caller says it IS the push path. The mode could be read
 			// off clientInfo instead, and is not, so that this method does not have to know CIBA's

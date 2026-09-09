@@ -81,7 +81,7 @@ public class ConsentConstraintEnforcerTests
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
-                Result<JsonArray?, OidcError>.Success(ad));
+                Result<JsonArray, OidcError>.Success(ad ?? new JsonArray()));
 
     [Fact]
     public async Task EnforceAsync_GrantedEqualsRequested_DoesNotThrow()
@@ -160,7 +160,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Failure(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Failure(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, "amount exceeds the client's cap")));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -182,7 +182,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(capped));
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(capped));
 
         var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
 
@@ -206,7 +206,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 new JsonObject { ["type"] = "account_information" })));
 
@@ -230,7 +230,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(
                 new JsonArray(new JsonObject { ["amount"] = "999999" })));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -273,7 +273,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = standIn },
                 new JsonObject { ["amount"] = "999999" })));
 
@@ -297,7 +297,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 new JsonObject { ["type"] = "admin_access" })));
 
@@ -321,7 +321,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray(
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 JsonValue.Create("payment_initiation"))));
 
@@ -330,11 +330,11 @@ public class ConsentConstraintEnforcerTests
     }
 
     [Fact]
-    public async Task EnforceAsync_ValidatorEditsTheTypeInPlaceAndReturnsNothing_Throws()
+    public async Task EnforceAsync_ValidatorEditsTheTypeInPlace_Throws()
     {
         // Every narrowing validator in this repository's own fixtures edits the entry IN PLACE and
-        // returns the same wrapper, and the typed wrappers alias the source nodes - so a policy that
-        // answers "nothing to change" can still have rewritten the array it was handed. The types read
+        // returns the same wrapper, and the typed wrappers alias the source nodes - so what a policy
+        // answers with can be the very array it rewrote, carrying a type nobody granted. The types read
         // before the call are the only untouched copy, and that path has to be guarded too.
         var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var request = CreateRequest(authorizationDetails:
@@ -347,7 +347,7 @@ public class ConsentConstraintEnforcerTests
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
             {
                 ad![0]!["type"] = "wire_transfer";
-                return Result<JsonArray?, OidcError>.Success(null);
+                return Result<JsonArray, OidcError>.Success(ad);
             });
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -359,9 +359,9 @@ public class ConsentConstraintEnforcerTests
     [Fact]
     public async Task EnforceAsync_PolicyReturnsAnEmptySet_Throws()
     {
-        // Null and empty are different statements. Empty says every entry was removed, and this same
-        // request answers access_denied to a consent decision that granted none - so emitting the
-        // granted set here would put back exactly what the validators took out.
+        // The call is made only for a non-empty granted set, so an empty answer says every entry was
+        // removed - and this same request answers access_denied to a consent decision that granted
+        // none, so emitting the granted set here would put back exactly what the validators took out.
         var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var request = CreateRequest(authorizationDetails:
             new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
@@ -370,32 +370,10 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(new JsonArray()));
+            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray()));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task EnforceAsync_PolicyReturnsNothing_KeepsTheGrantedSet()
-    {
-        // A null result means "nothing to change" everywhere else this policy is consumed - the
-        // request-time, CIBA and device validators all keep what they had - so reading it here as
-        // "the validators emptied the set" would drop authorization_details RFC 9396 section 7
-        // obliges the server to return, on a path where nobody can tell.
-        var grantedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-        var request = CreateRequest(authorizationDetails:
-            new JsonArray(new JsonObject { ["type"] = "payment_initiation" }));
-        var granted = Granted(authorizationDetails: grantedAd);
-
-        _authorizationDetailsPolicy
-            .Setup(p => p.ApplyGrantedAsync(
-                It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray?, OidcError>.Success(null));
-
-        var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
-
-        Assert.Same(grantedAd, enforced);
     }
 
     [Fact]

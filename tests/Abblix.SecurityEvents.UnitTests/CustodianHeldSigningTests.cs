@@ -89,7 +89,8 @@ public class CustodianHeldSigningTests
         resolved = host;
 
         // Startup validation is satisfied: the guard the custodian registration armed has an answer.
-        host.GetRequiredService<IStartupValidator>().Validate();
+        await host.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
 
         var compact = await new SecurityEventTokenBuilder()
             .WithIssuer(Issuer)

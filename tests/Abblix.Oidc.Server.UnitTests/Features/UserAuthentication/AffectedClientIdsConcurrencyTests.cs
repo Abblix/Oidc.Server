@@ -74,7 +74,7 @@ public class AffectedClientIdsConcurrencyTests
 
     /// <summary>
     /// The same client id arriving from several threads at once is stored once. A duplicate is not cosmetic:
-    /// the end-session endpoint notifies per entry, so a client would be asked to log out twice.
+    /// it is persisted, so the stored session grows on every request.
     /// </summary>
     [Fact]
     public async Task The_same_client_added_concurrently_is_stored_once()

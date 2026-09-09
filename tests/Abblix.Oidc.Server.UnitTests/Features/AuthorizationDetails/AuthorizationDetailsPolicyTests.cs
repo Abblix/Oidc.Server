@@ -227,18 +227,18 @@ public class AuthorizationDetailsPolicyTests
     }
 
     [Fact]
-    public async Task ApplyAsync_returns_null_when_raw_is_null_or_empty()
+    public async Task ApplyAsync_returns_an_empty_set_when_raw_is_null_or_empty()
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
         var resultNull = await composite.ApplyAsync(null, TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultNull.TryGetSuccess(out var validatedNull));
-        Assert.Null(validatedNull);
+        Assert.Empty(validatedNull);
 
         var resultEmpty = await composite.ApplyAsync(new JsonArray(), TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultEmpty.TryGetSuccess(out var validatedEmpty));
-        Assert.Null(validatedEmpty);
+        Assert.Empty(validatedEmpty);
     }
 
     [Fact]
@@ -608,13 +608,13 @@ public class AuthorizationDetailsPolicyTests
 
         public ClientInfo? LastClient { get; private set; }
 
-        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             LastRaw = raw;
             LastClient = client;
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>(
+            return Task.FromResult<Result<JsonArray, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
         }
     }

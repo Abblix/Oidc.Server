@@ -31,6 +31,7 @@ public static class JsonArrayExtensions
     /// </summary>
     /// <param name="details">The wrapper sequence, or <c>null</c>.</param>
     /// <returns>A fresh <see cref="JsonArray"/>, or <c>null</c> when the input is <c>null</c>.</returns>
+    [return: NotNullIfNotNull(nameof(details))]
     public static JsonArray? ToRawJsonArray(this IEnumerable<AuthorizationDetail>? details)
     {
         if (details is null) return null;

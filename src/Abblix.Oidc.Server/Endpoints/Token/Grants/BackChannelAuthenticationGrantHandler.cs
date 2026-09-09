@@ -101,6 +101,11 @@ public partial class BackChannelAuthenticationGrantHandler(
         if (WidensTheRequest(request, request.AuthorizedGrant))
             return NotWhatTheRequestAskedFor();
 
+        // Whom the request named, read before the processor is handed the request. The comparison below
+        // exists because what is stored can change between the two checks; taking its yardstick from the
+        // same object the processor holds would let one change move both sides together.
+        string[]? namedEndUsers = request.RequestedSubjects is { } named ? [..named] : null;
+
         var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
         if (result.TryGetFailure(out var error))
             return error;
@@ -112,7 +117,7 @@ public partial class BackChannelAuthenticationGrantHandler(
         // same storage through the public seam - can replace what is stored, which is the ordinary shape
         // of a retried or corrected completion rather than an attack. Approving one grant and handing over
         // another is the whole failure this comparison exists to prevent.
-        if (!NamesTheRequestedEndUser(request.RequestedSubjects, grant, clientInfo))
+        if (!NamesTheRequestedEndUser(namedEndUsers, grant, clientInfo))
             return NotTheRequestedEndUser();
 
         // And the same for what the grant authorises. The completion path judges this too, but a host can
@@ -308,13 +313,11 @@ public partial class BackChannelAuthenticationGrantHandler(
         // Note: This update is not atomic with the read above, see method remarks
         await storage.UpdateAsync(authenticationRequestId, authenticationRequest, expiresIn);
 
-        if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null)
+        if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null
+            && await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken)
+                is { } result)
         {
-            var result = await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken);
-            if (result != null)
-            {
-                return result;
-            }
+            return result;
         }
 
         return new OidcError(

@@ -48,14 +48,17 @@ public interface IAuthorizationDetailsPolicy
     /// drives the allowlist branch.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>
-    /// On success - the raw <see cref="JsonArray"/> that survived validation (or <c>null</c>
-    /// when the input was null / empty / contained no typed entries - there is nothing to
-    /// forward in that case). On failure - a fully-formed <see cref="OidcError"/> with
+    /// On success - the raw <see cref="JsonArray"/> that survived validation, empty only when the input
+    /// carried no entries to begin with, since there is nothing to forward in that case. An
+    /// implementation that would leave nothing of a non-empty input refuses instead: dropping every entry
+    /// says the request may not be honoured as asked, and every caller treats an empty answer to a
+    /// non-empty input as a fault - see <see cref="AuthorizationDetailsPolicyContract.EveryEntryDropped"/>.
+    /// On failure - a fully-formed <see cref="OidcError"/> with
     /// <c>error = invalid_authorization_details</c> (RFC 9396 section 5) and the rejection
     /// description; the endpoint adapter forwards it as-is when its error type is
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.
     /// </returns>
-    Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token);
@@ -84,9 +87,34 @@ public interface IAuthorizationDetailsPolicy
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
     /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
-    Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
         ClientInfo client,
         CancellationToken token)
         => ApplyAsync(granted, client, token);
+}
+
+/// <summary>
+/// The refusal every caller of <see cref="IAuthorizationDetailsPolicy"/> owes when an implementation
+/// breaks the one part of its contract nothing else can catch.
+/// </summary>
+internal static class AuthorizationDetailsPolicyContract
+{
+    /// <summary>
+    /// A policy answered with nothing to a request that carried entries.
+    /// </summary>
+    /// <remarks>
+    /// Dropping every entry says the request may not be honoured as asked, which is a refusal, and the
+    /// contract says so. Read as consent instead, it authorizes the request with its
+    /// <c>authorization_details</c> silently gone - the one outcome neither the client nor the resource
+    /// server can detect. The shipped policy cannot produce it, so reaching this means a host
+    /// implementation or a decorator did.
+    /// </remarks>
+    /// <returns>The exception to throw.</returns>
+    public static InvalidOperationException EveryEntryDropped()
+        => new(
+            $"An {nameof(IAuthorizationDetailsPolicy)} implementation answered with an empty set for a "
+            + "request that carried authorization_details. Dropping every entry is a refusal and has to "
+            + "be returned as one, because forwarding the request without them authorizes something "
+            + "nobody asked for.");
 }

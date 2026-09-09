@@ -261,8 +261,17 @@ public class AuthenticationSchemeAdapter(
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
 		var properties = new AuthenticationProperties();
-		if (authSession is { AffectedClientIds.Count: > 0 })
-			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
+		// Read once, and the decision made from what was read. Asking the live collection whether it is
+		// empty and then serialising it puts two questions to something another request can change in
+		// between: empty at the first and filled at the second writes nothing at all, so the session
+		// comes back naming nobody and every client it touched is gone from the logout it drives.
+		// This read asks the size too, but only as a capacity hint the answer does not depend on: what
+		// comes back is what the walk yielded. Copying out instead fills an array of the size that was
+		// answered, so a collection that has since grown overflows it and one that answered zero comes
+		// back empty however much it holds.
+		var affectedClientIds = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
+		if (affectedClientIds.Count > 0)
+			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(affectedClientIds));
 
 		return HttpContext.SignInAsync(authenticationScheme, principal, properties);
 	}

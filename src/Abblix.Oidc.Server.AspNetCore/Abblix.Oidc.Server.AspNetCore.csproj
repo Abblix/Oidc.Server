@@ -9,6 +9,7 @@
              part of each adapter's NuGet package (its assembly is embedded into them), never as a standalone
              package, so it is deliberately not packable. -->
         <IsPackable>false</IsPackable>
+
     </PropertyGroup>
 
     <ItemGroup>

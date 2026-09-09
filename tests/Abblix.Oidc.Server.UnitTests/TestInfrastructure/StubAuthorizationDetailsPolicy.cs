@@ -44,8 +44,22 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     public static StubAuthorizationDetailsPolicy Capping(string member, string value) =>
         new() { _cap = (member, value) };
 
+    /// <summary>
+    /// Answers with every entry removed - the shape the contract forbids, which a host implementation
+    /// can still produce and which reads as "nothing to forward" wherever it is not refused.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Emptying => new() { _empty = true };
+
+    /// <summary>
+    /// Answers with every entry removed, having removed them from the array it was handed - which is how
+    /// every narrowing validator in this repository edits, so it is the likelier of the two shapes.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy ClearingInPlace => new() { _empty = true, _clear = true };
+
     private string? _refusal;
     private (string Member, string Value)? _cap;
+    private bool _empty;
+    private bool _clear;
 
     /// <summary>What the last call was handed, so a test can see whether it was the live array.</summary>
     public JsonArray? LastSeen { get; private set; }
@@ -53,7 +67,7 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// <summary>How many times the granted-phase question was asked.</summary>
     public int GrantedCalls { get; private set; }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
@@ -67,14 +81,18 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
                     entry[cap.Member] = cap.Value;
             }
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>(raw);
+            if (_clear)
+                raw?.Clear();
+
+            return Task.FromResult<Result<JsonArray, OidcError>>(
+                _empty ? new JsonArray() : raw ?? new JsonArray());
         }
 
-        return Task.FromResult<Result<JsonArray?, OidcError>>(
+        return Task.FromResult<Result<JsonArray, OidcError>>(
             new OidcError(ErrorCodes.InvalidAuthorizationDetails, _refusal));
     }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
         ClientInfo client,
         CancellationToken token)

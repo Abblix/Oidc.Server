@@ -46,7 +46,7 @@ internal sealed class AuthorizationDetailsPolicy(
         CancellationToken token);
 
     /// <inheritdoc/>
-    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyAsync(
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
@@ -57,7 +57,7 @@ internal sealed class AuthorizationDetailsPolicy(
             token);
 
     /// <inheritdoc/>
-    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
         JsonArray? granted,
         ClientInfo client,
         CancellationToken token)
@@ -67,14 +67,14 @@ internal sealed class AuthorizationDetailsPolicy(
             static (validator, detail, client, token) => validator.ValidateGrantedAsync(detail, client, token),
             token);
 
-    private async Task<Result<JsonArray?, OidcError>> ApplyCoreAsync(
+    private async Task<Result<JsonArray, OidcError>> ApplyCoreAsync(
         JsonArray? raw,
         ClientInfo client,
         AskValidator ask,
         CancellationToken token)
     {
         if (raw is not { Count: > 0 })
-            return (JsonArray?)null;
+            return new JsonArray();
 
         // An entry that is not a JSON object is dropped by the conversion, so a count that shrank means the
         // client sent authorization_details this server cannot read - ["payment"] or [1,2] rather than the

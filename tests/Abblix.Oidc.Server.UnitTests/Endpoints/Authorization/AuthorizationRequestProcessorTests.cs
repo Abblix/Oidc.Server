@@ -8,6 +8,8 @@
 
 using System;
 using System.Globalization;
+using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -72,7 +74,7 @@ public class AuthorizationRequestProcessorTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad);
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
 
         _timeProvider = new FakeTimeProvider();
 
@@ -107,11 +109,14 @@ public class AuthorizationRequestProcessorTests
         JsonArray? authorizationDetails = null,
         TimeSpan? defaultMaxAge = null,
         string[]? defaultAcrValues = null,
-        string? idTokenHintSubject = null)
+        string? idTokenHintSubject = null,
+        string? clientId = null)
     {
+        clientId ??= TestConstants.DefaultClientId;
+
         var authRequest = new AuthorizationRequest
         {
-            ClientId = TestConstants.DefaultClientId,
+            ClientId = clientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = scope ?? [Scopes.OpenId],
@@ -121,7 +126,7 @@ public class AuthorizationRequestProcessorTests
             AuthorizationDetails = authorizationDetails,
         };
 
-        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
+        var clientInfo = new ClientInfo(clientId)
         {
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
             DefaultMaxAge = defaultMaxAge,
@@ -154,7 +159,8 @@ public class AuthorizationRequestProcessorTests
         {
             AuthContextClassRef = acr,
             // AffectedClientIds is left at its default on purpose: hard-coding a List here would test the
-            // fixture's collection rather than the one a session actually carries.
+            // fixture's collection rather than the one a session actually carries - except where that
+            // collection IS the subject, which is what the tests supplying their own collection are for.
         };
     }
 
@@ -1045,9 +1051,10 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(request);
 
         // Assert
+        Assert.IsType<SuccessfullyAuthenticated>(result);
         _authSessionService.Verify(s => s.SignInAsync(It.IsAny<AuthSession>()), Times.Never);
     }
 
@@ -1536,6 +1543,535 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// A consent provider that drops the client from the session leaves it recorded there all the same.
+    /// </summary>
+    /// <remarks>
+    /// The provider is handed the live session, and the list of clients a session touches is what logout
+    /// iterates to reach them. Put back, the session says what it said when the store handed it over, so
+    /// there is nothing to tell the store either - asserted here because that is the whole claim: the
+    /// restore leaves no difference behind, and a write would say there was one. The client this request
+    /// is for is deliberately not the one removed, or the line that records it would answer this test
+    /// instead of the restore.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderRemovingAnotherClient_RecordsItAnyway()
+    {
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId);
+
+        var consents = CreateConsents();
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Remove(bystander))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(bystander, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+        Assert.NotNull(capture.Grant);
+    }
+
+    /// <summary>
+    /// A consent provider that adds the client itself does not excuse the session from being written.
+    /// </summary>
+    /// <remarks>
+    /// The list on the object says the client is there; the store has never been told. Asking only the
+    /// object leaves the session unwritten, which is the same client missing from logout as when the
+    /// provider removes the entry - the failure reached from the other side.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderAddingTheClientItself_StillWritesTheSession()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Add(TestConstants.DefaultClientId))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// The client is recorded once, on a session whose collection does not do that for us.
+    /// </summary>
+    /// <remarks>
+    /// The shipped session holds a set, so a second copy is dropped before anything notices - and the
+    /// collection is public with an initialiser, so a host may supply a list. Then every request appends
+    /// another entry and the session is written because it now carries more than the store held, so the
+    /// stored session grows without bound.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ASessionWhoseListAcceptsDuplicates_RecordsTheClientOnce()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string> { TestConstants.DefaultClientId },
+        };
+
+        var consents = CreateConsents();
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
+        Assert.Single(session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+    /// <summary>
+    /// A consent provider that throws still leaves the session carrying what the store gave it.
+    /// </summary>
+    /// <remarks>
+    /// The one way out of the method that no refusal covers. A host that keeps the session object
+    /// between requests would otherwise carry whatever the provider did to this list onward, with
+    /// nothing left to undo it, and the clients it dropped are the ones logout can no longer reach.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderThatThrows_StillKeepsTheClientsTheStoreGave()
+    {
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ThrowsAsync(new InvalidOperationException("the consent provider gave up"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+
+        Assert.Contains(bystander, session.AffectedClientIds);
+    }
+
+    /// <summary>
+    /// A client the provider names is written even when the session arrived carrying a duplicate.
+    /// </summary>
+    /// <remarks>
+    /// The dangerous half of the same divergence, and the one that loses a client rather than writing
+    /// one too often: a list arriving with two copies of a client, and a provider that drops one of them
+    /// while naming somebody new, keeps its length. Measured by length, the session reads as unchanged
+    /// and the newcomer never reaches the store, which is the absence from logout this whole guard is
+    /// about.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ADuplicateTradedForANewClient_IsWritten()
+    {
+        const string newcomer = "newcomer-client";
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+                bystander,
+            },
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() =>
+            {
+                session.AffectedClientIds.Remove(TestConstants.DefaultClientId);
+                session.AffectedClientIds.Remove(bystander);
+                session.AffectedClientIds.Add(newcomer);
+            })
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(newcomer, session.AffectedClientIds);
+
+        // Asked about somebody else, because the client this request is FOR comes back whatever the
+        // restore does - the line recording it puts it there, so an assertion about it cannot fail.
+        Assert.Contains(bystander, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A client whose identifier differs only in case is another client, and the store is told.
+    /// </summary>
+    /// <remarks>
+    /// Identifiers are compared the way the shipped session compares them, which is exactly. Compared
+    /// loosely instead, a session already naming <c>Client-A</c> reads as unchanged when this request
+    /// records <c>client-a</c> - the record itself still happens, because the collection does its own
+    /// comparing, so the session carries a client the store is never told about, and logout cannot
+    /// reach it.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AClientDifferingOnlyInCase_IsWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId.ToUpperInvariant());
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A collection that gains an entry while it is being asked how large it is.
+    /// </summary>
+    /// <remarks>
+    /// The same order of events a second request produces against a session a host keeps, arriving
+    /// every time instead of one run in a thousand. The shipped collection hands a walker a snapshot
+    /// and cannot refuse one, while copying out reads the size first and takes the contents after.
+    /// </remarks>
+    private sealed class GrowsWhileMeasured(int growOnMeasure, params string[] items)
+        : ICollection<string>
+    {
+        private readonly List<string> _items = [..items];
+        private int _measures;
+
+        public int Count
+        {
+            get
+            {
+                var answer = _items.Count;
+
+                if (++_measures == growOnMeasure)
+                    _items.Add($"arrived-during-read-{growOnMeasure}");
+
+                return answer;
+            }
+        }
+
+        public int Measures => _measures;
+
+        public bool IsReadOnly => false;
+        public void Add(string item) => _items.Add(item);
+        public void Clear() => _items.Clear();
+        public bool Contains(string item) => _items.Contains(item);
+        public void CopyTo(string[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        public bool Remove(string item) => _items.Remove(item);
+        public IEnumerator<string> GetEnumerator() => _items.ToArray().AsEnumerable().GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// A session growing while it is read is still processed, and the client is still recorded.
+    /// </summary>
+    /// <remarks>
+    /// The question is not what the list says but HOW it is read. Asking for the size and then copying
+    /// into an array of that size fails when the size moved in between; walking the collection asks it
+    /// for a view it is prepared to give, which the shipped collection always is.
+    /// <para>
+    /// Driven at both reads, because they are two different moments and only one of them is the bad
+    /// one. The first happens before the provider is handed the session; the second after this
+    /// request's client is already recorded and before the store has been told, so a read that throws
+    /// there loses the request AND the record, and the client is missing from the logout that session
+    /// drives. A fixture growing under the first read leaves the second one unguarded.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 1)]
+    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed(
+        int whichRead, int expectedWrites)
+    {
+        var request = CreateRequest();
+        var clients = new GrowsWhileMeasured(whichRead, TestConstants.DefaultClientId);
+        var session = CreateAuthSession() with { AffectedClientIds = clients };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        var result = await _processor.ProcessAsync(request);
+        var measures = clients.Measures;
+
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+
+        // The case numbers are positions in the sequence of size reads, not the sites themselves, so
+        // a read added AHEAD of them moves both cases onto a different pair and leaves the guarded
+        // one unguarded with the theory still green. Pinning the count turns that into a failure,
+        // and catches a read added anywhere else as well. Taken before the assertions above, so it
+        // counts what the request did.
+        Assert.Equal(2, measures);
+
+        // The two cases differ in what the store is told, and that difference is the point of the
+        // second window: an arrival inside both snapshots leaves the session unchanged, while one
+        // landing between them is a real change and must be written. This is the line that fails
+        // when the write stops depending on the comparison at all - collapsing the two snapshots
+        // onto one read fails the count above instead, before this is reached.
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Exactly(expectedWrites));
+    }
+
+    /// <summary>
+    /// A session that arrived carrying one client twice, and nobody touching it, is not written.
+    /// </summary>
+    /// <remarks>
+    /// The cell the other three leave empty, and the one a criterion counting NAMES rather than
+    /// comparing them gets wrong: a list holding two copies of this client has more entries than the
+    /// set of names does, so counted that way the session reads as changed on every request and is
+    /// written to the store each time, for nothing.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ADuplicateNobodyTouches_IsNotWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+            },
+        };
+
+        var consents = CreateConsents();
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
+        Assert.Equal(2, session.AffectedClientIds.Count);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+
+        // The response names each client once, however many times the session happens to list it.
+        // The end-session processor walks the session's own list rather than this one, so no
+        // notification the library sends is saved here; what changes is what a host reading the
+        // response is told to watch.
+        var authenticated = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Equal([TestConstants.DefaultClientId], authenticated.AffectedClientIds);
+    }
+
+    /// <summary>
+    /// A session carrying one client twice, one copy dropped, is neither written nor shortened.
+    /// </summary>
+    /// <remarks>
+    /// Who a session touches is a set even where the collection holding them is not, and a host may
+    /// supply a list that already holds a duplicate from before this was guarded. Counted rather than
+    /// compared as a set, a provider dropping one of the copies would read as a session that lost a
+    /// client, and that shortened list would be written to the store.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ADuplicateWithOneCopyDropped_IsNotWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+            },
+        };
+
+        var consents = CreateConsents();
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Remove(TestConstants.DefaultClientId))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+    /// <summary>
+    /// A request that ends in a refusal still leaves the session carrying what the store gave it.
+    /// </summary>
+    /// <remarks>
+    /// Most ways out of this method are refusals - consent is pending, interaction is not allowed, the
+    /// end user denied the requested details - and each of them returns before anything else runs. So the
+    /// list is put back where it is repaired rather than where the request succeeds: a session object a
+    /// host keeps between requests would otherwise carry the provider's edit with nothing left to undo it.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ARefusedRequest_StillKeepsTheClientsTheStoreGave()
+    {
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
+
+        var consents = CreateConsents(pendingScopes: [new ScopeDefinition(Scopes.Profile)]);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        Assert.IsType<ConsentRequired>(await _processor.ProcessAsync(request));
+
+        Assert.Contains(bystander, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+    /// <summary>
+    /// A client the provider adds is written too, even when this request's client was already stored.
+    /// </summary>
+    /// <remarks>
+    /// Whether the session has to be written is a question about the session, not about this client: a
+    /// provider that named another client changed the object and told the store nothing, and that client
+    /// is then missing from logout exactly like one the provider removed.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderAddingAnotherClient_WritesTheSession()
+    {
+        const string another = "another-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Add(another))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(another, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A consent provider that empties the list does not take the other clients with it.
+    /// </summary>
+    /// <remarks>
+    /// The session is persisted whole, so whatever the provider left behind is what the store keeps.
+    /// Every client the session already touched has to be reachable at logout, and the provider was
+    /// never asked about them - so what this server knew is put back before anything is written.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderEmptyingTheClientList_KeepsTheOtherClients()
+    {
+        const string another = "another-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(another);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(another, session.AffectedClientIds);
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+    /// <summary>
+    /// Two clients whose names an ordinal comparison keeps apart both survive a consent provider
+    /// that empties the list.
+    /// </summary>
+    /// <remarks>
+    /// The copy the restore reads from is a set, and a set is only as discriminating as its
+    /// comparer: one that folds case, or one that compares by culture, merges such a pair into a
+    /// single entry and puts exactly one of the two names back. The other is gone from the session
+    /// for good, and the client behind it is never told to log out - the same outcome the restore
+    /// exists to prevent, arriving through the comparer instead of through the provider.
+    /// <para>
+    /// The second pair is here because no case-only pair can show it: the two names carry the same
+    /// accented letter written two ways, which a culture-sensitive comparison calls one name and an
+    /// ordinal one calls two. Both spellings can be registered, since nothing here normalises a
+    /// client name. The two literals are written as escapes, so what is being compared is fixed by
+    /// the compiler rather than by however this file happens to be decoded.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("Client-Case", "client-case")]
+    [InlineData("caf\u00e9-client", "cafe\u0301-client")]
+    public async Task ProcessAsync_TwoClientsAnOrdinalComparerKeepsApart_BothSurviveAnEmptyingProvider(
+        string one, string other)
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(one);
+        session.AffectedClientIds.Add(other);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(one, session.AffectedClientIds);
+        Assert.Contains(other, session.AffectedClientIds);
+    }
+    /// <summary>
+    /// A client colliding with one already on the session only under a coarser comparison is still
+    /// written to the store.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the same choice, and it needs its own row: the theory above drives the copy
+    /// the restore reads from, and swapping the comparer that answers "did this session change"
+    /// leaves that theory green. A session naming one spelling and a request registered under the
+    /// other are two clients; a comparison folding them into one reads the session as unchanged, so
+    /// nothing is written and the newcomer is missing from what logout walks on the next request,
+    /// having been recorded only in memory.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AClientCollidingOnlyUnderACoarserComparison_IsWritten()
+    {
+        const string composed = "caf\u00e9-client";
+        const string decomposed = "cafe\u0301-client";
+
+        var request = CreateRequest(clientId: decomposed);
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(composed);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(decomposed, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+    /// <summary>
     /// Wires up the strict Mocks for a successful authorization-code flow and returns a
     /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
     /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from
@@ -1616,6 +2152,40 @@ public class AuthorizationRequestProcessorTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
 
+    /// <summary>
+    /// A consent provider that empties the request as it answers is still answered with a denial.
+    /// </summary>
+    /// <remarks>
+    /// The provider is a host seam, and it is handed the array the request carries - so a provider that
+    /// narrows by editing what it was given, which is how narrowing is written everywhere in this
+    /// repository, empties the very set the denial is measured against. Measured afterwards, the request
+    /// looks like one that never asked for anything, the denial turns into a successful authorization,
+    /// and the token carries no authorization_details at all - which neither the client nor the resource
+    /// server can detect.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderEmptyingTheRequestInPlace_StillReturnsAccessDenied()
+    {
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: new JsonArray());
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => requestedAd.Clear())
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
     [Fact]
     public async Task ProcessAsync_AuthorizationDetailsNarrowedByProvider_PropagatesNarrowToContext()
     {
@@ -1660,7 +2230,8 @@ public class AuthorizationRequestProcessorTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) => CapAmount(ad, 800m));
+            .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
+                CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 

@@ -154,13 +154,13 @@ public class ResultTests
     public void BindContinuesOnSuccessAndStopsOnFailure()
     {
         Assert.Equal(
-            "42", Ok().Bind(value => Result<string, string>.Success(value.ToString())).GetSuccess());
+            42L, Ok().Bind(value => Result<long, string>.Success(value)).GetSuccess());
 
         Assert.Equal(
-            "refused", No().Bind(value => Result<string, string>.Success(value.ToString())).GetFailure());
+            "refused", No().Bind(value => Result<long, string>.Success(value)).GetFailure());
 
         // A step that refuses turns the chain into that refusal.
-        Assert.Equal("second step said no", Ok().Bind(_ => Result<string, string>.Failure("second step said no"))
+        Assert.Equal("second step said no", Ok().Bind(_ => Result<long, string>.Failure("second step said no"))
             .GetFailure());
     }
 
@@ -180,13 +180,13 @@ public class ResultTests
     public async Task BindingAsynchronouslyContinuesOnSuccessAndStopsOnFailure()
     {
         Assert.Equal(
-            "42",
-            (await Ok().BindAsync(value => Task.FromResult(Result<string, string>.Success(value.ToString()))))
+            42L,
+            (await Ok().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
             .GetSuccess());
 
         Assert.Equal(
             "refused",
-            (await No().BindAsync(value => Task.FromResult(Result<string, string>.Success(value.ToString()))))
+            (await No().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
             .GetFailure());
     }
 
@@ -233,5 +233,80 @@ public class ResultTests
     {
         Assert.Equal("42", Ok().ToString());
         Assert.Equal("refused", No().ToString());
+    }
+
+    /// <summary>
+    /// The value carrying neither arm, which a union has and the hierarchy it replaced did not.
+    /// </summary>
+    /// <remarks>
+    /// Nothing in the library produces one, so every assertion here is about a value that arrives by
+    /// accident: an uninitialised field, a loose mock answering with the default of the return type, or
+    /// <c>GetValueOrDefault</c> on a nullable result. Each of those reads as an ordinary result at the
+    /// call site, so what the members do with it decides whether the mistake is reported or travels.
+    /// <para>
+    /// Driven because the type's own documentation says what this state does, and a sentence about a
+    /// state no test constructs is a claim rather than a behaviour.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheValueCarryingNeitherArmIsRefusedRatherThanAnswered()
+    {
+        var neither = default(Result<int, string>);
+
+        // The getters name the state they met, rather than the arm the caller happened to ask for: a
+        // message saying "not a failure" sends whoever reads it to audit the failure path. Asserted by
+        // what the message must SAY - a pair of "does not contain" passes for an empty message too.
+        var onSuccess = Assert.Throws<InvalidOperationException>(() => neither.GetSuccess());
+        var onFailure = Assert.Throws<InvalidOperationException>(() => neither.GetFailure());
+        Assert.Equal(onSuccess.Message, onFailure.Message);
+        Assert.StartsWith(
+            "The result carries neither a success nor a failure.", onSuccess.Message, StringComparison.Ordinal);
+
+        Assert.Throws<InvalidOperationException>(() => (int)neither);
+        Assert.Throws<InvalidOperationException>(
+            () => neither.Match(value => $"ok:{value}", error => $"no:{error}"));
+        Assert.Throws<InvalidOperationException>(() => neither.MapSuccess(value => value + 1));
+        Assert.Throws<InvalidOperationException>(() => neither.MapFailure(error => error.Length));
+        Assert.Throws<InvalidOperationException>(
+            () => neither.Bind(value => Result<long, string>.Success(value)));
+        Assert.Throws<InvalidOperationException>(() => neither.Ensure(value => value > 0, "refused"));
+
+        // The pair that answers a question rather than producing a value says no to both, which is the
+        // only answer that is true of a value carrying neither arm.
+        Assert.False(neither.TryGetSuccess(out _));
+        Assert.False(neither.TryGetFailure(out _));
+
+        var (value, error) = neither;
+        Assert.Equal(0, value);
+        Assert.Null(error);
+
+        Assert.Equal("a result carrying neither case", neither.ToString());
+    }
+
+    /// <summary>
+    /// A case built from a null value lands in that same state, rather than in a case whose value is null.
+    /// </summary>
+    /// <remarks>
+    /// The second door into it, and the one a caller can walk through by accident: a union stores its
+    /// content as an object and a type pattern does not match null, so there is nothing to tell the two
+    /// apart afterwards. Driven because the type documents it, and because a producer that hands null to
+    /// the factory is told nothing at the point where it could still be fixed - the refusal arrives at
+    /// whoever reads the result.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ACaseBuiltFromNullIsTheValueCarryingNeitherArm(bool asSuccess)
+    {
+        var fromNull = asSuccess
+            ? Result<string, string[]>.Success(null!)
+            : Result<string, string[]>.Failure(null!);
+
+        Assert.False(fromNull.TryGetSuccess(out _));
+        Assert.False(fromNull.TryGetFailure(out _));
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => fromNull.GetSuccess());
+        Assert.StartsWith(
+            "The result carries neither a success nor a failure.", thrown.Message, StringComparison.Ordinal);
     }
 }

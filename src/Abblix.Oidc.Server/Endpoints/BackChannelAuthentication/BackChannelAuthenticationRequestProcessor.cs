@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -63,6 +64,21 @@ public class BackChannelAuthenticationRequestProcessor(
 	{
 		request.ClientInfo.CheckClientLicense();
 
+		// Read before the handler sees the request. The handler is a host seam holding this very request,
+		// and both answers below are what the REQUEST said: whom it named, and what it asked for. A handler
+		// that narrows by editing what it was given - the way narrowing is written throughout this
+		// repository - would otherwise erase the record of both, leaving the end-user check with nobody to
+		// enforce and the widening check at completion measuring against an empty set.
+		var namedSubjects = NamedSubjects(request);
+		var requestedDetails = request.AuthorizationDetails is { } asRequested
+			? (JsonArray)asRequested.DeepClone()
+			: null;
+		ScopeDefinition[] requestedScope = [..request.Scope];
+		ResourceDefinition[] requestedResources = [..request.Resources];
+		var requestedClaims = request.Model.Claims is { } claims
+			? JsonSerializer.Deserialize<RequestedClaims>(JsonSerializer.Serialize(claims))
+			: null;
+
 		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
 		if (authResult.TryGetFailure(out var error))
 		{
@@ -94,7 +110,6 @@ public class BackChannelAuthenticationRequestProcessor(
 		// Two parameters can name an end user and OpenID Connect Core 1.0 Section 3.1.2.2 puts both under one
 		// requirement, so both bind. Their intersection is what survives, which is the same answer the
 		// authorization endpoint reaches by filtering candidate sessions through one and then the other.
-		var namedSubjects = NamedSubjects(request);
 
 		// Answered now, because the session a handler returns here names the end user it is about to reach,
 		// not one who has already answered - the request is stored Pending either way. A handler intending
@@ -116,14 +131,14 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var authContext = new AuthorizationContext(
 			request.ClientInfo.ClientId,
-			request.Scope,
-			request.Resources,
-			request.Model.Claims)
+			requestedScope,
+			requestedResources,
+			requestedClaims)
 		{
 			// RFC 9396 section 3: authorization_details from the CIBA request carries onto the
 			// grant byte-exact, so the access token issued via the CIBA grant emits the
 			// claim through the same pipeline as the authorization-code flow.
-			AuthorizationDetails = request.AuthorizationDetails,
+			AuthorizationDetails = requestedDetails,
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
@@ -155,7 +170,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			// An EMPTY array when the request carried none, never null: null is what a request written by
 			// a build without this field reads back as, and the two must not be confused. Denying such a
 			// request would refuse, mid-upgrade, every in-flight authentication the user had approved.
-			RequestedAuthorizationDetails = request.AuthorizationDetails is { } requested
+			RequestedAuthorizationDetails = requestedDetails is { } requested
 				? (JsonArray)requested.DeepClone()
 				: [],
 
@@ -191,10 +206,10 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// what survives is their intersection - possibly nothing, which is the guaranteed mismatch Section 5.5.1
 	/// already prescribes an outcome for.
 	/// <para>
-	/// A malformed <c>claims</c> qualifier cannot be reported from here, because this runs after the request
-	/// was validated; the validator pipeline refuses one before anything reaches this method, so a failure
-	/// arriving here would mean the pipeline had changed underneath it. Treated as naming nobody, which
-	/// refuses rather than admits.
+	/// A <c>claims</c> qualifier that is malformed, or that no end user can satisfy, cannot be reported from
+	/// here, because this runs after the request was validated; the validator pipeline refuses either one
+	/// before anything reaches this method, so a failure arriving here would mean the pipeline had changed
+	/// underneath it. Treated as naming nobody, which refuses rather than admits.
 	/// </para>
 	/// </remarks>
 	private static string[]? NamedSubjects(ValidBackChannelAuthenticationRequest request)
@@ -202,7 +217,9 @@ public class BackChannelAuthenticationRequestProcessor(
 		var hinted = request.IdToken?.Payload.Subject is { Length: > 0 } named ? new[] { named } : null;
 
 		var requested = request.Model.Claims.RequestedSubjects();
-		var accepted = requested.TryGetSuccess(out var subjects) ? subjects : [];
+		var accepted = requested.Match<string[]?>(
+			subjects => subjects.Length > 0 ? subjects : null,
+			_ => []);
 
 		return (hinted, accepted) switch
 		{

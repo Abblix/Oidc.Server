@@ -21,13 +21,7 @@
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
-        <!-- Deterministic builds for reproducible binaries -->
-        <Deterministic>true</Deterministic>
-        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
 
-        <!-- SourceLink for symbol packages -->
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
@@ -53,7 +47,6 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
       <PackageReference Include="Microsoft.Extensions.Http" />
-      <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
       <PackageReference Update="SonarAnalyzer.CSharp">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>

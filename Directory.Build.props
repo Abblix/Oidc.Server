@@ -13,6 +13,16 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Unions are a C# 15 feature and C# 15 has not shipped, so the compiler does not recognise the
+       keyword at all without this - the failure is "Identifier expected" at the declaration, which
+       reads as a syntax error in our code rather than as a language version. It comes out when the
+       language ships, and until then it also admits every other preview feature, which is the cost:
+       nothing stops a preview feature from being used by accident, and a preview feature can still
+       change under us. -->
+  <PropertyGroup>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
        from git tags. The latest tag sets the base; commits since it bump the patch and
        append the height and the pre-release suffix.

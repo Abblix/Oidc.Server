@@ -15,3 +15,11 @@ trim_trailing_whitespace = false
 
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:suggestion
+
+# One Sonar rule CRASHES on a union declaration rather than reporting anything: the analyzer throws
+# NullReferenceException, which arrives as AD0001 and fails the build here, where warnings are errors.
+# Reproduced on the newest analyzer available as well, so it is a gap in the tool rather than a stale
+# pin. Scoped to the file that declares a union rather than turned off everywhere - the list growing is
+# the reminder that this is owed back to the analyzer, not a decision to stop checking.
+[src/Abblix.Utils/Result.cs]
+dotnet_diagnostic.S1117.severity = none

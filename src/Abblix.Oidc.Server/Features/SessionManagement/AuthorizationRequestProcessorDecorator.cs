@@ -37,12 +37,16 @@ public class AuthorizationRequestProcessorDecorator(
     /// </returns>
     public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
     {
+        // Read before the inner processor is handed the request: it is the seam a host replaces or wraps,
+        // and whether this response carries session state is decided from what the request asked for.
+        var asksForOpenId = request.Model.Scope.HasFlag(Scopes.OpenId);
+
         var response = await inner.ProcessAsync(request);
 
         // Append session state to the response if session management is enabled and the request qualifies
         if (sessionManagementService.Enabled &&
             response is SuccessfullyAuthenticated success && success.SessionId.HasValue() &&
-            request.Model.Scope.HasFlag(Scopes.OpenId))
+            asksForOpenId)
         {
             success.SessionState = sessionManagementService.GetSessionState(request.Model, success.SessionId);
         }

@@ -86,6 +86,12 @@ internal class IdentityTokenService(
 			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address]).ToArray();
 		}
 
+		// Read before the claims provider is handed the session: it is a host seam, and this is what the
+		// id_token reports about how the end user authenticated.
+		string[]? authenticationMethods = authSession.AuthenticationMethodReferences is { } methods
+			? [..methods]
+			: null;
+
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
 			authSession,
 			scope,
@@ -116,7 +122,7 @@ internal class IdentityTokenService(
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
 				AuthContextClassRef = authSession.AuthContextClassRef,
-				AuthenticationMethodReferences = authSession.AuthenticationMethodReferences,
+				AuthenticationMethodReferences = authenticationMethods,
 
 				Audiences = [authContext.ClientId],
 				Nonce = authContext.Nonce,
