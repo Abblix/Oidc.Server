@@ -13,14 +13,18 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <!-- Unions are a C# 15 feature and C# 15 has not shipped, so the compiler does not recognise the
-       keyword at all without this - the failure is "Identifier expected" at the declaration, which
-       reads as a syntax error in our code rather than as a language version. It comes out when the
-       language ships, and until then it also admits every other preview feature, which is the cost:
-       nothing stops a preview feature from being used by accident, and a preview feature can still
-       change under us. -->
+  <!-- Unions are a C# 15 feature, so the version is named rather than left to the SDK. Named rather
+       than "latest" because "latest" moves with the toolchain: the day C# 16 arrives, a construct
+       from it compiles here without anyone deciding that, and the build starts requiring an SDK
+       nobody chose. Below 15 the compiler does not know the keyword and reads the declaration as an
+       identifier, so the failure is a run of CS0106 about modifiers rather than anything naming a
+       language version.
+
+       This deliberately stops short of "preview", which the file carried while the feature was
+       behind it: preview admits every other unfinished feature as well, and one used by accident is
+       one that can change under us before it ships. -->
   <PropertyGroup>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>15.0</LangVersion>
   </PropertyGroup>
 
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
