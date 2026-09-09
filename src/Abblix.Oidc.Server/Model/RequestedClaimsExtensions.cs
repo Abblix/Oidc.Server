@@ -83,7 +83,7 @@ public static class RequestedClaimsExtensions
     private const string MalformedSubject = "The sub claim was requested with a value that is not a string";
 
     private const string NoAcceptableSubject =
-        "The sub claim was requested with qualifiers no end user can satisfy at once";
+        "The sub claim was requested with qualifiers no end user can satisfy";
 
     /// <summary>
     /// Reads a requested <c>sub</c> value, failing when the qualifier is not a string.

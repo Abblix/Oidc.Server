@@ -83,15 +83,21 @@ public class DeviceAuthorizationDetailsValidatorTests
     public async Task APolicyThatDropsEveryEntry_IsAFault(bool inPlace)
     {
         var context = Context((JsonArray)Requested.DeepClone());
-        var validator = new DeviceAuthorizationDetailsValidator(
-            inPlace
-                ? StubAuthorizationDetailsPolicy.ClearingInPlace
-                : StubAuthorizationDetailsPolicy.Emptying);
+        var policy = inPlace
+            ? StubAuthorizationDetailsPolicy.ClearingInPlace
+            : StubAuthorizationDetailsPolicy.Emptying;
+        var validator = new DeviceAuthorizationDetailsValidator(policy);
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
             () => validator.ValidateAsync(context));
 
         Assert.Contains(nameof(IAuthorizationDetailsPolicy), thrown.Message, StringComparison.Ordinal);
         Assert.Null(context.AuthorizationDetails);
+
+        // The premise the guard rests on: the policy is handed the live array, so the in-place shape
+        // empties the very thing a guard reading the request afterwards would count.
+        Assert.Same(context.Request.AuthorizationDetails, policy.LastSeen);
+        if (inPlace)
+            Assert.Empty(context.Request.AuthorizationDetails!);
     }
 }

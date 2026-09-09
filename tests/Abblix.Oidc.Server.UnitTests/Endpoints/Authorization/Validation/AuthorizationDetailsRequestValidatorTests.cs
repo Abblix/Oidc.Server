@@ -129,11 +129,16 @@ public class AuthorizationDetailsRequestValidatorTests
     public async Task APolicyThatEmptiesTheRequestAsItAnswers_IsAFault()
     {
         var context = Context((JsonArray)Requested.DeepClone());
-        var validator = new AuthorizationDetailsRequestValidator(
-            StubAuthorizationDetailsPolicy.ClearingInPlace);
+        var policy = StubAuthorizationDetailsPolicy.ClearingInPlace;
+        var validator = new AuthorizationDetailsRequestValidator(policy);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ValidateAsync(context));
 
         Assert.Null(context.AuthorizationDetails);
+
+        // The premise the guard rests on: the policy is handed the live array, and this shape empties
+        // the very thing a guard reading the request afterwards would count.
+        Assert.Same(context.Request.AuthorizationDetails, policy.LastSeen);
+        Assert.Empty(context.Request.AuthorizationDetails!);
     }
 }

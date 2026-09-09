@@ -24,8 +24,8 @@ public class DeviceAuthorizationDetailsValidator(
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
     {
-        // Counted before the call, because the policy is handed this very array and a validator
-        // that narrows by editing in place empties it as it answers.
+        // Whether the request carried any, read before the call: the policy is handed this very
+        // array, and a validator that narrows by editing in place empties it as it answers.
         var requested = context.Request.AuthorizationDetails is { Count: > 0 };
 
         var result = await policy.ApplyAsync(
