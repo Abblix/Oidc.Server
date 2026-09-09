@@ -109,11 +109,14 @@ public class AuthorizationRequestProcessorTests
         JsonArray? authorizationDetails = null,
         TimeSpan? defaultMaxAge = null,
         string[]? defaultAcrValues = null,
-        string? idTokenHintSubject = null)
+        string? idTokenHintSubject = null,
+        string? clientId = null)
     {
+        clientId ??= TestConstants.DefaultClientId;
+
         var authRequest = new AuthorizationRequest
         {
-            ClientId = TestConstants.DefaultClientId,
+            ClientId = clientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = TestConstants.DefaultRedirectUri,
             Scope = scope ?? [Scopes.OpenId],
@@ -123,7 +126,7 @@ public class AuthorizationRequestProcessorTests
             AuthorizationDetails = authorizationDetails,
         };
 
-        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
+        var clientInfo = new ClientInfo(clientId)
         {
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
             DefaultMaxAge = defaultMaxAge,
@@ -1607,9 +1610,9 @@ public class AuthorizationRequestProcessorTests
     /// <remarks>
     /// The shipped session holds a set, so a second copy is dropped before anything notices - and the
     /// collection is public with an initialiser, so a host may supply a list. Then every request appends
-    /// another entry, the session is written because it now carries more than the store held, and logout
-    /// emits one front-channel call per entry: the same client, told to log out as many times as it has
-    /// ever authorized.
+    /// another entry and the session is written because it now carries more than the store held, so the
+    /// stored session grows without bound and every host reading it back is handed a list naming one
+    /// client as many times as it has ever authorized.
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_ASessionWhoseListAcceptsDuplicates_RecordsTheClientOnce()
@@ -1621,10 +1624,12 @@ public class AuthorizationRequestProcessorTests
         };
 
         var consents = CreateConsents();
-        SetupSuccessfulAuthCodeFlow(request, session, consents);
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         await _processor.ProcessAsync(request);
 
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
         Assert.Single(session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
     }
@@ -1809,15 +1814,17 @@ public class AuthorizationRequestProcessorTests
         Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
 
         // The case numbers are positions in the sequence of size reads, not the sites themselves, so
-        // another read anywhere on this path moves both cases onto a different pair and leaves the
-        // guarded one unguarded with the theory still green. Pinning the count turns that into a
-        // failure. Taken before the assertions above, so it counts what the request did.
+        // a read added AHEAD of them moves both cases onto a different pair and leaves the guarded
+        // one unguarded with the theory still green. Pinning the count turns that into a failure,
+        // and catches a read added anywhere else as well. Taken before the assertions above, so it
+        // counts what the request did.
         Assert.Equal(2, measures);
 
         // The two cases differ in what the store is told, and that difference is the point of the
         // second window: an arrival inside both snapshots leaves the session unchanged, while one
-        // landing between them is a real change and must be written. Without this, taking both
-        // snapshots from the same read would leave every case passing.
+        // landing between them is a real change and must be written. This is the line that fails
+        // when the write stops depending on the comparison at all - collapsing the two snapshots
+        // onto one read fails the count above instead, before this is reached.
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Exactly(expectedWrites));
     }
 
@@ -1854,7 +1861,7 @@ public class AuthorizationRequestProcessorTests
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
 
         // The response names each client once, however many times the session happens to list it.
-        // The end-session processor walks the session own list rather than this one, so no
+        // The end-session processor walks the session's own list rather than this one, so no
         // notification the library sends is saved here; what changes is what a host reading the
         // response is told to watch.
         var authenticated = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -2006,9 +2013,9 @@ public class AuthorizationRequestProcessorTests
     /// <para>
     /// The second pair is here because no case-only pair can show it: the two names carry the same
     /// accented letter written two ways, which a culture-sensitive comparison calls one name and an
-    /// ordinal one calls two. Both spellings arrive over the request, so a host is free to register
-    /// either. Written as escapes so the file stays ASCII and no encoding can change what is being
-    /// compared.
+    /// ordinal one calls two. Both spellings can be registered, since nothing here normalises a
+    /// client name. The two literals are written as escapes, so what is being compared is fixed by
+    /// the compiler rather than by however this file happens to be decoded.
     /// </para>
     /// </remarks>
     [Theory]
@@ -2034,6 +2041,36 @@ public class AuthorizationRequestProcessorTests
 
         Assert.Contains(one, session.AffectedClientIds);
         Assert.Contains(other, session.AffectedClientIds);
+    }
+    /// <summary>
+    /// A client colliding with one already on the session only under a coarser comparison is still
+    /// written to the store.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the same choice, and it needs its own row: the theory above drives the copy
+    /// the restore reads from, and swapping the comparer that answers "did this session change"
+    /// leaves that theory green. A session naming one spelling and a request registered under the
+    /// other are two clients; a comparison folding them into one reads the session as unchanged, so
+    /// nothing is written and the newcomer is missing from what logout walks on the next request,
+    /// having been recorded only in memory.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AClientCollidingOnlyUnderACoarserComparison_IsWritten()
+    {
+        const string composed = "caf\u00e9-client";
+        const string decomposed = "cafe\u0301-client";
+
+        var request = CreateRequest(clientId: decomposed);
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(composed);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(decomposed, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
     /// <summary>
     /// Wires up the strict Mocks for a successful authorization-code flow and returns a

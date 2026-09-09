@@ -526,6 +526,55 @@ public class EndSessionRequestProcessorTests
             Times.Once);
         Assert.Single(response.FrontChannelLogoutRequestUris);
     }
+    /// <summary>
+    /// A client provider that adds to the session while it answers does not fault the logout.
+    /// </summary>
+    /// <remarks>
+    /// The provider is a host seam and it is asked inside this walk, so walking the collection the
+    /// session carries is walking something an implementation can change mid-iteration. What makes
+    /// the walk immune is that the list is taken ONCE, eagerly, before the first client is asked
+    /// about: a lazy read written in the same place reads the live collection just as the plain loop
+    /// did, and passes every other row here. The failure is not a client quietly lost but a faulted
+    /// request, arriving after the end user is already signed out and their tokens revoked.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AClientProviderGrowingTheSessionWhileItAnswers_StillCompletes()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string> { "client_1" },
+        };
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Callback(() => authSession.AffectedClientIds.Add("arrived-while-answering"))
+            .ReturnsAsync(new ClientInfo("client_1"));
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Contains("arrived-while-answering", authSession.AffectedClientIds);
+    }
 
     /// <summary>
     /// Verifies sign out is called before client notification.
