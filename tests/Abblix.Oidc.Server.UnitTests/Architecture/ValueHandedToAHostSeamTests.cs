@@ -107,15 +107,25 @@ public class ValueHandedToAHostSeamTests
 
     /// <summary>One site and member, named the same way wherever it is counted.</summary>
     /// <remarks>
-    /// Built once and used by both sides. Two keys assembled independently agree only while nothing
-    /// moves: one built from the call and one from the statement disagree the moment a statement wraps,
-    /// and one carrying a full path disagrees on whichever platform does not spell paths that way.
+    /// Built once and used by both sides, because two keys assembled independently agree only while
+    /// nothing moves - one built from the call and one from the statement part company the moment a
+    /// statement wraps. The file is named by its place in the repository rather than by its own name:
+    /// two files sharing a name would be one key, and a declaration at the same line in each would
+    /// silence the other, which is nobody's intent and nothing's failure.
     /// </remarks>
     private static string SiteOf(StatementSyntax statement, string member)
     {
         var line = statement.SyntaxTree.GetLineSpan(statement.Span).StartLinePosition.Line + 1;
-        return $"{Path.GetFileName(statement.SyntaxTree.FilePath)}({line}):{member}";
+        return $"{Located(statement.SyntaxTree.FilePath)}({line}):{member}";
     }
+
+    /// <summary>Where a file sits in the repository, spelled the same way on every platform.</summary>
+    private static string Located(string path)
+        => Path.IsPathRooted(path)
+            ? Path.GetRelativePath(Root.Value, path).Replace('\\', '/')
+            : path;
+
+    private static readonly Lazy<string> Root = new(RepositoryRoot);
 
     private static string RepositoryRoot()
     {
@@ -177,7 +187,7 @@ public class ValueHandedToAHostSeamTests
                 found.TryAdd(member, access);
         }
 
-        IEnumerable<(SyntaxNode Subject, PatternSyntax Pattern)> Patterns()
+        IEnumerable<(ExpressionSyntax Subject, PatternSyntax Pattern)> Patterns()
         {
             foreach (var node in After(body, call))
                 switch (node)
@@ -200,9 +210,21 @@ public class ValueHandedToAHostSeamTests
                 }
         }
 
-        foreach (var (subject, pattern) in Patterns())
+        void Collect(ExpressionSyntax subject, PatternSyntax pattern)
         {
-            if (!RootedAtTheLoan(subject)) continue;
+            // A tuple subject is matched element by element, because the loan is one of the elements and
+            // the whole tuple is never rooted at it. This file's own subject reads that way.
+            if (pattern is RecursivePatternSyntax { PositionalPatternClause: { } positional }
+                && subject is TupleExpressionSyntax tuple
+                && tuple.Arguments.Count == positional.Subpatterns.Count)
+            {
+                for (var i = 0; i < tuple.Arguments.Count; i++)
+                    Collect(tuple.Arguments[i].Expression, positional.Subpatterns[i].Pattern);
+
+                return;
+            }
+
+            if (!RootedAtTheLoan(subject)) return;
 
             // Only a PROPERTY pattern names members. The elements of a positional one carry the names
             // of deconstruction parameters, which read like members and are not.
@@ -224,17 +246,27 @@ public class ValueHandedToAHostSeamTests
             }
         }
 
+        foreach (var (subject, pattern) in Patterns())
+            Collect(subject, pattern);
+
         return found.Select(entry => (entry.Key, entry.Value));
     }
 
-    /// <summary>How many calls a host could answer this statement makes.</summary>
-    private static int SeamCallsIn(SyntaxNode statement, IReadOnlySet<string> seamMethods)
+    /// <summary>How many calls a host could answer belong to this statement itself.</summary>
+    /// <remarks>
+    /// A call in the header of an <c>if</c> or a <c>foreach</c> belongs to the whole statement, block
+    /// included, so counting the subtree counts the calls INSIDE the block as well - and each of those
+    /// is a statement of its own that can carry its own declaration. Counted that way, a declaration on
+    /// the header is called ambiguous when there is exactly one call it could mean.
+    /// </remarks>
+    private static int SeamCallsIn(StatementSyntax statement, IReadOnlySet<string> seamMethods)
         => statement.DescendantNodes()
             .OfType<AwaitExpressionSyntax>()
             .Select(awaited => awaited.Expression)
             .OfType<InvocationExpressionSyntax>()
             .Count(call => call.Expression is MemberAccessExpressionSyntax access
-                           && seamMethods.Contains(access.Name.Identifier.ValueText));
+                           && seamMethods.Contains(access.Name.Identifier.ValueText)
+                           && EnclosingStatement(call) == statement);
 
     /// <summary>
     /// Every offence, and every declared member that still describes a read.
@@ -342,10 +374,23 @@ public class ValueHandedToAHostSeamTests
     /// </remarks>
     private static IReadOnlyList<string> OffencesIn(string body, string declaration = "")
     {
-        var source = $$"""
+        var tree = Parsed(ProbeSource(body, declaration), "Probe.cs");
+        Assert.DoesNotContain(tree.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
+
+        return Walk([("Probe.cs", tree)]).Offences;
+    }
+
+    private static SyntaxTree Parsed(string source, string path)
+        => CSharpSyntaxTree.ParseText(
+            source, path: path, cancellationToken: TestContext.Current.CancellationToken);
+
+    /// <summary>One source declaring its own seam and its own lendable member.</summary>
+    private static string ProbeSource(string body, string declaration = "")
+    {
+        return $$"""
                        using System.Threading.Tasks;
 
-                       interface ISeam { Task KeepAsync(Thing thing); }
+                       interface ISeam { Task KeepAsync(Thing thing); Task<object?> AskAsync(Thing thing); }
 
                        class Thing { public string[] Names { get; set; } = []; }
 
@@ -360,11 +405,6 @@ public class ValueHandedToAHostSeamTests
                            }
                        }
                        """;
-
-        var tree = CSharpSyntaxTree.ParseText(source, path: "Probe.cs");
-        Assert.DoesNotContain(tree.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
-
-        return Walk([("Probe.cs", tree)]).Offences;
     }
 
     /// <summary>Every spelling of the same read that the walker claims to catch.</summary>
@@ -373,6 +413,9 @@ public class ValueHandedToAHostSeamTests
     [InlineData("if (thing is { Names.Length: 0 }) { }")]
     [InlineData("var n = thing switch { { Names.Length: 0 } => 1, _ => 2 };")]
     [InlineData("switch (thing) { case { Names.Length: 0 }: break; }")]
+    // A tuple subject is read element by element, which is how this repository writes one.
+    [InlineData("switch ((1, thing)) { case (_, { Names.Length: 0 }): break; default: break; }")]
+    [InlineData("if ((1, thing) is (_, { Names.Length: 0 })) { }")]
     public void AReadAfterTheLoanIsCaughtHoweverItIsWritten(string read)
     {
         var offences = OffencesIn($"await seam.KeepAsync(thing);{Environment.NewLine}{read}");
@@ -394,6 +437,53 @@ public class ValueHandedToAHostSeamTests
     public void WhatIsNotAnOffence(string body, string declaration)
         => Assert.Empty(OffencesIn(body.Replace("\\n", Environment.NewLine), declaration));
 
+
+    /// <summary>A call in a statement HEADER is one call, whatever the block below it does.</summary>
+    /// <remarks>
+    /// The header and its block are one statement, so counting the subtree would call this declaration
+    /// ambiguous - and the block's own call is a statement of its own that can declare for itself. The
+    /// shape is ordinary here.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationOnAStatementHeaderIsNotAmbiguous()
+    {
+        var offences = OffencesIn(
+            "if (await seam.AskAsync(thing) is not null)"
+            + $"{Environment.NewLine}{{"
+            + $"{Environment.NewLine}    await seam.KeepAsync(other);"
+            + $"{Environment.NewLine}}}"
+            + $"{Environment.NewLine}var n = thing.Names.Length;",
+            "// lent deliberately Names: one call in the header.");
+
+        Assert.Empty(offences);
+    }
+
+    /// <summary>Two files sharing a name are two sites, so neither can silence the other.</summary>
+    /// <remarks>
+    /// The site is named by where the file sits, not by what it is called. Keyed by name, a declaration
+    /// at the same line in a file of the same name elsewhere reads as the same declaration, and the one
+    /// that stopped describing a read is answered by the one that still does.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationIsNotAnsweredByASameNamedFileElsewhere()
+    {
+        var reads = ProbeSource("await seam.KeepAsync(thing);"
+            + $"{Environment.NewLine}var n = thing.Names.Length;",
+            "// lent deliberately Names: still read here.");
+
+        var doesNot = ProbeSource(
+            "await seam.KeepAsync(thing);",
+            "// lent deliberately Names: nothing reads it any more.");
+
+        var (written, stale) = Declarations([
+            ("/repo/one/Same.cs", Parsed(reads, "/repo/one/Same.cs")),
+            ("/repo/two/Same.cs", Parsed(doesNot, "/repo/two/Same.cs")),
+        ]);
+
+        Assert.Equal(2, written);
+        Assert.Single(stale);
+        Assert.Contains("two/Same.cs", stale[0], StringComparison.Ordinal);
+    }
     /// <summary>A declaration only counts where a declaration is written.</summary>
     /// <remarks>
     /// A documentation comment opens with the same two characters, and the tools that read documentation
@@ -449,29 +539,37 @@ public class ValueHandedToAHostSeamTests
     public void EveryDeclaredMemberStillDescribesARead()
     {
         var sources = LibrarySources();
+        var (written, stale) = Declarations(sources);
+
+        Assert.True(
+            written > 0,
+            "no site declares a deliberate loan, so nothing proves the walker matches");
+
+        Assert.True(
+            stale.Count == 0,
+            "A site declares a deliberate loan of a member it no longer reads:"
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>How many members are declared, and which of them no longer describe a read.</summary>
+    /// <remarks>
+    /// Counted the way the walker reads them, over the same statements, so the two sides cannot disagree
+    /// about what a declaration SAYS - only about whether it still describes anything. Named rather than
+    /// counted, because a number says the two disagree and a name says which declaration went quiet.
+    /// </remarks>
+    private static (int Written, IReadOnlyList<string> Stale) Declarations(
+        IReadOnlyList<(string Path, SyntaxTree Tree)> sources)
+    {
         var (_, honoured) = Walk(sources);
 
-        // Counted the way the walker reads them, over the same statements, so the two cannot disagree
-        // about what a declaration says - only about whether it still describes anything.
         var written = sources
             .SelectMany(s => s.Tree.GetRoot().DescendantNodes().OfType<StatementSyntax>())
             .SelectMany(statement => MembersDeclaredOn(statement)
                 .Select(member => SiteOf(statement, member)))
             .ToArray();
 
-        Assert.True(
-            written.Length > 0,
-            "no site declares a deliberate loan, so nothing proves the walker matches");
-
-        // Named rather than counted: a number tells you the two disagree, and the name tells you which
-        // declaration stopped describing a read.
-        var stale = written.Where(entry => !honoured.Contains(entry)).Order().ToArray();
-
-        Assert.True(
-            stale.Length == 0,
-            "A site declares a deliberate loan of a member it no longer reads:"
-            + Environment.NewLine
-            + string.Join(Environment.NewLine, stale));
+        return (written.Length, written.Where(entry => !honoured.Contains(entry)).Order().ToArray());
     }
 
     /// <summary>

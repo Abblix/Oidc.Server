@@ -128,9 +128,16 @@ public class AuthorizationRequestProcessor(
 
 		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
-		// lent deliberately AffectedClientIds: what the provider left in this list is compared against
-		// what the copy above says, and the difference is put back before anything is written.
+		// lent deliberately AffectedClientIds: what the provider leaves in this list is compared against
+		// the copy above, and whatever it took out goes back before anything else runs.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
+
+		// Put back whatever the provider took out of the list of clients this session touches, before
+		// anything else can return. That list is what logout iterates to reach each client, and the
+		// provider was never asked about the clients already on it. Only ever ADDED to: an entry the
+		// provider put there stays, since removing it would lose a client for the same reason.
+		foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
+			authSession.AffectedClientIds.Add(id);
 
 		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
 		if (userConsents.Pending is { Scopes.Length: > 0 }
@@ -222,29 +229,22 @@ public class AuthorizationRequestProcessor(
 
 		// Mark the client as affected by this session and update the session's state.
 		// Ensures the client is tied to the current session, updating its state to include the session's client ID.
-		// What this server knows the session touches: the copy taken before the provider saw it, plus this
-		// client. It is what the response tells the client to watch, and it is what the stored session has
-		// to carry - the provider was handed the live object and is not one of the things this is learnt
-		// from.
+		authSession.AffectedClientIds.Add(clientId);
+
+		// Written whenever the session now carries more than the store was holding. Asked as one question
+		// about the SESSION rather than about this client: a provider that named another client changed the
+		// object and told the store nothing, and that client is then missing from logout exactly like one
+		// this request would have added. The restore above only adds, so a difference is a difference in
+		// count.
+		if (authSession.AffectedClientIds.Count != alreadyAffected.Length)
+			await authSessionService.SignInAsync(authSession);
+
+		// What the response tells the client to watch: what this server knows the session touches, which is
+		// the copy taken before the provider saw it plus this client. The provider is not one of the things
+		// that is learnt from.
 		string[] affectedClientIds = alreadyAffected.Contains(clientId)
 			? alreadyAffected
 			: [..alreadyAffected, clientId];
-
-		// Restored into the live session, and only ever ADDED to. This list is what logout iterates to
-		// reach each client, so an entry the provider dropped goes back; an entry the provider added stays,
-		// because removing it would lose a client for exactly the same reason.
-		var missing = affectedClientIds
-			.Where(id => !authSession.AffectedClientIds.Contains(id))
-			.ToArray();
-
-		foreach (var id in missing)
-			authSession.AffectedClientIds.Add(id);
-
-		// Written when the STORED session did not name this client, or when the live one was missing
-		// anything above: a provider that added the client itself changed the object and told the store
-		// nothing, which is the same client absent from logout as one the provider removed.
-		if (!alreadyAffected.Contains(clientId) || missing.Length > 0)
-			await authSessionService.SignInAsync(authSession);
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
 		// scope set (identical to what the issued token carries) so the response encoder advertises the

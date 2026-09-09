@@ -1540,10 +1540,10 @@ public class AuthorizationRequestProcessorTests
     /// </summary>
     /// <remarks>
     /// The provider is handed the live session, and the list of clients a session touches is what logout
-    /// iterates to reach them. Whether this client still has to be written is a question about the
-    /// session as it now stands, not about the copy taken before the provider saw it: judged from the
-    /// copy, a client the provider removed reads as one already recorded, so nothing is written and the
-    /// end user's logout never reaches it.
+    /// iterates to reach them. Taken at its word, the object would carry one client fewer than the store
+    /// does, and any later write would push that loss out. Put back, the session says what it said when
+    /// the store handed it over - so there is also nothing to tell the store, which is asserted here
+    /// because a write nobody needs is how the loss would reach it anyway.
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_AConsentProviderRemovingTheClient_RecordsItAnyway()
@@ -1563,7 +1563,7 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
-        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
         Assert.NotNull(capture.Grant);
     }
 
@@ -1590,6 +1590,37 @@ public class AuthorizationRequestProcessorTests
 
         await _processor.ProcessAsync(request);
 
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A client the provider adds is written too, even when this request's client was already stored.
+    /// </summary>
+    /// <remarks>
+    /// Whether the session has to be written is a question about the session, not about this client: a
+    /// provider that named another client changed the object and told the store nothing, and that client
+    /// is then missing from logout exactly like one the provider removed.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderAddingAnotherClient_WritesTheSession()
+    {
+        const string another = "another-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Add(another))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(another, session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
 
