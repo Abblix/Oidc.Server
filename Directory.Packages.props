@@ -37,11 +37,9 @@
          ContinuousIntegrationBuild, which is what makes the shipped map portable rather than keyed on
          the directory it was built in.
 
-         Referencing it explicitly pulls in a Microsoft.Build.Tasks.Git carrying a MODERATE advisory,
-         which auditing reports at every level up to moderate - so raising NuGetAuditLevel does not
-         answer it, and what turns the report into a failure is TreatWarningsAsErrors in
-         Directory.Build.props. A restore against fresh advisory data then fails every packable
-         project; a warm cache holding advisory data older than the advisory hides it. -->
+         Referencing it explicitly pulls in a Microsoft.Build.Tasks.Git carrying a moderate advisory,
+         and warnings are errors here, so a restore against fresh advisory data fails every packable
+         project. A warm cache holding advisory data older than the advisory hides that. -->
     <!-- xunit.v3 picks the Microsoft Testing Platform major version by package variant: the plain
          xunit.v3 metapackage targets MTP v1, while xunit.v3.mtp-v2 targets MTP v2. We reference the
          mtp-v2 variant (below) so the current Microsoft.Testing.Extensions.*, which require MTP 2.x,

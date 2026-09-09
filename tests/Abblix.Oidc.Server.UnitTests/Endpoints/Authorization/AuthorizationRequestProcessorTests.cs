@@ -1697,8 +1697,42 @@ public class AuthorizationRequestProcessorTests
         await _processor.ProcessAsync(request);
 
         Assert.Contains(newcomer, session.AffectedClientIds);
+
+        // The half the restore owes: the copy this provider dropped is back, beside what it added.
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
+
+    /// <summary>
+    /// A session that arrived carrying one client twice, and nobody touching it, is not written.
+    /// </summary>
+    /// <remarks>
+    /// The cell the other three leave empty, and the one a criterion counting NAMES rather than
+    /// comparing them gets wrong: a list holding two copies of this client has more entries than the
+    /// set of names does, so counted that way the session reads as changed on every request and is
+    /// written to the store each time, for nothing.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ADuplicateNobodyTouches_IsNotWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string>
+            {
+                TestConstants.DefaultClientId,
+                TestConstants.DefaultClientId,
+            },
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+
     /// <summary>
     /// A session that arrived carrying one client twice is neither written nor shortened.
     /// </summary>
