@@ -1994,6 +1994,48 @@ public class AuthorizationRequestProcessorTests
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
     /// <summary>
+    /// Two clients whose names an ordinal comparison keeps apart both survive a consent provider
+    /// that empties the list.
+    /// </summary>
+    /// <remarks>
+    /// The copy the restore reads from is a set, and a set is only as discriminating as its
+    /// comparer: one that folds case, or one that compares by culture, merges such a pair into a
+    /// single entry and puts exactly one of the two names back. The other is gone from the session
+    /// for good, and the client behind it is never told to log out - the same outcome the restore
+    /// exists to prevent, arriving through the comparer instead of through the provider.
+    /// <para>
+    /// The second pair is here because no case-only pair can show it: the two names carry the same
+    /// accented letter written two ways, which a culture-sensitive comparison calls one name and an
+    /// ordinal one calls two. Both spellings arrive over the request, so a host is free to register
+    /// either. Written as escapes so the file stays ASCII and no encoding can change what is being
+    /// compared.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("Client-Case", "client-case")]
+    [InlineData("caf\u00e9-client", "cafe\u0301-client")]
+    public async Task ProcessAsync_TwoClientsAnOrdinalComparerKeepsApart_BothSurviveAnEmptyingProvider(
+        string one, string other)
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(one);
+        session.AffectedClientIds.Add(other);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(one, session.AffectedClientIds);
+        Assert.Contains(other, session.AffectedClientIds);
+    }
+    /// <summary>
     /// Wires up the strict Mocks for a successful authorization-code flow and returns a
     /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
     /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from
