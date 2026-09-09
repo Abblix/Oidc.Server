@@ -116,6 +116,51 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     /// <summary>
+    /// A handler that empties the request while it authenticates leaves the requested set untouched.
+    /// </summary>
+    /// <remarks>
+    /// The whole request is handed to the handler, which is a host seam, and what the request asked for
+    /// is read back afterwards - both onto the grant and as the baseline the completion-time widening
+    /// check measures against. A handler that edits what it was given, which is how narrowing is written
+    /// throughout this repository, would otherwise erase the record of what was asked for and leave that
+    /// check comparing an empty set against whatever arrives.
+    /// </remarks>
+    [Fact]
+    public async Task AHandlerEmptyingTheRequestWhileItAuthenticates_LeavesTheRequestedDetailsAsTheyWere()
+    {
+        var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        Result<AuthSession, OidcError> session = new AuthSession(
+            Subject: Approved,
+            SessionId: "session-1",
+            AuthenticationTime: DateTimeOffset.UnixEpoch,
+            IdentityProvider: "test");
+
+        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
+            .Callback((ValidBackChannelAuthenticationRequest r) => r.AuthorizationDetails?.Clear())
+            .Returns(Task.FromResult(session));
+
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.NotNull(stored);
+
+        Assert.Equal(
+            """[{"type":"payment_initiation"}]""",
+            stored.RequestedAuthorizationDetails!.ToJsonString());
+
+        Assert.Equal(
+            """[{"type":"payment_initiation"}]""",
+            stored.AuthorizedGrant.Context.AuthorizationDetails!.ToJsonString());
+    }
+
+    /// <summary>
     /// Rewriting the grant's <c>authorization_details</c> in place leaves the requested set untouched.
     /// </summary>
     /// <remarks>

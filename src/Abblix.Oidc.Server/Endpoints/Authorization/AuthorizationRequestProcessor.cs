@@ -106,6 +106,16 @@ public class AuthorizationRequestProcessor(
 					$"Unexpected number of auth sessions: {authSessions.Count} or prompt: {model.Prompt}");
 		}
 
+		// What the request asked for, read BEFORE the provider sees it. The provider is a host seam and it
+		// is handed the array this request carries, while every decision below is measured against that same
+		// array: whether the end user denied everything, what the granted set is checked against, and what
+		// is emitted when the provider has no opinion of its own. A provider that narrows by editing what it
+		// was given - which is how narrowing is written throughout this repository - would otherwise move the
+		// yardstick it is being measured by, and an emptied request reads exactly like one that never asked.
+		var requestedDetails = request.AuthorizationDetails is { } asRequested
+			? (JsonArray)asRequested.DeepClone()
+			: null;
+
 		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
@@ -139,7 +149,7 @@ public class AuthorizationRequestProcessor(
 		//                                           -> user denied every entry; fail with access_denied.
 		//   Granted.AuthorizationDetails is non-empty -> explicit consent (possibly narrowed); emit as-is.
 		if (userConsents.Granted.AuthorizationDetails is { Count: 0 }
-			&& request.AuthorizationDetails is { Count: > 0 })
+			&& requestedDetails is { Count: > 0 })
 		{
 			return new AuthorizationError(
 				model,
@@ -155,8 +165,12 @@ public class AuthorizationRequestProcessor(
 		// browser tampering it failed to intersect against the request), so it surfaces as an
 		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
 		// TokenAuthorizationContextEvaluator at the token endpoint.
+		// Handed what was asked for rather than what the provider left behind: the backstop measures the
+		// granted set against the request, and the provider it is policing can reach that array.
 		var enforcedAuthorizationDetails = await consentConstraintEnforcer.EnforceAsync(
-			request, userConsents.Granted, CancellationToken.None);
+			request with { AuthorizationDetails = requestedDetails },
+			userConsents.Granted,
+			CancellationToken.None);
 
 		// C2 (PR #135 review): the JsonArray reference passed to the consent provider and the
 		// one placed on AuthorizationContext travel through System.Text.Json on the way to the
@@ -164,7 +178,7 @@ public class AuthorizationRequestProcessor(
 		// child of its own DTO, the second serialise will throw because the JsonNode is parented
 		// twice. DeepClone defensively on the boundary so the two consumers each see independent
 		// trees -- matches the DeepClone discipline applied elsewhere (ApplyTo, resolvers).
-		var sourceAd = enforcedAuthorizationDetails ?? request.AuthorizationDetails;
+		var sourceAd = enforcedAuthorizationDetails ?? requestedDetails;
 		var emittedAuthorizationDetails = sourceAd is { Count: > 0 }
 			? (JsonArray?)sourceAd.DeepClone()
 			: null;

@@ -1616,6 +1616,40 @@ public class AuthorizationRequestProcessorTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
     }
 
+    /// <summary>
+    /// A consent provider that empties the request as it answers is still answered with a denial.
+    /// </summary>
+    /// <remarks>
+    /// The provider is a host seam, and it is handed the array the request carries - so a provider that
+    /// narrows by editing what it was given, which is how narrowing is written everywhere in this
+    /// repository, empties the very set the denial is measured against. Measured afterwards, the request
+    /// looks like one that never asked for anything, the denial turns into a successful authorization,
+    /// and the token carries no authorization_details at all - which neither the client nor the resource
+    /// server can detect.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderEmptyingTheRequestInPlace_StillReturnsAccessDenied()
+    {
+        var requestedAd = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var request = CreateRequest(authorizationDetails: requestedAd);
+        var session = CreateAuthSession();
+        var consents = CreateConsents(grantedAuthorizationDetails: new JsonArray());
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => requestedAd.Clear())
+            .ReturnsAsync(consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
     [Fact]
     public async Task ProcessAsync_AuthorizationDetailsNarrowedByProvider_PropagatesNarrowToContext()
     {

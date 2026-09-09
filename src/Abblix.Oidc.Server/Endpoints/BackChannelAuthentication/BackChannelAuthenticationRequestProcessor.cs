@@ -63,6 +63,16 @@ public class BackChannelAuthenticationRequestProcessor(
 	{
 		request.ClientInfo.CheckClientLicense();
 
+		// Read before the handler sees the request. The handler is a host seam holding this very request,
+		// and both answers below are what the REQUEST said: whom it named, and what it asked for. A handler
+		// that narrows by editing what it was given - the way narrowing is written throughout this
+		// repository - would otherwise erase the record of both, leaving the end-user check with nobody to
+		// enforce and the widening check at completion measuring against an empty set.
+		var namedSubjects = NamedSubjects(request);
+		var requestedDetails = request.AuthorizationDetails is { } asRequested
+			? (JsonArray)asRequested.DeepClone()
+			: null;
+
 		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
 		if (authResult.TryGetFailure(out var error))
 		{
@@ -94,7 +104,6 @@ public class BackChannelAuthenticationRequestProcessor(
 		// Two parameters can name an end user and OpenID Connect Core 1.0 Section 3.1.2.2 puts both under one
 		// requirement, so both bind. Their intersection is what survives, which is the same answer the
 		// authorization endpoint reaches by filtering candidate sessions through one and then the other.
-		var namedSubjects = NamedSubjects(request);
 
 		// Answered now, because the session a handler returns here names the end user it is about to reach,
 		// not one who has already answered - the request is stored Pending either way. A handler intending
@@ -123,7 +132,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			// RFC 9396 section 3: authorization_details from the CIBA request carries onto the
 			// grant byte-exact, so the access token issued via the CIBA grant emits the
 			// claim through the same pipeline as the authorization-code flow.
-			AuthorizationDetails = request.AuthorizationDetails,
+			AuthorizationDetails = requestedDetails,
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
@@ -155,7 +164,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			// An EMPTY array when the request carried none, never null: null is what a request written by
 			// a build without this field reads back as, and the two must not be confused. Denying such a
 			// request would refuse, mid-upgrade, every in-flight authentication the user had approved.
-			RequestedAuthorizationDetails = request.AuthorizationDetails is { } requested
+			RequestedAuthorizationDetails = requestedDetails is { } requested
 				? (JsonArray)requested.DeepClone()
 				: [],
 
