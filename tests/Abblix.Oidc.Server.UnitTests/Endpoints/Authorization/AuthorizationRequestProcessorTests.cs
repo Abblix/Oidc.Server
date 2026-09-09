@@ -1611,8 +1611,7 @@ public class AuthorizationRequestProcessorTests
     /// The shipped session holds a set, so a second copy is dropped before anything notices - and the
     /// collection is public with an initialiser, so a host may supply a list. Then every request appends
     /// another entry and the session is written because it now carries more than the store held, so the
-    /// stored session grows without bound and every host reading it back is handed a list naming one
-    /// client as many times as it has ever authorized.
+    /// stored session grows without bound.
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_ASessionWhoseListAcceptsDuplicates_RecordsTheClientOnce()

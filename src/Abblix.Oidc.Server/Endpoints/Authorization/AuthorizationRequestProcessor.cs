@@ -242,7 +242,7 @@ public class AuthorizationRequestProcessor(
 		// Mark the client as affected by this session, once. The shipped session holds a set, so a second
 		// copy would be dropped for us - but the collection is public and a host may supply a list, and
 		// then every request appends another entry that is persisted, so the stored session grows without
-		// bound and a host reading it back is handed one client named many times.
+		// bound.
 		if (!authSession.AffectedClientIds.Contains(clientId))
 			authSession.AffectedClientIds.Add(clientId);
 
