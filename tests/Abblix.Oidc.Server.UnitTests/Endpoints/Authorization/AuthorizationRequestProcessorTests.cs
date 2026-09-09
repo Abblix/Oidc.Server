@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -1701,6 +1702,74 @@ public class AuthorizationRequestProcessorTests
         // The half the restore owes: the copy this provider dropped is back, beside what it added.
         Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A collection that gains an entry while it is being asked how large it is.
+    /// </summary>
+    /// <remarks>
+    /// The same order of events a second request produces against a session a host keeps, arriving
+    /// every time instead of one run in a thousand. The shipped collection hands a walker a snapshot
+    /// and cannot refuse one, while copying out reads the size first and takes the contents after.
+    /// </remarks>
+    private sealed class GrowsWhileMeasured(params string[] items) : ICollection<string>
+    {
+        private readonly List<string> _items = [..items];
+        private bool _grown;
+
+        public int Count
+        {
+            get
+            {
+                var answer = _items.Count;
+
+                if (!_grown)
+                {
+                    _grown = true;
+                    _items.Add("arrived-during-the-read");
+                }
+
+                return answer;
+            }
+        }
+
+        public bool IsReadOnly => false;
+        public void Add(string item) => _items.Add(item);
+        public void Clear() => _items.Clear();
+        public bool Contains(string item) => _items.Contains(item);
+        public void CopyTo(string[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        public bool Remove(string item) => _items.Remove(item);
+        public IEnumerator<string> GetEnumerator() => _items.ToArray().AsEnumerable().GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// A session growing while it is read is still processed, and the client is still recorded.
+    /// </summary>
+    /// <remarks>
+    /// The question is not what the list says but HOW it is read. Asking for the size and then copying
+    /// into an array of that size fails when the size moved in between; walking the collection asks it
+    /// for a view it is prepared to give, which the shipped one always is. The window is the one that
+    /// matters: this request's client is already recorded on the session and the store has not been
+    /// told, so a read that throws here loses the request AND the record, and the client is missing
+    /// from the logout that session drives.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ASessionGrowingWhileItIsRead_IsStillProcessed()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new GrowsWhileMeasured(TestConstants.DefaultClientId),
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
     }
 
     /// <summary>

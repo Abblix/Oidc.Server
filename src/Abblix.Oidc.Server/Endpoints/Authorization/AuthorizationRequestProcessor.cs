@@ -124,7 +124,7 @@ public class AuthorizationRequestProcessor(
 			: null;
 
 		// Which clients this session already touches, read before the provider is handed the session.
-		string[] alreadyAffected = [..authSession.AffectedClientIds];
+		var alreadyAffected = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
 
 		UserConsents userConsents;
 		try
@@ -256,18 +256,20 @@ public class AuthorizationRequestProcessor(
 		// not read as shortened when a provider drops one of the copies. Ordinal, matching the comparer
 		// the shipped session uses - taking the host collection's instead would put its own idea of
 		// sameness between this answer and the store's.
-		// Taken the same way the copy above was, rather than walked: a host collection is not required to
-		// be safe against another thread, and enumerating one that is being changed throws where reading
-		// its count could not - after this client was added and before the store hears about it.
-		string[] nowAffected = [..authSession.AffectedClientIds];
-		if (!nowAffected.ToHashSet(StringComparer.Ordinal).SetEquals(alreadyAffected))
+		// Walked rather than copied out of, the same way the read above it is. Copying asks the
+		// collection its size and then fills an array of that size, which fails outright when a second
+		// request added a client in between; walking asks for a view, which the shipped collection always
+		// gives and never refuses. The window is the worst one available: this client is already on the
+		// session and the store has not been told.
+		var nowAffected = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
+		if (!nowAffected.SetEquals(alreadyAffected))
 			await authSessionService.SignInAsync(authSession);
 
 		// What the response tells the client to watch: what this server knows the session touches, which is
 		// the copy taken before the provider saw it plus this client. The provider is not one of the things
 		// that is learnt from.
 		string[] affectedClientIds = alreadyAffected.Contains(clientId)
-			? alreadyAffected
+			? [..alreadyAffected]
 			: [..alreadyAffected, clientId];
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
