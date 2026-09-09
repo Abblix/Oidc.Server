@@ -256,7 +256,11 @@ public class AuthorizationRequestProcessor(
 		// not read as shortened when a provider drops one of the copies. Ordinal, matching the comparer
 		// the shipped session uses - taking the host collection's instead would put its own idea of
 		// sameness between this answer and the store's.
-		if (!authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal).SetEquals(alreadyAffected))
+		// Taken the same way the copy above was, rather than walked: a host collection is not required to
+		// be safe against another thread, and enumerating one that is being changed throws where reading
+		// its count could not - after this client was added and before the store hears about it.
+		string[] nowAffected = [..authSession.AffectedClientIds];
+		if (!nowAffected.ToHashSet(StringComparer.Ordinal).SetEquals(alreadyAffected))
 			await authSessionService.SignInAsync(authSession);
 
 		// What the response tells the client to watch: what this server knows the session touches, which is

@@ -9,6 +9,15 @@
              part of each adapter's NuGet package (its assembly is embedded into them), never as a standalone
              package, so it is deliberately not packable. -->
         <IsPackable>false</IsPackable>
+        <!-- Not packable, but its assembly and its symbols ship inside the two adapter packages, so it owes
+             what every shipped assembly owes: symbols a consumer can step into, and none of this machine in
+             them. Without these the symbol file carries the directory it was built in, and a debugger that
+             steps into this code finds no source to show. -->
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
     </PropertyGroup>
 
     <ItemGroup>
