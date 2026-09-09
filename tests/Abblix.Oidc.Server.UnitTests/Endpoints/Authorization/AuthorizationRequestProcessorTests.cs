@@ -8,6 +8,7 @@
 
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -1540,16 +1541,20 @@ public class AuthorizationRequestProcessorTests
     /// </summary>
     /// <remarks>
     /// The provider is handed the live session, and the list of clients a session touches is what logout
-    /// iterates to reach them. Taken at its word, the object would carry one client fewer than the store
-    /// does, and any later write would push that loss out. Put back, the session says what it said when
-    /// the store handed it over - so there is also nothing to tell the store, which is asserted here
-    /// because a write nobody needs is how the loss would reach it anyway.
+    /// iterates to reach them. Put back, the session says what it said when the store handed it over, so
+    /// there is nothing to tell the store either - asserted here because that is the whole claim: the
+    /// restore leaves no difference behind, and a write would say there was one. The client this request
+    /// is for is deliberately not the one removed, or the line that records it would answer this test
+    /// instead of the restore.
     /// </remarks>
     [Fact]
-    public async Task ProcessAsync_AConsentProviderRemovingTheClient_RecordsItAnyway()
+    public async Task ProcessAsync_AConsentProviderRemovingAnotherClient_RecordsItAnyway()
     {
+        const string bystander = "bystander-client";
+
         var request = CreateRequest();
         var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
         session.AffectedClientIds.Add(TestConstants.DefaultClientId);
 
         var consents = CreateConsents();
@@ -1557,12 +1562,12 @@ public class AuthorizationRequestProcessorTests
 
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
-            .Callback(() => session.AffectedClientIds.Remove(TestConstants.DefaultClientId))
+            .Callback(() => session.AffectedClientIds.Remove(bystander))
             .ReturnsAsync(consents);
 
         await _processor.ProcessAsync(request);
 
-        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+        Assert.Contains(bystander, session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
         Assert.NotNull(capture.Grant);
     }
@@ -1593,6 +1598,67 @@ public class AuthorizationRequestProcessorTests
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
 
+    /// <summary>
+    /// The client is recorded once, on a session whose collection does not do that for us.
+    /// </summary>
+    /// <remarks>
+    /// The shipped session holds a set, so a second copy is dropped before anything notices - and the
+    /// collection is public with an initialiser, so a host may supply a list. Then every request appends
+    /// another entry, the session is written because it now carries more than the store held, and logout
+    /// emits one front-channel call per entry: the same client, told to log out as many times as it has
+    /// ever authorized.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ASessionWhoseListAcceptsDuplicates_RecordsTheClientOnce()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string> { TestConstants.DefaultClientId },
+        };
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Single(session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
+    /// <summary>
+    /// A request that ends in a refusal still leaves the session carrying what the store gave it.
+    /// </summary>
+    /// <remarks>
+    /// Most ways out of this method are refusals - consent is pending, interaction is not allowed, the
+    /// end user denied the requested details - and each of them returns before anything else runs. So the
+    /// list is put back where it is repaired rather than where the request succeeds: a session object a
+    /// host keeps between requests would otherwise carry the provider's edit with nothing left to undo it.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ARefusedRequest_StillKeepsTheClientsTheStoreGave()
+    {
+        const string bystander = "bystander-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(bystander);
+
+        var consents = CreateConsents(pendingScopes: [new ScopeDefinition(Scopes.Profile)]);
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        Assert.IsType<ConsentRequired>(await _processor.ProcessAsync(request));
+
+        Assert.Contains(bystander, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
+    }
     /// <summary>
     /// A client the provider adds is written too, even when this request's client was already stored.
     /// </summary>

@@ -132,13 +132,13 @@ public class AuthorizationRequestProcessor(
 		// the copy above, and whatever it took out goes back before anything else runs.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
+		foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
+			authSession.AffectedClientIds.Add(id);
+
 		// Put back whatever the provider took out of the list of clients this session touches, before
 		// anything else can return. That list is what logout iterates to reach each client, and the
 		// provider was never asked about the clients already on it. Only ever ADDED to: an entry the
 		// provider put there stays, since removing it would lose a client for the same reason.
-		foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
-			authSession.AffectedClientIds.Add(id);
-
 		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
 		if (userConsents.Pending is { Scopes.Length: > 0 }
 			or { Resources.Length: > 0 }
@@ -227,15 +227,18 @@ public class AuthorizationRequestProcessor(
 			AuthorizationDetails = emittedAuthorizationDetails,
 		};
 
-		// Mark the client as affected by this session and update the session's state.
-		// Ensures the client is tied to the current session, updating its state to include the session's client ID.
-		authSession.AffectedClientIds.Add(clientId);
+		// Mark the client as affected by this session, once. The shipped session holds a set, so a second
+		// copy would be dropped for us - but the collection is public and a host may supply a list, and
+		// then every request appends another entry that is persisted and turns into another front-channel
+		// logout call for the same client.
+		if (!authSession.AffectedClientIds.Contains(clientId))
+			authSession.AffectedClientIds.Add(clientId);
 
-		// Written whenever the session now carries more than the store was holding. Asked as one question
-		// about the SESSION rather than about this client: a provider that named another client changed the
-		// object and told the store nothing, and that client is then missing from logout exactly like one
-		// this request would have added. The restore above only adds, so a difference is a difference in
-		// count.
+		// Written whenever the session carries more than the copy taken before the provider saw it, which
+		// is what the store handed over. Asked as one question about the SESSION rather than about this
+		// client: a provider that named another client changed the object and told the store nothing, and
+		// that client is then missing from logout exactly like one this request would have added. Nothing
+		// above removes and nothing adds twice, so a difference is a difference in count.
 		if (authSession.AffectedClientIds.Count != alreadyAffected.Length)
 			await authSessionService.SignInAsync(authSession);
 
