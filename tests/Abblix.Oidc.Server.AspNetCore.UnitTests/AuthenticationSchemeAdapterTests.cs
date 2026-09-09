@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections;
 using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -191,6 +192,57 @@ public class AuthenticationSchemeAdapterTests
 
 		Assert.Equal(["pwd", "otp"], result!.AuthenticationMethodReferences);
 		Assert.Equal(["client-a", "client-b"], result.AffectedClientIds);
+	}
+	/// <summary>
+	/// A client list that was empty when its size was asked still reaches the other side whole.
+	/// </summary>
+	/// <remarks>
+	/// The size and the content were two questions put to a live collection, and a request adding the
+	/// first client between them left the property unwritten altogether - so the session came back
+	/// naming nobody, and every client it touched was gone from the logout that session drives. The
+	/// fixture is that moment made deterministic: zero to the first question, the truth afterwards.
+	/// </remarks>
+	[Fact]
+	public async Task RoundTrip_AClientListFilledAfterItsSizeWasAsked_IsStillCarried()
+	{
+		var input = Session() with
+		{
+			AffectedClientIds = new EmptyOnFirstMeasure("client-a", "client-b"),
+		};
+
+		var result = await RoundTripAsync(input);
+
+		Assert.Equal(["client-a", "client-b"], result!.AffectedClientIds);
+	}
+
+	/// <summary>
+	/// Answers zero the first time it is asked its size, and truthfully after.
+	/// </summary>
+	private sealed class EmptyOnFirstMeasure(params string[] items) : ICollection<string>
+	{
+		private readonly List<string> _items = [..items];
+		private bool _asked;
+
+		public int Count
+		{
+			get
+			{
+				if (_asked)
+					return _items.Count;
+
+				_asked = true;
+				return 0;
+			}
+		}
+
+		public bool IsReadOnly => false;
+		public void Add(string item) => _items.Add(item);
+		public void Clear() => _items.Clear();
+		public bool Contains(string item) => _items.Contains(item);
+		public void CopyTo(string[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+		public bool Remove(string item) => _items.Remove(item);
+		public IEnumerator<string> GetEnumerator() => _items.ToArray().AsEnumerable().GetEnumerator();
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 	}
 
 	[Fact]

@@ -261,8 +261,15 @@ public class AuthenticationSchemeAdapter(
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
 		var properties = new AuthenticationProperties();
-		if (authSession is { AffectedClientIds.Count: > 0 })
-			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(authSession.AffectedClientIds));
+		// Read once, and the decision made from what was read. Asking the live collection whether it is
+		// empty and then serialising it puts two questions to something another request can change in
+		// between: empty at the first and filled at the second writes nothing at all, so the session
+		// comes back naming nobody and every client it touched is gone from the logout it drives.
+		// Walked rather than copied out of, because copying asks the size and then fills an array of
+		// that size, which is the same two questions again.
+		var affectedClientIds = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
+		if (affectedClientIds.Count > 0)
+			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(affectedClientIds));
 
 		return HttpContext.SignInAsync(authenticationScheme, principal, properties);
 	}

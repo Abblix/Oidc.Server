@@ -98,8 +98,16 @@ public partial class EndSessionRequestProcessor(
 		// WaitingForActivation, not Running), leaving the POST detached and abandoned at request end.
 		// Notification is best-effort: NotifyClientSafelyAsync isolates per-client failures so an
 		// unreachable client endpoint cannot fail the end-user's logout.
+		// Read once, before the first client is asked about, and as a set. Two reasons, and each would
+		// be enough on its own. The collection is public and a host may supply a list, so the same client
+		// can be named twice - which is a second notification to a client already told, and a second
+		// identical entry in the list the browser is asked to walk. And the provider asked inside this
+		// loop is a host seam: walking the live collection while something a host wrote is answering is
+		// walking a thing it can change. Ordinal, matching the comparer the shipped session uses.
+		var clientIds = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
+
 		var tasks = new List<Task>();
-		foreach (var clientId in authSession.AffectedClientIds)
+		foreach (var clientId in clientIds)
 		{
 			var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
 			if (clientInfo == null)

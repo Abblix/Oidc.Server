@@ -470,6 +470,62 @@ public class EndSessionRequestProcessorTests
         Assert.Single(response.FrontChannelLogoutRequestUris);
         Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
     }
+    /// <summary>
+    /// A session naming one client twice tells that client once.
+    /// </summary>
+    /// <remarks>
+    /// The collection is public and a host may supply a list, so the same client can be named more
+    /// than once - the authorization endpoint records each client once but cannot stop a host from
+    /// handing over a session that already repeats one. Walked as it arrives, that is a second
+    /// notification to a client that has already been told, and a second identical entry in the
+    /// list the browser is asked to walk.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_ASessionNamingOneClientTwice_TellsItOnce()
+    {
+        // Arrange
+        var request = CreateValidEndSessionRequest();
+        var authSession = CreateAuthSession() with
+        {
+            AffectedClientIds = new List<string> { "client_1", "client_1" },
+        };
+
+        var client1 = new ClientInfo("client_1");
+
+        _authSessionService
+            .Setup(s => s.AuthenticateAsync())
+            .ReturnsAsync(authSession);
+
+        _authSessionService
+            .Setup(s => s.SignOutAsync())
+            .Returns(Task.CompletedTask);
+
+        _issuerProvider
+            .Setup(p => p.GetIssuer())
+            .Returns(Issuer);
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync("client_1"))
+            .ReturnsAsync(client1);
+
+        _logoutNotifier
+            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<ClientInfo, LogoutContext>((_, context) =>
+            {
+                context.FrontChannelLogoutRequestUris.Add(new Uri("https://client1.example.com/logout"));
+            })
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _processor.ProcessAsync(request);
+
+        // Assert
+        Assert.True(result.TryGetSuccess(out var response));
+        _logoutNotifier.Verify(
+            n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()),
+            Times.Once);
+        Assert.Single(response.FrontChannelLogoutRequestUris);
+    }
 
     /// <summary>
     /// Verifies sign out is called before client notification.
