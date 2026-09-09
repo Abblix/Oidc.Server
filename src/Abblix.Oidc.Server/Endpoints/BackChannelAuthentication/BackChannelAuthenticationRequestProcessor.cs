@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -72,6 +73,11 @@ public class BackChannelAuthenticationRequestProcessor(
 		var requestedDetails = request.AuthorizationDetails is { } asRequested
 			? (JsonArray)asRequested.DeepClone()
 			: null;
+		ScopeDefinition[] requestedScope = [..request.Scope];
+		ResourceDefinition[] requestedResources = [..request.Resources];
+		var requestedClaims = request.Model.Claims is { } claims
+			? JsonSerializer.Deserialize<RequestedClaims>(JsonSerializer.Serialize(claims))
+			: null;
 
 		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
 		if (authResult.TryGetFailure(out var error))
@@ -125,9 +131,9 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var authContext = new AuthorizationContext(
 			request.ClientInfo.ClientId,
-			request.Scope,
-			request.Resources,
-			request.Model.Claims)
+			requestedScope,
+			requestedResources,
+			requestedClaims)
 		{
 			// RFC 9396 section 3: authorization_details from the CIBA request carries onto the
 			// grant byte-exact, so the access token issued via the CIBA grant emits the

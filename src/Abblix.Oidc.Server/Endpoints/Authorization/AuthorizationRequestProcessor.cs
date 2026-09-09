@@ -116,8 +116,20 @@ public class AuthorizationRequestProcessor(
 			? (JsonArray)asRequested.DeepClone()
 			: null;
 
+		// The response types this request was validated for, read the same way and for the same reason:
+		// they decide which builders run, and the loop that reads them runs long after the provider held
+		// the request.
+		string[]? responseType = request.Model.ResponseType is { } asValidated
+			? [..asValidated]
+			: null;
+
+		// Which clients this session already touches, read before the provider is handed the session.
+		string[] alreadyAffected = [..authSession.AffectedClientIds];
+
 		// Retrieve user consents (i.e., permissions granted for requested scopes/resources/authorization_details).
 		// The 'prompt=consent' case is not forgotten but processed inside this call.
+		// lent deliberately AffectedClientIds: what touches this list after the call is the write that
+		// gets persisted, and every answer derived from it below comes from the copy taken above.
 		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
 		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
@@ -165,6 +177,12 @@ public class AuthorizationRequestProcessor(
 		// browser tampering it failed to intersect against the request), so it surfaces as an
 		// exception rather than an escalated grant. Symmetric with the strictly narrowing-only
 		// TokenAuthorizationContextEvaluator at the token endpoint.
+		// What the end user granted, read before the backstop runs. It is a seam of its own and it is
+		// handed the granted set to check, so the scopes and resources the token carries are taken from
+		// the answer rather than from what the check left behind.
+		ScopeDefinition[] grantedScopes = [..userConsents.Granted.Scopes];
+		ResourceDefinition[] grantedResources = [..userConsents.Granted.Resources];
+
 		// Handed what was asked for rather than what the provider left behind: the backstop measures the
 		// granted set against the request, and the provider it is policing can reach that array.
 		var enforcedAuthorizationDetails = await consentConstraintEnforcer.EnforceAsync(
@@ -190,8 +208,8 @@ public class AuthorizationRequestProcessor(
 		// the flow.
 		var authContext = new AuthorizationContext(
 			clientId,
-			userConsents.Granted.Scopes,
-			userConsents.Granted.Resources,
+			grantedScopes,
+			grantedResources,
 			model.Claims)
 		{
 			RedirectUri = model.RedirectUri,
@@ -204,7 +222,13 @@ public class AuthorizationRequestProcessor(
 
 		// Mark the client as affected by this session and update the session's state.
 		// Ensures the client is tied to the current session, updating its state to include the session's client ID.
-		if (!authSession.AffectedClientIds.Contains(clientId))
+		// Built from what was read before the provider saw the session, so the answer says what this
+		// server knows the session touches. The live session is still the thing that gets persisted -
+		// what a store keeps is its own business - but it is not what this response is derived from.
+		var clientIsNewToTheSession = !alreadyAffected.Contains(clientId);
+		string[] affectedClientIds = clientIsNewToTheSession ? [..alreadyAffected, clientId] : alreadyAffected;
+
+		if (clientIsNewToTheSession)
 		{
 			authSession.AffectedClientIds.Add(clientId);
 			await authSessionService.SignInAsync(authSession);
@@ -217,7 +241,7 @@ public class AuthorizationRequestProcessor(
 			model,
 			request.ResponseMode,
 			authSession.SessionId,
-			authSession.AffectedClientIds)
+			affectedClientIds)
 		{
 			GrantedScopes = authContext.Scope,
 		};
@@ -234,7 +258,7 @@ public class AuthorizationRequestProcessor(
 		// with unsupported_response_type.
 		foreach (var processor in responseProcessors)
 		{
-			if (!request.Model.ResponseType.HasFlag(processor.ResponseType))
+			if (!responseType.HasFlag(processor.ResponseType))
 				continue;
 
 			await processor.BuildResponseAsync(request, authorizedGrant, result);

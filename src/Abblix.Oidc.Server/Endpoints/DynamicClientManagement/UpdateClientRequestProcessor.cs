@@ -166,6 +166,9 @@ public class UpdateClientRequestProcessor(
         }
 
         // Update client in storage
+        // lent deliberately RedirectUris: the response echoes the post-update registered state, so what
+        // the store now holds is the answer - RFC 7592 section 3 asks the client to be able to verify
+        // that the full replacement took effect.
         await clientInfoManager.UpdateClientAsync(updatedClient);
 
         // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti

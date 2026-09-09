@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Read by the architecture test that walks the library's own sources: the shape it looks for is
+         an ORDER of statements inside one method, which a text search cannot see. Already managed for
+         the source generators, so this reference adds no dependency to the graph. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Moq" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
