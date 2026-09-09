@@ -25,6 +25,10 @@ public class AuthorizationDetailsRequestValidator(
     /// <inheritdoc/>
     public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
     {
+        // Counted before the call, because the policy is handed this very array and a validator
+        // that narrows by editing in place empties it as it answers.
+        var requested = context.Request.AuthorizationDetails is { Count: > 0 };
+
         var result = await policy.ApplyAsync(
             context.Request.AuthorizationDetails,
             context.ClientInfo,
@@ -35,7 +39,7 @@ public class AuthorizationDetailsRequestValidator(
 
         if (validated.Count > 0)
             context.AuthorizationDetails = validated;
-        else if (context.Request.AuthorizationDetails is { Count: > 0 })
+        else if (requested)
             throw AuthorizationDetailsPolicyContract.EveryEntryDropped();
         return null;
     }

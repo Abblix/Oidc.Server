@@ -293,10 +293,14 @@ public class ResultTests
     /// the factory is told nothing at the point where it could still be fixed - the refusal arrives at
     /// whoever reads the result.
     /// </remarks>
-    [Fact]
-    public void ACaseBuiltFromNullIsTheValueCarryingNeitherArm()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ACaseBuiltFromNullIsTheValueCarryingNeitherArm(bool asSuccess)
     {
-        var fromNull = Result<string, int>.Success(null!);
+        var fromNull = asSuccess
+            ? Result<string, string[]>.Success(null!)
+            : Result<string, string[]>.Failure(null!);
 
         Assert.False(fromNull.TryGetSuccess(out _));
         Assert.False(fromNull.TryGetFailure(out _));

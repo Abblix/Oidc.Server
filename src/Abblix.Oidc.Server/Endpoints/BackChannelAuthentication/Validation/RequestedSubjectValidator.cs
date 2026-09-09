@@ -13,8 +13,8 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
-/// Refuses a <c>claims</c> request whose <c>sub</c> qualifier is not a string, or whose qualifiers name
-/// no end user who could satisfy them both.
+/// Refuses a <c>claims</c> request whose <c>sub</c> qualifier is not a string, or whose qualifiers leave
+/// no end user who could satisfy them.
 /// </summary>
 /// <remarks>
 /// This endpoint accepts the same <c>claims</c> parameter as the authorization endpoint and honours a

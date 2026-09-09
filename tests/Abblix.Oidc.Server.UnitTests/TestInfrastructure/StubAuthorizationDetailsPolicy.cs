@@ -50,9 +50,16 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// </summary>
     public static StubAuthorizationDetailsPolicy Emptying => new() { _empty = true };
 
+    /// <summary>
+    /// Answers with every entry removed, having removed them from the array it was handed - which is how
+    /// every narrowing validator in this repository edits, so it is the likelier of the two shapes.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy ClearingInPlace => new() { _empty = true, _clear = true };
+
     private string? _refusal;
     private (string Member, string Value)? _cap;
     private bool _empty;
+    private bool _clear;
 
     /// <summary>What the last call was handed, so a test can see whether it was the live array.</summary>
     public JsonArray? LastSeen { get; private set; }
@@ -73,6 +80,9 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
                 foreach (var entry in raw.OfType<JsonObject>())
                     entry[cap.Member] = cap.Value;
             }
+
+            if (_clear)
+                raw?.Clear();
 
             return Task.FromResult<Result<JsonArray, OidcError>>(
                 _empty ? new JsonArray() : raw ?? new JsonArray());

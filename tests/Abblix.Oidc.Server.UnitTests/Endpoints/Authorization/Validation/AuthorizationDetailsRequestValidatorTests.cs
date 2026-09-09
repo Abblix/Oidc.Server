@@ -115,4 +115,25 @@ public class AuthorizationDetailsRequestValidatorTests
         Assert.Contains(nameof(IAuthorizationDetailsPolicy), thrown.Message, StringComparison.Ordinal);
         Assert.Null(context.AuthorizationDetails);
     }
+
+    /// <summary>
+    /// A policy that empties the request as it answers is the same fault, read the same way.
+    /// </summary>
+    /// <remarks>
+    /// The adapter hands the policy the live array, and every narrowing validator in this repository
+    /// edits what it is handed - so what the request carried has to be counted BEFORE the call. Counted
+    /// after, a policy that emptied the array in place answers a guard that has already been given the
+    /// same answer, and the request is authorized with its entries gone.
+    /// </remarks>
+    [Fact]
+    public async Task APolicyThatEmptiesTheRequestAsItAnswers_IsAFault()
+    {
+        var context = Context((JsonArray)Requested.DeepClone());
+        var validator = new AuthorizationDetailsRequestValidator(
+            StubAuthorizationDetailsPolicy.ClearingInPlace);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ValidateAsync(context));
+
+        Assert.Null(context.AuthorizationDetails);
+    }
 }

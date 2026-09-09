@@ -31,11 +31,11 @@ namespace Abblix.Utils;
 /// null, so <c>Success(null)</c> - or a conversion from a null value - lands in the same state rather
 /// than in a success whose value is absent. A case that can be null therefore cannot be carried here,
 /// which is a property of the union rather than a rule this type imposes.
+/// </para>
 /// <para>
 /// A member that must yield a value throws rather than inventing one; the <c>TryGet</c> pair answers
 /// <c>false</c> to both questions, deconstruction yields two defaults, and <c>ToString</c> says which
 /// state it found.
-/// </para>
 /// </para>
 /// </remarks>
 /// <typeparam name="TSuccess">The type of the success value.</typeparam>
@@ -350,7 +350,8 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
             _ => "a result carrying neither case",
         };
     /// <summary>
-    /// The refusal for a result carrying neither case, which is what <c>default</c> of this type is.
+    /// The refusal for a result carrying neither case: a value left unset, or a case built from an
+    /// empty reference.
     /// </summary>
     /// <remarks>
     /// Not defensive programming: a struct has a default value whether or not anything means to produce
