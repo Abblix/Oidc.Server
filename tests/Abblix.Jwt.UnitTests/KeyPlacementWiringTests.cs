@@ -53,7 +53,7 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void StartupValidationPasses_WhenAJwtOnlyHostChoosesAPlacement()
+    public async Task StartupValidationPasses_WhenAJwtOnlyHostChoosesAPlacement()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -61,11 +61,12 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public void StartupValidationFails_WhenNoPlacementIsChosen()
+    public async Task StartupValidationFails_WhenNoPlacementIsChosen()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -73,8 +74,9 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        var error = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(
+            () => provider.GetRequiredService<IAsyncStartupValidator>()
+                .ValidateAsync(TestContext.Current.CancellationToken));
 
         // The message must name a call the host can actually write. Asserting a substring of a message is only
         // worth anything when the substring is the method name, which the compiler then keeps honest.
@@ -86,7 +88,7 @@ public class KeyPlacementWiringTests
     [Theory]
     [InlineData(KeyPlacement.Custodian)]
     [InlineData(KeyPlacement.InProcess)]
-    public void EachPlacementIsRecorded_AndSatisfiesTheGuard(KeyPlacement placement)
+    public async Task EachPlacementIsRecorded_AndSatisfiesTheGuard(KeyPlacement placement)
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -108,7 +110,8 @@ public class KeyPlacementWiringTests
             provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
 
         // And the positive branch of every startup validator both placements arm, which a refusal test cannot reach.
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -247,7 +250,7 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void CustodianIsDiConstructed_WhenRegisteredByType()
+    public async Task CustodianIsDiConstructed_WhenRegisteredByType()
     {
         var services = new ServiceCollection();
         services.AddJsonWebTokens();
@@ -263,7 +266,8 @@ public class KeyPlacementWiringTests
         var custodian = Assert.IsType<DependentCustodian>(provider.GetRequiredService<IKeyCustodian>());
         Assert.Same(provider.GetRequiredService<TimeProvider>(), custodian.TimeProvider);
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Theory]
@@ -293,7 +297,7 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
+    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -301,8 +305,9 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        var error = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(
+            () => provider.GetRequiredService<IAsyncStartupValidator>()
+                .ValidateAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IKeyRingStore), Assert.Single(error.Failures));
     }
