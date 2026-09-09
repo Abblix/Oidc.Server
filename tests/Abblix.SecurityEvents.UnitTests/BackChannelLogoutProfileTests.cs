@@ -57,7 +57,7 @@ public class BackChannelLogoutProfileTests
                 Payload = new JsonWebTokenPayload(DecodeSegment(segments[1])),
             };
 
-            return Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Success(token));
+            return Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(token));
         }
 
         private static JsonObject DecodeSegment(string segment)

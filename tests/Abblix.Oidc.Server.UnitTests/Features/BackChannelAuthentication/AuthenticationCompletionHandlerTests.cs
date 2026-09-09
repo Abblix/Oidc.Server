@@ -372,7 +372,7 @@ public class AuthenticationCompletionHandlerTests
             new Uri("urn:ietf:params:oauth:token-type:access_token"));
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         _notificationService.Setup(s => s.SendAsync(
                 _notificationEndpoint,
@@ -445,7 +445,7 @@ public class AuthenticationCompletionHandlerTests
             new Uri("urn:ietf:params:oauth:token-type:access_token"));
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         _notificationService.Setup(s => s.SendAsync(
                 _notificationEndpoint,
@@ -508,7 +508,7 @@ public class AuthenticationCompletionHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Token generation failed");
 
         _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(error));
 
         _storage.Setup(s => s.UpdateAsync(AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
 
@@ -1351,7 +1351,7 @@ public class AuthenticationCompletionHandlerTests
         _tokenRequestProcessor
             .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
             .Callback(() => order.Add("minted"))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(
                 new TokenIssued(
                     new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt"),
                     TokenTypes.Bearer,

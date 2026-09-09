@@ -45,7 +45,7 @@ public class CachingSecureHttpFetcherDecoratorTests
         var (decorator, inner) = Create(TimeSpan.FromHours(1));
         inner
             .Setup(f => f.FetchAsync<string>(KeySetUri))
-            .ReturnsAsync(Result<string, OidcError>.Success("key-set"));
+            .ReturnsAsync((Result<string, OidcError>)("key-set"));
 
         await decorator.FetchAsync<string>(KeySetUri);
         await decorator.FetchAsync<string>(KeySetUri);
@@ -64,7 +64,7 @@ public class CachingSecureHttpFetcherDecoratorTests
         var (decorator, inner) = Create(TimeSpan.Zero);
         inner
             .Setup(f => f.FetchAsync<string>(KeySetUri))
-            .ReturnsAsync(Result<string, OidcError>.Success("key-set"));
+            .ReturnsAsync((Result<string, OidcError>)("key-set"));
 
         await decorator.FetchAsync<string>(KeySetUri);
         await decorator.FetchAsync<string>(KeySetUri);

@@ -93,11 +93,11 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         // Act
         var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -125,7 +125,7 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -154,11 +154,11 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Failure(error));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -186,11 +186,11 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidTokenRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<TokenIssued, OidcError>.Success(tokenIssued));
+            .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         // Act
         await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -219,7 +219,7 @@ public class TokenHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidTokenRequest, OidcError>.Success(validRequest);
+                return (Result<ValidTokenRequest, OidcError>)(validRequest);
             });
 
         _processor
@@ -227,7 +227,7 @@ public class TokenHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<TokenIssued, OidcError>.Success(tokenIssued);
+                return (Result<TokenIssued, OidcError>)(tokenIssued);
             });
 
         // Act
@@ -255,7 +255,7 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -281,7 +281,7 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
@@ -310,7 +310,7 @@ public class TokenHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(tokenRequest, clientRequest, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<ValidTokenRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidTokenRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);

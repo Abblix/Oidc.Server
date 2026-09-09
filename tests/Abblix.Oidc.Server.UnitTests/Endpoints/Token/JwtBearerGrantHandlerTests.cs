@@ -428,7 +428,7 @@ public class JwtBearerGrantHandlerTests
 		mocks.JwtValidator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
 			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
 		{
@@ -478,8 +478,8 @@ public class JwtBearerGrantHandlerTests
 
 		mocks.JwtValidator
 			.SetupSequence(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt1))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt2));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt1))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt2));
 
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
@@ -701,14 +701,14 @@ public class JwtBearerGrantHandlerTests
 	{
 		validator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
 	}
 
 	private static void SetupInvalidJwtValidation(Mock<IJsonWebTokenValidator> validator)
 	{
 		validator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Failure(new JwtValidationError(JwtError.InvalidToken, "Token expired")));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(new JwtValidationError(JwtError.InvalidToken, "Token expired")));
 	}
 
 	#region Security Tests - RFC 7523 Compliance

@@ -23,8 +23,8 @@ namespace Abblix.Utils.UnitTests;
 /// </remarks>
 public class ResultTests
 {
-    private static Result<int, string> Ok(int value = 42) => Result<int, string>.Success(value);
-    private static Result<int, string> No(string error = "refused") => Result<int, string>.Failure(error);
+    private static Result<int, string> Ok(int value = 42) => (Result<int, string>)(value);
+    private static Result<int, string> No(string error = "refused") => (Result<int, string>)(error);
 
     [Fact]
     public void SuccessAndFailureAreTellable()
@@ -154,13 +154,13 @@ public class ResultTests
     public void BindContinuesOnSuccessAndStopsOnFailure()
     {
         Assert.Equal(
-            42L, Ok().Bind(value => Result<long, string>.Success(value)).GetSuccess());
+            42L, Ok().Bind(value => (Result<long, string>)(value)).GetSuccess());
 
         Assert.Equal(
-            "refused", No().Bind(value => Result<long, string>.Success(value)).GetFailure());
+            "refused", No().Bind(value => (Result<long, string>)(value)).GetFailure());
 
         // A step that refuses turns the chain into that refusal.
-        Assert.Equal("second step said no", Ok().Bind(_ => Result<long, string>.Failure("second step said no"))
+        Assert.Equal("second step said no", Ok().Bind(_ => (Result<long, string>)("second step said no"))
             .GetFailure());
     }
 
@@ -181,12 +181,12 @@ public class ResultTests
     {
         Assert.Equal(
             42L,
-            (await Ok().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
+            (await Ok().BindAsync(value => Task.FromResult((Result<long, string>)(value))))
             .GetSuccess());
 
         Assert.Equal(
             "refused",
-            (await No().BindAsync(value => Task.FromResult(Result<long, string>.Success(value))))
+            (await No().BindAsync(value => Task.FromResult((Result<long, string>)(value))))
             .GetFailure());
     }
 
@@ -268,7 +268,7 @@ public class ResultTests
         Assert.Throws<InvalidOperationException>(() => neither.MapSuccess(value => value + 1));
         Assert.Throws<InvalidOperationException>(() => neither.MapFailure(error => error.Length));
         Assert.Throws<InvalidOperationException>(
-            () => neither.Bind(value => Result<long, string>.Success(value)));
+            () => neither.Bind(value => (Result<long, string>)(value)));
         Assert.Throws<InvalidOperationException>(() => neither.Ensure(value => value > 0, "refused"));
 
         // The pair that answers a question rather than producing a value says no to both, which is the
@@ -299,8 +299,8 @@ public class ResultTests
     public void ACaseBuiltFromNullIsTheValueCarryingNeitherArm(bool asSuccess)
     {
         var fromNull = asSuccess
-            ? Result<string, string[]>.Success(null!)
-            : Result<string, string[]>.Failure(null!);
+            ? (Result<string, string[]>)(string)null!
+            : (Result<string, string[]>)(string[])null!;
 
         Assert.False(fromNull.TryGetSuccess(out _));
         Assert.False(fromNull.TryGetFailure(out _));

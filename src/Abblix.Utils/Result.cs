@@ -42,19 +42,6 @@ namespace Abblix.Utils;
 /// <typeparam name="TFailure">The type of the failure value.</typeparam>
 public union Result<TSuccess, TFailure>(TSuccess, TFailure)
 {
-    /// <summary>
-    /// Creates a successful result with the specified value.
-    /// </summary>
-    /// <param name="value">The success value.</param>
-    /// <returns>A <see cref="Result{TSuccess, TFailure}"/> representing a successful result.</returns>
-    public static Result<TSuccess, TFailure> Success(TSuccess value) => value;
-
-    /// <summary>
-    /// Creates a failed result with the specified value.
-    /// </summary>
-    /// <param name="value">The failure value.</param>
-    /// <returns>A <see cref="Result{TSuccess, TFailure}"/> representing a failed result.</returns>
-    public static Result<TSuccess, TFailure> Failure(TFailure value) => value;
 
     /// <summary>
     /// Matches the result and invokes the appropriate function depending on whether the result is a success or failure.
@@ -175,8 +162,8 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
         Func<TSuccess, TNewSuccess> onSuccess,
         Func<TFailure, TNewFailure> onFailure)
         => Match(
-            success => Result<TNewSuccess, TNewFailure>.Success(onSuccess(success)),
-            failure => Result<TNewSuccess, TNewFailure>.Failure(onFailure(failure))
+            success => (Result<TNewSuccess, TNewFailure>)(onSuccess(success)),
+            failure => (Result<TNewSuccess, TNewFailure>)(onFailure(failure))
         );
 
     /// <summary>

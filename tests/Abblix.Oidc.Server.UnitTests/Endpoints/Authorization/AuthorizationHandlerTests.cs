@@ -77,13 +77,11 @@ public class AuthorizationHandlerTests
 
         _fetcher
             .Setup(f => f.FetchAsync(request))
-            .ReturnsAsync(Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                .Success(fetchedRequest));
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
             .Setup(v => v.ValidateAsync(fetchedRequest))
-            .ReturnsAsync(Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>
-                .Success(validRequest));
+            .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
@@ -116,8 +114,7 @@ public class AuthorizationHandlerTests
 
         _fetcher
             .Setup(f => f.FetchAsync(request))
-            .ReturnsAsync(Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                .Failure(fetchError));
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchError));
 
         // Act
         var result = await _handler.HandleAsync(request);
@@ -149,13 +146,11 @@ public class AuthorizationHandlerTests
 
         _fetcher
             .Setup(f => f.FetchAsync(request))
-            .ReturnsAsync(Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                .Success(fetchedRequest));
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
             .Setup(v => v.ValidateAsync(fetchedRequest))
-            .ReturnsAsync(Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>
-                .Failure(validationError));
+            .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validationError));
 
         // Act
         var result = await _handler.HandleAsync(request);
@@ -197,13 +192,11 @@ public class AuthorizationHandlerTests
 
         _fetcher
             .Setup(f => f.FetchAsync(originalRequest))
-            .ReturnsAsync(Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                .Success(fetchedRequest));
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
             .Setup(v => v.ValidateAsync(It.Is<AuthorizationRequest>(r => r.State == "modified_state")))
-            .ReturnsAsync(Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>
-                .Success(validRequest));
+            .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
@@ -234,8 +227,7 @@ public class AuthorizationHandlerTests
 
         _fetcher
             .Setup(f => f.FetchAsync(request))
-            .ReturnsAsync(Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                .Failure(fetchError));
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchError));
 
         // Act
         var result = await _handler.HandleAsync(request);
@@ -272,8 +264,7 @@ public class AuthorizationHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("fetch");
-                return Result<AuthorizationRequest, AuthorizationRequestValidationError>
-                    .Success(fetchedRequest);
+                return (Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest);
             });
 
         _validator
@@ -281,8 +272,7 @@ public class AuthorizationHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>
-                    .Success(validRequest);
+                return (Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validRequest);
             });
 
         _processor

@@ -76,11 +76,11 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -108,7 +108,7 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -137,11 +137,11 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Failure(error));
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -169,11 +169,11 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidIntrospectionRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
         await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -202,7 +202,7 @@ public class IntrospectionHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidIntrospectionRequest, OidcError>.Success(validRequest);
+                return (Result<ValidIntrospectionRequest, OidcError>)(validRequest);
             });
 
         _processor
@@ -210,7 +210,7 @@ public class IntrospectionHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess);
+                return (Result<IntrospectionSuccess, OidcError>)(introspectionSuccess);
             });
 
         // Act
@@ -238,7 +238,7 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -264,7 +264,7 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -292,7 +292,7 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -316,11 +316,11 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
@@ -345,11 +345,11 @@ public class IntrospectionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(introspectionRequest, clientRequest);

@@ -81,7 +81,7 @@ public class ConsentConstraintEnforcerTests
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
-                Result<JsonArray, OidcError>.Success(ad ?? new JsonArray()));
+                (Result<JsonArray, OidcError>)(ad ?? new JsonArray()));
 
     [Fact]
     public async Task EnforceAsync_GrantedEqualsRequested_DoesNotThrow()
@@ -160,7 +160,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Failure(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, "amount exceeds the client's cap")));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -182,7 +182,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(capped));
+            .ReturnsAsync((Result<JsonArray, OidcError>)(capped));
 
         var enforced = await _enforcer.EnforceAsync(request, granted, CancellationToken.None);
 
@@ -206,7 +206,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 new JsonObject { ["type"] = "account_information" })));
 
@@ -230,7 +230,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(
                 new JsonArray(new JsonObject { ["amount"] = "999999" })));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -273,7 +273,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(new JsonArray(
                 new JsonObject { ["type"] = standIn },
                 new JsonObject { ["amount"] = "999999" })));
 
@@ -297,7 +297,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 new JsonObject { ["type"] = "admin_access" })));
 
@@ -321,7 +321,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray(
+            .ReturnsAsync((Result<JsonArray, OidcError>)(new JsonArray(
                 new JsonObject { ["type"] = "payment_initiation" },
                 JsonValue.Create("payment_initiation"))));
 
@@ -347,7 +347,7 @@ public class ConsentConstraintEnforcerTests
             .ReturnsAsync((JsonArray? ad, ClientInfo _, CancellationToken _) =>
             {
                 ad![0]!["type"] = "wire_transfer";
-                return Result<JsonArray, OidcError>.Success(ad);
+                return (Result<JsonArray, OidcError>)(ad);
             });
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -370,7 +370,7 @@ public class ConsentConstraintEnforcerTests
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
                 It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<JsonArray, OidcError>.Success(new JsonArray()));
+            .ReturnsAsync((Result<JsonArray, OidcError>)(new JsonArray()));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _enforcer.EnforceAsync(request, granted, CancellationToken.None));

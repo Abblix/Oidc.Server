@@ -57,7 +57,7 @@ public class SecurityEventTokenValidatorTests
                 Payload = new JsonWebTokenPayload(DecodeSegment(segments[1])),
             };
 
-            return Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Success(token));
+            return Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(token));
         }
 
         private static JsonObject DecodeSegment(string segment)
@@ -74,7 +74,7 @@ public class SecurityEventTokenValidatorTests
             string compactToken,
             string? keyId = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Failure(error));
+            => Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(error));
     }
 
     private static string EncodeCompact(SecurityEventToken token)

@@ -97,11 +97,11 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<UserInfoFoundResponse, OidcError>.Success(userInfoFound));
+            .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -129,7 +129,7 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -158,11 +158,11 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<UserInfoFoundResponse, OidcError>.Failure(error));
+            .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -190,11 +190,11 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidUserInfoRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<UserInfoFoundResponse, OidcError>.Success(userInfoFound));
+            .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
         await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -223,7 +223,7 @@ public class UserInfoHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidUserInfoRequest, OidcError>.Success(validRequest);
+                return (Result<ValidUserInfoRequest, OidcError>)(validRequest);
             });
 
         _processor
@@ -231,7 +231,7 @@ public class UserInfoHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<UserInfoFoundResponse, OidcError>.Success(userInfoFound);
+                return (Result<UserInfoFoundResponse, OidcError>)(userInfoFound);
             });
 
         // Act
@@ -259,7 +259,7 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -285,7 +285,7 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -313,7 +313,7 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -337,11 +337,11 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<UserInfoFoundResponse, OidcError>.Success(userInfoFound));
+            .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
@@ -367,11 +367,11 @@ public class UserInfoHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
-            .ReturnsAsync(Result<ValidUserInfoRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<UserInfoFoundResponse, OidcError>.Success(userInfoFound));
+            .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
         var result = await _handler.HandleAsync(userInfoRequest, clientRequest);

@@ -77,11 +77,11 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<EndSessionSuccess, OidcError>.Success(endSessionSuccess));
+            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -108,7 +108,7 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -136,11 +136,11 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<EndSessionSuccess, OidcError>.Failure(error));
+            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -167,11 +167,11 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidEndSessionRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<EndSessionSuccess, OidcError>.Success(endSessionSuccess));
+            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
 
         // Act
         await _handler.HandleAsync(endSessionRequest);
@@ -199,7 +199,7 @@ public class EndSessionHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidEndSessionRequest, OidcError>.Success(validRequest);
+                return (Result<ValidEndSessionRequest, OidcError>)(validRequest);
             });
 
         _processor
@@ -207,7 +207,7 @@ public class EndSessionHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<EndSessionSuccess, OidcError>.Success(endSessionSuccess);
+                return (Result<EndSessionSuccess, OidcError>)(endSessionSuccess);
             });
 
         // Act
@@ -234,7 +234,7 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -259,7 +259,7 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(endSessionRequest);
@@ -284,7 +284,7 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(endSessionRequest);
@@ -307,11 +307,11 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<EndSessionSuccess, OidcError>.Success(endSessionSuccess));
+            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -336,11 +336,11 @@ public class EndSessionHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(endSessionRequest))
-            .ReturnsAsync(Result<ValidEndSessionRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<EndSessionSuccess, OidcError>.Success(endSessionSuccess));
+            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);

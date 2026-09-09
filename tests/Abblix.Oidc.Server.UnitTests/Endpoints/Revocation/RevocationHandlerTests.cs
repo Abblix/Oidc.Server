@@ -74,11 +74,11 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenRevoked, OidcError>.Success(tokenRevoked));
+            .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -106,7 +106,7 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -135,11 +135,11 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenRevoked, OidcError>.Failure(error));
+            .ReturnsAsync((Result<TokenRevoked, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -167,11 +167,11 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidRevocationRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<TokenRevoked, OidcError>.Success(tokenRevoked));
+            .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
         await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -200,7 +200,7 @@ public class RevocationHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidRevocationRequest, OidcError>.Success(validRequest);
+                return (Result<ValidRevocationRequest, OidcError>)(validRequest);
             });
 
         _processor
@@ -208,7 +208,7 @@ public class RevocationHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<TokenRevoked, OidcError>.Success(tokenRevoked);
+                return (Result<TokenRevoked, OidcError>)(tokenRevoked);
             });
 
         // Act
@@ -236,7 +236,7 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -262,7 +262,7 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -290,7 +290,7 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Failure(error));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(error));
 
         // Act
         await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -314,11 +314,11 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenRevoked, OidcError>.Success(tokenRevoked));
+            .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);
@@ -344,11 +344,11 @@ public class RevocationHandlerTests
 
         _validator
             .Setup(v => v.ValidateAsync(revocationRequest, clientRequest))
-            .ReturnsAsync(Result<ValidRevocationRequest, OidcError>.Success(validRequest));
+            .ReturnsAsync((Result<ValidRevocationRequest, OidcError>)(validRequest));
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<TokenRevoked, OidcError>.Success(tokenRevoked));
+            .ReturnsAsync((Result<TokenRevoked, OidcError>)(tokenRevoked));
 
         // Act
         var result = await _handler.HandleAsync(revocationRequest, clientRequest);

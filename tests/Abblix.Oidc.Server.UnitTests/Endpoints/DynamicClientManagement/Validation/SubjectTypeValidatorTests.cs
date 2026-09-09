@@ -189,7 +189,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(redirectUris));
+            .ReturnsAsync((Result<Uri[], OidcError>)(redirectUris));
 
         var context = CreateContext(
             redirectUris: redirectUris,
@@ -244,7 +244,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -278,7 +278,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -307,7 +307,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri], // Not listed in the sector document
@@ -335,7 +335,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Failure(fetchError));
+            .ReturnsAsync((Result<Uri[], OidcError>)(fetchError));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -382,7 +382,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(redirectUris));
+            .ReturnsAsync((Result<Uri[], OidcError>)(redirectUris));
 
         var context = CreateContext(
             redirectUris: redirectUris,
@@ -468,8 +468,9 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(
-                listedInDocument ? [modeUri] : [new Uri("https://client.example.com/something-else")]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(listedInDocument
+                ? new[] { modeUri }
+                : new[] { new Uri("https://client.example.com/something-else") }));
 
         var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
         var context = CreateContext(
@@ -513,7 +514,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([redirectUri]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(new[] { redirectUri }));
 
         var context = CreateContext(
             redirectUris: [redirectUri],
@@ -547,7 +548,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(Array.Empty<Uri>()));
 
         var context = CreateContext(
             redirectUris: [],
@@ -684,7 +685,8 @@ public class SubjectTypeValidatorTests
         var registered = new Uri("https://app.example.com/cb");
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([registered, new Uri("/cb", UriKind.Relative)]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(
+                new[] { registered, new Uri("/cb", UriKind.Relative) }));
 
         var context = CreateContext(
             redirectUris: [registered],
@@ -712,7 +714,7 @@ public class SubjectTypeValidatorTests
         var registered = new Uri("https://app.example.com/cb");
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([registered]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(new[] { registered }));
 
         var context = CreateContext(
             redirectUris: [registered],
