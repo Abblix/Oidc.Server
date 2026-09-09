@@ -78,13 +78,11 @@ public class ValueHandedToAHostSeamTests
     /// </remarks>
     private static string[] MembersDeclaredOn(SyntaxNode statement)
     {
-        var trivia = statement.GetLeadingTrivia().ToString();
-        if (!trivia.Contains(Declared, StringComparison.Ordinal)) return [];
+        var joined = string.Join(' ', statement.GetLeadingTrivia()
+            .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia))
+            .Select(trivia => trivia.ToString().Trim()[2..]));
 
-        var joined = string.Join(' ', trivia
-            .Split('\n')
-            .Select(line => line.Trim())
-            .Select(line => line.StartsWith("//", StringComparison.Ordinal) ? line[2..] : line));
+        if (!joined.Contains(Declared, StringComparison.Ordinal)) return [];
 
         var start = joined.IndexOf(Declared, StringComparison.Ordinal);
         if (start < 0) return [];
@@ -96,15 +94,27 @@ public class ValueHandedToAHostSeamTests
             : names[..end].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    /// <summary>The members the site around one call declares.</summary>
-    private static IReadOnlyCollection<string> DeclaredMembers(SyntaxNode call)
+    /// <summary>The statement a call belongs to, which is what a declaration is attached to.</summary>
+    private static StatementSyntax? EnclosingStatement(SyntaxNode call)
     {
         for (var node = call; node is not null; node = node.Parent)
         {
-            if (node is StatementSyntax) return MembersDeclaredOn(node);
+            if (node is StatementSyntax statement) return statement;
         }
 
-        return [];
+        return null;
+    }
+
+    /// <summary>One site and member, named the same way wherever it is counted.</summary>
+    /// <remarks>
+    /// Built once and used by both sides. Two keys assembled independently agree only while nothing
+    /// moves: one built from the call and one from the statement disagree the moment a statement wraps,
+    /// and one carrying a full path disagrees on whichever platform does not spell paths that way.
+    /// </remarks>
+    private static string SiteOf(StatementSyntax statement, string member)
+    {
+        var line = statement.SyntaxTree.GetLineSpan(statement.Span).StartLinePosition.Line + 1;
+        return $"{Path.GetFileName(statement.SyntaxTree.FilePath)}({line}):{member}";
     }
 
     private static string RepositoryRoot()
@@ -167,17 +177,44 @@ public class ValueHandedToAHostSeamTests
                 found.TryAdd(member, access);
         }
 
-        foreach (var pattern in After(body, call).OfType<IsPatternExpressionSyntax>())
+        IEnumerable<(SyntaxNode Subject, PatternSyntax Pattern)> Patterns()
         {
-            if (!RootedAtTheLoan(pattern.Expression)) continue;
+            foreach (var node in After(body, call))
+                switch (node)
+                {
+                    case IsPatternExpressionSyntax test:
+                        yield return (test.Expression, test.Pattern);
+                        break;
 
-            foreach (var named in pattern.Pattern.DescendantNodesAndSelf())
+                    case SwitchExpressionSyntax choice:
+                        foreach (var arm in choice.Arms)
+                            yield return (choice.GoverningExpression, arm.Pattern);
+                        break;
+
+                    case SwitchStatementSyntax choice:
+                        foreach (var label in choice.Sections
+                            .SelectMany(section => section.Labels)
+                            .OfType<CasePatternSwitchLabelSyntax>())
+                            yield return (choice.Expression, label.Pattern);
+                        break;
+                }
+        }
+
+        foreach (var (subject, pattern) in Patterns())
+        {
+            if (!RootedAtTheLoan(subject)) continue;
+
+            // Only a PROPERTY pattern names members. The elements of a positional one carry the names
+            // of deconstruction parameters, which read like members and are not.
+            foreach (var named in pattern.DescendantNodesAndSelf()
+                .OfType<SubpatternSyntax>()
+                .Where(sub => sub.Parent is PropertyPatternClauseSyntax))
             {
                 var member = named switch
                 {
-                    NameColonSyntax name => name.Name.Identifier.ValueText,
-                    ExpressionColonSyntax { Expression: IdentifierNameSyntax id } => id.Identifier.ValueText,
-                    ExpressionColonSyntax { Expression: MemberAccessExpressionSyntax access }
+                    { NameColon: { } name } => name.Name.Identifier.ValueText,
+                    { ExpressionColon.Expression: IdentifierNameSyntax id } => id.Identifier.ValueText,
+                    { ExpressionColon.Expression: MemberAccessExpressionSyntax access }
                         => Normalized(access).Split('.')[0],
                     _ => null,
                 };
@@ -189,6 +226,15 @@ public class ValueHandedToAHostSeamTests
 
         return found.Select(entry => (entry.Key, entry.Value));
     }
+
+    /// <summary>How many calls a host could answer this statement makes.</summary>
+    private static int SeamCallsIn(SyntaxNode statement, IReadOnlySet<string> seamMethods)
+        => statement.DescendantNodes()
+            .OfType<AwaitExpressionSyntax>()
+            .Select(awaited => awaited.Expression)
+            .OfType<InvocationExpressionSyntax>()
+            .Count(call => call.Expression is MemberAccessExpressionSyntax access
+                           && seamMethods.Contains(access.Name.Identifier.ValueText));
 
     /// <summary>
     /// Every offence, and every declared member that still describes a read.
@@ -221,6 +267,9 @@ public class ValueHandedToAHostSeamTests
         var offences = new List<string>();
         var honoured = new HashSet<string>(StringComparer.Ordinal);
 
+        // The refusal below belongs to the STATEMENT, and the loop reaches it once per call on it.
+        var refused = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var (path, root) in roots)
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -236,8 +285,23 @@ public class ValueHandedToAHostSeamTests
 
                 if (!seamMethods.Contains(called)) continue;
 
-                var declared = DeclaredMembers(call);
-                var lentAt = call.SyntaxTree.GetLineSpan(call.Span).StartLinePosition.Line + 1;
+                if (EnclosingStatement(call) is not { } statement) continue;
+
+                var declared = MembersDeclaredOn(statement);
+                var lentAt = statement.SyntaxTree.GetLineSpan(statement.Span).StartLinePosition.Line + 1;
+
+                // A declaration is attached to a statement, so a statement carrying two seam calls would
+                // have one declaration excusing both. Refused rather than silently obeyed: the marker
+                // says which members it excuses and cannot say which call it means.
+                if (declared.Length > 0 && SeamCallsIn(statement, seamMethods) > 1)
+                {
+                    if (refused.Add($"{path}({lentAt})"))
+                        offences.Add(
+                            $"{Path.GetFileName(path)}({lentAt}): a deliberate loan is declared on a "
+                            + "statement carrying more than one call, so it cannot say which one it excuses");
+
+                    continue;
+                }
 
                 foreach (var argument in call.ArgumentList.Arguments)
                 {
@@ -250,7 +314,7 @@ public class ValueHandedToAHostSeamTests
                     {
                         if (declared.Contains(member))
                         {
-                            honoured.Add($"{path}({lentAt}):{member}");
+                            honoured.Add(SiteOf(statement, member));
                             continue;
                         }
 
@@ -266,6 +330,97 @@ public class ValueHandedToAHostSeamTests
         return (offences, honoured);
     }
 
+    /// <summary>
+    /// One source of its own, so the walker's reach is pinned by what it CAN see rather than by what
+    /// the library happens to contain today.
+    /// </summary>
+    /// <remarks>
+    /// A capability proved only by a real site stops being proved the moment that site is rewritten, and
+    /// the walker then loses it silently - which is the failure it exists to catch, in the instrument.
+    /// The probe declares its own seam and its own lendable member, so nothing about it depends on the
+    /// library either.
+    /// </remarks>
+    private static IReadOnlyList<string> OffencesIn(string body, string declaration = "")
+    {
+        var source = $$"""
+                       using System.Threading.Tasks;
+
+                       interface ISeam { Task KeepAsync(Thing thing); }
+
+                       class Thing { public string[] Names { get; set; } = []; }
+
+                       class Caller
+                       {
+                           private readonly ISeam seam = null!;
+
+                           public async Task Run(Thing thing, Thing other)
+                           {
+                               {{declaration}}
+                               {{body}}
+                           }
+                       }
+                       """;
+
+        var tree = CSharpSyntaxTree.ParseText(source, path: "Probe.cs");
+        Assert.DoesNotContain(tree.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
+
+        return Walk([("Probe.cs", tree)]).Offences;
+    }
+
+    /// <summary>Every spelling of the same read that the walker claims to catch.</summary>
+    [Theory]
+    [InlineData("var n = thing.Names.Length;")]
+    [InlineData("if (thing is { Names.Length: 0 }) { }")]
+    [InlineData("var n = thing switch { { Names.Length: 0 } => 1, _ => 2 };")]
+    [InlineData("switch (thing) { case { Names.Length: 0 }: break; }")]
+    public void AReadAfterTheLoanIsCaughtHoweverItIsWritten(string read)
+    {
+        var offences = OffencesIn($"await seam.KeepAsync(thing);{Environment.NewLine}{read}");
+
+        Assert.Single(offences);
+        Assert.Contains("read Names", offences[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>What the walker must NOT report, so its silence means something.</summary>
+    [Theory]
+    // Read before the loan: the callee never had the chance.
+    [InlineData("var n = thing.Names.Length;\nawait seam.KeepAsync(thing);", "")]
+    // Another object entirely.
+    [InlineData("await seam.KeepAsync(thing);\nvar n = other.Names.Length;", "")]
+    // A positional pattern names deconstruction parameters, which read like members and are not.
+    [InlineData("await seam.KeepAsync(thing);\nif (thing is (Names: 1, Other: 2)) { }", "")]
+    // Declared, and the declaration names the member.
+    [InlineData("await seam.KeepAsync(thing);\nvar n = thing.Names.Length;", "// lent deliberately Names: the reason.")]
+    public void WhatIsNotAnOffence(string body, string declaration)
+        => Assert.Empty(OffencesIn(body.Replace("\\n", Environment.NewLine), declaration));
+
+    /// <summary>A declaration only counts where a declaration is written.</summary>
+    /// <remarks>
+    /// A documentation comment opens with the same two characters, and the tools that read documentation
+    /// put it where a reader of the code does not look for a decision about the code.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationInADocumentationCommentDoesNotSilence()
+    {
+        var offences = OffencesIn(
+            $"await seam.KeepAsync(thing);{Environment.NewLine}var n = thing.Names.Length;",
+            "/// lent deliberately Names: written where it does not belong.");
+
+        Assert.Single(offences);
+    }
+
+    /// <summary>A declaration on a statement making two calls cannot say which one it excuses.</summary>
+    [Fact]
+    public void ADeclarationOnAStatementWithTwoCallsIsRefused()
+    {
+        var offences = OffencesIn(
+            $"var pair = (await seam.KeepAsync(thing), await seam.KeepAsync(other));"
+            + $"{Environment.NewLine}var n = thing.Names.Length;",
+            "// lent deliberately Names: written for the first call only.");
+
+        Assert.Single(offences);
+        Assert.Contains("more than one call", offences[0], StringComparison.Ordinal);
+    }
     /// <summary>
     /// Nothing hands a value to a replaceable implementation and then measures anything against it.
     /// </summary>
@@ -301,9 +456,7 @@ public class ValueHandedToAHostSeamTests
         var written = sources
             .SelectMany(s => s.Tree.GetRoot().DescendantNodes().OfType<StatementSyntax>())
             .SelectMany(statement => MembersDeclaredOn(statement)
-                .Select(member => $"{Path.GetFileName(statement.SyntaxTree.FilePath)}"
-                    + $"({statement.SyntaxTree.GetLineSpan(statement.Span).StartLinePosition.Line + 1})"
-                    + $":{member}"))
+                .Select(member => SiteOf(statement, member)))
             .ToArray();
 
         Assert.True(
@@ -312,8 +465,7 @@ public class ValueHandedToAHostSeamTests
 
         // Named rather than counted: a number tells you the two disagree, and the name tells you which
         // declaration stopped describing a read.
-        var describing = honoured.Select(entry => entry[(entry.LastIndexOf('\\') + 1)..]).ToHashSet();
-        var stale = written.Where(entry => !describing.Contains(entry)).Order().ToArray();
+        var stale = written.Where(entry => !honoured.Contains(entry)).Order().ToArray();
 
         Assert.True(
             stale.Length == 0,
@@ -338,13 +490,14 @@ public class ValueHandedToAHostSeamTests
     [Fact]
     public void EverySourceIsParsedOrKnownToBeUnreadable()
     {
+        var root = RepositoryRoot();
         var unreadable = LibrarySources()
             .Where(s => s.Tree.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error))
-            .Select(s => Path.GetFileName(s.Path))
+            .Select(s => Path.GetRelativePath(root, s.Path).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["Result.cs"], unreadable);
+        Assert.Equal(["src/Abblix.Utils/Result.cs"], unreadable);
     }
 
     /// <summary>

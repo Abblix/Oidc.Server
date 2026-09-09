@@ -1568,6 +1568,63 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// A consent provider that adds the client itself does not excuse the session from being written.
+    /// </summary>
+    /// <remarks>
+    /// The list on the object says the client is there; the store has never been told. Asking only the
+    /// object leaves the session unwritten, which is the same client missing from logout as when the
+    /// provider removes the entry - the failure reached from the other side.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderAddingTheClientItself_StillWritesTheSession()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Add(TestConstants.DefaultClientId))
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A consent provider that empties the list does not take the other clients with it.
+    /// </summary>
+    /// <remarks>
+    /// The session is persisted whole, so whatever the provider left behind is what the store keeps.
+    /// Every client the session already touched has to be reachable at logout, and the provider was
+    /// never asked about them - so what this server knew is put back before anything is written.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AConsentProviderEmptyingTheClientList_KeepsTheOtherClients()
+    {
+        const string another = "another-client";
+
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(another);
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Callback(() => session.AffectedClientIds.Clear())
+            .ReturnsAsync(consents);
+
+        await _processor.ProcessAsync(request);
+
+        Assert.Contains(another, session.AffectedClientIds);
+        Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+    /// <summary>
     /// Wires up the strict Mocks for a successful authorization-code flow and returns a
     /// <see cref="GrantCapture"/> that fills in once <see cref="AuthorizationRequestProcessor.ProcessAsync"/>
     /// reaches the code-issuance step. Eliminates the four-line Setup boilerplate from
