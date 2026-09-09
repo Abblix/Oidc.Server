@@ -612,6 +612,15 @@ public class ValueHandedToAHostSeamTests
     /// <para>
     /// It reports on branches that cannot both run, since it compares positions rather than paths.
     /// </para>
+    /// <para>
+    /// Two shapes it missed on real code, named because a clean run had already been read as covering
+    /// them. ENUMERATION is not a member access, so a loop over a lent value whose body calls the seam
+    /// is invisible here even though the value is being walked while an implementation answers - that
+    /// was the end-session notification loop. And a value re-read WITHOUT any seam call between the
+    /// two reads is outside this walker entirely: asking a live collection its size and then
+    /// serialising it loses the whole property when another request fills it in between, and no host
+    /// implementation is involved for this walker to anchor on.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheShapesThisWalkerCannotSee()
