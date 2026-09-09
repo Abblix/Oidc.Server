@@ -38,8 +38,10 @@
          the directory it was built in.
 
          Referencing it explicitly pulls in a Microsoft.Build.Tasks.Git carrying a moderate advisory,
-         and warnings are errors here, so a restore against fresh advisory data fails every packable
-         project. A warm cache holding advisory data older than the advisory hides that. -->
+         and this repository audits from low upward with warnings as errors, so a restore against fresh
+         advisory data fails each project that references it. Both halves are needed: raising the audit
+         level past moderate restores clean, at the cost of every other moderate finding in the graph.
+         A warm cache holding advisory data older than the advisory hides all of it. -->
     <!-- xunit.v3 picks the Microsoft Testing Platform major version by package variant: the plain
          xunit.v3 metapackage targets MTP v1, while xunit.v3.mtp-v2 targets MTP v2. We reference the
          mtp-v2 variant (below) so the current Microsoft.Testing.Extensions.*, which require MTP 2.x,

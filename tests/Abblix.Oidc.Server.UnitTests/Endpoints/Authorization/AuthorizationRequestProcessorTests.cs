@@ -1672,6 +1672,7 @@ public class AuthorizationRequestProcessorTests
     public async Task ProcessAsync_ADuplicateTradedForANewClient_IsWritten()
     {
         const string newcomer = "newcomer-client";
+        const string bystander = "bystander-client";
 
         var request = CreateRequest();
         var session = CreateAuthSession() with
@@ -1680,6 +1681,7 @@ public class AuthorizationRequestProcessorTests
             {
                 TestConstants.DefaultClientId,
                 TestConstants.DefaultClientId,
+                bystander,
             },
         };
 
@@ -1691,6 +1693,7 @@ public class AuthorizationRequestProcessorTests
             .Callback(() =>
             {
                 session.AffectedClientIds.Remove(TestConstants.DefaultClientId);
+                session.AffectedClientIds.Remove(bystander);
                 session.AffectedClientIds.Add(newcomer);
             })
             .ReturnsAsync(consents);
@@ -1699,7 +1702,34 @@ public class AuthorizationRequestProcessorTests
 
         Assert.Contains(newcomer, session.AffectedClientIds);
 
-        // The half the restore owes: the copy this provider dropped is back, beside what it added.
+        // Asked about somebody else, because the client this request is FOR comes back whatever the
+        // restore does - the line recording it puts it there, so an assertion about it cannot fail.
+        Assert.Contains(bystander, session.AffectedClientIds);
+        _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
+    }
+
+    /// <summary>
+    /// A client whose identifier differs only in case is another client, and the store is told.
+    /// </summary>
+    /// <remarks>
+    /// Identifiers are compared the way the shipped session compares them, which is exactly. Compared
+    /// loosely instead, a session already naming <c>Client-A</c> reads as unchanged when this request
+    /// records <c>client-a</c> - the record itself still happens, because the collection does its own
+    /// comparing, so the session carries a client the store is never told about, and logout cannot
+    /// reach it.
+    /// </remarks>
+    [Fact]
+    public async Task ProcessAsync_AClientDifferingOnlyInCase_IsWritten()
+    {
+        var request = CreateRequest();
+        var session = CreateAuthSession();
+        session.AffectedClientIds.Add(TestConstants.DefaultClientId.ToUpperInvariant());
+
+        var consents = CreateConsents();
+        SetupSuccessfulAuthCodeFlow(request, session, consents);
+
+        await _processor.ProcessAsync(request);
+
         Assert.Contains(TestConstants.DefaultClientId, session.AffectedClientIds);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Once);
     }
@@ -1795,15 +1825,18 @@ public class AuthorizationRequestProcessorTests
         };
 
         var consents = CreateConsents();
-        SetupSuccessfulAuthCodeFlow(request, session, consents);
+        var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
         await _processor.ProcessAsync(request);
 
+        // The negative says nothing on its own unless the request reached the point that would write.
+        Assert.NotNull(capture.Grant);
+        Assert.Equal(2, session.AffectedClientIds.Count);
         _authSessionService.Verify(s => s.SignInAsync(session), Times.Never);
     }
 
     /// <summary>
-    /// A session that arrived carrying one client twice is neither written nor shortened.
+    /// A session carrying one client twice, one copy dropped, is neither written nor shortened.
     /// </summary>
     /// <remarks>
     /// Who a session touches is a set even where the collection holding them is not, and a host may
@@ -1812,7 +1845,7 @@ public class AuthorizationRequestProcessorTests
     /// client, and that shortened list would be written to the store.
     /// </remarks>
     [Fact]
-    public async Task ProcessAsync_ASessionArrivingWithADuplicate_IsNotWritten()
+    public async Task ProcessAsync_ADuplicateWithOneCopyDropped_IsNotWritten()
     {
         var request = CreateRequest();
         var session = CreateAuthSession() with
