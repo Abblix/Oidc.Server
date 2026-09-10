@@ -2,7 +2,7 @@
 
 The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for .NET: transmitter and receiver in one package, built on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). A transmitter tells its receivers that something security-relevant happened to a shared subject - a session revoked, a credential compromised - and this package carries both ends of that conversation: the event streams, their management API, and delivery over push (RFC 8935) and poll (RFC 8936).
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
 
 [A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) is that conversation running: two hosts, and a real push delivery between them.
 

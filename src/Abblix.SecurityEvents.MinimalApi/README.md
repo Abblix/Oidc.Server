@@ -5,7 +5,7 @@ receive a token and nothing more: `MapBackChannelLogoutEndpoint` for OpenID Conn
 Logout 1.0, and `MapPushDeliveryEndpoint` for RFC 8935 push delivery. The request and response rules
 live in the core, so this package is the transport and the route pattern.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) walks the smallest path through the whole stack: a relying party that wants logout notifications, installs this adapter and its core, and never meets a stream.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) walks the smallest path through the whole stack: a relying party that wants logout notifications, installs this adapter and its core, and never meets a stream.
 
 [A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) wires the receiving end into a host that verifies what arrives before it reaches the application's own code.
 

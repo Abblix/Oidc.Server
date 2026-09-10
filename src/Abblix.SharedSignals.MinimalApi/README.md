@@ -2,7 +2,7 @@
 
 ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): the OpenID Shared Signals Framework 1.0 endpoints as route handlers, with no MVC dependency.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
 
 [A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) puts those endpoints in running hosts, where each layer keeps its own routes in plain sight.
 
