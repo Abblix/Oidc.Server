@@ -316,14 +316,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtBearerGrant(this IServiceCollection services)
     {
         services.TryAddSingleton<IJwtBearerIssuerProvider, JwtBearerIssuerProvider>();
-        services.AddReplayPrevention();
 
-        // The storage now lives in Abblix.JWT so a Security Event Token receiver can share it
-        // without reaching for the OpenID Connect server. Both deprecated spellings still
-        // resolve, and every one of them reserves identifiers in that same store.
-#pragma warning disable CS0618 // intentional registration of the deprecated shim
-        services.TryAddSingleton<JwtBearer.IJwtReplayCache, JwtBearer.DistributedJwtReplayCache>();
-#pragma warning restore CS0618
+        // The storage lives in Abblix.JWT so a Security Event Token receiver can share it without
+        // reaching for the OpenID Connect server.
+        services.AddReplayPrevention();
 
         return services.AddAuthorizationGrant<JwtBearerGrantHandler>();
     }
