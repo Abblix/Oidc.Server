@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.OIDC.Server.Redis</PackageId>
     <Title>Abblix OIDC Server Redis</Title>
-    <Description>Redis-backed take-once redemption for Abblix OIDC Server: an authorization code, a device code or a CIBA request id is handed to exactly one caller and deleted in one indivisible command, so a provider running as several instances cannot issue two token sets for one authorization.</Description>
+    <Description>Redis-backed storage for the short-lived records of Abblix OIDC Server. A record that may be redeemed once - an authorization code, a device code, a CIBA request id - is read and deleted in one indivisible command, so a provider running as several instances hands it to exactly one caller and cannot issue two token sets for one authorization.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Oidc.Server.Redis</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
