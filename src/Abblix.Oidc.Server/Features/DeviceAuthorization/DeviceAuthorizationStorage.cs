@@ -26,12 +26,15 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <param name="serializer">The serializer for converting objects to/from binary format.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 /// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
+/// <param name="takeOnceStore">A store able to take a value and delete it indivisibly, when
+/// the host registered one. Absent, the redemption keeps the in-process guarantee and no more.</param>
 public partial class DeviceAuthorizationStorage(
     ILogger<DeviceAuthorizationStorage> logger,
     IDistributedCache cache,
     IBinarySerializer serializer,
     IEntityStorageKeyFactory keyFactory,
-    TimeProvider timeProvider) : IDeviceAuthorizationStorage
+    TimeProvider timeProvider,
+    ITakeOnceStore? takeOnceStore = null) : IDeviceAuthorizationStorage
 {
     /// <inheritdoc />
     public async Task StoreAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
@@ -173,7 +176,12 @@ public partial class DeviceAuthorizationStorage(
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
     {
-        var removed = await cache.TryRemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
+        // Asked of the store when it can answer indivisibly, which is what makes one winner a fact rather
+        // than a probability once more than one instance serves the token endpoint.
+        var requestKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
+        var removed = takeOnceStore is not null
+            ? await takeOnceStore.TryTakeAsync(requestKey) is not null
+            : await cache.TryRemoveAsync(requestKey);
         if (!removed)
             return false;
 

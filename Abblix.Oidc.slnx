@@ -22,6 +22,7 @@
     <Project Path="src/Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
     <Project Path="src/Abblix.Oidc.Server.AspNetCore/Abblix.Oidc.Server.AspNetCore.csproj" />
     <Project Path="src/Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.Redis/Abblix.Oidc.Server.Redis.csproj" />
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.Mvc/Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" />
     <Project Path="src/Abblix.Oidc.Server.MinimalApi/Abblix.Oidc.Server.MinimalApi.csproj" />
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.MinimalApi/Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" />
@@ -58,5 +59,6 @@
     <Project Path="tests/Abblix.SecurityEvents.E2E.Tests/Abblix.SecurityEvents.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.E2E.Tests/Abblix.SharedSignals.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.SharedSignals.Redis.UnitTests/Abblix.SharedSignals.Redis.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Server.Redis.UnitTests/Abblix.Oidc.Server.Redis.UnitTests.csproj" />
   </Folder>
 </Solution>
