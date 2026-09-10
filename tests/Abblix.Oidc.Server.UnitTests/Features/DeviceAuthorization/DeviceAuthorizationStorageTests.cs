@@ -52,10 +52,17 @@ public class DeviceAuthorizationStorageTests
         _serializer.Setup(s => s.Serialize(It.IsAny<DeviceAuthorizationRequest>())).Returns([1, 2, 3]);
         _serializer.Setup(s => s.Serialize(It.IsAny<string>())).Returns([4, 5, 6]);
 
+        // The claim reads the record it removes, so bytes that come back as nothing would look exactly
+        // like a code another caller took. A real serializer answers with the record; this says so too,
+        // rather than leaving the reading half of the round trip to a mock's default.
+        _serializer
+            .Setup(s => s.Deserialize<DeviceAuthorizationRequest>(It.IsAny<byte[]>()))
+            .Returns(() => NewRequest(_now.AddMinutes(10)));
+        _serializer.Setup(s => s.Deserialize<string>(It.IsAny<byte[]>())).Returns(DeviceCode);
+
         _storage = new DeviceAuthorizationStorage(
             new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
-            _cache.Object,
-            _serializer.Object,
+            new DistributedCacheStorage(_cache.Object, _serializer.Object),
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }
@@ -311,8 +318,7 @@ public class DeviceAuthorizationStorageTests
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
-            cache,
-            _serializer.Object,
+            new DistributedCacheStorage(cache, _serializer.Object),
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }

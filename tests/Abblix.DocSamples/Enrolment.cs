@@ -66,7 +66,7 @@ public static class Enrolment
     /// equality is the guard rather than a promise about some future day.
     /// </para>
     /// <para>
-    /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
+    /// Every project under <c>src/</c> but two. The two source generators are NOT referenced,
     /// and that is a hole rather than a tidiness: they emit documentation and ship inside the Mvc and
     /// MinimalApi packages, so a sample written into either is invisible here. Referencing them was
     /// tried and refused by the runtime - a generator assembly needs the compiler's own assemblies to
@@ -77,7 +77,7 @@ public static class Enrolment
     /// as coverage.
     /// </para>
     /// </remarks>
-    public const int Libraries = 16;
+    public const int Libraries = 17;
 
     /// <summary>
     /// How many projects under <c>src/</c> this one names in its own project file.
@@ -97,7 +97,7 @@ public static class Enrolment
     /// design with a better failure.
     /// </para>
     /// </remarks>
-    public const int References = 16;
+    public const int References = 17;
 
     /// <summary>
     /// How many distinct code samples the compiler recorded that nothing here compiles.
@@ -127,6 +127,7 @@ public static class Enrolment
     public static IReadOnlyList<ReadmeSample> ReadmeCompiled { get; } =
     [
         new("README.md", 0, "ReadmeQuickstart.cs"),
+        new("src/Abblix.Oidc.Server.Redis/README.md", 0, "ReadmeRedisStorage.cs"),
     ];
 
     /// <summary>
