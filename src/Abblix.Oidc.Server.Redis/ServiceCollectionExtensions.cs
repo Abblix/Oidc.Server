@@ -37,7 +37,9 @@ public static class ServiceCollectionExtensions
     /// </remarks>
     /// <param name="services">The service collection to register into.</param>
     /// <param name="options">Where in Redis the entries are written. The defaults suit a Redis this
-    /// deployment does not share.</param>
+    /// deployment does not share. Registering a <see cref="RedisEntityStorageOptions"/> of your own is
+    /// the stronger way to say it: that registration wins over anything passed here, in either order
+    /// and without a word, which is the same rule that lets a host override any other service.</param>
     /// <returns>The same collection, so calls chain.</returns>
     public static IServiceCollection AddRedisEntityStorage(
         this IServiceCollection services,
@@ -45,27 +47,13 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // TryAdd, because a host's own registration wins over anything a library extension does - and
-        // that leaves one way to lose a choice silently: options handed to this call while a different
-        // instance is already registered. The prefix decides WHERE records live, so losing it writes
-        // authorizations under one name and looks for them under another, and every holder is told the
-        // code expired. Neither instance may be discarded, so the contradiction is refused at startup
-        // rather than settled by whichever call happened to run first.
-        if (options is not null)
-        {
-            var registered = services
-                .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(RedisEntityStorageOptions))
-                ?.ImplementationInstance;
-
-            if (registered is not null && !ReferenceEquals(registered, options))
-            {
-                throw new InvalidOperationException(
-                    $"A different {nameof(RedisEntityStorageOptions)} is already registered, and these "
-                    + "name different places for the same records. Pass them once, or register them and "
-                    + $"call {nameof(AddRedisEntityStorage)} with none.");
-            }
-        }
-
+        // TryAdd, because a host's own registration wins over anything a library extension does. So
+        // options already registered stand and these lose, which is the rule rather than an accident -
+        // and it is why they are documented as the SECOND way to supply a prefix rather than a stronger
+        // one. Refusing the disagreement instead was tried and removed: whether an existing registration
+        // disagrees cannot be decided from the collection at all, because a descriptor built from a
+        // factory carries no instance to compare, so the check refused hosts that agreed and stayed
+        // silent for the ones it existed to catch.
         services.TryAddSingleton(options ?? new RedisEntityStorageOptions());
 
         services.Replace(ServiceDescriptor.Singleton<IEntityStorage, RedisEntityStorage>());

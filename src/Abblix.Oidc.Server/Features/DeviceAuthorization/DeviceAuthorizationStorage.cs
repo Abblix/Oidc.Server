@@ -128,9 +128,10 @@ public partial class DeviceAuthorizationStorage(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This method performs atomic removal of both the device code entry and its associated user code
-    /// mapping. By accepting the userCode as a parameter, it avoids an additional cache read operation,
-    /// since the caller already has this information from a previous fetch.
+    /// This method claims the device code and then tidies its user-code index entry. Only the claim is
+    /// indivisible; the tidying is a separate call whose failure is logged and swallowed, because
+    /// whether the index went is a different question from whether this caller took the code. The user
+    /// code is a parameter so that finding the entry costs no extra read, the caller having it already.
     /// </para>
     /// <para>
     /// <strong>Use Case:</strong> This method is used in the Device Authorization Grant flow (RFC 8628)
@@ -144,8 +145,8 @@ public partial class DeviceAuthorizationStorage(
     /// <strong>Atomicity:</strong> The claim is a removing read, which <see cref="IEntityStorage"/> requires
     /// to be indivisible, so no competitor can take the code between the read and the removal. How far that
     /// reaches beyond one process is the registered storage's answer: the one built over a distributed cache
-    /// serializes redemptions within a process and no further. After a successful claim, cleans up the
-    /// user code mapping.
+    /// serializes redemptions within a process and no further. It covers the claim and nothing after it -
+    /// the user-code index is tidied by a later call, and best-effort.
     /// </para>
     /// <para>
     /// One way the code is still consumed with nobody told they took it survives, and it is not a race: the

@@ -31,11 +31,12 @@ namespace Abblix.Oidc.Server.Redis.UnitTests;
 /// concurrency it has excluded. These rows each build a storage on a connection of its own, which is what
 /// a second process has, and race them against each other.
 /// <para>
-/// What that buys is the ARRANGEMENT rather than extra detection: measured across every mutation of this
-/// storage, each one that kills a row here also kills a single-connection one, because nothing in the
-/// storage is per-instance except the script latch and no server the suite can start refuses the single
-/// command. So these rows are what makes the sentence about several instances a measurement rather than an
-/// extrapolation - and they are the rows that would speak first if anything per-instance were ever added.
+/// What that buys is the ARRANGEMENT rather than extra detection. No mutation run so far distinguishes
+/// them: every one that killed a row here killed a single-connection one too, which follows from the
+/// storage holding nothing per-instance except the script latch, and no server the suite can start
+/// refusing the single command that latch answers. So these rows are what makes the sentence about
+/// several instances a measurement rather than an extrapolation, and they are the rows that would speak
+/// first if anything per-instance were ever added.
 /// </para>
 /// </remarks>
 public sealed class AcrossInstancesTests(GarnetFixture garnet) : IClassFixture<GarnetFixture>, IDisposable

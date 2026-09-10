@@ -29,9 +29,10 @@ namespace Abblix.Oidc.Server.Redis.UnitTests;
 /// <remarks>
 /// Order matters, and the two halves answer it differently on purpose. The STORAGE is replaced, because
 /// the server adds its own with TryAdd and a TryAdd here would win only when it happened to run first,
-/// while a host is free to call these in either order. The OPTIONS are not, because a host's own
-/// registration wins over anything a library extension does - so the only way an options instance can be
-/// lost is refused instead.
+/// while a host is free to call these in either order. The OPTIONS are not: a host's own registration
+/// wins over anything a library extension does, so options handed to the call lose to one already
+/// registered - by the same rule that lets a host override any other service, and documented on the
+/// parameter rather than argued with at startup.
 /// </remarks>
 public sealed class RegistrationTests
 {
@@ -96,44 +97,33 @@ public sealed class RegistrationTests
     }
 
     /// <summary>
-    /// Two registrations naming different places for the same records are refused, not ranked.
+    /// Options the host registered itself outrank options handed to the call, however they were
+    /// registered and whatever they say.
     /// </summary>
     /// <remarks>
-    /// A host's own registration wins over anything a library extension does, so options handed to this
-    /// call can only ever lose - and losing is silent and expensive here, because the prefix decides
-    /// where records live: authorizations written under one name and looked for under another, with
-    /// every holder told the code expired. Neither instance may be discarded, so the contradiction is
-    /// heard at startup instead.
+    /// This is the workspace's rule for every host-facing extension, and it is asserted here rather
+    /// than left as an accident because it decides WHERE records live: a host reading the parameter
+    /// documentation has to be able to rely on which of the two wins.
+    /// <para>
+    /// Both ways of registering, because they are not the same to anything inspecting the collection:
+    /// an instance can be compared and a factory cannot. A guard that tried to refuse the disagreement
+    /// was removed for exactly that reason - it could not see the factory case at all, so it stayed
+    /// silent for the arrangement it existed to catch.
+    /// </para>
     /// </remarks>
-    [Fact]
-    public void TwoRegistrationsNamingDifferentPlaces_AreRefused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OptionsTheHostRegisteredItself_OutrankOptionsHandedToTheCall(bool byFactory)
     {
-        var refusal = Assert.Throws<InvalidOperationException>(() => Build(services =>
-        {
-            services.AddSingleton(new RedisEntityStorageOptions { KeyPrefix = "a-host:" });
-            services.AddRedisEntityStorage(new RedisEntityStorageOptions { KeyPrefix = "somewhere-else:" });
-        }));
-
-        Assert.Contains(nameof(RedisEntityStorageOptions), refusal.Message);
-    }
-
-    /// <summary>
-    /// The same options handed over twice are not a contradiction, so they are not refused.
-    /// </summary>
-    /// <remarks>
-    /// A refusal that fired on this would make a host composing its registrations from a shared helper
-    /// unable to call the extension at all, which is the shape a guard takes when it matches on the
-    /// number of registrations rather than on what they disagree about.
-    /// </remarks>
-    [Fact]
-    public void OneOptionsInstanceRegisteredTwice_IsNotRefused()
-    {
-        var options = new RedisEntityStorageOptions { KeyPrefix = "a-host:" };
-
         using var provider = Build(services =>
         {
-            services.AddSingleton(options);
-            services.AddRedisEntityStorage(options);
+            if (byFactory)
+                services.AddSingleton(_ => new RedisEntityStorageOptions { KeyPrefix = "a-host:" });
+            else
+                services.AddSingleton(new RedisEntityStorageOptions { KeyPrefix = "a-host:" });
+
+            services.AddRedisEntityStorage(new RedisEntityStorageOptions { KeyPrefix = "the-call:" });
         });
 
         Assert.Equal("a-host:", provider.GetRequiredService<RedisEntityStorageOptions>().KeyPrefix);
