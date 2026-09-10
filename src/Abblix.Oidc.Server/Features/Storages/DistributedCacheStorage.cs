@@ -46,8 +46,12 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 
 	/// <summary>
 	/// Asynchronously retrieves an object from the distributed cache.
-	/// When removeOnRetrieval is true, uses atomic get-and-remove operation via
-	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryGetAndRemoveAsync"/>.
+	/// When removeOnRetrieval is true, claims the entry through
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TryGetAndRemoveAsync"/>, which is indivisible
+	/// WITHIN THIS PROCESS and no further: the read and the removal happen under one hold of a per-key
+	/// gate that a second instance cannot see, so two of them can be handed the same value. Closing that
+	/// is the job of a storage whose backing store decides the claim in one command, which is what
+	/// <see cref="IEntityStorage"/> asks implementations for and what this one cannot give.
 	/// </summary>
 	/// <typeparam name="T">The type of the object to retrieve.</typeparam>
 	/// <param name="key">The key associated with the object to retrieve.</param>

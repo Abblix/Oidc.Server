@@ -9,6 +9,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
@@ -304,6 +305,57 @@ public class DeviceAuthorizationStorageTests
         await failing.SetAsync(RequestKey, [1, 2, 3], new(), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(DeviceCode));
+    }
+
+    /// <summary>
+    /// A stored request is findable by BOTH of its codes, and claiming it by device code ends that.
+    /// </summary>
+    /// <remarks>
+    /// The secondary index is two halves that have to agree: <c>StoreAsync</c> writes the device code
+    /// under the user code, and <c>TryGetByUserCodeAsync</c> reads it back and follows it to the record.
+    /// Nothing else here enters that path - every other mention in the suite is a stub on the interface,
+    /// which answers whatever it was told and never runs this class.
+    /// <para>
+    /// Over a real cache and a real serializer, because the halves meet in the BYTES: a mocked serializer
+    /// makes the round trip a pair of stubs answering each other, and would pass over a store that wrote
+    /// one shape and read another.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AStoredRequest_IsFoundByEitherCode_UntilItIsClaimed()
+    {
+        var storage = StorageOverRealBytes();
+        var request = NewRequest(_now.AddMinutes(10));
+
+        await storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(10));
+
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+
+        var found = await storage.TryGetByUserCodeAsync(UserCode);
+        Assert.NotNull(found);
+        Assert.Equal(DeviceCode, found.Value.DeviceCode);
+        Assert.Equal(UserCode, found.Value.Request.UserCode);
+
+        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+
+        Assert.Null(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+        Assert.Null(await storage.TryGetByUserCodeAsync(UserCode));
+    }
+
+    /// <summary>
+    /// The storage over a real cache and a real serializer, so a round trip is a round trip.
+    /// </summary>
+    private DeviceAuthorizationStorage StorageOverRealBytes()
+    {
+        var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
+        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
+        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
+
+        return new DeviceAuthorizationStorage(
+            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
+            new DistributedCacheStorage(RealCache(), new JsonBinarySerializer()),
+            keyFactory.Object,
+            new FakeTimeProvider(_now));
     }
 
     private static IDistributedCache RealCache()
