@@ -57,6 +57,20 @@ repos:
         # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
         # content is the general answer, and this is the cheap one.
         files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
+      - id: license-headers
+        name: "Licence headers carry an SPDX identifier"
+        entry: python .github/scripts/lint-license-headers.py
+        language: python
+        pass_filenames: false
+        # The script takes ROOTS, not file names, and walking both of them costs under a second,
+        # so it checks everything rather than the staged subset. That is the cheaper answer here
+        # and also the stricter one: a header broken by an earlier commit is caught by the next
+        # commit that touches any source file, instead of waiting for someone to edit that file.
+        #
+        # Its own path is in the pattern, the same as the take-once check above: the mapping from
+        # package to licence lives inside the script, so a commit editing only that mapping must
+        # re-run it.
+        files: (\.cs$|\.github/scripts/lint-license-headers\.py$)
       - id: no-split-doc-comments
         name: "Block a doc comment that documents two members"
         entry: python .github/scripts/lint-no-split-doc-comments.py
