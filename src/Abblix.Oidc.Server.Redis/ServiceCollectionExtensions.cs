@@ -39,7 +39,10 @@ public static class ServiceCollectionExtensions
     /// <param name="options">Where in Redis the entries are written. The defaults suit a Redis this
     /// deployment does not share. Registering a <see cref="RedisEntityStorageOptions"/> of your own is
     /// the stronger way to say it: that registration wins over anything passed here, in either order
-    /// and without a word, which is the same rule that lets a host override any other service.</param>
+    /// and without a word, which is the same rule that lets a host override any other service. It has
+    /// to be a registration OF THAT TYPE - the storage takes it by value, so binding it through
+    /// <c>Configure</c> leaves the configured values readable through <c>IOptions</c> and the defaults
+    /// in force, which is the one arrangement where the two disagree in silence.</param>
     /// <returns>The same collection, so calls chain.</returns>
     public static IServiceCollection AddRedisEntityStorage(
         this IServiceCollection services,

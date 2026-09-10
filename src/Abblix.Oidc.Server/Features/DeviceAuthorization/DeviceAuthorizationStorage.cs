@@ -130,8 +130,9 @@ public partial class DeviceAuthorizationStorage(
     /// <para>
     /// This method claims the device code and then tidies its user-code index entry. Only the claim is
     /// indivisible; the tidying is a separate call whose failure is logged and swallowed, because
-    /// whether the index went is a different question from whether this caller took the code. The user
-    /// code is a parameter so that finding the entry costs no extra read, the caller having it already.
+    /// whether the index went is a different question from whether this caller took the code. What the
+    /// user code parameter is still for is on the parameter itself, and it is no longer the cost of a
+    /// read: the claim returns the record, which carries the right one.
     /// </para>
     /// <para>
     /// <strong>Use Case:</strong> This method is used in the Device Authorization Grant flow (RFC 8628)
