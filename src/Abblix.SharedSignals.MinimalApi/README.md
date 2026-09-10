@@ -4,6 +4,8 @@ ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuge
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
 
+[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) puts those endpoints in a running host, where each layer keeps its own routes in plain sight.
+
 ## Which adapter maps which endpoint
 
 There are two Minimal API packages in this family, and the line between them is not the one that first suggests itself. It is not transmitter here and receiver there: this package holds receiver-role code of its own - the stream management client, the transmitter discovery client. The question that decides placement is whether the endpoint stops making sense without a stream:

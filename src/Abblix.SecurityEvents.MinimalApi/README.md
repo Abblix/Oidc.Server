@@ -7,6 +7,8 @@ live in the core, so this package is the transport and the route pattern.
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) walks the smallest path through the whole stack: a relying party that wants logout notifications, installs this adapter and its core, and never meets a stream.
 
+[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) wires the receiving end into a host that verifies what arrives before it reaches the application's own code.
+
 ## Which adapter maps which endpoint
 
 There are two Minimal API packages in this family, and the line between them is not the one that

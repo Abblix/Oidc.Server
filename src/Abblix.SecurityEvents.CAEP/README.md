@@ -4,6 +4,8 @@ The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for 
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack: the envelope underneath it, the streams that carry it, and what a receiver does with a session event once it arrives.
 
+[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) follows a session revocation the whole way, from the host that decides it to the one that acts on it.
+
 ## Install
 
 ```bash
