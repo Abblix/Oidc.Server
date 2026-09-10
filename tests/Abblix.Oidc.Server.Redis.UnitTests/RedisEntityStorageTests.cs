@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Redis;
 using Abblix.Tests.Shared;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.Oidc.Server.Redis.UnitTests;
@@ -36,6 +37,11 @@ public sealed class RedisEntityStorageTests(GarnetFixture garnet) : IClassFixtur
         new RedisEntityStorageOptions { KeyPrefix = $"test:{Guid.NewGuid():N}:" });
 
     private static string NewKey() => $"entity:{Guid.NewGuid():N}";
+
+    /// <summary>
+    /// The instant the clock this test owns is held at.
+    /// </summary>
+    private static readonly DateTimeOffset Instant = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private sealed record Stored(string Value, int Number);
 
@@ -147,23 +153,32 @@ public sealed class RedisEntityStorageTests(GarnetFixture garnet) : IClassFixtur
     public async Task SetAsync_ADeadlineGivenAsAnInstant_ReachesTheServerAsALifetime()
     {
         const string prefix = "test-instant:";
+
+        // A clock this test owns, held still. With the ambient one the row cannot tell a storage that
+        // consults the clock it was given from one that ignores it, and the tolerance needed to absorb
+        // the drift would be wider than the errors worth catching - a few minutes of skew in the very
+        // arithmetic the row exists to pin would pass.
+        var clock = new FakeTimeProvider(Instant);
         var storage = new RedisEntityStorage(
             garnet.Connection,
             new JsonBinarySerializer(),
-            TimeProvider.System,
+            clock,
             new RedisEntityStorageOptions { KeyPrefix = prefix });
 
         var key = NewKey();
-        var options = new StorageOptions
-        {
-            AbsoluteExpiration = TimeProvider.System.GetUtcNow().AddMinutes(10),
-        };
+        var options = new StorageOptions { AbsoluteExpiration = Instant.AddMinutes(10) };
 
         await storage.SetAsync(key, new Stored("a-token-status", 1), options, Ct);
 
+        // The server rounds the lifetime it was handed to whole seconds and starts counting down at
+        // once, so the window is the second the round trip spent rather than the minutes a wall clock
+        // would need. Anything reading a different clock, or reading it with the wrong sign, is outside.
         var left = await garnet.Connection.GetDatabase().KeyTimeToLiveAsync(prefix + key);
         Assert.NotNull(left);
-        Assert.InRange(left.Value, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10));
+        Assert.InRange(
+            left.Value,
+            TimeSpan.FromMinutes(10) - TimeSpan.FromSeconds(30),
+            TimeSpan.FromMinutes(10));
     }
 
     /// <summary>

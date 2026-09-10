@@ -144,15 +144,15 @@ public partial class DeviceAuthorizationStorage(
     /// <strong>Atomicity:</strong> The claim is a removing read, which <see cref="IEntityStorage"/> requires
     /// to be indivisible, so no competitor can take the code between the read and the removal. How far that
     /// reaches beyond one process is the registered storage's answer: the one built over a distributed cache
-    /// serializes redemptions within a process and no further.
+    /// serializes redemptions within a process and no further. After a successful claim, cleans up the
+    /// user code mapping.
+    /// </para>
     /// <para>
     /// One way the code is still consumed with nobody told they took it survives, and it is not a race: the
     /// storage turns the removed bytes back into a record AFTER deleting them, so a record it cannot read -
     /// a shape changed under a rolling deploy, a serializer that dispatches differently between versions -
     /// is gone and the caller gets the failure rather than the code. Nothing here can put it back, because
     /// the delete has already happened at the server.
-    /// </para>
-    /// After a successful claim, cleans up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>

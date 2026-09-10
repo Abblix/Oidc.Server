@@ -45,13 +45,28 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Replace when the host named them, TryAdd when it did not: a call passing a prefix must not lose
-        // to an earlier call that passed none, because the prefix decides WHERE records live and losing it
-        // is silent - authorizations written under one name and looked for under another.
+        // TryAdd, because a host's own registration wins over anything a library extension does - and
+        // that leaves one way to lose a choice silently: options handed to this call while a different
+        // instance is already registered. The prefix decides WHERE records live, so losing it writes
+        // authorizations under one name and looks for them under another, and every holder is told the
+        // code expired. Neither instance may be discarded, so the contradiction is refused at startup
+        // rather than settled by whichever call happened to run first.
         if (options is not null)
-            services.Replace(ServiceDescriptor.Singleton(options));
-        else
-            services.TryAddSingleton(new RedisEntityStorageOptions());
+        {
+            var registered = services
+                .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(RedisEntityStorageOptions))
+                ?.ImplementationInstance;
+
+            if (registered is not null && !ReferenceEquals(registered, options))
+            {
+                throw new InvalidOperationException(
+                    $"A different {nameof(RedisEntityStorageOptions)} is already registered, and these "
+                    + "name different places for the same records. Pass them once, or register them and "
+                    + $"call {nameof(AddRedisEntityStorage)} with none.");
+            }
+        }
+
+        services.TryAddSingleton(options ?? new RedisEntityStorageOptions());
 
         services.Replace(ServiceDescriptor.Singleton<IEntityStorage, RedisEntityStorage>());
         return services;
