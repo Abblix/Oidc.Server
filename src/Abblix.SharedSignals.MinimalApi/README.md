@@ -4,7 +4,7 @@ ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuge
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
 
-[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) puts those endpoints in a running host, where each layer keeps its own routes in plain sight.
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) puts those endpoints in running hosts, where each layer keeps its own routes in plain sight.
 
 ## Which adapter maps which endpoint
 

@@ -4,7 +4,7 @@ The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-shared
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
 
-[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) is that conversation running: a transmitter and a receiver in separate hosts, with a real push delivery between them.
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) is that conversation running: two hosts, and a real push delivery between them.
 
 ## What is inside
 

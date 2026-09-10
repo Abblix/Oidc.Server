@@ -207,7 +207,7 @@ Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
 
 ### Shared Signals
-Read [Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) to build a transmitter and a receiver that exchange a signed Security Event Token over HTTPS, each verifying the other.
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) shows two hosts exchanging a signed Security Event Token over HTTPS, each verifying the other.
 
 The [Documentation](https://docs.abblix.com/docs) site covers configuration, deployment, the API reference and the OpenID Connect standard itself.
 

@@ -4,7 +4,7 @@ The Redis-native transmitter storage for [Abblix.SharedSignals](https://www.nuge
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) covers what running a transmitter on more than one instance actually requires, and which of the shipped defaults are single-instance by design.
 
-[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) runs a transmitter end to end; the defaults it leaves in place are the ones that hold on a single instance and no further.
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) stands both ends up for real; the defaults it leaves in place are the ones that hold on a single instance and no further.
 
 ## Install
 

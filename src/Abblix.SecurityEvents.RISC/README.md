@@ -4,7 +4,7 @@ The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dicti
 
 [Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack, and explains why account-level incidents travel the same envelope and the same streams as session events.
 
-[Shared Signals in ASP.NET Core: a working transmitter and receiver example](https://www.abblix.com/en/docs/shared-signals-guide) walks the same trip with both ends built, which a dictionary of event types cannot show by itself.
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) walks the same trip end to end, which a dictionary of event types cannot show by itself.
 
 ## Install
 
