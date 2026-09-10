@@ -9,6 +9,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
@@ -306,11 +307,62 @@ public class DeviceAuthorizationStorageTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => storage.RemoveAsync(DeviceCode));
     }
 
+    /// <summary>
+    /// A stored request is findable by BOTH of its codes, and claiming it by device code ends that.
+    /// </summary>
+    /// <remarks>
+    /// The secondary index is two halves that have to agree: <c>StoreAsync</c> writes the device code
+    /// under the user code, and <c>TryGetByUserCodeAsync</c> reads it back and follows it to the record.
+    /// Nothing else here enters that path - every other mention in the suite is a stub on the interface,
+    /// which answers whatever it was told and never runs this class.
+    /// <para>
+    /// Over a real cache and a real serializer, because the halves meet in the BYTES: a mocked serializer
+    /// makes the round trip a pair of stubs answering each other, and would pass over a store that wrote
+    /// one shape and read another.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AStoredRequest_IsFoundByEitherCode_UntilItIsClaimed()
+    {
+        var entities = new DistributedCacheStorage(RealCache(), new JsonBinarySerializer());
+        var storage = StorageOver(entities);
+        var request = NewRequest(_now.AddMinutes(10));
+
+        await storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(10));
+
+        Assert.NotNull(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+
+        var found = await storage.TryGetByUserCodeAsync(UserCode);
+        Assert.NotNull(found);
+        Assert.Equal(DeviceCode, found.Value.DeviceCode);
+        Assert.Equal(UserCode, found.Value.Request.UserCode);
+
+        // Twice, because the lookup must not consume what it finds: the verification service makes this
+        // call to show the confirmation page and again to act on the answer, with the same user code.
+        Assert.NotNull(await storage.TryGetByUserCodeAsync(UserCode));
+
+        Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
+
+        Assert.Null(await storage.TryGetByDeviceCodeAsync(DeviceCode));
+
+        // The index entry itself, read straight from the store. Asking by user code again would answer
+        // null as soon as the RECORD went, whatever became of the index - the lookup follows one to the
+        // other, so it cannot tell the two apart and would report a dangling entry as a removed one.
+        Assert.Null(await entities.GetAsync<string>(UserCodeKey, removeOnRetrieval: false));
+    }
+
     private static IDistributedCache RealCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     private DeviceAuthorizationStorage StorageOver(
         IDistributedCache cache, RecordingLoggerFactory? log = null)
+        => StorageOver(new DistributedCacheStorage(cache, _serializer.Object), log);
+
+    /// <summary>
+    /// The same storage over an entity storage the caller holds, for a row that reads the store back.
+    /// </summary>
+    private DeviceAuthorizationStorage StorageOver(
+        IEntityStorage entities, RecordingLoggerFactory? log = null)
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
         keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
@@ -318,7 +370,7 @@ public class DeviceAuthorizationStorageTests
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
-            new DistributedCacheStorage(cache, _serializer.Object),
+            entities,
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }

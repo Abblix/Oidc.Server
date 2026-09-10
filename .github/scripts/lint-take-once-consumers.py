@@ -56,15 +56,7 @@ DECLARING = "src/Abblix.Utils/DistributedCacheExtensions.cs"
 #:
 #: This is the reach of the four routes above. It is not a proof that nothing else redeems: a route this
 #: file does not name finds nothing, which is why WRAPPED is a list rather than a paragraph of prose.
-#:
-#: One entry IMPLEMENTS the protocol rather than consuming it, and its refusal is narrower than the
-#: contract above: `Abblix.Oidc.Server.Redis/RedisEntityStorage.cs` performs the removing read as one
-#: server-side command, so there is no claim to expire mid-protocol and no way for the value to be
-#: consumed with nobody told they took it. A refusal there means the entry was not present - taken by
-#: another caller, expired, or never written. Anything reading that file's answer may rely on that;
-#: anything reading the extension's may not.
 KNOWN = {
-    "src/Abblix.Oidc.Server.Redis/RedisEntityStorage.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/BackChannelAuthenticationGrantHandler.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/Grants/DeviceCodeGrantHandler.cs",
     "src/Abblix.Oidc.Server/Features/BackChannelAuthentication/AuthenticationNotifiers/AuthenticationCompletionHandler.cs",
