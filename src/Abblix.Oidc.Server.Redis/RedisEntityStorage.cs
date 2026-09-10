@@ -103,7 +103,10 @@ public sealed class RedisEntityStorage(
             ? await TakeAsync(KeyOf(key))
             : await Database.StringGetAsync(KeyOf(key));
 
-        return stored.IsNull ? default : serializer.Deserialize<T>((byte[])stored!);
+        // Through the nullable conversion rather than a cast past IsNull: the two say the same thing,
+        // and only this one says it in a way the compiler can carry to the call below.
+        byte[]? bytes = stored;
+        return bytes is null ? default : serializer.Deserialize<T>(bytes);
     }
 
     /// <inheritdoc />
