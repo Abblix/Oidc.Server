@@ -94,18 +94,66 @@ public sealed class RedisEntityStorageTests(GarnetFixture garnet) : IClassFixtur
     }
 
     /// <summary>
-    /// A write is refused rather than stored forever when the policy names no deadline.
+    /// A policy naming no deadline stores an entry that does not expire, and one naming a span sets it.
     /// </summary>
     /// <remarks>
-    /// Every caller in the server states one, so this cannot be reached from the product today. It is
-    /// the boundary a host writing its own caller would cross, and an entry outliving the authorization
-    /// it stands for is a leak nothing else in the system would report.
+    /// Not a hypothetical boundary: <c>RegistrationAccessTokenStore</c> writes without a deadline on
+    /// purpose, because a registration access token stays valid while the client is registered and
+    /// RFC 7592 section 5 forbids expiring it. A store refusing that write would break dynamic client
+    /// registration for every host that registered it.
+    /// <para>
+    /// The deadline is read back off the SERVER. Asserting on the policy handed in would restate what
+    /// the test itself passed, which is true by construction and measures nothing; and the pair is
+    /// asserted together so that a storage setting no expiry ever cannot pass the first half alone.
+    /// </para>
     /// </remarks>
     [Fact]
-    public async Task SetAsync_APolicyNamingNoDeadline_IsRefused()
+    public async Task SetAsync_ADeadlineOrNone_IsWhatTheServerHoldsAfterwards()
     {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => NewStorage().SetAsync(NewKey(), new Stored("x", 1), new StorageOptions(), Ct));
+        const string prefix = "test-ttl:";
+        var storage = new RedisEntityStorage(
+            garnet.Connection,
+            new JsonBinarySerializer(),
+            TimeProvider.System,
+            new RedisEntityStorageOptions { KeyPrefix = prefix });
+
+        var forever = NewKey();
+        await storage.SetAsync(forever, new Stored("a-registration-token", 1), new StorageOptions(), Ct);
+
+        Assert.Equal(
+            new Stored("a-registration-token", 1),
+            await storage.GetAsync<Stored>(forever, false, Ct));
+        Assert.Null(await garnet.Connection.GetDatabase().KeyTimeToLiveAsync(prefix + forever));
+
+        var expiring = NewKey();
+        await storage.SetAsync(expiring, new Stored("an-authorization", 2), OneMinute, Ct);
+
+        var left = await garnet.Connection.GetDatabase().KeyTimeToLiveAsync(prefix + expiring);
+        Assert.NotNull(left);
+        Assert.InRange(left.Value, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
+    }
+
+
+    /// <summary>
+    /// A deadline already behind us leaves nothing readable, and takes any earlier entry with it.
+    /// </summary>
+    /// <remarks>
+    /// Reachable from the product: a token's status is written to expire when the token does, so an
+    /// already-expired token asks for a deadline in the past. Redis refuses a non-positive lifetime, and
+    /// silently doing nothing would be worse than refusing - the key would keep whatever it held, while
+    /// this method's whole contract is that it replaces it.
+    /// </remarks>
+    [Fact]
+    public async Task SetAsync_ADeadlineAlreadyBehindUs_LeavesNothingReadable()
+    {
+        var storage = NewStorage();
+        var key = NewKey();
+        var past = new StorageOptions { AbsoluteExpiration = DateTimeOffset.UnixEpoch };
+
+        await storage.SetAsync(key, new Stored("an-authorization", 1), OneMinute, Ct);
+        await storage.SetAsync(key, new Stored("too-late", 2), past, Ct);
+
+        Assert.Null(await storage.GetAsync<Stored>(key, false, Ct));
     }
 
     /// <summary>

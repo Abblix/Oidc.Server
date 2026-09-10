@@ -75,15 +75,22 @@ public sealed class RedisEntityStorage(
         ArgumentNullException.ThrowIfNull(options);
         token?.ThrowIfCancellationRequested();
 
-        // An entry with no expiry would outlive the authorization it stands for, and every caller in
-        // the server states one. A key written without it is a leak the store cannot notice, so the
-        // absence is refused here rather than turned into a default nobody chose.
-        var expiry = ExpiryOf(options)
-            ?? throw new ArgumentException(
-                $"{nameof(StorageOptions)} carries no expiration, and this store writes no entry without one.",
-                nameof(options));
+        // A policy naming no deadline writes an entry that does not expire, which is a case the server
+        // has: a registration access token stays valid while the client is registered, so RFC 7592
+        // section 5 forbids giving it one, and its binding is dropped by an explicit removal instead.
+        var expiry = ExpiryOf(options);
 
-        return Database.StringSetAsync(KeyOf(key), serializer.Serialize(value), expiry);
+        // A deadline already behind us is an entry that would be gone before anything could read it, and
+        // a caller can hand one over honestly: a token's status is written to expire when the token does,
+        // which for an already-expired token is in the past. Redis refuses a non-positive lifetime, so the
+        // write becomes the removal it amounts to - and it has to REMOVE rather than do nothing, because
+        // this method replaces whatever the key held.
+        if (expiry is { } span && span <= TimeSpan.Zero)
+            return Database.KeyDeleteAsync(KeyOf(key));
+
+        // When.Always spelled out because the overload taking a nullable span needs it to be chosen: the
+        // one the compiler reaches for otherwise takes an Expiration, which cannot express "no deadline".
+        return Database.StringSetAsync(KeyOf(key), serializer.Serialize(value), expiry, When.Always);
     }
 
     /// <inheritdoc />
