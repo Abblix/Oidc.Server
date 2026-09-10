@@ -20,9 +20,6 @@ using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 
-// These tests deliberately exercise the obsolete type-dispatch FormatAsync(token, clientInfo) overload to lock its
-// back-compat behavior (it now delegates to the policy overload via the token's header type).
-#pragma warning disable CS0618
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
@@ -45,18 +42,24 @@ public class ClientJwtFormatterTests
     private readonly JsonWebKey _clientEncryptionKey;
     private readonly ClientInfo _clientInfo;
 
+    /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
+    private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)
+        => ClientJwtEncryption.ForUserInfo(client, new OidcOptions());
+
+    /// <summary>What the client registered for identity tokens, which logout tokens share.</summary>
+    private static ClientJwtEncryption LogoutTokenPolicy(ClientInfo client)
+        => ClientJwtEncryption.ForIdentityToken(client, new OidcOptions());
+
     public ClientJwtFormatterTests()
     {
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        var options = Options.Create(new OidcOptions());
         _formatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeysProvider.Object,
-            _serviceKeysProvider.Object,
-            options);
+            _serviceKeysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
@@ -94,7 +97,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo);
+        await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         // Assert
         Assert.Same(_signingKeyRS256, capturedSigningKey);
@@ -131,7 +134,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo);
+        await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Same(_clientEncryptionKey, capturedEncryptionKey);
@@ -167,7 +170,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        await _formatter.FormatAsync(token, _clientInfo);
+        await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Null(capturedEncryptionKey);
@@ -200,7 +203,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo);
+        var result = await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
@@ -243,7 +246,7 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo);
+        var result = await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
@@ -287,78 +290,10 @@ public class ClientJwtFormatterTests
             .ReturnsAsync(EncodedJwt);
 
         // Act
-        var result = await _formatter.FormatAsync(token, _clientInfo);
+        var result = await _formatter.FormatAsync(token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         // Assert
         Assert.Equal(EncodedJwt, result);
-    }
-
-    /// <summary>
-    /// Verifies that the obsolete overload selects the client's encryption metadata by JWT type: a token typed
-    /// as a logout token uses <c>id_token_encrypted_response_*</c>, and a token carrying no type at all uses
-    /// <c>userinfo_encrypted_response_*</c>. The encryption key here has no algorithm of its own, so the
-    /// registered value is what reaches the JWT creator - with a key that names one, only the content
-    /// encryption would tell the two apart.
-    /// </summary>
-    /// <remarks>
-    /// The untyped arm covers the ID TOKEN as well, and that is the counter-intuitive part worth stating: an ID
-    /// token carries no type of its own, so this overload cannot recognize it and gives it the userinfo
-    /// registration rather than the id_token one. That is not a defect to fix here but the reason the overload
-    /// is obsolete - inferring an encryption policy from a header no specification defines was never sound, and
-    /// real issuance passes the policy explicitly.
-    /// </remarks>
-    [Fact]
-    public async Task FormatAsync_SelectsEncryptionAlgorithmByTokenType()
-    {
-        // Arrange - distinct registered key-management AND content-encryption per token type.
-        var clientInfo = new ClientInfo(ClientId)
-        {
-            IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
-            IdentityTokenEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
-            UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
-            UserInfoEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
-        };
-        var keyWithoutAlgorithm = new RsaJsonWebKey { KeyId = "enc" };
-
-        _serviceKeysProvider
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
-        _clientKeysProvider
-            .Setup(p => p.GetEncryptionKeys(clientInfo))
-            .Returns(new[] { (JsonWebKey)keyWithoutAlgorithm }.ToAsyncEnumerable());
-
-        string? capturedKeyAlgorithm = null;
-        string? capturedContentEncryption = null;
-        _jwtCreator
-            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, keyAlg, contentEnc) =>
-            {
-                capturedKeyAlgorithm = keyAlg;
-                capturedContentEncryption = contentEnc;
-            })
-            .ReturnsAsync(EncodedJwt);
-
-        // Act & Assert - a logout token is the one type this overload recognizes, and it takes the id_token
-        // encryption metadata (both alg and enc).
-        var logoutToken = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.LogoutToken },
-            Payload = { Audiences = [ClientId] },
-        };
-        await _formatter.FormatAsync(logoutToken, clientInfo);
-        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedKeyAlgorithm);
-        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capturedContentEncryption);
-
-        // Everything else falls to the default arm and uses the userinfo metadata: a UserInfo response, and an
-        // ID TOKEN too, since it carries no type of its own.
-        var untypedToken = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { Audiences = [ClientId] },
-        };
-        await _formatter.FormatAsync(untypedToken, clientInfo);
-        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capturedKeyAlgorithm);
-        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512, capturedContentEncryption);
     }
 
     /// <summary>
@@ -389,6 +324,6 @@ public class ClientJwtFormatterTests
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(token, _clientInfo));
+            await _formatter.FormatAsync(token, _clientInfo, UserInfoPolicy(_clientInfo)));
     }
 }

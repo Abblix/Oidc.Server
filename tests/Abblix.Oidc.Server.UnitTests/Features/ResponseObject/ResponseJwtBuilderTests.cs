@@ -63,8 +63,7 @@ public class ResponseJwtBuilderTests
         var clientJwtFormatter = new ClientJwtFormatter(
             _jwtCreator.Object,
             _clientKeys.Object,
-            _serviceKeys.Object,
-            Options.Create(new OidcOptions()));
+            _serviceKeys.Object);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
@@ -203,7 +202,7 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, Options.Create(new OidcOptions())),
+                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object),
             _issuerProvider.Object,
             _timeProvider.Object,
             options);

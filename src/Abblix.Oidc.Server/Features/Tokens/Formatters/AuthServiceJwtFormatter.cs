@@ -24,52 +24,10 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
-/// <param name="options">OIDC configuration options.</param>
 public class AuthServiceJwtFormatter(
 	IJsonWebTokenCreator jwtCreator,
-	IAuthServiceKeysProvider serviceKeysProvider,
-	IOptions<OidcOptions> options) : IAuthServiceJwtFormatter
+	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
 {
-	/// <summary>
-	/// Formats and signs a JWT for use by the authentication service, applying the appropriate cryptographic operations
-	/// based on the JWT specified requirements and the available cryptographic keys.
-	/// </summary>
-	/// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
-	/// <returns>A task that returns the JWT formatted
-	/// as a string.</returns>
-	/// <remarks>
-	/// This method selects the appropriate signing key based on the algorithm specified in the JWT header.
-	/// If encryption is supported and keys are available, it also encrypts the JWT. The result is a JWT string
-	/// that is ready for use in authenticating and authorizing service operations, including access tokens,
-	/// refresh tokens and Registration Access Tokens.
-	/// </remarks>
-	[Obsolete("Use FormatAsync(JsonWebToken, ServiceJwtEncryption) with an explicit encryption policy. " +
-	          "This overload encrypts implicitly whenever any service encryption key exists and is kept for " +
-	          "backward compatibility.")]
-	public async Task<string> FormatAsync(JsonWebToken token)
-	{
-		// Select the appropriate signing key based on the JWT specified algorithm
-		var signingCredentials = await serviceKeysProvider.GetSigningKeys(true)
-			.FirstByAlgorithmAsync(token.Header.Algorithm);
-
-		// Optionally, select an encryption key if available
-		var encryptingCredentials = await serviceKeysProvider.GetEncryptionKeys()
-			.FirstOrDefaultAsync();
-
-		var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
-			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
-
-		var contentEncryptionAlgorithm = options.Value.DefaultContentEncryptionAlgorithm;
-
-		// Issue the JWT with the selected signing and encryption credentials
-		return await jwtCreator.IssueAsync(
-			token,
-			signingCredentials,
-			encryptingCredentials,
-			keyEncryptionAlgorithm,
-			contentEncryptionAlgorithm);
-	}
-
 	/// <inheritdoc />
 	public async Task<string> FormatAsync(JsonWebToken token, ServiceJwtEncryption encryption)
 	{

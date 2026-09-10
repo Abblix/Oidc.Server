@@ -20,17 +20,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 public interface IClientJwtFormatter
 {
     /// <summary>
-    /// Formats a JWT for a client, inferring the encryption metadata from the token's header <c>typ</c>.
-    /// </summary>
-    /// <param name="token">The JWT token to format.</param>
-    /// <param name="clientInfo">The client information.</param>
-    /// <returns>The formatted JWT string.</returns>
-    [Obsolete("Use FormatAsync(JsonWebToken, ClientInfo, ClientJwtEncryption) with an explicit " +
-              "encryption policy. This overload infers the policy from token.Header.Type and is kept for backward " +
-              "compatibility.")]
-    Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo);
-
-    /// <summary>
     /// Formats a JWT for a client, signing it with the authentication service's key chosen by the token's header
     /// algorithm and - per the supplied <paramref name="encryption"/> policy - optionally encrypting it to the
     /// client's registered public key.
