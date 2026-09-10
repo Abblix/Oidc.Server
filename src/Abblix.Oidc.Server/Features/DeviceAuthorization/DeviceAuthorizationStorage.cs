@@ -142,10 +142,17 @@ public partial class DeviceAuthorizationStorage(
     /// </para>
     /// <para>
     /// <strong>Atomicity:</strong> The claim is a removing read, which <see cref="IEntityStorage"/> requires
-    /// to be indivisible: the record comes back to the caller that removed it, so a code cannot be consumed
-    /// with nobody told they took it. How far that reaches beyond one process is the registered storage's
-    /// answer - the one built over a distributed cache serializes redemptions within a process and no
-    /// further. After a successful claim, cleans up the user code mapping.
+    /// to be indivisible, so no competitor can take the code between the read and the removal. How far that
+    /// reaches beyond one process is the registered storage's answer: the one built over a distributed cache
+    /// serializes redemptions within a process and no further.
+    /// <para>
+    /// One way the code is still consumed with nobody told they took it survives, and it is not a race: the
+    /// storage turns the removed bytes back into a record AFTER deleting them, so a record it cannot read -
+    /// a shape changed under a rolling deploy, a serializer that dispatches differently between versions -
+    /// is gone and the caller gets the failure rather than the code. Nothing here can put it back, because
+    /// the delete has already happened at the server.
+    /// </para>
+    /// After a successful claim, cleans up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
@@ -182,11 +189,10 @@ public partial class DeviceAuthorizationStorage(
         // server fault rather than a grant error - no tokens for a code that can never be presented again,
         // and the end user's approval lost with it.
         //
-        // The entry left behind carries its own expiry, so it goes away unattended. Whether it still
-        // resolves to a live request is not knowable from here, because this method never reads the
-        // record it is removing. Removing the index FIRST instead would make the fault retryable, at the
-        // cost of a window in which the user code resolves to nothing while the device code is still live
-        // - a worse trade, because that window is on the path that succeeds.
+        // The entry left behind carries its own expiry, so it goes away unattended. Removing the index
+        // FIRST instead would make the fault retryable, at the cost of a window in which the user code
+        // resolves to nothing while the device code is still live - a worse trade, because that window is
+        // on the path that succeeds.
         //
         // Swallowed, not hidden. Nothing else in the system reports a dangling index, so without this line
         // an operator has no way to learn the store refused a write at all.
@@ -197,10 +203,13 @@ public partial class DeviceAuthorizationStorage(
         }
         catch (Exception exception)
         {
-            // The DEVICE code key, not the user-code one. This method never reads the record, so it
-            // cannot establish that the user code it was handed belongs to the request it just claimed -
-            // and on the public interface a host may hand it a live one. The device code carries no such
-            // doubt: this line is reached only because the claim removed it.
+            // The DEVICE code key, not the user-code one. Nothing checks that the user code the caller
+            // handed over belongs to the request just claimed, and on the public interface a host may
+            // hand it a live one, so the key that was tried is not known to name this request. The device
+            // code carries no such doubt: this line is reached only because the claim removed it.
+            //
+            // The claimed record carries the right user code and would settle that, which is a change to
+            // what this method does with its argument rather than to how it reports a refusal.
             LogUserCodeIndexNotRemovedAfterClaim(exception, deviceCodeKey);
         }
 

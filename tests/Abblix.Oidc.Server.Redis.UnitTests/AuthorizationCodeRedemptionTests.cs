@@ -108,6 +108,10 @@ public sealed class AuthorizationCodeRedemptionTests(GarnetFixture garnet) : ICl
         Assert.True(replay.TryGetSuccess(out var reused));
         var token = Assert.Single(reused.IssuedTokens!);
         Assert.Equal("a-jwt-id", token.JwtId);
+
+        // And the replay consumed it in its turn. Without this line a storage whose removing read never
+        // removes passes every assertion above, which is the defect the whole file exists over.
+        Assert.False((await service.RemoveAuthorizationCodeAsync(code)).TryGetSuccess(out _));
     }
 
     /// <summary>

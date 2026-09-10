@@ -102,7 +102,11 @@ public sealed class DeviceAndCibaRedemptionTests(GarnetFixture garnet) : IClassF
 
         var polled = await storage.TryGetByDeviceCodeAsync(deviceCode);
         Assert.Equal(DeviceAuthorizationStatus.Authorized, polled!.Status);
+
         Assert.True(await storage.TryRemoveAsync(deviceCode, userCode));
+
+        // The claim consumed it, which is the half a row asserting only the first claim cannot see.
+        Assert.False(await storage.TryRemoveAsync(deviceCode, userCode));
     }
 
     [Fact]

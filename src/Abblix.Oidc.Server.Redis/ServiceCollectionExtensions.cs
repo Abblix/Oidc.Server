@@ -45,8 +45,14 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // TryAdd for the options, so a host that configured them before this call keeps its own.
-        services.TryAddSingleton(options ?? new RedisEntityStorageOptions());
+        // Replace when the host named them, TryAdd when it did not: a call passing a prefix must not lose
+        // to an earlier call that passed none, because the prefix decides WHERE records live and losing it
+        // is silent - authorizations written under one name and looked for under another.
+        if (options is not null)
+            services.Replace(ServiceDescriptor.Singleton(options));
+        else
+            services.TryAddSingleton(new RedisEntityStorageOptions());
+
         services.Replace(ServiceDescriptor.Singleton<IEntityStorage, RedisEntityStorage>());
         return services;
     }

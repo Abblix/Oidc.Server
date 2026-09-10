@@ -135,6 +135,38 @@ public sealed class RedisEntityStorageTests(GarnetFixture garnet) : IClassFixtur
 
 
     /// <summary>
+    /// A deadline given as an INSTANT reaches the server as a lifetime, not as no deadline at all.
+    /// </summary>
+    /// <remarks>
+    /// The arm the server uses for a token's status and for a revocation cutoff, both of which say when
+    /// the record stops mattering rather than how long it lasts. Nothing else here drives it, so the
+    /// whole arm can be replaced by "no deadline" with every other row still green - and the entries it
+    /// writes would then live forever.
+    /// </remarks>
+    [Fact]
+    public async Task SetAsync_ADeadlineGivenAsAnInstant_ReachesTheServerAsALifetime()
+    {
+        const string prefix = "test-instant:";
+        var storage = new RedisEntityStorage(
+            garnet.Connection,
+            new JsonBinarySerializer(),
+            TimeProvider.System,
+            new RedisEntityStorageOptions { KeyPrefix = prefix });
+
+        var key = NewKey();
+        var options = new StorageOptions
+        {
+            AbsoluteExpiration = TimeProvider.System.GetUtcNow().AddMinutes(10),
+        };
+
+        await storage.SetAsync(key, new Stored("a-token-status", 1), options, Ct);
+
+        var left = await garnet.Connection.GetDatabase().KeyTimeToLiveAsync(prefix + key);
+        Assert.NotNull(left);
+        Assert.InRange(left.Value, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10));
+    }
+
+    /// <summary>
     /// A deadline already behind us leaves nothing readable, and takes any earlier entry with it.
     /// </summary>
     /// <remarks>
