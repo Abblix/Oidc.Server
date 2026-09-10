@@ -324,7 +324,8 @@ public class DeviceAuthorizationStorageTests
     [Fact]
     public async Task AStoredRequest_IsFoundByEitherCode_UntilItIsClaimed()
     {
-        var storage = StorageOverRealBytes();
+        var entities = new DistributedCacheStorage(RealCache(), new JsonBinarySerializer());
+        var storage = StorageOver(entities);
         var request = NewRequest(_now.AddMinutes(10));
 
         await storage.StoreAsync(DeviceCode, request, TimeSpan.FromMinutes(10));
@@ -336,26 +337,18 @@ public class DeviceAuthorizationStorageTests
         Assert.Equal(DeviceCode, found.Value.DeviceCode);
         Assert.Equal(UserCode, found.Value.Request.UserCode);
 
+        // Twice, because the lookup must not consume what it finds: the verification service makes this
+        // call to show the confirmation page and again to act on the answer, with the same user code.
+        Assert.NotNull(await storage.TryGetByUserCodeAsync(UserCode));
+
         Assert.True(await storage.TryRemoveAsync(DeviceCode, UserCode));
 
         Assert.Null(await storage.TryGetByDeviceCodeAsync(DeviceCode));
-        Assert.Null(await storage.TryGetByUserCodeAsync(UserCode));
-    }
 
-    /// <summary>
-    /// The storage over a real cache and a real serializer, so a round trip is a round trip.
-    /// </summary>
-    private DeviceAuthorizationStorage StorageOverRealBytes()
-    {
-        var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
-
-        return new DeviceAuthorizationStorage(
-            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
-            new DistributedCacheStorage(RealCache(), new JsonBinarySerializer()),
-            keyFactory.Object,
-            new FakeTimeProvider(_now));
+        // The index entry itself, read straight from the store. Asking by user code again would answer
+        // null as soon as the RECORD went, whatever became of the index - the lookup follows one to the
+        // other, so it cannot tell the two apart and would report a dangling entry as a removed one.
+        Assert.Null(await entities.GetAsync<string>(UserCodeKey, removeOnRetrieval: false));
     }
 
     private static IDistributedCache RealCache()
@@ -363,6 +356,13 @@ public class DeviceAuthorizationStorageTests
 
     private DeviceAuthorizationStorage StorageOver(
         IDistributedCache cache, RecordingLoggerFactory? log = null)
+        => StorageOver(new DistributedCacheStorage(cache, _serializer.Object), log);
+
+    /// <summary>
+    /// The same storage over an entity storage the caller holds, for a row that reads the store back.
+    /// </summary>
+    private DeviceAuthorizationStorage StorageOver(
+        IEntityStorage entities, RecordingLoggerFactory? log = null)
     {
         var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
         keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
@@ -370,7 +370,7 @@ public class DeviceAuthorizationStorageTests
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
-            new DistributedCacheStorage(cache, _serializer.Object),
+            entities,
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }
