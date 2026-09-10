@@ -23,11 +23,17 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// back at the key catch one arriving after it. Both hold across processes.
 /// </summary>
 /// <remarks>
-/// Neither is complete on its own terms. The claim reads the value under the same hold of the gate that
-/// removes it, so on ONE node two callers cannot be handed the same grant; across processes the gate
-/// holds nothing and both can be, which is issue 435. And the write-back is what the second defense
-/// rests on, so a first redemption that ends without issuing tokens leaves nothing for it to catch. The
-/// refusal this class returns is the same string either way.
+/// How far the first defense reaches is the storage's answer, not this class's. <see cref="IEntityStorage"/>
+/// requires a removing read to be indivisible, so a storage that keeps that promise across its nodes
+/// hands the grant to exactly one caller however many instances are serving this endpoint. The storage
+/// built over a distributed cache keeps it only within one process, where the read and the removal are
+/// one hold of a per-key gate; a second instance sees no such gate, and both callers can be handed the
+/// grant. Which storage is registered therefore decides whether this defense holds beyond one node.
+/// <para>
+/// The second defense is not complete on its own terms either: the write-back is what it rests on, so a
+/// first redemption that ends without issuing tokens leaves nothing for it to catch. The refusal this
+/// class returns is the same string either way.
+/// </para>
 /// <para>
 /// This class decorates the standard token request processing flow with additional security measures
 /// to ensure the integrity of the authorization process. It detects when an authorization code,

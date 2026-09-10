@@ -18,12 +18,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// </summary>
 /// <param name="cache">The distributed cache backend used for storing and retrieving data.</param>
 /// <param name="serializer">The serializer used for converting objects to and from binary format.</param>
-/// <param name="takeOnceStore">A store able to take a value and delete it indivisibly, when
-/// the host registered one. Absent, the redemption keeps the in-process guarantee and no more.</param>
-public sealed class DistributedCacheStorage(
-	IDistributedCache cache,
-	IBinarySerializer serializer,
-	ITakeOnceStore? takeOnceStore = null) : IEntityStorage
+public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySerializer serializer) : IEntityStorage
 {
 	/// <summary>
 	/// Asynchronously stores an object in the distributed cache.
@@ -65,23 +60,9 @@ public sealed class DistributedCacheStorage(
 		ArgumentNullException.ThrowIfNull(key);
 		token ??= CancellationToken.None;
 
-		byte[]? result;
-		if (!removeOnRetrieval)
-		{
-			result = await cache.GetAsync(key, token.Value);
-		}
-		else if (takeOnceStore is not null)
-		{
-			// A store that can take and delete in one step is asked to, because that is the only way the
-			// redemption is exactly-once across processes.
-			result = await takeOnceStore.TryTakeAsync(key, token.Value);
-		}
-		else
-		{
-			// Without one the extension keeps the answer it has: serialized within this process, and
-			// probabilistic beyond it.
-			result = await cache.TryGetAndRemoveAsync(key, cancellationToken: token.Value);
-		}
+		var result = removeOnRetrieval
+			? await cache.TryGetAndRemoveAsync(key, cancellationToken: token.Value)
+			: await cache.GetAsync(key, token.Value);
 
 		return result != null ? serializer.Deserialize<T>(result) : default;
 	}

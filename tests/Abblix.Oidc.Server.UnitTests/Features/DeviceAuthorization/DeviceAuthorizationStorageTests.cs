@@ -52,10 +52,17 @@ public class DeviceAuthorizationStorageTests
         _serializer.Setup(s => s.Serialize(It.IsAny<DeviceAuthorizationRequest>())).Returns([1, 2, 3]);
         _serializer.Setup(s => s.Serialize(It.IsAny<string>())).Returns([4, 5, 6]);
 
+        // The claim reads the record it removes, so bytes that come back as nothing would look exactly
+        // like a code another caller took. A real serializer answers with the record; this says so too,
+        // rather than leaving the reading half of the round trip to a mock's default.
+        _serializer
+            .Setup(s => s.Deserialize<DeviceAuthorizationRequest>(It.IsAny<byte[]>()))
+            .Returns(() => NewRequest(_now.AddMinutes(10)));
+        _serializer.Setup(s => s.Deserialize<string>(It.IsAny<byte[]>())).Returns(DeviceCode);
+
         _storage = new DeviceAuthorizationStorage(
             new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
-            _cache.Object,
-            _serializer.Object,
+            new DistributedCacheStorage(_cache.Object, _serializer.Object),
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }
@@ -311,8 +318,7 @@ public class DeviceAuthorizationStorageTests
 
         return new DeviceAuthorizationStorage(
             (log ?? new RecordingLoggerFactory()).CreateLogger<DeviceAuthorizationStorage>(),
-            cache,
-            _serializer.Object,
+            new DistributedCacheStorage(cache, _serializer.Object),
             keyFactory.Object,
             new FakeTimeProvider(_now));
     }
@@ -356,72 +362,5 @@ public class DeviceAuthorizationStorageTests
         public void Remove(string key) => inner.Remove(key);
 
         public void Refresh(string key) => inner.Refresh(key);
-    }
-
-    /// <summary>
-    /// Builds the storage with a take-once store registered, the way a host running several instances does.
-    /// </summary>
-    private DeviceAuthorizationStorage StorageTaking(ITakeOnceStore takeOnceStore)
-    {
-        var keyFactory = new Mock<IEntityStorageKeyFactory>(MockBehavior.Loose);
-        keyFactory.Setup(f => f.DeviceAuthorizationRequestKey(DeviceCode)).Returns(RequestKey);
-        keyFactory.Setup(f => f.DeviceAuthorizationUserCodeKey(UserCode)).Returns(UserCodeKey);
-
-        return new DeviceAuthorizationStorage(
-            new RecordingLoggerFactory().CreateLogger<DeviceAuthorizationStorage>(),
-            _cache.Object,
-            _serializer.Object,
-            keyFactory.Object,
-            new FakeTimeProvider(_now),
-            takeOnceStore);
-    }
-
-    /// <summary>
-    /// A registered take-once store decides who claimed the device code, and its answer is the caller's.
-    /// </summary>
-    /// <remarks>
-    /// The store is what makes one winner a fact across instances rather than a probability, so a claim
-    /// routed past it would keep the single-process guarantee while the registration says otherwise.
-    /// </remarks>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task TryRemoveAsync_WithATakeOnceStoreRegistered_AnswersWhatTheStoreTook(bool took)
-    {
-        var takeOnceStore = new Mock<ITakeOnceStore>(MockBehavior.Strict);
-        takeOnceStore
-            .Setup(store => store.TryTakeAsync(RequestKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(took ? [1, 2, 3] : null);
-
-        var claimed = await StorageTaking(takeOnceStore.Object).TryRemoveAsync(DeviceCode, UserCode);
-
-        Assert.Equal(took, claimed);
-        takeOnceStore.Verify(
-            store => store.TryTakeAsync(RequestKey, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    /// <summary>
-    /// The user-code index is tidied only by the caller that claimed the code, and never by one that lost.
-    /// </summary>
-    /// <remarks>
-    /// Removing it on a lost claim would strip the winner's own index entry, leaving a live request
-    /// findable only by a device code the end user never sees.
-    /// </remarks>
-    [Theory]
-    [InlineData(true, 1)]
-    [InlineData(false, 0)]
-    public async Task TryRemoveAsync_TheUserCodeIndex_GoesOnlyWithAWonClaim(bool took, int removals)
-    {
-        var takeOnceStore = new Mock<ITakeOnceStore>(MockBehavior.Strict);
-        takeOnceStore
-            .Setup(store => store.TryTakeAsync(RequestKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(took ? [1, 2, 3] : null);
-
-        await StorageTaking(takeOnceStore.Object).TryRemoveAsync(DeviceCode, UserCode);
-
-        _cache.Verify(
-            c => c.RemoveAsync(UserCodeKey, It.IsAny<CancellationToken>()),
-            Times.Exactly(removals));
     }
 }

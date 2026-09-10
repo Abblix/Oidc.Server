@@ -1,6 +1,6 @@
 # Abblix.OIDC.Server.Redis
 
-Take-once redemption on Redis for [Abblix OIDC Server](https://www.nuget.org/packages/Abblix.OIDC.Server). An authorization code, a device code and a CIBA request id each stand for an authorization that may be redeemed once, and this package is what makes that true when the provider runs as more than one instance.
+Redis-backed storage for the short-lived records of [Abblix OIDC Server](https://www.nuget.org/packages/Abblix.OIDC.Server). An authorization code, a device code and a CIBA request id each stand for an authorization that may be redeemed once, and this package is what makes that true when the provider runs as more than one instance.
 
 ## The problem it solves
 
@@ -17,20 +17,30 @@ dotnet add package Abblix.OIDC.Server.Redis
 ## Use
 
 ```csharp
+using Abblix.Oidc.Server.Redis;
+using StackExchange.Redis;
+
 services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect("localhost:6379"));
 
-services.AddRedisTakeOnceStore();
-services.AddOidcServices(options => { ... });
+services.AddRedisEntityStorage();
 ```
 
-The connection is the host's, and a deployment already using Redis for its distributed cache has one. Nothing else changes: the storages ask this store when it is registered and keep their previous behaviour when it is not.
+That goes beside the `AddOidcServices` call the main README shows, in either order. The connection is the host's, and a deployment already using Redis has one.
+
+## What moves, and what does not
+
+The records this stores are the server's own short-lived ones: authorization codes and their grants, device and CIBA requests, pushed authorization requests, token status, and the rest of what the server keeps between one request and the next. They stop living in the host's distributed cache and live here instead. Everything the host caches for its own purposes is untouched.
+
+That is the point rather than a side effect. A store that only READS what another component wrote cannot be correct: a distributed cache promises bytes in and bytes out under a logical key and promises nothing about what exists in the store behind it, so a command aimed at that store finds something nobody described, or nothing at all.
+
+Two consequences are worth knowing before a deployment. A sliding expiration is refused rather than honored, because extending an authorization's life because somebody read it is what a polling client would use to keep a code alive; nothing in the server sets one. And the key prefix is part of where a record lives, so changing it while a deployment is running leaves whatever is already stored unreachable - those entries expire on their own, but an authorization in flight at that moment is reported to its holder as expired.
 
 ## How the take is done
 
 `GETDEL` returns the value to exactly one caller and deletes it, in one command, on Redis 6.2 and later. Where the command is absent the same two lines run as a script, which Redis executes with nothing interleaved, so both paths carry the same guarantee.
 
-Which path applies is not read off a version string, because a cluster can run mixed versions and a version answers for one node. The command is attempted, and the script becomes the instance's path once it has been seen to take where the command was refused. A server merely too busy for one take is therefore not mistaken for one that lacks the command.
+Which path applies is not read off a version string, because a cluster can run mixed versions and a version answers for one node. The command is attempted, and the script becomes the instance's path once it has been seen to take a value where the command was refused. A server merely too busy to serve one call is therefore not mistaken for one that lacks the command.
 
 ## Part of the Abblix product family
 

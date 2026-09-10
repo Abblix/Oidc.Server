@@ -41,6 +41,7 @@
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Redis\Abblix.Oidc.Server.Redis.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />

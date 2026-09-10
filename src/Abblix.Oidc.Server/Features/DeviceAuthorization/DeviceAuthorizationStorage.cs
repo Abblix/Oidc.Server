@@ -6,11 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Storages;
-using Abblix.Utils;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -18,23 +15,19 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// <summary>
 /// Implements storage for device authorization requests as defined in RFC 8628.
 /// Stores requests by device_code (for client polling) with a secondary index by user_code (for user verification).
-/// Redemption of a device code goes through the cache's claim protocol, which narrows the window in which
-/// two token requests both claim one code rather than closing it.
+/// Redemption of a device code is a removing read, which the storage is required to perform
+/// indivisibly - so how far one winner is guaranteed is that storage's answer rather than this
+/// class's.
 /// </summary>
 /// <param name="logger">Records a secondary-index entry left behind, which nothing else reports.</param>
-/// <param name="cache">The distributed cache backend used for atomic operations.</param>
-/// <param name="serializer">The serializer for converting objects to/from binary format.</param>
+/// <param name="storage">Holds the request and its user-code index, and decides who redeems.</param>
 /// <param name="keyFactory">The factory for generating standardized storage keys.</param>
 /// <param name="timeProvider">Provides the current time for seeding the request's absolute expiry.</param>
-/// <param name="takeOnceStore">A store able to take a value and delete it indivisibly, when
-/// the host registered one. Absent, the redemption keeps the in-process guarantee and no more.</param>
 public partial class DeviceAuthorizationStorage(
     ILogger<DeviceAuthorizationStorage> logger,
-    IDistributedCache cache,
-    IBinarySerializer serializer,
+    IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
-    TimeProvider timeProvider,
-    ITakeOnceStore? takeOnceStore = null) : IDeviceAuthorizationStorage
+    TimeProvider timeProvider) : IDeviceAuthorizationStorage
 {
     /// <inheritdoc />
     public async Task StoreAsync(string deviceCode, DeviceAuthorizationRequest request, TimeSpan expiresIn)
@@ -44,41 +37,42 @@ public partial class DeviceAuthorizationStorage(
         // lifetime on every poll (RFC 8628 section 3.2)
         request.ExpiresAt = timeProvider.GetUtcNow() + expiresIn;
 
-        var cacheOptions = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn };
+        var options = new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn };
 
         // Store the request by device code (primary key for client polling)
-        await cache.SetAsync(
+        await storage.SetAsync(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
-            serializer.Serialize(request),
-            cacheOptions);
+            request,
+            options);
 
         // Store a mapping from user code to device code (for user verification lookup)
-        await cache.SetAsync(
+        await storage.SetAsync(
             keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode),
-            serializer.Serialize(deviceCode),
-            cacheOptions);
+            deviceCode,
+            options);
     }
 
     /// <inheritdoc />
-    public async Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(string deviceCode)
-    {
-        var data = await cache.GetAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
-        return data != null ? serializer.Deserialize<DeviceAuthorizationRequest>(data) : null;
-    }
+    public Task<DeviceAuthorizationRequest?> TryGetByDeviceCodeAsync(string deviceCode)
+        => storage.GetAsync<DeviceAuthorizationRequest>(
+            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
+            removeOnRetrieval: false);
 
     /// <inheritdoc />
     public async Task<(string DeviceCode, DeviceAuthorizationRequest Request)?> TryGetByUserCodeAsync(string userCode)
     {
-        var deviceCodeData = await cache.GetAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
-        if (deviceCodeData == null)
+        var deviceCode = await storage.GetAsync<string>(
+            keyFactory.DeviceAuthorizationUserCodeKey(userCode),
+            removeOnRetrieval: false);
+
+        if (deviceCode == null)
             return null;
 
-        var deviceCode = serializer.Deserialize<string>(deviceCodeData);
-        var request = await TryGetByDeviceCodeAsync(deviceCode!);
+        var request = await TryGetByDeviceCodeAsync(deviceCode);
         if (request == null)
             return null;
 
-        return (deviceCode!, request);
+        return (deviceCode, request);
     }
 
     /// <inheritdoc />
@@ -87,10 +81,10 @@ public partial class DeviceAuthorizationStorage(
         // Apply the caller-computed remaining lifetime as the cache TTL. The caller derives it once from the
         // record's fixed ExpiresAt (RFC 8628 section 3.2) and gates on expiry first, so polling cannot extend the
         // code and the TTL here is always positive - no second clock read that could race the expiry boundary
-        return cache.SetAsync(
+        return storage.SetAsync(
             keyFactory.DeviceAuthorizationRequestKey(deviceCode),
-            serializer.Serialize(request),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn });
+            request,
+            new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
     }
 
     /// <inheritdoc />
@@ -112,7 +106,7 @@ public partial class DeviceAuthorizationStorage(
             var userCodeKey = keyFactory.DeviceAuthorizationUserCodeKey(request.UserCode);
             try
             {
-                await cache.RemoveAsync(userCodeKey);
+                await storage.RemoveAsync(userCodeKey);
             }
             catch (Exception exception)
             {
@@ -125,7 +119,7 @@ public partial class DeviceAuthorizationStorage(
         // reporting otherwise would leave a live record behind a call that looked like it worked. The
         // caller does see a fault where it expected a grant error, which is the cost, and it is a cost
         // over a record that is expired or denied rather than one carrying an approval.
-        await cache.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
+        await storage.RemoveAsync(keyFactory.DeviceAuthorizationRequestKey(deviceCode));
     }
 
     /// <summary>
@@ -143,45 +137,42 @@ public partial class DeviceAuthorizationStorage(
     /// when exchanging an authorized device code for tokens. The claim keeps two token requests from both
     /// being told they took one device code, however many processes are polling. What it does not reach
     /// is a decision landing after the claim: that path re-reads the record and refuses, which leaves a
-    /// window one store round trip wide rather than none - issues 194 and 435. The Atomicity note below
-    /// says what the claim itself reaches.
+    /// window one store round trip wide rather than none. The Atomicity note below says what the claim
+    /// itself reaches.
     /// </para>
     /// <para>
-    /// <strong>Atomicity:</strong> Uses <see cref="Abblix.Utils.DistributedCacheExtensions.TryRemoveAsync"/>
-    /// which admits at most one caller through its lock-token protocol, and serializes redemptions of one
-    /// device code in-process, which closes the one way a removal loses its winner to a competitor.
-    /// What that does NOT give is a winner for every removal - the code can be consumed with nobody told
-    /// they took it, and that needs neither a second caller nor a second node. The extension's own remarks
-    /// carry the condition and name the store primitive that closes it. After a successful removal, cleans
-    /// up the user code mapping.
+    /// <strong>Atomicity:</strong> The claim is a removing read, which <see cref="IEntityStorage"/> requires
+    /// to be indivisible: the record comes back to the caller that removed it, so a code cannot be consumed
+    /// with nobody told they took it. How far that reaches beyond one process is the registered storage's
+    /// answer - the one built over a distributed cache serializes redemptions within a process and no
+    /// further. After a successful claim, cleans up the user code mapping.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The device code identifying the authorization request to remove.</param>
     /// <param name="userCode">The user code of THAT request, used to find its secondary index entry.
-    /// Nothing here checks the two belong together - this method never reads the record - so a caller
-    /// passing a code from a different request removes that other request's index entry instead, leaving
-    /// a live request findable only by its device code.</param>
+    /// Nothing here checks the two belong together, so a caller passing a code from a different request
+    /// removes that other request's index entry instead, leaving a live request findable only by its
+    /// device code. The claim now returns the record, which carries the right user code, so this
+    /// parameter has stopped being the only way to find the entry and is kept because the interface
+    /// publishes it.</param>
     /// <returns>
     /// A task that completes when the operation finishes, containing true when this caller removed the
-    /// request AND still held the claim afterwards. False otherwise, which is wider than "another caller
-    /// won or it was never there": the code can be consumed and the caller still told false, when the lock
-    /// guarding the removal expires mid-protocol. The extension's remarks carry that condition.
+    /// request. False means the request was not there to remove: either another caller took it, or it
+    /// expired, or it never existed.
     /// <para>
     /// The index cleanup that runs after the claim cannot change that answer either way. Removing the
     /// user-code index is a different question from whether this caller took the code, so a refusal is logged
-    /// and the true stands. What the entry left behind still points at is not knowable here - this method
-    /// never reads the record, so the user code it was handed need not belong to the request it removed -
-    /// but that entry carries its own expiry either way.
+    /// and the true stands. The entry left behind is the one the caller's own user code named, which need
+    /// not be the removed request's, and it carries its own expiry either way.
     /// </para>
     /// </returns>
     public async Task<bool> TryRemoveAsync(string deviceCode, string userCode)
     {
-        // Asked of the store when it can answer indivisibly, which is what makes one winner a fact rather
-        // than a probability once more than one instance serves the token endpoint.
-        var requestKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
-        var removed = takeOnceStore is not null
-            ? await takeOnceStore.TryTakeAsync(requestKey) is not null
-            : await cache.TryRemoveAsync(requestKey);
+        var claimed = await storage.GetAsync<DeviceAuthorizationRequest>(
+            keyFactory.DeviceAuthorizationRequestKey(deviceCode),
+            removeOnRetrieval: true);
+
+        var removed = claimed != null;
         if (!removed)
             return false;
 
@@ -202,7 +193,7 @@ public partial class DeviceAuthorizationStorage(
         var deviceCodeKey = keyFactory.DeviceAuthorizationRequestKey(deviceCode);
         try
         {
-            await cache.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
+            await storage.RemoveAsync(keyFactory.DeviceAuthorizationUserCodeKey(userCode));
         }
         catch (Exception exception)
         {

@@ -13,12 +13,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Abblix.Oidc.Server.Redis;
 
 /// <summary>
-/// Registers the Redis-backed take-once redemption.
+/// Registers the Redis-backed entity storage.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Lets Redis decide who redeems a stored authorization, so a provider running as several instances
+    /// Puts the server's short-lived entities in Redis, so a provider running as several instances
     /// hands each authorization code, device code and CIBA request id to exactly one caller.
     /// </summary>
     /// <remarks>
@@ -26,17 +26,28 @@ public static class ServiceCollectionExtensions
     /// whole answer for one instance and no answer at all for several.
     /// <para>
     /// The connection is the host's: register an <c>IConnectionMultiplexer</c> alongside this, which a
-    /// deployment already using Redis for its distributed cache has.
+    /// deployment already using Redis has.
+    /// </para>
+    /// <para>
+    /// Replace rather than TryAdd, and the difference is not stylistic: the server registers its own
+    /// storage with TryAdd, so a TryAdd here would silently lose whenever this call came second, and
+    /// the losing arrangement is the one that reads as configured and stores nowhere. Calling this IS
+    /// the host's explicit choice, so it wins in either order.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection to register into.</param>
+    /// <param name="options">Where in Redis the entries are written. The defaults suit a Redis this
+    /// deployment does not share.</param>
     /// <returns>The same collection, so calls chain.</returns>
-    public static IServiceCollection AddRedisTakeOnceStore(this IServiceCollection services)
+    public static IServiceCollection AddRedisEntityStorage(
+        this IServiceCollection services,
+        RedisEntityStorageOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // TryAdd, so a host that brought its own implementation of the seam keeps it.
-        services.TryAddSingleton<ITakeOnceStore, RedisTakeOnceStore>();
+        // TryAdd for the options, so a host that configured them before this call keeps its own.
+        services.TryAddSingleton(options ?? new RedisEntityStorageOptions());
+        services.Replace(ServiceDescriptor.Singleton<IEntityStorage, RedisEntityStorage>());
         return services;
     }
 }
