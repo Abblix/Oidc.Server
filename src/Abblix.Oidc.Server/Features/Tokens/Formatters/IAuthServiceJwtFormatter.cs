@@ -19,18 +19,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 public interface IAuthServiceJwtFormatter
 {
     /// <summary>
-    /// Formats and signs a JWT for use within the authentication service, applying cryptographic operations such as
-    /// signing and optionally encrypting the token based on the specified requirements.
-    /// </summary>
-    /// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
-    /// <returns>A task representing the asynchronous operation, which results in the JWT formatted as a string.
-    /// </returns>
-    [Obsolete("Use FormatAsync(JsonWebToken, ServiceJwtEncryption) with an explicit encryption policy. " +
-              "This overload encrypts implicitly whenever any service encryption key exists and is kept for " +
-              "backward compatibility.")]
-    Task<string> FormatAsync(JsonWebToken token);
-
-    /// <summary>
     /// Formats and signs a JWT for use within the authentication service, and - per the supplied
     /// <paramref name="encryption"/> policy - optionally encrypts it as a JWE to the server's own encryption key.
     /// The signing algorithm and pinned signing key id come from the token header, set by the issuing service.

@@ -22,39 +22,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="jwtCreator">Creator for issuing JWTs.</param>
 /// <param name="clientKeysProvider">Provider for client encryption keys.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
-/// <param name="options">OIDC configuration options.</param>
 public class ClientJwtFormatter(
     IJsonWebTokenCreator jwtCreator,
     IClientKeysProvider clientKeysProvider,
-    IAuthServiceKeysProvider serviceKeysProvider,
-    IOptions<OidcOptions> options) : IClientJwtFormatter
+    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
-    /// <summary>
-    /// Asynchronously formats a JWT for a specific client, inferring the encryption metadata from the token's
-    /// header <c>typ</c> (id_token/logout_token vs. UserInfo).
-    /// </summary>
-    /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
-    /// <param name="clientInfo">Information about the client to which the JWT is issued, including any requirements for encryption.</param>
-    /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
-    [Obsolete("Use FormatAsync(JsonWebToken, ClientInfo, ClientJwtEncryption) with an explicit encryption policy. " +
-              "This overload infers the policy from token.Header.Type and is kept for backward compatibility.")]
-    public Task<string> FormatAsync(JsonWebToken token, ClientInfo clientInfo)
-    {
-        // The legacy contract picks the client's registered encryption metadata by JWT type: a logout token
-        // uses id_token_encrypted_response_*, everything else (UserInfo) uses userinfo_encrypted_response_*.
-        //
-        // An ID token no longer lands in the first arm, because it no longer carries a type of its own - which
-        // is precisely why this overload is obsolete. Inferring an encryption policy from a header that the
-        // specifications do not define was never sound; callers pass the policy explicitly instead.
-        var encryption = token.Header.Type switch
-        {
-            JsonWebTokenTypes.LogoutToken => ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value),
-            _ => ClientJwtEncryption.ForUserInfo(clientInfo, options.Value),
-        };
-
-        return FormatAsync(token, clientInfo, encryption);
-    }
-
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
     /// the token's header algorithm and - per the supplied <paramref name="encryption"/> policy - optionally

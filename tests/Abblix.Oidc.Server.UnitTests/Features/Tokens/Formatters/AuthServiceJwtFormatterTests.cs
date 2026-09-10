@@ -46,8 +46,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        var options = Options.Create(new OidcOptions());
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object, options);
+        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -475,53 +474,4 @@ public class AuthServiceJwtFormatterTests
             async () => await _formatter.FormatAsync(token, Encrypt(keyId: "missing-kid")));
     }
 
-    // Retained implicit legacy path
-
-    /// <summary>
-    /// Verifies that the retained, obsolete parameterless overload still encrypts implicitly whenever any
-    /// service encryption key exists, preserving backward compatibility for callers not yet migrated.
-    /// </summary>
-    [Fact]
-    public async Task Legacy_FormatAsync_WithEncryptionKey_EncryptsImplicitly()
-    {
-        var token = TokenWith();
-        SetupSigningKeys(_signingKeyRS256);
-        SetupEncryptionKeys(_encryptionKey);
-
-        JsonWebKey? capturedEncryptionKey = null;
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
-            .ReturnsAsync(EncodedJwt);
-
-#pragma warning disable CS0618 // exercising the retained obsolete overload on purpose
-        await _formatter.FormatAsync(token);
-#pragma warning restore CS0618
-
-        Assert.Same(_encryptionKey, capturedEncryptionKey);
-    }
-
-    /// <summary>
-    /// Verifies that the obsolete parameterless overload produces a signed-only token when no service
-    /// encryption key is configured.
-    /// </summary>
-    [Fact]
-    public async Task Legacy_FormatAsync_WithNoEncryptionKey_SignsOnly()
-    {
-        var token = TokenWith();
-        SetupSigningKeys(_signingKeyRS256);
-        SetupEncryptionKeys();
-
-        JsonWebKey? capturedEncryptionKey = null;
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, _signingKeyRS256, It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
-            .ReturnsAsync(EncodedJwt);
-
-#pragma warning disable CS0618 // exercising the retained obsolete overload on purpose
-        await _formatter.FormatAsync(token);
-#pragma warning restore CS0618
-
-        Assert.Null(capturedEncryptionKey);
-    }
 }

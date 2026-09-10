@@ -128,22 +128,6 @@ public record AuthorizationContext
     public string? CertificateSha256Thumbprint { get; init; }
 
     /// <summary>
-    /// Legacy alias for <see cref="CertificateSha256Thumbprint"/>: forwards to the same backing
-    /// storage so existing JSON blobs and downstream callers initialising this property still
-    /// resolve correctly, while the deprecation warning steers new code to the canonical name.
-    /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
-    /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
-    /// </summary>
-    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
-        Justification = "Permanent backward-compat alias; removal is a major-version concern.")]
-    public string? X509CertificateSha256Thumbprint
-    {
-        get => CertificateSha256Thumbprint;
-        init => CertificateSha256Thumbprint = value;
-    }
-
-    /// <summary>
     /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
     /// bound to this authorization (RFC 9449 section 6.1). When present, access tokens carry a
     /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the

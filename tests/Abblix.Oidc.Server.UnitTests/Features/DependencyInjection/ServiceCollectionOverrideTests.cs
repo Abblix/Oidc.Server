@@ -9,6 +9,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Jwt.Encryption;
@@ -186,23 +187,21 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public async Task AddDPoP_HostImplementedTheDeprecatedReplayCache_StaysInCharge()
+    public async Task AddDPoP_HostRegisteredItsOwnReplayCache_StaysInCharge()
     {
-        // The contract moved to Abblix.JWT and the server's own consumers moved with it. A host
-        // that had replaced the deprecated one - to get a strictly atomic backend, the reason the
-        // seam exists - must not have that silently stop applying while its registration still
-        // looks healthy: the bridge is what keeps the override deciding.
+        // The seam exists so a host can decide where replay state lives - a strictly atomic
+        // backend, usually. The server applies its own policy by decorating whatever it finds, so
+        // a store the host registered has to keep deciding rather than be quietly replaced.
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDistributedMemoryCache();
         services.Configure<Abblix.Oidc.Server.Common.Configuration.OidcOptions>(_ => { });
 
-#pragma warning disable CS0618 // the deprecated contract is exactly what this test covers
-        var host = new Mock<IJwtReplayCache>();
-        host.Setup(cache => cache.TryAddAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
+        var host = new Mock<IReplayCache>();
+        host.Setup(cache => cache.TryReserveAsync(
+                It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         services.AddSingleton(host.Object);
-#pragma warning restore CS0618
 
         services.AddDPoP();
 
@@ -214,11 +213,10 @@ public class ServiceCollectionOverrideTests
                 TestContext.Current.CancellationToken);
 
         Assert.False(reserved);
-#pragma warning disable CS0618 // the deprecated contract is exactly what this test covers
         host.Verify(
-            cache => cache.TryAddAsync("jti-1", It.IsAny<DateTimeOffset?>()),
+            cache => cache.TryReserveAsync(
+                "jti-1", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
-#pragma warning restore CS0618
     }
 
     [Fact]

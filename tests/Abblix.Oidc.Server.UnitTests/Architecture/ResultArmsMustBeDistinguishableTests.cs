@@ -231,13 +231,22 @@ public class ResultArmsMustBeDistinguishableTests
     /// <remarks>
     /// A negative is worth nothing until the instrument has been shown to reach a positive, and both
     /// halves fail silently in the same direction: a wrong root finds no assemblies, and a walk that
-    /// stopped matching finds no pairs. Each is asserted against a floor rather than against zero.
+    /// stopped matching finds no pairs.
+    /// <para>
+    /// What must be PRESENT rather than how many, because how many depends on what was built. A shard
+    /// that builds this suite alone produces fewer assemblies than a whole-solution build, and a count
+    /// taken from one of those layouts fails on the other while saying "wrong root" either way. The two
+    /// named here are the one that declares the type and the one that carries most of its uses.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheWalkReachesTheAssembliesAndFindsPairs()
     {
         var assemblies = BuiltAssemblies();
-        Assert.True(assemblies.Count > 10, $"only {assemblies.Count} assemblies found - wrong root?");
+        var names = assemblies.Select(assembly => assembly.GetName().Name).ToArray();
+
+        Assert.Contains("Abblix.Utils", names);
+        Assert.Contains("Abblix.Oidc.Server", names);
 
         var pairs = ResultPairs(assemblies);
         Assert.True(pairs.Count > 20, $"only {pairs.Count} result pairs found - did the walk stop matching?");
