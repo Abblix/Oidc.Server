@@ -94,8 +94,12 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:UserCode:{userCode}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitAttemptKey(string userCode, int attempt)
-        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:Attempt:{attempt}";
+    public string UserCodeRateLimitAttemptKey(string userCode, int generation, int attempt)
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:{generation}:Attempt:{attempt}";
+
+    /// <inheritdoc />
+    public string UserCodeRateLimitGenerationKey(string userCode)
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:Generation";
 
     /// <inheritdoc />
     public string FailedAttemptKey(long window, int attempt)
@@ -115,5 +119,5 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
 
     /// <inheritdoc />
     public string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash)
-        => $"Abblix.Oidc.Server:{clientId}:Reuse:{valueKind}:{valueHash}";
+        => $"Abblix.Oidc.Server:Reuse:{clientId}:{valueKind}:{valueHash}";
 }

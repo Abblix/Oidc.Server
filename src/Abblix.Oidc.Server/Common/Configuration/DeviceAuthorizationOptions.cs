@@ -81,18 +81,24 @@ public record DeviceAuthorizationOptions
     /// configuration can afford at that same probability is <c>A^L / 2^32</c>:
     /// </para>
     /// <para>
-    /// Here <c>N</c> is <see cref="MaxUserCodeAttempts"/>, because that is the number of guesses a code
-    /// gets before it stops being verifiable - the growing pause decides how long they take, not how many
-    /// there are. With that number at 5:
+    /// Here <c>N</c> is how many guesses the server entertains while one code is alive, which is
+    /// <see cref="MaxFailedAttemptsPerWindow"/> multiplied by <see cref="CodeLifetime"/> divided by
+    /// <see cref="RateLimitWindow"/> - a hundred a minute over a five-minute code is five hundred. It is
+    /// NOT <see cref="MaxUserCodeAttempts"/>: that bounds repeat attempts at one dead code, and a search
+    /// never repeats a value. With the shipped numbers and a five-minute code, N is 500:
     /// </para>
     /// <list type="bullet">
-    ///   <item>8 digits: 5 in 100 million, about 1 in 20 million.</item>
-    ///   <item>6 digits: 5 in a million, about 1 in 200 thousand - which is why a code this short needs a
-    ///   short life as well.</item>
-    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 5 in 25.6 billion, which is the example's own
-    ///   2^-32.</item>
-    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ23456789": 5 in 377 billion.</item>
+    ///   <item>8 digits: 500 in 100 million, about 1 in 200 thousand per code.</item>
+    ///   <item>10 digits: 500 in 10 billion, about 1 in 20 million.</item>
+    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 500 in 25.6 billion, about 1 in 51 million.</item>
+    ///   <item>13 digits, or 10 symbols of that alphabet: around the example's own 2^-32.</item>
     /// </list>
+    /// <para>
+    /// The document's example reaches 2^-32 by allowing five guesses over a code's whole life, not five
+    /// hundred. Matching it means a longer or wider code, a smaller budget, or a shorter code lifetime -
+    /// and a budget small enough to matter is also a budget an attacker can spend to refuse everybody,
+    /// since it is shared. That trade is named in <see cref="MaxFailedAttemptsPerWindow"/>.
+    /// </para>
     /// <para>
     /// Both halves move the same sum, and they cost different people: a longer or wider code is work for
     /// everyone who types one, while a smaller number of attempts is only felt by somebody who mistypes
@@ -145,19 +151,16 @@ public record DeviceAuthorizationOptions
     /// How many failed attempts one user code allows before it stops being verifiable at all.
     /// </summary>
     /// <remarks>
-    /// This is what stops one code being worked at, from one source or from a thousand: the attempts belong
-    /// to the code, not to whoever made them. Reaching the number leaves that code refused for as long as
-    /// its records stand, and the person starts again with a fresh one.
+    /// What this counts is attempts at a value that names an authorization which can no longer be used -
+    /// one already approved or denied, or one past its lifetime. Those are the only failures a code can
+    /// have: a live pending code either matches what was typed, in which case the attempt succeeded, or it
+    /// does not, in which case the typed value is not that code at all. So the number bounds how long a
+    /// dead code keeps answering "already used" before it answers like any unknown value, and nothing else.
     /// <para>
     /// It does NOT bound a search through the space of codes, and no per-code number can: a guesser submits
-    /// a different value every time, so each value it tries is a code the server never issued and has its
-    /// own untouched allowance. What bounds the search is
-    /// <see cref="MaxFailedAttemptsPerWindow"/> together with the code's own strength - see
-    /// <see cref="UserCodeAlphabet"/> for that arithmetic.
-    /// </para>
-    /// <para>
-    /// The cost of a small value is a person who mistypes a live code that many times starting over. Five
-    /// is the number RFC 8628 section 5.1 uses in its worked example.
+    /// a different value every time, and a person who mistypes submits a value the server never issued.
+    /// Both are counted by <see cref="MaxFailedAttemptsPerWindow"/> and the per-address cap - see
+    /// <see cref="UserCodeAlphabet"/> for what those allow and what it costs an attacker.
     /// </para>
     /// </remarks>
     public int MaxUserCodeAttempts { get; set; } = 5;
@@ -172,10 +175,17 @@ public record DeviceAuthorizationOptions
     /// what bounds the rate of the search itself, and the only thing that does.
     /// <para>
     /// It is an emergency brake rather than a routine limit, so it belongs well above the failures a
-    /// healthy deployment produces - those are typos, a few per minute at most. While it is held, a person
-    /// who mistypes is refused too: that is the cost of the brake, and it is why the number is generous
-    /// rather than tight. What decides the chance of a guess landing is the code's own strength, for which
-    /// see <see cref="UserCodeAlphabet"/>.
+    /// healthy deployment produces - those are typos, a few per minute at most.
+    /// <para>
+    /// The brake is shared, which cuts both ways and must be said plainly: while it is held, EVERY
+    /// verification is refused, including every legitimate person, and an attacker willing to spend this
+    /// many requests a minute can hold it down for as long as it likes. That is the price of bounding a
+    /// search that rotates addresses - there is nothing else about such a search to count. A number chosen
+    /// well above honest traffic keeps the brake off in practice; a number chosen tight enough to reach the
+    /// improbability RFC 8628 section 5.1 works its example to would also make refusing everybody cheap.
+    /// Sizing it is therefore a choice between the two, and <see cref="UserCodeAlphabet"/> carries the
+    /// arithmetic for making it.
+    /// </para>
     /// </para>
     /// </remarks>
     public int MaxFailedAttemptsPerWindow { get; set; } = 100;
@@ -202,6 +212,10 @@ public record DeviceAuthorizationOptions
     /// The maximum duration for exponential backoff blocking.
     /// Prevents indefinite blocking even with many failed attempts.
     /// </summary>
+    /// <remarks>
+    /// No length means no growing pause at all, which is a choice rather than a mistake: a deployment may
+    /// lean on the per-address cap and the server's budget instead, and nothing refuses it.
+    /// </remarks>
     public TimeSpan MaxBackoffDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>

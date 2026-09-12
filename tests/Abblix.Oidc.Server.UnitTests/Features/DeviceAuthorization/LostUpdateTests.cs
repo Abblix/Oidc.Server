@@ -134,7 +134,7 @@ public class LostUpdateTests
     public async Task TwoFailuresArrivingTogether_AreBothCounted()
     {
         var cache = RealCache();
-        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, 1);
+        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         storage.OnNextClaimOf(() => LimiterOver(RealStorage(cache))
@@ -171,7 +171,7 @@ public class LostUpdateTests
     public async Task AFailureArrivingWhileACodeIsCleared_DoesNotInflateLaterCounts()
     {
         var cache = RealCache();
-        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, 1);
+        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         // Two failures are already on record, so the clearing has a range to walk.
@@ -185,6 +185,56 @@ public class LostUpdateTests
 
         // Two failures since the code was verified, and the pause starts at the third: the next attempt
         // must be let through. A rung stranded above the cleared run makes these two count as three.
+        var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);
+        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await after.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A failure whose own reading began before a verification cleared the code does not make later
+    /// attempts count high.
+    /// </summary>
+    /// <remarks>
+    /// The failing caller decides two things from reads: which ladder to write to, and where the claimed
+    /// run ends. Either read can go stale while a verification clears the code in between, and the second
+    /// one is the ordering no removal can fix - the caller places its rung above a run that is no longer
+    /// there, and a reader that finds the highest rung by halving the range cannot meet a gap: two later
+    /// attempts then count as three, blocking a legitimate person early with a pause measured from an
+    /// attempt belonging to an earlier life of the code.
+    /// <para>
+    /// Both arming points are driven, because a row that produces only the first ordering stays green
+    /// against a clearing that removes rungs - measured, by planting exactly that.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("which ladder", 0)]
+    [InlineData("where the run ends", 2)]
+    public async Task AFailureThatBeganBeforeACodeWasCleared_DoesNotMakeLaterCountsHigh(
+        string ordering, int armOnRung)
+    {
+        var cache = RealCache();
+        var keys = new EntityStorageKeyFactory();
+
+        // Rung 2 rather than rung 1: the reader halves the range, so with two rungs taken it reads 16, 8,
+        // 4 and 2, and never touches the first.
+        var watched = armOnRung == 0
+            ? keys.UserCodeRateLimitGenerationKey(UserCode)
+            : keys.UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: armOnRung);
+
+        Assert.NotEmpty(ordering);
+        var storage = new LetsAnotherCallerIn(RealStorage(cache), watched);
+
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+
+        storage.OnNextReadOf(() => LimiterOver(RealStorage(cache))
+            .RecordSuccessAsync(UserCode, ClientIdentifier));
+
+        await LimiterOver(storage).RecordFailureAsync(UserCode, ClientIdentifier);
+
+        // Two failures since the code was verified, at most, and the pause starts at the third.
         var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);
         await after.RecordFailureAsync(UserCode, ClientIdentifier);
         await after.RecordFailureAsync(UserCode, ClientIdentifier);

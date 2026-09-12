@@ -193,6 +193,40 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
+    /// A guess made at the approval or denial step is counted, not only refused.
+    /// </summary>
+    /// <remarks>
+    /// Asking the limits and feeding them are two different things, and a row that only watches the asking
+    /// leaves the feeding unheld - measured: removing the recording from both steps changed no test. An
+    /// unrecorded guess is a free one, and these two steps take the same value from the same page.
+    /// </remarks>
+    [Fact]
+    public async Task AGuessAtTheApprovalOrDenialStep_IsCounted()
+    {
+        var grant = new AuthorizedGrant(
+            new AuthSession("a-user", "a-session", _now, "device"),
+            new AuthorizationContext("a-client", ["openid"], null));
+
+        // Ninety-nine wrong values through approval and denial, which is one short of the budget.
+        for (var i = 0; i < 99; i++)
+        {
+            var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
+            if (i % 2 == 0)
+                await guessing.ApproveAsync("9999" + i.ToString("0000"), grant);
+            else
+                await guessing.DenyAsync("9999" + i.ToString("0000"));
+        }
+
+        // One more through verification spends it, which can only happen if the ninety-nine were counted.
+        var last = ServiceOver(null, address: "198.51.100.1");
+        await last.VerifyAsync("88888888");
+
+        var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
+
+        Assert.IsType<InvalidUserCode>(await issued.VerifyAsync(TheCode));
+    }
+
+    /// <summary>
     /// Attempts against a code that exists belong to that code, and spend its allowance.
     /// </summary>
     /// <remarks>

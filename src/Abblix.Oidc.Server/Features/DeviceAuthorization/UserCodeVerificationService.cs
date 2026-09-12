@@ -113,12 +113,20 @@ public partial class UserCodeVerificationService(
         var (deviceCode, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
+        {
+            // Charged to the code, as verification charges it: the value names a real authorization and the
+            // attempt is against it, whether it arrived here or at the verification step.
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
         // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        {
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
         // authorization request never asked for gives the device authority nobody requested, and this is

@@ -115,9 +115,22 @@ public interface IEntityStorageKeyFactory
     /// these exist, so failures arriving together are counted separately.
     /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
+    /// <param name="generation">Which life of that code the attempt belongs to, from
+    /// <see cref="UserCodeRateLimitGenerationKey"/>.</param>
     /// <param name="attempt">Which attempt against that code this key stands for, counted from one.</param>
     /// <returns>A formatted storage key for that attempt.</returns>
-    string UserCodeRateLimitAttemptKey(string userCode, int attempt);
+    string UserCodeRateLimitAttemptKey(string userCode, int generation, int attempt);
+
+    /// <summary>
+    /// Generates a storage key for which life of a user code its attempt records belong to.
+    /// </summary>
+    /// <remarks>
+    /// A verified code starts a new life rather than having its records removed, because removing them is
+    /// what lets an attempt that began earlier land above the gap.
+    /// </remarks>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for that code's current generation.</returns>
+    string UserCodeRateLimitGenerationKey(string userCode);
 
     /// <summary>
     /// Generates a storage key for one failed verification attempt anywhere in the server, inside one
@@ -153,6 +166,11 @@ public interface IEntityStorageKeyFactory
     /// Generates a storage key for reuse detection of an authorization request value (a PKCE
     /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
     /// </summary>
+    /// <remarks>
+    /// Leads with a segment of its own rather than with the client identifier, because an identifier is
+    /// chosen at registration: leading with it, a client registered as another family's segment would spell
+    /// that family's key for an awkward value.
+    /// </remarks>
     /// <param name="clientId">The client the value belongs to.</param>
     /// <param name="valueKind">A discriminator for the value's role, so distinct kinds never collide.</param>
     /// <param name="valueHash">A hash of the value; the raw value is never part of the key.</param>

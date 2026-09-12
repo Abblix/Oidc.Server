@@ -53,6 +53,7 @@ public class EntityStorageKeyFactoryTests
     // One segment, not two: nested under the request's own name, the schedule key for "abc" is spelled
     // exactly like the request key for "NextPoll:abc".
     [InlineData("NextPoll:abc", "abc")]
+    [InlineData("NextPoll:CIBA:abc", "CIBA:abc")]
     public void ARequestKey_IsNeverSpelledLikeAScheduleKey(string awkward, string plain)
     {
         Assert.NotEqual(
@@ -62,6 +63,26 @@ public class EntityStorageKeyFactoryTests
         Assert.NotEqual(
             Factory.BackChannelAuthenticationRequestKey(awkward),
             Factory.BackChannelAuthenticationNextPollKey(plain));
+    }
+
+    /// <summary>
+    /// A replay record cannot be spelled like a request key either.
+    /// </summary>
+    /// <remarks>
+    /// The same shape one family over: this one puts a client identifier in the FIRST segment, so a client
+    /// registered as "Device" spells a replay key exactly like the device request key of a code beginning
+    /// "Reuse:". A client identifier is chosen at registration, which makes it an input that exists.
+    /// </remarks>
+    [Fact]
+    public void AReplayRecord_IsNeverSpelledLikeARequestKey()
+    {
+        Assert.NotEqual(
+            Factory.DeviceAuthorizationRequestKey("Reuse:code_challenge:a-hash"),
+            Factory.AuthorizationValueReuseKey("Device", "code_challenge", "a-hash"));
+
+        Assert.NotEqual(
+            Factory.BackChannelAuthenticationRequestKey("Reuse:code_challenge:a-hash"),
+            Factory.AuthorizationValueReuseKey("CIBA", "code_challenge", "a-hash"));
     }
 
     /// <summary>
@@ -79,7 +100,7 @@ public class EntityStorageKeyFactoryTests
             Factory.BackChannelAuthenticationRequestKey(identifier),
             Factory.BackChannelAuthenticationNextPollKey(identifier),
             Factory.DeviceAuthorizationUserCodeKey(identifier),
-            Factory.UserCodeRateLimitAttemptKey(identifier, 1),
+            Factory.UserCodeRateLimitAttemptKey(identifier, generation: 1, attempt: 1),
             Factory.IpRateLimitAttemptKey(identifier, 1, 1),
             Factory.AuthorizedGrantKey(identifier),
             Factory.JsonWebTokenStatusKey(identifier),

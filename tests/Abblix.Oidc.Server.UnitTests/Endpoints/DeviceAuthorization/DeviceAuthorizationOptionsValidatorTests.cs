@@ -66,6 +66,35 @@ public class DeviceAuthorizationOptionsValidatorTests
         Assert.True(Validator.Validate(null, options).Failed);
     }
 
+    /// <summary>
+    /// Durations that leave a limit unable to fire, or destroy the records the limits are kept in, are
+    /// refused at startup.
+    /// </summary>
+    /// <remarks>
+    /// A code lifetime of no length is not a lax setting, it is an endpoint that cannot work: every code is
+    /// expired at the moment it is issued, and that lifetime is also what each attempt record is given, so
+    /// no count survives the attempt that made it.
+    /// <para>
+    /// A backoff ceiling and a polling interval of no length are deliberately NOT refused - those are
+    /// choices, and one of them is what this repository's own end-to-end host uses so it need not wait
+    /// between polls. Measured: refusing them turned that suite red.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(3600, 5, 0)]
+    public void Fails_when_a_duration_switches_a_limit_off(
+        int backoffCapSeconds, int pollingSeconds, int codeLifetimeMinutes)
+    {
+        var settings = ValidSettings();
+        settings.MaxBackoffDuration = TimeSpan.FromSeconds(backoffCapSeconds);
+        settings.PollingInterval = TimeSpan.FromSeconds(pollingSeconds);
+        settings.CodeLifetime = TimeSpan.FromMinutes(codeLifetimeMinutes);
+
+        var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
+
+        Assert.True(Validator.Validate(null, options).Failed);
+    }
+
     [Fact]
     public void Fails_when_device_endpoint_enabled_but_settings_absent()
     {
