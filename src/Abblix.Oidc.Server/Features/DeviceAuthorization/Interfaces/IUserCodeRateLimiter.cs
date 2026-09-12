@@ -27,10 +27,11 @@ public interface IUserCodeRateLimiter
     /// <returns>
     /// A <see cref="Result{TSuccess, TFailure}"/> containing:
     /// - Success (<c>true</c>): The verification attempt is allowed to proceed.
-    /// - Failure (<see cref="TimeSpan"/>): The attempt is rate limited; the value indicates the duration
-    ///   the client must wait before retrying (Retry-After).
+    /// - Failure (<see cref="UserCodeRateLimited"/>): the attempt is refused, with how long before it may
+    ///   be made again and whether the refusal follows from attempts against this very code - which decides
+    ///   whether a caller may be told anything at all.
     /// </returns>
-    Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier);
+    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
@@ -38,6 +39,20 @@ public interface IUserCodeRateLimiter
     /// <param name="userCode">The user code that failed verification.</param>
     /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
     Task RecordFailureAsync(string userCode, string clientIdentifier);
+
+    /// <summary>
+    /// Records a failed attempt at a user code that does not exist.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not charged to the value that was typed. A guesser never submits the same value
+    /// twice, so counting per value bounds nothing - and a count held against a value nobody was issued
+    /// would be spent before a real code could ever carry it, leaving the person who reads that code off
+    /// their screen unable to use it. What this attempt belongs to is the source that made it and the
+    /// server's own budget for the window.
+    /// </remarks>
+    /// <param name="clientIdentifier">The client identifier (typically IP address) making the attempt.</param>
+    /// <returns>A task that completes when the attempt has been recorded.</returns>
+    Task RecordUnknownCodeAsync(string clientIdentifier);
 
     /// <summary>
     /// Records a successful verification to reset rate limiting counters.

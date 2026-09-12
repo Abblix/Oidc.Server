@@ -27,12 +27,6 @@ public record DeviceAuthorizationRequest(
     string UserCode)
 {
     /// <summary>
-    /// Specifies the next time the client should poll for updates regarding the authorization request.
-    /// This helps manage the timing of polling requests and enforces rate limiting.
-    /// </summary>
-    public DateTimeOffset? NextPollAt { get; set; }
-
-    /// <summary>
     /// The absolute time when this device authorization request expires (RFC 8628 Section 3.2 fixed lifetime).
     /// Seeded by the storage on <c>StoreAsync</c> and used to cap the refreshed cache TTL at the remaining
     /// lifetime, so regular polling cannot extend the code.

@@ -46,25 +46,35 @@ public partial class UserCodeVerificationService(
 
         // Check rate limiting before attempting verification
         var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);
-        if (rateLimitCheck.TryGetFailure(out _))
+        if (rateLimitCheck.TryGetFailure(out var refusal))
         {
-            // Return invalid to prevent information disclosure about valid vs invalid codes
-            // The rate limiter will log the security event
-            return new InvalidUserCode();
+            // A refusal that followed from attempts against THIS code stays indistinguishable from an
+            // unknown code: only a value the server issued can have such attempts, so naming the refusal
+            // would name the value as real. A refusal that counted attempts rather than codes carries no
+            // such information, and the caller is told how long to wait - otherwise somebody refused
+            // because a stranger is guessing sees exactly what their own typo shows.
+            return refusal.AboutThisCode
+                ? new InvalidUserCode()
+                : new TooManyUserCodeAttempts(refusal.RetryAfter);
         }
 
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
         {
-            // Record failed attempt for rate limiting
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            // Charged to the source and to the server's budget for the window, and NOT to the value that
+            // was typed: there is no code here to charge. A guesser never submits one value twice, so a
+            // count per value bounds nothing - and a count standing against a value nobody was issued
+            // would be spent before a real code could carry it, leaving the person reading that code off
+            // their screen unable to use it.
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return new InvalidUserCode();
         }
 
         var (_, request) = result.Value;
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
-            // Code already used - still record as failure to prevent enumeration
+            // This value IS a code, so the attempt belongs to it. That is what stops one code being
+            // hammered, from one source or from a thousand.
             await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return new UserCodeAlreadyUsed();
         }
@@ -90,19 +100,38 @@ public partial class UserCodeVerificationService(
     public async Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant)
     {
         userCode = normalizer.Normalize(userCode);
+
+        // The same limits as verification, because this takes the same thing - a user code as a string -
+        // and answers whether it names a live authorization, which is the question a guesser is asking.
+        // Without this it is the same oracle with no counting at all, and the one that grants.
+        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
+        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+            return false;
+
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
+        {
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return false;
+        }
 
         var (deviceCode, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
+        {
+            // Charged to the code, as verification charges it: the value names a real authorization and the
+            // attempt is against it, whether it arrived here or at the verification step.
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
         // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        {
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
         // authorization request never asked for gives the device authority nobody requested, and this is
@@ -148,9 +177,18 @@ public partial class UserCodeVerificationService(
     public async Task<bool> DenyAsync(string userCode)
     {
         userCode = normalizer.Normalize(userCode);
+
+        // Counted like verification and approval: this answers the same question about the same input.
+        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
+        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+            return false;
+
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
+        {
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return false;
+        }
 
         var (deviceCode, request) = result.Value;
 
@@ -185,9 +223,10 @@ public partial class UserCodeVerificationService(
     /// against a REMOVED record would miss.
     /// </para>
     /// <para>
-    /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
-    /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
-    /// Closing it needs a compare-and-swap the entity storage does not expose, which is issue 194.
+    /// Re-reading NARROWS the window to one store round trip and does not close it. What closes it is a
+    /// store that decides the write - a conditional update, or a claim on a key of its own - which is
+    /// what the polling paths now do and what this one still cannot, because it writes the record the
+    /// approval lives in. Issue 435 tracks the remaining half.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The record to decide on.</param>

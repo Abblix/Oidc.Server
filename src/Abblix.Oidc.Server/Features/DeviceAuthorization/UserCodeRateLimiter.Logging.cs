@@ -37,6 +37,21 @@ partial class UserCodeRateLimiter
     private partial void LogBruteForceDetected(string UserCode, string ClientIdentifier, int UserCodeFailures, int IpFailures);
 
     [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeRateLimiter.FailedAttemptBudgetSpent,
+        Level = LogLevel.Warning,
+        Message = "The server's budget of {Budget} failed user code attempts for this window is spent, so "
+                  + "every verification is refused until the window ends. This is what a distributed "
+                  + "guessing search runs into, and while it holds a user who mistypes is refused too")]
+    private partial void LogFailedAttemptBudgetSpent(int Budget);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeAttemptsSpent,
+        Level = LogLevel.Warning,
+        Message = "User code {UserCode} has spent every attempt it allows ({FailureCount}) and is refused "
+                  + "for the rest of its lifetime")]
+    private partial void LogUserCodeAttemptsSpent(string UserCode, int FailureCount);
+
+    [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
         Level = LogLevel.Information,
         Message = "User code {UserCode} successfully verified from {ClientIdentifier}")]

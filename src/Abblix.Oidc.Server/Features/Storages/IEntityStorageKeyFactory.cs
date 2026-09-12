@@ -74,6 +74,33 @@ public interface IEntityStorageKeyFactory
     string DeviceAuthorizationRequestKey(string deviceCode);
 
     /// <summary>
+    /// Generates a storage key for the next-poll instant of a backchannel authentication request.
+    /// </summary>
+    /// <remarks>
+    /// A top-level name of its own rather than one nested under the request's key, because an
+    /// identifier is a value the host's own generator produces: nested, an identifier that happened to
+    /// begin with this segment would name the request's own key and the next-poll write would land on the
+    /// authentication. A key of its own, because what the polling client changes is only this instant while what the
+    /// user's authentication changes is the request: a poll writing the request back to note the instant
+    /// overwrote a completion that had landed since it read.
+    /// </remarks>
+    /// <param name="requestId">The CIBA authentication request identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string BackChannelAuthenticationNextPollKey(string requestId);
+
+    /// <summary>
+    /// Generates a storage key for the next-poll instant of a device authorization request.
+    /// </summary>
+    /// <remarks>
+    /// A key of its own, for the same reason as its backchannel counterpart: a poll that wrote the
+    /// request back to note the instant overwrote an approval that had landed since it read, and the
+    /// device was told to keep waiting until the code expired.
+    /// </remarks>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string DeviceAuthorizationNextPollKey(string deviceCode);
+
+    /// <summary>
     /// Generates a storage key for mapping a user code to its device code.
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>
@@ -81,18 +108,52 @@ public interface IEntityStorageKeyFactory
     string DeviceAuthorizationUserCodeKey(string userCode);
 
     /// <summary>
-    /// Generates a storage key for rate limiting user code verification attempts.
+    /// Generates a storage key for one failed verification attempt against a user code.
     /// </summary>
+    /// <remarks>
+    /// One key per attempt rather than one key holding a number: attempts are counted by how many of
+    /// these exist, so failures arriving together are counted separately.
+    /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
-    /// <returns>A formatted storage key for the user code rate limit state.</returns>
-    string UserCodeRateLimitKey(string userCode);
+    /// <param name="generation">Which life of that code the attempt belongs to, from
+    /// <see cref="UserCodeRateLimitGenerationKey"/>.</param>
+    /// <param name="attempt">Which attempt against that code this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string UserCodeRateLimitAttemptKey(string userCode, int generation, int attempt);
 
     /// <summary>
-    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// Generates a storage key for which life of a user code its attempt records belong to.
+    /// </summary>
+    /// <remarks>
+    /// A verified code starts a new life rather than having its records removed, because removing them is
+    /// what lets an attempt that began earlier land above the gap.
+    /// </remarks>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for that code's current generation.</returns>
+    string UserCodeRateLimitGenerationKey(string userCode);
+
+    /// <summary>
+    /// Generates a storage key for one failed verification attempt anywhere in the server, inside one
+    /// counting window.
+    /// </summary>
+    /// <remarks>
+    /// Not keyed by anything the caller chooses, which is the point: a guesser rotating addresses and
+    /// never repeating a code escapes every other count.
+    /// </remarks>
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string FailedAttemptKey(long window, int attempt);
+
+    /// <summary>
+    /// Generates a storage key for one failed verification attempt from a client address, inside one
+    /// counting window.
     /// </summary>
     /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
-    /// <returns>A formatted storage key for the IP rate limit state.</returns>
-    string IpRateLimitKey(string clientIdentifier);
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string IpRateLimitAttemptKey(string clientIdentifier, long window, int attempt);
 
     /// <summary>
     /// Generates a storage key for the registration access token binding of a client (RFC 7592).
@@ -105,6 +166,11 @@ public interface IEntityStorageKeyFactory
     /// Generates a storage key for reuse detection of an authorization request value (a PKCE
     /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
     /// </summary>
+    /// <remarks>
+    /// Leads with a segment of its own rather than with the client identifier, because an identifier is
+    /// chosen at registration: leading with it, a client registered as another family's segment would spell
+    /// that family's key for an awkward value.
+    /// </remarks>
     /// <param name="clientId">The client the value belongs to.</param>
     /// <param name="valueKind">A discriminator for the value's role, so distinct kinds never collide.</param>
     /// <param name="valueHash">A hash of the value; the raw value is never part of the key.</param>

@@ -17,7 +17,19 @@ public record DeviceAuthorizationOptions
     /// The lifetime of device_code and user_code. After this duration, the codes expire
     /// and the client must start a new device authorization request.
     /// </summary>
-    public required TimeSpan CodeLifetime { get; set; }
+    /// <remarks>
+    /// One minute by default, and the number is a security setting as much as a usability one: the guesses
+    /// an attacker gets at a live code are the server's budget for a window multiplied by how many windows
+    /// the code survives, so halving the lifetime halves them. See <see cref="UserCodeAlphabet"/> for the
+    /// arithmetic and <see cref="MaxFailedAttemptsPerWindow"/> for why that budget cannot simply be made
+    /// small instead.
+    /// <para>
+    /// What it costs is the time a person has to pick up their phone and approve, so a deployment whose
+    /// users need longer raises it and accepts proportionally more guesses - or lengthens the code, which
+    /// buys far more than either, since every symbol multiplies the space.
+    /// </para>
+    /// </remarks>
+    public TimeSpan CodeLifetime { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// The minimum interval that the client should wait between polling requests to the token endpoint.
@@ -66,6 +78,48 @@ public record DeviceAuthorizationOptions
     /// Can be set to letters like "BCDFGHJKLMNPQRSTVWXZ" (consonants without ambiguous characters)
     /// or alphanumeric like "BCDFGHJKLMNPQRSTVWXZ23456789".
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This and <see cref="UserCodeLength"/> decide how hard the code is to guess, and the rate limits
+    /// decide how many guesses anyone gets. Both halves are needed, so here is the arithmetic rather than
+    /// a recommendation: a code drawn from an alphabet of <c>A</c> symbols at length <c>L</c> is one of
+    /// <c>A^L</c>, so the chance of landing it in <c>N</c> guesses is <c>N / A^L</c>.
+    /// </para>
+    /// <para>
+    /// RFC 8628 section 5.1 works the same sum the other way round: it takes an 8-character code over a
+    /// 20-symbol alphabet and says "the rate-limiting interval and validity period would need to only
+    /// allow 5 attempts in order to get the same 2^-32 probability of success by random guessing" - five
+    /// over the code's whole life, not five per interval. Put in those terms, the number of guesses a
+    /// configuration can afford at that same probability is <c>A^L / 2^32</c>:
+    /// </para>
+    /// <para>
+    /// Here <c>N</c> is how many guesses the server entertains while one code is alive, which is
+    /// <see cref="MaxFailedAttemptsPerWindow"/> multiplied by <see cref="CodeLifetime"/> divided by
+    /// <see cref="RateLimitWindow"/> - a hundred a minute over a one-minute code is a hundred. It is NOT
+    /// <see cref="MaxUserCodeAttempts"/>: that bounds repeat attempts at one dead code, and a search never
+    /// repeats a value. With the shipped numbers, N is 100:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item>8 digits: 100 in 100 million, about 1 in a million per code.</item>
+    ///   <item>10 digits: 100 in 10 billion, about 1 in 100 million.</item>
+    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 100 in 25.6 billion, about 1 in 256 million.</item>
+    ///   <item>12 digits, or 9 symbols of that alphabet: around the example's own 2^-32.</item>
+    /// </list>
+    /// <para>
+    /// The document's example reaches 2^-32 by allowing five guesses over a code's whole life, and at
+    /// eight digits no lifetime reaches that: it would take fewer than one guess per code, which no
+    /// shared budget can express. What the short lifetime buys is the factor between 1 in 200 thousand
+    /// and 1 in a million; closing the rest means a longer or wider code, since every symbol multiplies
+    /// the space while every limit only divides the rate. A smaller budget is not the lever it looks
+    /// like - see <see cref="MaxFailedAttemptsPerWindow"/> for why.
+    /// </para>
+    /// <para>
+    /// Both halves move the same sum, and they cost different people: a longer or wider code is work for
+    /// everyone who types one, while a smaller number of attempts is only felt by somebody who mistypes
+    /// that many times and has to start the flow again. That is the trade to make deliberately, and it is
+    /// why neither number is refused at startup for being weak - only for being impossible.
+    /// </para>
+    /// </remarks>
     public string UserCodeAlphabet { get; set; } = "0123456789";
 
     private Uri? _verificationUri;
@@ -108,26 +162,79 @@ public record DeviceAuthorizationOptions
     public int MaxFailuresBeforeBackoff { get; set; } = 3;
 
     /// <summary>
+    /// How many failed attempts one user code allows before it stops being verifiable at all.
+    /// </summary>
+    /// <remarks>
+    /// What this counts is attempts at a value that names an authorization which can no longer be used -
+    /// one already approved or denied, or one past its lifetime. Those are the only failures a code can
+    /// have: a live pending code either matches what was typed, in which case the attempt succeeded, or it
+    /// does not, in which case the typed value is not that code at all. So the number bounds how long a
+    /// dead code keeps answering "already used" before it answers like any unknown value, and nothing else.
+    /// <para>
+    /// It does NOT bound a search through the space of codes, and no per-code number can: a guesser submits
+    /// a different value every time, and a person who mistypes submits a value the server never issued.
+    /// Both are counted by <see cref="MaxFailedAttemptsPerWindow"/> and the per-address cap - see
+    /// <see cref="UserCodeAlphabet"/> for what those allow and what it costs an attacker.
+    /// </para>
+    /// </remarks>
+    public int MaxUserCodeAttempts { get; set; } = 5;
+
+    /// <summary>
+    /// How many failed verification attempts the server entertains in one counting window, across every
+    /// code and every source.
+    /// </summary>
+    /// <remarks>
+    /// The per-code and per-address limits both bound something an attacker controls: a guesser never
+    /// submits the same string twice, and one that rotates addresses is not bounded by either. This is
+    /// what bounds the rate of the search itself, and the only thing that does.
+    /// <para>
+    /// It is an emergency brake rather than a routine limit, so it belongs well above the failures a
+    /// healthy deployment produces - those are typos, a few per minute at most.
+    /// <para>
+    /// The brake is shared, which cuts both ways and must be said plainly: while it is held, EVERY
+    /// verification is refused, including every legitimate person, and an attacker willing to spend this
+    /// many requests a minute can hold it down for as long as it likes. That is the price of bounding a
+    /// search that rotates addresses - there is nothing else about such a search to count. A number chosen
+    /// well above honest traffic keeps the brake off in practice; a number chosen tight enough to reach the
+    /// improbability RFC 8628 section 5.1 works its example to would also make refusing everybody cheap.
+    /// Sizing it is therefore a choice between the two, and <see cref="UserCodeAlphabet"/> carries the
+    /// arithmetic for making it.
+    /// </para>
+    /// </para>
+    /// </remarks>
+    public int MaxFailedAttemptsPerWindow { get; set; } = 100;
+
+    /// <summary>
     /// The maximum number of failed user code verification attempts allowed from a single IP address
-    /// within a one-minute sliding window. Prevents distributed brute force attacks.
+    /// within one counting window. Prevents distributed brute force attacks.
     /// </summary>
     public int MaxIpFailuresPerMinute { get; set; } = 10;
 
     /// <summary>
-    /// The duration of the sliding window for per-IP rate limiting.
-    /// Failed attempts outside this window are not counted toward the rate limit.
+    /// How long one counting window for per-IP rate limiting lasts.
+    /// Failed attempts outside the current window are not counted toward the rate limit.
     /// </summary>
-    public TimeSpan RateLimitSlidingWindow { get; set; } = TimeSpan.FromMinutes(1);
+    /// <remarks>
+    /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
+    /// can spend the allowance twice: sizing the window is sizing the worst case at twice the count above.
+    /// The name says window rather than sliding window for that reason - and the count it replaced behaved
+    /// the same way, restarting once the interval had passed since the first failure it held.
+    /// </remarks>
+    public TimeSpan RateLimitWindow { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// The maximum duration for exponential backoff blocking.
     /// Prevents indefinite blocking even with many failed attempts.
     /// </summary>
+    /// <remarks>
+    /// No length means no growing pause at all, which is a choice rather than a mistake: a deployment may
+    /// lean on the per-address cap and the server's budget instead, and nothing refuses it.
+    /// </remarks>
     public TimeSpan MaxBackoffDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// The expiration time for IP rate limit state in storage.
-    /// Should be longer than RateLimitSlidingWindow to prevent premature cleanup.
+    /// How long a recorded per-IP attempt is kept in storage.
+    /// Must be longer than one window, or attempts stop being counted before their window ends.
     /// </summary>
     public TimeSpan IpRateLimitStateExpiration { get; set; } = TimeSpan.FromMinutes(2);
 }

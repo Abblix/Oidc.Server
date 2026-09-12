@@ -64,7 +64,7 @@ public class UserCodeVerificationServiceTests
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
             .Setup(r => r.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((Result<bool, TimeSpan>)true);
+            .ReturnsAsync((Result<bool, UserCodeRateLimited>)true);
 
         var normalizer = new UserCodeNormalizer(Options.Create(new OidcOptions
         {
@@ -303,7 +303,7 @@ public class UserCodeVerificationServiceTests
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
             .Setup(limiter => limiter.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((Result<bool, TimeSpan>)true);
+            .ReturnsAsync((Result<bool, UserCodeRateLimited>)true);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
