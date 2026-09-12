@@ -43,6 +43,7 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
 {
     private Func<Task>? _onRead;
     private Func<Task>? _onClaim;
+    private Func<Task>? _onRemoval;
 
     /// <summary>
     /// Arms the interleaving for a read-modify-write: the next read of the watched key runs this, once,
@@ -55,6 +56,12 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
     /// claim has been decided and before its caller continues.
     /// </summary>
     public void OnNextClaimOf(Func<Task> other) => _onClaim = other;
+
+    /// <summary>
+    /// Arms the interleaving for a caller that clears several keys: the next removal of the watched key
+    /// runs this, once, BEFORE the removal, which is where a caller clearing a range decided how far to go.
+    /// </summary>
+    public void OnNextRemovalOf(Func<Task> other) => _onRemoval = other;
 
     /// <inheritdoc />
     public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
@@ -84,5 +91,11 @@ public sealed class LetsAnotherCallerIn(IEntityStorage inner, string watched) : 
     }
 
     /// <inheritdoc />
-    public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    public async Task RemoveAsync(string key, CancellationToken? token = null)
+    {
+        if (key == watched && Interlocked.Exchange(ref _onRemoval, null) is { } other)
+            await other();
+
+        await inner.RemoveAsync(key, token);
+    }
 }

@@ -30,6 +30,36 @@ public class DeviceAuthorizationOptionsValidatorTests
         UserCodeLength = 8,
     };
 
+    /// <summary>
+    /// Settings that leave one of the two brute-force limits unable to fire are refused at startup.
+    /// </summary>
+    /// <remarks>
+    /// Each of these reads as a stricter setting and acts as no setting at all, which is the reason they
+    /// cannot be left to a comment. A pause that starts later than the number of attempts the server
+    /// records never starts; a per-address cap below one is never reached, where the same number used to
+    /// mean "blocked from the first failure"; a window of no length has no attempts in it; and state kept
+    /// for less than a window drops attempts while their own window is still running.
+    /// </remarks>
+    [Theory]
+    [InlineData(64, 10, 60, 120)]
+    [InlineData(0, 10, 60, 120)]
+    [InlineData(3, 0, 60, 120)]
+    [InlineData(3, 10, 0, 120)]
+    [InlineData(3, 10, 60, 30)]
+    public void Fails_when_a_brute_force_limit_cannot_fire(
+        int failuresBeforeBackoff, int addressCap, int windowSeconds, int stateSeconds)
+    {
+        var settings = ValidSettings();
+        settings.MaxFailuresBeforeBackoff = failuresBeforeBackoff;
+        settings.MaxIpFailuresPerMinute = addressCap;
+        settings.RateLimitSlidingWindow = TimeSpan.FromSeconds(windowSeconds);
+        settings.IpRateLimitStateExpiration = TimeSpan.FromSeconds(stateSeconds);
+
+        var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
+
+        Assert.True(Validator.Validate(null, options).Failed);
+    }
+
     [Fact]
     public void Fails_when_device_endpoint_enabled_but_settings_absent()
     {

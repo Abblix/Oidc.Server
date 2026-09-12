@@ -8,9 +8,12 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
@@ -58,12 +61,17 @@ public class LostUpdateTests
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     /// <summary>
-    /// The user's approval lands between the polling device's read and its write, and survives.
+    /// The user's approval lands inside the polling device's read, and that same poll answers with the
+    /// tokens.
     /// </summary>
     /// <remarks>
     /// It did not before: the poll wrote the whole request back to note when the client might ask again,
     /// so an approval arriving inside that window was put back to pending and the device was told to keep
     /// waiting until the code expired.
+    /// <para>
+    /// The assertion is the issued grant rather than the stored status, because that is what the person
+    /// standing at the device sees. A stored status would be the precondition for it.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task AnApprovalLandingInsideAPoll_IsNotLost()
@@ -80,18 +88,27 @@ public class LostUpdateTests
             var approving = DeviceStorageOver(RealStorage(cache));
             var request = await approving.TryGetByDeviceCodeAsync(DeviceCode);
             request!.Status = DeviceAuthorizationStatus.Authorized;
+
+            // The status and the grant together, which is what approval writes: a record saying approved
+            // with nothing to issue from is a different state, handled by an arm of its own.
+            request.AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession("a-user", "a-session", _now, "device"),
+                new AuthorizationContext("a-client", ["openid"], null));
+
             await approving.UpdateAsync(DeviceCode, request, TimeSpan.FromMinutes(5));
         });
 
         // The real poll, through the handler the token endpoint calls.
-        await DeviceHandlerOver(devices, RealStorage(cache)).AuthorizeAsync(
+        var result = await DeviceHandlerOver(devices, RealStorage(cache)).AuthorizeAsync(
             new TokenRequest { DeviceCode = DeviceCode },
             new ClientInfo("a-client"),
             TestContext.Current.CancellationToken);
 
-        var stored = await DeviceStorageOver(RealStorage(cache)).TryGetByDeviceCodeAsync(DeviceCode);
-        Assert.NotNull(stored);
-        Assert.Equal(DeviceAuthorizationStatus.Authorized, stored.Status);
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("a-client", grant.Context.ClientId);
+
+        // And the code is spent, so a second poll cannot be answered with the same grant.
+        Assert.Null(await DeviceStorageOver(RealStorage(cache)).TryGetByDeviceCodeAsync(DeviceCode));
     }
 
     /// <summary>
@@ -130,6 +147,48 @@ public class LostUpdateTests
         Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
     }
 
+    /// <summary>
+    /// A failure arriving while a verified code's attempts are being cleared does not inflate what the
+    /// next attempts are counted as.
+    /// </summary>
+    /// <remarks>
+    /// Clearing and claiming meet on the same keys. Clearing used to remove as many rungs as it had read a
+    /// moment earlier, so a failure landing in between left its rung ABOVE the cleared run. The failure
+    /// itself is not the loss - the code has just been verified, so its own history says nothing any more,
+    /// and the count per address kept it. What breaks is the reader: it finds the highest rung by halving
+    /// the range, which answers correctly only while the rungs are one unbroken run, so the stranded rung
+    /// made the next two attempts count as three - blocking a legitimate person one attempt early, with the
+    /// pause measured from somebody else's attempt.
+    /// <para>
+    /// The ordering needs no contrivance: a verification form submitted twice has one request succeeding
+    /// while the other finds the code already taken and records a failure.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task AFailureArrivingWhileACodeIsCleared_DoesNotInflateLaterCounts()
+    {
+        var cache = RealCache();
+        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, 1);
+        var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
+
+        // Two failures are already on record, so the clearing has a range to walk.
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+        await LimiterOver(RealStorage(cache)).RecordFailureAsync(UserCode, ClientIdentifier);
+
+        storage.OnNextRemovalOf(() => LimiterOver(RealStorage(cache))
+            .RecordFailureAsync(UserCode, ClientIdentifier));
+
+        await LimiterOver(storage).RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        // Two failures since the code was verified, and the pause starts at the third: the next attempt
+        // must be let through. A rung stranded above the cleared run makes these two count as three.
+        var after = LimiterOver(RealStorage(cache), failuresBeforeBackoff: 3);
+        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+        await after.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await after.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
     private DeviceAuthorizationStorage DeviceStorageOver(IEntityStorage storage)
         => new(
             NullLogger<DeviceAuthorizationStorage>.Instance,
@@ -151,7 +210,7 @@ public class LostUpdateTests
             new FakeTimeProvider(_now),
             Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
 
-    private UserCodeRateLimiter LimiterOver(IEntityStorage storage)
+    private UserCodeRateLimiter LimiterOver(IEntityStorage storage, int failuresBeforeBackoff = 2)
         => new(
             NullLogger<UserCodeRateLimiter>.Instance,
             storage,
@@ -167,9 +226,9 @@ public class LostUpdateTests
                     UserCodeLength = 8,
                     VerificationUri = new Uri("https://auth.example.com/device"),
 
-                    // The pause starts at the second failure, so one failure and two are told apart by
-                    // what the next attempt is answered with.
-                    MaxFailuresBeforeBackoff = 2,
+                    // Where the pause starts decides what a row can tell apart by asking whether the
+                    // next attempt is let through.
+                    MaxFailuresBeforeBackoff = failuresBeforeBackoff,
                 },
             }));
 

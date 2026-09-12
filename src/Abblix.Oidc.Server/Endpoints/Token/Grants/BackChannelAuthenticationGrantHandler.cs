@@ -316,12 +316,28 @@ public partial class BackChannelAuthenticationGrantHandler(
         var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(authenticationRequestId);
         var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
+        var now = timeProvider.GetUtcNow();
+        var askedEarly = nextPollAt is { } earliest && now < earliest;
+
+        // The authentication may have completed since the read this answer is decided on. Reading once
+        // more is about the answer being current, not about keeping that completion safe: nothing on this
+        // path writes the request, so there is nothing for a poll to overwrite. The same method the long
+        // poll hands its re-read to, so a client that waits and a client that asks again are answered by
+        // one piece of code.
+        if (await storage.TryGetAsync(authenticationRequestId) is
+            { Status: not BackChannelAuthenticationStatus.Pending } advanced)
+        {
+            return await ProcessUpdatedRequest(
+                advanced, authenticationRequestId, clientInfo, cancellationToken);
+        }
+
         // Asking early pushes the instant further out rather than resetting it from now: a client
-        // that ignores the interval does not get a fresh one.
-        var askedEarly = nextPollAt is { } earliest && timeProvider.GetUtcNow() < earliest;
+        // that ignores the interval does not get a fresh one. Never beyond the request's own expiry,
+        // because past that a client could only ever be told to slow down for a request that is gone.
+        var pushedTo = (askedEarly ? nextPollAt!.Value : now) + pollingInterval;
         await pollSchedule.SetNextPollAtAsync(
             pollKey,
-            (askedEarly ? nextPollAt!.Value : timeProvider.GetUtcNow()) + pollingInterval,
+            pushedTo < authenticationRequest.ExpiresAt ? pushedTo : authenticationRequest.ExpiresAt,
             expiresIn);
 
         if (askedEarly)

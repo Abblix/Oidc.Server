@@ -68,13 +68,42 @@ public partial class DeviceCodeGrantHandler(
 
         var deviceRequest = await storage.TryGetByDeviceCodeAsync(request.DeviceCode);
 
+        // A single clock read shared by the expiry gate and the remaining lifetime given to the poll
+        // schedule, so the two never disagree and the entry cannot be written with a lifetime that has
+        // already run out (RFC 8628 section 3.2).
+        var now = timeProvider.GetUtcNow();
+
+        return await DecideAsync(
+            request.DeviceCode, clientInfo, deviceRequest, now, true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Decides the answer from one reading of the stored request.
+    /// </summary>
+    /// <remarks>
+    /// Apart from the entry point because the pending arm reads the record once more and decides again on
+    /// what it finds: the user's approval can land between the first read and the answer, and a poll that
+    /// says "still pending" while the record says otherwise costs the user a whole polling interval with the
+    /// device in front of them. The second decision runs with <paramref name="mayReadAgain"/> false, so a
+    /// record that is still pending answers instead of reading a third time.
+    /// </remarks>
+    /// <param name="deviceCode">The device code being redeemed, already known to be present.</param>
+    /// <param name="clientInfo">The client the answer goes to.</param>
+    /// <param name="deviceRequest">What the store held when it was read, or null when it held nothing.</param>
+    /// <param name="now">The one clock reading this answer is decided on.</param>
+    /// <param name="mayReadAgain">False once this is the decision made after a second read.</param>
+    /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
+    private async Task<Result<AuthorizedGrant, OidcError>> DecideAsync(
+        string deviceCode,
+        ClientInfo clientInfo,
+        Features.DeviceAuthorization.DeviceAuthorizationRequest? deviceRequest,
+        DateTimeOffset now,
+        bool mayReadAgain,
+        CancellationToken cancellationToken)
+    {
         var deviceAuthOptions = options.Value.DeviceAuthorization
             .NotNull(nameof(OidcOptions.DeviceAuthorization));
         var pollingInterval = deviceAuthOptions.PollingInterval;
-
-        // A single clock read shared by the expiry gate and the remaining-lifetime passed to UpdateAsync, so
-        // the two never disagree and the refreshed cache TTL is guaranteed positive (RFC 8628 section 3.2).
-        var now = timeProvider.GetUtcNow();
 
         switch (deviceRequest)
         {
@@ -93,12 +122,12 @@ public partial class DeviceCodeGrantHandler(
             // the token endpoint and those three cannot disagree about the instant a device code stops
             // being usable - one expression rather than two comparisons kept in step by hand.
             case { } when !deviceRequest.HasLifetimeLeft(now, out _):
-                await storage.RemoveAsync(request.DeviceCode);
+                await storage.RemoveAsync(deviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
             // User has authorized the device - claim the authorization
             case { Status: DeviceAuthorizationStatus.Authorized }
-                when !await storage.TryRemoveAsync(request.DeviceCode, deviceRequest.UserCode):
+                when !await storage.TryRemoveAsync(deviceCode, deviceRequest.UserCode):
 
                 // Removed through the store's claim protocol, which is what keeps two polls from both
                 // being told they took the authorized grant, however many processes are polling. The
@@ -198,18 +227,31 @@ public partial class DeviceCodeGrantHandler(
 
                 // The instant lives in a key of its own, so noting it cannot write anything the
                 // approval owns. Absence means the client may ask now.
-                var pollKey = keyFactory.DeviceAuthorizationNextPollKey(request.DeviceCode);
+                var pollKey = keyFactory.DeviceAuthorizationNextPollKey(deviceCode);
                 var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
+                var asked = nextPollAt is { } earliest && now < earliest;
+
+                // The approval may have landed since the read this decision is made on. Reading once more
+                // is about the answer being current, not about keeping the approval safe: nothing on this
+                // path writes the record, so there is nothing for a poll to overwrite.
+                if (mayReadAgain &&
+                    await storage.TryGetByDeviceCodeAsync(deviceCode) is
+                        { Status: not DeviceAuthorizationStatus.Pending } advanced)
+                {
+                    return await DecideAsync(deviceCode, clientInfo, advanced, now, false, cancellationToken);
+                }
 
                 // Asking early pushes the instant further out rather than resetting it from now, so a
                 // client that ignores the interval cannot keep itself one interval ahead forever. RFC
                 // 8628 section 3.5 puts the widening on the client ("the interval MUST be increased by
                 // 5 seconds for this and all subsequent requests") and says nothing about the server,
-                // so this is our enforcement of it rather than a requirement of the document.
-                var asked = nextPollAt is { } earliest && now < earliest;
+                // so this is our enforcement of it rather than a requirement of the document. Never
+                // beyond the code's own expiry, because past that a client could only ever be told to
+                // slow down for a code that no longer exists.
+                var pushedTo = (asked ? nextPollAt!.Value : now) + pollingInterval;
                 await pollSchedule.SetNextPollAtAsync(
                     pollKey,
-                    (asked ? nextPollAt!.Value : now) + pollingInterval,
+                    pushedTo < deviceRequest.ExpiresAt ? pushedTo : deviceRequest.ExpiresAt,
                     deviceRequest.ExpiresAt - now);
 
                 return asked
@@ -222,7 +264,7 @@ public partial class DeviceCodeGrantHandler(
 
             // User denied the request
             case { Status: DeviceAuthorizationStatus.Denied }:
-                await storage.RemoveAsync(request.DeviceCode);
+                await storage.RemoveAsync(deviceCode);
                 return new OidcError(
                     ErrorCodes.AccessDenied,
                     "The user denied the authorization request.");

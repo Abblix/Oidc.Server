@@ -504,6 +504,43 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// The instant a client is told to wait for never lands beyond the request's own expiry.
+    /// </summary>
+    /// <remarks>
+    /// Each early ask pushes it one interval further, so a client polling many times a second would
+    /// otherwise push it hours ahead - and from then on that client can only ever be told to slow down,
+    /// for a request that has expired in the meantime, with the long-polling answer out of reach too.
+    /// </remarks>
+    [Fact]
+    public async Task TheInstantToldToAClient_NeverPassesTheRequestsExpiry()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var grant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var expiresAt = _currentTime.AddSeconds(2);
+        var authRequest = new BackChannelAuthenticationRequest(grant, expiresAt)
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
+        await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
+
+        // Act
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.SlowDown, error.Error);
+        Assert.Equal(expiresAt, await _pollSchedule.TryGetNextPollAtAsync(PollKey));
+    }
+
+    /// <summary>
     /// A completion landing between the poll's read and whatever the poll writes next survives.
     /// </summary>
     /// <remarks>
@@ -543,15 +580,17 @@ public class BackChannelAuthenticationGrantHandlerTests
         });
 
         // Act: the real poll, through the handler the token endpoint calls.
-        await HandlerOver(requests).AuthorizeAsync(
+        var result = await HandlerOver(requests).AuthorizeAsync(
             new TokenRequest { AuthenticationRequestId = AuthReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
 
         // Assert
-        var stored = await CibaStorageOver(RealStorage(cache)).TryGetAsync(AuthReqId);
-        Assert.NotNull(stored);
-        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, stored.Status);
+        Assert.True(result.TryGetSuccess(out var issued));
+        Assert.Equal(ClientId, issued.Context.ClientId);
+
+        // And the request is spent, so a second poll cannot be answered with the same grant.
+        Assert.Null(await CibaStorageOver(RealStorage(cache)).TryGetAsync(AuthReqId));
     }
 
     private static IEntityStorage RealStorage(IDistributedCache cache)
@@ -733,7 +772,6 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Assert
         _storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
-        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -999,8 +1037,12 @@ public class BackChannelAuthenticationGrantHandlerTests
             Status = BackChannelAuthenticationStatus.Authenticated
         };
 
-        // First call returns pending, second call (after status change) returns authenticated
+        // Still pending both times the request is read before the wait - the decision and the re-read
+        // that answers a completion already on record - and authenticated on the read that follows the
+        // notification. Anything else would be a completion that had already landed, which this handler
+        // answers without waiting at all, and then there would be no wait for this row to be about.
         storage.SetupSequence(s => s.TryGetAsync(AuthReqId))
+            .ReturnsAsync(pendingRequest)
             .ReturnsAsync(pendingRequest)
             .ReturnsAsync(authenticatedRequest);
 
@@ -1028,9 +1070,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         statusNotifier.Verify(
             n => n.WaitForStatusChangeAsync(AuthReqId, TimeSpan.FromSeconds(30), It.IsAny<CancellationToken>()),
             Times.Once);
-
-        // Verify storage was checked twice: initial pending check, then re-check after notification
-        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Exactly(2));
 
         // Verify storage removal in poll mode
         storage.Verify(s => s.TryRemoveAsync(AuthReqId), Times.Once);
@@ -1103,8 +1142,11 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        // Verify storage was only checked once (initial check, no re-check after timeout)
-        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        // Waited once and answered: the question is about the wait, not about how many times the
+        // record was read - the pending arm reads it again so an arriving completion is answered at once.
+        statusNotifier.Verify(
+            n => n.WaitForStatusChangeAsync(AuthReqId, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     /// <summary>
@@ -1137,8 +1179,9 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
 
-        // Verify storage was only checked once (no waiting, immediate return)
-        _storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        // Nothing was waited for, which is what "immediately" means here. The number of reads is not
+        // the criterion: the pending arm reads the record again so that a completion arriving beside the
+        // poll is answered by this poll rather than the next one.
     }
 
     /// <summary>
@@ -1196,8 +1239,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
 
-        // Verify storage was only checked once (no waiting despite UseLongPolling=true)
-        storage.Verify(s => s.TryGetAsync(AuthReqId), Times.Once);
+        // With no notifier there is nothing to wait on, and the answer is the short-polling one. The
+        // number of reads is not the criterion here either.
     }
 
     /// <summary>

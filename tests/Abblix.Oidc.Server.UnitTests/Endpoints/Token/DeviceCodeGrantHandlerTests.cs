@@ -890,6 +890,43 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
+    /// The instant a client is told to wait for never lands beyond the code's own expiry.
+    /// </summary>
+    /// <remarks>
+    /// Each early ask pushes it one interval further, so a client polling many times a second would
+    /// otherwise push it hours ahead - and from then on that client can only ever be told to slow down,
+    /// for a code that has expired in the meantime. Bounding it at the expiry keeps the answer a client
+    /// gets tied to the state of the code rather than to how rudely it polled.
+    /// </remarks>
+    [Fact]
+    public async Task TheInstantToldToAClient_NeverPassesTheCodesExpiry()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var expiresAt = _currentTime.AddSeconds(2);
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = expiresAt,
+        };
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
+
+        // Act: asked early, so the instant is pushed - one interval past where it stands is past expiry.
+        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.SlowDown, error.Error);
+        Assert.Equal(expiresAt, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+    }
+
+    /// <summary>
     /// A pending poll writes nothing to the request, so an approval landing beside it cannot be
     /// overwritten.
     /// </summary>
@@ -900,8 +937,11 @@ public class DeviceCodeGrantHandlerTests
     /// instant lives under a key of its own now, so the poll has no reason to write the request and the
     /// window has no width. One read is therefore the whole interaction, and that is what this row pins.
     /// <para>
-    /// The approval surviving an interleaved poll is driven end to end over a real store in
-    /// <c>LostUpdateTests</c>; what belongs here is that the handler does not write.
+    /// The approval surviving an interleaved poll, and being answered by that same poll, is driven end to
+    /// end over a real store in <c>LostUpdateTests</c>; what belongs here is that the handler does not
+    /// write. How many times it reads is not pinned: the pending arm reads again so that an approval
+    /// arriving beside the poll is answered at once rather than one interval later, and that is a choice
+    /// about latency which a count in a test would freeze.
     /// </para>
     /// </remarks>
     [Fact]
@@ -929,9 +969,6 @@ public class DeviceCodeGrantHandlerTests
         _storage.Verify(
             s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
-
-        // Read once: there is no re-read to make, because there is no write to protect.
-        _storage.Verify(s => s.TryGetByDeviceCodeAsync(DeviceCode), Times.Once);
     }
 
     /// <summary>

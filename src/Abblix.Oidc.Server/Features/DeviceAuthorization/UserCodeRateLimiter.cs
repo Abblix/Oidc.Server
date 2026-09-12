@@ -51,7 +51,7 @@ public partial class UserCodeRateLimiter(
     /// burst can reach it, and then the code stays blocked for the cap, which is what a burst of wrong
     /// guesses against a single code deserves.
     /// </remarks>
-    private const int AttemptLadderLength = 32;
+    internal const int AttemptLadderLength = 32;
 
     /// <inheritdoc />
     public async Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier)
@@ -134,8 +134,12 @@ public partial class UserCodeRateLimiter(
         // history is no longer relevant. The per-address count is deliberately left intact - it caps
         // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.1),
         // and an occasional successful verification must not reset that cross-code budget.
-        var (attempts, _) = await FindHighestAttemptAsync(userCode);
-        for (var rung = 1; rung <= attempts; rung++)
+        // The whole ladder, rather than as many rungs as a read said were claimed: a failure arriving
+        // between that read and the removals would leave its rung above the cleared run, and a gap is
+        // exactly what the reader below may not meet. Walking all of them also makes the order harmless -
+        // a failure arriving mid-clearing takes the lowest free rung while the clearing moves upward, so
+        // whatever survives still starts at the first rung.
+        for (var rung = 1; rung <= AttemptLadderLength; rung++)
         {
             await storage.RemoveAsync(keyFactory.UserCodeRateLimitAttemptKey(userCode, rung));
         }
@@ -170,9 +174,11 @@ public partial class UserCodeRateLimiter(
     /// Answers how many attempts are on record against a user code, and when the last of them happened.
     /// </summary>
     /// <remarks>
-    /// The claimed rungs are an unbroken run from the first - an attempt never skips a free rung without
-    /// claiming it, and no rung expires while the code can still be verified - so the highest one is found
-    /// by halving the range rather than walking it.
+    /// Found by halving the range rather than walking it, which answers correctly only while the claimed
+    /// rungs are one unbroken run from the first. Three things keep them so, and all three are needed: an
+    /// attempt never skips a free rung without claiming it; no rung expires while the code can still be
+    /// verified, because each is given the code's whole lifetime from a moment already inside it; and
+    /// clearing a verified code walks the whole ladder instead of as many rungs as it read.
     /// </remarks>
     private async Task<(int Attempts, DateTimeOffset? LastAt)> FindHighestAttemptAsync(string userCode)
     {
