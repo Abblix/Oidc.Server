@@ -504,6 +504,7 @@ internal static class LogEvents
             public const int UserCodeBlocked = Base + 3;
             public const int BruteForceDetected = Base + 4;
             public const int UserCodeVerified = Base + 5;
+            public const int UserCodeAttemptsSpent = Base + 6;
         }
 
         /// <summary>

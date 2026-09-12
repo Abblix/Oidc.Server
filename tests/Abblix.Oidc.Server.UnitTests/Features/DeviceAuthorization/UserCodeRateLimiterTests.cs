@@ -97,11 +97,15 @@ public class UserCodeRateLimiterTests
     /// <remarks>
     /// Read as the answer the next attempt gets rather than as a stored number: what a client is told is
     /// how long to wait, and that is what a caller can act on.
+    /// <para>
+    /// It stops at the failure before the last one the code allows, because the answer after that is not a
+    /// pause at all - the code is spent, and the row above owns that. With the shipped numbers that leaves
+    /// two doublings to see here; the far end of the ladder is driven below, against a cap raised to it.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData(3, 1)]
     [InlineData(4, 2)]
-    [InlineData(5, 4)]
     public async Task TheBackoffDoublesWithEachFailure(int failures, int expectedSeconds)
     {
         await Fail(failures);
@@ -110,6 +114,34 @@ public class UserCodeRateLimiterTests
 
         Assert.True(result.TryGetFailure(out var retryAfter));
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), retryAfter);
+    }
+
+    /// <summary>
+    /// A code whose attempts are spent is not verifiable again: what the next attempt is told to wait
+    /// covers the rest of the code's life.
+    /// </summary>
+    /// <remarks>
+    /// The growing pause only slows guessing down, and a code a person types is short enough that slowing
+    /// is not enough on its own: eight digits is one of a hundred million, which a patient attacker reaches
+    /// while the pause is still measured in seconds. The cap is what stops it - and it is the other half of
+    /// the same sum RFC 8628 section 5.1 works, where the number of attempts allowed over a code's whole
+    /// life is what decides the chance of landing one.
+    /// <para>
+    /// One failure short of the cap the answer is still the ordinary pause, in seconds. At the cap it is
+    /// the code's remaining life, which is how a client learns there is nothing left to wait for.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(4, false)]
+    [InlineData(5, true)]
+    public async Task ACodeWhoseAttemptsAreSpent_IsRefusedForTheRestOfItsLife(int failures, bool spent)
+    {
+        await Fail(failures);
+
+        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(spent, retryAfter >= TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
@@ -212,51 +244,48 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// Past the point where the pause is capped, further failures leave the pause at the cap rather than
-    /// running out of places to record themselves.
+    /// The growing pause never exceeds the configured maximum.
     /// </summary>
     /// <remarks>
-    /// Forty failures is more than the ladder of recorded attempts is long, which is reachable only by a
-    /// burst: guessing one at a time cannot fit that many into a code's lifetime. What a client is then
-    /// told to wait is the configured cap - and that answer outlives neither the code nor the records
-    /// behind it, since each rung is written with the code's lifetime and never renewed.
+    /// Doubling reaches hours within a dozen failures, so without a ceiling a code would be answered with a
+    /// wait outlasting anything a person would sit through - and outlasting the code itself, which makes the
+    /// number meaningless rather than strict. Driven with the attempt cap raised, because with the shipped
+    /// cap the code is spent before the pause has doubled far enough to meet any sane ceiling.
     /// </remarks>
     [Fact]
-    public async Task MoreFailuresThanTheLadderIsLong_LeaveThePauseAtTheCap()
+    public async Task ThePause_NeverExceedsTheConfiguredMaximum()
     {
-        await Fail(40);
+        var limiter = LimiterWith(options =>
+        {
+            options.MaxUserCodeAttempts = 20;
+            options.MaxBackoffDuration = TimeSpan.FromSeconds(10);
+            options.CodeLifetime = TimeSpan.FromHours(6);
+        });
 
-        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+        // Ten failures earn 2^7 seconds by doubling, which the ceiling cuts to ten.
+        for (var i = 0; i < 10; i++)
+            await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(TimeSpan.FromHours(1), retryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(10), retryAfter);
     }
 
     /// <summary>
-    /// What a failure is reported as, which is the only place its number is visible.
+    /// A limiter over the same store, configured away from the shipped numbers for one row.
     /// </summary>
-    /// <remarks>
-    /// The number reaches the log and nothing else - what the next attempt is told comes from the rungs on
-    /// record rather than from this count - so a row about what is reported is the only thing that can hold
-    /// it. Both ends are here: an ordinary failure is reported as its own number, and a burst past the last
-    /// rung is reported as that rung rather than as an attempt that happened nowhere.
-    /// </remarks>
-    [Theory]
-    [InlineData(5, 5)]
-    [InlineData(40, 32)]
-    public async Task AFailureIsReportedAsItsOwnNumber(int failures, int reportedAsLast)
+    private UserCodeRateLimiter LimiterWith(Action<DeviceAuthorizationOptions> configure)
     {
-        await Fail(failures);
+        var deviceOptions = DeviceOptions();
+        configure(deviceOptions);
 
-        // Matched on the whole phrase the message puts the number in, so a row cannot pass because the
-        // number happens to appear in a timestamp beside it.
-        var blocked = _logs.Entries.FindAll(e => e.Message.Contains("failed attempts", StringComparison.Ordinal));
-
-        Assert.NotEmpty(blocked);
-        Assert.EndsWith(
-            $"after {reportedAsLast.ToString(CultureInfo.InvariantCulture)} failed attempts",
-            blocked[^1].Message,
-            StringComparison.Ordinal);
+        return new UserCodeRateLimiter(
+            _logs.CreateLogger<UserCodeRateLimiter>(),
+            _storage,
+            new EntityStorageKeyFactory(),
+            _time,
+            Options.Create(new OidcOptions { DeviceAuthorization = deviceOptions }));
     }
 
     private async Task Fail(int times)

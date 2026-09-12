@@ -24,8 +24,10 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <para>
 /// The rate-limit checks are here for the same reason and not as defensive programming: each of those values reads
 /// as a stricter setting and acts as no setting at all, so the deployment loses the defense a short user code has
-/// (RFC 8628, section 5.1) and nothing says so. A limit that cannot fire is indistinguishable at runtime from a
-/// limit nobody has reached yet.
+/// and nothing says so. A limit that cannot fire is indistinguishable at runtime from a limit nobody has reached
+/// yet. RFC 8628 section 5.1 recommends the limiting in lower case and puts its capitalised SHOULD on the code
+/// having enough entropy "when combined with rate-limiting", so a limit switched off silently also takes that
+/// clause's other half with it.
 /// </para>
 /// </summary>
 public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
@@ -42,6 +44,16 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 $"{nameof(OidcOptions)}.{nameof(OidcOptions.DeviceAuthorization)} is not configured. Supply it " +
                 "(VerificationUri, CodeLifetime, PollingInterval, ...) or clear " +
                 $"{nameof(OidcEndpoints.DeviceAuthorization)} from {nameof(OidcOptions.EnabledEndpoints)}.");
+
+        if (deviceAuthorization.MaxUserCodeAttempts < 1 ||
+            UserCodeRateLimiter.AttemptLadderLength < deviceAuthorization.MaxUserCodeAttempts)
+            return ValidateOptionsResult.Fail(
+                $"{nameof(DeviceAuthorizationOptions.MaxUserCodeAttempts)} is " +
+                $"{deviceAuthorization.MaxUserCodeAttempts}, which is not a number of attempts a code can " +
+                $"have: below 1 no code could ever be verified, and above " +
+                $"{UserCodeRateLimiter.AttemptLadderLength} the limit is never reached because that is how " +
+                "many attempts against one code are recorded, so nothing but expiry would stop guessing. " +
+                $"Choose a value between 1 and {UserCodeRateLimiter.AttemptLadderLength}.");
 
         if (deviceAuthorization.MaxFailuresBeforeBackoff < 1 ||
             UserCodeRateLimiter.AttemptLadderLength < deviceAuthorization.MaxFailuresBeforeBackoff)

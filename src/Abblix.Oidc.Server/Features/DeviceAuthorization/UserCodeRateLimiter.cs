@@ -65,8 +65,20 @@ public partial class UserCodeRateLimiter(
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
+        var (attempts, firstAttemptAt, lastAttemptAt) = await FindHighestAttemptAsync(userCode);
+
+        // Every guess this code allows is spent, so there is nothing left to wait for: what the client is
+        // told covers the rest of the code's life. The first attempt happened after the code was issued, so
+        // the code's lifetime counted from there cannot end before the code does - and that instant is
+        // still ahead, because a first attempt older than one lifetime would have taken its own record with
+        // it and left nothing to count.
+        if (attempts >= deviceAuthOptions.MaxUserCodeAttempts && firstAttemptAt is { } firstAt)
+        {
+            LogUserCodeAttemptsSpent(userCode, attempts);
+            return firstAt + deviceAuthOptions.CodeLifetime - now;
+        }
+
         // Per-user-code exponential backoff, measured from the attempt that earned it.
-        var (attempts, lastAttemptAt) = await FindHighestAttemptAsync(userCode);
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff && lastAttemptAt is { } attemptAt)
         {
             var blockedUntil = attemptAt + BackoffAfter(attempts, deviceAuthOptions);
@@ -174,7 +186,8 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <summary>
-    /// Answers how many attempts are on record against a user code, and when the last of them happened.
+    /// Answers how many attempts are on record against a user code, and when the first and the last of
+    /// them happened.
     /// </summary>
     /// <remarks>
     /// Found by halving the range rather than walking it, which answers correctly only while the claimed
@@ -183,7 +196,8 @@ public partial class UserCodeRateLimiter(
     /// verified, because each is given the code's whole lifetime from a moment already inside it; and
     /// clearing a verified code walks the whole ladder instead of as many rungs as it read.
     /// </remarks>
-    private async Task<(int Attempts, DateTimeOffset? LastAt)> FindHighestAttemptAsync(string userCode)
+    private async Task<(int Attempts, DateTimeOffset? FirstAt, DateTimeOffset? LastAt)>
+        FindHighestAttemptAsync(string userCode)
     {
         // The first rung decides whether there is anything to search for at all, and its absence is the
         // ordinary case: every verification of a correct code asks this question with nothing on record.
@@ -193,9 +207,10 @@ public partial class UserCodeRateLimiter(
             keyFactory.UserCodeRateLimitAttemptKey(userCode, 1), removeOnRetrieval: false);
 
         if (first == null)
-            return (0, null);
+            return (0, null, null);
 
-        var (highest, highestAt) = (1, (DateTimeOffset?)first.At.ToDateTimeOffset());
+        var firstAt = first.At.ToDateTimeOffset();
+        var (highest, highestAt) = (1, (DateTimeOffset?)firstAt);
         var (low, high) = (2, AttemptLadderLength);
 
         while (low <= high)
@@ -215,7 +230,7 @@ public partial class UserCodeRateLimiter(
             }
         }
 
-        return (highest, highestAt);
+        return (highest, firstAt, highestAt);
     }
 
     /// <summary>

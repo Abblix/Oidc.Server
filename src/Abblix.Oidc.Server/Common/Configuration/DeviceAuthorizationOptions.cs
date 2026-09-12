@@ -66,6 +66,40 @@ public record DeviceAuthorizationOptions
     /// Can be set to letters like "BCDFGHJKLMNPQRSTVWXZ" (consonants without ambiguous characters)
     /// or alphanumeric like "BCDFGHJKLMNPQRSTVWXZ23456789".
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This and <see cref="UserCodeLength"/> decide how hard the code is to guess, and the rate limits
+    /// decide how many guesses anyone gets. Both halves are needed, so here is the arithmetic rather than
+    /// a recommendation: a code drawn from an alphabet of <c>A</c> symbols at length <c>L</c> is one of
+    /// <c>A^L</c>, so the chance of landing it in <c>N</c> guesses is <c>N / A^L</c>.
+    /// </para>
+    /// <para>
+    /// RFC 8628 section 5.1 works the same sum the other way round: it takes an 8-character code over a
+    /// 20-symbol alphabet and says "the rate-limiting interval and validity period would need to only
+    /// allow 5 attempts in order to get the same 2^-32 probability of success by random guessing" - five
+    /// over the code's whole life, not five per interval. Put in those terms, the number of guesses a
+    /// configuration can afford at that same probability is <c>A^L / 2^32</c>:
+    /// </para>
+    /// <para>
+    /// Here <c>N</c> is <see cref="MaxUserCodeAttempts"/>, because that is the number of guesses a code
+    /// gets before it stops being verifiable - the growing pause decides how long they take, not how many
+    /// there are. With that number at 5:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item>8 digits: 5 in 100 million, about 1 in 20 million.</item>
+    ///   <item>6 digits: 5 in a million, about 1 in 200 thousand - which is why a code this short needs a
+    ///   short life as well.</item>
+    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 5 in 25.6 billion, which is the example's own
+    ///   2^-32.</item>
+    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ23456789": 5 in 377 billion.</item>
+    /// </list>
+    /// <para>
+    /// Both halves move the same sum, and they cost different people: a longer or wider code is work for
+    /// everyone who types one, while a smaller number of attempts is only felt by somebody who mistypes
+    /// that many times and has to start the flow again. That is the trade to make deliberately, and it is
+    /// why neither number is refused at startup for being weak - only for being impossible.
+    /// </para>
+    /// </remarks>
     public string UserCodeAlphabet { get; set; } = "0123456789";
 
     private Uri? _verificationUri;
@@ -106,6 +140,23 @@ public record DeviceAuthorizationOptions
     /// enough to type and therefore short enough to guess.
     /// </summary>
     public int MaxFailuresBeforeBackoff { get; set; } = 3;
+
+    /// <summary>
+    /// How many failed attempts one user code allows before it stops being verifiable at all.
+    /// </summary>
+    /// <remarks>
+    /// The growing pause slows guessing down; this stops it. A code a person types is short, so slowing is
+    /// not enough on its own - the number of guesses allowed over a code's whole life is what decides the
+    /// chance of landing one, which is the sum RFC 8628 section 5.1 works through. Reaching this number
+    /// leaves the code refused for as long as it would otherwise have lived, and the device's user starts
+    /// again with a fresh code.
+    /// <para>
+    /// The cost of a small value is a person who mistypes that many times having to start over; the cost
+    /// of a large one is an attacker getting that many guesses. Five is the number the document's own
+    /// worked example uses. See <see cref="UserCodeAlphabet"/> for the arithmetic that ties the two.
+    /// </para>
+    /// </remarks>
+    public int MaxUserCodeAttempts { get; set; } = 5;
 
     /// <summary>
     /// The maximum number of failed user code verification attempts allowed from a single IP address

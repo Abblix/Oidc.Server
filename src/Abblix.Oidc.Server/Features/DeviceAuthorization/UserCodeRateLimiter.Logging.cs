@@ -37,6 +37,13 @@ partial class UserCodeRateLimiter
     private partial void LogBruteForceDetected(string UserCode, string ClientIdentifier, int UserCodeFailures, int IpFailures);
 
     [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeAttemptsSpent,
+        Level = LogLevel.Warning,
+        Message = "User code {UserCode} has spent every attempt it allows ({FailureCount}) and is refused "
+                  + "for the rest of its lifetime")]
+    private partial void LogUserCodeAttemptsSpent(string UserCode, int FailureCount);
+
+    [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
         Level = LogLevel.Information,
         Message = "User code {UserCode} successfully verified from {ClientIdentifier}")]

@@ -122,9 +122,12 @@ public class LostUpdateTests
     /// key, is the one that used to lose an attempt and now cannot.
     /// <para>
     /// RFC 8628 section 5.1 is what makes this a security defect rather than an inaccuracy: a user code is
-    /// short because a person types it, and the document's own worked example allows "only 5 attempts"
-    /// within the rate-limiting interval to reach the same improbability as a long random token. A count
-    /// that loses most of a burst spends those attempts without charging for them.
+    /// short because a person types it, and the document's worked example has "the rate-limiting interval
+    /// and validity period" allow "only 5 attempts" over a code's whole life to reach the improbability a
+    /// long random token has. A count that loses most of a burst spends those attempts without charging
+    /// for them. The rate limiting itself the document recommends in lower case; its capitalised SHOULD is
+    /// about the code having enough entropy "when combined with rate-limiting", which is why the two are
+    /// only ever judged together.
     /// </para>
     /// </remarks>
     [Fact]
