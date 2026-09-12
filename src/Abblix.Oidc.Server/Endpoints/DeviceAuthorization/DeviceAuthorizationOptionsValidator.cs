@@ -15,7 +15,8 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <summary>
 /// Fails loudly the first time <see cref="OidcOptions"/> is resolved when the device authorization endpoint is enabled
 /// but its settings are absent or leave a brute-force limit unable to fire, instead of letting the contradiction
-/// surface as an unhandled HTTP 500 on the first request. The endpoint is off in the default <see cref="OidcEndpoints.Base"/> set and is turned on only by an
+/// surface as an unhandled HTTP 500 on the first request. The endpoint is off in the default
+/// <see cref="OidcEndpoints.Base"/> set and is turned on only by an
 /// explicit <c>AddDeviceAuthorization()</c> opt-in (or a host that sets the
 /// <see cref="OidcEndpoints.DeviceAuthorization"/> flag itself), yet <see cref="OidcOptions.DeviceAuthorization"/> has
 /// no default - so a host that enables it without configuring it has an internally inconsistent configuration this
@@ -57,18 +58,18 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 $"{deviceAuthorization.MaxIpFailuresPerMinute}, so the per-address cap can never be reached and " +
                 "failures from one source are not limited at all. Choose 1 or more.");
 
-        if (deviceAuthorization.RateLimitSlidingWindow <= TimeSpan.Zero)
+        if (deviceAuthorization.RateLimitWindow <= TimeSpan.Zero)
             return ValidateOptionsResult.Fail(
-                $"{nameof(DeviceAuthorizationOptions.RateLimitSlidingWindow)} is " +
-                $"{deviceAuthorization.RateLimitSlidingWindow}, and attempts are counted per window, so a window " +
+                $"{nameof(DeviceAuthorizationOptions.RateLimitWindow)} is " +
+                $"{deviceAuthorization.RateLimitWindow}, and attempts are counted per window, so a window " +
                 "of no length counts nothing. Choose a positive duration.");
 
-        if (deviceAuthorization.IpRateLimitStateExpiration < deviceAuthorization.RateLimitSlidingWindow)
+        if (deviceAuthorization.IpRateLimitStateExpiration < deviceAuthorization.RateLimitWindow)
             return ValidateOptionsResult.Fail(
                 $"{nameof(DeviceAuthorizationOptions.IpRateLimitStateExpiration)} " +
                 $"({deviceAuthorization.IpRateLimitStateExpiration}) is shorter than " +
-                $"{nameof(DeviceAuthorizationOptions.RateLimitSlidingWindow)} " +
-                $"({deviceAuthorization.RateLimitSlidingWindow}), so recorded attempts are dropped while their own " +
+                $"{nameof(DeviceAuthorizationOptions.RateLimitWindow)} " +
+                $"({deviceAuthorization.RateLimitWindow}), so recorded attempts are dropped while their own " +
                 "window is still running and the cap is reached later than configured, or never. Keep the " +
                 "retention at least as long as the window.");
 

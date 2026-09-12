@@ -52,7 +52,7 @@ public class DeviceAuthorizationOptionsValidatorTests
         var settings = ValidSettings();
         settings.MaxFailuresBeforeBackoff = failuresBeforeBackoff;
         settings.MaxIpFailuresPerMinute = addressCap;
-        settings.RateLimitSlidingWindow = TimeSpan.FromSeconds(windowSeconds);
+        settings.RateLimitWindow = TimeSpan.FromSeconds(windowSeconds);
         settings.IpRateLimitStateExpiration = TimeSpan.FromSeconds(stateSeconds);
 
         var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };

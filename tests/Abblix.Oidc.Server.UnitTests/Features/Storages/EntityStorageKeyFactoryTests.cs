@@ -35,6 +35,62 @@ public class EntityStorageKeyFactoryTests
     }
 
     /// <summary>
+    /// A family's key cannot be spelled by another family with a different identifier inside it.
+    /// </summary>
+    /// <remarks>
+    /// Identifiers come from generators a host replaces, so a value carrying another family's segment is
+    /// an input that exists rather than one somebody must break in to supply. The danger is not two
+    /// families disagreeing about one identifier - it is one family's key for an awkward identifier
+    /// reading as another family's key for a plain one: nested under the request's own name, a next-poll
+    /// key would be spelled exactly like the request key of a code beginning with that segment, and the
+    /// poll would overwrite the authentication. Each family therefore starts with a segment of its own.
+    /// <para>
+    /// A row comparing one identifier across families cannot see this, and stayed green against the
+    /// nested spelling.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    // One segment, not two: nested under the request's own name, the schedule key for "abc" is spelled
+    // exactly like the request key for "NextPoll:abc".
+    [InlineData("NextPoll:abc", "abc")]
+    public void ARequestKey_IsNeverSpelledLikeAScheduleKey(string awkward, string plain)
+    {
+        Assert.NotEqual(
+            Factory.DeviceAuthorizationRequestKey(awkward),
+            Factory.DeviceAuthorizationNextPollKey(plain));
+
+        Assert.NotEqual(
+            Factory.BackChannelAuthenticationRequestKey(awkward),
+            Factory.BackChannelAuthenticationNextPollKey(plain));
+    }
+
+    /// <summary>
+    /// No two families name the same entry for one identifier either.
+    /// </summary>
+    [Fact]
+    public void EveryFamily_NamesItsOwnEntry()
+    {
+        const string identifier = "abc";
+
+        var keys = new[]
+        {
+            Factory.DeviceAuthorizationRequestKey(identifier),
+            Factory.DeviceAuthorizationNextPollKey(identifier),
+            Factory.BackChannelAuthenticationRequestKey(identifier),
+            Factory.BackChannelAuthenticationNextPollKey(identifier),
+            Factory.DeviceAuthorizationUserCodeKey(identifier),
+            Factory.UserCodeRateLimitAttemptKey(identifier, 1),
+            Factory.IpRateLimitAttemptKey(identifier, 1, 1),
+            Factory.AuthorizedGrantKey(identifier),
+            Factory.JsonWebTokenStatusKey(identifier),
+            Factory.RegistrationAccessTokenKey(identifier),
+            Factory.AuthorizationValueReuseKey(identifier, "code_challenge", "a-hash"),
+        };
+
+        Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
     /// Every scope has a key, so a member added later fails here rather than at the throw inside the factory -
     /// which a request would reach first, as a fault in the middle of validating somebody's token.
     /// </summary>

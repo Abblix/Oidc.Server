@@ -34,8 +34,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 /// the cross-code budget at will.
 /// <para>
 /// Driven over a real store rather than against a stand-in that records calls, because what matters is
-/// the answer the next attempt gets, not which method was reached. Several of these rows exist to watch
-/// the count stay exact under failures arriving together, which a call-recording stand-in cannot show.
+/// the answer the next attempt gets, not which method was reached. Every row here drives its failures one
+/// after another; what happens when two arrive together is driven in <c>LostUpdateTests</c>, where that
+/// ordering can be produced deterministically rather than hoped for.
 /// </para>
 /// </remarks>
 public class UserCodeRateLimiterTests
@@ -74,7 +75,7 @@ public class UserCodeRateLimiterTests
         VerificationUri = new Uri("https://auth.example.com/device"),
         MaxFailuresBeforeBackoff = 3,
         MaxIpFailuresPerMinute = 10,
-        RateLimitSlidingWindow = TimeSpan.FromMinutes(1),
+        RateLimitWindow = TimeSpan.FromMinutes(1),
         MaxBackoffDuration = TimeSpan.FromHours(1),
         IpRateLimitStateExpiration = TimeSpan.FromMinutes(2),
     };
@@ -216,8 +217,9 @@ public class UserCodeRateLimiterTests
     /// </summary>
     /// <remarks>
     /// Forty failures is more than the ladder of recorded attempts is long, which is reachable only by a
-    /// burst: guessing one at a time cannot fit that many into a code's lifetime. The code is then blocked
-    /// for the configured cap, which outlives the code itself.
+    /// burst: guessing one at a time cannot fit that many into a code's lifetime. What a client is then
+    /// told to wait is the configured cap - and that answer outlives neither the code nor the records
+    /// behind it, since each rung is written with the code's lifetime and never renewed.
     /// </remarks>
     [Fact]
     public async Task MoreFailuresThanTheLadderIsLong_LeaveThePauseAtTheCap()
@@ -246,10 +248,15 @@ public class UserCodeRateLimiterTests
     {
         await Fail(failures);
 
-        var blocked = _logs.Entries.FindAll(e => e.Message.Contains("attempt", StringComparison.OrdinalIgnoreCase));
+        // Matched on the whole phrase the message puts the number in, so a row cannot pass because the
+        // number happens to appear in a timestamp beside it.
+        var blocked = _logs.Entries.FindAll(e => e.Message.Contains("failed attempts", StringComparison.Ordinal));
 
         Assert.NotEmpty(blocked);
-        Assert.Contains(reportedAsLast.ToString(CultureInfo.InvariantCulture), blocked[^1].Message);
+        Assert.EndsWith(
+            $"after {reportedAsLast.ToString(CultureInfo.InvariantCulture)} failed attempts",
+            blocked[^1].Message,
+            StringComparison.Ordinal);
     }
 
     private async Task Fail(int times)

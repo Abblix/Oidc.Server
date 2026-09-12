@@ -77,7 +77,10 @@ public interface IEntityStorageKeyFactory
     /// Generates a storage key for the next-poll instant of a backchannel authentication request.
     /// </summary>
     /// <remarks>
-    /// A key of its own, because what the polling client changes is only this instant while what the
+    /// A top-level name of its own rather than one nested under the request's key, because an
+    /// identifier is a value the host's own generator produces: nested, an identifier that happened to
+    /// begin with this segment would name the request's own key and the next-poll write would land on the
+    /// authentication. A key of its own, because what the polling client changes is only this instant while what the
     /// user's authentication changes is the request: a poll writing the request back to note the instant
     /// overwrote a completion that had landed since it read.
     /// </remarks>

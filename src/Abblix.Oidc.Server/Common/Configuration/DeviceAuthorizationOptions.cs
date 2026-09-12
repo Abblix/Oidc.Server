@@ -119,10 +119,11 @@ public record DeviceAuthorizationOptions
     /// </summary>
     /// <remarks>
     /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
-    /// can spend the allowance twice. Sizing the window is therefore sizing the worst case at twice the
-    /// count above.
+    /// can spend the allowance twice: sizing the window is sizing the worst case at twice the count above.
+    /// The name says window rather than sliding window for that reason - and the count it replaced behaved
+    /// the same way, restarting once the interval had passed since the first failure it held.
     /// </remarks>
-    public TimeSpan RateLimitSlidingWindow { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan RateLimitWindow { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// The maximum duration for exponential backoff blocking.

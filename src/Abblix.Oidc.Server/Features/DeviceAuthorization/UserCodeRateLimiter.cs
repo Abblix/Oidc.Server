@@ -48,8 +48,14 @@ public partial class UserCodeRateLimiter(
     /// The backoff doubles per attempt past the configured threshold and is capped, so by this rung the
     /// block is the cap however many further attempts arrive - there is nothing left for a further rung to
     /// say. Reaching it by guessing one code at a time is not possible within the code's own lifetime; a
-    /// burst can reach it, and then the code stays blocked for the cap, which is what a burst of wrong
-    /// guesses against a single code deserves.
+    /// burst can reach it, and then the code is answered with that pause for as long as it exists, which
+    /// is what a burst of wrong guesses against a single code deserves.
+    /// <para>
+    /// "For as long as it exists" is the real bound, and it is shorter than the configured cap whenever
+    /// the cap is longer than a code's lifetime - which it is by default. Each rung is written with the
+    /// code's lifetime from the moment it is claimed and is never renewed, so the whole ladder is gone
+    /// once the code is, and a pause is never served for a code nobody can verify any more.
+    /// </para>
     /// </remarks>
     internal const int AttemptLadderLength = 32;
 
@@ -179,8 +185,18 @@ public partial class UserCodeRateLimiter(
     /// </remarks>
     private async Task<(int Attempts, DateTimeOffset? LastAt)> FindHighestAttemptAsync(string userCode)
     {
-        var (highest, highestAt) = (0, (DateTimeOffset?)null);
-        var (low, high) = (1, AttemptLadderLength);
+        // The first rung decides whether there is anything to search for at all, and its absence is the
+        // ordinary case: every verification of a correct code asks this question with nothing on record.
+        // Halving an empty range costs as many reads as a full one, which would put that cost on the path
+        // people actually take.
+        var first = await storage.GetAsync<RateLimitAttempt>(
+            keyFactory.UserCodeRateLimitAttemptKey(userCode, 1), removeOnRetrieval: false);
+
+        if (first == null)
+            return (0, null);
+
+        var (highest, highestAt) = (1, (DateTimeOffset?)first.At.ToDateTimeOffset());
+        var (low, high) = (2, AttemptLadderLength);
 
         while (low <= high)
         {
@@ -222,8 +238,8 @@ public partial class UserCodeRateLimiter(
     /// the interval had passed since the first failure it held.
     /// </remarks>
     private static long WindowOf(DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
-        => now.UtcTicks / deviceAuthOptions.RateLimitSlidingWindow.Ticks;
+        => now.UtcTicks / deviceAuthOptions.RateLimitWindow.Ticks;
 
     private static DateTimeOffset EndOf(long window, DeviceAuthorizationOptions deviceAuthOptions)
-        => new((window + 1) * deviceAuthOptions.RateLimitSlidingWindow.Ticks, TimeSpan.Zero);
+        => new((window + 1) * deviceAuthOptions.RateLimitWindow.Ticks, TimeSpan.Zero);
 }
