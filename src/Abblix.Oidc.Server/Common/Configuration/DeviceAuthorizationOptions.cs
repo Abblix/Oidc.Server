@@ -17,7 +17,19 @@ public record DeviceAuthorizationOptions
     /// The lifetime of device_code and user_code. After this duration, the codes expire
     /// and the client must start a new device authorization request.
     /// </summary>
-    public required TimeSpan CodeLifetime { get; set; }
+    /// <remarks>
+    /// One minute by default, and the number is a security setting as much as a usability one: the guesses
+    /// an attacker gets at a live code are the server's budget for a window multiplied by how many windows
+    /// the code survives, so halving the lifetime halves them. See <see cref="UserCodeAlphabet"/> for the
+    /// arithmetic and <see cref="MaxFailedAttemptsPerWindow"/> for why that budget cannot simply be made
+    /// small instead.
+    /// <para>
+    /// What it costs is the time a person has to pick up their phone and approve, so a deployment whose
+    /// users need longer raises it and accepts proportionally more guesses - or lengthens the code, which
+    /// buys far more than either, since every symbol multiplies the space.
+    /// </para>
+    /// </remarks>
+    public TimeSpan CodeLifetime { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// The minimum interval that the client should wait between polling requests to the token endpoint.
@@ -83,21 +95,23 @@ public record DeviceAuthorizationOptions
     /// <para>
     /// Here <c>N</c> is how many guesses the server entertains while one code is alive, which is
     /// <see cref="MaxFailedAttemptsPerWindow"/> multiplied by <see cref="CodeLifetime"/> divided by
-    /// <see cref="RateLimitWindow"/> - a hundred a minute over a five-minute code is five hundred. It is
-    /// NOT <see cref="MaxUserCodeAttempts"/>: that bounds repeat attempts at one dead code, and a search
-    /// never repeats a value. With the shipped numbers and a five-minute code, N is 500:
+    /// <see cref="RateLimitWindow"/> - a hundred a minute over a one-minute code is a hundred. It is NOT
+    /// <see cref="MaxUserCodeAttempts"/>: that bounds repeat attempts at one dead code, and a search never
+    /// repeats a value. With the shipped numbers, N is 100:
     /// </para>
     /// <list type="bullet">
-    ///   <item>8 digits: 500 in 100 million, about 1 in 200 thousand per code.</item>
-    ///   <item>10 digits: 500 in 10 billion, about 1 in 20 million.</item>
-    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 500 in 25.6 billion, about 1 in 51 million.</item>
-    ///   <item>13 digits, or 10 symbols of that alphabet: around the example's own 2^-32.</item>
+    ///   <item>8 digits: 100 in 100 million, about 1 in a million per code.</item>
+    ///   <item>10 digits: 100 in 10 billion, about 1 in 100 million.</item>
+    ///   <item>8 symbols of "BCDFGHJKLMNPQRSTVWXZ": 100 in 25.6 billion, about 1 in 256 million.</item>
+    ///   <item>12 digits, or 9 symbols of that alphabet: around the example's own 2^-32.</item>
     /// </list>
     /// <para>
-    /// The document's example reaches 2^-32 by allowing five guesses over a code's whole life, not five
-    /// hundred. Matching it means a longer or wider code, a smaller budget, or a shorter code lifetime -
-    /// and a budget small enough to matter is also a budget an attacker can spend to refuse everybody,
-    /// since it is shared. That trade is named in <see cref="MaxFailedAttemptsPerWindow"/>.
+    /// The document's example reaches 2^-32 by allowing five guesses over a code's whole life, and at
+    /// eight digits no lifetime reaches that: it would take fewer than one guess per code, which no
+    /// shared budget can express. What the short lifetime buys is the factor between 1 in 200 thousand
+    /// and 1 in a million; closing the rest means a longer or wider code, since every symbol multiplies
+    /// the space while every limit only divides the rate. A smaller budget is not the lever it looks
+    /// like - see <see cref="MaxFailedAttemptsPerWindow"/> for why.
     /// </para>
     /// <para>
     /// Both halves move the same sum, and they cost different people: a longer or wider code is work for
