@@ -103,8 +103,11 @@ public class LostUpdateTests
     /// </summary>
     /// <remarks>
     /// The counters are read, raised in memory and written back, so a second guess whose cycle completes
-    /// inside the first one's read writes the same number twice. A burst then counts as roughly one, and
-    /// RFC 8628 section 5.2 names this limit as the defense a short user code has.
+    /// inside the first one's read writes the same number twice. A burst then counts as roughly one.
+    /// RFC 8628 section 5.1 is what makes that a security defect rather than an inaccuracy: a user code
+    /// is short because a person types it, and the document's own worked example allows "only 5 attempts"
+    /// within the rate-limiting interval to reach the same improbability as a long random token. A count
+    /// that loses most of a burst spends those attempts without charging for them.
     /// </remarks>
     [Fact]
     public async Task TwoFailuresArrivingTogether_AreBothCounted()

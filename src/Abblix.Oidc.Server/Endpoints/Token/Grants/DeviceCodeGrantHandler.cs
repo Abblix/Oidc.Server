@@ -201,8 +201,11 @@ public partial class DeviceCodeGrantHandler(
                 var pollKey = keyFactory.DeviceAuthorizationNextPollKey(request.DeviceCode);
                 var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
-                // Asking early pushes the instant further out rather than resetting it from now, per
-                // RFC 8628 section 3.5: a client that ignores the interval does not get a fresh one.
+                // Asking early pushes the instant further out rather than resetting it from now, so a
+                // client that ignores the interval cannot keep itself one interval ahead forever. RFC
+                // 8628 section 3.5 puts the widening on the client ("the interval MUST be increased by
+                // 5 seconds for this and all subsequent requests") and says nothing about the server,
+                // so this is our enforcement of it rather than a requirement of the document.
                 var asked = nextPollAt is { } earliest && now < earliest;
                 await pollSchedule.SetNextPollAtAsync(
                     pollKey,
