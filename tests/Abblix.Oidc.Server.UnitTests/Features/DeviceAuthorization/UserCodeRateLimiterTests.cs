@@ -113,7 +113,7 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), retryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), retryAfter.RetryAfter);
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(spent, retryAfter >= TimeSpan.FromMinutes(5));
+        Assert.Equal(spent, retryAfter.RetryAfter >= TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.True(retryAfter > TimeSpan.Zero);
+        Assert.True(retryAfter.RetryAfter > TimeSpan.Zero);
     }
 
     /// <summary>
@@ -268,7 +268,7 @@ public class UserCodeRateLimiterTests
         var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(10), retryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(10), retryAfter.RetryAfter);
     }
 
     /// <summary>

@@ -61,7 +61,7 @@ public partial class UserCodeRateLimiter(
     internal const int AttemptLadderLength = 32;
 
     /// <inheritdoc />
-    public async Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier)
+    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -77,7 +77,7 @@ public partial class UserCodeRateLimiter(
         if (attempts >= deviceAuthOptions.MaxUserCodeAttempts && firstAttemptAt is { } firstAt)
         {
             LogUserCodeAttemptsSpent(userCode, attempts);
-            return firstAt + deviceAuthOptions.CodeLifetime - now;
+            return new UserCodeRateLimited(firstAt + deviceAuthOptions.CodeLifetime - now, true);
         }
 
         // Per-user-code exponential backoff, measured from the attempt that earned it.
@@ -87,7 +87,7 @@ public partial class UserCodeRateLimiter(
             if (now < blockedUntil)
             {
                 LogUserCodeRateLimited(userCode, blockedUntil, attempts);
-                return blockedUntil - now;
+                return new UserCodeRateLimited(blockedUntil - now, true);
             }
         }
 
@@ -102,7 +102,7 @@ public partial class UserCodeRateLimiter(
         {
             // The window this read is about is the one the clock is in, so its end is always still ahead.
             LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxIpFailuresPerMinute);
-            return EndOf(window, deviceAuthOptions) - now;
+            return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
         // The server's own budget for this window. This is what a guesser rotating addresses runs into:
@@ -115,7 +115,7 @@ public partial class UserCodeRateLimiter(
         if (budgetSpent != null)
         {
             LogFailedAttemptBudgetSpent(deviceAuthOptions.MaxFailedAttemptsPerWindow);
-            return EndOf(window, deviceAuthOptions) - now;
+            return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
         return true;

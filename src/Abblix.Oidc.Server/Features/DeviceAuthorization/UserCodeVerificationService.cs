@@ -46,11 +46,16 @@ public partial class UserCodeVerificationService(
 
         // Check rate limiting before attempting verification
         var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);
-        if (rateLimitCheck.TryGetFailure(out _))
+        if (rateLimitCheck.TryGetFailure(out var refusal))
         {
-            // Return invalid to prevent information disclosure about valid vs invalid codes
-            // The rate limiter will log the security event
-            return new InvalidUserCode();
+            // A refusal that followed from attempts against THIS code stays indistinguishable from an
+            // unknown code: only a value the server issued can have such attempts, so naming the refusal
+            // would name the value as real. A refusal that counted attempts rather than codes carries no
+            // such information, and the caller is told how long to wait - otherwise somebody refused
+            // because a stranger is guessing sees exactly what their own typo shows.
+            return refusal.AboutThisCode
+                ? new InvalidUserCode()
+                : new TooManyUserCodeAttempts(refusal.RetryAfter);
         }
 
         var result = await storage.TryGetByUserCodeAsync(userCode);

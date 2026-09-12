@@ -147,7 +147,7 @@ public class LostUpdateTests
         var result = await LimiterOver(RealStorage(cache)).CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter.RetryAfter);
     }
 
     /// <summary>

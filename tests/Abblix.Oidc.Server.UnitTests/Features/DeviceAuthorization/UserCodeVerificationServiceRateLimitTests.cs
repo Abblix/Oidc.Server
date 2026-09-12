@@ -114,6 +114,52 @@ public class UserCodeVerificationServiceRateLimitTests
         new("a-client", ["openid"], null, TheCode) { ExpiresAt = _now.AddMinutes(5) };
 
     /// <summary>
+    /// A refusal the typed value had nothing to do with says how long to wait.
+    /// </summary>
+    /// <remarks>
+    /// The limiter computes that duration either way; until now the only caller dropped it and answered
+    /// "invalid code", so a person refused because somebody else was guessing saw exactly what a typo
+    /// shows. The server's budget and the per-address cap say nothing about the value that was typed, so
+    /// naming them discloses nothing.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalThatIsNotAboutTheCode_SaysHowLongToWait()
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            var guessing = ServiceOver(null, address: "203.0.113." + (i % 250 + 1));
+            await guessing.VerifyAsync("9999" + i.ToString("0000"));
+        }
+
+        var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(TheCode);
+
+        var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
+        Assert.True(limited.RetryAfter > TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// A refusal that IS about the code is still indistinguishable from an unknown code.
+    /// </summary>
+    /// <remarks>
+    /// Only a value the server issued can have attempts recorded against it, so an answer that admitted
+    /// "this one is rate limited" would be an answer that the value is a real code. That is the disclosure
+    /// the plain refusal exists to prevent, and it outweighs telling an honest caller how long to wait -
+    /// for a code that is spent, waiting does not help anyway.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalAboutTheCode_LooksLikeAnUnknownCode()
+    {
+        var used = PendingCode();
+        used.Status = DeviceAuthorizationStatus.Authorized;
+        var service = ServiceOver(used);
+
+        for (var i = 0; i < 5; i++)
+            await service.VerifyAsync(TheCode);
+
+        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(TheCode));
+    }
+
+    /// <summary>
     /// Guesses at a code that does not exist do not spend the allowance of a code issued afterwards.
     /// </summary>
     /// <remarks>
@@ -154,10 +200,11 @@ public class UserCodeVerificationServiceRateLimitTests
         }
 
         // A real, pending code from an address that has spent nothing of its own is refused too: the
-        // budget is the server's, not the source's.
+        // budget is the server's, not the source's. And the refusal names itself, because it is not about
+        // the value that was typed.
         var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
 
-        Assert.IsType<InvalidUserCode>(await issued.VerifyAsync(TheCode));
+        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(TheCode));
     }
 
     /// <summary>
@@ -223,7 +270,7 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
 
-        Assert.IsType<InvalidUserCode>(await issued.VerifyAsync(TheCode));
+        Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(TheCode));
     }
 
     /// <summary>

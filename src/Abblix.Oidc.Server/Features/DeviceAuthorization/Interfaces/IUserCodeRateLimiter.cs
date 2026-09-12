@@ -27,10 +27,11 @@ public interface IUserCodeRateLimiter
     /// <returns>
     /// A <see cref="Result{TSuccess, TFailure}"/> containing:
     /// - Success (<c>true</c>): The verification attempt is allowed to proceed.
-    /// - Failure (<see cref="TimeSpan"/>): The attempt is rate limited; the value indicates the duration
-    ///   the client must wait before retrying (Retry-After).
+    /// - Failure (<see cref="UserCodeRateLimited"/>): the attempt is refused, with how long before it may
+    ///   be made again and whether the refusal follows from attempts against this very code - which decides
+    ///   whether a caller may be told anything at all.
     /// </returns>
-    Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier);
+    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
