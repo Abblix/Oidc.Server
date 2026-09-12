@@ -291,6 +291,84 @@ public class DistributedCacheExtensionsTests
 	}
 
 	[Fact]
+	public async Task TrySetIfAbsentAsync_FreeKey_WritesTheValueAndSaysSo()
+	{
+		// Arrange
+		var cache = CreateCache();
+		var key = "claimed-" + Guid.NewGuid().ToString("N");
+		var value = Encoding.UTF8.GetBytes("mine");
+
+		// Act
+		var wrote = await cache.TrySetIfAbsentAsync(
+			key, value, new (), TestContext.Current.CancellationToken);
+
+		// Assert
+		Assert.True(wrote);
+		Assert.Equal(value, await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TrySetIfAbsentAsync_TakenKey_KeepsTheFirstValue()
+	{
+		// Arrange
+		var cache = CreateCache();
+		var key = "claimed-" + Guid.NewGuid().ToString("N");
+		var first = Encoding.UTF8.GetBytes("first");
+
+		await cache.TrySetIfAbsentAsync(key, first, new (), TestContext.Current.CancellationToken);
+
+		// Act
+		var wrote = await cache.TrySetIfAbsentAsync(
+			key, Encoding.UTF8.GetBytes("second"), new (), TestContext.Current.CancellationToken);
+
+		// Assert: the later caller is told it did not write, and what is there is the earlier value - a
+		// claim that overwrote would also report false and would destroy what the winner recorded.
+		Assert.False(wrote);
+		Assert.Equal(first, await cache.GetAsync(key, TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TrySetIfAbsentAsync_ManyCallersAtOnce_ExactlyOneIsToldItWrote()
+	{
+		// Arrange
+		var cache = CreateCache();
+		var key = "claimed-" + Guid.NewGuid().ToString("N");
+
+		// Act: all of them aim at the same key at the same moment.
+		var claims = await Task.WhenAll(
+			Enumerable.Range(0, 16).Select(i => Task.Run(
+				() => cache.TrySetIfAbsentAsync(
+					key,
+					Encoding.UTF8.GetBytes("caller-" + i),
+					new (),
+					TestContext.Current.CancellationToken),
+				TestContext.Current.CancellationToken)));
+
+		// Assert
+		Assert.Equal(1, claims.Count(wrote => wrote));
+	}
+
+	[Fact]
+	public async Task TrySetIfAbsentAsync_NullCache_ThrowsArgumentNullException()
+	{
+		IDistributedCache? cache = null;
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache!.TrySetIfAbsentAsync(
+				"key", [1], new (), TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task TrySetIfAbsentAsync_NullKey_ThrowsArgumentNullException()
+	{
+		var cache = CreateCache();
+
+		await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+			await cache.TrySetIfAbsentAsync(
+				null!, [1], new (), TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
 	public async Task TryAddAsync_NewKey_MarksAndReturnsTrue()
 	{
 		var cache = CreateCache();

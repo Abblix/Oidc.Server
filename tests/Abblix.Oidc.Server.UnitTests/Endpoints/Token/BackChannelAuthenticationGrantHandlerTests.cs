@@ -519,7 +519,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         // Arrange
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
         var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(AuthReqId);
-        var watched = new LetsAnotherCallerInMidRead(RealStorage(cache), requestKey);
+        var watched = new LetsAnotherCallerIn(RealStorage(cache), requestKey);
         var requests = CibaStorageOver(watched);
 
         var grant = new AuthorizedGrant(

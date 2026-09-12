@@ -12,6 +12,10 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using AuthorizationContext = Abblix.Oidc.Server.Common.AuthorizationContext;
 using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
@@ -23,7 +27,6 @@ using JsonWebTokenStatus = Abblix.Oidc.Server.Features.Tokens.Revocation.JsonWeb
 using RequestedClaimDetails = Abblix.Oidc.Server.Model.RequestedClaimDetails;
 using RequestedClaims = Abblix.Oidc.Server.Model.RequestedClaims;
 using TokenInfo = Abblix.Oidc.Server.Endpoints.Token.Interfaces.TokenInfo;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
@@ -34,6 +37,64 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 public class ProtobufSerializerTests
 {
     private readonly ProtobufSerializer _serializer = new();
+
+    /// <summary>
+    /// The next-poll instant survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_PollSchedule_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:05Z", CultureInfo.InvariantCulture);
+
+        var bytes = _serializer.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() });
+        var result = _serializer.Deserialize<PollSchedule>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(instant, result.NextPollAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// One recorded verification attempt survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_RateLimitAttempt_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var bytes = _serializer.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() });
+        var result = _serializer.Deserialize<RateLimitAttempt>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(instant, result.At.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// Neither shape reaches the JSON fallback, which is the reason they have definitions at all.
+    /// </summary>
+    /// <remarks>
+    /// The fallback works and would carry them, so a round trip alone says nothing here - it passes either
+    /// way. What it costs is a warning carrying an exception on every write, and one of these is written on
+    /// every poll of every device and every decoupled authentication. A warning an operator sees that often
+    /// is a warning they stop reading.
+    /// </remarks>
+    [Fact]
+    public void TheNewShapes_DoNotReachTheJsonFallback()
+    {
+        var recorder = new RecordingLoggerFactory();
+        var composite = new CompositeBinarySerializer(
+            recorder.CreateLogger<CompositeBinarySerializer>(),
+            new ProtobufSerializer(),
+            new JsonBinarySerializer());
+
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        composite.Deserialize<PollSchedule>(
+            composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitAttempt>(
+            composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
+
+        Assert.Empty(recorder.Entries);
+    }
 
     [Theory]
     [InlineData(JsonWebTokenStatus.Unknown)]

@@ -68,6 +68,16 @@ public class BackChannelRequestStorageTests
             return Task.FromResult((T?)value);
         }
 
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            // One thread, so the check and the write are already indivisible here.
+            if (!_entries.TryAdd(key, value))
+                return Task.FromResult(false);
+
+            return Task.FromResult(true);
+        }
+
         public Task RemoveAsync(string key, CancellationToken? token = null)
         {
             _entries.Remove(key);

@@ -109,14 +109,19 @@ public record DeviceAuthorizationOptions
 
     /// <summary>
     /// The maximum number of failed user code verification attempts allowed from a single IP address
-    /// within a one-minute sliding window. Prevents distributed brute force attacks.
+    /// within one counting window. Prevents distributed brute force attacks.
     /// </summary>
     public int MaxIpFailuresPerMinute { get; set; } = 10;
 
     /// <summary>
-    /// The duration of the sliding window for per-IP rate limiting.
-    /// Failed attempts outside this window are not counted toward the rate limit.
+    /// How long one counting window for per-IP rate limiting lasts.
+    /// Failed attempts outside the current window are not counted toward the rate limit.
     /// </summary>
+    /// <remarks>
+    /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
+    /// can spend the allowance twice. Sizing the window is therefore sizing the worst case at twice the
+    /// count above.
+    /// </remarks>
     public TimeSpan RateLimitSlidingWindow { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -126,8 +131,8 @@ public record DeviceAuthorizationOptions
     public TimeSpan MaxBackoffDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// The expiration time for IP rate limit state in storage.
-    /// Should be longer than RateLimitSlidingWindow to prevent premature cleanup.
+    /// How long a recorded per-IP attempt is kept in storage.
+    /// Must be longer than one window, or attempts stop being counted before their window ends.
     /// </summary>
     public TimeSpan IpRateLimitStateExpiration { get; set; } = TimeSpan.FromMinutes(2);
 }

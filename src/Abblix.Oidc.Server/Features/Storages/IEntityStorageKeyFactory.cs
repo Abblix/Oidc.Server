@@ -105,18 +105,26 @@ public interface IEntityStorageKeyFactory
     string DeviceAuthorizationUserCodeKey(string userCode);
 
     /// <summary>
-    /// Generates a storage key for rate limiting user code verification attempts.
+    /// Generates a storage key for one failed verification attempt against a user code.
     /// </summary>
+    /// <remarks>
+    /// One key per attempt rather than one key holding a number: attempts are counted by how many of
+    /// these exist, so failures arriving together are counted separately.
+    /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
-    /// <returns>A formatted storage key for the user code rate limit state.</returns>
-    string UserCodeRateLimitKey(string userCode);
+    /// <param name="attempt">Which attempt against that code this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string UserCodeRateLimitAttemptKey(string userCode, int attempt);
 
     /// <summary>
-    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// Generates a storage key for one failed verification attempt from a client address, inside one
+    /// counting window.
     /// </summary>
     /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
-    /// <returns>A formatted storage key for the IP rate limit state.</returns>
-    string IpRateLimitKey(string clientIdentifier);
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string IpRateLimitAttemptKey(string clientIdentifier, long window, int attempt);
 
     /// <summary>
     /// Generates a storage key for the registration access token binding of a client (RFC 7592).

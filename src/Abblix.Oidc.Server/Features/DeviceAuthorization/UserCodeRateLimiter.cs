@@ -21,6 +21,14 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 /// Implements rate limiting for user code verification attempts to prevent brute force attacks.
 /// Uses exponential backoff and per-IP rate limiting as recommended by RFC 8628 Section 5.1.
 /// </summary>
+/// <remarks>
+/// Every attempt claims a key of its own, and the count of attempts is how many of those keys exist.
+/// Nothing reads a number and writes it back, which is what makes a burst count as a burst: the storage
+/// decides which of several callers racing for one key wrote it, so two failures arriving together claim
+/// two keys rather than writing the same number twice. The claim is exact to the extent the storage makes
+/// it so - the in-box storage decides it within one process, and a deployment spread over nodes supplies
+/// a storage whose backing store decides it.
+/// </remarks>
 /// <param name="logger">Logger for security events.</param>
 /// <param name="storage">The storage service for persisting rate limit state.</param>
 /// <param name="keyFactory">The factory for generating storage keys.</param>
@@ -33,41 +41,49 @@ public partial class UserCodeRateLimiter(
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IUserCodeRateLimiter
 {
+    /// <summary>
+    /// How many attempts against one user code are recorded separately.
+    /// </summary>
+    /// <remarks>
+    /// The backoff doubles per attempt past the configured threshold and is capped, so by this rung the
+    /// block is the cap however many further attempts arrive - there is nothing left for a further rung to
+    /// say. Reaching it by guessing one code at a time is not possible within the code's own lifetime; a
+    /// burst can reach it, and then the code stays blocked for the cap, which is what a burst of wrong
+    /// guesses against a single code deserves.
+    /// </remarks>
+    private const int AttemptLadderLength = 32;
+
     /// <inheritdoc />
     public async Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        // Check per-user-code exponential backoff
-        var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);
-        var userCodeAttempts = await storage.GetAsync<RateLimitState>(userCodeKey, removeOnRetrieval: false);
-
-        if (userCodeAttempts is { BlockedUntil: { } blockedUntilTimestamp })
+        // Per-user-code exponential backoff, measured from the attempt that earned it.
+        var (attempts, lastAttemptAt) = await FindHighestAttemptAsync(userCode);
+        if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff && lastAttemptAt is { } attemptAt)
         {
-            var blockedUntil = blockedUntilTimestamp.ToDateTimeOffset();
+            var blockedUntil = attemptAt + BackoffAfter(attempts, deviceAuthOptions);
             if (now < blockedUntil)
             {
-                var retryAfter = blockedUntil - now;
-
-                LogUserCodeRateLimited(userCode, blockedUntil, userCodeAttempts.FailureCount);
-
-                return retryAfter;
+                LogUserCodeRateLimited(userCode, blockedUntil, attempts);
+                return blockedUntil - now;
             }
         }
 
-        // Check per-IP rate limiting
-        var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
-        var ipAttempts = await storage.GetAsync<RateLimitState>(ipKey, removeOnRetrieval: false);
+        // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
+        // the rung at the cap is the whole question and costs one read.
+        var window = WindowOf(now, deviceAuthOptions);
+        var capReached = await storage.GetAsync<RateLimitAttempt>(
+            keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, deviceAuthOptions.MaxIpFailuresPerMinute),
+            removeOnRetrieval: false);
 
-        if (ipAttempts != null && deviceAuthOptions.MaxIpFailuresPerMinute <= ipAttempts.FailureCount)
+        if (capReached != null)
         {
-            var firstFailure = ipAttempts.FirstFailureAt.ToDateTimeOffset();
-            var retryAfter = deviceAuthOptions.RateLimitSlidingWindow - (now - firstFailure);
+            var retryAfter = EndOf(window, deviceAuthOptions) - now;
             if (retryAfter > TimeSpan.Zero)
             {
-                LogIpRateLimited(clientIdentifier, ipAttempts.FailureCount);
-
+                LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxIpFailuresPerMinute);
                 return retryAfter;
             }
         }
@@ -78,68 +94,36 @@ public partial class UserCodeRateLimiter(
     /// <inheritdoc />
     public async Task RecordFailureAsync(string userCode, string clientIdentifier)
     {
-        // NOTE: the counter updates below are a non-atomic get-increment-set. Under a highly concurrent
-        // burst of failures the count can undercount (multiple callers read the same value and write
-        // value+1), weakening the backoff and per-IP cap (RFC 8628 section 5.1). A precise limit requires a backend
-        // atomic increment (for example Redis INCR) or a CAS loop on a versioned record, which the current
-        // IEntityStorage abstraction does not expose. Tracked as a follow-up
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        // Record per-user-code failure with exponential backoff
-        var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);
-        var userCodeState = await storage.GetAsync<RateLimitState>(userCodeKey, removeOnRetrieval: false)
-            ?? new RateLimitState { FirstFailureAt = Timestamp.FromDateTimeOffset(now) };
+        var attempts = await ClaimAttemptAsync(
+            rung => keyFactory.UserCodeRateLimitAttemptKey(userCode, rung),
+            AttemptLadderLength,
+            now,
+            // Every rung outlives the code it belongs to: the lifetime is counted from this attempt, which
+            // is itself inside that lifetime. That is what keeps the claimed rungs an unbroken run while
+            // the code can still be verified, which is what lets a reader find the highest one by halving
+            // the range instead of walking it.
+            deviceAuthOptions.CodeLifetime);
 
-        userCodeState.FailureCount++;
-        userCodeState.LastFailureAt = Timestamp.FromDateTimeOffset(now);
-
-        // Apply exponential backoff after configured threshold
-        if (userCodeState.FailureCount >= deviceAuthOptions.MaxFailuresBeforeBackoff)
+        if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
         {
-            var backoffSeconds = Math.Pow(2, userCodeState.FailureCount - deviceAuthOptions.MaxFailuresBeforeBackoff);
-            var cappedBackoff = TimeSpan.FromSeconds(Math.Min(backoffSeconds, deviceAuthOptions.MaxBackoffDuration.TotalSeconds));
-            var blockedUntil = now.Add(cappedBackoff);
-            userCodeState.BlockedUntil = Timestamp.FromDateTimeOffset(blockedUntil);
-
-            LogUserCodeBlocked(userCode, blockedUntil, userCodeState.FailureCount);
+            var blockedUntil = now + BackoffAfter(attempts, deviceAuthOptions);
+            LogUserCodeBlocked(userCode, blockedUntil, attempts);
         }
 
-        await storage.SetAsync(
-            userCodeKey,
-            userCodeState,
-            new StorageOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime });
+        var window = WindowOf(now, deviceAuthOptions);
+        var ipAttempts = await ClaimAttemptAsync(
+            rung => keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, rung),
+            deviceAuthOptions.MaxIpFailuresPerMinute,
+            now,
+            deviceAuthOptions.IpRateLimitStateExpiration);
 
-        // Record per-IP failure
-        var ipKey = keyFactory.IpRateLimitKey(clientIdentifier);
-        var ipState = await storage.GetAsync<RateLimitState>(ipKey, removeOnRetrieval: false);
-
-        if (ipState == null || ipState.FirstFailureAt.ToDateTimeOffset() + deviceAuthOptions.RateLimitSlidingWindow < now)
+        if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
+            deviceAuthOptions.MaxIpFailuresPerMinute <= ipAttempts)
         {
-            // Start new sliding window
-            ipState = new RateLimitState
-            {
-                FirstFailureAt = now.ToTimestamp(),
-                FailureCount = 1,
-                LastFailureAt = now.ToTimestamp(),
-            };
-        }
-        else
-        {
-            ipState.FailureCount++;
-            ipState.LastFailureAt = now.ToTimestamp();
-        }
-
-        await storage.SetAsync(
-            ipKey,
-            ipState,
-            new () { AbsoluteExpirationRelativeToNow = deviceAuthOptions.IpRateLimitStateExpiration });
-
-        // Security event logging for monitoring
-        if (deviceAuthOptions.MaxFailuresBeforeBackoff <= userCodeState.FailureCount ||
-            deviceAuthOptions.MaxIpFailuresPerMinute <= ipState.FailureCount)
-        {
-            LogBruteForceDetected(userCode, clientIdentifier, userCodeState.FailureCount, ipState.FailureCount);
+            LogBruteForceDetected(userCode, clientIdentifier, attempts, ipAttempts);
         }
     }
 
@@ -147,12 +131,96 @@ public partial class UserCodeRateLimiter(
     public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
     {
         // Clear the per-user-code backoff: this code has now been verified, so its own attempt
-        // history is no longer relevant. The per-IP counter is deliberately left intact - it caps
+        // history is no longer relevant. The per-address count is deliberately left intact - it caps
         // brute-force attempts spanning many distinct codes from one source (RFC 8628 Section 5.1),
         // and an occasional successful verification must not reset that cross-code budget.
-        var userCodeKey = keyFactory.UserCodeRateLimitKey(userCode);
-        await storage.RemoveAsync(userCodeKey);
+        var (attempts, _) = await FindHighestAttemptAsync(userCode);
+        for (var rung = 1; rung <= attempts; rung++)
+        {
+            await storage.RemoveAsync(keyFactory.UserCodeRateLimitAttemptKey(userCode, rung));
+        }
 
         LogUserCodeVerified(userCode, clientIdentifier);
     }
+
+    /// <summary>
+    /// Claims the lowest free rung and answers which one, which is this attempt's number.
+    /// </summary>
+    /// <remarks>
+    /// A caller that loses a rung to somebody else moves up to the next one, so two attempts arriving
+    /// together are counted as two. When every rung is taken the attempt is counted as the topmost: the
+    /// ladder is already saying as much as it can about this code or this address.
+    /// </remarks>
+    private async Task<int> ClaimAttemptAsync(
+        Func<int, string> keyOfRung, int ladderLength, DateTimeOffset now, TimeSpan expiresIn)
+    {
+        var attempt = new RateLimitAttempt { At = now.ToTimestamp() };
+        var storageOptions = new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn };
+
+        for (var rung = 1; rung <= ladderLength; rung++)
+        {
+            if (await storage.TrySetIfAbsentAsync(keyOfRung(rung), attempt, storageOptions))
+                return rung;
+        }
+
+        return ladderLength;
+    }
+
+    /// <summary>
+    /// Answers how many attempts are on record against a user code, and when the last of them happened.
+    /// </summary>
+    /// <remarks>
+    /// The claimed rungs are an unbroken run from the first - an attempt never skips a free rung without
+    /// claiming it, and no rung expires while the code can still be verified - so the highest one is found
+    /// by halving the range rather than walking it.
+    /// </remarks>
+    private async Task<(int Attempts, DateTimeOffset? LastAt)> FindHighestAttemptAsync(string userCode)
+    {
+        var (highest, highestAt) = (0, (DateTimeOffset?)null);
+        var (low, high) = (1, AttemptLadderLength);
+
+        while (low <= high)
+        {
+            var middle = low + (high - low) / 2;
+            var attempt = await storage.GetAsync<RateLimitAttempt>(
+                keyFactory.UserCodeRateLimitAttemptKey(userCode, middle), removeOnRetrieval: false);
+
+            if (attempt != null)
+            {
+                (highest, highestAt) = (middle, attempt.At.ToDateTimeOffset());
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        return (highest, highestAt);
+    }
+
+    /// <summary>
+    /// How long a code is blocked after the given number of attempts: doubling per attempt past the
+    /// configured threshold, never longer than the configured cap.
+    /// </summary>
+    private static TimeSpan BackoffAfter(int attempts, DeviceAuthorizationOptions deviceAuthOptions)
+    {
+        var seconds = Math.Pow(2, attempts - deviceAuthOptions.MaxFailuresBeforeBackoff);
+        return TimeSpan.FromSeconds(
+            Math.Min(seconds, deviceAuthOptions.MaxBackoffDuration.TotalSeconds));
+    }
+
+    /// <summary>
+    /// The window one instant falls into, numbered so that consecutive windows get consecutive numbers.
+    /// </summary>
+    /// <remarks>
+    /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
+    /// can spend the cap twice. The record this replaced behaved the same way: it restarted the count once
+    /// the interval had passed since the first failure it held.
+    /// </remarks>
+    private static long WindowOf(DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
+        => now.UtcTicks / deviceAuthOptions.RateLimitSlidingWindow.Ticks;
+
+    private static DateTimeOffset EndOf(long window, DeviceAuthorizationOptions deviceAuthOptions)
+        => new((window + 1) * deviceAuthOptions.RateLimitSlidingWindow.Ticks, TimeSpan.Zero);
 }

@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Storages.Proto;
+using Google.Protobuf.WellKnownTypes;
+
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
@@ -20,7 +23,7 @@ public sealed class PollScheduleStore(IEntityStorage storage) : IPollScheduleSto
         ArgumentNullException.ThrowIfNull(key);
 
         var entry = await storage.GetAsync<PollSchedule>(key, removeOnRetrieval: false);
-        return entry?.NextPollAt;
+        return entry?.NextPollAt?.ToDateTimeOffset();
     }
 
     /// <inheritdoc />
@@ -35,16 +38,7 @@ public sealed class PollScheduleStore(IEntityStorage storage) : IPollScheduleSto
             ? Task.CompletedTask
             : storage.SetAsync(
                 key,
-                new PollSchedule { NextPollAt = nextPollAt },
+                new PollSchedule { NextPollAt = nextPollAt.ToTimestamp() },
                 new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
-    }
-
-    /// <summary>
-    /// What is stored: one instant, in a record of its own so the stored shape can gain a field without
-    /// every existing entry becoming unreadable.
-    /// </summary>
-    private sealed record PollSchedule
-    {
-        public DateTimeOffset NextPollAt { get; init; }
     }
 }
