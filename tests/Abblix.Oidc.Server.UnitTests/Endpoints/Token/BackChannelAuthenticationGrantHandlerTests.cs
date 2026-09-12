@@ -23,11 +23,16 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Features.Storages;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using CibaStorage = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelRequestStorage;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
 
@@ -46,7 +51,24 @@ public class BackChannelAuthenticationGrantHandlerTests
 
     private readonly Mock<IBackChannelRequestStorage> _storage;
     private readonly BackChannelAuthenticationGrantHandler _handler;
+
+    /// <summary>
+    /// Where the next-poll instant lives: a record of its own, keyed per request.
+    /// </summary>
+    private readonly IPollScheduleStore _pollSchedule = NewPollSchedule();
+
+    private static readonly string PollKey =
+        new EntityStorageKeyFactory().BackChannelAuthenticationNextPollKey(AuthReqId);
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// A poll schedule over a real memory cache, so what the handler wrote is what the next read sees.
+    /// </summary>
+    private static IPollScheduleStore NewPollSchedule()
+        => new PollScheduleStore(
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new JsonBinarySerializer()));
 
     public BackChannelAuthenticationGrantHandlerTests()
     {
@@ -66,6 +88,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         _handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             _storage.Object,
+            _pollSchedule,
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
@@ -368,6 +392,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         => new(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             _storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             policy,
             new FakeTimeProvider(_currentTime),
             Options.Create(new OidcOptions
@@ -433,18 +459,20 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the client polls too early (before NextPollAt time),
-    /// the handler returns a SlowDown error to enforce rate limiting.
-    /// This prevents clients from overwhelming the server with polling requests.
+    /// A client asking before the instant it was given is told to slow down, and the instant moves further
+    /// out rather than being reset from now.
     /// </summary>
+    /// <remarks>
+    /// Pushing it out is what makes the limit hold against a client that ignores it: resetting from the
+    /// moment of the early ask would let a client polling continuously keep the instant one interval ahead
+    /// forever, which is the behaviour the limit exists to refuse.
+    /// </remarks>
     [Fact]
     public async Task PendingRequest_PolledTooEarly_ShouldReturnSlowDownError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
-
-        var nextPollAt = _currentTime.AddSeconds(5);
 
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
@@ -453,11 +481,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
-            NextPollAt = nextPollAt
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(5), TimeSpan.FromMinutes(5));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -467,7 +494,97 @@ public class BackChannelAuthenticationGrantHandlerTests
         // slow_down (polled too fast, CIBA Core section 11) is the stable wire contract; the human-readable
         // description is free to change, so the test pins the error code only.
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
+
+        Assert.Equal(_currentTime.AddSeconds(10), await _pollSchedule.TryGetNextPollAtAsync(PollKey));
+
+        // The authentication itself is untouched, so nothing a poll does can overwrite a completion.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
+
+    /// <summary>
+    /// A completion landing between the poll's read and whatever the poll writes next survives.
+    /// </summary>
+    /// <remarks>
+    /// Driven over a real store rather than a stand-in, because the claim is about two callers meeting at
+    /// one key: the decorator lets the completing caller finish its whole cycle inside the handler's read,
+    /// which is the single interleaving a read-modify-write loses an update on. It did not survive while the
+    /// poll wrote the request back to note when the client might ask again - the user had authenticated and
+    /// the client was told to keep waiting until the request expired.
+    /// </remarks>
+    [Fact]
+    public async Task ACompletionLandingInsideAPoll_IsNotLost()
+    {
+        // Arrange
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var requestKey = new EntityStorageKeyFactory().BackChannelAuthenticationRequestKey(AuthReqId);
+        var watched = new LetsAnotherCallerInMidRead(RealStorage(cache), requestKey);
+        var requests = CibaStorageOver(watched);
+
+        var grant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        await requests.StoreAsync(
+            new BackChannelAuthenticationRequest(grant, _currentTime.AddMinutes(5))
+            {
+                Status = BackChannelAuthenticationStatus.Pending,
+            },
+            TimeSpan.FromMinutes(5));
+
+        // What the user completing authentication elsewhere does, timed to land inside the handler's read.
+        watched.OnNextReadOf(async () =>
+        {
+            var completing = CibaStorageOver(RealStorage(cache));
+            var request = await completing.TryGetAsync(AuthReqId);
+            request!.Status = BackChannelAuthenticationStatus.Authenticated;
+            await completing.UpdateAsync(AuthReqId, request, TimeSpan.FromMinutes(5));
+        });
+
+        // Act: the real poll, through the handler the token endpoint calls.
+        await HandlerOver(requests).AuthorizeAsync(
+            new TokenRequest { AuthenticationRequestId = AuthReqId },
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var stored = await CibaStorageOver(RealStorage(cache)).TryGetAsync(AuthReqId);
+        Assert.NotNull(stored);
+        Assert.Equal(BackChannelAuthenticationStatus.Authenticated, stored.Status);
+    }
+
+    private static IEntityStorage RealStorage(IDistributedCache cache)
+        => new DistributedCacheStorage(cache, new JsonBinarySerializer());
+
+    /// <summary>
+    /// The CIBA request storage production uses, over the storage a row controls.
+    /// </summary>
+    private static IBackChannelRequestStorage CibaStorageOver(IEntityStorage storage)
+    {
+        var ids = new Mock<IAuthenticationRequestIdGenerator>(MockBehavior.Strict);
+        ids.Setup(g => g.GenerateAuthenticationRequestId()).Returns(AuthReqId);
+
+        return new CibaStorage(storage, ids.Object, new EntityStorageKeyFactory());
+    }
+
+    /// <summary>
+    /// The handler the token endpoint calls, over a storage this row owns instead of the shared stand-in.
+    /// </summary>
+    private BackChannelAuthenticationGrantHandler HandlerOver(IBackChannelRequestStorage requests)
+        => new(
+            NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
+            requests,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
+            StubAuthorizationDetailsPolicy.Accepting,
+            new FakeTimeProvider(_currentTime),
+            Options.Create(new OidcOptions
+            {
+                BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
+            }),
+            new TestServiceProvider(requests),
+            PublicSubjects());
 
     /// <summary>
     /// Verifies that when the authentication request is still pending (user hasn't authenticated yet)
@@ -488,11 +605,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
-            NextPollAt = null // No rate limiting
         };
 
+        // Nothing seeded: no instant means the client may ask now.
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -505,8 +621,8 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the authentication request is still pending but NextPollAt has passed,
-    /// the handler returns an AuthorizationPending error (not SlowDown).
+    /// Verifies that when the authentication request is still pending and the instant the client was
+    /// given has passed, the handler returns an AuthorizationPending error (not SlowDown).
     /// </summary>
     [Fact]
     public async Task PendingRequest_AfterNextPollAt_ShouldReturnAuthorizationPendingError()
@@ -515,8 +631,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        var nextPollAt = _currentTime.AddSeconds(-1); // In the past
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -524,11 +638,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
-            NextPollAt = nextPollAt
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(5));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -695,7 +808,7 @@ public class BackChannelAuthenticationGrantHandlerTests
 
     /// <summary>
     /// Verifies that time-based rate limiting works correctly at the boundary condition
-    /// (exactly at NextPollAt time should NOT trigger SlowDown).
+    /// (asking exactly at the instant given should NOT trigger SlowDown).
     /// </summary>
     [Fact]
     public async Task PendingRequest_ExactlyAtNextPollAt_ShouldReturnAuthorizationPending()
@@ -704,8 +817,6 @@ public class BackChannelAuthenticationGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
 
-        var nextPollAt = _currentTime; // Exactly now
-
         var expectedGrant = new AuthorizedGrant(
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null));
@@ -713,11 +824,10 @@ public class BackChannelAuthenticationGrantHandlerTests
         var authRequest = new BackChannelAuthenticationRequest(expectedGrant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
-            NextPollAt = nextPollAt
         };
 
         _storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime, TimeSpan.FromMinutes(5));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -860,6 +970,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
@@ -951,6 +1063,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
@@ -1052,6 +1166,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
@@ -1111,6 +1227,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,
@@ -1337,6 +1455,8 @@ public class BackChannelAuthenticationGrantHandlerTests
         var handler = new BackChannelAuthenticationGrantHandler(
             NullLogger<BackChannelAuthenticationGrantHandler>.Instance,
             storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options,

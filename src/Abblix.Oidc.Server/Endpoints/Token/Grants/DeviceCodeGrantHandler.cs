@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="logger">Records a refusal the client learns nothing from, and the approval path cannot
 /// have reported.</param>
 /// <param name="storage">Service for storing and retrieving device authorization requests.</param>
+/// <param name="pollSchedule">Holds the instant before which this request's client is told to slow
+/// down, under a key of its own so noting it cannot overwrite the user's approval.</param>
+/// <param name="keyFactory">Names the key that instant lives under.</param>
 /// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
 /// authorization_details are still acceptable, which is the only comparison that can see inside an
 /// entry.</param>
@@ -37,6 +41,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public partial class DeviceCodeGrantHandler(
     ILogger<DeviceCodeGrantHandler> logger,
     IDeviceAuthorizationStorage storage,
+    IPollScheduleStore pollSchedule,
+    IEntityStorageKeyFactory keyFactory,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IAuthorizationGrantHandler
@@ -188,34 +194,28 @@ public partial class DeviceCodeGrantHandler(
                     "The device authorization cannot be redeemed");
 
             // Authorization still pending - check polling rate
-            case { Status: DeviceAuthorizationStatus.Pending, NextPollAt: { } nextPollAt }
-                when now < nextPollAt:
-
-                // Polling too fast - increase the interval per RFC 8628 Section 3.5. Persisting the stale
-                // Pending snapshot here would revert an approval that landed after the read above, so the
-                // helper re-reads and this re-dispatches when the status has advanced under us.
-                if (!await TryBumpNextPollAsync(
-                        request.DeviceCode, nextPollAt + pollingInterval, deviceRequest.ExpiresAt - now))
-                {
-                    return await AuthorizeAsync(request, clientInfo, cancellationToken);
-                }
-
-                return new OidcError(
-                    ErrorCodes.SlowDown,
-                    "Polling too frequently. Increase the interval between requests.");
-
-            // Authorization still pending - update next poll time
             case { Status: DeviceAuthorizationStatus.Pending }:
 
-                if (!await TryBumpNextPollAsync(
-                        request.DeviceCode, now + pollingInterval, deviceRequest.ExpiresAt - now))
-                {
-                    return await AuthorizeAsync(request, clientInfo, cancellationToken);
-                }
+                // The instant lives in a key of its own, so noting it cannot write anything the
+                // approval owns. Absence means the client may ask now.
+                var pollKey = keyFactory.DeviceAuthorizationNextPollKey(request.DeviceCode);
+                var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
-                return new OidcError(
-                    ErrorCodes.AuthorizationPending,
-                    "The authorization request is still pending. The user has not yet completed authorization.");
+                // Asking early pushes the instant further out rather than resetting it from now, per
+                // RFC 8628 section 3.5: a client that ignores the interval does not get a fresh one.
+                var asked = nextPollAt is { } earliest && now < earliest;
+                await pollSchedule.SetNextPollAtAsync(
+                    pollKey,
+                    (asked ? nextPollAt!.Value : now) + pollingInterval,
+                    deviceRequest.ExpiresAt - now);
+
+                return asked
+                    ? new OidcError(
+                        ErrorCodes.SlowDown,
+                        "Polling too frequently. Increase the interval between requests.")
+                    : new OidcError(
+                        ErrorCodes.AuthorizationPending,
+                        "The authorization request is still pending. The user has not yet completed authorization.");
 
             // User denied the request
             case { Status: DeviceAuthorizationStatus.Denied }:
@@ -230,20 +230,4 @@ public partial class DeviceCodeGrantHandler(
         }
     }
 
-    // Re-reads the record and only writes the rate-limit bump when it is still Pending, so a concurrent
-    // approval is not overwritten. Returns false when the status has advanced, signalling the caller to
-    // re-dispatch on the fresh state. The remaining lifetime is computed by the caller from the same clock
-    // read as the expiry gate, so the refreshed cache TTL stays positive and cannot extend the code
-    private async Task<bool> TryBumpNextPollAsync(string deviceCode, DateTimeOffset nextPollAt, TimeSpan remaining)
-    {
-        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
-        if (current is not { Status: DeviceAuthorizationStatus.Pending })
-        {
-            return false;
-        }
-
-        current.NextPollAt = nextPollAt;
-        await storage.UpdateAsync(deviceCode, current, remaining);
-        return true;
-    }
 }

@@ -16,10 +16,14 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Implementation;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -43,6 +47,7 @@ public class DeviceCodeGrantHandlerTests
 
     private readonly Mock<IDeviceAuthorizationStorage> _storage;
     private readonly DeviceCodeGrantHandler _handler;
+    private readonly IPollScheduleStore _pollSchedule;
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(5);
 
@@ -63,9 +68,13 @@ public class DeviceCodeGrantHandlerTests
             }
         });
 
+        _pollSchedule = NewPollSchedule();
+
         _handler = new DeviceCodeGrantHandler(
             NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
+            _pollSchedule,
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options);
@@ -380,10 +389,21 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(granted.ToJsonString(), policy.LastSeen!.ToJsonString());
     }
 
+    /// <summary>
+    /// A poll schedule over a real memory cache, so what the handler wrote is what the next read sees.
+    /// </summary>
+    private static IPollScheduleStore NewPollSchedule()
+        => new PollScheduleStore(
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new JsonBinarySerializer()));
+
     private DeviceCodeGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
         => new(
             NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             policy,
             new FakeTimeProvider(_currentTime),
             Options.Create(new OidcOptions
@@ -598,7 +618,9 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, nextPollAt, TimeSpan.FromMinutes(15));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -607,9 +629,13 @@ public class DeviceCodeGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
 
-        // Verify interval was increased
-        Assert.Equal(nextPollAt + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
+        // Pushed further out rather than reset from now, so ignoring the interval buys nothing.
+        Assert.Equal(nextPollAt + _pollingInterval, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+
+        // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     /// <summary>
@@ -632,7 +658,6 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -642,9 +667,13 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        // Verify NextPollAt was set
-        Assert.Equal(_currentTime + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        Assert.Equal(_currentTime + _pollingInterval, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+
+        // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     /// <summary>
@@ -861,12 +890,22 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// A poll that races a just-completed approval must not overwrite the Authorized
-    /// status with its stale Pending snapshot. The handler must re-read and surface the granted tokens
-    /// instead of persisting authorization_pending forever.
+    /// A pending poll writes nothing to the request, so an approval landing beside it cannot be
+    /// overwritten.
     /// </summary>
+    /// <remarks>
+    /// This used to be the narrowed version of that claim: the poll wrote the request back to note the
+    /// next-poll instant, and what kept an approval alive was the handler re-reading first and
+    /// re-dispatching when the status had advanced - which left a window one store round trip wide. The
+    /// instant lives under a key of its own now, so the poll has no reason to write the request and the
+    /// window has no width. One read is therefore the whole interaction, and that is what this row pins.
+    /// <para>
+    /// The approval surviving an interleaved poll is driven end to end over a real store in
+    /// <c>LostUpdateTests</c>; what belongs here is that the handler does not write.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public async Task PendingPoll_ApprovalRacedIn_DoesNotClobberApproval()
+    public async Task PendingPoll_WritesNothingToTheRequest()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -875,38 +914,24 @@ public class DeviceCodeGrantHandlerTests
         var pending = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        var approvedGrant = new AuthorizedGrant(
-            new AuthSession(UserId, "session_123", _currentTime, "device"),
-            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
-
-        var approved = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
-        {
-            Status = DeviceAuthorizationStatus.Authorized,
-            AuthorizedGrant = approvedGrant,
-            ExpiresAt = _currentTime.AddMinutes(15),
-        };
-
-        // First read (line 67) sees Pending; the re-read in the pending branch and the re-dispatch see
-        // the approval that landed in the window.
-        _storage.SetupSequence(s => s.TryGetByDeviceCodeAsync(DeviceCode))
-            .ReturnsAsync(pending)
-            .ReturnsAsync(approved)
-            .ReturnsAsync(approved);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(pending);
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
-        // Assert: the approval survives - tokens are issued, and no Pending snapshot was written back.
-        Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(UserId, grant.AuthSession.Subject);
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+
         _storage.Verify(
             s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
+
+        // Read once: there is no re-read to make, because there is no write to protect.
+        _storage.Verify(s => s.TryGetByDeviceCodeAsync(DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -929,14 +954,39 @@ public class DeviceCodeGrantHandlerTests
 
         TimeSpan capturedTtl = default;
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()))
-            .Callback<string, StoredDeviceAuthorizationRequest, TimeSpan>((_, _, ttl) => capturedTtl = ttl)
+
+        // The span now reaches the poll schedule rather than the request, so that is where it is read.
+        var schedule = new Mock<IPollScheduleStore>(MockBehavior.Loose);
+        schedule
+            .Setup(s => s.SetNextPollAtAsync(
+                It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan>()))
+            .Callback<string, DateTimeOffset, TimeSpan>((_, _, ttl) => capturedTtl = ttl)
             .Returns(Task.CompletedTask);
 
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var handler = new DeviceCodeGrantHandler(
+            NullLogger<DeviceCodeGrantHandler>.Instance,
+            _storage.Object,
+            schedule.Object,
+            new EntityStorageKeyFactory(),
+            StubAuthorizationDetailsPolicy.Accepting,
+            new FakeTimeProvider(_currentTime),
+            Options.Create(new OidcOptions
+            {
+                DeviceAuthorization = new DeviceAuthorizationOptions
+                {
+                    CodeLifetime = TimeSpan.FromMinutes(15),
+                    PollingInterval = _pollingInterval,
+                    DeviceCodeLength = 32,
+                    UserCodeLength = 8,
+                    VerificationUri = new Uri("https://example.com/device"),
+                },
+            }));
 
-        // Assert: the refreshed TTL is the 3-minute remainder, not the 15-minute CodeLifetime.
+        // Act
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        // Assert: the entry lives for the 3-minute remainder, not the 15-minute lifetime - so polling
+        // cannot keep the schedule, or anything keyed beside it, alive past the code's fixed expiry.
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Equal(TimeSpan.FromMinutes(3), capturedTtl);

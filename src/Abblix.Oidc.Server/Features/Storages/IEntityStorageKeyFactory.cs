@@ -74,6 +74,30 @@ public interface IEntityStorageKeyFactory
     string DeviceAuthorizationRequestKey(string deviceCode);
 
     /// <summary>
+    /// Generates a storage key for the next-poll instant of a backchannel authentication request.
+    /// </summary>
+    /// <remarks>
+    /// A key of its own, because what the polling client changes is only this instant while what the
+    /// user's authentication changes is the request: a poll writing the request back to note the instant
+    /// overwrote a completion that had landed since it read.
+    /// </remarks>
+    /// <param name="requestId">The CIBA authentication request identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string BackChannelAuthenticationNextPollKey(string requestId);
+
+    /// <summary>
+    /// Generates a storage key for the next-poll instant of a device authorization request.
+    /// </summary>
+    /// <remarks>
+    /// A key of its own, for the same reason as its backchannel counterpart: a poll that wrote the
+    /// request back to note the instant overwrote an approval that had landed since it read, and the
+    /// device was told to keep waiting until the code expired.
+    /// </remarks>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string DeviceAuthorizationNextPollKey(string deviceCode);
+
+    /// <summary>
     /// Generates a storage key for mapping a user code to its device code.
     /// </summary>
     /// <param name="userCode">The user-friendly verification code.</param>

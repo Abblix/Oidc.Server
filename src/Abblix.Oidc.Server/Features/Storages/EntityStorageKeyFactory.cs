@@ -77,6 +77,14 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     public string DeviceAuthorizationRequestKey(string deviceCode)
         => $"Abblix.Oidc.Server:Device:{deviceCode}";
 
+    /// <inheritdoc />
+    public string BackChannelAuthenticationNextPollKey(string requestId)
+        => $"Abblix.Oidc.Server:CIBA:NextPoll:{requestId}";
+
+    /// <inheritdoc />
+    public string DeviceAuthorizationNextPollKey(string deviceCode)
+        => $"Abblix.Oidc.Server:Device:NextPoll:{deviceCode}";
+
     /// <summary>
     /// Generates a storage key for mapping a user code to its device code.
     /// </summary>

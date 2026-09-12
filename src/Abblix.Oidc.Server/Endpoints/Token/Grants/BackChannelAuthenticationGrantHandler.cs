@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// Supports both short-polling (immediate response) and long-polling (holds connection until auth completes).
 /// </summary>
 /// <param name="storage">Service for storing and retrieving backchannel authentication requests.</param>
+/// <param name="pollSchedule">Holds the instant before which this request's client is told to slow
+/// down, under a key of its own so noting it cannot overwrite the authentication.</param>
+/// <param name="keyFactory">Names the key that instant lives under.</param>
 /// <param name="timeProvider">Provides access to the current time.</param>
 /// <param name="options">Configuration options for backchannel authentication including long-polling settings.</param>
 /// <param name="logger">Records a refusal the client is deliberately told nothing specific about.</param>
@@ -48,6 +52,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public partial class BackChannelAuthenticationGrantHandler(
     ILogger<BackChannelAuthenticationGrantHandler> logger,
     IBackChannelRequestStorage storage,
+    IPollScheduleStore pollSchedule,
+    IEntityStorageKeyFactory keyFactory,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
@@ -251,13 +257,9 @@ public partial class BackChannelAuthenticationGrantHandler(
                 => await RedeemAsync(
                     request.AuthenticationRequestId, authenticated, clientInfo, processor, cancellationToken),
 
-            // If the request is still pending and not yet time to poll again
-            { Status: BackChannelAuthenticationStatus.Pending, NextPollAt: { } nextPollAt }
-                when timeProvider.GetUtcNow() < nextPollAt
-                => new OidcError(ErrorCodes.SlowDown, "The token endpoint was polled before the minimum interval elapsed; reduce the polling rate."),
-
-            // If the user has not yet been authenticated and the request is still pending,
-            // either wait for status change (long-polling) or return immediately (short-polling)
+            // If the user has not yet been authenticated and the request is still pending, either
+            // tell a client that asked early to slow down, or wait for a status change (long
+            // polling) and otherwise answer immediately
             { Status: BackChannelAuthenticationStatus.Pending } pendingRequest
                 => await HandlePendingRequestAsync(
                     request.AuthenticationRequestId, pendingRequest, clientInfo, cancellationToken),
@@ -277,12 +279,16 @@ public partial class BackChannelAuthenticationGrantHandler(
     /// otherwise returns authorization_pending immediately.
     /// </summary>
     /// <remarks>
-    /// Note: There is a benign race condition between TryGetAsync (line 106) and UpdateAsync where concurrent
-    /// poll requests could overwrite each other's NextPollAt updates. This is acceptable because:
-    /// 1. The rate limiting check (line 136) happens BEFORE this method is called
-    /// 2. Any concurrent update will set NextPollAt to approximately the same time (now + interval)
-    /// 3. The worst case is slightly inconsistent polling intervals, not security vulnerability
-    /// 4. Proper fix would require compare-and-swap or optimistic locking at storage layer
+    /// The next-poll instant lives under a key of its own, so noting it writes nothing the
+    /// authentication owns. An earlier version of this method wrote the whole request back, and a
+    /// completion that landed between its read and that write was overwritten: the user had
+    /// authenticated, and the client was told to keep waiting until the request expired. The remark
+    /// here called that race benign, which held for the race it described - two polls overwriting
+    /// each other's instant, both writing about the same moment - and not for the one that mattered.
+    /// <para>
+    /// Two polls can still overwrite each other's instant, and that stays harmless for exactly the
+    /// reason the old remark gave.
+    /// </para>
     /// </remarks>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="authenticationRequest">The pending authentication request to update.</param>
@@ -304,14 +310,26 @@ public partial class BackChannelAuthenticationGrantHandler(
             return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
         }
 
-        // Update NextPollAt to enforce rate limiting for the next poll
-        // This prevents clients from spamming polls after the initial interval expires
+        // The instant before which this client is told to slow down, under a key of its own.
+        // Absence means it may ask now.
         var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
-        authenticationRequest.NextPollAt = timeProvider.GetUtcNow() + pollingInterval;
+        var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(authenticationRequestId);
+        var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
-        // Update the request in storage with new NextPollAt
-        // Note: This update is not atomic with the read above, see method remarks
-        await storage.UpdateAsync(authenticationRequestId, authenticationRequest, expiresIn);
+        // Asking early pushes the instant further out rather than resetting it from now: a client
+        // that ignores the interval does not get a fresh one.
+        var askedEarly = nextPollAt is { } earliest && timeProvider.GetUtcNow() < earliest;
+        await pollSchedule.SetNextPollAtAsync(
+            pollKey,
+            (askedEarly ? nextPollAt!.Value : timeProvider.GetUtcNow()) + pollingInterval,
+            expiresIn);
+
+        if (askedEarly)
+        {
+            return new OidcError(
+                ErrorCodes.SlowDown,
+                "The token endpoint was polled before the minimum interval elapsed; reduce the polling rate.");
+        }
 
         if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null
             && await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken)
