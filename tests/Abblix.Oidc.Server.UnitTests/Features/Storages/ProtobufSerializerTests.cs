@@ -341,7 +341,6 @@ public class ProtobufSerializerTests
         var grant = new AuthorizedGrant(session, context);
         var bcRequest = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
         {
-            NextPollAt = DateTimeOffset.UtcNow.AddSeconds(30),
             Status = status,
         };
 
@@ -352,7 +351,6 @@ public class ProtobufSerializerTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(bcRequest.Status, result.Status);
-        Assert.NotNull(result.NextPollAt);
         Assert.Equal(bcRequest.AuthorizedGrant.AuthSession.Subject, result.AuthorizedGrant.AuthSession.Subject);
     }
 

@@ -598,7 +598,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the client polls too early (before NextPollAt time),
+    /// Verifies that when the client polls too early (before the instant it was given),
     /// the handler returns a SlowDown error and increases the interval.
     /// </summary>
     [Fact]
@@ -613,7 +613,6 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
@@ -641,10 +640,10 @@ public class DeviceCodeGrantHandlerTests
     /// <summary>
     /// Verifies that when the authorization request is still pending
     /// and the client polls at the correct time, the handler returns an AuthorizationPending error
-    /// and updates NextPollAt for rate limiting.
+    /// and notes when it may ask again.
     /// </summary>
     [Fact]
-    public async Task PendingRequest_NormalPoll_ShouldReturnAuthorizationPendingErrorAndUpdateNextPollAt()
+    public async Task PendingRequest_NormalPoll_ShouldReturnAuthorizationPendingErrorAndNoteTheNextPoll()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -653,7 +652,6 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
@@ -796,26 +794,25 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// Verifies that time-based rate limiting works correctly at the boundary condition
-    /// (exactly at NextPollAt time should NOT trigger SlowDown).
+    /// (asking exactly at the instant given should NOT trigger SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_ExactlyAtNextPollAt_ShouldReturnAuthorizationPending()
+    public async Task PendingRequest_ExactlyAtTheInstantGiven_ShouldReturnAuthorizationPending()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        var nextPollAt = _currentTime;
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime, TimeSpan.FromMinutes(15));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -826,27 +823,26 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the authorization is pending but NextPollAt has passed,
+    /// Verifies that when the authorization is pending but the instant given has passed,
     /// the handler returns an AuthorizationPending error (not SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_AfterNextPollAt_ShouldReturnAuthorizationPendingError()
+    public async Task PendingRequest_AfterTheInstantGiven_ShouldReturnAuthorizationPendingError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        var nextPollAt = _currentTime.AddSeconds(-1);
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(15));
 
         // Act
         var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -870,7 +866,6 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = _currentTime.AddSeconds(-30),
             ExpiresAt = _currentTime.AddSeconds(-1),
         };
 
@@ -985,7 +980,6 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(3),
         };
 

@@ -185,9 +185,10 @@ public partial class UserCodeVerificationService(
     /// against a REMOVED record would miss.
     /// </para>
     /// <para>
-    /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
-    /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
-    /// Closing it needs a compare-and-swap the entity storage does not expose, which is issue 194.
+    /// Re-reading NARROWS the window to one store round trip and does not close it. What closes it is a
+    /// store that decides the write - a conditional update, or a claim on a key of its own - which is
+    /// what the polling paths now do and what this one still cannot, because it writes the record the
+    /// approval lives in. Issue 435 tracks the remaining half.
     /// </para>
     /// </remarks>
     /// <param name="deviceCode">The record to decide on.</param>

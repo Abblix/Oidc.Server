@@ -200,7 +200,7 @@ public partial class BackChannelAuthenticationGrantHandler(
     ///   then re-checks storage to return grant or appropriate error</item>
     ///   <item><term>Denied:</term> Returns access_denied error</item>
     ///   <item><term>Expired/Not Found:</term> Returns expired_token error</item>
-    ///   <item><term>Rate Limited:</term> Returns slow_down error if polled before NextPollAt</item>
+    ///   <item><term>Rate Limited:</term> Returns slow_down when asked before the instant this request's client was given</item>
     /// </list>
     /// <para>
     /// Long-polling reduces latency (0-1s vs 0-5s) and server load (1-4 req/min vs 12 req/min) by holding the
@@ -275,7 +275,7 @@ public partial class BackChannelAuthenticationGrantHandler(
 
     /// <summary>
     /// Handles pending authentication requests with optional long-polling support.
-    /// Updates NextPollAt to enforce rate limiting on subsequent polls, then attempts long-polling if enabled,
+    /// Notes when the client may ask again, then attempts long-polling if enabled,
     /// otherwise returns authorization_pending immediately.
     /// </summary>
     /// <remarks>

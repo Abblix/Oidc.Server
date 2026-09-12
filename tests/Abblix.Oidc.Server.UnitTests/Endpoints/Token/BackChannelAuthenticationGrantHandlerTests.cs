@@ -664,7 +664,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// given has passed, the handler returns an AuthorizationPending error (not SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_AfterNextPollAt_ShouldReturnAuthorizationPendingError()
+    public async Task PendingRequest_AfterTheInstantGiven_ShouldReturnAuthorizationPendingError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
@@ -849,7 +849,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     /// (asking exactly at the instant given should NOT trigger SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_ExactlyAtNextPollAt_ShouldReturnAuthorizationPending()
+    public async Task PendingRequest_ExactlyAtTheInstantGiven_ShouldReturnAuthorizationPending()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };

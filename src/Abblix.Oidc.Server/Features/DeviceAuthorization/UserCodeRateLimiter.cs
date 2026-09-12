@@ -80,12 +80,9 @@ public partial class UserCodeRateLimiter(
 
         if (capReached != null)
         {
-            var retryAfter = EndOf(window, deviceAuthOptions) - now;
-            if (retryAfter > TimeSpan.Zero)
-            {
-                LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxIpFailuresPerMinute);
-                return retryAfter;
-            }
+            // The window this read is about is the one the clock is in, so its end is always still ahead.
+            LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxIpFailuresPerMinute);
+            return EndOf(window, deviceAuthOptions) - now;
         }
 
         return true;

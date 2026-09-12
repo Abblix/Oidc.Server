@@ -31,14 +31,9 @@ public sealed class PollScheduleStore(IEntityStorage storage) : IPollScheduleSto
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        // Nothing is written once the request it belongs to has no time left: the entry would outlive what
-        // it describes, and the caller that hands over a non-positive span is already on its way to
-        // telling the client the request expired.
-        return expiresIn <= TimeSpan.Zero
-            ? Task.CompletedTask
-            : storage.SetAsync(
-                key,
-                new PollSchedule { NextPollAt = nextPollAt.ToTimestamp() },
-                new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
+        return storage.SetAsync(
+            key,
+            new PollSchedule { NextPollAt = nextPollAt.ToTimestamp() },
+            new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn });
     }
 }

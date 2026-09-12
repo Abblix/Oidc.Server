@@ -180,7 +180,6 @@ public class BackChannelAuthenticationRequestProcessor(
 			// endpoint" - it has nothing to sit after until a first poll exists. This used to read
 			// now + interval, which answered the first request with slow_down and cost every sign-in one
 			// interval for polling too fast when nothing had been polled.
-			NextPollAt = timeProvider.GetUtcNow(),
 
 			ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint,
 			ClientNotificationToken = request.Model.ClientNotificationToken,

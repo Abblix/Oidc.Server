@@ -32,7 +32,11 @@ message DeviceAuthorizationRequest {
   string user_code = 4;
 
   // Next time the client should poll for updates
-  optional google.protobuf.Timestamp next_poll_at = 5;
+  // Field 5 held the next-poll instant. It lives under a key of its own now, so noting when a client
+  // may ask again cannot overwrite what the user's approval writes here. Reserved rather than freed:
+  // records written by an earlier build still carry it, and a new field taking this number would read
+  // those bytes as its own.
+  reserved 5;
 
   // Current status of the authorization request
   DeviceAuthorizationStatus status = 6;

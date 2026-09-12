@@ -39,9 +39,6 @@ internal static class DeviceAuthorizationRequestMapper
             }
         }
 
-        if (source.NextPollAt.HasValue)
-            proto.NextPollAt = Timestamp.FromDateTimeOffset(source.NextPollAt.Value);
-
         if (source.AuthorizedGrant != null)
             proto.AuthorizedGrant = source.AuthorizedGrant.ToProto();
 
@@ -70,7 +67,6 @@ internal static class DeviceAuthorizationRequestMapper
             resources,
             source.UserCode)
         {
-            NextPollAt = source.NextPollAt != null ? source.NextPollAt.ToDateTimeOffset() : null,
             ExpiresAt = source.ExpiresAt?.ToDateTimeOffset() ?? default,
             Status = source.Status.FromProtoStatus(),
             AuthorizedGrant = source.AuthorizedGrant?.FromProto(),
