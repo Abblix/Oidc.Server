@@ -332,8 +332,9 @@ public partial class BackChannelAuthenticationGrantHandler(
         }
 
         // Asking early pushes the instant further out rather than resetting it from now: a client
-        // that ignores the interval does not get a fresh one. Never beyond the request's own expiry,
-        // because past that a client could only ever be told to slow down for a request that is gone.
+        // that ignores the interval does not get a fresh one. Bounded by the request's own expiry, which
+        // changes no answer a client can receive - the expiry check above runs first - and keeps the
+        // stored instant inside the life of what it describes.
         var pushedTo = (askedEarly ? nextPollAt!.Value : now) + pollingInterval;
         await pollSchedule.SetNextPollAtAsync(
             pollKey,

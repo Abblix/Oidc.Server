@@ -145,18 +145,40 @@ public record DeviceAuthorizationOptions
     /// How many failed attempts one user code allows before it stops being verifiable at all.
     /// </summary>
     /// <remarks>
-    /// The growing pause slows guessing down; this stops it. A code a person types is short, so slowing is
-    /// not enough on its own - the number of guesses allowed over a code's whole life is what decides the
-    /// chance of landing one, which is the sum RFC 8628 section 5.1 works through. Reaching this number
-    /// leaves the code refused for as long as it would otherwise have lived, and the device's user starts
-    /// again with a fresh code.
+    /// This is what stops one code being worked at, from one source or from a thousand: the attempts belong
+    /// to the code, not to whoever made them. Reaching the number leaves that code refused for as long as
+    /// its records stand, and the person starts again with a fresh one.
     /// <para>
-    /// The cost of a small value is a person who mistypes that many times having to start over; the cost
-    /// of a large one is an attacker getting that many guesses. Five is the number the document's own
-    /// worked example uses. See <see cref="UserCodeAlphabet"/> for the arithmetic that ties the two.
+    /// It does NOT bound a search through the space of codes, and no per-code number can: a guesser submits
+    /// a different value every time, so each value it tries is a code the server never issued and has its
+    /// own untouched allowance. What bounds the search is
+    /// <see cref="MaxFailedAttemptsPerWindow"/> together with the code's own strength - see
+    /// <see cref="UserCodeAlphabet"/> for that arithmetic.
+    /// </para>
+    /// <para>
+    /// The cost of a small value is a person who mistypes a live code that many times starting over. Five
+    /// is the number RFC 8628 section 5.1 uses in its worked example.
     /// </para>
     /// </remarks>
     public int MaxUserCodeAttempts { get; set; } = 5;
+
+    /// <summary>
+    /// How many failed verification attempts the server entertains in one counting window, across every
+    /// code and every source.
+    /// </summary>
+    /// <remarks>
+    /// The per-code and per-address limits both bound something an attacker controls: a guesser never
+    /// submits the same string twice, and one that rotates addresses is not bounded by either. This is
+    /// what bounds the rate of the search itself, and the only thing that does.
+    /// <para>
+    /// It is an emergency brake rather than a routine limit, so it belongs well above the failures a
+    /// healthy deployment produces - those are typos, a few per minute at most. While it is held, a person
+    /// who mistypes is refused too: that is the cost of the brake, and it is why the number is generous
+    /// rather than tight. What decides the chance of a guess landing is the code's own strength, for which
+    /// see <see cref="UserCodeAlphabet"/>.
+    /// </para>
+    /// </remarks>
+    public int MaxFailedAttemptsPerWindow { get; set; } = 100;
 
     /// <summary>
     /// The maximum number of failed user code verification attempts allowed from a single IP address

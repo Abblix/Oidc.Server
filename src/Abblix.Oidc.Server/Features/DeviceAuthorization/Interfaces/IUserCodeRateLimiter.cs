@@ -40,6 +40,20 @@ public interface IUserCodeRateLimiter
     Task RecordFailureAsync(string userCode, string clientIdentifier);
 
     /// <summary>
+    /// Records a failed attempt at a user code that does not exist.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not charged to the value that was typed. A guesser never submits the same value
+    /// twice, so counting per value bounds nothing - and a count held against a value nobody was issued
+    /// would be spent before a real code could ever carry it, leaving the person who reads that code off
+    /// their screen unable to use it. What this attempt belongs to is the source that made it and the
+    /// server's own budget for the window.
+    /// </remarks>
+    /// <param name="clientIdentifier">The client identifier (typically IP address) making the attempt.</param>
+    /// <returns>A task that completes when the attempt has been recorded.</returns>
+    Task RecordUnknownCodeAsync(string clientIdentifier);
+
+    /// <summary>
     /// Records a successful verification to reset rate limiting counters.
     /// </summary>
     /// <param name="userCode">The user code that was successfully verified.</param>

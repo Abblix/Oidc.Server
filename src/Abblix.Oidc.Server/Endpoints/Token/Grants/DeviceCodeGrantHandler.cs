@@ -73,8 +73,7 @@ public partial class DeviceCodeGrantHandler(
         // already run out (RFC 8628 section 3.2).
         var now = timeProvider.GetUtcNow();
 
-        return await DecideAsync(
-            request.DeviceCode, clientInfo, deviceRequest, now, true, cancellationToken);
+        return await DecideAsync(request.DeviceCode, clientInfo, deviceRequest, now, cancellationToken);
     }
 
     /// <summary>
@@ -84,21 +83,20 @@ public partial class DeviceCodeGrantHandler(
     /// Apart from the entry point because the pending arm reads the record once more and decides again on
     /// what it finds: the user's approval can land between the first read and the answer, and a poll that
     /// says "still pending" while the record says otherwise costs the user a whole polling interval with the
-    /// device in front of them. The second decision runs with <paramref name="mayReadAgain"/> false, so a
-    /// record that is still pending answers instead of reading a third time.
+    /// device in front of them. The second decision is reached only for a record that is no longer pending,
+    /// so it cannot enter the arm that reads again - the case analysis bounds the recursion, and no flag is
+    /// needed to say so.
     /// </remarks>
     /// <param name="deviceCode">The device code being redeemed, already known to be present.</param>
     /// <param name="clientInfo">The client the answer goes to.</param>
     /// <param name="deviceRequest">What the store held when it was read, or null when it held nothing.</param>
     /// <param name="now">The one clock reading this answer is decided on.</param>
-    /// <param name="mayReadAgain">False once this is the decision made after a second read.</param>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     private async Task<Result<AuthorizedGrant, OidcError>> DecideAsync(
         string deviceCode,
         ClientInfo clientInfo,
         Features.DeviceAuthorization.DeviceAuthorizationRequest? deviceRequest,
         DateTimeOffset now,
-        bool mayReadAgain,
         CancellationToken cancellationToken)
     {
         var deviceAuthOptions = options.Value.DeviceAuthorization
@@ -234,20 +232,21 @@ public partial class DeviceCodeGrantHandler(
                 // The approval may have landed since the read this decision is made on. Reading once more
                 // is about the answer being current, not about keeping the approval safe: nothing on this
                 // path writes the record, so there is nothing for a poll to overwrite.
-                if (mayReadAgain &&
-                    await storage.TryGetByDeviceCodeAsync(deviceCode) is
-                        { Status: not DeviceAuthorizationStatus.Pending } advanced)
+                if (await storage.TryGetByDeviceCodeAsync(deviceCode) is
+                    { Status: not DeviceAuthorizationStatus.Pending } advanced)
                 {
-                    return await DecideAsync(deviceCode, clientInfo, advanced, now, false, cancellationToken);
+                    return await DecideAsync(deviceCode, clientInfo, advanced, now, cancellationToken);
                 }
 
                 // Asking early pushes the instant further out rather than resetting it from now, so a
                 // client that ignores the interval cannot keep itself one interval ahead forever. RFC
                 // 8628 section 3.5 puts the widening on the client ("the interval MUST be increased by
                 // 5 seconds for this and all subsequent requests") and says nothing about the server,
-                // so this is our enforcement of it rather than a requirement of the document. Never
-                // beyond the code's own expiry, because past that a client could only ever be told to
-                // slow down for a code that no longer exists.
+                // so this is our enforcement of it rather than a requirement of the document.
+                //
+                // Bounded by the code's own expiry, which changes no answer a client can receive - the
+                // expiry arm above runs first, so nothing reaches here once the code is gone. It keeps
+                // the stored instant inside the life of what it describes, and nothing more.
                 var pushedTo = (asked ? nextPollAt!.Value : now) + pollingInterval;
                 await pollSchedule.SetNextPollAtAsync(
                     pollKey,

@@ -120,6 +120,19 @@ public interface IEntityStorageKeyFactory
     string UserCodeRateLimitAttemptKey(string userCode, int attempt);
 
     /// <summary>
+    /// Generates a storage key for one failed verification attempt anywhere in the server, inside one
+    /// counting window.
+    /// </summary>
+    /// <remarks>
+    /// Not keyed by anything the caller chooses, which is the point: a guesser rotating addresses and
+    /// never repeating a code escapes every other count.
+    /// </remarks>
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string FailedAttemptKey(long window, int attempt);
+
+    /// <summary>
     /// Generates a storage key for one failed verification attempt from a client address, inside one
     /// counting window.
     /// </summary>

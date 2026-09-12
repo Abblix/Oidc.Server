@@ -51,10 +51,11 @@ public partial class UserCodeRateLimiter(
     /// burst can reach it, and then the code is answered with that pause for as long as it exists, which
     /// is what a burst of wrong guesses against a single code deserves.
     /// <para>
-    /// "For as long as it exists" is the real bound, and it is shorter than the configured cap whenever
-    /// the cap is longer than a code's lifetime - which it is by default. Each rung is written with the
-    /// code's lifetime from the moment it is claimed and is never renewed, so the whole ladder is gone
-    /// once the code is, and a pause is never served for a code nobody can verify any more.
+    /// Each rung is written with the code's lifetime from the moment it is claimed and is never renewed, so
+    /// a sustained attack no longer extends the pause indefinitely - which is what a record rewritten on
+    /// every failure used to do. It does NOT mean the records die with the code: counted from an attempt
+    /// rather than from issuance, they outlive it by up to one lifetime, and nothing here asks whether a
+    /// code exists, so a pause can be served for a value that names nothing.
     /// </para>
     /// </remarks>
     internal const int AttemptLadderLength = 32;
@@ -103,7 +104,31 @@ public partial class UserCodeRateLimiter(
             return EndOf(window, deviceAuthOptions) - now;
         }
 
+        // The server's own budget for this window. This is what a guesser rotating addresses runs into:
+        // the per-code count never sees it, because it never submits one value twice, and the per-address
+        // count never sees it either.
+        var budgetSpent = await storage.GetAsync<RateLimitAttempt>(
+            keyFactory.FailedAttemptKey(window, deviceAuthOptions.MaxFailedAttemptsPerWindow),
+            removeOnRetrieval: false);
+
+        if (budgetSpent != null)
+        {
+            LogFailedAttemptBudgetSpent(deviceAuthOptions.MaxFailedAttemptsPerWindow);
+            return EndOf(window, deviceAuthOptions) - now;
+        }
+
         return true;
+    }
+
+    /// <inheritdoc />
+    public async Task RecordUnknownCodeAsync(string clientIdentifier)
+    {
+        var now = timeProvider.GetUtcNow();
+        var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
+
+        // No per-code count: there is no code. Charging this to the value that was typed would count the
+        // one thing a guesser never repeats, and would let it spend the allowance of a code issued later.
+        await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
     }
 
     /// <inheritdoc />
@@ -128,18 +153,41 @@ public partial class UserCodeRateLimiter(
             LogUserCodeBlocked(userCode, blockedUntil, attempts);
         }
 
-        var window = WindowOf(now, deviceAuthOptions);
-        var ipAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, rung),
-            deviceAuthOptions.MaxIpFailuresPerMinute,
-            now,
-            deviceAuthOptions.IpRateLimitStateExpiration);
+        var ipAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxIpFailuresPerMinute <= ipAttempts)
         {
             LogBruteForceDetected(userCode, clientIdentifier, attempts, ipAttempts);
         }
+    }
+
+    /// <summary>
+    /// Records one failed attempt against the source that made it and against the server's budget for the
+    /// window, and answers how many that source has spent.
+    /// </summary>
+    /// <remarks>
+    /// Both counts belong to every failed attempt, whether or not a code was found, which is why they live
+    /// apart from the per-code ladder.
+    /// </remarks>
+    private async Task<int> RecordAgainstSourceAndBudgetAsync(
+        string clientIdentifier, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
+    {
+        var window = WindowOf(now, deviceAuthOptions);
+
+        var ipAttempts = await ClaimAttemptAsync(
+            rung => keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, rung),
+            deviceAuthOptions.MaxIpFailuresPerMinute,
+            now,
+            deviceAuthOptions.IpRateLimitStateExpiration);
+
+        await ClaimAttemptAsync(
+            rung => keyFactory.FailedAttemptKey(window, rung),
+            deviceAuthOptions.MaxFailedAttemptsPerWindow,
+            now,
+            deviceAuthOptions.IpRateLimitStateExpiration);
+
+        return ipAttempts;
     }
 
     /// <inheritdoc />
@@ -176,7 +224,28 @@ public partial class UserCodeRateLimiter(
         var attempt = new RateLimitAttempt { At = now.ToTimestamp() };
         var storageOptions = new StorageOptions { AbsoluteExpirationRelativeToNow = expiresIn };
 
-        for (var rung = 1; rung <= ladderLength; rung++)
+        // Where the run currently ends, found by halving rather than walked: a budget of a hundred would
+        // otherwise cost a hundred reads on one failure, and the counts that matter most are the widest.
+        var (low, high) = (1, ladderLength);
+        var highestTaken = 0;
+        while (low <= high)
+        {
+            var middle = low + (high - low) / 2;
+            if (await storage.GetAsync<RateLimitAttempt>(keyOfRung(middle), removeOnRetrieval: false) != null)
+            {
+                highestTaken = middle;
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        // From there upward, because another caller may have taken the same rung between the read and the
+        // claim. Each loss moves this caller one rung up, so two attempts arriving together are counted as
+        // two - which is the whole point of claiming rather than counting.
+        for (var rung = highestTaken + 1; rung <= ladderLength; rung++)
         {
             if (await storage.TrySetIfAbsentAsync(keyOfRung(rung), attempt, storageOptions))
                 return rung;

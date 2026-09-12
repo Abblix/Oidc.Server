@@ -248,9 +248,8 @@ public class UserCodeRateLimiterTests
     /// </summary>
     /// <remarks>
     /// Doubling reaches hours within a dozen failures, so without a ceiling a code would be answered with a
-    /// wait outlasting anything a person would sit through - and outlasting the code itself, which makes the
-    /// number meaningless rather than strict. Driven with the attempt cap raised, because with the shipped
-    /// cap the code is spent before the pause has doubled far enough to meet any sane ceiling.
+    /// wait outlasting anything a person would sit through. Driven with the attempt cap raised, because with
+    /// the shipped cap the code is spent before the pause has doubled far enough to meet any sane ceiling.
     /// </remarks>
     [Fact]
     public async Task ThePause_NeverExceedsTheConfiguredMaximum()

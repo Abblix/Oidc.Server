@@ -64,6 +64,14 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 "a value below 1 describes a pause starting before any attempt has been made. Choose a value " +
                 $"between 1 and {UserCodeRateLimiter.AttemptLadderLength}.");
 
+        if (deviceAuthorization.MaxFailedAttemptsPerWindow < 1)
+            return ValidateOptionsResult.Fail(
+                $"{nameof(DeviceAuthorizationOptions.MaxFailedAttemptsPerWindow)} is " +
+                $"{deviceAuthorization.MaxFailedAttemptsPerWindow}, so the server would refuse every " +
+                "verification from the first failure of every window - and it is the only limit that bounds " +
+                "a guessing search spread across addresses, so switching it off that way removes the bound " +
+                "rather than tightening it. Choose 1 or more.");
+
         if (deviceAuthorization.MaxIpFailuresPerMinute < 1)
             return ValidateOptionsResult.Fail(
                 $"{nameof(DeviceAuthorizationOptions.MaxIpFailuresPerMinute)} is " +

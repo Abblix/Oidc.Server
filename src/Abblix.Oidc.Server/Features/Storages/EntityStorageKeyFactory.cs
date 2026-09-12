@@ -98,6 +98,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:Attempt:{attempt}";
 
     /// <inheritdoc />
+    public string FailedAttemptKey(long window, int attempt)
+        => $"Abblix.Oidc.Server:RateLimit:Failed:{window}:Attempt:{attempt}";
+
+    /// <inheritdoc />
     public string IpRateLimitAttemptKey(string clientIdentifier, long window, int attempt)
         => $"Abblix.Oidc.Server:RateLimit:Ip:{clientIdentifier}:{window}:Attempt:{attempt}";
 

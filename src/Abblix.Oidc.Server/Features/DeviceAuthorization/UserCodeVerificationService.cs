@@ -56,15 +56,20 @@ public partial class UserCodeVerificationService(
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
         {
-            // Record failed attempt for rate limiting
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            // Charged to the source and to the server's budget for the window, and NOT to the value that
+            // was typed: there is no code here to charge. A guesser never submits one value twice, so a
+            // count per value bounds nothing - and a count standing against a value nobody was issued
+            // would be spent before a real code could carry it, leaving the person reading that code off
+            // their screen unable to use it.
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return new InvalidUserCode();
         }
 
         var (_, request) = result.Value;
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
-            // Code already used - still record as failure to prevent enumeration
+            // This value IS a code, so the attempt belongs to it. That is what stops one code being
+            // hammered, from one source or from a thousand.
             await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return new UserCodeAlreadyUsed();
         }
@@ -90,9 +95,20 @@ public partial class UserCodeVerificationService(
     public async Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant)
     {
         userCode = normalizer.Normalize(userCode);
+
+        // The same limits as verification, because this takes the same thing - a user code as a string -
+        // and answers whether it names a live authorization, which is the question a guesser is asking.
+        // Without this it is the same oracle with no counting at all, and the one that grants.
+        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
+        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+            return false;
+
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
+        {
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return false;
+        }
 
         var (deviceCode, request) = result.Value;
 
@@ -148,9 +164,18 @@ public partial class UserCodeVerificationService(
     public async Task<bool> DenyAsync(string userCode)
     {
         userCode = normalizer.Normalize(userCode);
+
+        // Counted like verification and approval: this answers the same question about the same input.
+        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
+        if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
+            return false;
+
         var result = await storage.TryGetByUserCodeAsync(userCode);
         if (result == null)
+        {
+            await rateLimiter.RecordUnknownCodeAsync(clientIp);
             return false;
+        }
 
         var (deviceCode, request) = result.Value;
 

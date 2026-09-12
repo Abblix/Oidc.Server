@@ -44,16 +44,18 @@ public class DeviceAuthorizationOptionsValidatorTests
     [InlineData(64, 10, 60, 120)]
     [InlineData(3, 10, 60, 120, 0)]
     [InlineData(3, 10, 60, 120, 64)]
+    [InlineData(3, 10, 60, 120, 5, 0)]
     [InlineData(0, 10, 60, 120)]
     [InlineData(3, 0, 60, 120)]
     [InlineData(3, 10, 0, 120)]
     [InlineData(3, 10, 60, 30)]
     public void Fails_when_a_brute_force_limit_cannot_fire(
         int failuresBeforeBackoff, int addressCap, int windowSeconds, int stateSeconds,
-        int attemptsPerCode = 5)
+        int attemptsPerCode = 5, int serverBudget = 100)
     {
         var settings = ValidSettings();
         settings.MaxUserCodeAttempts = attemptsPerCode;
+        settings.MaxFailedAttemptsPerWindow = serverBudget;
         settings.MaxFailuresBeforeBackoff = failuresBeforeBackoff;
         settings.MaxIpFailuresPerMinute = addressCap;
         settings.RateLimitWindow = TimeSpan.FromSeconds(windowSeconds);
