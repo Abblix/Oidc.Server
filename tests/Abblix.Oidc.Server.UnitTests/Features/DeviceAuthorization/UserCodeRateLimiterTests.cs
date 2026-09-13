@@ -145,6 +145,56 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// The remaining life of a spent code is counted from its FIRST attempt, not its last.
+    /// </summary>
+    /// <remarks>
+    /// A code lives a fixed time from issuance, and the first attempt against it happened inside that life -
+    /// so the first attempt plus one lifetime is never earlier than the code's own end, and never later than
+    /// one lifetime past it. The last attempt carries no such relation: attempts can arrive until the moment
+    /// the code dies, so counting from the last one promises a wait outlasting the code by however long the
+    /// guessing went on.
+    /// <para>
+    /// Every other row here spends the allowance in one instant, where the first attempt and the last are
+    /// the same record and the distinction is invisible. Here they are two minutes apart, so the answer says
+    /// which one the code reads.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRemainingLifeOfASpentCode_IsCountedFromItsFirstAttempt()
+    {
+        await Fail(1);
+        _time.Advance(TimeSpan.FromMinutes(2));
+        await Fail(4);
+
+        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+
+        // Five minutes of life from the first attempt, two of them already gone.
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromMinutes(3), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
+    /// What a caller is told to wait is what is LEFT of the pause, not how long the pause was.
+    /// </summary>
+    /// <remarks>
+    /// The rows above ask the moment the failure is recorded, where the two are equal and an answer giving
+    /// the whole pause reads as correct. Asked a second later the difference is a second, and a client acting
+    /// on the larger number waits longer than it was refused for.
+    /// </remarks>
+    [Fact]
+    public async Task TheWait_IsWhatIsLeftOfThePause()
+    {
+        // The fourth failure earns two seconds.
+        await Fail(4);
+        _time.Advance(TimeSpan.FromSeconds(1));
+
+        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
     /// The pause is measured from the failure that earned it, so waiting it out lets the next attempt in.
     /// </summary>
     [Fact]
