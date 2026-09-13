@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 
 /// <summary>
 /// Implements rate limiting for user code verification attempts to prevent brute force attacks.
-/// Uses exponential backoff and per-IP rate limiting as recommended by RFC 8628 Section 5.1.
+/// Uses a growing pause per code, a cap per source address and a budget for the whole server, as
+/// recommended by RFC 8628 Section 5.1.
 /// </summary>
 /// <remarks>
 /// Every attempt claims a key of its own, and the count of attempts is how many of those keys exist.
@@ -95,13 +96,13 @@ public partial class UserCodeRateLimiter(
         // the rung at the cap is the whole question and costs one read.
         var window = WindowOf(now, deviceAuthOptions);
         var capReached = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, deviceAuthOptions.MaxIpFailuresPerMinute),
+            keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
             removeOnRetrieval: false);
 
         if (capReached != null)
         {
             // The window this read is about is the one the clock is in, so its end is always still ahead.
-            LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxIpFailuresPerMinute);
+            LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxAddressFailuresPerWindow);
             return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
@@ -163,7 +164,7 @@ public partial class UserCodeRateLimiter(
         var ipAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
-            deviceAuthOptions.MaxIpFailuresPerMinute <= ipAttempts)
+            deviceAuthOptions.MaxAddressFailuresPerWindow <= ipAttempts)
         {
             LogBruteForceDetected(userCode, clientIdentifier, attempts, ipAttempts);
         }
@@ -183,16 +184,16 @@ public partial class UserCodeRateLimiter(
         var window = WindowOf(now, deviceAuthOptions);
 
         var ipAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.IpRateLimitAttemptKey(clientIdentifier, window, rung),
-            deviceAuthOptions.MaxIpFailuresPerMinute,
+            rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
+            deviceAuthOptions.MaxAddressFailuresPerWindow,
             now,
-            deviceAuthOptions.IpRateLimitStateExpiration);
+            deviceAuthOptions.RateLimitRetention);
 
         await ClaimAttemptAsync(
             rung => keyFactory.FailedAttemptKey(window, rung),
             deviceAuthOptions.MaxFailedAttemptsPerWindow,
             now,
-            deviceAuthOptions.IpRateLimitStateExpiration);
+            deviceAuthOptions.RateLimitRetention);
 
         return ipAttempts;
     }

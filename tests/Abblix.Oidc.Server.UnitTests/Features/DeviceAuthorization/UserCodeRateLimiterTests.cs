@@ -74,10 +74,10 @@ public class UserCodeRateLimiterTests
         UserCodeLength = 8,
         VerificationUri = new Uri("https://auth.example.com/device"),
         MaxFailuresBeforeBackoff = 3,
-        MaxIpFailuresPerMinute = 10,
+        MaxAddressFailuresPerWindow = 10,
         RateLimitWindow = TimeSpan.FromMinutes(1),
         MaxBackoffDuration = TimeSpan.FromHours(1),
-        IpRateLimitStateExpiration = TimeSpan.FromMinutes(2),
+        RateLimitRetention = TimeSpan.FromMinutes(2),
     };
 
     /// <summary>

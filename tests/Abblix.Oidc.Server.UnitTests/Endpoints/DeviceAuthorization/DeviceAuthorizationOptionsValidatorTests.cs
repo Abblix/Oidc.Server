@@ -57,9 +57,9 @@ public class DeviceAuthorizationOptionsValidatorTests
         settings.MaxUserCodeAttempts = attemptsPerCode;
         settings.MaxFailedAttemptsPerWindow = serverBudget;
         settings.MaxFailuresBeforeBackoff = failuresBeforeBackoff;
-        settings.MaxIpFailuresPerMinute = addressCap;
+        settings.MaxAddressFailuresPerWindow = addressCap;
         settings.RateLimitWindow = TimeSpan.FromSeconds(windowSeconds);
-        settings.IpRateLimitStateExpiration = TimeSpan.FromSeconds(stateSeconds);
+        settings.RateLimitRetention = TimeSpan.FromSeconds(stateSeconds);
 
         var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
 

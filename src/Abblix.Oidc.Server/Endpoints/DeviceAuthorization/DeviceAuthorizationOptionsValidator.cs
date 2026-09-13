@@ -72,10 +72,10 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 "a guessing search spread across addresses, so switching it off that way removes the bound " +
                 "rather than tightening it. Choose 1 or more.");
 
-        if (deviceAuthorization.MaxIpFailuresPerMinute < 1)
+        if (deviceAuthorization.MaxAddressFailuresPerWindow < 1)
             return ValidateOptionsResult.Fail(
-                $"{nameof(DeviceAuthorizationOptions.MaxIpFailuresPerMinute)} is " +
-                $"{deviceAuthorization.MaxIpFailuresPerMinute}, so the per-address cap can never be reached and " +
+                $"{nameof(DeviceAuthorizationOptions.MaxAddressFailuresPerWindow)} is " +
+                $"{deviceAuthorization.MaxAddressFailuresPerWindow}, so the per-address cap can never be reached and " +
                 "failures from one source are not limited at all. Choose 1 or more.");
 
         // Deliberately NOT refused here: a polling interval of no length (poll as fast as you like -
@@ -96,10 +96,10 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 $"{deviceAuthorization.RateLimitWindow}, and attempts are counted per window, so a window " +
                 "of no length counts nothing. Choose a positive duration.");
 
-        if (deviceAuthorization.IpRateLimitStateExpiration < deviceAuthorization.RateLimitWindow)
+        if (deviceAuthorization.RateLimitRetention < deviceAuthorization.RateLimitWindow)
             return ValidateOptionsResult.Fail(
-                $"{nameof(DeviceAuthorizationOptions.IpRateLimitStateExpiration)} " +
-                $"({deviceAuthorization.IpRateLimitStateExpiration}) is shorter than " +
+                $"{nameof(DeviceAuthorizationOptions.RateLimitRetention)} " +
+                $"({deviceAuthorization.RateLimitRetention}) is shorter than " +
                 $"{nameof(DeviceAuthorizationOptions.RateLimitWindow)} " +
                 $"({deviceAuthorization.RateLimitWindow}), so recorded attempts are dropped while their own " +
                 "window is still running and the cap is reached later than configured, or never. Keep the " +

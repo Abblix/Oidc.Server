@@ -205,14 +205,22 @@ public record DeviceAuthorizationOptions
     public int MaxFailedAttemptsPerWindow { get; set; } = 100;
 
     /// <summary>
-    /// The maximum number of failed user code verification attempts allowed from a single IP address
-    /// within one counting window. Prevents distributed brute force attacks.
+    /// How many failed verification attempts one source address may accumulate within one counting window,
+    /// across every code it tries.
     /// </summary>
-    public int MaxIpFailuresPerMinute { get; set; } = 10;
+    /// <remarks>
+    /// The window is <see cref="RateLimitWindow"/> and is a setting of its own, so what this number allows
+    /// is read together with it rather than per minute.
+    /// <para>
+    /// It bounds one address and nothing more. A search spread over addresses spends a fresh allowance from
+    /// each one, which is what <see cref="MaxFailedAttemptsPerWindow"/> is for.
+    /// </para>
+    /// </remarks>
+    public int MaxAddressFailuresPerWindow { get; set; } = 10;
 
     /// <summary>
-    /// How long one counting window for per-IP rate limiting lasts.
-    /// Failed attempts outside the current window are not counted toward the rate limit.
+    /// How long one counting window lasts, for the per-address cap and the server's budget alike.
+    /// Failed attempts outside the current window are not counted toward either.
     /// </summary>
     /// <remarks>
     /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
@@ -233,8 +241,13 @@ public record DeviceAuthorizationOptions
     public TimeSpan MaxBackoffDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// How long a recorded per-IP attempt is kept in storage.
-    /// Must be longer than one window, or attempts stop being counted before their window ends.
+    /// How long a recorded attempt against a window is kept in storage - both the per-address records and
+    /// the server's own budget, which are counted the same way and live for the same time.
     /// </summary>
-    public TimeSpan IpRateLimitStateExpiration { get; set; } = TimeSpan.FromMinutes(2);
+    /// <remarks>
+    /// Must outlast one window, or attempts stop being counted before the window they belong to ends, which
+    /// reads as a stricter setting and acts as no setting at all. Per-code records are not kept by this: each
+    /// of those lives the code's own lifetime from the attempt that wrote it.
+    /// </remarks>
+    public TimeSpan RateLimitRetention { get; set; } = TimeSpan.FromMinutes(2);
 }

@@ -21,7 +21,7 @@ partial class UserCodeRateLimiter
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.IpRateLimited,
         Level = LogLevel.Warning,
-        Message = "Client {ClientIdentifier} exceeded per-IP rate limit. Failed attempts in window: {FailureCount}")]
+        Message = "Client {ClientIdentifier} exceeded the per-address cap. Failed attempts in window: {FailureCount}")]
     private partial void LogIpRateLimited(string ClientIdentifier, int FailureCount);
 
     [LoggerMessage(

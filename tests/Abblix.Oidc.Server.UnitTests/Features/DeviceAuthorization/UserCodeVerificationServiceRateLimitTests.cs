@@ -67,10 +67,10 @@ public class UserCodeVerificationServiceRateLimitTests
         // Above the per-code allowance, so the growing pause cannot answer before the allowance does and
         // these rows measure the allowance they are named for.
         MaxFailuresBeforeBackoff = 6,
-        MaxIpFailuresPerMinute = 100,
+        MaxAddressFailuresPerWindow = 100,
         RateLimitWindow = TimeSpan.FromMinutes(1),
         MaxBackoffDuration = TimeSpan.FromHours(1),
-        IpRateLimitStateExpiration = TimeSpan.FromMinutes(2),
+        RateLimitRetention = TimeSpan.FromMinutes(2),
     };
 
     /// <summary>

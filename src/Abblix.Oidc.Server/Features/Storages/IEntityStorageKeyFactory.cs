@@ -153,7 +153,7 @@ public interface IEntityStorageKeyFactory
     /// <param name="window">Which counting window this attempt falls into.</param>
     /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
     /// <returns>A formatted storage key for that attempt.</returns>
-    string IpRateLimitAttemptKey(string clientIdentifier, long window, int attempt);
+    string AddressRateLimitAttemptKey(string clientIdentifier, long window, int attempt);
 
     /// <summary>
     /// Generates a storage key for the registration access token binding of a client (RFC 7592).
