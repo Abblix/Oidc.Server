@@ -500,7 +500,7 @@ internal static class LogEvents
             private const int Base = 7000;
 
             public const int UserCodeRateLimited = Base + 1;
-            public const int IpRateLimited = Base + 2;
+            public const int AddressCapReached = Base + 2;
             public const int UserCodeBlocked = Base + 3;
             public const int BruteForceDetected = Base + 4;
             public const int UserCodeVerified = Base + 5;
