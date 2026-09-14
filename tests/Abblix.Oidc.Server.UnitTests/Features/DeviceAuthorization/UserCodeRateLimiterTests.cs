@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -305,6 +306,30 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// A refusal by the per-address cap waits out the window it was refused in, and no longer.
+    /// </summary>
+    /// <remarks>
+    /// The wait here is not a pause the ladder measured, it is the remainder of the counting window, worked
+    /// out from the window's number. A number shifted by one is invisible everywhere else - every key shifts
+    /// with it - and lands only here, as a wait one whole window too long. Asserting that some wait was
+    /// given does not see it; the value does.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalByTheAddressCap_WaitsOutTheWindowAndNoLonger()
+    {
+        // Twenty seconds into a window one minute long.
+        _time.Advance(TimeSpan.FromSeconds(20));
+
+        for (var i = 0; i < 10; i++)
+            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+
+        var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
+
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromSeconds(40), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
     /// The count is per window: once the window the failures were spent in has passed, attempts are let
     /// through again.
     /// </summary>
@@ -317,6 +342,32 @@ public class UserCodeRateLimiterTests
         _time.Advance(TimeSpan.FromMinutes(1));
 
         Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Failures past the cap keep being reported, not just the one that reached it.
+    /// </summary>
+    /// <remarks>
+    /// Once every rung of a source's ladder is taken, a further failure is counted as the topmost - which is
+    /// what keeps it at or above the cap, and so keeps the warning firing. An operator watching a sustained
+    /// attack sees it continuing rather than one line at the moment it started.
+    /// <para>
+    /// This is the only place the answer for a full ladder is read, so nothing else can go wrong when it is
+    /// wrong. Asserted by event id rather than by message text, because the id is what a consumer keys on.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task FailuresPastTheCap_AreStillReported()
+    {
+        for (var i = 0; i < 10; i++)
+            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+
+        _logs.Entries.Clear();
+        await _rateLimiter.RecordFailureAsync("CODE-OVER", ClientIdentifier);
+
+        Assert.Contains(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
     }
 
     /// <summary>
