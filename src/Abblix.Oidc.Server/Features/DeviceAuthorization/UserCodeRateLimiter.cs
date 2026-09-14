@@ -155,11 +155,11 @@ public partial class UserCodeRateLimiter(
             // the range instead of walking it.
             deviceAuthOptions.CodeLifetime);
 
+        // The pause this attempt earned, rather than the instant it ends at. Only the check that refuses
+        // an attempt works out that instant, and it anchors on the attempt rather than on the moment of
+        // asking - a second anchor here would agree only while the two coincide, which is exactly now.
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
-        {
-            var blockedUntil = now + BackoffAfter(attempts, deviceAuthOptions);
-            LogUserCodeBlocked(userCode, blockedUntil, attempts);
-        }
+            LogUserCodeBlocked(userCode, BackoffAfter(attempts, deviceAuthOptions), attempts);
 
         var ipAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
 

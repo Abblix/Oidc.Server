@@ -27,8 +27,8 @@ partial class UserCodeRateLimiter
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeBlocked,
         Level = LogLevel.Warning,
-        Message = "User code {UserCode} blocked until {BlockedUntil} after {FailureCount} failed attempts")]
-    private partial void LogUserCodeBlocked(string UserCode, DateTimeOffset BlockedUntil, int FailureCount);
+        Message = "User code {UserCode} blocked for {BlockedFor} after {FailureCount} failed attempts")]
+    private partial void LogUserCodeBlocked(string UserCode, TimeSpan BlockedFor, int FailureCount);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
