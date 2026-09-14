@@ -154,8 +154,8 @@ public class UserCodeRateLimiterTests
     /// the code dies, so counting from the last one promises a wait outlasting the code by however long the
     /// guessing went on.
     /// <para>
-    /// Every other row here spends the allowance in one instant, where the first attempt and the last are
-    /// the same record and the distinction is invisible. Here they are two minutes apart, so the answer says
+    /// Every other row here spends the allowance in one instant, where the first attempt and the last carry
+    /// the same instant and the distinction is invisible. Here they are two minutes apart, so the answer says
     /// which one the code reads.
     /// </para>
     /// </remarks>
@@ -177,21 +177,56 @@ public class UserCodeRateLimiterTests
     /// What a caller is told to wait is what is LEFT of the pause, not how long the pause was.
     /// </summary>
     /// <remarks>
-    /// The rows above ask the moment the failure is recorded, where the two are equal and an answer giving
-    /// the whole pause reads as correct. Asked a second later the difference is a second, and a client acting
-    /// on the larger number waits longer than it was refused for.
+    /// <see cref="TheBackoffDoublesWithEachFailure"/> asks at the instant the failure is recorded, where what
+    /// is left of the pause and the pause itself are the same number, and an answer giving the whole length
+    /// reads as correct. Asked part of the way in, the two differ, and a client acting on the larger number
+    /// waits longer than it was refused for.
+    /// <para>
+    /// Half a second in rather than a second, so that what is left (one and a half) is also unlike what has
+    /// elapsed (a half). At a second those two are equal, and the row would pass just as well for an answer
+    /// measuring the wrong end of the interval.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task TheWait_IsWhatIsLeftOfThePause()
     {
         // The fourth failure earns two seconds.
         await Fail(4);
-        _time.Advance(TimeSpan.FromSeconds(1));
+        _time.Advance(TimeSpan.FromMilliseconds(500));
 
         var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter.RetryAfter);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
+    /// The pause is measured from the attempt that EARNED it, not from the first attempt against the code.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of the row above the last one, and the half that is easy to leave unpinned: the refusal for
+    /// a spent code reads the first attempt, the growing pause reads the latest, and both readings are taken
+    /// four lines apart from one pair of values. Every other row that reaches the pause drives its failures at
+    /// one instant, where the two are the same number.
+    /// <para>
+    /// Measuring the pause from the first attempt does not merely shift it: the end of the pause then stops
+    /// moving while the clock does not, so after it passes once no further failure can block anything. The
+    /// count against a code would go on rising and refuse nothing, which is the state a guesser is working
+    /// toward.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ThePause_IsMeasuredFromTheAttemptThatEarnedIt()
+    {
+        await Fail(3);
+        _time.Advance(TimeSpan.FromSeconds(10));
+        await Fail(1);
+
+        var result = await _rateLimiter.CheckAsync(UserCode, ClientIdentifier);
+
+        // Two seconds from the fourth failure, which has only just happened.
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromSeconds(2), retryAfter.RetryAfter);
     }
 
     /// <summary>
