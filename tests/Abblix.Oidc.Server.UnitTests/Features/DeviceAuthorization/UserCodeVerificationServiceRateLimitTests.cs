@@ -137,8 +137,9 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(TheCode);
 
+        // Refused at the first instant of a window a minute long, so the whole minute is what is left.
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
-        Assert.True(limited.RetryAfter > TimeSpan.Zero);
+        Assert.Equal(TimeSpan.FromMinutes(1), limited.RetryAfter);
     }
 
     /// <summary>
@@ -160,11 +161,7 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         var used = PendingCode();
         used.Status = DeviceAuthorizationStatus.Authorized;
-        var service = ServiceOver(used, configure: options =>
-        {
-            options.MaxFailuresBeforeBackoff = 2;
-            options.MaxUserCodeAttempts = 20;
-        });
+        var service = ServiceOver(used, configure: options => options.MaxFailuresBeforeBackoff = 2);
 
         await service.VerifyAsync(TheCode);
         await service.VerifyAsync(TheCode);
@@ -191,8 +188,9 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var result = await ServiceOver(PendingCode(), configure: SmallCap).VerifyAsync(TheCode);
 
+        // Refused at the first instant of a window a minute long, so the whole minute is what is left.
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
-        Assert.True(limited.RetryAfter > TimeSpan.Zero);
+        Assert.Equal(TimeSpan.FromMinutes(1), limited.RetryAfter);
     }
 
     /// <summary>
@@ -329,6 +327,46 @@ public class UserCodeVerificationServiceRateLimitTests
         var issued = ServiceOver(PendingCode(), address: "198.51.100.23");
 
         Assert.IsType<TooManyUserCodeAttempts>(await issued.VerifyAsync(TheCode));
+    }
+
+    /// <summary>
+    /// An approval of a code that can no longer be approved spends that code's own allowance.
+    /// </summary>
+    [Theory]
+    [InlineData("already used")]
+    [InlineData("expired")]
+    public async Task ApprovingACodeThatCannotBeApproved_SpendsThatCodesAllowance(string state)
+    {
+        var request = PendingCode();
+        switch (state)
+        {
+            case "already used":
+                request.Status = DeviceAuthorizationStatus.Authorized;
+                break;
+            case "expired":
+                request.ExpiresAt = _now.AddMinutes(-1);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(state), state, null);
+        }
+
+        var service = ServiceOver(request);
+        var grant = new AuthorizedGrant(
+            new AuthSession("a-user", "a-session", _now, "device"),
+            new AuthorizationContext("a-client", ["openid"], null));
+
+        for (var i = 0; i < 5; i++)
+            await service.ApproveAsync(TheCode, grant);
+
+        var limiter = new UserCodeRateLimiter(
+            NullLogger<UserCodeRateLimiter>.Instance,
+            _rateLimitStore,
+            new EntityStorageKeyFactory(),
+            new FakeTimeProvider(_now),
+            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
+
+        Assert.True((await limiter.CheckAsync(TheCode, Address)).TryGetFailure(out var refusal));
+        Assert.True(refusal.AboutThisCode);
     }
 
     /// <summary>
