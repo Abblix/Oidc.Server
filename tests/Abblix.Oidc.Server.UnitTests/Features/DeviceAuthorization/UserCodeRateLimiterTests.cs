@@ -47,6 +47,10 @@ public class UserCodeRateLimiterTests
     private const string OtherUserCode = "BDWD-HJKL";
     private const string ClientIdentifier = "203.0.113.7";
 
+    private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan OneTick = TimeSpan.FromTicks(1);
+
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly FakeTimeProvider _time;
     private readonly IEntityStorage _storage;
@@ -71,14 +75,14 @@ public class UserCodeRateLimiterTests
 
     private static DeviceAuthorizationOptions DeviceOptions() => new()
     {
-        CodeLifetime = TimeSpan.FromMinutes(5),
+        CodeLifetime = CodeLifetime,
         PollingInterval = TimeSpan.FromSeconds(5),
         DeviceCodeLength = 32,
         UserCodeLength = 8,
         VerificationUri = new Uri("https://auth.example.com/device"),
         MaxFailuresBeforeBackoff = 3,
         MaxAddressFailuresPerWindow = 10,
-        RateLimitWindow = TimeSpan.FromMinutes(1),
+        RateLimitWindow = RateLimitWindow,
         MaxBackoffDuration = TimeSpan.FromHours(1),
         RateLimitRetention = TimeSpan.FromMinutes(2),
     };
@@ -364,32 +368,44 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// A spent code stays spent for the rest of its life, however long attempt records are kept for.
+    /// A spent code stays spent to the last instant of its life.
     /// </summary>
     [Fact]
-    public async Task ASpentCode_StaysSpentPastTheRateLimitRetention()
+    public async Task ASpentCode_StaysSpentForItsWholeLife()
     {
         await Fail(5);
-        _time.Advance(TimeSpan.FromMinutes(3));
+        _time.Advance(CodeLifetime - OneTick);
 
         Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
     }
 
     /// <summary>
-    /// A verified code does not get its old failures back once attempt records would have aged out.
+    /// One lifetime after the attempts against it, a code is forgiven.
     /// </summary>
     [Fact]
-    public async Task AVerifiedCode_StaysForgivenPastTheRateLimitRetention()
+    public async Task ASpentCode_IsForgivenOnceItsRecordsHaveAged()
     {
         await Fail(5);
-        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
-        _time.Advance(TimeSpan.FromMinutes(3));
+        _time.Advance(CodeLifetime + OneTick);
 
         Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
     }
 
     /// <summary>
-    /// The per-address cap holds for the whole window it was reached in.
+    /// A verified code does not get its old failures back at any point in its life.
+    /// </summary>
+    [Fact]
+    public async Task AVerifiedCode_StaysForgivenForTheCodesWholeLife()
+    {
+        await Fail(5);
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+        _time.Advance(CodeLifetime - OneTick);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The per-address cap holds to the last instant of the window it was reached in.
     /// </summary>
     [Fact]
     public async Task TheAddressCap_HoldsForTheWholeWindow()
@@ -397,13 +413,13 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < 10; i++)
             await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
 
-        _time.Advance(TimeSpan.FromSeconds(40));
+        _time.Advance(RateLimitWindow - OneTick);
 
         Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
     }
 
     /// <summary>
-    /// The server's budget holds for the whole window it was spent in.
+    /// The server's budget holds to the last instant of the window it was spent in.
     /// </summary>
     [Fact]
     public async Task TheServersBudget_HoldsForTheWholeWindow()
@@ -413,9 +429,32 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < 3; i++)
             await limiter.RecordFailureAsync($"CODE-{i:0000}", $"203.0.113.{i + 1}");
 
-        _time.Advance(TimeSpan.FromSeconds(40));
+        _time.Advance(RateLimitWindow - OneTick);
 
         Assert.True((await limiter.CheckAsync(OtherUserCode, "198.51.100.23")).TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// An allowance as large as the ladder is still spent, at the rung the reader stops on.
+    /// </summary>
+    /// <remarks>
+    /// Startup accepts an allowance equal to the ladder's length, so the topmost rung is a value a host
+    /// can configure rather than a spare one. Spread over distinct addresses so neither the per-address cap
+    /// nor the server's budget answers first.
+    /// </remarks>
+    [Fact]
+    public async Task AnAllowanceAsLargeAsTheLadder_IsStillSpent()
+    {
+        var limiter = LimiterWith(options =>
+        {
+            options.MaxUserCodeAttempts = UserCodeRateLimiter.AttemptLadderLength;
+            options.MaxFailuresBeforeBackoff = UserCodeRateLimiter.AttemptLadderLength + 1;
+        });
+
+        for (var i = 0; i < UserCodeRateLimiter.AttemptLadderLength; i++)
+            await limiter.RecordFailureAsync(UserCode, $"203.0.113.{i + 1}");
+
+        Assert.True((await limiter.CheckAsync(UserCode, "198.51.100.23")).TryGetFailure(out _));
     }
 
     /// <summary>
