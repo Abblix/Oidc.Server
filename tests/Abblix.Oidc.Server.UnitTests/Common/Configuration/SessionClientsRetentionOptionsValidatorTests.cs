@@ -13,8 +13,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// A retention at which the record of a session's clients expires as it is written is refused at startup, since
-/// every logout would then notify nobody and nothing would say so.
+/// A retention at which the record of a session's clients would expire as it is written is refused at startup.
 /// </summary>
 public class SessionClientsRetentionOptionsValidatorTests
 {

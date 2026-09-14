@@ -432,8 +432,7 @@ public class ProtobufSerializerTests
     /// A session stored by a release that kept the session's clients inside it, as field 6, still reads back.
     /// </summary>
     /// <remarks>
-    /// Such a session sits inside every authorization code issued before an upgrade, and a code that no
-    /// longer parses fails its redemption with an error rather than a refusal.
+    /// Such a session sits inside every authorization code issued before an upgrade.
     /// </remarks>
     [Fact]
     public void Deserialize_AuthSessionStoredWithAClientList_StillReads()

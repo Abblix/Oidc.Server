@@ -14,9 +14,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// Fails at startup on a retention that would keep no record of which clients signed in to a session.
 /// </summary>
 /// <remarks>
-/// At zero or below every record expires as it is written, so each authorization succeeds and every logout
-/// notifies nobody, with nothing logged. A value merely shorter than the host's sessions cannot be detected
-/// here, because the session lifetime is the host's cookie setting.
+/// At zero or below a record would expire as it is written, so no logout could read it. A value merely shorter
+/// than the host's sessions cannot be detected here, because the session lifetime is the host's cookie setting.
 /// </remarks>
 public sealed class SessionClientsRetentionOptionsValidator : IValidateOptions<OidcOptions>
 {
