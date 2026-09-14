@@ -8,6 +8,7 @@
 
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -38,6 +39,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
 /// the answer the next attempt gets, not which method was reached. Every row here drives its failures one
 /// after another; what happens when two arrive together is driven in <c>LostUpdateTests</c>, where that
 /// ordering can be produced deterministically rather than hoped for.
+/// </para>
+/// <para>
+/// One thing no row here can reach: records falling out of the store by age. The store takes no clock of
+/// its own, so it expires on the real one, while the limiter reads the fake one these rows advance -
+/// moving the fake clock ages nothing. So every deadline this class exercises is a deadline the limiter
+/// COMPUTES, never one the store enforced, and a green run says nothing about how long a record lives.
 /// </para>
 /// </remarks>
 public class UserCodeRateLimiterTests
@@ -209,15 +216,6 @@ public class UserCodeRateLimiterTests
     /// that is easy to leave unpinned: the spent-code refusal reads the first attempt, the growing pause
     /// reads the latest, and both readings come from one pair of values a few lines apart. Every other row
     /// that reaches the pause drives its failures at one instant, where the two are the same number.
-    /// <para>
-    /// What measuring the pause from the first attempt costs, measured rather than argued: with the shipped
-    /// numbers the fourth failure is let through instead of earning its two seconds, and the fifth spends the
-    /// allowance, after which the code is refused for the rest of its life either way - one guess, out of
-    /// five. The end of the pause does not freeze: it is anchored to an instant that does not move, but the
-    /// doubling still carries it forward, so with the attempt cap raised out of the way the pause goes on
-    /// blocking. What is lost is that the pause stops tracking the attempts that earn it, and one guess per
-    /// pause is what that buys an attacker.
-    /// </para>
     /// </remarks>
     [Fact]
     public async Task ThePause_IsMeasuredFromTheAttemptThatEarnedIt()
@@ -269,6 +267,26 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// A code that was verified still counts the failures that come after.
+    /// </summary>
+    /// <remarks>
+    /// Forgetting is done by starting the next generation of the ladder rather than by removing anything,
+    /// so a failure has to be written into the generation the code is in NOW. Written into the one left
+    /// behind, it would be invisible to every later read - the count would never rise again for that value,
+    /// and the row above, which only asks that the slate is clean, would pass either way.
+    /// </remarks>
+    [Fact]
+    public async Task AVerifiedCode_CountsTheFailuresThatComeAfter()
+    {
+        await Fail(5);
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        await Fail(3);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+    }
+
+    /// <summary>
     /// A verified code does not forget what its source has spent across codes.
     /// </summary>
     /// <remarks>
@@ -310,15 +328,18 @@ public class UserCodeRateLimiterTests
     /// </summary>
     /// <remarks>
     /// The wait here is not a pause the ladder measured, it is the remainder of the counting window, worked
-    /// out from the window's number. A number shifted by one is invisible everywhere else - every key shifts
-    /// with it - and lands only here, as a wait one whole window too long. Asserting that some wait was
-    /// given does not see it; the value does.
+    /// out from the window's number. A number shifted by one leaves the counts alone - every key shifts with
+    /// it - and surfaces as a wait one whole window too long. Asserting that some wait was given does not
+    /// see that; the value does.
     /// </remarks>
-    [Fact]
-    public async Task ARefusalByTheAddressCap_WaitsOutTheWindowAndNoLonger()
+    [Theory]
+    [InlineData(20, 40)]
+    [InlineData(50, 10)]
+    public async Task ARefusalByTheAddressCap_WaitsOutTheWindowAndNoLonger(int secondsIn, int secondsLeft)
     {
-        // Twenty seconds into a window one minute long.
-        _time.Advance(TimeSpan.FromSeconds(20));
+        // Two instants of one window a minute long. One instant cannot tell a shift of half a window from
+        // no shift at all, because half a window crosses no boundary.
+        _time.Advance(TimeSpan.FromSeconds(secondsIn));
 
         for (var i = 0; i < 10; i++)
             await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
@@ -326,7 +347,48 @@ public class UserCodeRateLimiterTests
         var result = await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier);
 
         Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromSeconds(secondsLeft), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
+    /// The refusal by the server's own budget waits out the same window, and that is its own arithmetic.
+    /// </summary>
+    /// <remarks>
+    /// Two refusals work the wait out from the window's number, and each does it in its own line of code.
+    /// Holding one of them says nothing about the other. Spent from distinct addresses so the per-address
+    /// cap cannot answer first - this row is about the budget.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalByTheServersBudget_WaitsOutTheWindow()
+    {
+        var limiter = LimiterWith(options => options.MaxFailedAttemptsPerWindow = 3);
+        _time.Advance(TimeSpan.FromSeconds(20));
+
+        for (var i = 0; i < 3; i++)
+            await limiter.RecordFailureAsync($"CODE-{i:0000}", $"203.0.113.{i + 1}");
+
+        var result = await limiter.CheckAsync(OtherUserCode, "198.51.100.23");
+
+        Assert.True(result.TryGetFailure(out var retryAfter));
         Assert.Equal(TimeSpan.FromSeconds(40), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
+    /// Reading the cap does not spend it: the next attempt is refused too.
+    /// </summary>
+    /// <remarks>
+    /// The cap is read by asking whether the record at the topmost rung exists. A read that also removed it
+    /// would answer correctly once and let everything through afterwards, which is the opposite of a cap -
+    /// and the row that reaches the cap would still pass, because it only ever asks once.
+    /// </remarks>
+    [Fact]
+    public async Task ReadingTheCap_DoesNotSpendIt()
+    {
+        for (var i = 0; i < 10; i++)
+            await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
+
+        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
+        Assert.True((await _rateLimiter.CheckAsync(OtherUserCode, ClientIdentifier)).TryGetFailure(out _));
     }
 
     /// <summary>
@@ -352,8 +414,7 @@ public class UserCodeRateLimiterTests
     /// what keeps it at or above the cap, and so keeps the warning firing. An operator watching a sustained
     /// attack sees it continuing rather than one line at the moment it started.
     /// <para>
-    /// This is the only place the answer for a full ladder is read, so nothing else can go wrong when it is
-    /// wrong. Asserted by event id rather than by message text, because the id is what a consumer keys on.
+    /// Asserted by event id rather than by message text, because the id is what a consumer keys on.
     /// </para>
     /// </remarks>
     [Fact]
@@ -362,12 +423,16 @@ public class UserCodeRateLimiterTests
         for (var i = 0; i < 10; i++)
             await _rateLimiter.RecordFailureAsync($"CODE-{i:0000}", ClientIdentifier);
 
+        // Two past the cap rather than one, so the row needs the overflow itself: with one, a later edit
+        // that fills the ladder one short would leave it testing the ordinary path and still passing.
         _logs.Entries.Clear();
-        await _rateLimiter.RecordFailureAsync("CODE-OVER", ClientIdentifier);
+        await _rateLimiter.RecordFailureAsync("CODE-OVER-1", ClientIdentifier);
+        await _rateLimiter.RecordFailureAsync("CODE-OVER-2", ClientIdentifier);
 
-        Assert.Contains(
-            _logs.Entries,
-            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
+        Assert.Equal(
+            2,
+            _logs.Entries.Count(
+                entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected));
     }
 
     /// <summary>
