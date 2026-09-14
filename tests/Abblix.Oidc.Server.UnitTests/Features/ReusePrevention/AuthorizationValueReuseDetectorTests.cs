@@ -80,6 +80,16 @@ public class AuthorizationValueReuseDetectorTests
             return Task.FromResult(found ? (T?)value : default);
         }
 
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            // One thread, so the check and the write are already indivisible here.
+            if (!_store.TryAdd(key, value))
+                return Task.FromResult(false);
+
+            return Task.FromResult(true);
+        }
+
         public Task RemoveAsync(string key, CancellationToken? token = null)
         {
             _store.Remove(key);

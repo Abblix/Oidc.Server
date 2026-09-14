@@ -72,6 +72,35 @@ public sealed class DistributedCacheStorage(IDistributedCache cache, IBinarySeri
 	}
 
 	/// <summary>
+	/// Claims a key by writing to it only when it carries nothing, through
+	/// <see cref="Abblix.Utils.DistributedCacheExtensions.TrySetIfAbsentAsync"/> - which decides the
+	/// winner WITHIN THIS PROCESS and no further, the read and the write happening under one hold of a
+	/// per-key gate a second instance cannot see. A deployment spread over several nodes supplies its own
+	/// storage and uses the primitive its store already has.
+	/// </summary>
+	/// <typeparam name="T">The type of the object to store.</typeparam>
+	/// <param name="key">The key to claim.</param>
+	/// <param name="value">The object to store when the key is free.</param>
+	/// <param name="options">Configuration options for the cache entry, such as expiration.</param>
+	/// <param name="token">An optional cancellation token to cancel the operation.</param>
+	/// <returns>True when this caller wrote the value; false when a value was already there.</returns>
+	public Task<bool> TrySetIfAbsentAsync<T>(
+		string key, T value, StorageOptions options, CancellationToken? token = null)
+	{
+		ArgumentNullException.ThrowIfNull(key);
+		return cache.TrySetIfAbsentAsync(
+			key,
+			serializer.Serialize(value),
+			new ()
+			{
+				AbsoluteExpiration = options.AbsoluteExpiration,
+				AbsoluteExpirationRelativeToNow = options.AbsoluteExpirationRelativeToNow,
+				SlidingExpiration = options.SlidingExpiration,
+			},
+			token ?? CancellationToken.None);
+	}
+
+	/// <summary>
 	/// Asynchronously removes an object from the distributed cache.
 	/// </summary>
 	/// <param name="key">The key of the object to remove.</param>

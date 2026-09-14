@@ -185,6 +185,10 @@ public static class ServiceCollectionExtensions
         services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         services.TryAddSingleton<IEntityStorage, DistributedCacheStorage>();
+
+        // The next-poll instant of a polled request, kept apart from the request itself: a poll
+        // writing the request back to note it overwrote whatever the approval had changed.
+        services.TryAddSingleton<IPollScheduleStore, PollScheduleStore>();
         return services.AddJsonWebTokens();
     }
 

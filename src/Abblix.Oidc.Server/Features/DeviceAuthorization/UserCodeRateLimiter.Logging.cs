@@ -21,20 +21,35 @@ partial class UserCodeRateLimiter
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.IpRateLimited,
         Level = LogLevel.Warning,
-        Message = "Client {ClientIdentifier} exceeded per-IP rate limit. Failed attempts in window: {FailureCount}")]
+        Message = "Client {ClientIdentifier} exceeded the per-address cap. Failed attempts in window: {FailureCount}")]
     private partial void LogIpRateLimited(string ClientIdentifier, int FailureCount);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeBlocked,
         Level = LogLevel.Warning,
-        Message = "User code {UserCode} blocked until {BlockedUntil} after {FailureCount} failed attempts")]
-    private partial void LogUserCodeBlocked(string UserCode, DateTimeOffset BlockedUntil, int FailureCount);
+        Message = "User code {UserCode} blocked for {BlockedFor} after {FailureCount} failed attempts")]
+    private partial void LogUserCodeBlocked(string UserCode, TimeSpan BlockedFor, int FailureCount);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
         Level = LogLevel.Warning,
         Message = "Potential brute force attack detected. UserCode: {UserCode}, Client: {ClientIdentifier}, UserCodeFailures: {UserCodeFailures}, IpFailures: {IpFailures}")]
     private partial void LogBruteForceDetected(string UserCode, string ClientIdentifier, int UserCodeFailures, int IpFailures);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeRateLimiter.FailedAttemptBudgetSpent,
+        Level = LogLevel.Warning,
+        Message = "The server's budget of {Budget} failed user code attempts for this window is spent, so "
+                  + "every verification is refused until the window ends. This is what a distributed "
+                  + "guessing search runs into, and while it holds a user who mistypes is refused too")]
+    private partial void LogFailedAttemptBudgetSpent(int Budget);
+
+    [LoggerMessage(
+        EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeAttemptsSpent,
+        Level = LogLevel.Warning,
+        Message = "User code {UserCode} has spent every attempt it allows ({FailureCount}) and is refused "
+                  + "for the rest of its lifetime")]
+    private partial void LogUserCodeAttemptsSpent(string UserCode, int FailureCount);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,

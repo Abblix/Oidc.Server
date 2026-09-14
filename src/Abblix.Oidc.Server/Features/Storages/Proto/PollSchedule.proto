@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// The instant before which the client polling one request is told to slow down.
+//
+// It lives apart from the request it belongs to, so noting it cannot overwrite what the
+// user's approval or authentication writes there.
+//
+// A message rather than a bare timestamp for the reason RevocationCutoff states: the
+// serializer dispatches on the stored type, and a type without a definition here falls back
+// to JSON and logs a warning - on every poll, which is the one place a warning must not
+// appear.
+message PollSchedule {
+  // The instant before which this request's client may not ask again.
+  google.protobuf.Timestamp next_poll_at = 1;
+}

@@ -26,13 +26,11 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="deviceCodeGenerator">Generator for high-entropy device codes.</param>
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
-/// <param name="timeProvider">Provider for current time.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
-    IOptionsSnapshot<OidcOptions> options,
-    TimeProvider timeProvider) : IDeviceAuthorizationRequestProcessor
+    IOptionsSnapshot<OidcOptions> options) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
@@ -53,16 +51,10 @@ public class DeviceAuthorizationRequestProcessor(
         {
             Status = DeviceAuthorizationStatus.Pending,
 
-            // The device may poll from the moment it holds the code, so the first allowed poll is now.
-            // RFC 8628 section 3.2 defines the interval as "the minimum amount of time in seconds that
-            // the client SHOULD wait between polling requests to the token endpoint" - it bounds the gap
-            // BETWEEN polls, and at issuance there is no earlier poll for it to sit after. This used to
-            // read now + interval, which answered the device's very first request with slow_down: not a
-            // violation, since slow_down is a variant of authorization_pending and a conforming device
-            // simply waits, but it charged every sign-in one interval of latency for polling too fast
-            // when nothing had been polled at all. The first poll stamps the interval, and the throttle
-            // governs every request after it.
-            NextPollAt = timeProvider.GetUtcNow(),
+            // Nothing is written about when the device may first poll, and that absence IS the answer:
+            // the token endpoint reads no instant for this code and lets the first poll through. RFC 8628
+            // section 3.2 defines the interval as the minimum wait "between polling requests", so it
+            // bounds the gap between two polls and has nothing to say before the first one.
 
             // RFC 9396 section 3: stash authorization_details on the persisted record so the
             // host's user-verification step can read it (via ValidUserCode) and thread it

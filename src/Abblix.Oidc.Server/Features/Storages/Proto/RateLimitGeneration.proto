@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+// Which life of a user code its attempt records belong to.
+//
+// A verified code starts a new one instead of having its records removed: removal is what lets a
+// concurrent attempt land above the gap it leaves, and the reader of those records may not meet a
+// gap. Nothing is ever removed, so within one generation the claimed records are an unbroken run
+// from the first by construction.
+//
+// A message rather than a bare number for the reason RevocationCutoff states.
+message RateLimitGeneration {
+  // Counted from one; absence means the first.
+  int32 value = 1;
+}

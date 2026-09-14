@@ -46,6 +46,28 @@ public interface IEntityStorage
     Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null);
 
     /// <summary>
+    /// Writes an entity only when <paramref name="key"/> carries none, and reports whether this caller
+    /// is the one that wrote it.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must decide this between concurrent callers: of several racing for one key, at
+    /// most one may be told it wrote. This is what lets a count be kept without reading a number and
+    /// writing it back - each event claims a key of its own, and two events arriving together claim two
+    /// keys instead of writing the same number twice.
+    /// </remarks>
+    /// <typeparam name="T">The type of the entity to store.</typeparam>
+    /// <param name="key">The key to claim.</param>
+    /// <param name="value">The entity to store when the key is free.</param>
+    /// <param name="options">Expiration policy for the entry, when one is written.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>
+    /// True when the key held nothing and this caller wrote the value; false when a value was already
+    /// there.
+    /// </returns>
+    Task<bool> TrySetIfAbsentAsync<T>(
+        string key, T value, StorageOptions options, CancellationToken? token = null);
+
+    /// <summary>
     /// Removes the entity stored under <paramref name="key"/>; succeeds silently when no entry
     /// is present.
     /// </summary>

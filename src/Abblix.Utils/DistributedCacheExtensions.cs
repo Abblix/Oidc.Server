@@ -35,13 +35,13 @@ public static class DistributedCacheExtensions
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <strong>Not atomic:</strong> <see cref="IDistributedCache"/> exposes only Get + Set, no
-	/// compare-and-set primitive, so two concurrent callers of the same key can both observe a miss
-	/// before either writes and both hear "new". The race window is bounded by the cache round-trip,
-	/// which makes the duplicate-detection guarantee probabilistic rather than strict. Callers whose
-	/// domain needs strict exactly-once use a backend-aware primitive instead - for replay prevention
-	/// that is a <c>ReplayCacheBase</c> over the store's own conditional write (Redis
-	/// <c>SET ... NX PX</c>, SQL <c>INSERT ... ON CONFLICT DO NOTHING</c>).
+	/// <strong>Decided within this process only:</strong> this is
+	/// <see cref="TrySetIfAbsentAsync"/> with an opaque marker for a value, so of several callers racing
+	/// for one key here exactly one hears "new" - and a second process sees neither the gate nor the
+	/// hold, so two nodes can both hear it. Callers whose domain needs strict exactly-once across nodes
+	/// use a backend-aware primitive instead - for replay prevention that is a <c>ReplayCacheBase</c>
+	/// over the store's own conditional write (Redis <c>SET ... NX PX</c>, SQL
+	/// <c>INSERT ... ON CONFLICT DO NOTHING</c>).
 	/// </para>
 	/// <para>
 	/// The entry stores an opaque marker; only the key's presence carries meaning. The requested
@@ -66,23 +66,16 @@ public static class DistributedCacheExtensions
 		ArgumentNullException.ThrowIfNull(cache);
 		ArgumentNullException.ThrowIfNull(key);
 
-		if (await cache.GetAsync(key, cancellationToken) != null)
-		{
-			return false;
-		}
-
 		if (timeToLive < MinimumTimeToLive)
 		{
 			timeToLive = MinimumTimeToLive;
 		}
 
-		await cache.SetAsync(
+		return await cache.TrySetIfAbsentAsync(
 			key,
 			PresenceMarker,
 			new () { AbsoluteExpirationRelativeToNow = timeToLive },
 			cancellationToken);
-
-		return true;
 	}
 
 	/// <summary>
@@ -166,6 +159,60 @@ public static class DistributedCacheExtensions
 			return await RemoveUnderGateAsync(cache, key, lockTimeout, cancellationToken)
 				? valueData
 				: null;
+		});
+	}
+
+	/// <summary>
+	/// Writes a value only when the key carries none, and reports whether this caller is the one that
+	/// wrote it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The read and the write happen under one hold of the same per-key gate
+	/// <see cref="TryGetAndRemoveAsync"/> takes, so within this process exactly one of several callers
+	/// racing for one key is told it wrote. That is the whole of what this gives: a second process sees
+	/// neither the gate nor the hold, so two nodes can both be told they wrote.
+	/// </para>
+	/// <para>
+	/// A deployment that needs the answer to hold across nodes supplies its own
+	/// <c>IEntityStorage</c> and uses the primitive its store already has - <c>SET key value NX</c> in
+	/// Redis, an insert whose unique-key violation picks the loser in a relational store. The interface
+	/// is registered so that a host's own registration wins.
+	/// </para>
+	/// <para>
+	/// A writer that takes no gate - any plain <c>SetAsync</c> on the same key - is outside this
+	/// entirely and can land between the read and the write, after which both it and this caller
+	/// believe they wrote. Nothing here closes that, and nothing needs to: a key used for claiming is
+	/// claimed by this method alone.
+	/// </para>
+	/// </remarks>
+	/// <param name="cache">The distributed cache instance.</param>
+	/// <param name="key">The key to claim.</param>
+	/// <param name="value">The value to write when the key is free.</param>
+	/// <param name="options">Expiration policy for the entry, when one is written.</param>
+	/// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+	/// <returns>
+	/// True when the key held nothing and this caller wrote the value; false when a value was already
+	/// there. False says nothing about WHO put it there, or whether it is still there afterwards.
+	/// </returns>
+	public static Task<bool> TrySetIfAbsentAsync(
+		this IDistributedCache cache,
+		string key,
+		byte[] value,
+		DistributedCacheEntryOptions options,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cache);
+		ArgumentNullException.ThrowIfNull(key);
+		ArgumentNullException.ThrowIfNull(value);
+
+		return UnderGateAsync(key, cancellationToken, async () =>
+		{
+			if (await cache.GetAsync(key, cancellationToken) != null)
+				return false;
+
+			await cache.SetAsync(key, value, options, cancellationToken);
+			return true;
 		});
 	}
 

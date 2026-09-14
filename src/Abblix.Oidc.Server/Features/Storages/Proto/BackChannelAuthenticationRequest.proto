@@ -29,7 +29,11 @@ message BackChannelAuthenticationRequest {
   AuthorizedGrant authorized_grant = 1;
 
   // Next time the client should poll for updates
-  optional google.protobuf.Timestamp next_poll_at = 2;
+  // Field 2 held the next-poll instant. It lives under a key of its own now, so noting when a client
+  // may ask again cannot overwrite what a completed authentication writes here. Reserved rather than freed:
+  // records written by an earlier build still carry it, and a new field taking this number would read
+  // those bytes as its own.
+  reserved 2;
 
   // Current status of the authentication request
   BackChannelAuthenticationStatus status = 3;

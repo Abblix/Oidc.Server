@@ -722,49 +722,6 @@ public class MappersTests
     }
 
     [Fact]
-    public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNextPollAt()
-    {
-        // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
-        var grant = new AuthorizedGrant(session, context);
-        var nextPoll = DateTimeOffset.UtcNow.AddSeconds(45);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            NextPollAt = nextPoll,
-            Status = BackChannelAuthenticationStatus.Pending,
-        };
-
-        // Act
-        var proto = request.ToProto();
-
-        // Assert
-        Assert.NotNull(proto.NextPollAt);
-
-        var result = proto.FromProto();
-        Assert.NotNull(result.NextPollAt);
-        // Compare with millisecond precision
-        Assert.Equal(nextPoll.ToUnixTimeMilliseconds(), result.NextPollAt.Value.ToUnixTimeMilliseconds());
-    }
-
-    [Fact]
-    public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNullNextPollAt()
-    {
-        // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
-        var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)); // NextPollAt is null
-
-        // Act
-        var proto = request.ToProto();
-
-        // Assert
-        var result = proto.FromProto();
-        Assert.Null(result.NextPollAt);
-    }
-
-    [Fact]
     public void BackChannelAuthenticationRequestMapper_RoundTrips_ClientNotificationFields()
     {
         // Ping/push delivery depends on these two fields surviving storage: the client

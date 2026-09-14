@@ -28,9 +28,6 @@ internal static class BackChannelAuthenticationRequestMapper
             ExpiresAt = source.ExpiresAt.ToTimestamp(),
         };
 
-        if (source.NextPollAt.HasValue)
-            proto.NextPollAt = source.NextPollAt.Value.ToTimestamp();
-
         // Ping/push delivery fields - absent for poll mode, kept null-distinct via the
         // proto3 optional accessors so the round-trip never coerces null into "".
         if (source.ClientNotificationEndpoint is not null)
@@ -60,7 +57,6 @@ internal static class BackChannelAuthenticationRequestMapper
             source.AuthorizedGrant.FromProto(),
             source.ExpiresAt.ToDateTimeOffset())
         {
-            NextPollAt = source.NextPollAt?.ToDateTimeOffset(),
             Status = source.Status.FromProtoStatus(),
             ClientNotificationEndpoint = source.HasClientNotificationEndpoint
                 ? new Uri(source.ClientNotificationEndpoint)
