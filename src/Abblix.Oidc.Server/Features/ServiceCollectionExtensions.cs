@@ -229,6 +229,7 @@ public static class ServiceCollectionExtensions
         // backchannel_logout_supported. So every provider advertises both channels whether or not its
         // operator wants either, and back-channel logout carries an outbound HTTP client with it.
         // Removing them here is a breaking change for a host that relies on the default, hence the major.
+        services.TryAddScoped<ISessionLogoutNotifier, SessionLogoutNotifier>();
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()
@@ -538,6 +539,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationCodeService, AuthorizationCodeService>();
         services.TryAddSingleton<IAuthorizationValueReuseDetector, AuthorizationValueReuseDetector>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
+        services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SessionClientsRetentionOptionsValidator>());
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 

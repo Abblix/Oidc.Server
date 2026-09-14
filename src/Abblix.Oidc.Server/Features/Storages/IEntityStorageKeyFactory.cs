@@ -156,6 +156,14 @@ public interface IEntityStorageKeyFactory
     string AddressRateLimitAttemptKey(string clientIdentifier, long window, int attempt);
 
     /// <summary>
+    /// Generates a storage key for one position in the list of clients that signed in to a session.
+    /// </summary>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="position">Which position in the session's list this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that position.</returns>
+    string SessionClientKey(string sessionId, int position);
+
+    /// <summary>
     /// Generates a storage key for the registration access token binding of a client (RFC 7592).
     /// </summary>
     /// <param name="clientId">The identifier of the registered client.</param>

@@ -109,6 +109,10 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     public string AddressRateLimitAttemptKey(string clientIdentifier, long window, int attempt)
         => $"Abblix.Oidc.Server:RateLimit:Address:{clientIdentifier}:{window}:Attempt:{attempt}";
 
+    /// <inheritdoc />
+    public string SessionClientKey(string sessionId, int position)
+        => $"Abblix.Oidc.Server:SessionClient:{sessionId}:{position}";
+
     /// <summary>
     /// Generates a storage key for the registration access token binding of a client (RFC 7592).
     /// </summary>

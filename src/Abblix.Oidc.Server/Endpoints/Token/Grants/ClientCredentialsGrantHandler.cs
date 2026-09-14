@@ -75,10 +75,7 @@ public class ClientCredentialsGrantHandler(
 			Subject: clientInfo.ClientId,
 			SessionId: sessionIdGenerator.GenerateSessionId(),
 			AuthenticationTime: timeProvider.GetUtcNow(),
-			IdentityProvider: GrantTypes.ClientCredentials)
-		{
-			AffectedClientIds = { clientInfo.ClientId }
-		};
+			IdentityProvider: GrantTypes.ClientCredentials);
 
 		// Create and return the authorized grant
 		var grant = new AuthorizedGrant(authSession, context);

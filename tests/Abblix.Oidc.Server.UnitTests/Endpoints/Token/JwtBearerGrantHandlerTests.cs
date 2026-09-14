@@ -70,7 +70,6 @@ public class JwtBearerGrantHandlerTests
 		Assert.Equal(Issuer, grant.AuthSession.IdentityProvider);
 		Assert.Equal(ClientId, grant.Context.ClientId);
 		Assert.Equal(tokenRequest.Scope, grant.Context.Scope);
-		Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
 	}
 
 	/// <summary>
@@ -497,32 +496,6 @@ public class JwtBearerGrantHandlerTests
 		Assert.True(result2.TryGetSuccess(out var grant2));
 		Assert.Equal("user1@example.com", grant1.AuthSession.Subject);
 		Assert.Equal("user2@example.com", grant2.AuthSession.Subject);
-	}
-
-	/// <summary>
-	/// Verifies that the affected client IDs collection contains the requesting client.
-	/// </summary>
-	[Fact]
-	public async Task AuthSession_ShouldTrackClientInAffectedClientIds()
-	{
-		// Arrange
-		var (handler, mocks) = CreateHandler();
-		var jwt = CreateValidJwt();
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
-		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
-
-		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
-		Assert.Single(grant.AuthSession.AffectedClientIds);
 	}
 
 	/// <summary>

@@ -60,6 +60,7 @@ public class ProtobufSerializer : IBinarySerializer
             Proto.PollSchedule pollSchedule => pollSchedule,
             Proto.RateLimitAttempt rateLimitAttempt => rateLimitAttempt,
             Proto.RateLimitGeneration generation => generation,
+            Proto.SessionClient sessionClient => sessionClient,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +
@@ -104,6 +105,9 @@ public class ProtobufSerializer : IBinarySerializer
 
         if (targetType == typeof(Proto.RateLimitGeneration))
             return (T)(object)Proto.RateLimitGeneration.Parser.ParseFrom(bytes);
+
+        if (targetType == typeof(Proto.SessionClient))
+            return (T)(object)Proto.SessionClient.Parser.ParseFrom(bytes);
 
         if (targetType == typeof(Endpoints.Token.Interfaces.TokenInfo))
         {

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// One client that signed in to a session, recorded under a position in that session's list which
+// nobody else writes.
+//
+// The list is how many of these exist rather than one record holding all of them: a list read,
+// extended and written back loses a client whenever two authorizations share the session.
+message SessionClient {
+  // The client that took part in the session.
+  string client_id = 1;
+
+  // When the records of this session expire. The first record decides it and the later ones copy
+  // it, so the records leave the store together.
+  google.protobuf.Timestamp expires_at = 2;
+}

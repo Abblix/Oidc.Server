@@ -16,11 +16,13 @@ using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -41,6 +43,7 @@ public class EndSessionRequestProcessorTests
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<ILogoutNotifier> _logoutNotifier;
     private readonly Mock<ITokenRevoker> _tokenRevoker;
+    private readonly RecordedSessionClients _sessionClients = new();
     private readonly OidcOptions _options;
     private readonly EndSessionRequestProcessor _processor;
 
@@ -56,9 +59,12 @@ public class EndSessionRequestProcessorTests
         _processor = new EndSessionRequestProcessor(
             _logger.Object,
             _authSessionService.Object,
-            _issuerProvider.Object,
-            _clientInfoProvider.Object,
-            _logoutNotifier.Object,
+            new SessionLogoutNotifier(
+                NullLogger<SessionLogoutNotifier>.Instance,
+                _sessionClients,
+                _issuerProvider.Object,
+                _clientInfoProvider.Object,
+                _logoutNotifier.Object),
             _tokenRevoker.Object,
             Options.Create(_options));
     }
@@ -84,23 +90,43 @@ public class EndSessionRequestProcessorTests
         return new ValidEndSessionRequest(request, clientInfo);
     }
 
-    private static AuthSession CreateAuthSession(
+    private AuthSession CreateAuthSession(
         string subject = "user_123",
         string sessionId = "session_123",
-        params string[] affectedClientIds)
+        params string[] clientIds)
     {
-        var session = new AuthSession(
+        foreach (var clientId in clientIds)
+            _sessionClients.Record(sessionId, clientId);
+
+        return new AuthSession(
             subject,
             sessionId,
             DateTimeOffset.UtcNow,
             "local");
+    }
 
-        foreach (var clientId in affectedClientIds)
+    /// <summary>
+    /// The clients each session has on record, as the tests set them up.
+    /// </summary>
+    private sealed class RecordedSessionClients : ISessionClientRegistry
+    {
+        private readonly Dictionary<string, List<string>> _clients = new(StringComparer.Ordinal);
+
+        public void Record(string sessionId, string clientId)
         {
-            session.AffectedClientIds.Add(clientId);
+            if (!_clients.TryGetValue(sessionId, out var clients))
+                _clients[sessionId] = clients = [];
+
+            clients.Add(clientId);
         }
 
-        return session;
+        public Task AddClientAsync(string sessionId, string clientId, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Ending a session never records a client.");
+
+        public Task<IReadOnlyCollection<string>> GetClientsAsync(
+            string sessionId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyCollection<string>>(
+                _clients.TryGetValue(sessionId, out var clients) ? [..clients] : []);
     }
 
     /// <summary>
@@ -469,111 +495,6 @@ public class EndSessionRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Single(response.FrontChannelLogoutRequestUris);
         Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
-    }
-    /// <summary>
-    /// A session naming one client twice tells that client once.
-    /// </summary>
-    /// <remarks>
-    /// The collection is public and a host may supply a list, so the same client can be named more
-    /// than once - the authorization endpoint records each client once but cannot stop a host from
-    /// handing over a session that already repeats one. Walked as it arrives, that is a second
-    /// notification to a client that has already been told, and a second identical entry in the
-    /// list the browser is asked to walk.
-    /// </remarks>
-    [Fact]
-    public async Task ProcessAsync_ASessionNamingOneClientTwice_TellsItOnce()
-    {
-        // Arrange
-        var request = CreateValidEndSessionRequest();
-        var authSession = CreateAuthSession() with
-        {
-            AffectedClientIds = new List<string> { "client_1", "client_1" },
-        };
-
-        var client1 = new ClientInfo("client_1");
-
-        _authSessionService
-            .Setup(s => s.AuthenticateAsync())
-            .ReturnsAsync(authSession);
-
-        _authSessionService
-            .Setup(s => s.SignOutAsync())
-            .Returns(Task.CompletedTask);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
-            .ReturnsAsync(client1);
-
-        _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, context) =>
-            {
-                context.FrontChannelLogoutRequestUris.Add(new Uri("https://client1.example.com/logout"));
-            })
-            .Returns(Task.CompletedTask);
-
-        // Act
-        var result = await _processor.ProcessAsync(request);
-
-        // Assert
-        Assert.True(result.TryGetSuccess(out var response));
-        _logoutNotifier.Verify(
-            n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()),
-            Times.Once);
-        Assert.Single(response.FrontChannelLogoutRequestUris);
-    }
-    /// <summary>
-    /// A client provider that adds to the session while it answers does not fault the logout.
-    /// </summary>
-    /// <remarks>
-    /// The provider is a host seam and it is asked inside this walk, so walking the collection the
-    /// session carries is walking something an implementation can change mid-iteration. What makes
-    /// the walk immune is that the list is taken ONCE, eagerly, before the first client is asked
-    /// about: a lazy read written in the same place reads the live collection just as the plain loop
-    /// did, and passes every other row here. The failure is not a client quietly lost but a faulted
-    /// request, arriving after the end user is already signed out and their tokens revoked.
-    /// </remarks>
-    [Fact]
-    public async Task ProcessAsync_AClientProviderGrowingTheSessionWhileItAnswers_StillCompletes()
-    {
-        // Arrange
-        var request = CreateValidEndSessionRequest();
-        var authSession = CreateAuthSession() with
-        {
-            AffectedClientIds = new List<string> { "client_1" },
-        };
-
-        _authSessionService
-            .Setup(s => s.AuthenticateAsync())
-            .ReturnsAsync(authSession);
-
-        _authSessionService
-            .Setup(s => s.SignOutAsync())
-            .Returns(Task.CompletedTask);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
-            .Callback(() => authSession.AffectedClientIds.Add("arrived-while-answering"))
-            .ReturnsAsync(new ClientInfo("client_1"));
-
-        _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Returns(Task.CompletedTask);
-
-        // Act
-        var result = await _processor.ProcessAsync(request);
-
-        // Assert
-        Assert.True(result.TryGetSuccess(out _));
-        Assert.Contains("arrived-while-answering", authSession.AffectedClientIds);
     }
 
     /// <summary>

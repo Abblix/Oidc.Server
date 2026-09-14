@@ -13,7 +13,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
-using Abblix.Utils.Collections;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -188,10 +187,6 @@ public class AuthenticationSchemeAdapter(
 				: null,
 		};
 
-		if (authenticationResult.Properties is { } properties &&
-		    properties.TryGetStringList(nameof(AuthSession.AffectedClientIds), out var affectedClientIds))
-			authSession = authSession with { AffectedClientIds = new ConcurrentSet<string>(affectedClientIds) };
-
 		if (principal.TryGetStringList(JwtClaimTypes.AuthenticationMethodReferences, out var authenticationMethodReferences))
 			authSession = authSession with { AuthenticationMethodReferences = authenticationMethodReferences };
 
@@ -206,7 +201,6 @@ public class AuthenticationSchemeAdapter(
 	/// <summary>
 	/// Signs in the specified user into the application, setting up their authentication session.
 	/// Critical claims (Subject, SessionId, AuthenticationTime, AuthenticationMethodReferences) are stored in principal claims.
-	/// AffectedClientIds stored in properties as it's not needed in cookie events.
 	/// </summary>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
 	/// <returns>A task that represents the asynchronous sign-in operation.</returns>
@@ -260,20 +254,7 @@ public class AuthenticationSchemeAdapter(
 
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
-		var properties = new AuthenticationProperties();
-		// Read once, and the decision made from what was read. Asking the live collection whether it is
-		// empty and then serialising it puts two questions to something another request can change in
-		// between: empty at the first and filled at the second writes nothing at all, so the session
-		// comes back naming nobody and every client it touched is gone from the logout it drives.
-		// This read asks the size too, but only as a capacity hint the answer does not depend on: what
-		// comes back is what the walk yielded. Copying out instead fills an array of the size that was
-		// answered, so a collection that has since grown overflows it and one that answered zero comes
-		// back empty however much it holds.
-		var affectedClientIds = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
-		if (affectedClientIds.Count > 0)
-			properties.SetString(nameof(AuthSession.AffectedClientIds), JsonSerializer.Serialize(affectedClientIds));
-
-		return HttpContext.SignInAsync(authenticationScheme, principal, properties);
+		return HttpContext.SignInAsync(authenticationScheme, principal);
 	}
 
 	/// <summary>

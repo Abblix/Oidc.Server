@@ -169,7 +169,6 @@ public class ProtobufSerializerTests
             "local")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
-            AffectedClientIds = ["client-1", "client-2"],
             AuthenticationMethodReferences = ["pwd", "mfa"],
             Email = "user@example.com",
             EmailVerified = true,
@@ -191,7 +190,6 @@ public class ProtobufSerializerTests
         Assert.Equal(session.AuthenticationTime, result.AuthenticationTime);
         Assert.Equal(session.IdentityProvider, result.IdentityProvider);
         Assert.Equal(session.AuthContextClassRef, result.AuthContextClassRef);
-        Assert.Equal(session.AffectedClientIds, result.AffectedClientIds);
         Assert.Equal(session.AuthenticationMethodReferences, result.AuthenticationMethodReferences);
         Assert.Equal(session.Email, result.Email);
         Assert.Equal(session.EmailVerified, result.EmailVerified);
@@ -430,13 +428,34 @@ public class ProtobufSerializerTests
         Assert.Null(result.AdditionalClaims);
     }
 
+    /// <summary>
+    /// A session stored by a release that kept the session's clients inside it, as field 6, still reads back.
+    /// </summary>
+    /// <remarks>
+    /// Such a session sits inside every authorization code issued before an upgrade, and a code that no
+    /// longer parses fails its redemption with an error rather than a refusal.
+    /// </remarks>
+    [Fact]
+    public void Deserialize_AuthSessionStoredWithAClientList_StillReads()
+    {
+        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        const string clientId = "client-1";
+
+        // Field 6, wire type 2 (length-delimited): the tag byte is (6 << 3) | 2.
+        byte[] clientListField = [(6 << 3) | 2, (byte)clientId.Length, ..System.Text.Encoding.ASCII.GetBytes(clientId)];
+        byte[] stored = [.._serializer.Serialize(session), ..clientListField];
+
+        var result = _serializer.Deserialize<AuthSession>(stored);
+
+        Assert.Equal(session.SessionId, result?.SessionId);
+    }
+
     [Fact]
     public void Serialize_CompareWithJsonSerializer_ProducesSmaller()
     {
         // Arrange
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local")
         {
-            AffectedClientIds = ["client-1", "client-2", "client-3"],
             AuthenticationMethodReferences = ["pwd", "mfa", "otp"],
             Email = "user@example.com",
         };

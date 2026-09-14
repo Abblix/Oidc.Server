@@ -22,8 +22,10 @@ message AuthSession {
   // Authentication context class reference (SAML/OIDC)
   optional string auth_context_class_ref = 5;
 
-  // Client identifiers the user has interacted with during the session
-  repeated string affected_client_ids = 6;
+  // Held the clients of the session in earlier releases, which ISessionClientRegistry now records.
+  // Reserved so a session stored by one of those releases still parses and the number is never reused.
+  reserved 6;
+  reserved "affected_client_ids";
 
   // Authentication methods used (AMR values)
   repeated string authentication_method_references = 7;

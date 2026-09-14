@@ -10,9 +10,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
-using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -33,17 +30,13 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// </remarks>
 /// <param name="logger">The logger.</param>
 /// <param name="authSessionService">The authentication service.</param>
-/// <param name="issuerProvider">The issuer provider.</param>
-/// <param name="clientInfoProvider">The client info provider.</param>
-/// <param name="logoutNotifier">The logout notifier.</param>
+/// <param name="sessionLogoutNotifier">Notifies the clients of the ended session.</param>
 /// <param name="tokenRevoker">Revokes the tokens of the ended session, when the deployment asks for it.</param>
 /// <param name="options">Supplies whether ending a session revokes its tokens.</param>
 public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
-	IIssuerProvider issuerProvider,
-	IClientInfoProvider clientInfoProvider,
-	ILogoutNotifier logoutNotifier,
+	ISessionLogoutNotifier sessionLogoutNotifier,
 	ITokenRevoker tokenRevoker,
 	IOptions<OidcOptions> options) : IEndSessionRequestProcessor
 {
@@ -91,51 +84,9 @@ public partial class EndSessionRequestProcessor(
 
 		LogUserLoggedOut(subjectId, sessionId);
 
-		var context = new LogoutContext(sessionId, subjectId, LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()));
-
-		// Await every logout notification so the back-channel POST is actually sent. An earlier
-		// `task.Status == Running` filter silently dropped these tasks (an async notifier's task is
-		// WaitingForActivation, not Running), leaving the POST detached and abandoned at request end.
-		// Notification is best-effort: NotifyClientSafelyAsync isolates per-client failures so an
-		// unreachable client endpoint cannot fail the end-user's logout.
-		// Read once, before the first client is asked about, and as a set. Two reasons, and each would
-		// be enough on its own. The collection is public and a host may supply a list, so the same client
-		// can be named twice - which is a second notification to a client already told, and a second
-		// identical entry in the list the browser is asked to walk. And the provider asked inside this
-		// loop is a host seam: walking the live collection while something a host wrote is answering is
-		// walking a thing it can change. Ordinal, matching the comparer the shipped session uses.
-		var clientIds = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
-
-		var tasks = new List<Task>();
-		foreach (var clientId in clientIds)
-		{
-			var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
-			if (clientInfo == null)
-				continue;
-
-			tasks.Add(NotifyClientSafelyAsync(clientInfo, context));
-		}
-		await Task.WhenAll(tasks);
+		var context = await sessionLogoutNotifier.NotifyClientsAsync(sessionId, subjectId);
 
 		var response = new EndSessionSuccess(postLogoutRedirectUri, context.FrontChannelLogoutRequestUris);
 		return response;
 	}
-
-	/// <summary>
-	/// Notifies a single client of the logout, isolating any failure. Back-channel and front-channel
-	/// logout are best-effort: a client whose endpoint is unreachable (down, TLS failure, blocked) is
-	/// logged for operator attention but must not fail the end-user's logout.
-	/// </summary>
-	private async Task NotifyClientSafelyAsync(ClientInfo clientInfo, LogoutContext context)
-	{
-		try
-		{
-			await logoutNotifier.NotifyClientAsync(clientInfo, context);
-		}
-		catch (Exception exception)
-		{
-			LogClientLogoutNotificationFailed(exception, clientInfo.ClientId);
-		}
-	}
-
 }
