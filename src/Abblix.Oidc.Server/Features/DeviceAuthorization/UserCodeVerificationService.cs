@@ -125,8 +125,8 @@ public partial class UserCodeVerificationService(
             return false;
         }
 
-        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
-        // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
+        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so nothing
+        // is decided rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
         {
             await rateLimiter.RecordFailureAsync(userCode, clientIp);
@@ -199,7 +199,7 @@ public partial class UserCodeVerificationService(
         }
 
         // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
-        // treat it as a no-op rather than writing a record with a non-positive cache TTL.
+        // nothing is decided rather than writing a record with a non-positive cache TTL.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
         {
             await rateLimiter.RecordFailureAsync(userCode, clientIp);

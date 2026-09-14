@@ -437,11 +437,6 @@ public class UserCodeRateLimiterTests
     /// <summary>
     /// An allowance as large as the ladder is still spent, at the rung the reader stops on.
     /// </summary>
-    /// <remarks>
-    /// Startup accepts an allowance equal to the ladder's length, so the topmost rung is a value a host
-    /// can configure rather than a spare one. Spread over distinct addresses so neither the per-address cap
-    /// nor the server's budget answers first.
-    /// </remarks>
     [Fact]
     public async Task AnAllowanceAsLargeAsTheLadder_IsStillSpent()
     {

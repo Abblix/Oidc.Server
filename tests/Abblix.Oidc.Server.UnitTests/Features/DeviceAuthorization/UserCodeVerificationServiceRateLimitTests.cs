@@ -316,12 +316,8 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
-    /// A value issued again does not inherit the failures recorded while it named an earlier authorization.
+    /// Failures recorded against a value before it is successfully verified stop counting afterwards.
     /// </summary>
-    /// <remarks>
-    /// Attempt records outlive the authorization they were made against, so a value that is issued anew
-    /// while they still stand would otherwise carry them to its new holder.
-    /// </remarks>
     [Fact]
     public async Task AVerifiedValue_DoesNotCarryTheFailuresOfItsEarlierLife()
     {
