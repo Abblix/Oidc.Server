@@ -193,12 +193,18 @@ public partial class UserCodeVerificationService(
         var (deviceCode, request) = result.Value;
 
         if (request.Status != DeviceAuthorizationStatus.Pending)
+        {
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
         // treat it as a no-op rather than writing a record with a non-positive cache TTL.
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        {
+            await rateLimiter.RecordFailureAsync(userCode, clientIp);
             return false;
+        }
 
         return await TryDecideAsync(
             deviceCode, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);

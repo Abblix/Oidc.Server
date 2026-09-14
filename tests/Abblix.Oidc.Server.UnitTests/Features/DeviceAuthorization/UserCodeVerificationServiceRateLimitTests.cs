@@ -51,7 +51,7 @@ public class UserCodeVerificationServiceRateLimitTests
     private const string TheCode = "12345678";
     private const string Address = "203.0.113.7";
 
-    private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+    private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 20, TimeSpan.Zero);
     private readonly IEntityStorage _rateLimitStore = new DistributedCacheStorage(
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
         new JsonBinarySerializer());
@@ -137,9 +137,8 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(TheCode);
 
-        // Refused at the first instant of a window a minute long, so the whole minute is what is left.
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
-        Assert.Equal(TimeSpan.FromMinutes(1), limited.RetryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
     }
 
     /// <summary>
@@ -188,9 +187,8 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var result = await ServiceOver(PendingCode(), configure: SmallCap).VerifyAsync(TheCode);
 
-        // Refused at the first instant of a window a minute long, so the whole minute is what is left.
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
-        Assert.Equal(TimeSpan.FromMinutes(1), limited.RetryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
     }
 
     /// <summary>
@@ -233,6 +231,68 @@ public class UserCodeVerificationServiceRateLimitTests
         var issued = ServiceOver(PendingCode());
 
         Assert.IsType<ValidUserCode>(await issued.VerifyAsync(TheCode));
+    }
+
+    /// <summary>
+    /// Guesses made through approval or denial at a value nobody holds do not spend the allowance of a code
+    /// issued with that value later.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GuessesThroughApprovalOrDenial_DoNotSpendTheAllowanceOfACodeIssuedLater(bool approve)
+    {
+        var guessing = ServiceOver(null);
+        var grant = new AuthorizedGrant(
+            new AuthSession("a-user", "a-session", _now, "device"),
+            new AuthorizationContext("a-client", ["openid"], null));
+
+        for (var i = 0; i < 10; i++)
+        {
+            if (approve)
+                Assert.False(await guessing.ApproveAsync(TheCode, grant));
+            else
+                Assert.False(await guessing.DenyAsync(TheCode));
+        }
+
+        Assert.IsType<ValidUserCode>(await ServiceOver(PendingCode()).VerifyAsync(TheCode));
+    }
+
+    /// <summary>
+    /// A code typed with a separator meets the same allowance as the code typed without one.
+    /// </summary>
+    [Fact]
+    public async Task ACodeTypedWithASeparator_MeetsTheSameAllowance()
+    {
+        var limiter = new UserCodeRateLimiter(
+            NullLogger<UserCodeRateLimiter>.Instance,
+            _rateLimitStore,
+            new EntityStorageKeyFactory(),
+            new FakeTimeProvider(_now),
+            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
+
+        for (var i = 0; i < 5; i++)
+            await limiter.RecordFailureAsync(TheCode, Address);
+
+        Assert.IsType<InvalidUserCode>(await ServiceOver(PendingCode()).VerifyAsync("1234-5678"));
+    }
+
+    /// <summary>
+    /// Approval and denial accept a code typed with a separator, as verification does.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApprovalAndDenial_AcceptACodeTypedWithASeparator(bool approve)
+    {
+        var service = ServiceOver(PendingCode());
+        var grant = new AuthorizedGrant(
+            new AuthSession("a-user", "a-session", _now, "device"),
+            new AuthorizationContext("a-client", ["openid"], null));
+
+        Assert.True(approve
+            ? await service.ApproveAsync("1234-5678", grant)
+            : await service.DenyAsync("1234-5678"));
     }
 
     /// <summary>
@@ -330,12 +390,14 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
-    /// An approval of a code that can no longer be approved spends that code's own allowance.
+    /// Approving or denying a code that can no longer be decided spends that code's own allowance.
     /// </summary>
     [Theory]
-    [InlineData("already used")]
-    [InlineData("expired")]
-    public async Task ApprovingACodeThatCannotBeApproved_SpendsThatCodesAllowance(string state)
+    [InlineData("already used", true)]
+    [InlineData("expired", true)]
+    [InlineData("already used", false)]
+    [InlineData("expired", false)]
+    public async Task DecidingACodeThatCannotBeDecided_SpendsThatCodesAllowance(string state, bool approve)
     {
         var request = PendingCode();
         switch (state)
@@ -356,7 +418,12 @@ public class UserCodeVerificationServiceRateLimitTests
             new AuthorizationContext("a-client", ["openid"], null));
 
         for (var i = 0; i < 5; i++)
-            await service.ApproveAsync(TheCode, grant);
+        {
+            if (approve)
+                await service.ApproveAsync(TheCode, grant);
+            else
+                await service.DenyAsync(TheCode);
+        }
 
         var limiter = new UserCodeRateLimiter(
             NullLogger<UserCodeRateLimiter>.Instance,
