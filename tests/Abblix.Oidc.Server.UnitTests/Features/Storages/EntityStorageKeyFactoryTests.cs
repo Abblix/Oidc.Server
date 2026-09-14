@@ -86,6 +86,30 @@ public class EntityStorageKeyFactoryTests
     }
 
     /// <summary>
+    /// Distinct attempts from distinct sources never share a key, however the source is spelled.
+    /// </summary>
+    /// <remarks>
+    /// The source is supplied by the caller and can carry colons, as an IPv6 address does.
+    /// </remarks>
+    [Fact]
+    public void AnAttemptFromOneSource_IsNeverSpelledLikeAnotherSources()
+    {
+        var keys = new[]
+        {
+            Factory.AddressRateLimitAttemptKey("a1", 2, 3),
+            Factory.AddressRateLimitAttemptKey("a", 12, 3),
+            Factory.AddressRateLimitAttemptKey("a:1", 2, 3),
+            Factory.AddressRateLimitAttemptKey("a", 1, 23),
+            Factory.AddressRateLimitAttemptKey("::1", 5, 1),
+            Factory.AddressRateLimitAttemptKey("::1:5", 1, 1),
+            Factory.AddressRateLimitAttemptKey("x:Attempt:1", 2, 3),
+            Factory.AddressRateLimitAttemptKey("x", 1, 2),
+        };
+
+        Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
     /// No two families name the same entry for one identifier either.
     /// </summary>
     [Fact]

@@ -585,6 +585,50 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// A ceiling on the pause that is not a whole number of seconds is kept as configured.
+    /// </summary>
+    [Fact]
+    public async Task AFractionalPauseCeiling_IsKeptAsConfigured()
+    {
+        var limiter = LimiterWith(options =>
+        {
+            options.MaxUserCodeAttempts = 20;
+            options.MaxBackoffDuration = TimeSpan.FromMilliseconds(2500);
+            options.CodeLifetime = TimeSpan.FromHours(6);
+        });
+
+        // The fifth failure earns four seconds, above the ceiling.
+        for (var i = 0; i < 5; i++)
+            await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        var result = await limiter.CheckAsync(UserCode, ClientIdentifier);
+
+        Assert.True(result.TryGetFailure(out var retryAfter));
+        Assert.Equal(TimeSpan.FromMilliseconds(2500), retryAfter.RetryAfter);
+    }
+
+    /// <summary>
+    /// Guessing at one code is reported from the failure that starts its pause, whatever the source.
+    /// </summary>
+    [Fact]
+    public async Task GuessingAtOneCode_IsReportedFromTheFailureThatStartsItsPause()
+    {
+        // Distinct sources, so only the count against the code can raise the report.
+        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.1");
+        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.2");
+
+        Assert.DoesNotContain(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
+
+        await _rateLimiter.RecordFailureAsync(UserCode, "203.0.113.3");
+
+        Assert.Contains(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
+    }
+
+    /// <summary>
     /// A limiter over the same store, configured away from the shipped numbers for one row.
     /// </summary>
     private UserCodeRateLimiter LimiterWith(Action<DeviceAuthorizationOptions> configure)
