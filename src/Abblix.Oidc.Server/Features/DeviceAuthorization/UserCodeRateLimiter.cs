@@ -102,7 +102,7 @@ public partial class UserCodeRateLimiter(
         if (capReached != null)
         {
             // The window this read is about is the one the clock is in, so its end is always still ahead.
-            LogIpRateLimited(clientIdentifier, deviceAuthOptions.MaxAddressFailuresPerWindow);
+            LogAddressCapReached(clientIdentifier, deviceAuthOptions.MaxAddressFailuresPerWindow);
             return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
@@ -161,12 +161,12 @@ public partial class UserCodeRateLimiter(
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
             LogUserCodeBlocked(userCode, BackoffAfter(attempts, deviceAuthOptions), attempts);
 
-        var ipAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
+        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
-            deviceAuthOptions.MaxAddressFailuresPerWindow <= ipAttempts)
+            deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(userCode, clientIdentifier, attempts, ipAttempts);
+            LogBruteForceDetected(userCode, clientIdentifier, attempts, addressAttempts);
         }
     }
 
@@ -183,7 +183,7 @@ public partial class UserCodeRateLimiter(
     {
         var window = WindowOf(now, deviceAuthOptions);
 
-        var ipAttempts = await ClaimAttemptAsync(
+        var addressAttempts = await ClaimAttemptAsync(
             rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
             deviceAuthOptions.MaxAddressFailuresPerWindow,
             now,
@@ -195,7 +195,7 @@ public partial class UserCodeRateLimiter(
             now,
             deviceAuthOptions.RateLimitRetention);
 
-        return ipAttempts;
+        return addressAttempts;
     }
 
     /// <inheritdoc />
