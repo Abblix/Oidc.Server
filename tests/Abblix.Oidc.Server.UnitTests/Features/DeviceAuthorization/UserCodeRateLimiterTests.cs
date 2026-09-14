@@ -204,15 +204,18 @@ public class UserCodeRateLimiterTests
     /// The pause is measured from the attempt that EARNED it, not from the first attempt against the code.
     /// </summary>
     /// <remarks>
-    /// The mirror of the row above the last one, and the half that is easy to leave unpinned: the refusal for
-    /// a spent code reads the first attempt, the growing pause reads the latest, and both readings are taken
-    /// four lines apart from one pair of values. Every other row that reaches the pause drives its failures at
-    /// one instant, where the two are the same number.
+    /// The mirror of <see cref="TheRemainingLifeOfASpentCode_IsCountedFromItsFirstAttempt"/>, and the half
+    /// that is easy to leave unpinned: the spent-code refusal reads the first attempt, the growing pause
+    /// reads the latest, and both readings come from one pair of values a few lines apart. Every other row
+    /// that reaches the pause drives its failures at one instant, where the two are the same number.
     /// <para>
-    /// Measuring the pause from the first attempt does not merely shift it: the end of the pause then stops
-    /// moving while the clock does not, so after it passes once no further failure can block anything. The
-    /// count against a code would go on rising and refuse nothing, which is the state a guesser is working
-    /// toward.
+    /// What measuring the pause from the first attempt costs, measured rather than argued: with the shipped
+    /// numbers the fourth failure is let through instead of earning its two seconds, and the fifth spends the
+    /// allowance, after which the code is refused for the rest of its life either way - one guess, out of
+    /// five. The end of the pause does not freeze: it is anchored to an instant that does not move, but the
+    /// doubling still carries it forward, so with the attempt cap raised out of the way the pause goes on
+    /// blocking. What is lost is that the pause stops tracking the attempts that earn it, and one guess per
+    /// pause is what that buys an attacker.
     /// </para>
     /// </remarks>
     [Fact]
