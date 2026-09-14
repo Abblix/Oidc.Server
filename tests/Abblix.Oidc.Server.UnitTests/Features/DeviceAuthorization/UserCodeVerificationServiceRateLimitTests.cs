@@ -77,7 +77,9 @@ public class UserCodeVerificationServiceRateLimitTests
     /// Builds the real pair over a store that holds the named code, or holds nothing.
     /// </summary>
     private UserCodeVerificationService ServiceOver(
-        DeviceAuthorizationRequest? request, string address = Address)
+        DeviceAuthorizationRequest? request,
+        string address = Address,
+        Action<DeviceAuthorizationOptions>? configure = null)
     {
         var deviceStorage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         deviceStorage
@@ -94,7 +96,9 @@ public class UserCodeVerificationServiceRateLimitTests
         var requestInfo = new Mock<IRequestInfoProvider>(MockBehavior.Loose);
         requestInfo.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse(address));
 
-        var options = Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() });
+        var deviceOptions = DeviceOptions();
+        configure?.Invoke(deviceOptions);
+        var options = Options.Create(new OidcOptions { DeviceAuthorization = deviceOptions });
 
         return new UserCodeVerificationService(
             NullLogger<UserCodeVerificationService>.Instance,
@@ -132,6 +136,60 @@ public class UserCodeVerificationServiceRateLimitTests
         }
 
         var result = await ServiceOver(PendingCode(), address: "198.51.100.23").VerifyAsync(TheCode);
+
+        var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
+        Assert.True(limited.RetryAfter > TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// A refusal by the growing pause is about the code, so it looks like an unknown code too.
+    /// </summary>
+    /// <remarks>
+    /// Two refusals are about the typed value - the one that says its allowance is spent, and the pause it
+    /// earns on the way there - and each decides separately whether it may be named. Naming this one would
+    /// tell a guesser that the value it just typed is a code this server issued, which is the whole thing
+    /// the plain refusal hides.
+    /// <para>
+    /// The pause is out of reach under the numbers the other rows use, where it is set above the allowance
+    /// on purpose so those rows measure the allowance. Here it is set below, which is the ordinary
+    /// arrangement and the one a deployment ships with.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalByTheGrowingPause_LooksLikeAnUnknownCode()
+    {
+        var used = PendingCode();
+        used.Status = DeviceAuthorizationStatus.Authorized;
+        var service = ServiceOver(used, configure: options =>
+        {
+            options.MaxFailuresBeforeBackoff = 2;
+            options.MaxUserCodeAttempts = 20;
+        });
+
+        await service.VerifyAsync(TheCode);
+        await service.VerifyAsync(TheCode);
+
+        Assert.IsType<InvalidUserCode>(await service.VerifyAsync(TheCode));
+    }
+
+    /// <summary>
+    /// A refusal by the per-address cap says how long to wait.
+    /// </summary>
+    /// <remarks>
+    /// Both refusals that count attempts rather than codes must say so - the cap on one address and the
+    /// server's budget - and each carries that decision separately. This is the one an honest person meets
+    /// while somebody else guesses from the same address or the same office, and answering it with
+    /// "invalid code" tells them their correct code is wrong.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalByTheAddressCap_SaysHowLongToWait()
+    {
+        void SmallCap(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 3;
+
+        for (var i = 0; i < 3; i++)
+            await ServiceOver(null, configure: SmallCap).VerifyAsync("9999000" + i);
+
+        var result = await ServiceOver(PendingCode(), configure: SmallCap).VerifyAsync(TheCode);
 
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
         Assert.True(limited.RetryAfter > TimeSpan.Zero);
