@@ -296,6 +296,58 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
+    /// Approving or denying a code that was already decided answers that nothing was decided.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DecidingACodeThatWasAlreadyDecided_AnswersFalse(bool approve)
+    {
+        var decided = PendingCode();
+        decided.Status = DeviceAuthorizationStatus.Authorized;
+        var service = ServiceOver(decided);
+        var grant = new AuthorizedGrant(
+            new AuthSession("a-user", "a-session", _now, "device"),
+            new AuthorizationContext("a-client", ["openid"], null));
+
+        Assert.False(approve
+            ? await service.ApproveAsync(TheCode, grant)
+            : await service.DenyAsync(TheCode));
+    }
+
+    /// <summary>
+    /// A value issued again does not inherit the failures recorded while it named an earlier authorization.
+    /// </summary>
+    /// <remarks>
+    /// Attempt records outlive the authorization they were made against, so a value that is issued anew
+    /// while they still stand would otherwise carry them to its new holder.
+    /// </remarks>
+    [Fact]
+    public async Task AVerifiedValue_DoesNotCarryTheFailuresOfItsEarlierLife()
+    {
+        void PauseAtThree(DeviceAuthorizationOptions options) => options.MaxFailuresBeforeBackoff = 3;
+
+        var deviceOptions = DeviceOptions();
+        PauseAtThree(deviceOptions);
+        var limiter = new UserCodeRateLimiter(
+            NullLogger<UserCodeRateLimiter>.Instance,
+            _rateLimitStore,
+            new EntityStorageKeyFactory(),
+            new FakeTimeProvider(_now),
+            Options.Create(new OidcOptions { DeviceAuthorization = deviceOptions }));
+
+        await limiter.RecordFailureAsync(TheCode, Address);
+        await limiter.RecordFailureAsync(TheCode, Address);
+
+        Assert.IsType<ValidUserCode>(
+            await ServiceOver(PendingCode(), configure: PauseAtThree).VerifyAsync(TheCode));
+
+        await limiter.RecordFailureAsync(TheCode, Address);
+
+        Assert.True((await limiter.CheckAsync(TheCode, Address)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// A guessing search that rotates addresses runs into the server's own budget for the window.
     /// </summary>
     /// <remarks>

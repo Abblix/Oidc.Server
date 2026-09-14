@@ -560,6 +560,36 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// With an allowance of one, the first failure spends it.
+    /// </summary>
+    [Fact]
+    public async Task AnAllowanceOfOne_IsSpentByTheFirstFailure()
+    {
+        var limiter = LimiterWith(options =>
+        {
+            options.MaxUserCodeAttempts = 1;
+            options.MaxFailuresBeforeBackoff = UserCodeRateLimiter.AttemptLadderLength + 1;
+        });
+
+        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await limiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// With a pause that starts at the second failure, the first failure does not start it.
+    /// </summary>
+    [Fact]
+    public async Task APauseStartingAtTheSecondFailure_IsNotStartedByTheFirst()
+    {
+        var limiter = LimiterWith(options => options.MaxFailuresBeforeBackoff = 2);
+
+        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await limiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// A limiter over the same store, configured away from the shipped numbers for one row.
     /// </summary>
     private UserCodeRateLimiter LimiterWith(Action<DeviceAuthorizationOptions> configure)
