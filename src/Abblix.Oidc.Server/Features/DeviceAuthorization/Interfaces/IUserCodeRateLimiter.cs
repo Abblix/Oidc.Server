@@ -21,7 +21,7 @@ public interface IUserCodeRateLimiter
     /// <summary>
     /// Checks if a verification attempt should be allowed for the given user code and client identifier.
     /// Implements a growing pause per code, a cap per source address and a budget for the whole server, to
-/// prevent brute force attacks.
+    /// prevent brute force attacks.
     /// </summary>
     /// <param name="userCode">The user code being verified.</param>
     /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>

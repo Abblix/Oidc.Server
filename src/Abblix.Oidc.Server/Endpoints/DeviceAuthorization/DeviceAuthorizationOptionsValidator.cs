@@ -79,10 +79,10 @@ public class DeviceAuthorizationOptionsValidator : IValidateOptions<OidcOptions>
                 "failures from one source are not limited at all. Choose 1 or more.");
 
         // Deliberately NOT refused here: a polling interval of no length (poll as fast as you like -
-        // which this repository's own end-to-end host configures, so it need not wait) and a backoff
-        // ceiling of no length (no growing pause, leaning on the other two limits instead). Both are
-        // choices a host may make; refusing them would be an opinion dressed as a contradiction. Only a
-        // setting that leaves the endpoint unable to work at all belongs below.
+        // which a scenario in this repository's own end-to-end suite sets, so its polls need not wait)
+        // and a backoff ceiling of no length (no growing pause, leaning on the other two limits
+        // instead). Both are choices a host may make; refusing them would be an opinion dressed as a
+        // contradiction. Only a setting that leaves the endpoint unable to work at all belongs below.
         if (deviceAuthorization.CodeLifetime <= TimeSpan.Zero)
             return ValidateOptionsResult.Fail(
                 $"{nameof(DeviceAuthorizationOptions.CodeLifetime)} is " +

@@ -76,8 +76,9 @@ public class DeviceAuthorizationOptionsValidatorTests
     /// no count survives the attempt that made it.
     /// <para>
     /// A backoff ceiling and a polling interval of no length are deliberately NOT refused - those are
-    /// choices, and one of them is what this repository's own end-to-end host uses so it need not wait
-    /// between polls. Measured: refusing them turned that suite red.
+    /// choices, and one of them is what a scenario in this repository's own end-to-end suite sets so its
+    /// polls need not wait. Measured: refusing them turned that suite red. What the validator must ACCEPT
+    /// is pinned by the row below, because a comment saying "deliberately not refused" cannot go red.
     /// </para>
     /// </remarks>
     [Theory]
@@ -93,6 +94,49 @@ public class DeviceAuthorizationOptionsValidatorTests
         var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
 
         Assert.True(Validator.Validate(null, options).Failed);
+    }
+
+    /// <summary>
+    /// Settings the validator must ACCEPT, including the two it would be easiest to mistake for errors.
+    /// </summary>
+    /// <remarks>
+    /// A startup refusal has two sides and only one of them is a list of wrong values; the other is every
+    /// configuration that must keep working, and it is the side with no natural place to be written down.
+    /// Both refusals this branch had to withdraw were on this side - a host legitimately polls as fast as
+    /// it likes, and a host may lean on the other limits instead of a growing pause. Each was written from
+    /// intent, read as obviously safe, and broke a caller in this repository.
+    /// <para>
+    /// Retention equal to the window belongs here for a different reason: it is the boundary the refusal
+    /// stops at. A record claimed at any instant inside a window outlives that window when the retention is
+    /// one window long, so nothing is dropped while its own window runs, and refusing equality would refuse
+    /// a setting that works.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("polling interval of no length")]
+    [InlineData("backoff ceiling of no length")]
+    [InlineData("retention equal to the window")]
+    public void Succeeds_for_settings_that_only_look_like_mistakes(string setting)
+    {
+        var settings = ValidSettings();
+        switch (setting)
+        {
+            case "polling interval of no length":
+                settings.PollingInterval = TimeSpan.Zero;
+                break;
+            case "backoff ceiling of no length":
+                settings.MaxBackoffDuration = TimeSpan.Zero;
+                break;
+            case "retention equal to the window":
+                settings.RateLimitRetention = settings.RateLimitWindow;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(setting), setting, null);
+        }
+
+        var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
+
+        Assert.True(Validator.Validate(null, options).Succeeded);
     }
 
     [Fact]

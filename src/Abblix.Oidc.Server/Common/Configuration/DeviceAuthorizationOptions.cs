@@ -245,9 +245,11 @@ public record DeviceAuthorizationOptions
     /// the server's own budget, which are counted the same way and live for the same time.
     /// </summary>
     /// <remarks>
-    /// Must outlast one window, or attempts stop being counted before the window they belong to ends, which
-    /// reads as a stricter setting and acts as no setting at all. Per-code records are not kept by this: each
-    /// of those lives the code's own lifetime from the attempt that wrote it.
+    /// Must be at least one window long, or attempts stop being counted before the window they belong to
+    /// ends, which reads as a stricter setting and acts as no setting at all. Equal to the window is enough:
+    /// a record claimed at any instant inside a window outlives that window by construction. Per-code records
+    /// are not kept by this - each of those lives the code's own lifetime, counted from the attempt or the
+    /// verification that wrote it.
     /// </remarks>
     public TimeSpan RateLimitRetention { get; set; } = TimeSpan.FromMinutes(2);
 }
