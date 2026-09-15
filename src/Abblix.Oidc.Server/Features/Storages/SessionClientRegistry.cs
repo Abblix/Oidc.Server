@@ -45,8 +45,9 @@ public partial class SessionClientRegistry(
     /// </summary>
     /// <remarks>
     /// Logout reads every position of the list, and so does every successful authorization, whose response
-    /// names the session's clients, so the bound is what one session can cost those reads. A person signs in to a handful of clients
-    /// within a session; a list this long is a script registering clients and authorizing each.
+    /// names the session's clients, so the bound is what one session can cost those reads. A person signs in
+    /// to a handful of clients within a session; a list this long is a script registering clients and
+    /// authorizing each.
     /// </remarks>
     internal const int MaxClientsPerSession = 1000;
 
@@ -150,14 +151,18 @@ public partial class SessionClientRegistry(
         if (await storage.GetAsync<Proto.SessionClient>(markerKey, false, cancellationToken) != null)
             return;
 
-        // A whole retention from now, which is never earlier than the generation's end, so no record expires
-        // before its generation and leaves a gap the reader stops at. The generation's own end is not used: the
-        // search below takes several round trips, and a generation ending during them would hand the writes an
-        // expiry already past, which some stores refuse outright. A record outliving its generation is never
-        // read again, because a generation's id is never reused.
+        // The later of the generation's end and a whole retention from now, so no record expires before its
+        // generation and leaves a gap the reader stops at. The generation's end alone is not enough: the search
+        // below takes several round trips, and a generation ending during them would hand the writes an expiry
+        // already past, which some stores refuse outright. A retention from now alone is not enough either: the
+        // generation's end was measured on the clock of whichever instance started it, which may be ahead of
+        // this one. A record outliving its generation is never read again, because a generation's id is never
+        // reused.
+        var generationEnd = generation.ExpiresAt.ToDateTimeOffset();
+        var retentionFromNow = clock.GetUtcNow() + options.Value.SessionClientsRetention;
         var storageOptions = new StorageOptions
         {
-            AbsoluteExpiration = clock.GetUtcNow() + options.Value.SessionClientsRetention,
+            AbsoluteExpiration = generationEnd > retentionFromNow ? generationEnd : retentionFromNow,
         };
 
         var record = new Proto.SessionClient { ClientId = clientId };
