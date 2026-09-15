@@ -48,11 +48,11 @@ public class SessionClientRegistryTests
             new ProtobufSerializer());
     }
 
-    private SessionClientRegistry Registry(IEntityStorage? storage = null) => new(
+    private SessionClientRegistry Registry(IEntityStorage? storage = null, TimeProvider? clock = null) => new(
         storage ?? _storage,
         _keys,
         Options.Create(new OidcOptions { SessionClientsRetention = Retention }),
-        _time,
+        clock ?? _time,
         _logs.CreateLogger<SessionClientRegistry>());
 
     [Fact]
@@ -225,6 +225,31 @@ public class SessionClientRegistryTests
         await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
 
         Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A client recorded by an instance whose clock is behind the one that started the session's list stays
+    /// listed for as long as the list does, rather than ending early and cutting off the clients after it.
+    /// </summary>
+    [Fact]
+    public async Task A_client_recorded_by_an_instance_with_a_slower_clock_stays_listed_with_the_list()
+    {
+        var aheadByAMinute = new ShiftedClock(_time, TimeSpan.FromMinutes(1));
+        await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "a", Ct);
+        await Registry().AddClientAsync(SessionId, "b", Ct);
+        await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "c", Ct);
+
+        _time.Advance(Retention + TimeSpan.FromSeconds(30));
+
+        Assert.Equal(["a", "b", "c"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Another instance's clock, a fixed distance from the store's.
+    /// </summary>
+    private sealed class ShiftedClock(TimeProvider store, TimeSpan shift) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => store.GetUtcNow() + shift;
     }
 
     /// <summary>
