@@ -459,13 +459,12 @@ public record OidcOptions
 	/// </summary>
 	/// <remarks>
 	/// Logout notifies the clients this record names, so a session still in use after its record has expired
-	/// ends without telling the clients that signed in before the expiry. A client that signs in again after it
-	/// starts a new record and is told.
+	/// ends without telling the clients that signed in before the expiry.
 	/// <para>
-	/// Set this to at least the longest a session can last, which is the lifetime of the host's authentication
-	/// cookie, sliding renewals included. It cannot be derived here, because the cookie belongs to the host.
-	/// Keeping it longer costs one small record per client per session until it expires. Only a non-positive
-	/// value is refused at startup.
+	/// Set this to at least the longest a session lasts. That is the host's authentication cookie lifetime, and
+	/// with sliding expiration it has no upper bound, so choose the longest session the deployment expects to see
+	/// in use. It cannot be derived here, because the cookie belongs to the host. Keeping it longer costs a few
+	/// small records per client per session until they expire. Only a non-positive value is refused at startup.
 	/// </para>
 	/// </remarks>
 	public TimeSpan SessionClientsRetention { get; set; } = TimeSpan.FromDays(31);

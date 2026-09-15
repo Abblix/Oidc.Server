@@ -8,6 +8,8 @@
 
 using System;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
@@ -44,5 +46,21 @@ public class SessionClientsRetentionOptionsValidatorTests
     public void A_negative_retention_is_refused()
     {
         Assert.True(Fails(TimeSpan.FromDays(-1)));
+    }
+
+    /// <summary>
+    /// The shipped composition refuses the value too, which a validator nobody registers would not.
+    /// </summary>
+    [Fact]
+    public void The_composition_refuses_a_retention_of_zero()
+    {
+        var services = new ServiceCollection();
+        services.AddOidcCore(options => options.SessionClientsRetention = TimeSpan.Zero);
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+
+        Assert.Contains(refusal.Failures, failure => failure.Contains(nameof(OidcOptions.SessionClientsRetention)));
     }
 }

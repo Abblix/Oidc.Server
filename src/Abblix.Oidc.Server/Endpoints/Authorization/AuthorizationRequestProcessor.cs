@@ -218,8 +218,8 @@ public class AuthorizationRequestProcessor(
 			AuthorizationDetails = emittedAuthorizationDetails,
 		};
 
-		// Recorded before anything is issued, so a client holding a code or a token from this response is
-		// one the logout of this session reaches.
+		// Recorded before anything is issued, so a store that refuses the record fails the authorization
+		// rather than following a code or a token already handed out.
 		await sessionClients.AddClientAsync(authSession.SessionId, clientId);
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
