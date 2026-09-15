@@ -127,6 +127,48 @@ public class SignInOverSessionTests
         Assert.Equal("bob-session", ended.SessionId);
     }
 
+    /// <summary>
+    /// A host that signs somebody in and carries on with the authorization in the same request records the client
+    /// under the session it just wrote, so that session's logout reaches the client.
+    /// </summary>
+    [Fact]
+    public async Task A_client_authorized_in_the_request_that_signed_in_is_notified_on_that_sessions_logout()
+    {
+        var notified = new ConcurrentQueue<(string ClientId, LogoutContext Context)>();
+        await using var provider = BuildProvider(notified);
+        var alice = await SignInAsync(provider, cookie: null, subject: "alice", sessionId: "alice-session");
+
+        // Driven without RequestAsync, because the response carries the sign-in's cookie beside the arrived one.
+        string? bob;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var httpContext = new DefaultHttpContext
+            {
+                RequestServices = scope.ServiceProvider,
+                Request = { Headers = { Cookie = alice } },
+            };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
+            await scope.ServiceProvider.GetRequiredService<IAuthSessionService>()
+                .SignInAsync(Session("bob", "bob-session"));
+            await AuthorizeAsync(scope.ServiceProvider, ClientId);
+
+            bob = SetCookieHeaderValue.ParseList(httpContext.Response.Headers.SetCookie.OfType<string>().ToList())
+                .Select(c => $"{c.Name}={c.Value}")
+                .Last();
+        }
+
+        notified.Clear();
+        await RequestAsync(provider, bob, async services =>
+        {
+            var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
+                new ValidEndSessionRequest(new EndSessionRequest { Confirmed = true }, ClientInfo: null));
+            Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
+        });
+
+        var (clientId, context) = Assert.Single(notified);
+        Assert.Equal((ClientId, "bob-session"), (clientId, context.SessionId));
+    }
+
     private static AuthSession Session(string subject, string sessionId) => new(
         Subject: subject,
         SessionId: sessionId,

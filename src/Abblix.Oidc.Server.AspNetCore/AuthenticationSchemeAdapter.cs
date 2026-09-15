@@ -135,6 +135,10 @@ public class AuthenticationSchemeAdapter(
 	/// writes (for example a plain application login cookie sharing the same scheme name, or a cookie whose claims are
 	/// malformed) is treated as "no OIDC session" - the method returns null rather than throwing, so an unrelated cookie
 	/// never turns a request into a 500.
+	/// <para>
+	/// Once this request has signed in or out, the answer is the session it wrote, or none, because the scheme keeps
+	/// answering with the cookie the request arrived with for the rest of the request.
+	/// </para>
 	/// </remarks>
 	/// <returns>
 	/// A task that returns the <see cref="AuthSession"/>
@@ -142,6 +146,9 @@ public class AuthenticationSchemeAdapter(
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()
 	{
+		if (HttpContext.Items.TryGetValue(WrittenInThisRequest, out var written))
+			return (AuthSession?)written;
+
 		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
 		if (!authenticationResult.Succeeded)
 			return null;
@@ -215,10 +222,6 @@ public class AuthenticationSchemeAdapter(
 	/// reported as ended. When it belongs to the same end user, as on a re-authentication or a step-up, the session
 	/// continues under its existing identifier: the clients signed in to it are recorded under that identifier and
 	/// their ID tokens carry it, so a fresh one would lose them to the logout that follows.
-	/// <para>
-	/// The session replaced is the one this request last wrote or signed out, and otherwise the one the request
-	/// arrived with, because the scheme keeps answering with the arrived cookie for the rest of the request.
-	/// </para>
 	/// </remarks>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
 	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
@@ -233,10 +236,7 @@ public class AuthenticationSchemeAdapter(
 				"type of the issued identity; an empty value yields an unauthenticated principal that cannot be read back.",
 				nameof(authSession));
 
-		var replaced = HttpContext.Items.TryGetValue(WrittenInThisRequest, out var written)
-			? (AuthSession?)written
-			: await AuthenticateAsync();
-
+		var replaced = await AuthenticateAsync();
 		AuthSession[] endedSessions = [];
 		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
 			authSession = authSession with { SessionId = replaced.SessionId };

@@ -80,6 +80,9 @@ public class AuthenticationSchemeAdapterTests
 		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
 
 		await _adapter.SignInAsync(input);
+
+		// Read on the next request, which parses the cookie instead of answering with the session just written.
+		NextRequest();
 		return await _adapter.AuthenticateAsync();
 	}
 
@@ -258,6 +261,105 @@ public class AuthenticationSchemeAdapterTests
 		await _adapter.SignOutAsync();
 		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
 
+		Assert.Empty(result.EndedSessions);
+		Assert.Empty(_calls);
+	}
+
+	/// <summary>
+	/// Reading the session in the request that signed in answers with the session written, the same answer the
+	/// next sign-in in that request replaces.
+	/// </summary>
+	[Fact]
+	public async Task AuthenticateAsync_AfterSignInInTheSameRequest_ReturnsTheSessionWritten()
+	{
+		SetupSignIn();
+
+		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+
+		Assert.Same(result.Session, await _adapter.AuthenticateAsync());
+		Assert.Equal([result.Session], await _adapter.GetAvailableAuthSessions().ToArrayAsync(TestContext.Current.CancellationToken));
+	}
+
+	[Fact]
+	public async Task AuthenticateAsync_AfterSignOutInTheSameRequest_ReturnsNone()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		NextRequest();
+		var arrived = await _httpContext.RequestServices.GetRequiredService<IAuthenticationService>()
+			.AuthenticateAsync(_httpContext, Scheme);
+		var signingOut = new Mock<IAuthenticationService>();
+		signingOut.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme)).ReturnsAsync(arrived);
+		signingOut.Setup(x => x.SignOutAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<AuthenticationProperties>()))
+			.Returns(Task.CompletedTask);
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).BuildServiceProvider();
+
+		await _adapter.SignOutAsync();
+
+		Assert.Null(await _adapter.AuthenticateAsync());
+	}
+
+	/// <summary>
+	/// A sign-in the scheme refused wrote nothing, so a retry in the same request still replaces the session the
+	/// request arrived with.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_RetriedAfterTheSchemeRefused_EndsTheArrivedSession()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		NextRequest();
+		var arrived = await _httpContext.RequestServices.GetRequiredService<IAuthenticationService>()
+			.AuthenticateAsync(_httpContext, Scheme);
+		var refuseOnce = new Mock<IAuthenticationService>();
+		refuseOnce.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme)).ReturnsAsync(arrived);
+		refuseOnce
+			.SetupSequence(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
+			.ThrowsAsync(new InvalidOperationException("the scheme refused"))
+			.Returns(Task.CompletedTask);
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refuseOnce.Object).BuildServiceProvider();
+
+		await Assert.ThrowsAsync<InvalidOperationException>(
+			() => _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" }));
+		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+
+		Assert.Equal("alice-session", Assert.Single(result.EndedSessions).SessionId);
+		Assert.Equal(["terminate alice-session alice"], _calls);
+	}
+
+	/// <summary>
+	/// Each scheme keeps its own cookie, so what one scheme wrote in a request says nothing about another's.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_UnderAnotherScheme_DoesNotSeeThisSchemesWrite()
+	{
+		const string otherScheme = "Other";
+		var authService = new Mock<IAuthenticationService>();
+		authService
+			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), It.IsAny<string>(), It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
+			.Returns(Task.CompletedTask);
+		authService
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), It.IsAny<string>()))
+			.ReturnsAsync(AuthenticateResult.NoResult());
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
+		var other = new AuthenticationSchemeAdapter(
+			_httpContextAccessor.Object, Mock.Of<IAuthSessionTerminator>(MockBehavior.Strict), otherScheme);
+
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		var result = await other.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+
+		Assert.Empty(result.EndedSessions);
+	}
+
+	[Fact]
+	public async Task SignInAsync_TheSamePersonTwiceInOneRequest_KeepsTheFirstIdentifier()
+	{
+		SetupSignIn();
+
+		await _adapter.SignInAsync(Session() with { SessionId = "first-session" });
+		var result = await _adapter.SignInAsync(Session() with { SessionId = "second-session" });
+
+		Assert.Equal("first-session", result.Session.SessionId);
 		Assert.Empty(result.EndedSessions);
 		Assert.Empty(_calls);
 	}
