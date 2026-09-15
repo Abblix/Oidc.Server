@@ -306,6 +306,36 @@ public class AuthenticationSchemeAdapterTests
 		Assert.Equal(["tenant"], read.AdditionalClaims!.Select(claim => claim.Key));
 	}
 
+	/// <summary>
+	/// The session a sign-in returns is the one written, the same one a read gets, so a host carrying on from the
+	/// result meets the same filtering as one carrying on from a read.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_ReturnsTheSessionTheCookieHolds()
+	{
+		SetupSignIn();
+
+		var result = await _adapter.SignInAsync(Session(new JsonObject
+		{
+			[JwtClaimTypes.Subject] = JsonValue.Create("attacker"),
+			["tenant"] = JsonValue.Create("acme"),
+		}));
+
+		Assert.Equal("user123", result.Session.Subject);
+		Assert.Equal(["tenant"], result.Session.AdditionalClaims!.Select(claim => claim.Key));
+	}
+
+	[Theory]
+	[InlineData("", "session456")]
+	[InlineData("user123", "")]
+	public async Task SignInAsync_WithoutSubjectOrSessionId_Throws(string subject, string sessionId)
+	{
+		SetupSignIn();
+
+		await Assert.ThrowsAsync<ArgumentException>(
+			() => _adapter.SignInAsync(Session() with { Subject = subject, SessionId = sessionId }));
+	}
+
 	[Fact]
 	public async Task AuthenticateAsync_AfterSignOutInTheSameRequest_ReturnsNone()
 	{

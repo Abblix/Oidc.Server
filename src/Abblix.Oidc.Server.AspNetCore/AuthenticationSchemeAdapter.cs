@@ -137,7 +137,8 @@ public class AuthenticationSchemeAdapter(
 	/// never turns a request into a 500.
 	/// <para>
 	/// Once this request has signed in or out, the answer is the session it wrote, or none, because the scheme keeps
-	/// answering with the cookie the request arrived with for the rest of the request.
+	/// answering with the cookie the request arrived with for the rest of the request. That session is read from the
+	/// claims as written, so a claims transformation the host registered reaches it only from the next request on.
 	/// </para>
 	/// </remarks>
 	/// <returns>
@@ -240,6 +241,18 @@ public class AuthenticationSchemeAdapter(
 				"type of the issued identity; an empty value yields an unauthenticated principal that cannot be read back.",
 				nameof(authSession));
 
+		// The subject and the session id are what a read requires to see an OIDC session at all, so a session without
+		// either would be written and then read as no session, by this request and every later one.
+		if (string.IsNullOrEmpty(authSession.Subject))
+			throw new ArgumentException(
+				$"{nameof(AuthSession.Subject)} must be a non-empty value; a session without one is read back as no session.",
+				nameof(authSession));
+
+		if (string.IsNullOrEmpty(authSession.SessionId))
+			throw new ArgumentException(
+				$"{nameof(AuthSession.SessionId)} must be a non-empty value; a session without one is read back as no session.",
+				nameof(authSession));
+
 		var replaced = await AuthenticateAsync();
 		AuthSession[] endedSessions = [];
 		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
@@ -289,13 +302,14 @@ public class AuthenticationSchemeAdapter(
 		await HttpContext.SignInAsync(authenticationScheme, principal);
 
 		// What the next request will read from this cookie, rather than the session passed in, so a read in this
-		// request gets the same filtering and precision the cookie applies.
-		HttpContext.Items[WrittenInThisRequest] = ReadSession(principal);
+		// request and the result get the same filtering and precision the cookie applies.
+		var written = ReadSession(principal).NotNull(nameof(principal));
+		HttpContext.Items[WrittenInThisRequest] = written;
 
 		foreach (var endedSession in endedSessions)
 			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
 
-		return new AuthSessionSignInResult(authSession, endedSessions);
+		return new AuthSessionSignInResult(written, endedSessions);
 	}
 
 	/// <summary>

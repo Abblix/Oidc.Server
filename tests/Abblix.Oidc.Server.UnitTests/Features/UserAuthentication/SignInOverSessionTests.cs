@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -169,6 +170,43 @@ public class SignInOverSessionTests
         Assert.Equal((ClientId, "bob-session"), (clientId, context.SessionId));
     }
 
+    /// <summary>
+    /// A host's claims transformation runs when a request reads its cookie, and the request that signed in never
+    /// reads the cookie back, so its session carries the claims as written and the next request's carries the
+    /// transformed ones.
+    /// </summary>
+    [Fact]
+    public async Task A_claims_transformation_reaches_the_next_request_and_not_the_one_that_signed_in()
+    {
+        var notified = new ConcurrentQueue<(string ClientId, LogoutContext Context)>();
+        await using var provider = BuildProvider(notified,
+            services => services.AddSingleton<IClaimsTransformation, AddsTenant>());
+
+        AuthSession? sameRequest = null;
+        var cookie = await RequestAsync(provider, cookie: null, async services =>
+        {
+            var sessions = services.GetRequiredService<IAuthSessionService>();
+            await sessions.SignInAsync(Session("alice", "alice-session"));
+            sameRequest = await sessions.AuthenticateAsync();
+        });
+
+        AuthSession? nextRequest = null;
+        await RequestAsync(provider, cookie, async services =>
+            nextRequest = await services.GetRequiredService<IAuthSessionService>().AuthenticateAsync());
+
+        Assert.Null(sameRequest!.AdditionalClaims);
+        Assert.Equal("acme", nextRequest!.AdditionalClaims!["tenant"]!.GetValue<string>());
+    }
+
+    private sealed class AddsTenant : IClaimsTransformation
+    {
+        public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+        {
+            ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim("tenant", "acme"));
+            return Task.FromResult(principal);
+        }
+    }
+
     private static AuthSession Session(string subject, string sessionId) => new(
         Subject: subject,
         SessionId: sessionId,
@@ -233,7 +271,9 @@ public class SignInOverSessionTests
             .SingleOrDefault() ?? cookie;
     }
 
-    private static ServiceProvider BuildProvider(ConcurrentQueue<(string ClientId, LogoutContext Context)> notified)
+    private static ServiceProvider BuildProvider(
+        ConcurrentQueue<(string ClientId, LogoutContext Context)> notified,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -261,6 +301,7 @@ public class SignInOverSessionTests
             .Callback((ClientInfo client, LogoutContext context) => notified.Enqueue((client.ClientId, context)))
             .Returns(Task.CompletedTask);
         services.Replace(ServiceDescriptor.Singleton(notifier.Object));
+        configure?.Invoke(services);
 
         return services.BuildServiceProvider();
     }
