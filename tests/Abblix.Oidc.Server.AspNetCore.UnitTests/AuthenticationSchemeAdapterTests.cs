@@ -91,7 +91,87 @@ public class AuthenticationSchemeAdapterTests
 		authService
 			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
 			.Returns(Task.CompletedTask);
+		authService
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
+			.ReturnsAsync(AuthenticateResult.NoResult());
 		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
+	}
+
+	/// <summary>
+	/// Keeps the principal each sign-in writes and hands it back to the next read, as one cookie across requests.
+	/// </summary>
+	private void SetupCookie()
+	{
+		ClaimsPrincipal? written = null;
+		var authService = new Mock<IAuthenticationService>();
+		authService
+			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
+			.Callback<HttpContext, string, ClaimsPrincipal, AuthenticationProperties>((_, _, p, _) => written = p)
+			.Returns(Task.CompletedTask);
+		authService
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
+			.ReturnsAsync(() => written is null
+				? AuthenticateResult.NoResult()
+				: AuthenticateResult.Success(new AuthenticationTicket(written, Scheme)));
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
+	}
+
+	// ---------- Signing in over a session ----------
+
+	[Fact]
+	public async Task SignInAsync_WithoutASession_WritesTheSessionGivenAndEndsNone()
+	{
+		SetupCookie();
+
+		var result = await _adapter.SignInAsync(Session());
+
+		Assert.Equal("session456", result.Session.SessionId);
+		Assert.Empty(result.EndedSessions);
+	}
+
+	[Fact]
+	public async Task SignInAsync_OverAnotherPersonsSession_EndsIt()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+
+		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+
+		Assert.Equal("bob-session", result.Session.SessionId);
+		var ended = Assert.Single(result.EndedSessions);
+		Assert.Equal(("alice", "alice-session"), (ended.Subject, ended.SessionId));
+		Assert.Equal("bob-session", (await _adapter.AuthenticateAsync())!.SessionId);
+	}
+
+	[Fact]
+	public async Task SignInAsync_OverTheSamePersonsSession_ContinuesItUnderItsIdentifier()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { SessionId = "first-session" });
+		var reauthenticatedAt = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
+		var result = await _adapter.SignInAsync(
+			Session() with { SessionId = "second-session", AuthenticationTime = reauthenticatedAt });
+
+		Assert.Equal("first-session", result.Session.SessionId);
+		Assert.Empty(result.EndedSessions);
+		var written = await _adapter.AuthenticateAsync();
+		Assert.Equal(("first-session", reauthenticatedAt), (written!.SessionId, written.AuthenticationTime));
+	}
+
+	/// <summary>
+	/// Subjects are identifiers compared exactly, so two differing only in case are two people.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_OverASubjectDifferingOnlyInCase_EndsIt()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "first-session" });
+
+		var result = await _adapter.SignInAsync(Session() with { Subject = "Alice", SessionId = "second-session" });
+
+		Assert.Equal("second-session", result.Session.SessionId);
+		Assert.Single(result.EndedSessions);
 	}
 
 	// ---------- Round-trip fidelity ----------

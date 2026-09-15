@@ -638,10 +638,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(),
@@ -679,7 +675,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-        _authSessionService.Setup(s => s.SignInAsync(session)).Returns(Task.CompletedTask);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
@@ -708,7 +703,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-        _authSessionService.Setup(s => s.SignInAsync(session)).Returns(Task.CompletedTask);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
@@ -739,10 +733,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
@@ -784,9 +774,7 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
+
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
             .ReturnsAsync(accessToken);
@@ -832,10 +820,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
                 session,
@@ -878,10 +862,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -929,10 +909,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, recentSession))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(recentSession))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(),
@@ -968,10 +944,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, highAcrSession))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(highAcrSession))
-            .Returns(Task.CompletedTask);
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -1143,10 +1115,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(),
@@ -1191,10 +1159,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -1245,10 +1209,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
@@ -1301,10 +1261,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(),
@@ -1356,10 +1312,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.Is<AuthorizedGrant>(g => g.AuthSession == session),
@@ -1396,10 +1348,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -1485,10 +1433,6 @@ public class AuthorizationRequestProcessorTests
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
 
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
-
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
                 It.IsAny<AuthorizedGrant>(),
@@ -1524,10 +1468,6 @@ public class AuthorizationRequestProcessorTests
         _consentsProvider
             .Setup(p => p.GetUserConsentsAsync(request, session))
             .ReturnsAsync(consents);
-
-        _authSessionService
-            .Setup(s => s.SignInAsync(session))
-            .Returns(Task.CompletedTask);
 
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(

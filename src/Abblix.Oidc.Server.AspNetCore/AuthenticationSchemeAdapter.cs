@@ -202,9 +202,15 @@ public class AuthenticationSchemeAdapter(
 	/// Signs in the specified user into the application, setting up their authentication session.
 	/// Critical claims (Subject, SessionId, AuthenticationTime, AuthenticationMethodReferences) are stored in principal claims.
 	/// </summary>
+	/// <remarks>
+	/// The cookie holds one session, so signing in replaces the one it carries. When that session belongs to another
+	/// end user, it ends and is reported as ended. When it belongs to the same end user, as on a re-authentication or
+	/// a step-up, the session continues under its existing identifier: the clients signed in to it are recorded
+	/// under that identifier and their ID tokens carry it, so a fresh one would lose them to the logout that follows.
+	/// </remarks>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
-	/// <returns>A task that represents the asynchronous sign-in operation.</returns>
-	public Task SignInAsync(AuthSession authSession)
+	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
+	public async Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
 	{
 		// IdentityProvider becomes the authentication type of the issued identity. An empty value produces an
 		// unauthenticated principal: SignInAsync would appear to succeed, yet AuthenticateAsync would read it back as
@@ -214,6 +220,13 @@ public class AuthenticationSchemeAdapter(
 				$"{nameof(AuthSession.IdentityProvider)} must be a non-empty value because it becomes the authentication " +
 				"type of the issued identity; an empty value yields an unauthenticated principal that cannot be read back.",
 				nameof(authSession));
+
+		var replaced = await AuthenticateAsync();
+		AuthSession[] endedSessions = [];
+		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
+			authSession = authSession with { SessionId = replaced.SessionId };
+		else if (replaced != null)
+			endedSessions = [replaced];
 
 		// Critical claims stored in principal for access in cookie events (especially SigningOut)
 		var claims = new List<Claim>
@@ -254,7 +267,8 @@ public class AuthenticationSchemeAdapter(
 
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
-		return HttpContext.SignInAsync(authenticationScheme, principal);
+		await HttpContext.SignInAsync(authenticationScheme, principal);
+		return new AuthSessionSignInResult(authSession, endedSessions);
 	}
 
 	/// <summary>

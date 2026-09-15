@@ -35,6 +35,8 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -305,31 +307,55 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public void AddOidcMinimalApi_RegistersDefaultAuthSessionService()
+    public async Task AddOidcMinimalApi_RegistersDefaultAuthSessionService()
     {
         // The MVC transport registers AuthenticationSchemeAdapter as the default IAuthSessionService;
         // the Minimal API transport must mirror it, or a host without its own implementation fails
         // at request time on every endpoint that touches the authentication session.
         var services = new ServiceCollection();
+        services.AddSingleton(Mock.Of<IAuthSessionTerminator>());
+        var authentication = new Mock<IAuthenticationService>(MockBehavior.Strict);
+        authentication
+            .Setup(a => a.AuthenticateAsync(It.IsAny<HttpContext>(), It.IsAny<string>()))
+            .ReturnsAsync(AuthenticateResult.NoResult());
 
         services.AddOidcMinimalApi();
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
-        Assert.Equal(typeof(AuthenticationSchemeAdapter), descriptor.ImplementationType);
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddSingleton(authentication.Object).BuildServiceProvider(),
+        };
+        var resolved = scope.ServiceProvider.GetRequiredService<IAuthSessionService>();
+
+        // Ends the sessions a sign-in replaces, over the cookie scheme the host authenticates with.
+        Assert.IsType<AuthSessionTerminatingDecorator>(resolved);
+        Assert.Null(await resolved.AuthenticateAsync());
+        authentication.Verify(a => a.AuthenticateAsync(It.IsAny<HttpContext>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
-    public void AddOidcMinimalApi_HostPreregisteredAuthSessionService_Wins()
+    public async Task AddOidcMinimalApi_HostPreregisteredAuthSessionService_Wins()
     {
         var services = new ServiceCollection();
-        var stub = new Mock<IAuthSessionService>().Object;
-        services.AddSingleton(stub);
+        var session = new AuthSession("subject", "session", DateTimeOffset.UnixEpoch, "local");
+        var stub = new Mock<IAuthSessionService>();
+        stub.Setup(s => s.AuthenticateAsync()).ReturnsAsync(session);
+        services.AddSingleton(stub.Object);
+        services.AddSingleton(Mock.Of<IAuthSessionTerminator>());
 
         services.AddOidcMinimalApi();
 
-        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
-        Assert.Same(stub, descriptor.ImplementationInstance);
+        await using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredService<IAuthSessionService>();
+
+        // The host's store keeps the sessions, and a sign-in through it still ends the ones it reports.
+        Assert.IsType<AuthSessionTerminatingDecorator>(resolved);
+        Assert.Same(session, await resolved.AuthenticateAsync());
     }
 
     [Fact]

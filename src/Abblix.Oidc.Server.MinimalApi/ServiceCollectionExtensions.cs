@@ -99,6 +99,7 @@ public static class ServiceCollectionExtensions
         // The default authentication-session bridge over the host's cookie authentication scheme,
         // mirroring the MVC transport. TryAdd lets a host supply its own session service instead.
         services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
+        services.Decorate<IAuthSessionService, AuthSessionTerminatingDecorator>();
 
         // Flattens a response DTO into name/value pairs for query/fragment/form_post delivery.
         services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();

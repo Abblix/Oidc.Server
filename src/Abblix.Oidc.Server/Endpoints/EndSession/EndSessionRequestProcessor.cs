@@ -7,16 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
-using Abblix.Oidc.Server.Features.LogoutNotification;
-using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
@@ -30,15 +26,11 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession;
 /// </remarks>
 /// <param name="logger">The logger.</param>
 /// <param name="authSessionService">The authentication service.</param>
-/// <param name="sessionLogoutNotifier">Notifies the clients of the ended session.</param>
-/// <param name="tokenRevoker">Revokes the tokens of the ended session, when the deployment asks for it.</param>
-/// <param name="options">Supplies whether ending a session revokes its tokens.</param>
+/// <param name="authSessionTerminator">Ends the session for its tokens and its clients.</param>
 public partial class EndSessionRequestProcessor(
 	ILogger<EndSessionRequestProcessor> logger,
 	IAuthSessionService authSessionService,
-	ISessionLogoutNotifier sessionLogoutNotifier,
-	ITokenRevoker tokenRevoker,
-	IOptions<OidcOptions> options) : IEndSessionRequestProcessor
+	IAuthSessionTerminator authSessionTerminator) : IEndSessionRequestProcessor
 {
 	/// <summary>
 	/// Processes the end-session request and returns the corresponding response.
@@ -77,14 +69,9 @@ public partial class EndSessionRequestProcessor(
 
 		await authSessionService.SignOutAsync();
 
-		// Recorded before any client is told, so a client acting on the notification cannot refresh its way
-		// back in against a cutoff that has not been written yet.
-		if (options.Value.RevokeSessionTokensOnLogout)
-			await tokenRevoker.RevokeSessionAsync(sessionId);
-
 		LogUserLoggedOut(subjectId, sessionId);
 
-		var context = await sessionLogoutNotifier.NotifyClientsAsync(sessionId, subjectId);
+		var context = await authSessionTerminator.TerminateAsync(sessionId, subjectId);
 
 		var response = new EndSessionSuccess(postLogoutRedirectUri, context.FrontChannelLogoutRequestUris);
 		return response;
