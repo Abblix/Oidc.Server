@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,15 +33,20 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession;
 
 /// <summary>
-/// Which clients a logout reaches when the session they signed in to was used by two authorizations at once.
+/// Which clients a logout reaches when two authorizations were sent with the same session cookie.
 /// </summary>
 /// <remarks>
 /// Runs the shipped composition over the real ASP.NET cookie handler, because that is where the session lives
 /// in an ordinary host. A browser opening two relying parties in two tabs sends both authorization requests
 /// with the cookie it holds at that moment, so both requests start from the same session. Each client that
 /// signs in there must still be told when the user logs out.
+/// <para>
+/// The two requests run one after the other, each carrying the cookie the browser held before either response
+/// arrived. Two authorizations claiming a record at the same moment is a property of the record store, and its
+/// own tests drive that.
+/// </para>
 /// </remarks>
-public class ConcurrentAuthorizationLogoutTests
+public class SameCookieAuthorizationLogoutTests
 {
     private const string FirstClientId = "first-client";
     private const string SecondClientId = "second-client";
@@ -104,7 +110,8 @@ public class ConcurrentAuthorizationLogoutTests
 
     /// <summary>
     /// Runs one request carrying <paramref name="cookie"/> and answers the cookie its response set, or null when
-    /// it set none.
+    /// it set none. Throws when the response set several, as the cookie handler does for a ticket too large for
+    /// one cookie.
     /// </summary>
     private static async Task<string?> RequestAsync(
         ServiceProvider provider, string? cookie, Func<IServiceProvider, Task> handle)
@@ -118,7 +125,6 @@ public class ConcurrentAuthorizationLogoutTests
         await handle(scope.ServiceProvider);
 
         return SetCookieHeaderValue.ParseList(httpContext.Response.Headers.SetCookie.OfType<string>().ToList())
-            .Where(c => c.Expires == null || c.Expires > DateTimeOffset.UtcNow)
             .Select(c => $"{c.Name}={c.Value}")
             .SingleOrDefault();
     }
@@ -129,7 +135,7 @@ public class ConcurrentAuthorizationLogoutTests
         services.AddLogging();
         services.AddDistributedMemoryCache();
         services.AddMemoryCache();
-        services.AddDataProtection();
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
         services.AddAuthentication().AddCookie();
         services.AddSingleton(Mock.Of<IUserInfoProvider>());
 
