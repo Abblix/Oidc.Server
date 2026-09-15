@@ -228,6 +228,58 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
+    /// A store that refuses an expiry already in the past, as the Redis cache does, still records a client whose
+    /// write is made as the session's records expire.
+    /// </summary>
+    [Fact]
+    public async Task A_client_recorded_as_the_records_expire_is_listed_by_a_store_refusing_past_expiries()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+
+        var expiring = new ClockMovesAtTheFirstClaim(new RefusesAnExpiryInThePast(_storage, _time), () =>
+        {
+            _time.Advance(TimeSpan.FromMilliseconds(2));
+            return Task.CompletedTask;
+        });
+        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+
+        Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Refuses a write whose absolute expiry is not after the current moment, which is what the Redis cache does
+    /// where the in-memory one drops the write silently.
+    /// </summary>
+    private sealed class RefusesAnExpiryInThePast(IEntityStorage inner, TimeProvider time) : IEntityStorage
+    {
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            Refuse(options);
+            return inner.SetAsync(key, value, options, token);
+        }
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            Refuse(options);
+            return inner.TrySetIfAbsentAsync(key, value, options, token);
+        }
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+
+        private void Refuse(StorageOptions options)
+        {
+            if (options.AbsoluteExpiration <= time.GetUtcNow())
+                throw new ArgumentOutOfRangeException(
+                    nameof(options), options.AbsoluteExpiration, "The absolute expiration value must be in the future.");
+        }
+    }
+
+    /// <summary>
     /// A client that loses its claim to another one whose record then expires is still listed.
     /// </summary>
     [Fact]
