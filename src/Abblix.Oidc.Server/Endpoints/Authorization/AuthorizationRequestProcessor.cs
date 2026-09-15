@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -28,6 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response to an authorization request based on the request's parameters and the current state
 /// of the user's session.
 /// </summary>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+	Justification = "Every dependency is used: the session store, the record of which clients a session has, the consent provider and its backstop, the revocation check, the subject converter, the clock and the response builders each decide a different part of one authorization.")]
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
 	ISessionClientRegistry sessionClients,

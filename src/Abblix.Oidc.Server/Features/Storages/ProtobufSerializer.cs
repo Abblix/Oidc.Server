@@ -33,6 +33,19 @@ namespace Abblix.Oidc.Server.Features.Storages;
 public class ProtobufSerializer : IBinarySerializer
 {
     /// <summary>
+    /// The messages stored as they are, with no domain type mapped onto them, each with the parser that reads it.
+    /// </summary>
+    private static readonly Dictionary<Type, MessageParser> StoredAsThemselves = new()
+    {
+        [typeof(Proto.RevocationCutoff)] = Proto.RevocationCutoff.Parser,
+        [typeof(Proto.PollSchedule)] = Proto.PollSchedule.Parser,
+        [typeof(Proto.RateLimitAttempt)] = Proto.RateLimitAttempt.Parser,
+        [typeof(Proto.RateLimitGeneration)] = Proto.RateLimitGeneration.Parser,
+        [typeof(Proto.SessionClient)] = Proto.SessionClient.Parser,
+        [typeof(Proto.SessionClientsGeneration)] = Proto.SessionClientsGeneration.Parser,
+    };
+
+    /// <summary>
     /// Serializes an object to a binary representation using Protocol Buffers.
     /// </summary>
     /// <typeparam name="T">The type of the object to serialize.</typeparam>
@@ -95,23 +108,8 @@ public class ProtobufSerializer : IBinarySerializer
             return (T)(object)proto.FromProto();
         }
 
-        if (targetType == typeof(Proto.RevocationCutoff))
-            return (T)(object)Proto.RevocationCutoff.Parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Proto.PollSchedule))
-            return (T)(object)Proto.PollSchedule.Parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Proto.RateLimitAttempt))
-            return (T)(object)Proto.RateLimitAttempt.Parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Proto.RateLimitGeneration))
-            return (T)(object)Proto.RateLimitGeneration.Parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Proto.SessionClient))
-            return (T)(object)Proto.SessionClient.Parser.ParseFrom(bytes);
-
-        if (targetType == typeof(Proto.SessionClientsGeneration))
-            return (T)(object)Proto.SessionClientsGeneration.Parser.ParseFrom(bytes);
+        if (StoredAsThemselves.TryGetValue(targetType, out var parser))
+            return (T)(object)parser.ParseFrom(bytes);
 
         if (targetType == typeof(Endpoints.Token.Interfaces.TokenInfo))
         {
