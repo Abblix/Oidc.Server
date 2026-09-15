@@ -122,6 +122,11 @@ internal static class LogEvents
         /// <c>Endpoints/EndSession/EndSessionRequestProcessor.cs</c> - processes RP-Initiated
         /// Logout requests per OpenID Connect RP-Initiated Logout 1.0 (sub-range 2070-2074).
         /// </summary>
+        /// <remarks>
+        /// <see cref="ClientNotificationFailed"/> is raised by
+        /// <c>Features/LogoutNotification/SessionLogoutNotifier.cs</c>, which notifies the clients on the end
+        /// session's behalf, and keeps this id because an operator may already alert on it.
+        /// </remarks>
         public static class EndSessionRequestProcessor
         {
             private const int Base = 2070;
@@ -862,6 +867,23 @@ internal static class LogEvents
 
             public const int GrantedAuthorizationDetailsRefused = Base;
         }
+    }
 
+    /// <summary>
+    /// Range 10300-10399: <c>Features/LogoutNotification</c> and the storage it reads - which clients a
+    /// session is known to have, and telling them when it ends.
+    /// </summary>
+    public static class LogoutNotification
+    {
+        /// <summary>
+        /// <c>Features/Storages/SessionClientRegistry.cs</c> - a client the session could not record
+        /// (sub-range 10300-10319).
+        /// </summary>
+        public static class SessionClientRegistry
+        {
+            private const int Base = 10300;
+
+            public const int SessionClientsExhausted = Base;
+        }
     }
 }

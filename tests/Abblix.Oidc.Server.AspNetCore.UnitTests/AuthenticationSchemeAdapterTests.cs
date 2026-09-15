@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Collections;
 using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -180,69 +179,44 @@ public class AuthenticationSchemeAdapterTests
 	}
 
 	[Fact]
-	public async Task RoundTrip_AmrAndAffectedClientIds_Preserved()
+	public async Task RoundTrip_Amr_Preserved()
 	{
 		var input = Session() with
 		{
 			AuthenticationMethodReferences = ["pwd", "otp"],
-			AffectedClientIds = ["client-a", "client-b"],
 		};
 
 		var result = await RoundTripAsync(input);
 
 		Assert.Equal(["pwd", "otp"], result!.AuthenticationMethodReferences);
-		Assert.Equal(["client-a", "client-b"], result.AffectedClientIds);
 	}
+
 	/// <summary>
-	/// A client list that was empty when its size was asked still reaches the other side whole.
+	/// A cookie written by a release that kept the session's clients in the authentication properties still
+	/// reads as the session it was, so upgrading does not sign every user out.
 	/// </summary>
-	/// <remarks>
-	/// The size and the content were two questions put to a live collection, and a request adding the
-	/// first client between them left the property unwritten altogether - so the session came back
-	/// naming nobody, and every client it touched was gone from the logout that session drives. The
-	/// fixture is that moment made deterministic: zero to the first question, the truth afterwards.
-	/// </remarks>
 	[Fact]
-	public async Task RoundTrip_AClientListFilledAfterItsSizeWasAsked_IsStillCarried()
+	public async Task AuthenticateAsync_CookieCarryingAClientListProperty_StillReadsTheSession()
 	{
-		var input = Session() with
-		{
-			AffectedClientIds = new EmptyOnFirstMeasure("client-a", "client-b"),
-		};
+		var identity = new ClaimsIdentity([
+			new Claim(JwtClaimTypes.Subject, "user"),
+			new Claim(JwtClaimTypes.SessionId, "s"),
+			new Claim(JwtClaimTypes.AuthenticationTime, "1700000000")
+		], "TestProvider");
 
-		var result = await RoundTripAsync(input);
+		var properties = new AuthenticationProperties();
+		properties.SetString("AffectedClientIds", "[\"client-a\"]");
 
-		Assert.Equal(["client-a", "client-b"], result!.AffectedClientIds);
-	}
+		var authService = new Mock<IAuthenticationService>();
+		authService
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
+			.ReturnsAsync(AuthenticateResult.Success(
+				new AuthenticationTicket(new ClaimsPrincipal(identity), properties, Scheme)));
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(authService.Object).BuildServiceProvider();
 
-	/// <summary>
-	/// Answers zero the first time it is asked its size, and truthfully after.
-	/// </summary>
-	private sealed class EmptyOnFirstMeasure(params string[] items) : ICollection<string>
-	{
-		private readonly List<string> _items = [..items];
-		private bool _asked;
+		var result = await _adapter.AuthenticateAsync();
 
-		public int Count
-		{
-			get
-			{
-				if (_asked)
-					return _items.Count;
-
-				_asked = true;
-				return 0;
-			}
-		}
-
-		public bool IsReadOnly => false;
-		public void Add(string item) => _items.Add(item);
-		public void Clear() => _items.Clear();
-		public bool Contains(string item) => _items.Contains(item);
-		public void CopyTo(string[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
-		public bool Remove(string item) => _items.Remove(item);
-		public IEnumerator<string> GetEnumerator() => _items.ToArray().AsEnumerable().GetEnumerator();
-		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+		Assert.Equal("s", result?.SessionId);
 	}
 
 	[Fact]

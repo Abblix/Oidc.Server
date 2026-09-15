@@ -381,10 +381,7 @@ public partial class JwtBearerGrantHandler(
 			Subject: ctx.Subject,
 			SessionId: sessionIdGenerator.GenerateSessionId(),
 			AuthenticationTime: timeProvider.GetUtcNow(),
-			IdentityProvider: ctx.Issuer)
-		{
-			AffectedClientIds = { clientInfo.ClientId }
-		};
+			IdentityProvider: ctx.Issuer);
 
 		return new AuthorizedGrant(authSession, context);
 	}

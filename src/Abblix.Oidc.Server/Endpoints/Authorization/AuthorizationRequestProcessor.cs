@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -14,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
@@ -27,8 +29,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response to an authorization request based on the request's parameters and the current state
 /// of the user's session.
 /// </summary>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+	Justification = "Every dependency is used: the session store, the record of which clients a session has, the consent provider and its backstop, the revocation check, the subject converter, the clock and the response builders each decide a different part of one authorization.")]
 public class AuthorizationRequestProcessor(
 	IAuthSessionService authSessionService,
+	ISessionClientRegistry sessionClients,
 	IUserConsentsProvider consentsProvider,
 	IRevocationCutoffChecker cutoffChecker,
 	ISubjectTypeConverter subjectTypeConverter,
@@ -123,33 +128,10 @@ public class AuthorizationRequestProcessor(
 			? [..asValidated]
 			: null;
 
-		// Which clients this session already touches, read before the provider is handed the session.
-		var alreadyAffected = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
-
-		UserConsents userConsents;
-		try
-		{
-			// Retrieve user consents (i.e., permissions granted for requested
-			// scopes/resources/authorization_details). The 'prompt=consent' case is not forgotten but
-			// processed inside this call.
-			//
-			// lent deliberately AffectedClientIds: what the provider leaves in this list is compared
-			// against the copy above, and whatever it took out goes back below, whichever way this ends.
-			userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
-		}
-		finally
-		{
-			// Put back whatever the provider took out of the list of clients this session touches, before
-			// anything else can happen. That list is what logout iterates to reach each client, and the
-			// provider was never asked about the clients already on it. Only ever ADDED to: an entry the
-			// provider put there stays, since removing it would lose a client for the same reason.
-			//
-			// In a finally, because a throw is the one way out of here that no return below covers, and a
-			// host that keeps the session object between requests would carry the provider's edit onward
-			// with nothing left to undo it.
-			foreach (var id in alreadyAffected.Where(id => !authSession.AffectedClientIds.Contains(id)))
-				authSession.AffectedClientIds.Add(id);
-		}
+		// Retrieve user consents (i.e., permissions granted for requested
+		// scopes/resources/authorization_details). The 'prompt=consent' case is not forgotten but
+		// processed inside this call.
+		var userConsents = await consentsProvider.GetUserConsentsAsync(request, authSession);
 
 		// If consent for required scopes, resources, or authorization_details is still pending, handle it.
 		if (userConsents.Pending is { Scopes.Length: > 0 }
@@ -239,38 +221,9 @@ public class AuthorizationRequestProcessor(
 			AuthorizationDetails = emittedAuthorizationDetails,
 		};
 
-		// Mark the client as affected by this session, once. The shipped session holds a set, so a second
-		// copy would be dropped for us - but the collection is public and a host may supply a list, and
-		// then every request appends another entry that is persisted, so the stored session grows without
-		// bound.
-		if (!authSession.AffectedClientIds.Contains(clientId))
-			authSession.AffectedClientIds.Add(clientId);
-
-		// Written whenever the session names a client the copy did not, and the copy is what the store
-		// handed over. Asked as one question about the SESSION rather than about this client: a provider
-		// that named another client changed the object and told the store nothing, and that client is then
-		// missing from logout exactly like one this request would have added.
-		//
-		// Compared as sets, because who the session touches is a set even where the collection holding
-		// them is not: a list that arrived carrying one client twice must not read as changed, and must
-		// not read as shortened when a provider drops one of the copies. Ordinal, matching the comparer
-		// the shipped session uses - taking the host collection's instead would put its own idea of
-		// sameness between this answer and the store's.
-		// Walked rather than copied out of, the same way the read above it is. Copying asks the
-		// collection its size and then fills an array of that size, which fails outright when a second
-		// request added a client in between; walking asks for a view, which the shipped collection always
-		// gives and never refuses. The window is the worst one available: this client is already on the
-		// session and the store has not been told.
-		var nowAffected = authSession.AffectedClientIds.ToHashSet(StringComparer.Ordinal);
-		if (!nowAffected.SetEquals(alreadyAffected))
-			await authSessionService.SignInAsync(authSession);
-
-		// What the response tells the client to watch: what this server knows the session touches, which is
-		// the copy taken before the provider saw it plus this client. The provider is not one of the things
-		// that is learnt from.
-		string[] affectedClientIds = alreadyAffected.Contains(clientId)
-			? [..alreadyAffected]
-			: [..alreadyAffected, clientId];
+		// Recorded before anything is issued, so a store that refuses the record fails the authorization
+		// rather than following a code or a token already handed out.
+		await sessionClients.AddClientAsync(authSession.SessionId, clientId);
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
 		// scope set (identical to what the issued token carries) so the response encoder advertises the
@@ -279,7 +232,7 @@ public class AuthorizationRequestProcessor(
 			model,
 			request.ResponseMode,
 			authSession.SessionId,
-			affectedClientIds)
+			[..await sessionClients.GetClientsAsync(authSession.SessionId)])
 		{
 			GrantedScopes = authContext.Scope,
 		};

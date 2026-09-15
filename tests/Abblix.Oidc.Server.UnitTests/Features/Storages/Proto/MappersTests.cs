@@ -151,7 +151,6 @@ public class MappersTests
         var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "google")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-            AffectedClientIds = ["client-1", "client-2", "client-3"],
             AuthenticationMethodReferences = ["pwd", "mfa", "face"],
             Email = "user@example.com",
             EmailVerified = true,
@@ -171,7 +170,6 @@ public class MappersTests
         Assert.Equal(session.SessionId, proto.SessionId);
         Assert.Equal(session.IdentityProvider, proto.IdentityProvider);
         Assert.Equal(session.AuthContextClassRef, proto.AuthContextClassRef);
-        Assert.Equal(3, proto.AffectedClientIds.Count);
         Assert.Equal(3, proto.AuthenticationMethodReferences.Count);
         Assert.Equal(session.Email, proto.Email);
         Assert.True(proto.EmailVerified);
@@ -201,7 +199,6 @@ public class MappersTests
         var result = proto.FromProto();
         Assert.Equal(session.Subject, result.Subject);
         Assert.Null(result.AuthContextClassRef);
-        Assert.Empty(result.AffectedClientIds);
         Assert.Null(result.AuthenticationMethodReferences);
     }
 

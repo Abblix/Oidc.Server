@@ -58,7 +58,6 @@ public class ClientCredentialsGrantHandlerTests
         Assert.Equal(ClientId, grant.AuthSession.Subject);
         Assert.Equal("client_credentials", grant.AuthSession.IdentityProvider);
         Assert.NotNull(grant.AuthSession.SessionId);
-        Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
     }
 
     /// <summary>
@@ -200,28 +199,6 @@ public class ClientCredentialsGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("client_credentials", grant.AuthSession.IdentityProvider);
-    }
-
-    /// <summary>
-    /// Verifies that the affected client IDs collection contains the authenticating client.
-    /// </summary>
-    [Fact]
-    public async Task AuthSession_ShouldTrackClientInAffectedClientIds()
-    {
-        // Arrange
-        var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
-        sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns("session_123");
-        var handler = new ClientCredentialsGrantHandler(sessionIdGenerator.Object, TimeProvider.System);
-        var clientInfo = new ClientInfo(ClientId);
-        var tokenRequest = new TokenRequest();
-
-        // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
-        Assert.Single(grant.AuthSession.AffectedClientIds);
     }
 
     /// <summary>

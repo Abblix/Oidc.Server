@@ -503,10 +503,7 @@ public class TokenExchangeGrantHandler(
             Subject: subject.Subject,
             SessionId: sessionIdGenerator.GenerateSessionId(),
             AuthenticationTime: timeProvider.GetUtcNow(),
-            IdentityProvider: subject.Issuer ?? "self")
-        {
-            AffectedClientIds = { clientInfo.ClientId },
-        };
+            IdentityProvider: subject.Issuer ?? "self");
 
         return new AuthorizedGrant(authSession, authContext);
     }
