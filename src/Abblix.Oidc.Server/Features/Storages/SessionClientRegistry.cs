@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// itself, and a session whose generation is gone starts a new one instead of writing into positions of the old
 /// one that may already have emptied.
 /// <para>
-/// A second key per client says the client is already recorded, so an authorization of a client the session
-/// already knows costs two reads rather than a walk of the list.
+/// A second key per client says the client is already recorded, so recording a client the session already knows
+/// costs three reads, the generation, the marker and the generation again, rather than a search of the list.
 /// </para>
 /// </remarks>
 /// <param name="storage">Where the records are claimed and read.</param>
@@ -44,8 +44,8 @@ public partial class SessionClientRegistry(
     /// How many clients one generation of a session can record.
     /// </summary>
     /// <remarks>
-    /// Logout reads every position of the list, and so does each authorization that reports the session's
-    /// clients, so the bound is what one session can cost those reads. A person signs in to a handful of clients
+    /// Logout reads every position of the list, and so does every successful authorization, whose response
+    /// names the session's clients, so the bound is what one session can cost those reads. A person signs in to a handful of clients
     /// within a session; a list this long is a script registering clients and authorizing each.
     /// </remarks>
     internal const int MaxClientsPerSession = 1000;
@@ -150,14 +150,14 @@ public partial class SessionClientRegistry(
         if (await storage.GetAsync<Proto.SessionClient>(markerKey, false, cancellationToken) != null)
             return;
 
-        // A record expiring before its generation would leave a gap the reader stops at. A generation this
-        // instance's clock already sees as ended is still held by the store, so its records are given a whole
-        // retention instead: a record outliving its generation is simply never read again.
-        var now = clock.GetUtcNow();
-        var generationEnd = generation.ExpiresAt.ToDateTimeOffset();
+        // A whole retention from now, which is never earlier than the generation's end, so no record expires
+        // before its generation and leaves a gap the reader stops at. The generation's own end is not used: the
+        // search below takes several round trips, and a generation ending during them would hand the writes an
+        // expiry already past, which some stores refuse outright. A record outliving its generation is never
+        // read again, because a generation's id is never reused.
         var storageOptions = new StorageOptions
         {
-            AbsoluteExpiration = generationEnd > now ? generationEnd : now + options.Value.SessionClientsRetention,
+            AbsoluteExpiration = clock.GetUtcNow() + options.Value.SessionClientsRetention,
         };
 
         var record = new Proto.SessionClient { ClientId = clientId };
