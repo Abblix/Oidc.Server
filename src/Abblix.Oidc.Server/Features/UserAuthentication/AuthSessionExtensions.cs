@@ -20,9 +20,11 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 public static class AuthSessionExtensions
 {
     /// <summary>
-    /// Standard JWT and OIDC claims that are handled as dedicated properties on <see cref="AuthSession"/> or written by
-    /// the token services. They are excluded when extracting additional claims from JWT payloads, and never written
-    /// from additional claims into one.
+    /// Claims the library decides: the dedicated properties of <see cref="AuthSession"/>, the claims the token services
+    /// write, and the authorization's own (its key binding, authorization details, actor, nonce and requested
+    /// claims). They are excluded when reading a token back into a session and never written from additional claims,
+    /// because the authorization writes some of them only when it has one, and a host's value would stand in for
+    /// its absence and come back as the grant on the next refresh.
     /// </summary>
     private static readonly HashSet<string> StandardClaims = new(StringComparer.Ordinal)
     {
@@ -42,6 +44,13 @@ public static class AuthSessionExtensions
         JwtClaimTypes.JwtId,
         JwtClaimTypes.Scope,
         JwtClaimTypes.ClientId,
+        JwtClaimTypes.GrantId,
+        JwtClaimTypes.Nonce,
+        JwtClaimTypes.RequestedClaims,
+        IanaClaimTypes.Cnf,
+        IanaClaimTypes.AuthorizationDetails,
+        IanaClaimTypes.Act,
+        IanaClaimTypes.MayAct,
     };
 
     /// <summary>
