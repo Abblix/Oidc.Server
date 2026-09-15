@@ -150,10 +150,14 @@ public class AuthenticationSchemeAdapter(
 			return (AuthSession?)written;
 
 		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
-		if (!authenticationResult.Succeeded)
-			return null;
+		return authenticationResult.Succeeded ? ReadSession(authenticationResult.Principal) : null;
+	}
 
-		var principal = authenticationResult.Principal;
+	/// <summary>
+	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
+	/// </summary>
+	private static AuthSession? ReadSession(ClaimsPrincipal principal)
+	{
 		if (!principal.IsAuthenticated())
 			return null;
 
@@ -283,7 +287,10 @@ public class AuthenticationSchemeAdapter(
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
 		await HttpContext.SignInAsync(authenticationScheme, principal);
-		HttpContext.Items[WrittenInThisRequest] = authSession;
+
+		// What the next request will read from this cookie, rather than the session passed in, so a read in this
+		// request gets the same filtering and precision the cookie applies.
+		HttpContext.Items[WrittenInThisRequest] = ReadSession(principal);
 
 		foreach (var endedSession in endedSessions)
 			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);

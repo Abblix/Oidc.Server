@@ -159,6 +159,7 @@ public class AuthenticationSchemeAdapterTests
 		var ended = Assert.Single(result.EndedSessions);
 		Assert.Equal(("alice", "alice-session"), (ended.Subject, ended.SessionId));
 		Assert.Equal(["terminate alice-session alice"], _calls);
+		NextRequest();
 		Assert.Equal("bob-session", (await _adapter.AuthenticateAsync())!.SessionId);
 	}
 
@@ -202,6 +203,7 @@ public class AuthenticationSchemeAdapterTests
 		Assert.Equal("first-session", result.Session.SessionId);
 		Assert.Empty(result.EndedSessions);
 		Assert.Empty(_calls);
+		NextRequest();
 		var written = await _adapter.AuthenticateAsync();
 		Assert.Equal(("first-session", reauthenticatedAt), (written!.SessionId, written.AuthenticationTime));
 	}
@@ -276,8 +278,32 @@ public class AuthenticationSchemeAdapterTests
 
 		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
 
-		Assert.Same(result.Session, await _adapter.AuthenticateAsync());
-		Assert.Equal([result.Session], await _adapter.GetAvailableAuthSessions().ToArrayAsync(TestContext.Current.CancellationToken));
+		var read = await _adapter.AuthenticateAsync();
+		Assert.Equal(("bob", "bob-session"), (read!.Subject, read.SessionId));
+		Assert.Equal(["bob-session"], (await _adapter.GetAvailableAuthSessions()
+			.ToArrayAsync(TestContext.Current.CancellationToken)).Select(session => session.SessionId));
+		Assert.Equal("bob-session", result.Session.SessionId);
+	}
+
+	/// <summary>
+	/// The session read in the request that signed in is the one the cookie holds, so an additional claim named like
+	/// a managed one is dropped there exactly as the next request drops it.
+	/// </summary>
+	[Fact]
+	public async Task AuthenticateAsync_AfterSignInInTheSameRequest_DropsAdditionalClaimsNamedLikeManagedOnes()
+	{
+		SetupSignIn();
+
+		await _adapter.SignInAsync(Session(new JsonObject
+		{
+			[JwtClaimTypes.Subject] = JsonValue.Create("attacker"),
+			[JwtClaimTypes.SessionId] = JsonValue.Create("forged-session"),
+			["tenant"] = JsonValue.Create("acme"),
+		}));
+
+		var read = await _adapter.AuthenticateAsync();
+		Assert.Equal(("user123", "session456"), (read!.Subject, read.SessionId));
+		Assert.Equal(["tenant"], read.AdditionalClaims!.Select(claim => claim.Key));
 	}
 
 	[Fact]
