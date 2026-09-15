@@ -21,6 +21,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using StoredSessionClient = Abblix.Oidc.Server.Features.Storages.Proto.SessionClient;
+using StoredGeneration = Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
@@ -81,7 +82,7 @@ public class SessionClientRegistryTests
         await registry.AddClientAsync(SessionId, "first", Ct);
         await registry.AddClientAsync(SessionId, "first", Ct);
 
-        Assert.Null(await _storage.GetAsync<StoredSessionClient>(_keys.SessionClientKey(SessionId, 2), false, Ct));
+        Assert.Null(await StoredPositionAsync(2));
     }
 
     [Fact]
@@ -101,25 +102,36 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_losing_a_position_to_another_client_takes_the_next_one()
     {
-        var racing = new LetsAnotherCallerIn(_storage, _keys.SessionClientKey(SessionId, 1));
-        var registry = Registry(racing);
-        racing.OnNextReadOf(() => registry.AddClientAsync(SessionId, "first", Ct));
+        await Registry().AddClientAsync(SessionId, "zero", Ct);
+        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
 
-        await registry.AddClientAsync(SessionId, "second", Ct);
+        await Registry(racing).AddClientAsync(SessionId, "second", Ct);
 
-        Assert.Equal(["first", "second"], await registry.GetClientsAsync(SessionId, Ct));
+        Assert.Equal(["zero", "first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
     }
 
     [Fact]
     public async Task A_client_losing_a_position_to_itself_takes_no_other_one()
     {
-        var racing = new LetsAnotherCallerIn(_storage, _keys.SessionClientKey(SessionId, 1));
-        var registry = Registry(racing);
-        racing.OnNextReadOf(() => registry.AddClientAsync(SessionId, "first", Ct));
+        await Registry().AddClientAsync(SessionId, "zero", Ct);
+        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, "first", Ct));
 
-        await registry.AddClientAsync(SessionId, "first", Ct);
+        await Registry(racing).AddClientAsync(SessionId, "first", Ct);
 
-        Assert.Null(await _storage.GetAsync<StoredSessionClient>(_keys.SessionClientKey(SessionId, 2), false, Ct));
+        Assert.Null(await StoredPositionAsync(3));
+    }
+
+    /// <summary>
+    /// What the in-box storage holds at one position of the session's current generation.
+    /// </summary>
+    private async Task<StoredSessionClient?> StoredPositionAsync(int position)
+    {
+        var generation = await _storage.GetAsync<StoredGeneration>(
+            _keys.SessionClientsGenerationKey(SessionId), false, Ct);
+
+        Assert.NotNull(generation);
+        return await _storage.GetAsync<StoredSessionClient>(
+            _keys.SessionClientKey(SessionId, generation.Id, position), false, Ct);
     }
 
     /// <summary>
@@ -154,21 +166,24 @@ public class SessionClientRegistryTests
     }
 
     /// <summary>
-    /// A first record whose expiry this instance's clock already sees as passed, while the store still holds
-    /// it, does not stop the next client from being recorded.
+    /// A generation whose end this instance's clock already sees as passed, while the store still holds it,
+    /// does not stop the next client from being recorded.
     /// </summary>
     [Fact]
-    public async Task A_client_is_recorded_when_the_expiry_to_copy_has_already_passed_here()
+    public async Task A_client_is_recorded_when_the_generation_end_has_already_passed_here()
     {
+        var heldByTheStore = new StorageOptions { AbsoluteExpiration = _time.GetUtcNow() + TimeSpan.FromMinutes(1) };
         await _storage.SetAsync(
-            _keys.SessionClientKey(SessionId, 1),
-            new StoredSessionClient
+            _keys.SessionClientsGenerationKey(SessionId),
+            new StoredGeneration
             {
-                ClientId = "first",
+                Id = "skewed",
                 ExpiresAt = Timestamp.FromDateTimeOffset(_time.GetUtcNow() - TimeSpan.FromSeconds(1)),
             },
-            new StorageOptions { AbsoluteExpiration = _time.GetUtcNow() + TimeSpan.FromMinutes(1) },
+            heldByTheStore,
             Ct);
+        await _storage.SetAsync(
+            _keys.SessionClientKey(SessionId, "skewed", 1), new StoredSessionClient { ClientId = "first" }, heldByTheStore, Ct);
 
         var registry = Registry();
         await registry.AddClientAsync(SessionId, "second", Ct);
@@ -185,7 +200,9 @@ public class SessionClientRegistryTests
 
         await registry.AddClientAsync(SessionId, "one-too-many", Ct);
 
-        Assert.DoesNotContain("one-too-many", await registry.GetClientsAsync(SessionId, Ct));
+        var listed = await registry.GetClientsAsync(SessionId, Ct);
+        Assert.Equal(SessionClientRegistry.MaxClientsPerSession, listed.Count);
+        Assert.DoesNotContain("one-too-many", listed);
         var warning = Assert.Single(_logs.Entries, entry => entry.Level == LogLevel.Warning);
         Assert.Contains("one-too-many", warning.Message);
     }
@@ -245,6 +262,126 @@ public class SessionClientRegistryTests
         await Registry().AddClientAsync(SessionId, "second", Ct);
 
         Assert.Equal(["second"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A client whose earlier authorization claimed a position and then failed before recording that it holds
+    /// one takes another position when it signs in again, and is still listed once.
+    /// </summary>
+    [Fact]
+    public async Task A_client_holding_two_positions_is_listed_once()
+    {
+        var failing = new FailsTheFirstWrite(_storage);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Registry(failing).AddClientAsync(SessionId, "first", Ct));
+
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+
+        Assert.NotNull(await StoredPositionAsync(2));
+        Assert.Equal(["first"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Reading the clients of a session reads the positions it holds and the one after them, not every position
+    /// the list could hold.
+    /// </summary>
+    [Fact]
+    public async Task Reading_a_short_list_stops_after_its_last_client()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+        var counting = new CountsOperations(_storage);
+
+        await Registry(counting).GetClientsAsync(SessionId, Ct);
+
+        // The generation, both positions, and the free position that ends the list.
+        Assert.Equal(4, counting.Reads);
+    }
+
+    /// <summary>
+    /// A client losing its position to another client whose identifier is equal only under a culture comparison
+    /// takes the next position instead of reading itself as recorded.
+    /// </summary>
+    [Fact]
+    public async Task A_client_losing_a_position_to_a_culture_equal_client_takes_the_next_one()
+    {
+        const string composed = "caf\u00e9-client";
+        const string decomposed = "cafe\u0301-client";
+        await Registry().AddClientAsync(SessionId, "zero", Ct);
+        var racing = new ClockMovesAtTheFirstClaim(_storage, () => Registry().AddClientAsync(SessionId, composed, Ct));
+
+        await Registry(racing).AddClientAsync(SessionId, decomposed, Ct);
+
+        Assert.Equal(["zero", composed, decomposed], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Two authorizations starting a session together write into the generation one of them started, and each
+    /// records its client once.
+    /// </summary>
+    [Fact]
+    public async Task Two_authorizations_starting_a_session_together_record_each_client_once()
+    {
+        var counting = new CountsOperations(_storage);
+        var racing = new ClockMovesAtTheFirstClaim(counting, () => Registry().AddClientAsync(SessionId, "first", Ct));
+
+        await Registry(racing).AddClientAsync(SessionId, "second", Ct);
+
+        Assert.Equal(["first", "second"], await Registry().GetClientsAsync(SessionId, Ct));
+        Assert.Equal(1, counting.Writes);
+    }
+
+    /// <summary>
+    /// Counts the reads and the plain writes made through it.
+    /// </summary>
+    private sealed class CountsOperations(IEntityStorage inner) : IEntityStorage
+    {
+        private int _reads;
+        private int _writes;
+
+        public int Reads => _reads;
+        public int Writes => _writes;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            Interlocked.Increment(ref _writes);
+            return inner.SetAsync(key, value, options, token);
+        }
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+        {
+            Interlocked.Increment(ref _reads);
+            return inner.GetAsync<T>(key, removeOnRetrieval, token);
+        }
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
+    /// Fails the first plain write through it, which is the one that records a client already holding a
+    /// position.
+    /// </summary>
+    private sealed class FailsTheFirstWrite(IEntityStorage inner) : IEntityStorage
+    {
+        private int _writes;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => Interlocked.Increment(ref _writes) == 1
+                ? throw new InvalidOperationException("The store refused the write.")
+                : inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
     }
 
     /// <summary>

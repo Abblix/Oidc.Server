@@ -5,15 +5,23 @@ option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 import "google/protobuf/timestamp.proto";
 
 // One client that signed in to a session, recorded under a position in that session's list which
-// nobody else writes.
+// nobody else writes, and again under a key naming the client, which says it is already recorded.
 //
 // The list is how many of these exist rather than one record holding all of them: a list read,
 // extended and written back loses a client whenever two authorizations share the session.
 message SessionClient {
   // The client that took part in the session.
   string client_id = 1;
+}
 
-  // When the records of this session expire. The first record decides it and the later ones copy
-  // it, so the records leave the store together.
+// Which generation of a session's list is current, and when it ends.
+//
+// A list is kept under its generation, and a session whose generation has expired starts a new one
+// rather than writing again into the positions of the old one, some of which may already be gone.
+message SessionClientsGeneration {
+  // Names the generation in the keys of its records. Never reused.
+  string id = 1;
+
+  // When the generation ends. No record of the generation is written to expire before it.
   google.protobuf.Timestamp expires_at = 2;
 }

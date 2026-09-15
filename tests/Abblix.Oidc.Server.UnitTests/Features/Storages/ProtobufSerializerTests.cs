@@ -69,6 +69,24 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
+    /// A recorded client of a session and the generation it belongs to survive a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_SessionClientRecords_RoundTrip()
+    {
+        var end = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var client = _serializer.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
+            _serializer.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
+        var generation = _serializer.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
+            _serializer.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = end.ToTimestamp() }));
+
+        Assert.Equal("client-1", client?.ClientId);
+        Assert.Equal("g-1", generation?.Id);
+        Assert.Equal(end, generation?.ExpiresAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
     /// Neither shape reaches the JSON fallback, which is the reason they have definitions at all.
     /// </summary>
     /// <remarks>
@@ -92,6 +110,10 @@ public class ProtobufSerializerTests
             composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
         composite.Deserialize<RateLimitAttempt>(
             composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
 
         Assert.Empty(recorder.Entries);
     }

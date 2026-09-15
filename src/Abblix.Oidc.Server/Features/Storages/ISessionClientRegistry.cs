@@ -17,8 +17,10 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// ever hold the client of whichever response arrived last.
 /// <para>
 /// Replace the default when the backing store offers an atomic set addition across nodes. The default claims
-/// one storage key per client through <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/>, and is therefore
-/// exactly as reliable between concurrent authorizations as the storage's implementation of that call.
+/// one storage key per client through <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/>, so between
+/// concurrent authorizations it is as exact as the storage's implementation of that call. It also relies on the
+/// storage keeping an entry until its expiry: an entry dropped earlier ends the list a logout reads at that
+/// point.
 /// </para>
 /// </remarks>
 public interface ISessionClientRegistry
