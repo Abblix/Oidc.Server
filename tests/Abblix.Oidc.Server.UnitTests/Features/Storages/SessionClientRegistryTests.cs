@@ -189,4 +189,131 @@ public class SessionClientRegistryTests
         var warning = Assert.Single(_logs.Entries, entry => entry.Level == LogLevel.Warning);
         Assert.Contains("one-too-many", warning.Message);
     }
+
+    /// <summary>
+    /// A client whose record is written in the moment the session's records expire is still listed, rather
+    /// than landing above a position that has just emptied.
+    /// </summary>
+    [Fact]
+    public async Task A_client_recorded_as_the_session_records_expire_is_listed()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+
+        var expiring = new ClockMovesAtTheFirstClaim(_storage, () =>
+        {
+            _time.Advance(TimeSpan.FromMilliseconds(2));
+            return Task.CompletedTask;
+        });
+        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+
+        Assert.Contains("second", await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A client that loses its claim to another one whose record then expires is still listed.
+    /// </summary>
+    [Fact]
+    public async Task A_client_losing_to_a_record_that_then_expires_is_listed()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+
+        var racing = new ClockMovesAtTheFirstClaim(_storage, async () =>
+        {
+            await Registry().AddClientAsync(SessionId, "winner", Ct);
+            _time.Advance(TimeSpan.FromMilliseconds(2));
+        });
+        await Registry(racing).AddClientAsync(SessionId, "loser", Ct);
+
+        Assert.Contains("loser", await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// A client whose walk read a live record just before the session's records expired, and which signs in
+    /// again later, is listed once.
+    /// </summary>
+    [Fact]
+    public async Task A_client_recorded_as_the_records_expire_is_listed_once_after_signing_in_again()
+    {
+        await Registry().AddClientAsync(SessionId, "first", Ct);
+        _time.Advance(Retention - TimeSpan.FromMilliseconds(1));
+        var expiring = new ClockMovesAfterTheFirstRecordRead(_storage, () => _time.Advance(TimeSpan.FromMilliseconds(2)));
+        await Registry(expiring).AddClientAsync(SessionId, "second", Ct);
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        await Registry().AddClientAsync(SessionId, "second", Ct);
+
+        Assert.Equal(["second"], await Registry().GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Client identifiers are compared by their code points, so two spellings a culture treats as equal are two
+    /// clients.
+    /// </summary>
+    [Fact]
+    public async Task Clients_equal_only_under_a_culture_comparison_are_two_clients()
+    {
+        const string composed = "café-client";
+        const string decomposed = "café-client";
+        var registry = Registry();
+
+        await registry.AddClientAsync(SessionId, composed, Ct);
+        await registry.AddClientAsync(SessionId, decomposed, Ct);
+
+        Assert.Equal([composed, decomposed], await registry.GetClientsAsync(SessionId, Ct));
+    }
+
+    /// <summary>
+    /// Runs a step once, just after the first read through it that found a record: the moment a caller has
+    /// seen the session's records alive and has not yet acted on it.
+    /// </summary>
+    private sealed class ClockMovesAfterTheFirstRecordRead(IEntityStorage inner, Action step) : IEntityStorage
+    {
+        private Action? _step = step;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+        {
+            var read = await inner.GetAsync<T>(key, removeOnRetrieval, token);
+            if (read is not null && Interlocked.Exchange(ref _step, null) is { } once)
+                once();
+
+            return read;
+        }
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
+
+    /// <summary>
+    /// Runs a step once, just before the first claim made through it: the moment a caller has decided where to
+    /// write and has not yet written.
+    /// </summary>
+    private sealed class ClockMovesAtTheFirstClaim(IEntityStorage inner, Func<Task> step) : IEntityStorage
+    {
+        private Func<Task>? _step = step;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => inner.GetAsync<T>(key, removeOnRetrieval, token);
+
+        public async Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+        {
+            if (Interlocked.Exchange(ref _step, null) is { } once)
+                await once();
+
+            return await inner.TrySetIfAbsentAsync(key, value, options, token);
+        }
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
+    }
 }
