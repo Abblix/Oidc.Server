@@ -45,6 +45,8 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
         result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
-            request.ClientInfo);
+            request.ClientInfo,
+            // The authorization endpoint never issues a refresh token, so there is no family to join.
+            grantId: null);
     }
 }

@@ -735,7 +735,7 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null))
             .ReturnsAsync(expectedToken);
 
         // Act
@@ -776,7 +776,7 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         var response = await _processor.ProcessAsync(request);
@@ -870,7 +870,7 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null))
             .ReturnsAsync(expectedToken);
 
         // Act
@@ -1211,7 +1211,7 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null))
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
@@ -1268,7 +1268,7 @@ public class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null))
             .ReturnsAsync(expectedToken);
 
         _identityTokenService

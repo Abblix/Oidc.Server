@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
@@ -79,6 +80,43 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         // rt3 - the token an attacker who had rotated forward would be holding.
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt3));
+    }
+
+    [Fact]
+    public async Task Revoking_the_family_also_refuses_its_access_tokens()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // The first access token is issued together with rt1, the second one at the rotation that replaces it,
+        // so between them they cover both ways an access token of this grant comes into being.
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var firstAccessToken = initial[ResponseParameters.AccessToken]!.GetValue<string>();
+
+        var rotation = await RefreshAsync(client, discovery, rt1);
+        var rotated = await ReadJsonAsync(rotation);
+        Assert.True(rotation.IsSuccessStatusCode, $"refresh should rotate, got {(int)rotation.StatusCode}: {rotated}");
+        var rotatedAccessToken = rotated[ResponseParameters.AccessToken]!.GetValue<string>();
+
+        // Both are accepted before the family is revoked, so a refusal below is the revocation speaking and not
+        // a token UserInfo would have refused anyway.
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, firstAccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt1));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, firstAccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> SendUserInfoAsync(
+        HttpClient client, DiscoveryDocument discovery, string accessToken)
+    {
+        Assert.NotNull(discovery.UserInfoEndpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     private static async Task<HttpResponseMessage> RefreshAsync(

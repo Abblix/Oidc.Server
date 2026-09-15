@@ -61,9 +61,6 @@ public class RefreshTokenServiceTests
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
 
-        var grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
-        grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(GrantId);
-
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
@@ -74,7 +71,6 @@ public class RefreshTokenServiceTests
             issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
-            grantIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
             new SubjectTypeConverter(),
@@ -102,7 +98,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -139,7 +135,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -171,7 +167,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -206,7 +202,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -237,7 +233,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -278,7 +274,7 @@ public class RefreshTokenServiceTests
             .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
@@ -324,7 +320,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         _tokenRegistry.Verify(
@@ -333,13 +329,12 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies that a first-issued refresh token starts a new token family: the
-    /// <c>grant_id</c> claim (<see cref="JsonWebTokenPayload.GrantId"/>) is populated so that
-    /// every token later rotated from it shares one lineage a detected replay can revoke whole
-    /// (RFC 9700 Section 4.14.2).
+    /// Verifies that the token joins the family its caller decided: the <c>grant_id</c> claim
+    /// (<see cref="JsonWebTokenPayload.GrantId"/>) is what ties every token of one grant into a lineage a
+    /// detected replay can revoke whole (RFC 9700 Section 4.14.2).
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_NewToken_ShouldStartNewFamily()
+    public async Task CreateRefreshToken_ShouldJoinTheFamilyItIsGiven()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -353,54 +348,11 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, refreshToken: null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, refreshToken: null, grantId: GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
         Assert.Equal(GrantId, capturedToken!.Payload.GrantId);
-    }
-
-    /// <summary>
-    /// Verifies that rotation carries the existing token family forward: the new token inherits the previous
-    /// token's <c>grant_id</c> value instead of starting a fresh lineage. This is what lets a replay detected
-    /// on any single token cascade to the whole grant per the RFC 9700 Section 4.14.2 implementation note.
-    /// </summary>
-    [Fact]
-    public async Task CreateRefreshToken_WithRenewal_ShouldCarryFamilyForward()
-    {
-        // Arrange
-        const string grantId = "grant_root_001";
-        var authSession = CreateAuthSession();
-        var authContext = CreateAuthorizationContext();
-        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
-        {
-            AllowReuse = true, // isolate family propagation from the rotation status write
-            AbsoluteExpiresIn = TimeSpan.FromHours(10),
-        });
-
-        var oldToken = new JsonWebToken
-        {
-            Payload =
-            {
-                JwtId = OldTokenId,
-                IssuedAt = _currentTime.AddHours(-2),
-                ExpiresAt = _currentTime.AddHours(8),
-                GrantId = grantId,
-            }
-        };
-
-        JsonWebToken? capturedToken = null;
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
-            .ReturnsAsync(EncodedToken);
-
-        // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
-
-        // Assert
-        Assert.NotNull(capturedToken);
-        Assert.Equal(grantId, capturedToken!.Payload.GrantId);
     }
 
     /// <summary>
@@ -435,7 +387,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         _tokenRegistry.Verify(
@@ -480,7 +432,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -514,7 +466,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -561,7 +513,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -613,7 +565,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -655,7 +607,7 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.Null(result);
@@ -682,7 +634,7 @@ public class RefreshTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(result);

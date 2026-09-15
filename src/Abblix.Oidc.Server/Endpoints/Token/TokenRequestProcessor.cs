@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 
 
@@ -28,11 +29,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="refreshTokenService">Issues refresh-token JWTs, rolling the previous one for refresh-token grants.</param>
 /// <param name="identityTokenService">Issues ID tokens.</param>
 /// <param name="tokenContextEvaluator">Narrows scopes/resources and computes mTLS confirmation binding.</param>
+/// <param name="grantIdGenerator">Starts a refresh token family for a grant that has none yet.</param>
 public class TokenRequestProcessor(
 	IAccessTokenService accessTokenService,
 	IRefreshTokenService refreshTokenService,
 	IIdentityTokenService identityTokenService,
-	ITokenAuthorizationContextEvaluator tokenContextEvaluator) : ITokenRequestProcessor
+	ITokenAuthorizationContextEvaluator tokenContextEvaluator,
+	IGrantIdGenerator grantIdGenerator) : ITokenRequestProcessor
 {
 	/// <summary>
 	/// Asynchronously processes a valid token request, determining the necessary tokens to generate based on
@@ -82,10 +85,36 @@ public class TokenRequestProcessor(
 		// rather than what the end user did.
 		string[] grantedScope = [..authContext.Scope];
 
+		// RFC 6749 section 4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
+		// returns neither a refresh token nor an ID token - the exchanged access token is the whole
+		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
+		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
+		// cannot mint a credential these grants must never produce. All user-facing grants
+		// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
+		var grantType = request.Model.GrantType;
+		var mayIssueDerivedTokens =
+			grantType != GrantTypes.ClientCredentials &&
+			grantType != GrantTypes.TokenExchange;
+
+		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
+
+		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
+			? refreshToken
+			: null;
+
+		// Decided here, before either token is minted, because both belong to the family and the access token
+		// is minted first: a replay that revokes the family (RFC 9700 section 4.14.2) then refuses the access
+		// tokens it produced as well as its refresh tokens. A rotation continues the presented token's family,
+		// and a grant issuing its first refresh token starts one. A grant with no refresh token has no family
+		// to revoke, so its access token carries none.
+		var grantId = presentedRefreshToken?.Payload.GrantId
+		              ?? (issuesRefreshToken ? grantIdGenerator.GenerateGrantId() : null);
+
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			request.AuthorizedGrant.AuthSession,
 			authContext,
-			clientInfo);
+			clientInfo,
+			grantId);
 
 		// RFC 9449 section 7.1: a DPoP-bound access token (cnf.jkt populated by the evaluator
 		// from the proof key) advertises token_type "DPoP"; otherwise "Bearer".
@@ -120,18 +149,7 @@ public class TokenRequestProcessor(
 					: null,
 		};
 
-		// RFC 6749 section 4.4.3 forbids a refresh token for client_credentials, and an RFC 8693 token exchange
-		// returns neither a refresh token nor an ID token - the exchanged access token is the whole
-		// deliverable. Gate both derived-token branches by grant type so a stray offline_access or openid
-		// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
-		// cannot mint a credential these grants must never produce. All user-facing grants
-		// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
-		var grantType = request.Model.GrantType;
-		var mayIssueDerivedTokens =
-			grantType != GrantTypes.ClientCredentials &&
-			grantType != GrantTypes.TokenExchange;
-
-		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess))
+		if (issuesRefreshToken)
 		{
 			var refreshContext = request.AuthorizedGrant.Context with
 			{
@@ -160,9 +178,8 @@ public class TokenRequestProcessor(
 				request.AuthorizedGrant.AuthSession,
 				refreshContext,
 				clientInfo,
-				request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
-					? refreshToken
-					: null);
+				presentedRefreshToken,
+				grantId.NotNull(nameof(grantId)));
 		}
 
 		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))

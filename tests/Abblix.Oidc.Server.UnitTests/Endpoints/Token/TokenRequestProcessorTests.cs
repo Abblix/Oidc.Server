@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -33,7 +34,11 @@ public class TokenRequestProcessorTests
     private readonly Mock<IRefreshTokenService> _refreshTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
     private readonly Mock<ITokenAuthorizationContextEvaluator> _contextEvaluator;
+    private readonly Mock<IGrantIdGenerator> _grantIdGenerator;
     private readonly TokenRequestProcessor _processor;
+
+    private const string NewGrantId = "grant_new";
+    private const string ExistingGrantId = "grant_existing";
 
     public TokenRequestProcessorTests()
     {
@@ -41,11 +46,14 @@ public class TokenRequestProcessorTests
         _refreshTokenService = new Mock<IRefreshTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
         _contextEvaluator = new Mock<ITokenAuthorizationContextEvaluator>(MockBehavior.Strict);
+        _grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
+        _grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(NewGrantId);
         _processor = new TokenRequestProcessor(
             _accessTokenService.Object,
             _refreshTokenService.Object,
             _identityTokenService.Object,
-            _contextEvaluator.Object);
+            _contextEvaluator.Object,
+            _grantIdGenerator.Object);
     }
 
     private static TokenRequest CreateTokenRequest() => new()
@@ -108,7 +116,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -121,7 +129,7 @@ public class TokenRequestProcessorTests
             s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo),
+                request.ClientInfo, null),
             Times.Once);
     }
 
@@ -147,7 +155,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
@@ -199,7 +207,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
@@ -207,7 +215,7 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         // Act
@@ -221,8 +229,12 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null),
+                null, NewGrantId),
             Times.Once);
+
+        // One family, started once and shared: the access token setup above names the same identifier, and the
+        // strict mock refuses any other.
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Once);
     }
 
     /// <summary>
@@ -260,7 +272,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
@@ -268,7 +280,7 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         PushDeliveryBindings? captured = null;
@@ -328,7 +340,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
@@ -336,7 +348,7 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         var captured = new PushDeliveryBindings("not-set", null);
@@ -384,7 +396,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
@@ -392,7 +404,7 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         _identityTokenService
@@ -436,7 +448,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -469,7 +481,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -479,6 +491,48 @@ public class TokenRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.RefreshToken);
         _refreshTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
+    }
+
+    /// <summary>
+    /// A refresh whose narrowed scope drops offline_access issues no new refresh token, yet the access token it
+    /// mints still came from the presented one, so it stays in that token's family and dies with it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RefreshWithoutOfflineAccess_KeepsTheAccessTokenInThePresentedFamily()
+    {
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var narrowedContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.RefreshToken },
+            new RefreshTokenAuthorizedGrant(
+                authSession,
+                new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
+                existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(narrowedContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, narrowedContext, request.ClientInfo, ExistingGrantId))
+            .ReturnsAsync(accessToken);
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
+            .ReturnsAsync(CreateIdToken());
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(accessToken, tokenIssued.AccessToken);
+        Assert.Null(tokenIssued.RefreshToken);
+        _refreshTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
     }
 
     /// <summary>
@@ -501,7 +555,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -532,7 +586,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -563,7 +617,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -595,7 +649,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 request.AuthorizedGrant.AuthSession,
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -606,7 +660,7 @@ public class TokenRequestProcessorTests
             s => s.CreateAccessTokenAsync(
                 request.AuthorizedGrant.AuthSession,
                 authContext,
-                request.ClientInfo),
+                request.ClientInfo, null),
             Times.Once);
     }
 
@@ -619,7 +673,7 @@ public class TokenRequestProcessorTests
     {
         // Arrange
         var scopes = new[] { Scopes.OfflineAccess };
-        var existingRefreshToken = new Jwt.JsonWebToken();
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
         var authSession = CreateAuthSession();
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(
@@ -646,7 +700,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 authSession,
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, ExistingGrantId))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
@@ -654,7 +708,7 @@ public class TokenRequestProcessorTests
                 authSession,
                 authContext,
                 request.ClientInfo,
-                existingRefreshToken))
+                existingRefreshToken, ExistingGrantId))
             .ReturnsAsync(newRefreshToken);
 
         // Act
@@ -668,7 +722,7 @@ public class TokenRequestProcessorTests
                 authSession,
                 authContext,
                 request.ClientInfo,
-                existingRefreshToken),
+                existingRefreshToken, ExistingGrantId),
             Times.Once);
     }
 
@@ -694,7 +748,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
@@ -748,7 +802,7 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         // Act
@@ -798,7 +852,7 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(evaluatedContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), evaluatedContext, clientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), evaluatedContext, clientInfo, NewGrantId))
             .ReturnsAsync(accessToken);
 
         AuthorizationContext? capturedRefreshContext = null;
@@ -807,9 +861,9 @@ public class TokenRequestProcessorTests
                 It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 clientInfo,
-                It.IsAny<Jwt.JsonWebToken?>()))
-            .Callback<AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?>(
-                (_, ctx, _, _) => capturedRefreshContext = ctx)
+                It.IsAny<Jwt.JsonWebToken?>(), It.IsAny<string>()))
+            .Callback<AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?, string>(
+                (_, ctx, _, _, _) => capturedRefreshContext = ctx)
             .ReturnsAsync(refreshToken);
 
         // Act
@@ -849,7 +903,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         var result = await _processor.ProcessAsync(request);
@@ -859,6 +913,7 @@ public class TokenRequestProcessorTests
         Assert.Null(tokenIssued.IdToken);
         _refreshTokenService.VerifyNoOtherCalls();
         _identityTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
     }
 
     /// <summary>
@@ -885,7 +940,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 emptyScopeContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(CreateAccessToken());
 
         var result = await _processor.ProcessAsync(request);
@@ -929,7 +984,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 evaluated,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(CreateAccessToken());
 
         var result = await _processor.ProcessAsync(request);
@@ -979,7 +1034,7 @@ public class TokenRequestProcessorTests
             .Setup(svc => svc.CreateAccessTokenAsync(
                 It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null))
             .ReturnsAsync(accessToken);
 
         var result = await _processor.ProcessAsync(request);

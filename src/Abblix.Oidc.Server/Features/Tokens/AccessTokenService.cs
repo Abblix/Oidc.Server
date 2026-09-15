@@ -64,6 +64,7 @@ internal class AccessTokenService(
 	/// </param>
 	/// <param name="clientInfo">Client-specific information, including token expiration settings and required JWT
 	/// algorithms.</param>
+	/// <param name="grantId">The refresh token family this access token belongs to, or <c>null</c>.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the newly minted access
 	/// token.</returns>
 	/// <remarks>
@@ -74,7 +75,8 @@ internal class AccessTokenService(
 	public async Task<EncodedJsonWebToken> CreateAccessTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
-		ClientInfo clientInfo)
+		ClientInfo clientInfo,
+		string? grantId)
 	{
 		// Four claims answer four different questions, and keeping them apart is what stops any one of them
 		// from being asked to carry two meanings at once:
@@ -113,6 +115,7 @@ internal class AccessTokenService(
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
 				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+				GrantId = grantId,
 			},
 		};
 
