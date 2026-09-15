@@ -495,6 +495,42 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A refresh token issued before tokens carried a family has none to continue, so rotating it starts one, and
+    /// the access token minted beside the new refresh token joins it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RotatingATokenWithoutAFamily_StartsOne()
+    {
+        var legacyRefreshToken = new Jwt.JsonWebToken();
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OfflineAccess], null);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.RefreshToken },
+            new RefreshTokenAuthorizedGrant(authSession, authContext, legacyRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        var newRefreshToken = CreateRefreshToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, NewGrantId))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
+            .ReturnsAsync(newRefreshToken);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(newRefreshToken, tokenIssued.RefreshToken);
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Once);
+    }
+
+    /// <summary>
     /// A refresh whose narrowed scope drops offline_access issues no new refresh token, yet the access token it
     /// mints still came from the presented one, so it stays in that token's family and dies with it.
     /// </summary>

@@ -89,7 +89,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         var discovery = await FetchDiscoveryAsync(client);
 
         // The first access token is issued together with rt1, the second one at the rotation that replaces it,
-        // so between them they cover both ways an access token of this grant comes into being.
+        // so between them they cover both ways the token endpoint issues an access token of this grant.
         var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
         var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
         var firstAccessToken = initial[ResponseParameters.AccessToken]!.GetValue<string>();

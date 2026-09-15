@@ -253,7 +253,8 @@ public class JsonWebTokenPayload(JsonObject json)
 	/// (RFC 9700 Section 4.14.2).
 	/// </summary>
 	/// <remarks>
-	/// Present on refresh tokens (<c>rt+jwt</c>) and on the access tokens issued by a grant that has them;
+	/// Present on refresh tokens (<c>rt+jwt</c>) and on the access tokens issued at the token endpoint by a grant
+	/// that has them;
 	/// absent (null) on all other tokens, which leaves the family cascade in the token-status validator inert
 	/// for them.
 	/// </remarks>
