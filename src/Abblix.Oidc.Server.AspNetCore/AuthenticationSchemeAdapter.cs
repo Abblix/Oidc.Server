@@ -29,10 +29,12 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// </summary>
 /// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
 /// allowing operations on the HTTP context of the current request.</param>
+/// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
 /// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
 /// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 public class AuthenticationSchemeAdapter(
 	IHttpContextAccessor httpContextAccessor,
+	IAuthSessionTerminator authSessionTerminator,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
@@ -91,6 +93,11 @@ public class AuthenticationSchemeAdapter(
 		JwtClaimTypes.EmailVerified,
 		JwtClaimTypes.AuthenticationMethodReferences,
 	];
+
+	/// <summary>
+	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
+	/// </summary>
+	private (Type, string) WrittenInThisRequest => (typeof(AuthenticationSchemeAdapter), authenticationScheme);
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
@@ -204,9 +211,14 @@ public class AuthenticationSchemeAdapter(
 	/// </summary>
 	/// <remarks>
 	/// The cookie holds one session, so signing in replaces the one it carries. When that session belongs to another
-	/// end user, it ends and is reported as ended. When it belongs to the same end user, as on a re-authentication or
-	/// a step-up, the session continues under its existing identifier: the clients signed in to it are recorded
-	/// under that identifier and their ID tokens carry it, so a fresh one would lose them to the logout that follows.
+	/// end user, it is ended through <see cref="IAuthSessionTerminator"/> once the new cookie is written, and is
+	/// reported as ended. When it belongs to the same end user, as on a re-authentication or a step-up, the session
+	/// continues under its existing identifier: the clients signed in to it are recorded under that identifier and
+	/// their ID tokens carry it, so a fresh one would lose them to the logout that follows.
+	/// <para>
+	/// The session replaced is the one this request last wrote or signed out, and otherwise the one the request
+	/// arrived with, because the scheme keeps answering with the arrived cookie for the rest of the request.
+	/// </para>
 	/// </remarks>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
 	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
@@ -221,7 +233,10 @@ public class AuthenticationSchemeAdapter(
 				"type of the issued identity; an empty value yields an unauthenticated principal that cannot be read back.",
 				nameof(authSession));
 
-		var replaced = await AuthenticateAsync();
+		var replaced = HttpContext.Items.TryGetValue(WrittenInThisRequest, out var written)
+			? (AuthSession?)written
+			: await AuthenticateAsync();
+
 		AuthSession[] endedSessions = [];
 		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
 			authSession = authSession with { SessionId = replaced.SessionId };
@@ -268,6 +283,11 @@ public class AuthenticationSchemeAdapter(
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
 		await HttpContext.SignInAsync(authenticationScheme, principal);
+		HttpContext.Items[WrittenInThisRequest] = authSession;
+
+		foreach (var endedSession in endedSessions)
+			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
+
 		return new AuthSessionSignInResult(authSession, endedSessions);
 	}
 
@@ -333,7 +353,11 @@ public class AuthenticationSchemeAdapter(
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
-	public Task SignOutAsync() => HttpContext.SignOutAsync(authenticationScheme);
+	public async Task SignOutAsync()
+	{
+		await HttpContext.SignOutAsync(authenticationScheme);
+		HttpContext.Items[WrittenInThisRequest] = null;
+	}
 
 	/// <summary>
 	/// Extracts additional claims from the principal, excluding standard OIDC claims.

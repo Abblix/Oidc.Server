@@ -9,6 +9,7 @@
 using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -25,6 +26,7 @@ public class AuthenticationSchemeAdapterTests
 	private readonly Mock<IHttpContextAccessor> _httpContextAccessor;
 	private readonly DefaultHttpContext _httpContext;
 	private readonly AuthenticationSchemeAdapter _adapter;
+	private readonly List<string> _calls = [];
 
 	public AuthenticationSchemeAdapterTests()
 	{
@@ -32,7 +34,13 @@ public class AuthenticationSchemeAdapterTests
 		_httpContext = new DefaultHttpContext();
 		_httpContextAccessor.Setup(x => x.HttpContext).Returns(_httpContext);
 
-		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, Scheme);
+		var terminator = new Mock<IAuthSessionTerminator>(MockBehavior.Strict);
+		terminator
+			.Setup(t => t.TerminateAsync(It.IsAny<string>(), It.IsAny<string>()))
+			.Callback((string sessionId, string subject) => _calls.Add($"terminate {sessionId} {subject}"))
+			.ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
+
+		_adapter = new AuthenticationSchemeAdapter(_httpContextAccessor.Object, terminator.Object, Scheme);
 	}
 
 	private static AuthSession Session(JsonObject? additionalClaims = null, string identityProvider = "TestProvider") => new(
@@ -118,6 +126,11 @@ public class AuthenticationSchemeAdapterTests
 
 	// ---------- Signing in over a session ----------
 
+	/// <summary>
+	/// Starts the next request on the same cookie: what a request remembers of its own writes does not carry over.
+	/// </summary>
+	private void NextRequest() => _httpContext.Items.Clear();
+
 	[Fact]
 	public async Task SignInAsync_WithoutASession_WritesTheSessionGivenAndEndsNone()
 	{
@@ -127,6 +140,7 @@ public class AuthenticationSchemeAdapterTests
 
 		Assert.Equal("session456", result.Session.SessionId);
 		Assert.Empty(result.EndedSessions);
+		Assert.Empty(_calls);
 	}
 
 	[Fact]
@@ -134,13 +148,41 @@ public class AuthenticationSchemeAdapterTests
 	{
 		SetupCookie();
 		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		NextRequest();
 
 		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
 
 		Assert.Equal("bob-session", result.Session.SessionId);
 		var ended = Assert.Single(result.EndedSessions);
 		Assert.Equal(("alice", "alice-session"), (ended.Subject, ended.SessionId));
+		Assert.Equal(["terminate alice-session alice"], _calls);
 		Assert.Equal("bob-session", (await _adapter.AuthenticateAsync())!.SessionId);
+	}
+
+	/// <summary>
+	/// The replaced session is ended only once the new cookie is written, so a sign-in the scheme refuses signs
+	/// nobody out.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_TheSchemeRefuses_EndsNothing()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		NextRequest();
+		var refusing = new Mock<IAuthenticationService>();
+		refusing
+			.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme))
+			.ReturnsAsync(await _httpContext.RequestServices.GetRequiredService<IAuthenticationService>()
+				.AuthenticateAsync(_httpContext, Scheme));
+		refusing
+			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
+			.ThrowsAsync(new InvalidOperationException("the scheme refused"));
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(refusing.Object).BuildServiceProvider();
+
+		await Assert.ThrowsAsync<InvalidOperationException>(
+			() => _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" }));
+
+		Assert.Empty(_calls);
 	}
 
 	[Fact]
@@ -148,6 +190,7 @@ public class AuthenticationSchemeAdapterTests
 	{
 		SetupCookie();
 		await _adapter.SignInAsync(Session() with { SessionId = "first-session" });
+		NextRequest();
 		var reauthenticatedAt = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
 
 		var result = await _adapter.SignInAsync(
@@ -155,6 +198,7 @@ public class AuthenticationSchemeAdapterTests
 
 		Assert.Equal("first-session", result.Session.SessionId);
 		Assert.Empty(result.EndedSessions);
+		Assert.Empty(_calls);
 		var written = await _adapter.AuthenticateAsync();
 		Assert.Equal(("first-session", reauthenticatedAt), (written!.SessionId, written.AuthenticationTime));
 	}
@@ -167,11 +211,55 @@ public class AuthenticationSchemeAdapterTests
 	{
 		SetupCookie();
 		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "first-session" });
+		NextRequest();
 
 		var result = await _adapter.SignInAsync(Session() with { Subject = "Alice", SessionId = "second-session" });
 
 		Assert.Equal("second-session", result.Session.SessionId);
 		Assert.Single(result.EndedSessions);
+	}
+
+	/// <summary>
+	/// Within one request the scheme keeps answering with the cookie the request arrived with, so the session a
+	/// sign-in replaces is the one this request wrote last.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_TwiceInOneRequest_EndsWhatTheFirstWrote()
+	{
+		SetupSignIn();
+
+		await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+		var result = await _adapter.SignInAsync(Session() with { Subject = "carol", SessionId = "carol-session" });
+
+		Assert.Equal("bob-session", Assert.Single(result.EndedSessions).SessionId);
+		Assert.Equal(["terminate bob-session bob"], _calls);
+	}
+
+	/// <summary>
+	/// After signing out, the request holds no session, whatever cookie it arrived with.
+	/// </summary>
+	[Fact]
+	public async Task SignInAsync_AfterSignOutInTheSameRequest_EndsNothing()
+	{
+		SetupCookie();
+		await _adapter.SignInAsync(Session() with { Subject = "alice", SessionId = "alice-session" });
+		NextRequest();
+		var cookie = _httpContext.RequestServices.GetRequiredService<IAuthenticationService>();
+		var arrived = await cookie.AuthenticateAsync(_httpContext, Scheme);
+		var signingOut = new Mock<IAuthenticationService>();
+		signingOut.Setup(x => x.AuthenticateAsync(It.IsAny<HttpContext>(), Scheme)).ReturnsAsync(arrived);
+		signingOut.Setup(x => x.SignOutAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<AuthenticationProperties>()))
+			.Returns(Task.CompletedTask);
+		signingOut
+			.Setup(x => x.SignInAsync(It.IsAny<HttpContext>(), Scheme, It.IsAny<ClaimsPrincipal>(), It.IsAny<AuthenticationProperties>()))
+			.Returns(Task.CompletedTask);
+		_httpContext.RequestServices = new ServiceCollection().AddSingleton(signingOut.Object).BuildServiceProvider();
+
+		await _adapter.SignOutAsync();
+		var result = await _adapter.SignInAsync(Session() with { Subject = "bob", SessionId = "bob-session" });
+
+		Assert.Empty(result.EndedSessions);
+		Assert.Empty(_calls);
 	}
 
 	// ---------- Round-trip fidelity ----------

@@ -109,7 +109,6 @@ public static class ServiceCollectionExtensions
 		services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
 		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
-		services.Decorate<IAuthSessionService, AuthSessionTerminatingDecorator>();
 		services.TryAddSingleton<IUriResolver, UriResolver>();
 		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
 

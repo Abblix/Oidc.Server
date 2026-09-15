@@ -69,9 +69,9 @@ public partial class EndSessionRequestProcessor(
 
 		await authSessionService.SignOutAsync();
 
-		LogUserLoggedOut(subjectId, sessionId);
-
 		var context = await authSessionTerminator.TerminateAsync(sessionId, subjectId);
+
+		LogUserLoggedOut(subjectId, sessionId);
 
 		var response = new EndSessionSuccess(postLogoutRedirectUri, context.FrontChannelLogoutRequestUris);
 		return response;

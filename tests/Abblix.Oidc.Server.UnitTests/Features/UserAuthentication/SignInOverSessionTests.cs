@@ -101,6 +101,38 @@ public class SignInOverSessionTests
         Assert.Equal("first-session", context.SessionId);
     }
 
+    /// <summary>
+    /// A second sign-in within the same request replaces what the first one wrote, not the cookie the request
+    /// arrived with.
+    /// </summary>
+    [Fact]
+    public async Task A_second_sign_in_in_one_request_ends_the_session_the_first_one_wrote()
+    {
+        var notified = new ConcurrentQueue<(string ClientId, LogoutContext Context)>();
+        await using var provider = BuildProvider(notified);
+        var alice = await SignInAsync(provider, cookie: null, subject: "alice", sessionId: "alice-session");
+
+        // Driven without RequestAsync, because the response carries both sign-ins' cookies.
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+            Request = { Headers = { Cookie = alice } },
+        };
+        var sessions = scope.ServiceProvider.GetRequiredService<IAuthSessionService>();
+        await sessions.SignInAsync(Session("bob", "bob-session"));
+        var second = await sessions.SignInAsync(Session("carol", "carol-session"));
+
+        var ended = Assert.Single(second.EndedSessions);
+        Assert.Equal("bob-session", ended.SessionId);
+    }
+
+    private static AuthSession Session(string subject, string sessionId) => new(
+        Subject: subject,
+        SessionId: sessionId,
+        AuthenticationTime: TimeProvider.System.GetUtcNow(),
+        IdentityProvider: "local");
+
     private static Task<string?> SignInAsync(
         ServiceProvider provider, string? cookie, string subject, string sessionId)
         => RequestAsync(provider, cookie, async services =>

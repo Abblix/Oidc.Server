@@ -36,11 +36,16 @@ public interface IAuthSessionService
 	/// This method is essential for establishing new user sessions following successful authentication.
 	/// </summary>
 	/// <remarks>
-	/// The implementation decides whether the sign-in ends a session the user agent already holds, and reports each
-	/// one it ended. Through the service the library registers, those sessions then end as a logout ends one: their
-	/// tokens are revoked when <see cref="Common.Configuration.OidcOptions.RevokeSessionTokensOnLogout"/> asks for it,
-	/// and their clients receive back-channel logout notifications. Front-channel notifications are not sent, because
-	/// a sign-in has no logout page to render them on.
+	/// The implementation decides whether the sign-in ends a session the user agent already holds. It ends each such
+	/// session through <see cref="IAuthSessionTerminator"/> after writing the new one, so a sign-in that fails signs
+	/// nobody out, and reports it in the result. That revokes the session's tokens when
+	/// <see cref="Common.Configuration.OidcOptions.RevokeSessionTokensOnLogout"/> asks for it and sends its clients
+	/// back-channel logout notifications. Front-channel notifications are not sent, because a sign-in has no logout
+	/// page to render them on.
+	/// <para>
+	/// A failure while ending a replaced session surfaces from this call after the new session is already written:
+	/// the end user is signed in, and the clients of the replaced session may not have been told.
+	/// </para>
 	/// </remarks>
 	/// <param name="authSession">Detailed information about the authentication session to be established.</param>
 	/// <returns>The session written and the sessions the sign-in ended.</returns>

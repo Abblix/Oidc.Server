@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// keeps that session's identifier.
 /// </param>
 /// <param name="EndedSessions">
-/// The sessions the sign-in ended, whose tokens and clients are then dealt with as on logout. Empty when the store
+/// The sessions the sign-in ended, already ended for their tokens and clients as on logout. Empty when the store
 /// ended none, which is also the answer of a store keeping several sessions side by side.
 /// </param>
 public record AuthSessionSignInResult(AuthSession Session, IReadOnlyCollection<AuthSession> EndedSessions);
