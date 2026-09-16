@@ -105,29 +105,10 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AnEmptyValue_AnswersNothing()
     {
-        var storage = new RecordingStorage(new LogoutConfirmation { Confirmation = string.Empty });
+        var storage = new HoldingOneRecord(new LogoutConfirmation { Confirmation = string.Empty });
         var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
         Assert.False(await store.RedeemLogoutConfirmationAsync(SessionId, string.Empty));
-    }
-
-    /// <summary>
-    /// A storage holding one record, whatever it is asked for, so a record this store would never write itself
-    /// can still be put in front of it.
-    /// </summary>
-    private sealed class RecordingStorage(LogoutConfirmation held) : IEntityStorage
-    {
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Task.CompletedTask;
-
-        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-            => Task.FromResult((T?)(object)held);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => Task.FromResult(true);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
     }
 
     /// <summary>
@@ -143,9 +124,9 @@ public class LogoutConfirmationStoreTests
     }
 
     /// <summary>
-    /// Asking again is the same question. Anyone can make a browser reach the logout address, so a question per
-    /// request would both fill the store and let a request arriving while the end user reads the page void the
-    /// answer they are about to give.
+    /// Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a fresh
+    /// value here would let a request arriving while the end user reads the page void the answer they are about
+    /// to give. The store's size is not what this buys: the key is the session's either way.
     /// </summary>
     [Fact]
     public async Task AskingAgain_IsTheSameQuestion()
@@ -180,13 +161,20 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AskingAgain_DoesNotExtendTheQuestion()
     {
-        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(150);
+        // Three margins, each 300 ms wide, which is what the numbers are for. The second ask lands 300 ms before
+        // the question's own end, so it is answered by the record rather than by a fresh one. The last check
+        // comes 300 ms after that end, so a question whose life was never extended is gone. And it comes 600 ms
+        // before the end a refresh would have given it, so one that was extended is still there and this row
+        // goes red - which is the whole point of it.
+        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(1200);
         var confirmation = await _store.IssueAsync(SessionId);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        // Handing the same value back is also the control: the record is alive at this point, so the refusal
+        // below is its age rather than an ask having removed it.
+        await Task.Delay(TimeSpan.FromMilliseconds(900), TestContext.Current.CancellationToken);
         Assert.Equal(confirmation, await _store.IssueAsync(SessionId));
 
-        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(600), TestContext.Current.CancellationToken);
 
         Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
     }
@@ -223,5 +211,25 @@ public class LogoutConfirmationStoreTests
         _options.LogoutConfirmationLifetime = TimeSpan.Zero;
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SessionId));
+    }
+
+    /// <summary>
+    /// A storage answering every read with one record, so a record this library would never write itself can be
+    /// put in front of the store. Everything the store does not call refuses, rather than answering something a
+    /// later row might believe.
+    /// </summary>
+    private sealed class HoldingOneRecord(LogoutConfirmation held) : IEntityStorage
+    {
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => Task.FromResult((T?)(object)held);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => throw new NotSupportedException();
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => throw new NotSupportedException();
     }
 }
