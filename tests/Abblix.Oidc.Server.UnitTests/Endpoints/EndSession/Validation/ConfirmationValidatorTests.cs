@@ -6,176 +6,226 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.EndSession.Validation;
 
 /// <summary>
-/// Unit tests for <see cref="ConfirmationValidator"/> verifying confirmation validation
-/// for end-session requests per OIDC Session Management specification.
+/// Unit tests for <see cref="ConfirmationValidator"/>, which decides whether the end user has to be asked before
+/// a logout request is acted upon (OpenID Connect RP-Initiated Logout 1.0 section 2).
 /// </summary>
 public class ConfirmationValidatorTests
 {
+    private const string CurrentSubject = "user-b";
+    private const string CurrentSessionId = "session-b";
+
+    private readonly Mock<IAuthSessionService> _authSessionService = new(MockBehavior.Strict);
     private readonly ConfirmationValidator _validator;
 
     public ConfirmationValidatorTests()
     {
-        _validator = new ConfirmationValidator();
+        // These rows exercise public clients (the default subject type), so a converter with no pairwise settings
+        // is the production path: it passes a subject through unchanged.
+        _validator = new ConfirmationValidator(_authSessionService.Object, new SubjectTypeConverter());
+        SignedIn(null);
     }
+
+    /// <summary>
+    /// Answers the current session for every read, or none when <paramref name="session"/> is null.
+    /// </summary>
+    private void SignedIn(AuthSession? session)
+        => _authSessionService.Setup(s => s.AuthenticateAsync()).ReturnsAsync(session);
+
+    private static AuthSession Session(string subject, string sessionId)
+        => new(subject, sessionId, DateTimeOffset.UnixEpoch, "local");
 
     private static EndSessionValidationContext CreateContext(
         bool? confirmed = null,
-        string? idTokenHint = null)
+        string? idTokenHint = null,
+        string? hintSubject = null,
+        string? hintSessionId = null)
     {
         var request = new EndSessionRequest
         {
             Confirmed = confirmed,
             IdTokenHint = idTokenHint,
         };
-        return new EndSessionValidationContext(request);
+
+        var context = new EndSessionValidationContext(request)
+        {
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
+        };
+
+        if (hintSubject != null || hintSessionId != null)
+        {
+            context.IdToken = new JsonWebToken
+            {
+                Payload =
+                {
+                    Subject = hintSubject,
+                    SessionId = hintSessionId,
+                },
+            };
+        }
+
+        return context;
     }
 
     /// <summary>
-    /// Verifies successful validation when request is confirmed.
-    /// Per OIDC Session Management, confirmed requests don't require ID token hint.
+    /// A request the host has already had confirmed needs nothing else, hint or no hint.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithConfirmedRequest_ShouldSucceed()
     {
-        // Arrange
-        var context = CreateContext(confirmed: true, idTokenHint: null);
+        var error = await _validator.ValidateAsync(CreateContext(confirmed: true));
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
         Assert.Null(error);
     }
 
     /// <summary>
-    /// Verifies successful validation when ID token hint provided.
-    /// Per OIDC Session Management, ID token hint can substitute for confirmation.
+    /// A hint naming the session that is signed in stands in for the confirmation, which is what lets an ordinary
+    /// logout go through without a page in between.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithIdTokenHint_ShouldSucceed()
+    public async Task ValidateAsync_WithHintNamingTheCurrentSession_ShouldSucceed()
     {
-        // Arrange
-        var context = CreateContext(confirmed: false, idTokenHint: "id_token_value");
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: CurrentSubject,
+            hintSessionId: CurrentSessionId));
 
-        // Assert
         Assert.Null(error);
     }
 
     /// <summary>
-    /// Verifies successful validation when both confirmed and ID token hint provided.
-    /// Either condition alone is sufficient.
+    /// An ID token carries a session identifier only when the deployment issues one, so a hint without it is
+    /// judged by its subject alone.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithBothConfirmedAndIdTokenHint_ShouldSucceed()
+    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndNoSession_ShouldSucceed()
     {
-        // Arrange
-        var context = CreateContext(confirmed: true, idTokenHint: "id_token_value");
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: CurrentSubject));
 
-        // Assert
         Assert.Null(error);
     }
 
     /// <summary>
-    /// Verifies error when neither confirmed nor ID token hint provided.
-    /// Per OIDC Session Management, one of these is required.
+    /// A hint about somebody else does not speak for the person signed in now: RP-Initiated Logout 1.0 section 2
+    /// says the OP "MUST ask the End-User this question ... if the supplied ID Token does not belong to the
+    /// current OP session with the RP and/or currently logged in End-User". Without this, a client holding an old
+    /// ID token of any end user could sign out whoever is there now.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithoutConfirmationOrIdTokenHint_ShouldReturnError()
+    public async Task ValidateAsync_WithHintNamingAnotherSubject_ShouldReturnError()
     {
-        // Arrange
-        var context = CreateContext(confirmed: false, idTokenHint: null);
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: "user-a",
+            hintSessionId: CurrentSessionId));
 
-        // Assert
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
+    }
+
+    /// <summary>
+    /// The same person can hold an ID token from a session that has since been replaced, and that token names a
+    /// session this request is not about.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithHintNamingAnotherSession_ShouldReturnError()
+    {
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: CurrentSubject,
+            hintSessionId: "session-a"));
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
+    }
+
+    /// <summary>
+    /// A confirmation the host already obtained decides the request, however stale the hint is.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithConfirmationAndAMismatchingHint_ShouldSucceed()
+    {
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: true,
+            idTokenHint: "id_token_value",
+            hintSubject: "user-a"));
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// With nobody signed in there is no session to end and nobody to ask, so the request passes and the
+    /// processing answers with the redirect alone.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNobodySignedIn_ShouldSucceed()
+    {
+        var error = await _validator.ValidateAsync(CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: "user-a"));
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A request with neither a confirmation nor a hint is the case the confirmation step was written for.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    public async Task ValidateAsync_WithoutConfirmationOrIdTokenHint_ShouldReturnError(bool? confirmed)
+    {
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+
+        var error = await _validator.ValidateAsync(CreateContext(confirmed));
+
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
         Assert.Contains("requires to be confirmed", error.ErrorDescription);
     }
 
     /// <summary>
-    /// Verifies error when confirmed is null and no ID token hint.
-    /// Null confirmation is treated as false.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithNullConfirmation_ShouldReturnError()
-    {
-        // Arrange
-        var context = CreateContext(confirmed: null, idTokenHint: null);
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
-    }
-
-    /// <summary>
-    /// Verifies successful validation with null confirmation but ID token hint present.
-    /// ID token hint is sufficient even when confirmation is null.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithNullConfirmationButIdTokenHint_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext(confirmed: null, idTokenHint: "id_token_value");
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// Verifies empty ID token hint is not sufficient for confirmation.
-    /// Empty string is treated as no value.
+    /// An empty hint is no hint at all.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithEmptyIdTokenHint_ShouldReturnError()
     {
-        // Arrange
-        var context = CreateContext(confirmed: false, idTokenHint: "");
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(CreateContext(confirmed: false, idTokenHint: ""));
 
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
-    }
-
-    /// <summary>
-    /// Verifies explicit false confirmation requires ID token hint.
-    /// False and null are treated the same.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithFalseConfirmation_ShouldRequireIdTokenHint()
-    {
-        // Arrange
-        var context = CreateContext(confirmed: false, idTokenHint: null);
-
-        // Act
-        var error = await _validator.ValidateAsync(context);
-
-        // Assert
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
     }
