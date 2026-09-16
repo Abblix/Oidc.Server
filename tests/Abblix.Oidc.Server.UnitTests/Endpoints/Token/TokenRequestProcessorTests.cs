@@ -504,7 +504,7 @@ public class TokenRequestProcessorTests
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
         var request = new ValidTokenRequest(
             new TokenRequest { GrantType = GrantTypes.TokenExchange },
-            new ExchangedAuthorizedGrant(authSession, authContext, ExistingGrantId),
+            new AuthorizedGrant(authSession, authContext) { GrantId = ExistingGrantId },
             new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
@@ -576,7 +576,7 @@ public class TokenRequestProcessorTests
             new RefreshTokenAuthorizedGrant(
                 authSession,
                 new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
-                existingRefreshToken),
+                existingRefreshToken) { GrantId = ExistingGrantId },
             new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
@@ -746,7 +746,7 @@ public class TokenRequestProcessorTests
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(
             authSession,
             authContext,
-            existingRefreshToken);
+            existingRefreshToken) { GrantId = ExistingGrantId };
 
         var tokenRequest = CreateTokenRequest();
         var request = new ValidTokenRequest(

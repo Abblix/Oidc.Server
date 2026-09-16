@@ -253,9 +253,9 @@ public class JsonWebTokenPayload(JsonObject json)
 	/// (RFC 9700 Section 4.14.2).
 	/// </summary>
 	/// <remarks>
-	/// Present on a token exercising such authority: a refresh token (<c>rt+jwt</c>), an access token of a grant
-	/// that has refresh tokens, and a token exchanged for one of those. Absent (null) on every other token, which
-	/// leaves the family cascade in the token-status validator inert for it.
+	/// Present on a token the token endpoint minted inside a family - the one the grant it was issued under
+	/// carried, or the one started for a request issuing a refresh token. Absent (null) on every other token,
+	/// which leaves the family cascade in the token-status validator inert for it.
 	/// </remarks>
 	public string? GrantId
 	{

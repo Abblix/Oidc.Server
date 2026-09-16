@@ -176,7 +176,7 @@ public class TokenExchangeGrantHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(grantId, Assert.IsType<ExchangedAuthorizedGrant>(grant).GrantId);
+        Assert.Equal(grantId, grant.GrantId);
     }
 
     [Fact]

@@ -27,4 +27,13 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     /// if the same code is presented twice, every previously issued token is revoked by JTI.
     /// </summary>
     public TokenInfo[]? IssuedTokens { get; init; }
+
+    /// <summary>
+    /// The refresh token family whose authority this grant exercises, so the tokens minted from it join that
+    /// family and a revoked family refuses them (RFC 9700 section 4.14.2). Set by the grant handlers that inherit
+    /// one: a refresh token grant from the token presented to it, and a token exchange from its subject token.
+    /// <c>null</c> where the grant exercises no such authority, in which case a grant issuing its first refresh
+    /// token starts a family of its own.
+    /// </summary>
+    public string? GrantId { get; init; }
 }

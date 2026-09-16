@@ -205,7 +205,12 @@ public class RefreshTokenService(
 				new OidcError(ErrorCodes.InvalidGrant, "The refresh token subject could not be resolved"));
 		}
 
+		// The grant exercises the authority of the family this token belongs to, so every token minted from it
+		// joins that family and dies with it.
 		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
-			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
+			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken)
+			{
+				GrantId = refreshToken.Payload.GrantId,
+			});
 	}
 }

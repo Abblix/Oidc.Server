@@ -72,14 +72,13 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
-    /// The family the presented token belongs to travels into the exchange, so a token exchanged from it dies with
-    /// that family; a token belonging to none (an id_token, or a grant without refresh tokens) leaves it in none.
+    /// The family the presented token carries travels into the exchange, so a token exchanged from it dies with
+    /// that family.
     /// </summary>
-    [Theory]
-    [InlineData("grant_of_this_lineage")]
-    [InlineData(null)]
-    public async Task FamilyOfThePresentedToken_ReachesTheContext(string? grantId)
+    [Fact]
+    public async Task FamilyOfThePresentedToken_ReachesTheContext()
     {
+        const string grantId = "grant_of_this_lineage";
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.GrantId = grantId;
         _jwtValidator

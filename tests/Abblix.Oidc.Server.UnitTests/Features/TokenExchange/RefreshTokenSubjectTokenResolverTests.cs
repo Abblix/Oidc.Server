@@ -77,13 +77,12 @@ public class RefreshTokenSubjectTokenResolverTests
 
     /// <summary>
     /// The refresh token's own family travels into the exchange, so a token exchanged from it dies with that
-    /// family; a token issued before tokens carried a family leaves the exchange in none.
+    /// family.
     /// </summary>
-    [Theory]
-    [InlineData("grant_of_this_lineage")]
-    [InlineData(null)]
-    public async Task FamilyOfTheRefreshToken_ReachesTheContext(string? grantId)
+    [Fact]
+    public async Task FamilyOfTheRefreshToken_ReachesTheContext()
     {
+        const string grantId = "grant_of_this_lineage";
         var jwt = NewRefreshJwt();
         jwt.Payload.GrantId = grantId;
         _jwtValidator

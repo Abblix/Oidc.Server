@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
 /// <summary>
@@ -22,6 +24,10 @@ internal static class AuthorizedGrantMapper
         {
             AuthSession = source.AuthSession.ToProto(),
             Context = source.Context.ToProto(),
+
+            // Absent and empty are the same statement here - a grant exercising no family's authority - so the
+            // proto3 default stands in for both rather than each needing a case of its own.
+            GrantId = source.GrantId ?? string.Empty,
         };
 
         proto.IssuedTokens.AddIfNotNull(source.IssuedTokens, TokenInfoMapper.ToProto);
@@ -39,6 +45,7 @@ internal static class AuthorizedGrantMapper
             AuthorizationContextMapper.FromProto(source.Context))
         {
             IssuedTokens = source.IssuedTokens.GetArray(TokenInfoMapper.FromProto),
+            GrantId = source.GrantId.HasValue() ? source.GrantId : null,
         };
     }
 }

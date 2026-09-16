@@ -522,6 +522,27 @@ public class MappersTests
         Assert.Null(result.IssuedTokens);
     }
 
+    /// <summary>
+    /// The family a grant exercises survives storage, and a grant exercising none reads back as none rather than
+    /// as an empty name. A stored grant that lost the family would mint tokens no revocation reaches.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public void AuthorizedGrantMapper_RoundTrips_TheFamily(string? grantId)
+    {
+        var grant = new AuthorizedGrant(
+            new AuthSession("user-123", "session-456", DateTimeOffset.UnixEpoch, "local"),
+            new AuthorizationContext("client-123", [TestConstants.DefaultScope], null))
+        {
+            GrantId = grantId,
+        };
+
+        var result = grant.ToProto().FromProto();
+
+        Assert.Equal(grantId, result.GrantId);
+    }
+
     [Fact]
     public void AuthorizationRequestMapper_ToProto_HandlesCultureInfo()
     {

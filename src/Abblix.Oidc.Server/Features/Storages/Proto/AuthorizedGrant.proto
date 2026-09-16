@@ -16,4 +16,7 @@ message AuthorizedGrant {
 
   // Tokens that have been issued as part of this grant
   repeated TokenInfo issued_tokens = 3;
+
+  // The refresh token family this grant exercises the authority of, empty when it exercises none
+  string grant_id = 4;
 }
