@@ -514,9 +514,8 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// </summary>
     /// <remarks>
     /// Standing in for the transport is also what these rows cannot say anything about: the one the handler builds
-    /// for itself. What that transport promises is held beside the type that builds it, and that it still reaches
-    /// a deployed client is held where the clients are assembled, in
-    /// <see cref="OutboundHttpClientSsrfWiringTests"/>.
+    /// for itself, whose promises are held in <see cref="AddressValidatingHttpMessageHandler"/>'s own suite, and
+    /// whose presence in an assembled client is held in <see cref="OutboundHttpClientSsrfWiringTests"/>.
     /// </remarks>
     private static (HttpClient Client, CountingTransport Transport) Sending(SecureHttpFetchOptions options)
     {
@@ -527,8 +526,7 @@ public class SsrfValidatingHttpMessageHandlerTests
             new SecureUriValidator(accessor),
             RefusesToResolve);
 
-        // The handler builds its own transport, and only one of the two can be reached, so the one being replaced
-        // is released here rather than left for the collector to find.
+        // The handler builds its own transport, and only one of the two can be reached.
         Assert.NotNull(handler.InnerHandler);
         handler.InnerHandler.Dispose();
         handler.InnerHandler = transport;

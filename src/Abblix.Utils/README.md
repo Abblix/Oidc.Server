@@ -47,7 +47,7 @@ Custom `System.Text.Json` converters for the shapes protocol messages actually u
 
 ### Outbound addresses a caller did not choose
 
-`PrivateNetworks` states which addresses are internal - loopback, the private and link-local ranges, and the rest a server must not be talked into reaching on somebody else's behalf. `AddressValidatingHttpMessageHandler` is the message-handler half: it follows no redirect, carries no ambient credentials, decompresses nothing, and judges the address on the send itself rather than when the request was scheduled, leaving only the policy to the handler derived from it. `ResolveHostDelegate` names the answer a derived handler needs about a hostname, so one function serves every guard built on this base. Whoever registers such a guard passes it, since what a server resolves an outbound address through is a security decision rather than a service to be picked up from a container.
+`PrivateNetworks` states which addresses are internal - loopback, the private and link-local ranges, and the rest a server must not be talked into reaching on somebody else's behalf. `AddressValidatingHttpMessageHandler` is the message-handler half: it follows no redirect, carries no ambient credentials, decompresses nothing, and judges the address on the send itself rather than when the request was scheduled, leaving only the policy to the handler derived from it. `ResolveHostDelegate` names the answer a derived handler needs about a hostname, so one function serves every guard built on this base.
 
 ### Collections and enums
 

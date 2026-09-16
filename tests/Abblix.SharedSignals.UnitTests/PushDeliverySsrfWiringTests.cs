@@ -41,9 +41,8 @@ public class PushDeliverySsrfWiringTests
     /// The policy takes an optional name resolution so a test can say what a name stands for. Registered by type,
     /// the container would fill that parameter from any registration of that delegate, and a host that registered
     /// one for something else would silently decide what every delivery address resolves to, with the guard still
-    /// in place. What this row holds is the library's own registration carrying a factory, and nothing beyond it:
-    /// not what the factory passes, and not a host that registers the policy by type itself and wins the TryAdd,
-    /// which is a host saying it builds the policy and getting what it asked for.
+    /// in place. A host that registers the policy itself is a different matter: it is saying it builds the policy,
+    /// and gets what it asked for.
     /// </remarks>
     [Fact]
     public void TheAddressPolicy_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()

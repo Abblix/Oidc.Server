@@ -103,26 +103,23 @@ public class OutboundHttpClientSsrfWiringTests
     }
 
     /// <summary>
-    /// A deployed client reaches its transport through the guard, and that transport follows no redirect.
+    /// A deployed client reaches a transport that follows no redirect, on the far side of the guard.
     /// </summary>
     /// <remarks>
     /// A followed 3xx re-sends the request to an address nothing vetted, which is the one bypass the guard cannot
-    /// see. The transport the guard builds refuses redirects, and what this row adds is that the assembled client
-    /// still arrives at that transport rather than at one a pipeline put in its place. What the transport promises
-    /// in the first place belongs to the type that builds it, and is held there.
+    /// see. That the transport refuses them is a promise of the type that builds it and is held in that type's own
+    /// suite; what an assembled client owes is to still arrive there.
     /// </remarks>
     [Theory]
     [InlineData(BackChannelNotificationTransport.HttpClientName)]
     [InlineData(BackChannelLogoutTransport.HttpClientName)]
-    public void ADeployedClient_ReachesItsTransportThroughTheGuard(string clientName)
+    public void ADeployedClient_ReachesATransportThatFollowsNoRedirect(string clientName)
     {
         using var serviceProvider = BuildHost().BuildServiceProvider();
         using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
             .CreateHandler(clientName);
 
-        var guard = Assert.IsType<SsrfValidatingHttpMessageHandler>(
-            Chain(handler).Single(link => link is SsrfValidatingHttpMessageHandler));
-
+        var guard = Chain(handler).OfType<SsrfValidatingHttpMessageHandler>().Single();
         var transport = Assert.IsType<HttpClientHandler>(guard.InnerHandler);
 
         Assert.False(transport.AllowAutoRedirect);
@@ -137,9 +134,8 @@ public class OutboundHttpClientSsrfWiringTests
     /// the container would fill that parameter from any registration of that delegate - and a host has every
     /// reason to register one for something else, at which point it silently decides what every outbound address
     /// of this server resolves to, while the guard is still present and still primary, so the watch over these
-    /// clients sees nothing. What this row holds is the library's own registration carrying a factory, and nothing
-    /// beyond it: not what the factory passes, and not a host that registers this handler by type itself and wins
-    /// the TryAdd, which is a host saying it builds the handler and getting what it asked for.
+    /// clients sees nothing. A host that registers this handler itself is a different matter: it is saying it
+    /// builds the handler, and gets what it asked for.
     /// </remarks>
     [Fact]
     public void TheSsrfHandler_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()

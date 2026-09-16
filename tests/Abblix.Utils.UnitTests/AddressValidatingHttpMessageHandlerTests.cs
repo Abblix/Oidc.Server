@@ -16,15 +16,20 @@ namespace Abblix.Utils.UnitTests;
 public class AddressValidatingHttpMessageHandlerTests
 {
     /// <summary>
-    /// A handler that records what it was asked to judge and refuses whatever it is told to.
+    /// A handler that records what it was asked to judge and under whose cancellation, and refuses whatever it is
+    /// told to.
     /// </summary>
     private sealed class Recording(string? refusal = null) : AddressValidatingHttpMessageHandler
     {
         public List<Uri> Judged { get; } = [];
 
+        public CancellationToken Given { get; private set; }
+
         protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
         {
             Judged.Add(requestUri);
+            Given = cancellationToken;
+
             return refusal is null
                 ? Task.CompletedTask
                 : throw new HttpRequestException(refusal);
@@ -44,17 +49,27 @@ public class AddressValidatingHttpMessageHandlerTests
         }
     }
 
+    /// <summary>
+    /// A client over the handler, reaching a transport that counts requests instead of making them. The client
+    /// owns the handler and disposes it, so a row disposes the client and nothing else.
+    /// </summary>
     private static (HttpClient Client, CountingTransport Transport) Sending(Recording handler)
     {
         var transport = new CountingTransport();
-
-        // The handler builds its own transport, and only one of the two can be reached, so the one being replaced
-        // is released here rather than left for the collector to find.
-        Assert.NotNull(handler.InnerHandler);
-        handler.InnerHandler.Dispose();
-        handler.InnerHandler = transport;
+        Replacing(handler.InnerHandler, with: transport, on: handler);
 
         return (new HttpClient(handler), transport);
+    }
+
+    /// <summary>
+    /// Puts a row's own transport under the handler. The handler builds one for itself, and only one of the two
+    /// can be reached.
+    /// </summary>
+    private static void Replacing(HttpMessageHandler? built, HttpMessageHandler with, Recording on)
+    {
+        Assert.NotNull(built);
+        built.Dispose();
+        on.InnerHandler = with;
     }
 
     /// <summary>
@@ -62,11 +77,10 @@ public class AddressValidatingHttpMessageHandlerTests
     /// decompresses nothing.
     /// </summary>
     /// <remarks>
-    /// The redirect is the one of the three the platform does not already refuse, and it is why the check lives on
-    /// the connection rather than in front of the client: an answer of 3xx to an internal address would otherwise
-    /// have the request re-sent there, past the address the derived handler just judged. The other two carry the
-    /// same values the platform starts from, so this row states them rather than catching their deletion - it goes
-    /// red when somebody sets a wrong one, not when somebody drops a line.
+    /// A followed 3xx re-sends the request to an address nothing vetted, which is the one bypass the derived
+    /// handler cannot see, and it is why the check lives on the connection rather than in front of the client. The
+    /// other two are the values the platform starts from, so stating them catches somebody setting a wrong one and
+    /// not somebody dropping the line.
     /// </remarks>
     [Fact]
     public void TheTransportItBuilds_FollowsNoRedirectAndCarriesNothingOfItsOwn()
@@ -86,19 +100,45 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task EverySend_IsJudgedOnItsOwnAddress()
     {
-        using var handler = new Recording();
+        var handler = new Recording();
         var (client, transport) = Sending(handler);
+
         using (client)
         {
             await client.GetAsync(new Uri("https://first.example.com/a"), TestContext.Current.CancellationToken);
             await client.GetAsync(new Uri("https://second.example.com/b"), TestContext.Current.CancellationToken);
+
+            Assert.Equal(
+                [new Uri("https://first.example.com/a"), new Uri("https://second.example.com/b")],
+                handler.Judged);
+
+            Assert.Equal(2, transport.Requests);
         }
+    }
 
-        Assert.Equal(
-            [new Uri("https://first.example.com/a"), new Uri("https://second.example.com/b")],
-            handler.Judged);
+    /// <summary>
+    /// The check runs under the caller's cancellation, which is what lets a request nobody is waiting for any more
+    /// stop waiting rather than hold the caller for however long the check's own work would take.
+    /// </summary>
+    /// <remarks>
+    /// Driven through an invoker rather than a client, because a client hands its handler a token of its own that
+    /// merely follows the caller's - so the token arriving here would be nobody's in particular, and the row could
+    /// not tell the caller's from one this handler invented.
+    /// </remarks>
+    [Fact]
+    public async Task TheCheck_RunsUnderTheCallersCancellation()
+    {
+        var handler = new Recording();
+        Replacing(handler.InnerHandler, with: new CountingTransport(), on: handler);
 
-        Assert.Equal(2, transport.Requests);
+        using var invoker = new HttpMessageInvoker(handler);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("https://example.com/"));
+
+        await invoker.SendAsync(request, cancellation.Token);
+
+        Assert.Equal(cancellation.Token, handler.Given);
     }
 
     /// <summary>
@@ -108,8 +148,9 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task ARefusedAddress_NeverReachesTheTransport()
     {
-        using var handler = new Recording("not this address");
+        var handler = new Recording("not this address");
         var (client, transport) = Sending(handler);
+
         using (client)
         {
             var refusal = await Assert.ThrowsAsync<HttpRequestException>(
@@ -117,8 +158,32 @@ public class AddressValidatingHttpMessageHandlerTests
                     new Uri("https://refused.example.com/"), TestContext.Current.CancellationToken));
 
             Assert.Equal("not this address", refusal.Message);
+            Assert.Equal(0, transport.Requests);
         }
+    }
 
+    /// <summary>
+    /// A request carrying no address is refused rather than judged, because there is nothing to judge and whatever
+    /// the request then reached would be an address this handler never saw.
+    /// </summary>
+    /// <remarks>
+    /// Driven through an invoker rather than a client: a client refuses such a request before any handler runs, so
+    /// a row built on one would be reading the client's own check and would stay green with this one deleted.
+    /// </remarks>
+    [Fact]
+    public async Task ARequestWithNoAddress_IsRefusedWithoutBeingJudged()
+    {
+        var handler = new Recording();
+        var transport = new CountingTransport();
+        Replacing(handler.InnerHandler, with: transport, on: handler);
+
+        using var invoker = new HttpMessageInvoker(handler);
+        using var request = new HttpRequestMessage { RequestUri = null };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => invoker.SendAsync(request, TestContext.Current.CancellationToken));
+
+        Assert.Empty(handler.Judged);
         Assert.Equal(0, transport.Requests);
     }
 }
