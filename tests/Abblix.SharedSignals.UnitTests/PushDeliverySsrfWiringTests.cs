@@ -41,8 +41,9 @@ public class PushDeliverySsrfWiringTests
     /// The policy takes an optional name resolution so a test can say what a name stands for. Registered by type,
     /// the container would fill that parameter from any registration of that delegate, and a host that registered
     /// one for something else would silently decide what every delivery address resolves to, with the guard still
-    /// in place. A host that registers the policy itself is a different matter: it is saying it builds the policy,
-    /// and gets what it asked for.
+    /// in place. What this row holds is that the registration carries a factory, and not what the factory hands
+    /// in. A host that registers the policy itself is a different matter: it is saying it builds the policy, and
+    /// gets what it asked for.
     /// </remarks>
     [Fact]
     public void TheAddressPolicy_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
@@ -74,10 +75,10 @@ public class PushDeliverySsrfWiringTests
     public void ThePushClientRoutesThroughTheValidatingHandler_WithRedirectsDisabled()
     {
         using var handler = HandlerFactory().CreateHandler(PushDeliveryTransport.HttpClientName);
-        var chain = Chain(handler).ToList();
 
-        var guard = Assert.IsType<ReceiverAddressValidatingHandler>(
-            chain.Find(link => link is ReceiverAddressValidatingHandler));
+        // One guard, not the first of several: a second one chained on would put its own inner handler in front
+        // of the transport, and reading that would answer about the host's guard rather than about this client's.
+        var guard = Assert.Single(Chain(handler).OfType<ReceiverAddressValidatingHandler>());
 
         // The redirect-following that would carry a delivery to an unvetted second address is off, so a receiver's
         // 3xx comes back as an ordinary non-success response instead.

@@ -56,19 +56,23 @@ public class AddressValidatingHttpMessageHandlerTests
     private static (HttpClient Client, CountingTransport Transport) Sending(Recording handler)
     {
         var transport = new CountingTransport();
-        Replacing(handler.InnerHandler, with: transport, on: handler);
+        Replacing(handler, with: transport);
 
         return (new HttpClient(handler), transport);
     }
 
     /// <summary>
-    /// Puts a row's own transport under the handler. The handler builds one for itself, and only one of the two
-    /// can be reached.
+    /// Puts a row's own transport under the handler, releasing the one the handler built for itself: this is the
+    /// last moment anything holds it, because the assignment below drops the only reference to it.
     /// </summary>
-    private static void Replacing(HttpMessageHandler? built, HttpMessageHandler with, Recording on)
+    /// <remarks>
+    /// Whatever a row then wraps the handler in owns it - a client and an invoker both dispose the handler they
+    /// are given - so a row disposes that and nothing else.
+    /// </remarks>
+    private static void Replacing(Recording on, HttpMessageHandler with)
     {
-        Assert.NotNull(built);
-        built.Dispose();
+        Assert.NotNull(on.InnerHandler);
+        on.InnerHandler.Dispose();
         on.InnerHandler = with;
     }
 
@@ -129,7 +133,7 @@ public class AddressValidatingHttpMessageHandlerTests
     public async Task TheCheck_RunsUnderTheCallersCancellation()
     {
         var handler = new Recording();
-        Replacing(handler.InnerHandler, with: new CountingTransport(), on: handler);
+        Replacing(handler, with: new CountingTransport());
 
         using var invoker = new HttpMessageInvoker(handler);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -175,14 +179,17 @@ public class AddressValidatingHttpMessageHandlerTests
     {
         var handler = new Recording();
         var transport = new CountingTransport();
-        Replacing(handler.InnerHandler, with: transport, on: handler);
+        Replacing(handler, with: transport);
 
         using var invoker = new HttpMessageInvoker(handler);
         using var request = new HttpRequestMessage { RequestUri = null };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => invoker.SendAsync(request, TestContext.Current.CancellationToken));
 
+        // The reason, not merely a refusal of that kind: the two counters below hold for any refusal at all, so
+        // without this the row would pass on a handler that refuses everything for some other reason.
+        Assert.Equal("A request through this handler must carry a target URI.", refusal.Message);
         Assert.Empty(handler.Judged);
         Assert.Equal(0, transport.Requests);
     }

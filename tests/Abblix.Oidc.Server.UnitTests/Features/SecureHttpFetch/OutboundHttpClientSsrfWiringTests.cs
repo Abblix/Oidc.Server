@@ -119,7 +119,7 @@ public class OutboundHttpClientSsrfWiringTests
         using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
             .CreateHandler(clientName);
 
-        var guard = Chain(handler).OfType<SsrfValidatingHttpMessageHandler>().Single();
+        var guard = Assert.Single(Chain(handler).OfType<SsrfValidatingHttpMessageHandler>());
         var transport = Assert.IsType<HttpClientHandler>(guard.InnerHandler);
 
         Assert.False(transport.AllowAutoRedirect);
@@ -134,8 +134,9 @@ public class OutboundHttpClientSsrfWiringTests
     /// the container would fill that parameter from any registration of that delegate - and a host has every
     /// reason to register one for something else, at which point it silently decides what every outbound address
     /// of this server resolves to, while the guard is still present and still primary, so the watch over these
-    /// clients sees nothing. A host that registers this handler itself is a different matter: it is saying it
-    /// builds the handler, and gets what it asked for.
+    /// clients sees nothing. What this row holds is that the registration carries a factory, and not what the
+    /// factory hands in. A host that registers this handler itself is a different matter: it is saying it builds
+    /// the handler, and gets what it asked for.
     /// </remarks>
     [Fact]
     public void TheSsrfHandler_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()

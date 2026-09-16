@@ -18,5 +18,10 @@ namespace Abblix.Utils;
 /// An outbound address guard refuses by the rules in <see cref="PrivateNetworks"/>, and to apply them to a name it
 /// has to learn what that name stands for. One signature for that answer lets the same function be handed to any
 /// such guard. What a guard does when it is given none is that guard's own contract, stated where it takes it.
+/// <para>
+/// It is passed to a guard rather than taken from an application's services, and deliberately: what a server
+/// resolves an outbound address through decides what that guard is judging, so it is a security decision of
+/// whoever builds the guard rather than a service anything in reach may supply.
+/// </para>
 /// </remarks>
 public delegate Task<IPAddress[]> ResolveHostDelegate(string host, CancellationToken cancellationToken);

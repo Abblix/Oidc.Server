@@ -526,7 +526,8 @@ public class SsrfValidatingHttpMessageHandlerTests
             new SecureUriValidator(accessor),
             RefusesToResolve);
 
-        // The handler builds its own transport, and only one of the two can be reached.
+        // Releasing the transport the handler built for itself: this is the last moment anything holds it, because
+        // the assignment below drops the only reference to it.
         Assert.NotNull(handler.InnerHandler);
         handler.InnerHandler.Dispose();
         handler.InnerHandler = transport;
