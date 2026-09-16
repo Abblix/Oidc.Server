@@ -45,7 +45,7 @@ public class LogoutConfirmationStoreTests
         // The in-box storage over an in-memory cache, which is the production path for a single-node deployment.
         var storage = new DistributedCacheStorage(
             new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-            new JsonBinarySerializer());
+            new ProtobufSerializer());
 
         _store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
     }

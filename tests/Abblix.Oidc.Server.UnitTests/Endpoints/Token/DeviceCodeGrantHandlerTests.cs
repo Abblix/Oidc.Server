@@ -396,7 +396,7 @@ public class DeviceCodeGrantHandlerTests
         => new PollScheduleStore(
             new DistributedCacheStorage(
                 new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-                new JsonBinarySerializer()));
+                new ProtobufSerializer()));
 
     private DeviceCodeGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
         => new(

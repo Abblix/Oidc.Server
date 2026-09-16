@@ -9,11 +9,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -83,17 +85,16 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// A rate-limit generation survives a round trip, and a generation of zero does not: this format writes a
-    /// number of zero as nothing at all, and nothing reads back as no record.
+    /// A rate-limit generation survives a round trip.
     /// </summary>
     /// <remarks>
-    /// Nothing writes a zero here - generations start at one and only climb - so the deployment is unaffected. What
-    /// the row is for is the fixtures: a test that stores these records in a readable format instead keeps a stored
-    /// zero and an absent record apart, which the deployment cannot, and then holds behavior no deployment has.
+    /// One is the value a reader gets for a generation nobody has written yet, so it is the boundary the row
+    /// below sits against; three hundred is past the first byte a number occupies on the wire, which the small
+    /// values never reach.
     /// </remarks>
     [Theory]
     [InlineData(1)]
-    [InlineData(7)]
+    [InlineData(300)]
     public void Serialize_RateLimitGeneration_RoundTrip(int value)
     {
         var result = _serializer.Deserialize<RateLimitGeneration>(
@@ -104,10 +105,17 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// And the zero this format cannot keep, stated as its own row so the fixtures have something to point at.
+    /// A generation of zero is written as nothing at all, and this serializer reads nothing as no record - so the
+    /// two are one state, and a fixture that keeps them apart is holding behavior no deployment has.
     /// </summary>
+    /// <remarks>
+    /// The empty payload is the wire format: a number at its default value is not written. Reading it back as
+    /// absent is this serializer's own decision, taken for every shape at once, so a deployment that supplies its
+    /// own storage need not share it. Nothing writes a zero here in any case - generations start at one and only
+    /// climb - which is why the rows that matter are the fixtures, not this one.
+    /// </remarks>
     [Fact]
-    public void Serialize_ARateLimitGenerationOfZero_ReadsBackAsNoRecord()
+    public void ARateLimitGenerationOfZero_IsWrittenAsNothingAndReadBackAsNoRecord()
     {
         var bytes = _serializer.Serialize(new RateLimitGeneration { Value = 0 });
 
@@ -134,16 +142,22 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// Neither shape reaches the JSON fallback, which is the reason they have definitions at all.
+    /// No shape this serializer carries itself reaches the JSON fallback, which is the reason they have
+    /// definitions at all.
     /// </summary>
     /// <remarks>
     /// The fallback works and would carry them, so a round trip alone says nothing here - it passes either
     /// way. What it costs is a warning carrying an exception on every write, and one of these is written on
     /// every poll of every device and every decoupled authentication. A warning an operator sees that often
     /// is a warning they stop reading.
+    /// <para>
+    /// The shapes are read from the serializer's own registry rather than listed here, so a shape added
+    /// without a row cannot come back green. It also catches the two halves of that serializer disagreeing:
+    /// a shape the reader knows and the writer does not fails to serialize, which is what the fallback is.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheNewShapes_DoNotReachTheJsonFallback()
+    public void EveryShapeItCarriesItself_DoesNotReachTheJsonFallback()
     {
         var recorder = new RecordingLoggerFactory();
         var composite = new CompositeBinarySerializer(
@@ -151,18 +165,19 @@ public class ProtobufSerializerTests
             new ProtobufSerializer(),
             new JsonBinarySerializer());
 
-        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+        var shapes = ProtobufSerializer.StoredMessageTypes.ToList();
+        Assert.NotEmpty(shapes);
 
-        composite.Deserialize<PollSchedule>(
-            composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
-        composite.Deserialize<RateLimitAttempt>(
-            composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
-        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
-            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
-        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
-            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
-        composite.Deserialize<LogoutConfirmation>(
-            composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
+        foreach (var shape in shapes)
+        {
+            var message = (IMessage)Activator.CreateInstance(shape)!;
+            var bytes = composite.Serialize(message);
+
+            typeof(CompositeBinarySerializer)
+                .GetMethod(nameof(CompositeBinarySerializer.Deserialize))!
+                .MakeGenericMethod(shape)
+                .Invoke(composite, [bytes]);
+        }
 
         Assert.Empty(recorder.Entries);
     }

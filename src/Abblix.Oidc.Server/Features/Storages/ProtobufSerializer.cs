@@ -47,6 +47,16 @@ public class ProtobufSerializer : IBinarySerializer
     };
 
     /// <summary>
+    /// The shapes this serializer carries itself, for a check that has to walk all of them.
+    /// </summary>
+    /// <remarks>
+    /// Read from the registry rather than listed again, because a list of expected shapes kept beside the one in
+    /// use falls behind it silently: whoever adds a shape and forgets the copy gets a green run about a shape
+    /// nothing looked at.
+    /// </remarks>
+    internal static IEnumerable<Type> StoredMessageTypes => StoredAsThemselves.Keys;
+
+    /// <summary>
     /// Serializes an object to a binary representation using Protocol Buffers.
     /// </summary>
     /// <typeparam name="T">The type of the object to serialize.</typeparam>

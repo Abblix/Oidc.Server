@@ -68,7 +68,7 @@ public class BackChannelAuthenticationGrantHandlerTests
         => new PollScheduleStore(
             new DistributedCacheStorage(
                 new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-                new JsonBinarySerializer()));
+                new ProtobufSerializer()));
 
     public BackChannelAuthenticationGrantHandlerTests()
     {
@@ -594,7 +594,7 @@ public class BackChannelAuthenticationGrantHandlerTests
     }
 
     private static IEntityStorage RealStorage(IDistributedCache cache)
-        => new DistributedCacheStorage(cache, new JsonBinarySerializer());
+        => new DistributedCacheStorage(cache, new ProtobufSerializer());
 
     /// <summary>
     /// The CIBA request storage production uses, over the storage a row controls.

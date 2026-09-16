@@ -60,9 +60,10 @@ public class UserCodeRateLimiterTests
     public UserCodeRateLimiterTests()
     {
         _time = new FakeTimeProvider(_now);
-        // The format the library stores these records in. It is not interchangeable with the readable one: a
-        // number written as zero becomes an empty payload and reads back as no record at all, so under the
-        // readable format a stored zero and a missing record are two states here and one state in a deployment.
+        // The serializer the library stores these records through. It is not interchangeable with the readable
+        // one: a number written as zero occupies no bytes, and this serializer reads an empty payload as no
+        // record, so a stored zero and a missing record are one state in a deployment and two under the readable
+        // format - which is behavior a row here would otherwise be free to lean on.
         _storage = new DistributedCacheStorage(
             new MemoryDistributedCache(
                 Options.Create(new MemoryDistributedCacheOptions { Clock = new StoreClock(_time) })),

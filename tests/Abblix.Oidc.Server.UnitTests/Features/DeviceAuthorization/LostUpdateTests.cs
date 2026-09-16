@@ -55,7 +55,7 @@ public class LostUpdateTests
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private static IEntityStorage RealStorage(IDistributedCache cache)
-        => new DistributedCacheStorage(cache, new JsonBinarySerializer());
+        => new DistributedCacheStorage(cache, new ProtobufSerializer());
 
     private static IDistributedCache RealCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
