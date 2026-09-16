@@ -8,6 +8,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -102,6 +103,32 @@ public class OutboundHttpClientSsrfWiringTests
     }
 
     /// <summary>
+    /// The transport under the guard is the hardened one: it follows no redirect, carries no ambient credentials
+    /// and decompresses nothing.
+    /// </summary>
+    /// <remarks>
+    /// The redirect is the one that matters most, and it is the reason the check lives on the connection rather
+    /// than in front of the client: a receiver answering with a 3xx to an internal address would otherwise have
+    /// the request re-sent there, past the address this guard just judged. The other two keep a hostile answer
+    /// from spending the server's memory or reaching an internal service with the server's own credentials.
+    /// </remarks>
+    [Theory]
+    [InlineData(BackChannelNotificationTransport.HttpClientName)]
+    [InlineData(BackChannelLogoutTransport.HttpClientName)]
+    public void TheTransportUnderTheGuard_FollowsNoRedirectAndCarriesNothingOfItsOwn(string clientName)
+    {
+        using var serviceProvider = BuildHost().BuildServiceProvider();
+        using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(clientName);
+
+        var transport = Assert.IsType<HttpClientHandler>(Chain(handler).Last());
+
+        Assert.False(transport.AllowAutoRedirect);
+        Assert.False(transport.UseDefaultCredentials);
+        Assert.Equal(DecompressionMethods.None, transport.AutomaticDecompression);
+    }
+
+    /// <summary>
     /// The library builds the SSRF handler itself rather than letting the container choose its constructor
     /// arguments.
     /// </summary>
@@ -110,8 +137,9 @@ public class OutboundHttpClientSsrfWiringTests
     /// the container would fill that parameter from any registration of that delegate - and a host has every
     /// reason to register one for something else, at which point it silently decides what every outbound address
     /// of this server resolves to, while the guard is still present and still primary, so the watch over these
-    /// clients sees nothing. Registering a factory is what closes that, and this row holds the factory: it says
-    /// the decision was made, not what the factory passes, which is one line away in the same file.
+    /// clients sees nothing. This row holds the factory, which is the decision, and not what the factory passes:
+    /// telling the container's delegate from the platform's would mean running the resolution, whose other answer
+    /// is a live name server, and no row here is allowed one.
     /// </remarks>
     [Fact]
     public void TheSsrfHandler_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
@@ -121,7 +149,6 @@ public class OutboundHttpClientSsrfWiringTests
             descriptor => descriptor.ServiceType == typeof(SsrfValidatingHttpMessageHandler));
 
         Assert.NotNull(registration.ImplementationFactory);
-        Assert.Null(registration.ImplementationType);
     }
 
     /// <summary>Stands in for whatever a host chains onto the client - a resilience pipeline, a proxy.</summary>

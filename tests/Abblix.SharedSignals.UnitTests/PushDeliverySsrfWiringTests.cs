@@ -41,7 +41,9 @@ public class PushDeliverySsrfWiringTests
     /// The policy takes an optional name resolution so a test can say what a name stands for. Registered by type,
     /// the container would fill that parameter from any registration of that delegate, and a host that registered
     /// one for something else would silently decide what every delivery address resolves to, with the guard still
-    /// in place. Registering a factory closes that, and this row holds the factory.
+    /// in place. This row holds the factory, which is the decision, and not what the factory passes: telling the
+    /// container's delegate from the platform's would mean running the resolution, whose other answer is a live
+    /// name server, and no row here is allowed one.
     /// </remarks>
     [Fact]
     public void TheAddressPolicy_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
@@ -58,7 +60,6 @@ public class PushDeliverySsrfWiringTests
             descriptor => descriptor.ServiceType == typeof(ReceiverAddressPolicy));
 
         Assert.NotNull(registration.ImplementationFactory);
-        Assert.Null(registration.ImplementationType);
     }
 
     private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)

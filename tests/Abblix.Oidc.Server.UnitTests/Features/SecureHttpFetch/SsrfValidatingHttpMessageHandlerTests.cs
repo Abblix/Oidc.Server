@@ -23,12 +23,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 /// may reach the address it names.
 /// </summary>
 /// <remarks>
-/// Most rows judge an address and nothing else, so they neither open a socket nor resolve a name: the decision is
+/// A row judges an address and nothing else, so it neither opens a socket nor resolves a name: the decision is
 /// driven directly, and the addresses a name stands for are supplied. A row that judges a name without saying what
 /// it resolves to gets a resolution that refuses, so reaching a live one fails that row instead of spending its
-/// time on the network. The last two rows are the exception and say so: they go through a send, over a transport
-/// that counts rather than connects, because the decision and the send being wired together is a property of its
-/// own and nothing else holds it.
+/// time on the network. The rows named for the send path are the exception: they go through a send, over a
+/// transport that counts rather than connects, because the decision and the send being wired together is a
+/// property of its own and nothing else holds it.
 /// </remarks>
 public class SsrfValidatingHttpMessageHandlerTests
 {
@@ -246,7 +246,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
     /// <summary>
     /// The name resolved is the one being judged. Without this the addresses could be fetched for some other name
-    /// and judged in place of the request's own, which every row above would report as a pass.
+    /// and judged in place of the request's own, which a row supplying addresses for any name reports as a pass.
     /// </summary>
     [Fact]
     public async Task Resolves_TheNameOfTheAddressItIsJudging()
@@ -294,7 +294,7 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// </summary>
     /// <remarks>
     /// The resolution this row gets refuses, so it goes red if the handler stops telling an address from a name.
-    /// The refusal rows above cannot say this: an internal address is refused before the question arises.
+    /// A row about an internal address cannot say this: such an address is refused before the question arises.
     /// </remarks>
     [Fact]
     public async Task Allows_APublicAddress_WithoutResolvingIt()
@@ -461,9 +461,8 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// Naming one destination must not stand the protection down for its neighbors.
     /// </summary>
     /// <remarks>
-    /// Over https, so the address is what refuses this. Asked in cleartext the row is refused by the scheme
-    /// instead and says nothing about the protection it is named for, which is what an assertion on the shared
-    /// prefix of every refusal let it get away with.
+    /// Over https, so the address is what refuses this. Asked in cleartext it is the scheme that refuses, and the
+    /// row then says nothing about the protection it is named for.
     /// </remarks>
     [Fact]
     public async Task Refuses_ANeighborOfANamedDestination()
@@ -477,9 +476,9 @@ public class SsrfValidatingHttpMessageHandlerTests
             "IP address '169.254.169.254' is private/internal");
 
     /// <summary>
-    /// The send judges the address of the request it is about to make. The decision and the send are two halves
-    /// of one guarantee, and every row above calls the decision itself, so a decision nobody calls - or one
-    /// called on some other address - leaves all of them green while refusing nothing.
+    /// The send judges the address of the request it is about to make. The decision and the send are two halves of
+    /// one guarantee, and a row that calls the decision itself holds only the first: a decision nobody calls, or
+    /// one called on some other address, leaves such a row green while refusing nothing.
     /// </summary>
     [Fact]
     public async Task TheSendPath_JudgesTheAddressOfItsOwnRequest()
@@ -513,6 +512,12 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// A client whose handler is the one under test, over a transport that counts requests instead of making
     /// them, so a row can say whether the send reached the wire.
     /// </summary>
+    /// <remarks>
+    /// Standing in for the transport is also what these rows cannot say anything about: the one the handler builds
+    /// for itself, which follows no redirect, carries no ambient credentials and decompresses nothing. That it
+    /// reaches a deployed client is held where the clients are assembled, in
+    /// <see cref="OutboundHttpClientSsrfWiringTests"/>.
+    /// </remarks>
     private static (HttpClient Client, CountingTransport Transport) Sending(SecureHttpFetchOptions options)
     {
         var accessor = Options.Create(options);
@@ -520,10 +525,12 @@ public class SsrfValidatingHttpMessageHandlerTests
         var handler = new SsrfValidatingHttpMessageHandler(
             accessor,
             new SecureUriValidator(accessor),
-            RefusesToResolve)
-        {
-            InnerHandler = transport,
-        };
+            RefusesToResolve);
+
+        // The transport the base constructor built has nowhere left to go once this row supplies its own, and
+        // assigning over it would drop it still holding its connection pool.
+        handler.InnerHandler?.Dispose();
+        handler.InnerHandler = transport;
 
         return (new HttpClient(handler), transport);
     }
