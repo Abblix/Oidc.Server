@@ -19,7 +19,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// <param name="Context">The authorization context the exchanged token is issued under.</param>
 /// <param name="GrantId">The family the exchanged token joins, or <c>null</c> when the subject_token
 /// belonged to none. The exchange hands out authority that came from the subject_token, so revoking that
-/// token's family must refuse the exchanged token as well (RFC 9700 section 4.14.2).</param>
+/// token's family must refuse the exchanged token as well (RFC 9700 section 4.14.2).
+/// <para>
+/// The subject_token's family and no other, even in a delegation where an actor_token was presented as well: a
+/// token names one family, and the one the issued token acts under is the end user's. A revoked actor family
+/// therefore does not reach a token already issued; the actor's own tokens die with it as usual.
+/// </para></param>
 public record ExchangedAuthorizedGrant(
 	AuthSession AuthSession,
 	AuthorizationContext Context,

@@ -71,6 +71,27 @@ public class JwtSubjectTokenResolverTests
         Assert.Null(ctx.AuthorizationDetails);
     }
 
+    /// <summary>
+    /// The family the presented token belongs to travels into the exchange, so a token exchanged from it dies with
+    /// that family; a token belonging to none (an id_token, or a grant without refresh tokens) leaves it in none.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public async Task FamilyOfThePresentedToken_ReachesTheContext(string? grantId)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        jwt.Payload.GrantId = grantId;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(grantId, ctx.GrantId);
+    }
+
     [Fact]
     public async Task AuthorizationDetailsClaim_DeepClonedIntoContext()
     {
