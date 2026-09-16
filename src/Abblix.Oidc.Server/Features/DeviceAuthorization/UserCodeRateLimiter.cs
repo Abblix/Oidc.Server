@@ -61,6 +61,12 @@ public partial class UserCodeRateLimiter(
     /// </remarks>
     internal const int AttemptLadderLength = 32;
 
+    /// <summary>
+    /// The generation a code's attempts belong to before any verification has declared one, which is why no
+    /// record is written for it: absence says it.
+    /// </summary>
+    private const int FirstGeneration = 1;
+
     /// <inheritdoc />
     public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier)
     {
@@ -143,7 +149,8 @@ public partial class UserCodeRateLimiter(
         // generation lands in the generation it read - the one being left behind - rather than on top of an
         // empty ladder it never saw. That attempt is then not counted, which is the same loss as before:
         // the code has just been verified and its own history says nothing any more.
-        var generation = await CurrentGenerationAsync(userCode);
+        var declared = await DeclaredGenerationAsync(userCode);
+        var generation = declared?.Value ?? FirstGeneration;
 
         var attempts = await ClaimAttemptAsync(
             rung => keyFactory.UserCodeRateLimitAttemptKey(userCode, generation, rung),
@@ -154,6 +161,20 @@ public partial class UserCodeRateLimiter(
             // the code can still be verified, which is what lets a reader find the highest one by halving
             // the range instead of walking it.
             deviceAuthOptions.CodeLifetime);
+
+        // The rung just written outlives the record that names its generation, which was written when the code
+        // was verified and given the same lifetime from there. Left alone, that record goes first, a reader
+        // counts from the first generation again, and the next verification declares a generation whose rungs
+        // are still stored - so whoever holds this value next inherits failures that were cleared. Written
+        // again here, it lasts as long as the newest rung it accounts for, whatever the code's history.
+        // A code in its first generation has no record: absence is that generation, so nothing can collide.
+        if (declared != null)
+        {
+            await storage.SetAsync(
+                keyFactory.UserCodeRateLimitGenerationKey(userCode),
+                declared,
+                new StorageOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime });
+        }
 
         // The pause this attempt earned, rather than the instant it ends at. Only the check that refuses
         // an attempt works out that instant, and it anchors on the attempt rather than on the moment of
@@ -223,15 +244,18 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <summary>
+    /// The generation a verification declared for this code, or null while none has: absence is the first
+    /// generation, which is why nothing is written for it.
+    /// </summary>
+    private Task<RateLimitGeneration?> DeclaredGenerationAsync(string userCode)
+        => storage.GetAsync<RateLimitGeneration>(
+            keyFactory.UserCodeRateLimitGenerationKey(userCode), removeOnRetrieval: false);
+
+    /// <summary>
     /// Which life of this code its attempt records belong to. Absence is the first.
     /// </summary>
     private async Task<int> CurrentGenerationAsync(string userCode)
-    {
-        var generation = await storage.GetAsync<RateLimitGeneration>(
-            keyFactory.UserCodeRateLimitGenerationKey(userCode), removeOnRetrieval: false);
-
-        return generation?.Value ?? 1;
-    }
+        => (await DeclaredGenerationAsync(userCode))?.Value ?? FirstGeneration;
 
     /// <summary>
     /// Claims the lowest free rung and answers which one, which is this attempt's number.
