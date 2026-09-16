@@ -36,10 +36,19 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
 /// </remarks>
+/// <param name="options">The deployment's outbound fetch settings.</param>
+/// <param name="uriValidator">Applies the synchronous scheme, hostname and IP-literal rules.</param>
+/// <param name="resolveHost">
+/// Resolves a hostname to its addresses; defaults to <see cref="Dns.GetHostAddressesAsync(string,
+/// CancellationToken)"/>. A test supplies its own so the resolved-address branch, the only part of this handler
+/// that is not a string comparison, can be driven in both directions without a live DNS.</param>
 public class SsrfValidatingHttpMessageHandler(
     IOptions<SecureHttpFetchOptions> options,
-    ISecureUriValidator uriValidator) : AddressValidatingHttpMessageHandler
+    ISecureUriValidator uriValidator,
+    HostResolver? resolveHost = null) : AddressValidatingHttpMessageHandler
 {
+    private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+
     /// <summary>
     /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,
     /// hostname and IP-literal rules, then a DNS re-resolution that catches rebinding. The base handler owns the
@@ -69,10 +78,10 @@ public class SsrfValidatingHttpMessageHandler(
             !SecureUriValidator.IsAllowedDestination(uri, options.Value.AllowedDestinations) &&
             !IPAddress.TryParse(uri.Host, out _))
         {
-            IPHostEntry hostEntry;
+            IPAddress[] addresses;
             try
             {
-                hostEntry = await Dns.GetHostEntryAsync(uri.Host, cancellationToken);
+                addresses = await _resolveHost(uri.Host, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -81,7 +90,7 @@ public class SsrfValidatingHttpMessageHandler(
                     ex);
             }
 
-            var privateAddress = hostEntry.AddressList.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
+            var privateAddress = addresses.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
             if (privateAddress != null)
             {
                 throw new HttpRequestException(
