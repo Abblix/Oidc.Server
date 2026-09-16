@@ -50,13 +50,12 @@ public class AddressValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
-    /// A client over the handler, reaching a transport that counts requests instead of making them. The client
-    /// owns the handler and disposes it, so a row disposes the client and nothing else.
+    /// A client over the handler, reaching a transport that counts requests instead of making them.
     /// </summary>
     private static (HttpClient Client, CountingTransport Transport) Sending(Recording handler)
     {
         var transport = new CountingTransport();
-        Replacing(handler, with: transport);
+        Replacing(on: handler, with: transport);
 
         return (new HttpClient(handler), transport);
     }
@@ -133,7 +132,7 @@ public class AddressValidatingHttpMessageHandlerTests
     public async Task TheCheck_RunsUnderTheCallersCancellation()
     {
         var handler = new Recording();
-        Replacing(handler, with: new CountingTransport());
+        Replacing(on: handler, with: new CountingTransport());
 
         using var invoker = new HttpMessageInvoker(handler);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -179,7 +178,7 @@ public class AddressValidatingHttpMessageHandlerTests
     {
         var handler = new Recording();
         var transport = new CountingTransport();
-        Replacing(handler, with: transport);
+        Replacing(on: handler, with: transport);
 
         using var invoker = new HttpMessageInvoker(handler);
         using var request = new HttpRequestMessage { RequestUri = null };

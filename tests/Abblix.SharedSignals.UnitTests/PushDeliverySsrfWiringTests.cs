@@ -76,8 +76,9 @@ public class PushDeliverySsrfWiringTests
     {
         using var handler = HandlerFactory().CreateHandler(PushDeliveryTransport.HttpClientName);
 
-        // One guard, not the first of several: a second one chained on would put its own inner handler in front
-        // of the transport, and reading that would answer about the host's guard rather than about this client's.
+        // One guard, not the first of several: with a second one chained on, the outer one's inner handler is the
+        // other guard, and the row below would refuse it for the wrong reason - a type that does not match rather
+        // than a chain carrying two.
         var guard = Assert.Single(Chain(handler).OfType<ReceiverAddressValidatingHandler>());
 
         // The redirect-following that would carry a delivery to an unvetted second address is off, so a receiver's
