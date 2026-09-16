@@ -13,6 +13,7 @@ using Abblix.SecurityEvents.Abstractions;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -251,7 +252,7 @@ public class StreamAddressAtRegistrationTests
 
     private static StreamManagementService Service(
         IReadOnlyList<Uri>? allowed = null,
-        ReceiverAddressPolicy.HostResolver? resolve = null)
+        HostResolver? resolve = null)
     {
         var options = new SharedSignalsTransmitterOptions
         {

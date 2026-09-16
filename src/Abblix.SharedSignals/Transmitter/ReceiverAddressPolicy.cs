@@ -32,15 +32,8 @@ namespace Abblix.SharedSignals.Transmitter;
 /// that is not a string comparison, can be driven in both directions without a live DNS.</param>
 public sealed class ReceiverAddressPolicy(
     SharedSignalsTransmitterOptions options,
-    ReceiverAddressPolicy.HostResolver? resolveHost = null)
+    HostResolver? resolveHost = null)
 {
-    /// <summary>
-    /// Resolves a hostname to the addresses a connection to it would use.
-    /// </summary>
-    /// <param name="host">The hostname to resolve.</param>
-    /// <param name="cancellationToken">Cancels the resolution.</param>
-    public delegate Task<IPAddress[]> HostResolver(string host, CancellationToken cancellationToken);
-
     private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
 
     /// <summary>
