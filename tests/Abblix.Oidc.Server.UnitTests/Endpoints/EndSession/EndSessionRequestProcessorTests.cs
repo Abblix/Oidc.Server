@@ -59,14 +59,15 @@ public class EndSessionRequestProcessorTests
         _processor = new EndSessionRequestProcessor(
             _logger.Object,
             _authSessionService.Object,
-            new SessionLogoutNotifier(
-                NullLogger<SessionLogoutNotifier>.Instance,
-                _sessionClients,
-                _issuerProvider.Object,
-                _clientInfoProvider.Object,
-                _logoutNotifier.Object),
-            _tokenRevoker.Object,
-            Options.Create(_options));
+            new AuthSessionTerminator(
+                _tokenRevoker.Object,
+                new SessionLogoutNotifier(
+                    NullLogger<SessionLogoutNotifier>.Instance,
+                    _sessionClients,
+                    _issuerProvider.Object,
+                    _clientInfoProvider.Object,
+                    _logoutNotifier.Object),
+                Options.Create(_options)));
     }
 
     private static EndSessionRequest CreateEndSessionRequest(

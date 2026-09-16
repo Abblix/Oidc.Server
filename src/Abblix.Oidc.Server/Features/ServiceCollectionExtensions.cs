@@ -47,6 +47,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -230,6 +231,7 @@ public static class ServiceCollectionExtensions
         // operator wants either, and back-channel logout carries an outbound HTTP client with it.
         // Removing them here is a breaking change for a host that relies on the default, hence the major.
         services.TryAddScoped<ISessionLogoutNotifier, SessionLogoutNotifier>();
+        services.TryAddScoped<IAuthSessionTerminator, AuthSessionTerminator>();
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()

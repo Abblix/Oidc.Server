@@ -505,7 +505,11 @@ public class TokenExchangeGrantHandler(
             AuthenticationTime: timeProvider.GetUtcNow(),
             IdentityProvider: subject.Issuer ?? "self");
 
-        return new AuthorizedGrant(authSession, authContext);
+        // The exchanged token carries authority that came from the subject_token, so it joins that token's
+        // refresh token family and a replay revoking the family refuses it too. The subject_token's family and no
+        // other, even where an actor_token was presented as well: a token names one family, and the one the
+        // issued token acts under is the end user's.
+        return new AuthorizedGrant(authSession, authContext) { GrantId = subject.GrantId };
     }
 
     /// <summary>

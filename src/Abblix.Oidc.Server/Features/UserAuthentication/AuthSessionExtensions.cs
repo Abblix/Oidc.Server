@@ -20,8 +20,11 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 public static class AuthSessionExtensions
 {
     /// <summary>
-    /// Standard JWT and OIDC claims that are handled as dedicated properties on <see cref="AuthSession"/>.
-    /// These claims are excluded when extracting additional claims from JWT payloads to prevent duplication.
+    /// Claims the library decides: the dedicated properties of <see cref="AuthSession"/>, the claims the token services
+    /// write, and the authorization's own (its key binding, authorization details, actor, nonce and requested
+    /// claims). They are excluded when reading a token back into a session and never written from additional claims,
+    /// because the authorization writes some of them only when it has one, and a host's value would stand in for
+    /// its absence and come back as the grant on the next refresh.
     /// </summary>
     private static readonly HashSet<string> StandardClaims = new(StringComparer.Ordinal)
     {
@@ -41,6 +44,13 @@ public static class AuthSessionExtensions
         JwtClaimTypes.JwtId,
         JwtClaimTypes.Scope,
         JwtClaimTypes.ClientId,
+        JwtClaimTypes.GrantId,
+        JwtClaimTypes.Nonce,
+        JwtClaimTypes.RequestedClaims,
+        IanaClaimTypes.Cnf,
+        IanaClaimTypes.AuthorizationDetails,
+        IanaClaimTypes.Act,
+        IanaClaimTypes.MayAct,
     };
 
     /// <summary>
@@ -53,7 +63,8 @@ public static class AuthSessionExtensions
     /// This method transfers authentication session details into the JWT payload, including:
     /// - Subject, SessionId, AuthenticationTime, IdentityProvider, AuthContextClassRef, AuthenticationMethodReferences
     /// - Email and EmailVerified (when specified in the session)
-    /// - Any additional custom claims from AdditionalClaims
+    /// - Any additional custom claims from AdditionalClaims, except one named like a claim above or like a claim
+    ///   the payload already carries
     /// </remarks>
     public static void ApplyTo(this AuthSession authSession, JsonWebTokenPayload payload)
     {
@@ -70,15 +81,17 @@ public static class AuthSessionExtensions
         if (authSession.EmailVerified.HasValue)
             payload.EmailVerified = authSession.EmailVerified.Value;
 
-        // Apply additional claims to payload
+        // Additional claims are the host's, often copied from an upstream provider, so they never write a claim the
+        // session owns or one the token services wrote before calling this: that would let them decide who the
+        // token is about, which session it belongs to, who issued it and when it expires.
         if (authSession.AdditionalClaims != null)
         {
             foreach (var (claimType, jsonValue) in authSession.AdditionalClaims)
             {
-                if (jsonValue != null)
-                {
-                    payload[claimType] = Clone(jsonValue);
-                }
+                if (jsonValue == null || StandardClaims.Contains(claimType) || payload.Json.ContainsKey(claimType))
+                    continue;
+
+                payload[claimType] = Clone(jsonValue);
             }
         }
     }

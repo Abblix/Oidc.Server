@@ -321,12 +321,14 @@ public static class JwtClaimTypes
     public const string AuthenticationMethodReferences = IanaClaimTypes.Amr;
 
     /// <summary>
-    /// "grant_id" - Abblix private claim (RFC 7519 Section 4.3) identifying the authorization grant a refresh
-    /// token belongs to. It binds every refresh token derived from one grant into a single lineage (a "token
-    /// family" in RFC 9700 terms): a first-issued token starts a new grant, and each rotation carries the same
-    /// value forward. It lets a detected replay revoke the whole family in one registry write. No IANA-registered
-    /// claim captures per-grant refresh-token lineage, and this token is self-issued and self-validated, never
-    /// shown to third parties. See RFC 9700 Section 4.14.2.
+    /// "grant_id" - Abblix private claim (RFC 7519 Section 4.3) naming the refresh token family an access or
+    /// refresh token was minted inside: the family the grant it was issued under carried, or the one started for a
+    /// request issuing a refresh token. An ID token carries none. It binds those tokens into a single lineage (a "token family" in RFC 9700
+    /// terms): a first-issued refresh token starts a new grant, and each rotation carries the same value forward.
+    /// It lets a detected replay revoke the whole family in one registry write. A token exercising no such
+    /// authority carries no value. No IANA-registered claim captures per-grant refresh-token lineage. The value is
+    /// random and opaque, so a resource server reading it from an access token learns only which tokens share a
+    /// grant. See RFC 9700 Section 4.14.2.
     /// </summary>
     public const string GrantId = "grant_id";
 }

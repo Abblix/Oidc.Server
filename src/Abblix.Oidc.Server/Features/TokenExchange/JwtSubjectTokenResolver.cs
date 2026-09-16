@@ -121,6 +121,9 @@ public sealed class JwtSubjectTokenResolver(
 
             // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
             JwtTokenType = jwt.Header.Type,
+
+            // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
+            GrantId = jwt.Payload.GrantId,
         };
     }
 

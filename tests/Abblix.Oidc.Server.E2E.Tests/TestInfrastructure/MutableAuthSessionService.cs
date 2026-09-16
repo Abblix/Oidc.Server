@@ -52,7 +52,8 @@ public sealed class MutableAuthSessionService(TimeProvider clock) : IAuthSession
     public Task<AuthSession?> AuthenticateAsync() =>
         Task.FromResult(_sessions.Length > 0 ? _sessions[0] : null);
 
-    public Task SignInAsync(AuthSession authSession) => Task.CompletedTask;
+    public Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
+        => Task.FromResult(new AuthSessionSignInResult(authSession, []));
 
     public Task SignOutAsync()
     {

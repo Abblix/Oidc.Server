@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="issuerProvider">Provider for the issuer claim in tokens.</param>
 /// <param name="clock">Time provider for token timestamps.</param>
 /// <param name="tokenIdGenerator">Generator for unique token identifiers.</param>
-/// <param name="grantIdGenerator">Generator for unique refresh-token grant identifiers.</param>
 /// <param name="jwtFormatter">Formatter for encoding JWTs.</param>
 /// <param name="tokenRegistry">Registry for tracking token status.</param>
 /// <param name="subjectTypeConverter">Converts the real subject to the client-facing subject (pairwise pseudonym
@@ -44,7 +43,6 @@ public class RefreshTokenService(
 	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
-	IGrantIdGenerator grantIdGenerator,
 	IAuthServiceJwtFormatter jwtFormatter,
 	ITokenRegistry tokenRegistry,
 	ISubjectTypeConverter subjectTypeConverter,
@@ -63,6 +61,7 @@ public class RefreshTokenService(
 	/// token policies.</param>
 	/// <param name="refreshToken">An existing refresh token to be renewed, if applicable. A new token is created
 	/// if this is null or expired.</param>
+	/// <param name="grantId">The family the new token joins, decided by the caller.</param>
 	/// <returns>A task that results in a new or renewed <see cref="EncodedJsonWebToken"/> representing
 	/// the refresh token, or null if the existing token cannot be renewed due to policy constraints or expiration.
 	/// </returns>
@@ -70,7 +69,8 @@ public class RefreshTokenService(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
-		JsonWebToken? refreshToken)
+		JsonWebToken? refreshToken,
+		string grantId)
 	{
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
@@ -96,10 +96,6 @@ public class RefreshTokenService(
 			// check means a refused renewal never consumes the presented token.
 			await tokenRegistry.SetStatusAsync(previousJwtId, JsonWebTokenStatus.Used, previousExpiresAt);
 		}
-
-		// A first-issued token starts a new grant lineage; a rotation carries the existing grant id forward. The
-		// grant id ties every refresh token of one authorization grant into a family a detected replay revokes whole.
-		var grantId = refreshToken?.Payload.GrantId ?? grantIdGenerator.GenerateGrantId();
 
 		// The same four claims as on an access token, answering the same four questions - except that one of
 		// them answers a different question here than its name suggests:
@@ -209,6 +205,9 @@ public class RefreshTokenService(
 				new OidcError(ErrorCodes.InvalidGrant, "The refresh token subject could not be resolved"));
 		}
 
+		// The family is not restated here: the grant carries the token, and the token states which family it
+		// belongs to. Copying the value onto the grant would let the two disagree, and would put the answer in a
+		// place a host building this grant itself can leave empty.
 		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
 			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
 	}

@@ -102,6 +102,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
             // Refresh tokens always have typ=rt+jwt (enforced above). Recording it here makes
             // the typ-confusion check at the handler uniform across resolvers.
             JwtTokenType = jwt.Header.Type,
+
+            GrantId = jwt.Payload.GrantId,
         };
     }
 }

@@ -247,14 +247,15 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// Identifies the authorization grant this refresh token belongs to, binding it to the lineage of every
-	/// refresh token derived from the same grant. A first-issued token starts a new grant; each rotation
+	/// Identifies the refresh token family whose authority this token exercises, binding it to the lineage of
+	/// every token derived from the same grant. A first-issued refresh token starts a new grant; each rotation
 	/// carries the value forward, so a detected replay can revoke the whole family in one registry write
 	/// (RFC 9700 Section 4.14.2).
 	/// </summary>
 	/// <remarks>
-	/// Present only on refresh tokens (<c>rt+jwt</c>); absent (null) on all other token types, which leaves
-	/// the family cascade in the token-status validator inert for them.
+	/// Present on an access or refresh token minted inside a family - the one the grant it was issued under
+	/// carried, or the one started for a request issuing a refresh token. Absent (null) on every other token, an
+	/// ID token included, which leaves the family cascade in the token-status validator inert for it.
 	/// </remarks>
 	public string? GrantId
 	{

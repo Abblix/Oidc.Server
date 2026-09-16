@@ -29,11 +29,18 @@ public interface IRefreshTokenService
 	/// rotation and the previous token may be revoked according to the client's policy. Returns
 	/// <c>null</c> when expiration policies have already elapsed and no new token can be issued.
 	/// </summary>
+	/// <param name="authSession">The authentication session the token continues.</param>
+	/// <param name="authContext">The authorization context the token carries.</param>
+	/// <param name="clientInfo">The client the token is issued to.</param>
+	/// <param name="refreshToken">The token being rotated, or <c>null</c> for the first token of a grant.</param>
+	/// <param name="grantId">The family the new token joins. The caller decides it, because the access token
+	/// issued in the same response belongs to the same family and is minted first.</param>
 	Task<EncodedJsonWebToken?> CreateRefreshTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
 		ClientInfo clientInfo,
-		JsonWebToken? refreshToken);
+		JsonWebToken? refreshToken,
+		string grantId);
 
 	/// <summary>
 	/// Reconstructs the <see cref="AuthorizedGrant"/> represented by a previously issued refresh

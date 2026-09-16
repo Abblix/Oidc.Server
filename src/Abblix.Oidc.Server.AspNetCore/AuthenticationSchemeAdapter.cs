@@ -29,10 +29,12 @@ namespace Abblix.Oidc.Server.AspNetCore;
 /// </summary>
 /// <param name="httpContextAccessor">Provides access to the <see cref="HttpContext"/>,
 /// allowing operations on the HTTP context of the current request.</param>
+/// <param name="authSessionTerminator">Ends the session a sign-in replaces, for its tokens and its clients.</param>
 /// <param name="authenticationScheme">The authentication scheme to use for all authentication operations.
 /// This scheme will be explicitly specified when calling SignInAsync, SignOutAsync, and AuthenticateAsync methods.</param>
 public class AuthenticationSchemeAdapter(
 	IHttpContextAccessor httpContextAccessor,
+	IAuthSessionTerminator authSessionTerminator,
 	string authenticationScheme = CookieAuthenticationDefaults.AuthenticationScheme) : IAuthSessionService
 {
 	/// <summary>
@@ -93,6 +95,11 @@ public class AuthenticationSchemeAdapter(
 	];
 
 	/// <summary>
+	/// The request item holding the session this scheme last wrote, or null once it signed out, in the request.
+	/// </summary>
+	private (Type, string) WrittenInThisRequest => (typeof(AuthenticationSchemeAdapter), authenticationScheme);
+
+	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
 	/// </summary>
 	private HttpContext HttpContext => httpContextAccessor.HttpContext.NotNull(nameof(IHttpContextAccessor.HttpContext));
@@ -128,6 +135,11 @@ public class AuthenticationSchemeAdapter(
 	/// writes (for example a plain application login cookie sharing the same scheme name, or a cookie whose claims are
 	/// malformed) is treated as "no OIDC session" - the method returns null rather than throwing, so an unrelated cookie
 	/// never turns a request into a 500.
+	/// <para>
+	/// Once this request has signed in or out, the answer is the session it wrote, or none, because the scheme keeps
+	/// answering with the cookie the request arrived with for the rest of the request. That session is read from the
+	/// claims as written, so a claims transformation the host registered reaches it only from the next request on.
+	/// </para>
 	/// </remarks>
 	/// <returns>
 	/// A task that returns the <see cref="AuthSession"/>
@@ -135,11 +147,18 @@ public class AuthenticationSchemeAdapter(
 	/// </returns>
 	public async Task<AuthSession?> AuthenticateAsync()
 	{
-		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
-		if (!authenticationResult.Succeeded)
-			return null;
+		if (HttpContext.Items.TryGetValue(WrittenInThisRequest, out var written))
+			return (AuthSession?)written;
 
-		var principal = authenticationResult.Principal;
+		var authenticationResult = await HttpContext.AuthenticateAsync(authenticationScheme);
+		return authenticationResult.Succeeded ? ReadSession(authenticationResult.Principal) : null;
+	}
+
+	/// <summary>
+	/// Reads the OIDC session a principal written by this adapter carries, or null when it carries none.
+	/// </summary>
+	private static AuthSession? ReadSession(ClaimsPrincipal principal)
+	{
 		if (!principal.IsAuthenticated())
 			return null;
 
@@ -202,9 +221,16 @@ public class AuthenticationSchemeAdapter(
 	/// Signs in the specified user into the application, setting up their authentication session.
 	/// Critical claims (Subject, SessionId, AuthenticationTime, AuthenticationMethodReferences) are stored in principal claims.
 	/// </summary>
+	/// <remarks>
+	/// The cookie holds one session, so signing in replaces the one it carries. When that session belongs to another
+	/// end user, it is ended through <see cref="IAuthSessionTerminator"/> once the new cookie is written, and is
+	/// reported as ended. When it belongs to the same end user, as on a re-authentication or a step-up, the session
+	/// continues under its existing identifier: the clients signed in to it are recorded under that identifier and
+	/// their ID tokens carry it, so a fresh one would lose them to the logout that follows.
+	/// </remarks>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
-	/// <returns>A task that represents the asynchronous sign-in operation.</returns>
-	public Task SignInAsync(AuthSession authSession)
+	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
+	public async Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
 	{
 		// IdentityProvider becomes the authentication type of the issued identity. An empty value produces an
 		// unauthenticated principal: SignInAsync would appear to succeed, yet AuthenticateAsync would read it back as
@@ -214,6 +240,25 @@ public class AuthenticationSchemeAdapter(
 				$"{nameof(AuthSession.IdentityProvider)} must be a non-empty value because it becomes the authentication " +
 				"type of the issued identity; an empty value yields an unauthenticated principal that cannot be read back.",
 				nameof(authSession));
+
+		// The subject and the session id are what a read requires to see an OIDC session at all, so a session without
+		// either would be written and then read as no session, by this request and every later one.
+		if (string.IsNullOrEmpty(authSession.Subject))
+			throw new ArgumentException(
+				$"{nameof(AuthSession.Subject)} must be a non-empty value; a session without one is read back as no session.",
+				nameof(authSession));
+
+		if (string.IsNullOrEmpty(authSession.SessionId))
+			throw new ArgumentException(
+				$"{nameof(AuthSession.SessionId)} must be a non-empty value; a session without one is read back as no session.",
+				nameof(authSession));
+
+		var replaced = await AuthenticateAsync();
+		AuthSession[] endedSessions = [];
+		if (replaced != null && string.Equals(replaced.Subject, authSession.Subject, StringComparison.Ordinal))
+			authSession = authSession with { SessionId = replaced.SessionId };
+		else if (replaced != null)
+			endedSessions = [replaced];
 
 		// Critical claims stored in principal for access in cookie events (especially SigningOut)
 		var claims = new List<Claim>
@@ -254,7 +299,17 @@ public class AuthenticationSchemeAdapter(
 
 		var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, authSession.IdentityProvider));
 
-		return HttpContext.SignInAsync(authenticationScheme, principal);
+		await HttpContext.SignInAsync(authenticationScheme, principal);
+
+		// What the next request will read from this cookie, rather than the session passed in, so a read in this
+		// request and the result get the same filtering and precision the cookie applies.
+		var written = ReadSession(principal).NotNull(nameof(principal));
+		HttpContext.Items[WrittenInThisRequest] = written;
+
+		foreach (var endedSession in endedSessions)
+			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
+
+		return new AuthSessionSignInResult(written, endedSessions);
 	}
 
 	/// <summary>
@@ -319,7 +374,11 @@ public class AuthenticationSchemeAdapter(
 	/// Signs out the current user from the application, ending their authenticated session.
 	/// </summary>
 	/// <returns>A task that represents the asynchronous sign-out operation.</returns>
-	public Task SignOutAsync() => HttpContext.SignOutAsync(authenticationScheme);
+	public async Task SignOutAsync()
+	{
+		await HttpContext.SignOutAsync(authenticationScheme);
+		HttpContext.Items[WrittenInThisRequest] = null;
+	}
 
 	/// <summary>
 	/// Extracts additional claims from the principal, excluding standard OIDC claims.

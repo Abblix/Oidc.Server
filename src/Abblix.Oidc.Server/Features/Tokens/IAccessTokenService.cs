@@ -29,12 +29,16 @@ public interface IAccessTokenService
 	/// <param name="authSession">The authentication session containing user and session details.</param>
 	/// <param name="authContext">The authorization context containing details about the granted permissions and scopes.</param>
 	/// <param name="clientInfo">Information about the client for whom the token is being created.</param>
+	/// <param name="grantId">The refresh token family this access token belongs to, or <c>null</c> when the grant
+	/// has none. Written into the token so that revoking the family refuses the access tokens minted from it as
+	/// well as its refresh tokens.</param>
 	/// <returns>A task that represents the asynchronous create operation.
 	/// The task result contains the newly created <see cref="JsonWebToken"/>.</returns>
 	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
 		AuthSession authSession,
 		AuthorizationContext authContext,
-		ClientInfo clientInfo);
+		ClientInfo clientInfo,
+		string? grantId);
 
 	/// <summary>
 	/// Asynchronously authenticates a user based on a provided access token.
