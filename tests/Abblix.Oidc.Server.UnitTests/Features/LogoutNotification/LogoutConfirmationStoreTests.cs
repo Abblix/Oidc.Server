@@ -109,19 +109,34 @@ public class LogoutConfirmationStoreTests
     }
 
     /// <summary>
-    /// Asking again replaces the question rather than adding one: anyone can make a browser reach the logout
-    /// address, so a question per request would let an outsider fill the store, and the end user is looking at the
-    /// page the latest request rendered.
+    /// Asking again is the same question. Anyone can make a browser reach the logout address, so a question per
+    /// request would both fill the store and let a request arriving while the end user reads the page void the
+    /// answer they are about to give.
     /// </summary>
     [Fact]
-    public async Task AskingAgain_ReplacesTheOutstandingQuestion()
+    public async Task AskingAgain_IsTheSameQuestion()
     {
         var first = await _store.IssueAsync(SessionId);
         var second = await _store.IssueAsync(SessionId);
 
-        Assert.NotEqual(first, second);
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, first));
-        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, second));
+        Assert.Equal(first, second);
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, first));
+    }
+
+    /// <summary>
+    /// And once it has been answered the next request asks afresh, so the value just given stops being one.
+    /// </summary>
+    [Fact]
+    public async Task AskingAfterAnAnswer_IssuesAfresh()
+    {
+        var answered = await _store.IssueAsync(SessionId);
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, answered));
+
+        var next = await _store.IssueAsync(SessionId);
+
+        Assert.NotEqual(answered, next);
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, answered));
+        Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, next));
     }
 
     /// <summary>

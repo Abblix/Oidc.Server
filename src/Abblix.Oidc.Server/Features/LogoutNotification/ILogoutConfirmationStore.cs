@@ -21,16 +21,19 @@ public interface ILogoutConfirmationStore
 {
     /// <summary>
     /// Issues the value that answers for <paramref name="sessionId"/>, to be rendered into the page that asks the
-    /// end user and sent back with their answer. It replaces whatever question that session had outstanding, so a
-    /// page left open somewhere else stops being an answer.
+    /// end user and sent back with their answer. A session has one outstanding question at a time: asking again
+    /// while it stands answers with the same value, so a request arriving while the end user reads the page
+    /// cannot void the answer they are about to give.
     /// </summary>
     /// <param name="sessionId">The session the end user is being asked about.</param>
-    /// <returns>The value, unguessable and good for one use.</returns>
+    /// <returns>The value, unguessable and good until it is answered or expires.</returns>
     Task<string> IssueAsync(string sessionId);
 
     /// <summary>
     /// Answers whether <paramref name="confirmation"/> is the value <paramref name="sessionId"/> was asked with,
-    /// and spends it when it is, so the same answer cannot be sent twice.
+    /// and spends the question when it is, so a value captured from a page stops being an answer once it has been
+    /// given. Two identical answers arriving together can both be told they took it; each of them asked to end
+    /// the same session, which is what happens.
     /// </summary>
     /// <param name="sessionId">The session the request would end.</param>
     /// <param name="confirmation">The value the request presented.</param>

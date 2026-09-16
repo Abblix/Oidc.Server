@@ -4,16 +4,16 @@ option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
 // The logout confirmation a session currently has outstanding: the question the server asked its end user.
 //
-// One record per session, replaced when the question is asked again and removed when it is answered, so the
-// number of these is bounded by the sessions that exist rather than by the requests that arrive - and asking
-// is something any site can cause, by making a browser fetch the logout address with its cookie on it.
-//
-// It holds a hash rather than the value, for the reason the storage key does: a store's contents reach logs,
-// dumps and administration consoles, and the value itself would be a replayable answer for a named session.
+// One record per session, handed back while it stands and removed once it is answered. Two properties follow
+// from that, and both are why it is keyed by the session rather than by anything the request carries: the
+// number of these is bounded by the sessions that exist rather than by the requests that arrive, and a later
+// request cannot void the question the end user is looking at, since asking again is answered with the same
+// value. Asking is something any site can cause, by making a browser reach the logout address with its
+// cookie on it, so both matter.
 //
 // A message rather than a bare string for the reason PollSchedule states: the serializer dispatches on the
 // stored type, and a type without a definition here falls back to JSON and logs a warning on every write.
 message LogoutConfirmation {
-  // SHA-256 of the value the end user's page sends back, URL-safe Base64.
-  string confirmation_hash = 1;
+  // The value the end user's page sends back, which is what makes asking again idempotent.
+  string confirmation = 1;
 }

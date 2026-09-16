@@ -54,17 +54,17 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// The hash a session's outstanding logout question is kept as survives a round trip; without it no answer
-    /// would ever match and no logout could be confirmed.
+    /// The value a session's outstanding logout question was asked with survives a round trip; without it no
+    /// answer would ever match and no logout could be confirmed.
     /// </summary>
     [Fact]
     public void Serialize_LogoutConfirmation_RoundTrip()
     {
         var result = _serializer.Deserialize<LogoutConfirmation>(
-            _serializer.Serialize(new LogoutConfirmation { ConfirmationHash = "hash-of-the-value" }));
+            _serializer.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
 
         Assert.NotNull(result);
-        Assert.Equal("hash-of-the-value", result.ConfirmationHash);
+        Assert.Equal("the-value-that-asks", result.Confirmation);
     }
 
     /// <summary>
@@ -129,7 +129,7 @@ public class ProtobufSerializerTests
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
         composite.Deserialize<LogoutConfirmation>(
-            composite.Serialize(new LogoutConfirmation { ConfirmationHash = "hash-of-the-value" }));
+            composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
 
         Assert.Empty(recorder.Entries);
     }

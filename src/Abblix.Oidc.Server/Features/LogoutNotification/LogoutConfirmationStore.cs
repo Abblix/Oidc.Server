@@ -18,8 +18,8 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
-/// Keeps the question a session currently has outstanding in the server's entity storage, as a hash of the value
-/// the end user's page will send back.
+/// Keeps the question a session currently has outstanding in the server's entity storage, under the session's own
+/// key, so that asking again is the same question rather than another one.
 /// </summary>
 /// <param name="storage">Where the outstanding question is kept.</param>
 /// <param name="keyFactory">Names the storage key a session's question is kept under.</param>
@@ -34,18 +34,22 @@ public sealed class LogoutConfirmationStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
+        var key = keyFactory.LogoutConfirmationKey(sessionId);
+
+        // Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a
+        // value per request would do two things at once: fill the store with questions nobody will answer, and
+        // let a request arriving while the end user reads the page void the answer they are about to give.
+        if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
+            return outstanding.Confirmation;
+
         // Drawn from a cryptographically secure source and sized by configuration, like every other value this
         // server issues that an outsider must not be able to state: guessing one would end a session.
         var confirmation = Base64Url.EncodeToString(
             CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
 
-        // One record per session, replacing whatever question was outstanding. Asking is something any site can
-        // cause, so a record per request would let an outsider fill the store with questions nobody will answer;
-        // and a session has one end user, who is looking at one page. The record holds a hash, so nothing in the
-        // store is an answer somebody could send.
         await storage.SetAsync(
-            keyFactory.LogoutConfirmationKey(sessionId),
-            new LogoutConfirmation { ConfirmationHash = HashOf(confirmation) },
+            key,
+            new LogoutConfirmation { Confirmation = confirmation },
             new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime });
 
         return confirmation;
@@ -56,32 +60,26 @@ public sealed class LogoutConfirmationStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
-        var outstanding = await storage.GetAsync<LogoutConfirmation>(
-            keyFactory.LogoutConfirmationKey(sessionId),
-            removeOnRetrieval: false);
+        var key = keyFactory.LogoutConfirmationKey(sessionId);
+        var outstanding = await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false);
 
-        if (outstanding == null || !Matches(outstanding.ConfirmationHash, confirmation))
+        if (outstanding == null || !Matches(outstanding.Confirmation, confirmation))
             return false;
 
-        // Removed only once the answer is the one this session was asked for, so a value somebody else sends
-        // cannot spend the question the end user is looking at. Two answers racing both end the same session,
-        // which is what the request asked for either way.
-        await storage.RemoveAsync(keyFactory.LogoutConfirmationKey(sessionId));
+        // Removed only once the answer is the one this session was asked with, so a wrong value somebody else
+        // sends cannot spend the question the end user is looking at. Read and removal are two calls rather than
+        // one, so two identical answers arriving together can both be told they took it; they end the same
+        // session, which is what each of them asked for.
+        await storage.RemoveAsync(key);
         return true;
     }
 
     /// <summary>
-    /// Compares the presented value against the hash the session's question was stored as, in time that does not
-    /// depend on how much of it matches.
+    /// Compares the presented value with the one this session was asked with, in time that does not depend on how
+    /// much of it matches, because the caller chooses the value being compared.
     /// </summary>
-    private static bool Matches(string outstandingHash, string confirmation)
+    private static bool Matches(string outstanding, string confirmation)
         => CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(outstandingHash),
-            Encoding.UTF8.GetBytes(HashOf(confirmation)));
-
-    /// <summary>
-    /// Hashes the value, so what the store holds is a question rather than an answer.
-    /// </summary>
-    private static string HashOf(string confirmation)
-        => Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(confirmation)));
+            Encoding.UTF8.GetBytes(outstanding),
+            Encoding.UTF8.GetBytes(confirmation));
 }
