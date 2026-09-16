@@ -72,6 +72,9 @@ public class ConfirmationValidator(
         if (hint.SessionId.HasValue() && !string.Equals(hint.SessionId, authSession.SessionId, StringComparison.Ordinal))
             return false;
 
+        // The client is read rather than assumed: the members that resolve it run before this one, and the family
+        // is publicly editable, so a host that reorders it finds the request asking for a confirmation instead of
+        // skipping one.
         return context.ClientInfo is { } clientInfo &&
                hint.Subject is { } subject &&
                subjectTypeConverter.Names(authSession, [subject], clientInfo);

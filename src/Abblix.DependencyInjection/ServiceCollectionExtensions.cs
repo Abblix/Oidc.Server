@@ -775,9 +775,9 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// The composition core shared by the plain and keyed families: moves the detached members into keyed
-    /// registrations under <paramref name="memberKey"/> (sharing the composite's lifetime, so member
-    /// instances live exactly as long as the composite that consumes them) and returns the factory that
-    /// materializes the composite over them.
+    /// registrations under <paramref name="memberKey"/>, each keeping the lifetime it was registered with, and
+    /// returns the factory that materializes the composite over them. The composite itself takes the shortest
+    /// lifetime among the members, so it never outlives one of them.
     /// </summary>
     private static Func<IServiceProvider, object> KeyFamilyMembers<TInterface>(
         this IServiceCollection services,

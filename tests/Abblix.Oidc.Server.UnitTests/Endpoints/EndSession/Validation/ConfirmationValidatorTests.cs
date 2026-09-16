@@ -217,16 +217,59 @@ public class ConfirmationValidatorTests
     }
 
     /// <summary>
-    /// An empty hint is no hint at all.
+    /// A hint that did not parse leaves nothing to compare, whatever the request carried as its text, so the
+    /// request falls to the confirmation.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithEmptyIdTokenHint_ShouldReturnError()
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-token")]
+    public async Task ValidateAsync_WithAHintThatNamesNothing_ShouldReturnError(string idTokenHint)
     {
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        var error = await _validator.ValidateAsync(CreateContext(confirmed: false, idTokenHint: ""));
+        var error = await _validator.ValidateAsync(CreateContext(confirmed: false, idTokenHint: idTokenHint));
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.ConfirmationRequired, error.Error);
+    }
+
+    /// <summary>
+    /// A pairwise client never sees the subject the session holds, so the comparison is made in that client's own
+    /// spelling of the end user: its pseudonym matches, and the real subject, which only this server knows, does
+    /// not. Comparing the two strings directly would have it the other way round.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateAsync_WithPairwiseClient_ComparesTheSubjectThatClientSees(bool hintCarriesThePseudonym)
+    {
+        var converter = new SubjectTypeConverter(
+            new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifier = "client.example.com",
+        };
+
+        var validator = new ConfirmationValidator(_authSessionService.Object, converter);
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+
+        var pseudonym = converter.Convert(CurrentSubject, client);
+        Assert.NotEqual(CurrentSubject, pseudonym);
+
+        var context = CreateContext(
+            confirmed: false,
+            idTokenHint: "id_token_value",
+            hintSubject: hintCarriesThePseudonym ? pseudonym : CurrentSubject,
+            hintSessionId: CurrentSessionId);
+        context.ClientInfo = client;
+
+        var error = await validator.ValidateAsync(context);
+
+        if (hintCarriesThePseudonym)
+            Assert.Null(error);
+        else
+            Assert.Equal(ErrorCodes.ConfirmationRequired, error?.Error);
     }
 }
