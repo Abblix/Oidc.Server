@@ -204,18 +204,9 @@ public interface IEntityStorageKeyFactory
     string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash);
 
     /// <summary>
-    /// Generates a storage key for a logout confirmation this server issued, under a hash of it.
+    /// Generates a storage key for the logout confirmation a session currently has outstanding.
     /// </summary>
-    /// <param name="confirmationHash">A hash of the issued value; the value itself is a secret and is never part
-    /// of the key.</param>
-    /// <returns>A formatted storage key for the issued confirmation.</returns>
-    string LogoutConfirmationKey(string confirmationHash);
-
-    /// <summary>
-    /// Generates a storage key for the confirmation currently outstanding for a session, so asking the same
-    /// question again re-uses it instead of issuing another.
-    /// </summary>
-    /// <param name="sessionId">The session the end user is being asked about.</param>
+    /// <param name="sessionId">The session whose end user was asked whether to log out.</param>
     /// <returns>A formatted storage key for that session's outstanding confirmation.</returns>
-    string LogoutConfirmationForSessionKey(string sessionId);
+    string LogoutConfirmationKey(string sessionId);
 }

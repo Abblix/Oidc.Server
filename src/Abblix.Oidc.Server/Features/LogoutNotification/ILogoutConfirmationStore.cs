@@ -21,31 +21,26 @@ public interface ILogoutConfirmationStore
 {
     /// <summary>
     /// Issues the value that answers for <paramref name="sessionId"/>, to be rendered into the page that asks the
-    /// end user and sent back with their answer.
+    /// end user and sent back with their answer. It replaces whatever question that session had outstanding, so a
+    /// page left open somewhere else stops being an answer.
     /// </summary>
     /// <param name="sessionId">The session the end user is being asked about.</param>
     /// <returns>The value, unguessable and good for one use.</returns>
     Task<string> IssueAsync(string sessionId);
 
     /// <summary>
-    /// Redeems <paramref name="confirmation"/>, answering which session it was issued for, and spends it so the
-    /// same answer cannot end a second session.
+    /// Answers whether <paramref name="confirmation"/> is the value <paramref name="sessionId"/> was asked with,
+    /// and spends it when it is, so the same answer cannot be sent twice.
     /// </summary>
+    /// <param name="sessionId">The session the request would end.</param>
     /// <param name="confirmation">The value the request presented.</param>
-    /// <returns>The session the value was issued for, or <c>null</c> when this caller is not the one that took
-    /// it.</returns>
+    /// <returns><c>true</c> when the end user answered this session's question; <c>false</c> when that session has
+    /// no question outstanding, when the question has expired or been answered already, and when the value is not
+    /// the one it was asked with.</returns>
     /// <remarks>
-    /// A caller is told it took the value only when the take-once protocol ran to the end and its own claim was
-    /// still in the store. A refusal therefore covers the value not being there at all, another caller having
-    /// taken it, and a claim that expired mid-protocol - the last on a single caller with nobody to lose to, its
-    /// outcome being the value gone with nobody able to be told they took it. A store fault after the removal
-    /// raises rather than answering, so it never reaches the refusal. Contract:
-    /// <c>src/Abblix.Utils/DistributedCacheExtensions.cs</c>.
-    /// <para>
-    /// Every refusal means the same thing here, which is what makes this seam usable at all: the end user is
-    /// asked again. A logout that asks twice costs a click; one that acts on an answer somebody else's browser
-    /// gave, or on one already spent, costs the session.
-    /// </para>
+    /// Every <c>false</c> means the same thing to the caller, which is what makes this seam usable at all: the end
+    /// user is asked again, and a fresh question replaces whatever stood before. A logout that asks twice costs a
+    /// click; one that acts on an answer somebody else's browser gave, or on one already spent, costs the session.
     /// </remarks>
-    Task<string?> RedeemLogoutConfirmationAsync(string confirmation);
+    Task<bool> RedeemLogoutConfirmationAsync(string sessionId, string confirmation);
 }

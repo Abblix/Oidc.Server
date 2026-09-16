@@ -18,12 +18,12 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
-/// Keeps each issued logout confirmation in the server's entity storage, under the value itself, until it is
-/// redeemed or expires.
+/// Keeps the question a session currently has outstanding in the server's entity storage, as a hash of the value
+/// the end user's page will send back.
 /// </summary>
-/// <param name="storage">Where the issued confirmations are kept.</param>
-/// <param name="keyFactory">Names the storage key a confirmation is kept under.</param>
-/// <param name="options">Source of the confirmation's length and lifetime.</param>
+/// <param name="storage">Where the outstanding question is kept.</param>
+/// <param name="keyFactory">Names the storage key a session's question is kept under.</param>
+/// <param name="options">Source of the value's length and of how long a question stays good for.</param>
 public sealed class LogoutConfirmationStore(
     IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
@@ -34,58 +34,54 @@ public sealed class LogoutConfirmationStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
-        // One outstanding question per session. Asking is something any site can cause, by making the browser
-        // fetch the logout address with its cookie on it, so issuing a value per request would let an outsider
-        // fill the store with entries nobody will ever answer. Re-using the live one costs that attack nothing
-        // to keep going and costs the store one entry per session either way, and the end user sees the same
-        // question whichever request rendered it.
-        var sessionKey = keyFactory.LogoutConfirmationForSessionKey(sessionId);
-        if (await storage.GetAsync<string>(sessionKey, removeOnRetrieval: false) is { } outstanding)
-            return outstanding;
-
         // Drawn from a cryptographically secure source and sized by configuration, like every other value this
         // server issues that an outsider must not be able to state: guessing one would end a session.
         var confirmation = Base64Url.EncodeToString(
             CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
 
-        var expiry = new StorageOptions
-        {
-            AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime,
-        };
-
-        await storage.SetAsync(KeyOf(confirmation), new LogoutConfirmation { SessionId = sessionId }, expiry);
-
-        // The value itself, so the next question can hand back the one already asked. It is a value rather than
-        // a key, which is the side of the store that carries secrets.
-        await storage.SetAsync(sessionKey, confirmation, expiry);
+        // One record per session, replacing whatever question was outstanding. Asking is something any site can
+        // cause, so a record per request would let an outsider fill the store with questions nobody will answer;
+        // and a session has one end user, who is looking at one page. The record holds a hash, so nothing in the
+        // store is an answer somebody could send.
+        await storage.SetAsync(
+            keyFactory.LogoutConfirmationKey(sessionId),
+            new LogoutConfirmation { ConfirmationHash = HashOf(confirmation) },
+            new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime });
 
         return confirmation;
     }
 
     /// <inheritdoc />
-    public async Task<string?> RedeemLogoutConfirmationAsync(string confirmation)
+    public async Task<bool> RedeemLogoutConfirmationAsync(string sessionId, string confirmation)
     {
-        // Removed as it is read, so an answer spent on one logout cannot be replayed against the session the end
-        // user signs into next. The take-once protocol tells this caller it took the value only when the protocol
-        // ran to the end and its own claim was still in the store, so a refusal covers the value not being there,
-        // another caller having taken it, and a claim that expired mid-protocol - and every one of them ends in
-        // the end user being asked again.
-        var issued = await storage.GetAsync<LogoutConfirmation>(KeyOf(confirmation), removeOnRetrieval: true);
-        if (issued == null)
-            return null;
+        ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
-        // The question has been answered, so the next one starts afresh rather than handing back a value that
-        // is already spent and would be refused.
-        await storage.RemoveAsync(keyFactory.LogoutConfirmationForSessionKey(issued.SessionId));
+        var outstanding = await storage.GetAsync<LogoutConfirmation>(
+            keyFactory.LogoutConfirmationKey(sessionId),
+            removeOnRetrieval: false);
 
-        return issued.SessionId;
+        if (outstanding == null || !Matches(outstanding.ConfirmationHash, confirmation))
+            return false;
+
+        // Removed only once the answer is the one this session was asked for, so a value somebody else sends
+        // cannot spend the question the end user is looking at. Two answers racing both end the same session,
+        // which is what the request asked for either way.
+        await storage.RemoveAsync(keyFactory.LogoutConfirmationKey(sessionId));
+        return true;
     }
 
     /// <summary>
-    /// Names the key a confirmation is kept under, from a hash of it rather than from the value: the value is a
-    /// secret, and a store's keys travel into logs and administration tools that its values do not.
+    /// Compares the presented value against the hash the session's question was stored as, in time that does not
+    /// depend on how much of it matches.
     /// </summary>
-    private string KeyOf(string confirmation)
-        => keyFactory.LogoutConfirmationKey(
-            Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(confirmation))));
+    private static bool Matches(string outstandingHash, string confirmation)
+        => CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(outstandingHash),
+            Encoding.UTF8.GetBytes(HashOf(confirmation)));
+
+    /// <summary>
+    /// Hashes the value, so what the store holds is a question rather than an answer.
+    /// </summary>
+    private static string HashOf(string confirmation)
+        => Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(confirmation)));
 }

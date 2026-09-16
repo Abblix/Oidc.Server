@@ -41,16 +41,13 @@ public class ConfirmationValidator(
         if (authSession == null)
             return null;
 
-        // The end user's own answer, spent here so the same one cannot end a second session, and honoured only
-        // for the session it was issued for. Redeeming answers with the session only when the take-once protocol
-        // ran to the end and this caller's own claim was still in the store; a refusal covers the value not being
-        // there, another caller having taken it, and a claim that expired mid-protocol. All of them, and a value
-        // naming another session, lead to the same place below: the end user is asked.
-        if (context.Request.Confirmation is { } confirmation)
+        // The end user's own answer, spent here so the same one cannot be sent twice, and asked of this session
+        // rather than of the value: a question issued for another session, one already answered and one that
+        // expired all lead to the same place below, which is that the end user is asked again.
+        if (context.Request.Confirmation is { } confirmation &&
+            await confirmationStore.RedeemLogoutConfirmationAsync(authSession.SessionId, confirmation))
         {
-            var confirmedSessionId = await confirmationStore.RedeemLogoutConfirmationAsync(confirmation);
-            if (string.Equals(confirmedSessionId, authSession.SessionId, StringComparison.Ordinal))
-                return null;
+            return null;
         }
 
         if (NamesTheCurrentSession(context, authSession))

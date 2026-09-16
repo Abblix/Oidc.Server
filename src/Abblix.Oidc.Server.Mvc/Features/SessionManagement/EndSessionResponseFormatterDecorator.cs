@@ -28,7 +28,8 @@ public class EndSessionResponseFormatterDecorator(
     ISessionManagementService sessionManagementService): IEndSessionResponseFormatter
 {
     /// <summary>
-    /// Formats an End Session response and performs session management operations if enabled.
+    /// Formats an End Session response, clearing the session-management cookie when the logout ended the session
+    /// and the deployment serves that cookie.
     /// </summary>
     /// <param name="request">The End Session request.</param>
     /// <param name="response">The End Session response to be formatted.</param>

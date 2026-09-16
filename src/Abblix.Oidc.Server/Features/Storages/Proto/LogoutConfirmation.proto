@@ -2,15 +2,18 @@ syntax = "proto3";
 
 option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
-// The record behind a logout confirmation the server issued when it asked the end user whether to log out.
+// The logout confirmation a session currently has outstanding: the question the server asked its end user.
 //
-// The value it is stored under is the secret itself, so this message holds only what the confirmation is about:
-// the session the question was asked of. A confirmation presented for a different session is refused, which is
-// what stops one browser's answer from ending another's session.
+// One record per session, replaced when the question is asked again and removed when it is answered, so the
+// number of these is bounded by the sessions that exist rather than by the requests that arrive - and asking
+// is something any site can cause, by making a browser fetch the logout address with its cookie on it.
+//
+// It holds a hash rather than the value, for the reason the storage key does: a store's contents reach logs,
+// dumps and administration consoles, and the value itself would be a replayable answer for a named session.
 //
 // A message rather than a bare string for the reason PollSchedule states: the serializer dispatches on the
 // stored type, and a type without a definition here falls back to JSON and logs a warning on every write.
 message LogoutConfirmation {
-  // The session the end user was asked about.
-  string session_id = 1;
+  // SHA-256 of the value the end user's page sends back, URL-safe Base64.
+  string confirmation_hash = 1;
 }

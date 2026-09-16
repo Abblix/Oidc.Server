@@ -33,7 +33,7 @@ import sys
 #: Naming the wrapper's own method here is what turns that from a hand-kept list into a measurement, and
 #: it finds both ends at once - the interface declaring it and every caller invoking it. A new wrapper
 #: adds its name here; that is the one manual step, and it is one line rather than a roll of files.
-WRAPPED = ["RemoveAuthorizationCodeAsync", "TakeRequestAsync", "RedeemLogoutConfirmationAsync"]
+WRAPPED = ["RemoveAuthorizationCodeAsync", "TakeRequestAsync"]
 
 #: Four ways in. The two extension methods by name; the flag that routes a read through the same protocol
 #: one layer up - `IEntityStorage.GetAsync(..., removeOnRetrieval: true)` and
@@ -76,9 +76,6 @@ KNOWN = {
     "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationCodeService.cs",
     "src/Abblix.Oidc.Server/Features/Storages/IEntityStorage.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/AuthorizationCodeReusePreventingDecorator.cs",
-    "src/Abblix.Oidc.Server/Endpoints/EndSession/Validation/ConfirmationValidator.cs",
-    "src/Abblix.Oidc.Server/Features/LogoutNotification/ILogoutConfirmationStore.cs",
-    "src/Abblix.Oidc.Server/Features/LogoutNotification/LogoutConfirmationStore.cs",
 }
 
 CONTRACT = (
