@@ -39,9 +39,10 @@ public class LogoutConfirmationStoreTests
 
     /// <summary>
     /// A lifetime no row waits out, for the half of a row that has to stay answerable while its sibling goes
-    /// stale. Any large value does; it says "not this row's subject" rather than a duration that matters.
+    /// stale. Deliberately not the shipped default, so that half is a lifetime this row configured rather than
+    /// one it inherited.
     /// </summary>
-    private static readonly TimeSpan LongerThanTheRow = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan LongerThanTheRow = TimeSpan.FromMinutes(7);
 
     private readonly OidcOptions _options = new();
     private readonly LogoutConfirmationStore _store;
@@ -221,9 +222,10 @@ public class LogoutConfirmationStoreTests
 
     /// <summary>
     /// A storage answering every read with one record, so a record this library would never write itself can be
-    /// put in front of the store, and refusing every write, so a row can say that a path does not write by
-    /// running it rather than by asserting about it. The store does write, on the path where a read answers
-    /// nothing, which this storage never does.
+    /// put in front of the store, and refusing to create or replace one, so a row can say that a path does not
+    /// write by running it rather than by asserting about it. The store does create a record, on the path where
+    /// a read answers nothing, which this storage never takes. Removal stays open because answering a question
+    /// removes it, and a row about that path would otherwise be unable to run at all.
     /// </summary>
     private sealed class HoldingOneRecord(LogoutConfirmation held) : IEntityStorage
     {
