@@ -40,7 +40,11 @@ public class EndSessionResponseFormatterDecorator(
     {
         var result = await inner.FormatResponseAsync(request, response);
 
-        if (sessionManagementService.Enabled)
+        // Only where the session actually ended. The cookie is how a client's own page reads whether somebody is
+        // still signed in, so deleting it for an answer that merely asks the end user would tell every watching
+        // client that the session is over while it is still live, and a question the end user declines would
+        // leave them signed in with nothing saying so.
+        if (sessionManagementService.Enabled && response.TryGetSuccess(out var succeeded) && succeeded is EndSessionSuccess)
         {
             var cookie = sessionManagementService.GetSessionCookie();
             result = result.WithDeleteCookie(cookie.Name, cookie.Options.ConvertOptions());

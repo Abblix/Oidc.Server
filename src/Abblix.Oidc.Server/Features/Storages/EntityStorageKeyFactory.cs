@@ -136,4 +136,8 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <inheritdoc />
     public string LogoutConfirmationKey(string confirmationHash)
         => $"Abblix.Oidc.Server:LogoutConfirmation:{confirmationHash}";
+
+    /// <inheritdoc />
+    public string LogoutConfirmationForSessionKey(string sessionId)
+        => $"Abblix.Oidc.Server:LogoutConfirmation:Session:{sessionId}";
 }

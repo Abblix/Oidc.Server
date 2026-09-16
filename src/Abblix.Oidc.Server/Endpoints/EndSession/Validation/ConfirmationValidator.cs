@@ -48,7 +48,7 @@ public class ConfirmationValidator(
         // naming another session, lead to the same place below: the end user is asked.
         if (context.Request.Confirmation is { } confirmation)
         {
-            var confirmedSessionId = await confirmationStore.RedeemAsync(confirmation);
+            var confirmedSessionId = await confirmationStore.RedeemLogoutConfirmationAsync(confirmation);
             if (string.Equals(confirmedSessionId, authSession.SessionId, StringComparison.Ordinal))
                 return null;
         }

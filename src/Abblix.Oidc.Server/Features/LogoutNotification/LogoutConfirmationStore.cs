@@ -34,33 +34,51 @@ public sealed class LogoutConfirmationStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
 
+        // One outstanding question per session. Asking is something any site can cause, by making the browser
+        // fetch the logout address with its cookie on it, so issuing a value per request would let an outsider
+        // fill the store with entries nobody will ever answer. Re-using the live one costs that attack nothing
+        // to keep going and costs the store one entry per session either way, and the end user sees the same
+        // question whichever request rendered it.
+        var sessionKey = keyFactory.LogoutConfirmationForSessionKey(sessionId);
+        if (await storage.GetAsync<string>(sessionKey, removeOnRetrieval: false) is { } outstanding)
+            return outstanding;
+
         // Drawn from a cryptographically secure source and sized by configuration, like every other value this
         // server issues that an outsider must not be able to state: guessing one would end a session.
         var confirmation = Base64Url.EncodeToString(
             CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
 
-        await storage.SetAsync(
-            KeyOf(confirmation),
-            new LogoutConfirmation { SessionId = sessionId },
-            new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime });
+        var expiry = new StorageOptions
+        {
+            AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime,
+        };
+
+        await storage.SetAsync(KeyOf(confirmation), new LogoutConfirmation { SessionId = sessionId }, expiry);
+
+        // The value itself, so the next question can hand back the one already asked. It is a value rather than
+        // a key, which is the side of the store that carries secrets.
+        await storage.SetAsync(sessionKey, confirmation, expiry);
 
         return confirmation;
     }
 
     /// <inheritdoc />
-    public async Task<string?> RedeemAsync(string confirmation)
+    public async Task<string?> RedeemLogoutConfirmationAsync(string confirmation)
     {
-        if (!confirmation.HasValue())
-            return null;
-
         // Removed as it is read, so an answer spent on one logout cannot be replayed against the session the end
         // user signs into next. The take-once protocol tells this caller it took the value only when the protocol
         // ran to the end and its own claim was still in the store, so a refusal covers the value not being there,
         // another caller having taken it, and a claim that expired mid-protocol - and every one of them ends in
         // the end user being asked again.
         var issued = await storage.GetAsync<LogoutConfirmation>(KeyOf(confirmation), removeOnRetrieval: true);
+        if (issued == null)
+            return null;
 
-        return issued?.SessionId;
+        // The question has been answered, so the next one starts afresh rather than handing back a value that
+        // is already spent and would be refused.
+        await storage.RemoveAsync(keyFactory.LogoutConfirmationForSessionKey(issued.SessionId));
+
+        return issued.SessionId;
     }
 
     /// <summary>

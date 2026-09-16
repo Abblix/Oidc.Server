@@ -544,7 +544,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SessionClientsRetentionOptionsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RecordLifetimeOptionsValidator>());
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

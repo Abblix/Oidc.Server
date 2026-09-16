@@ -47,9 +47,9 @@ public class ConfirmationValidatorTests
         SignedIn(null);
 
         // Only a value this server issued names a session; anything else was never issued, or has been spent.
-        _confirmationStore.Setup(s => s.RedeemAsync(It.IsAny<string>())).ReturnsAsync((string?)null);
-        _confirmationStore.Setup(s => s.RedeemAsync(IssuedConfirmation)).ReturnsAsync(CurrentSessionId);
-        _confirmationStore.Setup(s => s.RedeemAsync(IssuedForAnotherSession)).ReturnsAsync("session-a");
+        _confirmationStore.Setup(s => s.RedeemLogoutConfirmationAsync(It.IsAny<string>())).ReturnsAsync((string?)null);
+        _confirmationStore.Setup(s => s.RedeemLogoutConfirmationAsync(IssuedConfirmation)).ReturnsAsync(CurrentSessionId);
+        _confirmationStore.Setup(s => s.RedeemLogoutConfirmationAsync(IssuedForAnotherSession)).ReturnsAsync("session-a");
     }
 
     /// <summary>
@@ -116,7 +116,7 @@ public class ConfirmationValidatorTests
 
         Assert.False(await AsksTheEndUserAsync(CreateContext(confirmation: IssuedConfirmation)));
 
-        _confirmationStore.Verify(s => s.RedeemAsync(IssuedConfirmation), Times.Once);
+        _confirmationStore.Verify(s => s.RedeemLogoutConfirmationAsync(IssuedConfirmation), Times.Once);
     }
 
     /// <summary>
@@ -215,7 +215,7 @@ public class ConfirmationValidatorTests
             idTokenHint: "id_token_value",
             hintSubject: "user-a")));
 
-        _confirmationStore.Verify(s => s.RedeemAsync(It.IsAny<string>()), Times.Never);
+        _confirmationStore.Verify(s => s.RedeemLogoutConfirmationAsync(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>

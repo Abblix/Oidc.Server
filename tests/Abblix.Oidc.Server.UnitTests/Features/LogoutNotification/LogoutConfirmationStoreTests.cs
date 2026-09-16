@@ -49,7 +49,7 @@ public class LogoutConfirmationStoreTests
     {
         var confirmation = await _store.IssueAsync(SessionId);
 
-        Assert.Equal(SessionId, await _store.RedeemAsync(confirmation));
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(confirmation));
     }
 
     /// <summary>
@@ -61,8 +61,8 @@ public class LogoutConfirmationStoreTests
     {
         var confirmation = await _store.IssueAsync(SessionId);
 
-        Assert.Equal(SessionId, await _store.RedeemAsync(confirmation));
-        Assert.Null(await _store.RedeemAsync(confirmation));
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(confirmation));
+        Assert.Null(await _store.RedeemLogoutConfirmationAsync(confirmation));
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public class LogoutConfirmationStoreTests
     {
         await _store.IssueAsync(SessionId);
 
-        Assert.Null(await _store.RedeemAsync(confirmation));
+        Assert.Null(await _store.RedeemLogoutConfirmationAsync(confirmation));
     }
 
     /// <summary>
@@ -87,25 +87,74 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task Confirmation_StopsCountingAfterItsLifetime()
     {
-        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(50);
+        _options.LogoutConfirmationLifetime = TimeSpan.FromMinutes(10);
+        var stillGood = await _store.IssueAsync(SessionId);
 
-        var confirmation = await _store.IssueAsync(SessionId);
+        // The same store, so the only difference between the two halves is how long the question was good for.
+        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(50);
+        var goneStale = await _store.IssueAsync("session-2");
+
         await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
 
-        Assert.Null(await _store.RedeemAsync(confirmation));
+        // The control: the delay alone does not make an answer stop counting, so the refusal below is the
+        // lifetime and not the wait.
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(stillGood));
+        Assert.Null(await _store.RedeemLogoutConfirmationAsync(goneStale));
     }
 
     /// <summary>
-    /// Two issues answer with two different values, so one page's answer is never another's.
+    /// A lifetime that keeps nothing is refused by the storage itself, which is why the settings are checked at
+    /// startup: without that check a deployment boots and every logout question faults here instead.
     /// </summary>
     [Fact]
-    public async Task EachIssue_AnswersWithItsOwnValue()
+    public async Task ALifetimeOfZero_IsRefusedByTheStorage()
+    {
+        _options.LogoutConfirmationLifetime = TimeSpan.Zero;
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SessionId));
+    }
+
+    /// <summary>
+    /// Asking the same session again hands back the question already outstanding. Anyone can make a browser reach
+    /// the logout address, so a value per request would let an outsider fill the store with questions nobody will
+    /// answer.
+    /// </summary>
+    [Fact]
+    public async Task AskingAgain_ReUsesTheOutstandingQuestion()
     {
         var first = await _store.IssueAsync(SessionId);
         var second = await _store.IssueAsync(SessionId);
 
-        Assert.NotEqual(first, second);
-        Assert.Equal(SessionId, await _store.RedeemAsync(first));
-        Assert.Equal(SessionId, await _store.RedeemAsync(second));
+        Assert.Equal(first, second);
+    }
+
+    /// <summary>
+    /// Two sessions are two questions, or one browser's answer would end the other's session.
+    /// </summary>
+    [Fact]
+    public async Task EachSession_GetsItsOwnValue()
+    {
+        var mine = await _store.IssueAsync(SessionId);
+        var theirs = await _store.IssueAsync("session-2");
+
+        Assert.NotEqual(mine, theirs);
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(mine));
+        Assert.Equal("session-2", await _store.RedeemLogoutConfirmationAsync(theirs));
+    }
+
+    /// <summary>
+    /// Once answered, the next question is a fresh one: handing back the value just spent would have every logout
+    /// after the first refused.
+    /// </summary>
+    [Fact]
+    public async Task AskingAfterAnAnswer_IssuesAfresh()
+    {
+        var answered = await _store.IssueAsync(SessionId);
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(answered));
+
+        var next = await _store.IssueAsync(SessionId);
+
+        Assert.NotEqual(answered, next);
+        Assert.Equal(SessionId, await _store.RedeemLogoutConfirmationAsync(next));
     }
 }

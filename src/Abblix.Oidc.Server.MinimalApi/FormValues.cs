@@ -159,8 +159,9 @@ internal static class FormValues
         }
     }
 
-    /// <summary>A single boolean value (e.g. <c>require_signed_request_object</c>), or null when absent or
-    /// unparseable.</summary>
+    /// <summary>A single boolean value, or null when absent or unparseable. Kept for the model generator, which
+    /// emits a call to it for a <c>bool?</c> property; no request model bound from a form carries one today.
+    /// </summary>
     public static bool? Bool(StringValues values)
     {
         var value = Value(values);

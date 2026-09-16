@@ -47,5 +47,5 @@ public interface ILogoutConfirmationStore
     /// gave, or on one already spent, costs the session.
     /// </para>
     /// </remarks>
-    Task<string?> RedeemAsync(string confirmation);
+    Task<string?> RedeemLogoutConfirmationAsync(string confirmation);
 }

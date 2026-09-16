@@ -210,4 +210,12 @@ public interface IEntityStorageKeyFactory
     /// of the key.</param>
     /// <returns>A formatted storage key for the issued confirmation.</returns>
     string LogoutConfirmationKey(string confirmationHash);
+
+    /// <summary>
+    /// Generates a storage key for the confirmation currently outstanding for a session, so asking the same
+    /// question again re-uses it instead of issuing another.
+    /// </summary>
+    /// <param name="sessionId">The session the end user is being asked about.</param>
+    /// <returns>A formatted storage key for that session's outstanding confirmation.</returns>
+    string LogoutConfirmationForSessionKey(string sessionId);
 }

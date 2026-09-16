@@ -11,7 +11,8 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Fails at startup on a duration that would make the record it governs expire as it is written.
+/// Fails at startup on a duration that would keep nothing: a record gone before anything could read it, or a write
+/// the storage refuses outright.
 /// </summary>
 /// <remarks>
 /// At zero or below a record would be gone before anything could read it. For the session's clients that means a
@@ -19,7 +20,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// logout question would fault. A retention merely shorter than the host's sessions cannot be detected here,
 /// because the session lifetime is the host's cookie setting.
 /// </remarks>
-public sealed class SessionClientsRetentionOptionsValidator : IValidateOptions<OidcOptions>
+public sealed class RecordLifetimeOptionsValidator : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)

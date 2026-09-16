@@ -17,17 +17,17 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// <summary>
 /// A retention at which the record of a session's clients would expire as it is written is refused at startup.
 /// </summary>
-public class SessionClientsRetentionOptionsValidatorTests
+public class RecordLifetimeOptionsValidatorTests
 {
     private static bool Fails(TimeSpan retention)
-        => new SessionClientsRetentionOptionsValidator()
+        => new RecordLifetimeOptionsValidator()
             .Validate(null, new OidcOptions { SessionClientsRetention = retention })
             .Failed;
 
     [Fact]
     public void The_default_retention_is_accepted()
     {
-        Assert.False(new SessionClientsRetentionOptionsValidator().Validate(null, new OidcOptions()).Failed);
+        Assert.False(new RecordLifetimeOptionsValidator().Validate(null, new OidcOptions()).Failed);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class SessionClientsRetentionOptionsValidatorTests
     [InlineData(-1)]
     public void A_logout_confirmation_lifetime_that_keeps_nothing_is_refused(int minutes)
     {
-        var refused = new SessionClientsRetentionOptionsValidator().Validate(
+        var refused = new RecordLifetimeOptionsValidator().Validate(
             null,
             new OidcOptions { LogoutConfirmationLifetime = TimeSpan.FromMinutes(minutes) });
 
