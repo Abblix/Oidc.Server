@@ -30,6 +30,19 @@ public class LogoutConfirmationStoreTests
     private const string SessionId = "session-1";
     private const string AnotherSessionId = "session-2";
 
+    /// <summary>
+    /// How far the one timed row stays from the moment it is about to cross, so a delay that overruns on a
+    /// loaded machine does not decide the outcome. Its lifetime and its wait are both stated in these, never in
+    /// a number of their own, so the distance holds by arithmetic rather than by a comment saying it does.
+    /// </summary>
+    private static readonly TimeSpan Margin = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// A lifetime no row waits out, for the half of a row that has to stay answerable while its sibling goes
+    /// stale. Any large value does; it says "not this row's subject" rather than a duration that matters.
+    /// </summary>
+    private static readonly TimeSpan LongerThanTheRow = TimeSpan.FromMinutes(10);
+
     private readonly OidcOptions _options = new();
     private readonly LogoutConfirmationStore _store;
 
@@ -161,22 +174,14 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AskingAgain_DoesNotExtendTheQuestion()
     {
-        // Three margins, each 300 ms wide, which is what the numbers are for. The second ask lands 300 ms before
-        // the question's own end, so it is answered by the record rather than by a fresh one. The last check
-        // comes 300 ms after that end, so a question whose life was never extended is gone. And it comes 600 ms
-        // before the end a refresh would have given it, so one that was extended is still there and this row
-        // goes red - which is the whole point of it.
-        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(1200);
-        var confirmation = await _store.IssueAsync(SessionId);
+        // A question's life is carried by the write that created it, so extending it means writing again. This
+        // says so directly rather than through the clock: a storage that refuses writes answers the standing
+        // record, and a hand-back that wrote would fault instead of handing it back. Waiting for an expiry would
+        // test the same property by arithmetic on a machine whose delays overrun.
+        var storage = new HoldingOneRecord(new LogoutConfirmation { Confirmation = "the-standing-question" });
+        var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
 
-        // Handing the same value back is also the control: the record is alive at this point, so the refusal
-        // below is its age rather than an ask having removed it.
-        await Task.Delay(TimeSpan.FromMilliseconds(900), TestContext.Current.CancellationToken);
-        Assert.Equal(confirmation, await _store.IssueAsync(SessionId));
-
-        await Task.Delay(TimeSpan.FromMilliseconds(600), TestContext.Current.CancellationToken);
-
-        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
+        Assert.Equal("the-standing-question", await store.IssueAsync(SessionId));
     }
 
     /// <summary>
@@ -186,14 +191,15 @@ public class LogoutConfirmationStoreTests
     [Fact]
     public async Task AQuestion_StopsCountingAfterItsLifetime()
     {
-        _options.LogoutConfirmationLifetime = TimeSpan.FromMinutes(10);
+        _options.LogoutConfirmationLifetime = LongerThanTheRow;
         var stillGood = await _store.IssueAsync(SessionId);
 
         // The same store, so the only difference between the two halves is how long the question was good for.
-        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(50);
+        _options.LogoutConfirmationLifetime = Margin;
         var goneStale = await _store.IssueAsync(AnotherSessionId);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+        // One margin past the end of the short question and nowhere near the end of the long one.
+        await Task.Delay(Margin + Margin, TestContext.Current.CancellationToken);
 
         // The control: the delay alone does not make an answer stop counting, so the refusal below is the
         // lifetime and not the wait.
@@ -215,8 +221,9 @@ public class LogoutConfirmationStoreTests
 
     /// <summary>
     /// A storage answering every read with one record, so a record this library would never write itself can be
-    /// put in front of the store. Everything the store does not call refuses, rather than answering something a
-    /// later row might believe.
+    /// put in front of the store, and refusing every write, so a row can say that a path does not write by
+    /// running it rather than by asserting about it. The store does write, on the path where a read answers
+    /// nothing, which this storage never does.
     /// </summary>
     private sealed class HoldingOneRecord(LogoutConfirmation held) : IEntityStorage
     {
