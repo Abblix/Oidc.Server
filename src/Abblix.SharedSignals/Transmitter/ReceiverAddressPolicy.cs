@@ -32,9 +32,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// that is not a string comparison, can be driven in both directions without a live DNS.</param>
 public sealed class ReceiverAddressPolicy(
     SharedSignalsTransmitterOptions options,
-    HostResolver? resolveHost = null)
+    ResolveHostDelegate? resolveHost = null)
 {
-    private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+    private readonly ResolveHostDelegate _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
 
     /// <summary>
     /// Judges the address of a delivery endpoint.

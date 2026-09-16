@@ -40,14 +40,16 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// <param name="uriValidator">Applies the synchronous scheme, hostname and IP-literal rules.</param>
 /// <param name="resolveHost">
 /// Resolves a hostname to its addresses; defaults to <see cref="Dns.GetHostAddressesAsync(string,
-/// CancellationToken)"/>. A test supplies its own so the resolved-address branch, the only part of this handler
-/// that is not a string comparison, can be driven in both directions without a live DNS.</param>
+/// CancellationToken)"/>. It exists so the resolved-address branch, the only part of this handler that is not a
+/// string comparison, can be driven in both directions without a live DNS. What this server resolves through is
+/// a security decision, so the library's own registration always passes the default: only a caller that builds
+/// this handler itself decides otherwise.</param>
 public class SsrfValidatingHttpMessageHandler(
     IOptions<SecureHttpFetchOptions> options,
     ISecureUriValidator uriValidator,
-    HostResolver? resolveHost = null) : AddressValidatingHttpMessageHandler
+    ResolveHostDelegate? resolveHost = null) : AddressValidatingHttpMessageHandler
 {
-    private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+    private readonly ResolveHostDelegate _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
 
     /// <summary>
     /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,
@@ -70,7 +72,7 @@ public class SsrfValidatingHttpMessageHandler(
         // above), re-resolve immediately before the request and reject if any address is private.
         //
         // A destination the host named is exempt here as well as above, and it has to be: such a service is
-        // reached at a private address by definition, so honouring the permission only in the validator
+        // reached at a private address by definition, so honoring the permission only in the validator
         // would let the URI pass and then refuse it here, one line before the request. There is no rebinding
         // to defend against either - the permission names the host, and an attacker who could change what it
         // resolves to already owns the name.

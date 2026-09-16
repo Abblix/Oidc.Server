@@ -885,7 +885,13 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<SecureHttpFetchOptions>, SecureHttpFetchOptionsValidator>());
 
         services.TryAddSingleton<ISecureUriValidator, SecureUriValidator>();
-        services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
+        // Built here rather than by the container's own constructor selection, which would fill the handler's
+        // optional resolution parameter from any registration of that delegate - a registration a host may well
+        // have made for something else entirely, silently deciding what every outbound address of this server
+        // resolves to. A host that means to replace the resolution registers this handler itself.
+        services.TryAddTransient(serviceProvider => new SsrfValidatingHttpMessageHandler(
+            serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+            serviceProvider.GetRequiredService<ISecureUriValidator>()));
 
         services.AddSsrfHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
         {

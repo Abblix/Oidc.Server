@@ -101,6 +101,29 @@ public class OutboundHttpClientSsrfWiringTests
         }
     }
 
+    /// <summary>
+    /// The library builds the SSRF handler itself rather than letting the container choose its constructor
+    /// arguments.
+    /// </summary>
+    /// <remarks>
+    /// The handler takes an optional name resolution so a test can say what a name stands for. Registered by type,
+    /// the container would fill that parameter from any registration of that delegate - and a host has every
+    /// reason to register one for something else, at which point it silently decides what every outbound address
+    /// of this server resolves to, while the guard is still present and still primary, so the watch over these
+    /// clients sees nothing. Registering a factory is what closes that, and this row holds the factory: it says
+    /// the decision was made, not what the factory passes, which is one line away in the same file.
+    /// </remarks>
+    [Fact]
+    public void TheSsrfHandler_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
+    {
+        var registration = Assert.Single(
+            BuildHost(),
+            descriptor => descriptor.ServiceType == typeof(SsrfValidatingHttpMessageHandler));
+
+        Assert.NotNull(registration.ImplementationFactory);
+        Assert.Null(registration.ImplementationType);
+    }
+
     /// <summary>Stands in for whatever a host chains onto the client - a resilience pipeline, a proxy.</summary>
     private sealed class HostHandler : DelegatingHandler;
 }

@@ -33,6 +33,34 @@ public class PushDeliverySsrfWiringTests
         return services.BuildServiceProvider().GetRequiredService<IHttpMessageHandlerFactory>();
     }
 
+    /// <summary>
+    /// The transmitter builds its address policy itself rather than letting the container choose its constructor
+    /// arguments.
+    /// </summary>
+    /// <remarks>
+    /// The policy takes an optional name resolution so a test can say what a name stands for. Registered by type,
+    /// the container would fill that parameter from any registration of that delegate, and a host that registered
+    /// one for something else would silently decide what every delivery address resolves to, with the guard still
+    /// in place. Registering a factory closes that, and this row holds the factory.
+    /// </remarks>
+    [Fact]
+    public void TheAddressPolicy_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSecurityEvents();
+        services.AddSharedSignalsTransmitter(
+            new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" });
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(ReceiverAddressPolicy));
+
+        Assert.NotNull(registration.ImplementationFactory);
+        Assert.Null(registration.ImplementationType);
+    }
+
     private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)
     {
         for (var current = handler; current is not null;)

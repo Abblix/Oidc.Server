@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Abblix.Utils</PackageId>
     <Title>Abblix Utils</Title>
-    <Description>Utility library for .NET from Abblix: a result type for validation chains, a URI builder with query composition, validation attributes, RFC 6750 authentication challenges, Base32 and Base64URL encoding, secure random values and JSON converters. Usable on its own.</Description>
+    <Description>Utility library for .NET from Abblix: a result type for validation chains, a URI builder with query composition, validation attributes, RFC 6750 authentication challenges, Base32 and Base64URL encoding, secure random values, JSON converters, and the pieces a server needs to reach an address somebody else chose without being talked into an internal one. Usable on its own.</Description>
     <Authors>Abblix LLP</Authors>
     <PackageProjectUrl>https://github.com/Abblix/Oidc.Server/tree/master/src/Abblix.Utils</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>

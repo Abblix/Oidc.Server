@@ -252,7 +252,7 @@ public class StreamAddressAtRegistrationTests
 
     private static StreamManagementService Service(
         IReadOnlyList<Uri>? allowed = null,
-        HostResolver? resolve = null)
+        ResolveHostDelegate? resolve = null)
     {
         var options = new SharedSignalsTransmitterOptions
         {
