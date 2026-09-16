@@ -37,8 +37,9 @@ public sealed class LogoutConfirmationStore(
         var key = keyFactory.LogoutConfirmationKey(sessionId);
 
         // Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a
-        // value per request would do two things at once: fill the store with questions nobody will answer, and
-        // let a request arriving while the end user reads the page void the answer they are about to give.
+        // fresh value here would let a request arriving while the end user reads the page void the answer they
+        // are about to give. The store does not grow either way: the key is the session's, so a new value would
+        // replace this record rather than add one.
         if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
             return outstanding.Confirmation;
 
@@ -59,6 +60,11 @@ public sealed class LogoutConfirmationStore(
     public async Task<bool> RedeemLogoutConfirmationAsync(string sessionId, string confirmation)
     {
         ArgumentException.ThrowIfNullOrEmpty(sessionId);
+
+        // Nothing is what an empty value answers. Two empty spans compare equal, so a record that somehow holds
+        // no value would otherwise be answered by a request carrying the parameter and nothing in it.
+        if (confirmation.Length == 0)
+            return false;
 
         var key = keyFactory.LogoutConfirmationKey(sessionId);
         var outstanding = await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false);

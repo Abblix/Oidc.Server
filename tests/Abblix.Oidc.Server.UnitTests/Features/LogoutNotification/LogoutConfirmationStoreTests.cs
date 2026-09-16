@@ -7,11 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -97,6 +99,38 @@ public class LogoutConfirmationStoreTests
     }
 
     /// <summary>
+    /// A request that carries the parameter and nothing in it answers nothing, whatever the store holds: two
+    /// empty values compare equal, so a record that somehow held none would otherwise be answerable by anybody.
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyValue_AnswersNothing()
+    {
+        var storage = new RecordingStorage(new LogoutConfirmation { Confirmation = string.Empty });
+        var store = new LogoutConfirmationStore(storage, new EntityStorageKeyFactory(), Options.Create(_options));
+
+        Assert.False(await store.RedeemLogoutConfirmationAsync(SessionId, string.Empty));
+    }
+
+    /// <summary>
+    /// A storage holding one record, whatever it is asked for, so a record this store would never write itself
+    /// can still be put in front of it.
+    /// </summary>
+    private sealed class RecordingStorage(LogoutConfirmation held) : IEntityStorage
+    {
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => Task.CompletedTask;
+
+        public Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+            => Task.FromResult((T?)(object)held);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => Task.FromResult(true);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => Task.CompletedTask;
+    }
+
+    /// <summary>
     /// A session with no question outstanding has nothing to answer, which is what a request carrying a value
     /// nobody asked for looks like.
     /// </summary>
@@ -137,6 +171,24 @@ public class LogoutConfirmationStoreTests
         Assert.NotEqual(answered, next);
         Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, answered));
         Assert.True(await _store.RedeemLogoutConfirmationAsync(SessionId, next));
+    }
+
+    /// <summary>
+    /// Asking again hands the question back without giving it a longer life, so repeated asking cannot keep one
+    /// question alive indefinitely.
+    /// </summary>
+    [Fact]
+    public async Task AskingAgain_DoesNotExtendTheQuestion()
+    {
+        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(150);
+        var confirmation = await _store.IssueAsync(SessionId);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        Assert.Equal(confirmation, await _store.IssueAsync(SessionId));
+
+        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+
+        Assert.False(await _store.RedeemLogoutConfirmationAsync(SessionId, confirmation));
     }
 
     /// <summary>
