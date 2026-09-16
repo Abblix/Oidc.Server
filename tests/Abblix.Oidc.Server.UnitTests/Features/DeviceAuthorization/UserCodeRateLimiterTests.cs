@@ -409,6 +409,35 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// A verified code forgets its failures however long its history has been going on, and not only while the
+    /// record naming that history happens to be around.
+    /// </summary>
+    /// <remarks>
+    /// The record saying which life a code's attempts belong to is written when the code is verified and lives
+    /// the code's lifetime from there. Its attempts are written later and live that lifetime from each of them,
+    /// so the newest of them outlive it. Once it is gone a reader counts from the first life again, and the next
+    /// verification declares a life whose attempt records are still lying around - whereupon the holder of that
+    /// value inherits failures that were cleared. Narrow, because it needs the value to be in use that long, and
+    /// silent, because everything involved is doing what it was told.
+    /// </remarks>
+    [Fact]
+    public async Task AVerifiedCode_ForgetsItsFailures_EvenWhenItsHistoryOutlivesTheRecordNamingIt()
+    {
+        await Fail(5);
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        // Failures in the life just started, written late enough in it to outlive the record that named it.
+        _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
+        await Fail(5);
+
+        // Past the record's own end, while those failures are still stored.
+        _time.Advance(TimeSpan.FromMinutes(2));
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// The per-address cap holds to the last instant of the window it was reached in.
     /// </summary>
     [Fact]
