@@ -495,6 +495,37 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// An exchange arrives with the family its subject_token belonged to, and the access token it issues joins it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TokenExchange_KeepsTheAccessTokenInTheSubjectTokensFamily()
+    {
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.TokenExchange },
+            new ExchangedAuthorizedGrant(authSession, authContext, ExistingGrantId),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(authSession, authContext, request.ClientInfo, ExistingGrantId))
+            .ReturnsAsync(accessToken);
+
+        var result = await _processor.ProcessAsync(request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(accessToken, tokenIssued.AccessToken);
+        Assert.Null(tokenIssued.RefreshToken);
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
+    }
+
+    /// <summary>
     /// A refresh token issued before tokens carried a family has none to continue, so rotating it starts one, and
     /// the access token minted beside the new refresh token joins it.
     /// </summary>

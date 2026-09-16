@@ -104,10 +104,10 @@ public class TokenRequestProcessor(
 
 		// Decided here, before either token is minted, because both belong to the family and the access token
 		// is minted first: a replay that revokes the family (RFC 9700 section 4.14.2) then refuses the access
-		// tokens it produced as well as its refresh tokens. A rotation continues the presented token's family,
-		// and a grant issuing its first refresh token starts one. A grant with no refresh token has no family
-		// to revoke, so its access token carries none.
-		var grantId = presentedRefreshToken?.Payload.GrantId
+		// tokens it produced as well as its refresh tokens. A grant that arrives with a family continues it,
+		// and a grant issuing its first refresh token starts one. A grant with no refresh token and no family
+		// of its own has none to revoke, so its access token carries none.
+		var grantId = FamilyOf(request.AuthorizedGrant)
 		              ?? (issuesRefreshToken ? grantIdGenerator.GenerateGrantId() : null);
 
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
@@ -207,4 +207,15 @@ public class TokenRequestProcessor(
 
 		return response;
 	}
+
+	/// <summary>
+	/// The refresh token family a grant arrives with: the presented refresh token's, or the one an RFC 8693
+	/// exchange inherited from its subject_token. Every other grant arrives with none.
+	/// </summary>
+	private static string? FamilyOf(AuthorizedGrant grant) => grant switch
+	{
+		RefreshTokenAuthorizedGrant { RefreshToken.Payload.GrantId: var grantId } => grantId,
+		ExchangedAuthorizedGrant { GrantId: var grantId } => grantId,
+		_ => null,
+	};
 }

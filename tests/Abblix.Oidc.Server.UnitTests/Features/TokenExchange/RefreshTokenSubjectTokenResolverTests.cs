@@ -75,6 +75,33 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Equal(["openid"], ctx.Scope!);
     }
 
+    /// <summary>
+    /// The refresh token's own family travels into the exchange, so a token exchanged from it dies with that
+    /// family; a token issued before tokens carried a family leaves the exchange in none.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public async Task FamilyOfTheRefreshToken_ReachesTheContext(string? grantId)
+    {
+        var jwt = NewRefreshJwt();
+        jwt.Payload.GrantId = grantId;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .ReturnsAsync(jwt);
+
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
+                new AuthorizationContext("client-1", ["openid"], null)));
+
+        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(grantId, ctx.GrantId);
+    }
+
     [Fact]
     public async Task GrantWithAuthorizationDetails_DeepClonedIntoContext()
     {

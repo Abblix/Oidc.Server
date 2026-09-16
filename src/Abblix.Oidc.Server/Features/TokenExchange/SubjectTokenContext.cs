@@ -61,4 +61,12 @@ public sealed record SubjectTokenContext(
     /// not a JWT or the typ header was absent.
     /// </summary>
     public string? JwtTokenType { get; init; }
+
+    /// <summary>
+    /// The refresh token family the subject_token belongs to, so the exchanged token joins it and a revoked
+    /// family refuses the exchanged token too (RFC 9700 section 4.14.2). The authority the exchange hands out
+    /// comes from the subject_token, so it must not outlive the grant that token came from. <c>null</c> when the
+    /// subject_token belongs to no family - an id_token, or a grant that never issued a refresh token.
+    /// </summary>
+    public string? GrantId { get; init; }
 }

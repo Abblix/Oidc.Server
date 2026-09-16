@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
@@ -151,6 +152,31 @@ public class TokenExchangeGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("allow list", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// The exchanged grant carries the subject_token's refresh token family, so revoking that family refuses the
+    /// exchanged token too; a subject_token belonging to no family leaves the exchange in none.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_the_subject_token")]
+    [InlineData(null)]
+    public async Task ExchangedGrant_CarriesTheSubjectTokensFamily(string? grantId)
+    {
+        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        {
+            OriginalClientId = ClientId,
+            GrantId = grantId,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(grantId, Assert.IsType<ExchangedAuthorizedGrant>(grant).GrantId);
     }
 
     [Fact]
