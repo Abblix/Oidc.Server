@@ -52,9 +52,11 @@ public class UserCodeVerificationServiceRateLimitTests
     private const string Address = "203.0.113.7";
 
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 20, TimeSpan.Zero);
+    // The format the library stores these records in, which treats a number written as zero as an absent record
+    // where the readable one keeps the two apart.
     private readonly IEntityStorage _rateLimitStore = new DistributedCacheStorage(
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-        new JsonBinarySerializer());
+        new ProtobufSerializer());
 
     private static DeviceAuthorizationOptions DeviceOptions() => new()
     {

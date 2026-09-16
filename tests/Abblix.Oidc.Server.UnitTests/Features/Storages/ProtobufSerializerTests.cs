@@ -83,6 +83,39 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
+    /// A rate-limit generation survives a round trip, and a generation of zero does not: this format writes a
+    /// number of zero as nothing at all, and nothing reads back as no record.
+    /// </summary>
+    /// <remarks>
+    /// Nothing writes a zero here - generations start at one and only climb - so the deployment is unaffected. What
+    /// the row is for is the fixtures: a test that stores these records in a readable format instead keeps a stored
+    /// zero and an absent record apart, which the deployment cannot, and then holds behavior no deployment has.
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    public void Serialize_RateLimitGeneration_RoundTrip(int value)
+    {
+        var result = _serializer.Deserialize<RateLimitGeneration>(
+            _serializer.Serialize(new RateLimitGeneration { Value = value }));
+
+        Assert.NotNull(result);
+        Assert.Equal(value, result.Value);
+    }
+
+    /// <summary>
+    /// And the zero this format cannot keep, stated as its own row so the fixtures have something to point at.
+    /// </summary>
+    [Fact]
+    public void Serialize_ARateLimitGenerationOfZero_ReadsBackAsNoRecord()
+    {
+        var bytes = _serializer.Serialize(new RateLimitGeneration { Value = 0 });
+
+        Assert.Empty(bytes);
+        Assert.Null(_serializer.Deserialize<RateLimitGeneration>(bytes));
+    }
+
+    /// <summary>
     /// A recorded client of a session and the generation it belongs to survive a round trip.
     /// </summary>
     [Fact]
