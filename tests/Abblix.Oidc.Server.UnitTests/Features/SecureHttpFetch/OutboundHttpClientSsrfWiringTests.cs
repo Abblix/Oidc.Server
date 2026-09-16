@@ -103,29 +103,29 @@ public class OutboundHttpClientSsrfWiringTests
     }
 
     /// <summary>
-    /// The transport under the guard is the hardened one: it follows no redirect, carries no ambient credentials
-    /// and decompresses nothing.
+    /// A deployed client reaches its transport through the guard, and that transport follows no redirect.
     /// </summary>
     /// <remarks>
-    /// The redirect is the one that matters most, and it is the reason the check lives on the connection rather
-    /// than in front of the client: a receiver answering with a 3xx to an internal address would otherwise have
-    /// the request re-sent there, past the address this guard just judged. The other two keep a hostile answer
-    /// from spending the server's memory or reaching an internal service with the server's own credentials.
+    /// A followed 3xx re-sends the request to an address nothing vetted, which is the one bypass the guard cannot
+    /// see. The transport the guard builds refuses redirects, and what this row adds is that the assembled client
+    /// still arrives at that transport rather than at one a pipeline put in its place. What the transport promises
+    /// in the first place belongs to the type that builds it, and is held there.
     /// </remarks>
     [Theory]
     [InlineData(BackChannelNotificationTransport.HttpClientName)]
     [InlineData(BackChannelLogoutTransport.HttpClientName)]
-    public void TheTransportUnderTheGuard_FollowsNoRedirectAndCarriesNothingOfItsOwn(string clientName)
+    public void ADeployedClient_ReachesItsTransportThroughTheGuard(string clientName)
     {
         using var serviceProvider = BuildHost().BuildServiceProvider();
         using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
             .CreateHandler(clientName);
 
-        var transport = Assert.IsType<HttpClientHandler>(Chain(handler).Last());
+        var guard = Assert.IsType<SsrfValidatingHttpMessageHandler>(
+            Chain(handler).Single(link => link is SsrfValidatingHttpMessageHandler));
+
+        var transport = Assert.IsType<HttpClientHandler>(guard.InnerHandler);
 
         Assert.False(transport.AllowAutoRedirect);
-        Assert.False(transport.UseDefaultCredentials);
-        Assert.Equal(DecompressionMethods.None, transport.AutomaticDecompression);
     }
 
     /// <summary>
@@ -137,9 +137,9 @@ public class OutboundHttpClientSsrfWiringTests
     /// the container would fill that parameter from any registration of that delegate - and a host has every
     /// reason to register one for something else, at which point it silently decides what every outbound address
     /// of this server resolves to, while the guard is still present and still primary, so the watch over these
-    /// clients sees nothing. This row holds the factory, which is the decision, and not what the factory passes:
-    /// telling the container's delegate from the platform's would mean running the resolution, whose other answer
-    /// is a live name server, and no row here is allowed one.
+    /// clients sees nothing. What this row holds is the library's own registration carrying a factory, and nothing
+    /// beyond it: not what the factory passes, and not a host that registers this handler by type itself and wins
+    /// the TryAdd, which is a host saying it builds the handler and getting what it asked for.
     /// </remarks>
     [Fact]
     public void TheSsrfHandler_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
