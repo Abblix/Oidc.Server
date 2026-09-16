@@ -107,7 +107,10 @@ public class TokenRequestProcessor(
 		// tokens it produced as well as its refresh tokens. A grant that arrives with a family continues it,
 		// and a grant issuing its first refresh token starts one. A grant with no refresh token and no family
 		// of its own has none to revoke, so its access token carries none.
-		var grantId = request.AuthorizedGrant.GrantId
+		// A grant presenting a refresh token states its family in that token, which is what a rotation carries
+		// forward; any other grant states it on itself, as a token exchange does from its subject token.
+		var grantId = presentedRefreshToken?.Payload.GrantId
+		              ?? request.AuthorizedGrant.GrantId
 		              ?? (issuesRefreshToken ? grantIdGenerator.GenerateGrantId() : null);
 
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(

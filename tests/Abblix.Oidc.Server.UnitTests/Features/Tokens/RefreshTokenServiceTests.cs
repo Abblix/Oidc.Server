@@ -677,34 +677,6 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// The grant rebuilt from a refresh token exercises that token's family, so every token minted from the grant
-    /// joins it and a revoked family refuses them (RFC 9700 Section 4.14.2).
-    /// </summary>
-    [Fact]
-    public async Task AuthorizeByRefreshToken_ShouldCarryTheTokensFamily()
-    {
-        const string grantId = "grant_of_this_lineage";
-        var refreshToken = new JsonWebToken
-        {
-            Payload =
-            {
-                Subject = UserId,
-                SessionId = SessionId,
-                AuthenticationTime = _currentTime.AddMinutes(-30),
-                IdentityProvider = "local",
-                ClientId = ClientId,
-                Scope = [Scopes.OpenId],
-                GrantId = grantId,
-            }
-        };
-
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
-
-        Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(grantId, grant.GrantId);
-    }
-
-    /// <summary>
     /// Verifies that AuthorizeByRefreshTokenAsync correctly reconstructs AuthorizationContext from refresh token payload.
     /// Tests that client ID, scopes, and authorization parameters are preserved across token refresh.
     /// This enables issuing new access tokens with the same authorization context.

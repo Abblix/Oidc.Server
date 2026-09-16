@@ -576,7 +576,7 @@ public class TokenRequestProcessorTests
             new RefreshTokenAuthorizedGrant(
                 authSession,
                 new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
-                existingRefreshToken) { GrantId = ExistingGrantId },
+                existingRefreshToken),
             new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
@@ -746,7 +746,7 @@ public class TokenRequestProcessorTests
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(
             authSession,
             authContext,
-            existingRefreshToken) { GrantId = ExistingGrantId };
+            existingRefreshToken);
 
         var tokenRequest = CreateTokenRequest();
         var request = new ValidTokenRequest(

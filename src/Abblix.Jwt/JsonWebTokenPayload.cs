@@ -253,9 +253,9 @@ public class JsonWebTokenPayload(JsonObject json)
 	/// (RFC 9700 Section 4.14.2).
 	/// </summary>
 	/// <remarks>
-	/// Present on a token the token endpoint minted inside a family - the one the grant it was issued under
-	/// carried, or the one started for a request issuing a refresh token. Absent (null) on every other token,
-	/// which leaves the family cascade in the token-status validator inert for it.
+	/// Present on an access or refresh token minted inside a family - the one the grant it was issued under
+	/// carried, or the one started for a request issuing a refresh token. Absent (null) on every other token, an
+	/// ID token included, which leaves the family cascade in the token-status validator inert for it.
 	/// </remarks>
 	public string? GrantId
 	{

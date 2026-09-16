@@ -73,12 +73,14 @@ public class JwtSubjectTokenResolverTests
 
     /// <summary>
     /// The family the presented token carries travels into the exchange, so a token exchanged from it dies with
-    /// that family.
+    /// that family. A token carrying none answers none rather than an empty name, which would be a family of its
+    /// own for everything downstream.
     /// </summary>
-    [Fact]
-    public async Task FamilyOfThePresentedToken_ReachesTheContext()
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public async Task FamilyOfThePresentedToken_ReachesTheContext(string? grantId)
     {
-        const string grantId = "grant_of_this_lineage";
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.GrantId = grantId;
         _jwtValidator
