@@ -132,4 +132,8 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
     /// <inheritdoc />
     public string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash)
         => $"Abblix.Oidc.Server:Reuse:{clientId}:{valueKind}:{valueHash}";
+
+    /// <inheritdoc />
+    public string LogoutConfirmationKey(string sessionId)
+        => $"Abblix.Oidc.Server:LogoutConfirmation:{sessionId}";
 }

@@ -93,7 +93,7 @@ public class SignInOverSessionTests
         await RequestAsync(provider, reauthenticated, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
-                new ValidEndSessionRequest(new EndSessionRequest { Confirmed = true }, ClientInfo: null));
+                new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
 
@@ -162,7 +162,7 @@ public class SignInOverSessionTests
         await RequestAsync(provider, bob, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
-                new ValidEndSessionRequest(new EndSessionRequest { Confirmed = true }, ClientInfo: null));
+                new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
 

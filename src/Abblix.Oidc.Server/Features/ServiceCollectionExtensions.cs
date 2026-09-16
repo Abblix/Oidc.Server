@@ -232,6 +232,7 @@ public static class ServiceCollectionExtensions
         // Removing them here is a breaking change for a host that relies on the default, hence the major.
         services.TryAddScoped<ISessionLogoutNotifier, SessionLogoutNotifier>();
         services.TryAddScoped<IAuthSessionTerminator, AuthSessionTerminator>();
+        services.TryAddSingleton<ILogoutConfirmationStore, LogoutConfirmationStore>();
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()
@@ -543,7 +544,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, SessionClientsRetentionOptionsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RecordLifetimeOptionsValidator>());
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

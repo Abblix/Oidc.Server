@@ -18,8 +18,8 @@ using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 
 /// <summary>
-/// Decorates <see cref="IEndSessionResponseFormatter"/> to delete the session-management cookie when session management
-/// is enabled, so the browser's logged-in state is cleared as part of logout.
+/// Decorates <see cref="IEndSessionResponseFormatter"/> to delete the session-management cookie when a logout ended
+/// the session and the deployment serves that cookie, so the browser's logged-in state is cleared with it.
 /// </summary>
 public class EndSessionResponseFormatterDecorator(
     IEndSessionResponseFormatter inner,
@@ -27,11 +27,15 @@ public class EndSessionResponseFormatterDecorator(
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(
-        EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
+        EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)
     {
         var result = await inner.FormatResponseAsync(request, response);
 
-        if (sessionManagementService.Enabled)
+        // Only where the session actually ended. The cookie is how a client's own page reads whether somebody is
+        // still signed in, so deleting it for an answer that merely asks the end user would tell every watching
+        // client that the session is over while it is still live, and a question the end user declines would
+        // leave them signed in with nothing saying so.
+        if (sessionManagementService.Enabled && response.TryGetSuccess(out var succeeded) && succeeded is EndSessionSuccess)
         {
             var cookie = sessionManagementService.GetSessionCookie();
             result = result.WithDeleteCookie(cookie.Name, cookie.Options.ConvertOptions());

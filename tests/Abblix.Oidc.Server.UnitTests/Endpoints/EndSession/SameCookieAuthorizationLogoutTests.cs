@@ -72,7 +72,7 @@ public class SameCookieAuthorizationLogoutTests
         await RequestAsync(provider, afterSecond ?? afterFirst ?? signedIn, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
-                new ValidEndSessionRequest(new EndSessionRequest { Confirmed = true }, ClientInfo: null));
+                new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
 

@@ -27,5 +27,5 @@ public interface IEndSessionRequestProcessor
 	/// An <see cref="EndSessionSuccess"/> describing the post-logout redirect and any
 	/// front-channel URIs to invoke; an <see cref="OidcError"/> if processing cannot complete.
 	/// </returns>
-	Task<Result<EndSessionSuccess, OidcError>> ProcessAsync(ValidEndSessionRequest request);
+	Task<Result<IEndSessionResponse, OidcError>> ProcessAsync(ValidEndSessionRequest request);
 }

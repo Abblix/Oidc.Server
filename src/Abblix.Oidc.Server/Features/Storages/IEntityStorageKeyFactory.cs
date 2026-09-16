@@ -202,4 +202,11 @@ public interface IEntityStorageKeyFactory
     /// <param name="valueHash">A hash of the value; the raw value is never part of the key.</param>
     /// <returns>A formatted storage key for the recorded value.</returns>
     string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash);
+
+    /// <summary>
+    /// Generates a storage key for the logout confirmation a session currently has outstanding.
+    /// </summary>
+    /// <param name="sessionId">The session whose end user was asked whether to log out.</param>
+    /// <returns>A formatted storage key for that session's outstanding confirmation.</returns>
+    string LogoutConfirmationKey(string sessionId);
 }

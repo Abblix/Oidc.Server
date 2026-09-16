@@ -11,13 +11,16 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Fails at startup on a retention that would keep no record of which clients signed in to a session.
+/// Fails at startup on a duration that would keep nothing: a record gone before anything could read it, or a write
+/// the storage refuses outright.
 /// </summary>
 /// <remarks>
-/// At zero or below a record would expire as it is written, so no logout could read it. A value merely shorter
-/// than the host's sessions cannot be detected here, because the session lifetime is the host's cookie setting.
+/// At zero or below a record would be gone before anything could read it. For the session's clients that means a
+/// logout notifying nobody; for a logout confirmation it means the storage refusing the write outright, so every
+/// logout question would fault. A retention merely shorter than the host's sessions cannot be detected here,
+/// because the session lifetime is the host's cookie setting.
 /// </remarks>
-public sealed class SessionClientsRetentionOptionsValidator : IValidateOptions<OidcOptions>
+public sealed class RecordLifetimeOptionsValidator : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
@@ -28,6 +31,14 @@ public sealed class SessionClientsRetentionOptionsValidator : IValidateOptions<O
                 $"{nameof(options.SessionClientsRetention)} is {options.SessionClientsRetention}, so the record of " +
                 "the clients in a session would expire as it is written and no logout would notify any client. " +
                 "Set it to at least the longest a session can last.");
+        }
+
+        if (options.LogoutConfirmationLifetime <= TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(options.LogoutConfirmationLifetime)} is {options.LogoutConfirmationLifetime}, so the " +
+                "value asking the end user to confirm a logout could not be stored at all and every logout " +
+                "question would fail. Set it to as long as somebody may take to answer.");
         }
 
         return ValidateOptionsResult.Success;

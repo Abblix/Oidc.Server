@@ -23,7 +23,7 @@ public class EndSessionHandler(
     IEndSessionRequestProcessor processor) : IEndSessionHandler
 {
     /// <inheritdoc />
-    public async Task<Result<EndSessionSuccess, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
+    public async Task<Result<IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
     {
         var validationResult = await validator.ValidateAsync(endSessionRequest);
         return await validationResult.BindAsync(processor.ProcessAsync);

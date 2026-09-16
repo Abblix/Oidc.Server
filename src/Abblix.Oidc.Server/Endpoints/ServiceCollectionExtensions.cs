@@ -672,7 +672,9 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.IdTokenHintValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IEndSessionContextValidator, EndSession.Validation.PostLogoutRedirectUrisValidator>(),
-            ServiceDescriptor.Singleton<IEndSessionContextValidator, ConfirmationValidator>()
+            // Scoped, unlike its siblings: it reads the session the user agent holds, which lives for the request.
+            // Compose takes the shortest lifetime among the members, so the composite follows it down.
+            ServiceDescriptor.Scoped<IEndSessionContextValidator, ConfirmationValidator>()
         ]);
         return services.Compose<IEndSessionContextValidator, EndSessionContextValidatorComposite>();
     }

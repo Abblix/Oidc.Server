@@ -81,7 +81,7 @@ public class EndSessionHandlerTests
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
+            .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -140,7 +140,7 @@ public class EndSessionHandlerTests
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(error));
+            .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(error));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
@@ -171,7 +171,7 @@ public class EndSessionHandlerTests
 
         _processor
             .Setup(p => p.ProcessAsync(It.Is<ValidEndSessionRequest>(r => r == validRequest)))
-            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
+            .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
         await _handler.HandleAsync(endSessionRequest);
@@ -207,7 +207,7 @@ public class EndSessionHandlerTests
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return (Result<EndSessionSuccess, OidcError>)(endSessionSuccess);
+                return (Result<IEndSessionResponse, OidcError>)(endSessionSuccess);
             });
 
         // Act
@@ -311,15 +311,16 @@ public class EndSessionHandlerTests
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
+            .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Equal("https://client.example.com/logout", response.PostLogoutRedirectUri.ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Equal("https://client.example.com/logout", success.PostLogoutRedirectUri.ToString());
     }
 
     /// <summary>
@@ -340,14 +341,15 @@ public class EndSessionHandlerTests
 
         _processor
             .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync((Result<EndSessionSuccess, OidcError>)(endSessionSuccess));
+            .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
         var result = await _handler.HandleAsync(endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.FrontChannelLogoutRequestUris);
-        Assert.Equal(2, response.FrontChannelLogoutRequestUris.Count);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.FrontChannelLogoutRequestUris);
+        Assert.Equal(2, success.FrontChannelLogoutRequestUris.Count);
     }
 }
