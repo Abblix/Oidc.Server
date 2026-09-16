@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
@@ -57,6 +58,10 @@ public class EndSessionResponseFormatterDecoratorTests
     /// </summary>
     private sealed class AlwaysNoContent : IEndSessionResponseFormatter
     {
+        [SuppressMessage("Minor Code Smell", "S2325",
+            Justification = "Implements IEndSessionResponseFormatter; the analyser reads the file without building it.")]
+        [SuppressMessage("Major Code Smell", "S1172",
+            Justification = "The parameters belong to the interface; this formatter answers the same way whatever it is given.")]
         public Task<IResult> FormatResponseAsync(
             EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)
             => Task.FromResult(Results.NoContent());
