@@ -116,7 +116,6 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [EndSessionRequest.Parameters.IdTokenHint] = idToken,
             [EndSessionRequest.Parameters.PostLogoutRedirectUri] = MinimalApiTestConstants.PostLogoutRedirectUri,
             [EndSessionRequest.Parameters.UiLocales] = "en-US",
-            ["confirmed"] = "true",
         };
         var response = await client.GetAsync(
             OidcFlows.BuildQuery(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.EndSessionEndpoint), query),

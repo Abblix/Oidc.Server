@@ -159,7 +159,8 @@ internal static class FormValues
         }
     }
 
-    /// <summary>A single boolean value (e.g. <c>confirmed</c>), or null when absent or unparseable.</summary>
+    /// <summary>A single boolean value (e.g. <c>require_signed_request_object</c>), or null when absent or
+    /// unparseable.</summary>
     public static bool? Bool(StringValues values)
     {
         var value = Value(values);

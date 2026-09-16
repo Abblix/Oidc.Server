@@ -49,8 +49,8 @@ public record EndSessionRequest
 		/// the logout confirmation page.</summary>
 		public const string UiLocales = "ui_locales";
 
-		/// <summary>The <c>confirmed</c> end-session form field used to carry the end-user's answer to the
-		/// logout confirmation prompt back to the OP.</summary>
+		/// <summary>The end-session field carrying the value the OP issued when it asked the end user whether to
+		/// log out, sent back with their answer.</summary>
 		public const string Confirmation = "confirmation";
 	}
 

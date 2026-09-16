@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -71,9 +72,25 @@ public class LogoutConfirmationStoreTests
     [Theory]
     [InlineData("a-value-nobody-issued")]
     [InlineData("")]
+    [InlineData(" ")]
     public async Task ValueNobodyIssued_NamesNothing(string confirmation)
     {
         await _store.IssueAsync(SessionId);
+
+        Assert.Null(await _store.RedeemAsync(confirmation));
+    }
+
+    /// <summary>
+    /// An answer stops counting once its question has gone stale, which is what bounds how long a page left open
+    /// can be submitted and how long each unanswered question occupies the store.
+    /// </summary>
+    [Fact]
+    public async Task Confirmation_StopsCountingAfterItsLifetime()
+    {
+        _options.LogoutConfirmationLifetime = TimeSpan.FromMilliseconds(50);
+
+        var confirmation = await _store.IssueAsync(SessionId);
+        await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
 
         Assert.Null(await _store.RedeemAsync(confirmation));
     }
