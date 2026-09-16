@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+// The record behind a logout confirmation the server issued when it asked the end user whether to log out.
+//
+// The value it is stored under is the secret itself, so this message holds only what the confirmation is about:
+// the session the question was asked of. A confirmation presented for a different session is refused, which is
+// what stops one browser's answer from ending another's session.
+//
+// A message rather than a bare string for the reason PollSchedule states: the serializer dispatches on the
+// stored type, and a type without a definition here falls back to JSON and logs a warning on every write.
+message LogoutConfirmation {
+  // The session the end user was asked about.
+  string session_id = 1;
+}

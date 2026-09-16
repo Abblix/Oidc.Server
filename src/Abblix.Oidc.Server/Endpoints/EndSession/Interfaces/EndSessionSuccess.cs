@@ -15,6 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 /// client can clear its own session.
 /// </summary>
 public record EndSessionSuccess(Uri? PostLogoutRedirectUri, IList<Uri> FrontChannelLogoutRequestUris)
+	: IEndSessionResponse
 {
 	/// <summary>
 	/// Validated <c>post_logout_redirect_uri</c> with <c>state</c> appended when supplied,

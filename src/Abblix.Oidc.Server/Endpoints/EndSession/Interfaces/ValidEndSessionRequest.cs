@@ -27,4 +27,11 @@ public record ValidEndSessionRequest(EndSessionRequest Model, ClientInfo? Client
     /// The client information associated with the request.
     /// </summary>
     public ClientInfo? ClientInfo { get; init; } = ClientInfo;
+
+    /// <summary>
+    /// Whether the end user has to be asked whether to log out before this request is acted upon (OpenID Connect
+    /// RP-Initiated Logout 1.0 section 2), because the request carried no answer of theirs and no hint naming the
+    /// session it would end.
+    /// </summary>
+    public bool ConfirmationRequired { get; init; }
 }

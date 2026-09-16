@@ -27,7 +27,7 @@ public class EndSessionResponseFormatterDecorator(
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(
-        EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
+        EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)
     {
         var result = await inner.FormatResponseAsync(request, response);
 

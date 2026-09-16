@@ -38,4 +38,11 @@ public record EndSessionValidationContext(EndSessionRequest Request)
 	/// This token is typically used to validate the identity of the user who initiated the end-session process.
 	/// </summary>
 	public JsonWebToken? IdToken { get; set; }
+
+	/// <summary>
+	/// Whether the end user has to be asked before this request is acted upon (OpenID Connect RP-Initiated Logout
+	/// 1.0 section 2). Decided by <see cref="ConfirmationValidator"/>; the processing then issues the value that
+	/// carries their answer back.
+	/// </summary>
+	public bool ConfirmationRequired { get; set; }
 }

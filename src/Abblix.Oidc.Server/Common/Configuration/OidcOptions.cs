@@ -342,6 +342,20 @@ public record OidcOptions
 	public int GrantIdLength { get; set; } = 64;
 
 	/// <summary>
+	/// Specifies the length, in random bytes, of the value that carries an end user's answer to the logout
+	/// question back to this server. A value somebody else could state would let any site end a session, so it
+	/// must carry enough entropy to make guessing hopeless.
+	/// </summary>
+	public int LogoutConfirmationLength { get; set; } = 64;
+
+	/// <summary>
+	/// How long an issued logout confirmation stays good for. It bounds how long the page asking the end user may
+	/// sit open before their answer is refused, so it is measured in the patience of somebody reading a question,
+	/// not in the length of a session. Only a non-positive value is refused at startup.
+	/// </summary>
+	public TimeSpan LogoutConfirmationLifetime { get; set; } = TimeSpan.FromMinutes(10);
+
+	/// <summary>
 	/// Determines whether the OIDC server requires Pushed Authorization Requests (PAR).
 	/// </summary>
 	public bool RequirePushedAuthorizationRequests { get; set; } = false;

@@ -45,6 +45,7 @@ public class EndSessionRequestProcessorTests
     private readonly Mock<ITokenRevoker> _tokenRevoker;
     private readonly RecordedSessionClients _sessionClients = new();
     private readonly OidcOptions _options;
+    private readonly Mock<ILogoutConfirmationStore> _confirmationStore = new(MockBehavior.Strict);
     private readonly EndSessionRequestProcessor _processor;
 
     public EndSessionRequestProcessorTests()
@@ -67,7 +68,8 @@ public class EndSessionRequestProcessorTests
                     _issuerProvider.Object,
                     _clientInfoProvider.Object,
                     _logoutNotifier.Object),
-                Options.Create(_options)));
+                Options.Create(_options)),
+            _confirmationStore.Object);
     }
 
     private static EndSessionRequest CreateEndSessionRequest(
@@ -158,7 +160,8 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
         _authSessionService.Verify(s => s.AuthenticateAsync(), Times.Once);
         _authSessionService.Verify(s => s.SignOutAsync(), Times.Once);
     }
@@ -255,8 +258,9 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Empty(response.FrontChannelLogoutRequestUris);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Empty(success.FrontChannelLogoutRequestUris);
         _authSessionService.Verify(s => s.AuthenticateAsync(), Times.Once);
         _authSessionService.Verify(s => s.SignOutAsync(), Times.Never);
     }
@@ -283,8 +287,9 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Contains("state=state_value_123", response.PostLogoutRedirectUri.Query);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Contains("state=state_value_123", success.PostLogoutRedirectUri.Query);
     }
 
     /// <summary>
@@ -308,8 +313,9 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri.ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Equal(redirectUri.ToString(), success.PostLogoutRedirectUri.ToString());
     }
 
     /// <summary>
@@ -494,8 +500,9 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Single(response.FrontChannelLogoutRequestUris);
-        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.Single(success.FrontChannelLogoutRequestUris);
+        Assert.Equal("https://client1.example.com/logout", success.FrontChannelLogoutRequestUris[0].ToString());
     }
 
     /// <summary>
@@ -604,7 +611,8 @@ public class EndSessionRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri!.ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.Equal(redirectUri.ToString(), success.PostLogoutRedirectUri!.ToString());
     }
 
     /// <summary>

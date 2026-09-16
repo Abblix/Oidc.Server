@@ -232,6 +232,7 @@ public static class ServiceCollectionExtensions
         // Removing them here is a breaking change for a host that relies on the default, hence the major.
         services.TryAddScoped<ISessionLogoutNotifier, SessionLogoutNotifier>();
         services.TryAddScoped<IAuthSessionTerminator, AuthSessionTerminator>();
+        services.TryAddSingleton<ILogoutConfirmationStore, LogoutConfirmationStore>();
         return services
             .AddFrontChannelLogout()
             .AddBackChannelLogout()

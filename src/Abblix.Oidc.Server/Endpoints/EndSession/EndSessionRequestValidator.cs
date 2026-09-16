@@ -44,6 +44,9 @@ public class EndSessionRequestValidator(IEndSessionContextValidator validator) :
         if (error != null)
             return error;
 
-        return new ValidEndSessionRequest(context.Request, context.ClientInfo);
+        return new ValidEndSessionRequest(context.Request, context.ClientInfo)
+        {
+            ConfirmationRequired = context.ConfirmationRequired,
+        };
     }
 }

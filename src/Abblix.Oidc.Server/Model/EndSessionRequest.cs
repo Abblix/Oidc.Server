@@ -51,7 +51,7 @@ public record EndSessionRequest
 
 		/// <summary>The <c>confirmed</c> end-session form field used to carry the end-user's answer to the
 		/// logout confirmation prompt back to the OP.</summary>
-		public const string Confirmed = "confirmed";
+		public const string Confirmation = "confirmation";
 	}
 
 	/// <summary>
@@ -100,13 +100,16 @@ public record EndSessionRequest
 	public IEnumerable<CultureInfo>? UiLocales { get; set; }
 
 	/// <summary>
-	/// Carries the End-User's answer to the logout confirmation prompt that the OP is required to display
-	/// per OIDC RP-Initiated Logout 1.0 section 2 ("the OP SHOULD ask the End-User whether to log out ... MUST ask ...
-	/// if an id_token_hint was not provided"). When <c>true</c>, the user has explicitly approved logout in
-	/// the interactive UI; when <c>null</c> or <c>false</c>, the request is treated as not-yet-confirmed and
-	/// the OP renders the confirmation screen. Encoded via the <see cref="Parameters.Confirmed"/> form field
-	/// rather than a wire parameter defined by the specification.
+	/// Carries the End-User's answer to the logout question the OP is required to ask per OIDC RP-Initiated
+	/// Logout 1.0 section 2 ("the OP SHOULD ask the End-User whether to log out ... MUST ask ... if an
+	/// id_token_hint was not provided"). It holds the value the OP issued when it asked, which the host renders
+	/// into its page and sends back with the answer; the OP spends it and ends the session it was issued for.
 	/// </summary>
-	[JsonPropertyName(Parameters.Confirmed)]
-	public bool? Confirmed { get; set; }
+	/// <remarks>
+	/// The answer is this value rather than a flag because a flag states itself: any site could send one and end
+	/// the session, which section 6 names as a denial of service. Not a wire parameter defined by the
+	/// specification, which leaves the exchange between the OP and its own pages unspecified.
+	/// </remarks>
+	[JsonPropertyName(Parameters.Confirmation)]
+	public string? Confirmation { get; set; }
 }

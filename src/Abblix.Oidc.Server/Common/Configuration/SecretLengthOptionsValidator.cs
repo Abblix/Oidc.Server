@@ -51,6 +51,8 @@ public class SecretLengthOptionsValidator : IValidateOptions<OidcOptions>
             options.TokenIdLength, MinimumRandomSecretLength);
         Check(failures, nameof(options.GrantIdLength),
             options.GrantIdLength, MinimumRandomSecretLength);
+        Check(failures, nameof(options.LogoutConfirmationLength),
+            options.LogoutConfirmationLength, MinimumRandomSecretLength);
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success

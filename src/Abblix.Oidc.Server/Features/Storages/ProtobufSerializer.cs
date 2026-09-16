@@ -43,6 +43,7 @@ public class ProtobufSerializer : IBinarySerializer
         [typeof(Proto.RateLimitGeneration)] = Proto.RateLimitGeneration.Parser,
         [typeof(Proto.SessionClient)] = Proto.SessionClient.Parser,
         [typeof(Proto.SessionClientsGeneration)] = Proto.SessionClientsGeneration.Parser,
+        [typeof(Proto.LogoutConfirmation)] = Proto.LogoutConfirmation.Parser,
     };
 
     /// <summary>
@@ -75,6 +76,7 @@ public class ProtobufSerializer : IBinarySerializer
             Proto.RateLimitGeneration generation => generation,
             Proto.SessionClient sessionClient => sessionClient,
             Proto.SessionClientsGeneration sessionClientsGeneration => sessionClientsGeneration,
+            Proto.LogoutConfirmation logoutConfirmation => logoutConfirmation,
 
             _ => throw new InvalidOperationException(
                 $"Type {typeof(T).FullName} is not supported for protobuf serialization. " +

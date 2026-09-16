@@ -76,6 +76,7 @@ KNOWN = {
     "src/Abblix.Oidc.Server/Features/Storages/IAuthorizationCodeService.cs",
     "src/Abblix.Oidc.Server/Features/Storages/IEntityStorage.cs",
     "src/Abblix.Oidc.Server/Endpoints/Token/AuthorizationCodeReusePreventingDecorator.cs",
+    "src/Abblix.Oidc.Server/Features/LogoutNotification/LogoutConfirmationStore.cs",
 }
 
 CONTRACT = (

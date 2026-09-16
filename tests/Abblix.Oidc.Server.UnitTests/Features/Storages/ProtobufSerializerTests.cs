@@ -54,6 +54,20 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
+    /// The session a logout confirmation was issued for survives a round trip; without it the answer would name
+    /// nothing and every confirmation would be refused.
+    /// </summary>
+    [Fact]
+    public void Serialize_LogoutConfirmation_RoundTrip()
+    {
+        var result = _serializer.Deserialize<LogoutConfirmation>(
+            _serializer.Serialize(new LogoutConfirmation { SessionId = "session-1" }));
+
+        Assert.NotNull(result);
+        Assert.Equal("session-1", result.SessionId);
+    }
+
+    /// <summary>
     /// One recorded verification attempt survives a round trip.
     /// </summary>
     [Fact]
@@ -114,6 +128,8 @@ public class ProtobufSerializerTests
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
+        composite.Deserialize<LogoutConfirmation>(
+            composite.Serialize(new LogoutConfirmation { SessionId = "session-1" }));
 
         Assert.Empty(recorder.Entries);
     }

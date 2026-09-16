@@ -8,6 +8,8 @@
 
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Model;
@@ -34,10 +36,25 @@ public class EndSessionResponseFormatter(
     /// <returns>
     /// A <see cref="Task"/> representing the asynchronous operation, with the formatted response as an <see cref="ActionResult"/>.
     /// </returns>
-    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<EndSessionSuccess, OidcError> response)
+    public Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)
         => Task.FromResult(response.Match(
-            onSuccess: FormatSuccessResponse,
+            onSuccess: FormatResponse,
             onFailure: error => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))));
+
+    private ActionResult FormatResponse(IEndSessionResponse response) => response switch
+    {
+        EndSessionSuccess success => FormatSuccessResponse(success),
+
+        // The same status and error code a request lacking the answer has always been given, with the value the
+        // host's page needs in order to ask for one.
+        ConfirmationRequired confirmation => new BadRequestObjectResult(
+            new ConfirmationRequiredResponse(
+                ErrorCodes.ConfirmationRequired,
+                "The request requires to be confirmed by user",
+                confirmation.Confirmation)),
+
+        _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
+    };
 
     private ActionResult FormatSuccessResponse(EndSessionSuccess success)
     {
