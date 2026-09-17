@@ -142,7 +142,7 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// No shape this serializer carries itself reaches the JSON fallback, which is the reason they have
+    /// None of the shapes stored as they are reaches the JSON fallback, which is the reason they have
     /// definitions at all.
     /// </summary>
     /// <remarks>
@@ -151,13 +151,13 @@ public class ProtobufSerializerTests
     /// every poll of every device and every decoupled authentication. A warning an operator sees that often
     /// is a warning they stop reading.
     /// <para>
-    /// The shapes are read from the serializer's own registry rather than listed here, so a shape added
-    /// without a row cannot come back green. It also catches the two halves of that serializer disagreeing:
-    /// a shape the reader knows and the writer does not fails to serialize, which is what the fallback is.
+    /// Every value here is a non-default one, because a message at its defaults is written as nothing and read
+    /// back without the reader ever being consulted - so a row built on defaults would say nothing about the
+    /// half it looks like it covers.
     /// </para>
     /// </remarks>
     [Fact]
-    public void EveryShapeItCarriesItself_DoesNotReachTheJsonFallback()
+    public void TheShapesStoredAsThemselves_DoNotReachTheJsonFallback()
     {
         var recorder = new RecordingLoggerFactory();
         var composite = new CompositeBinarySerializer(
@@ -165,19 +165,22 @@ public class ProtobufSerializerTests
             new ProtobufSerializer(),
             new JsonBinarySerializer());
 
-        var shapes = ProtobufSerializer.StoredMessageTypes.ToList();
-        Assert.NotEmpty(shapes);
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
 
-        foreach (var shape in shapes)
-        {
-            var message = (IMessage)Activator.CreateInstance(shape)!;
-            var bytes = composite.Serialize(message);
-
-            typeof(CompositeBinarySerializer)
-                .GetMethod(nameof(CompositeBinarySerializer.Deserialize))!
-                .MakeGenericMethod(shape)
-                .Invoke(composite, [bytes]);
-        }
+        composite.Deserialize<RevocationCutoff>(
+            composite.Serialize(new RevocationCutoff { Cutoff = instant.ToTimestamp() }));
+        composite.Deserialize<PollSchedule>(
+            composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitAttempt>(
+            composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitGeneration>(
+            composite.Serialize(new RateLimitGeneration { Value = 2 }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
+        composite.Deserialize<LogoutConfirmation>(
+            composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
 
         Assert.Empty(recorder.Entries);
     }

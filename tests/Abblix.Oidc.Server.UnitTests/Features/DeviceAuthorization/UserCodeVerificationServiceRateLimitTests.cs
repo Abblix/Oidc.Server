@@ -52,8 +52,8 @@ public class UserCodeVerificationServiceRateLimitTests
     private const string Address = "203.0.113.7";
 
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 20, TimeSpan.Zero);
-    // The serializer the library stores these records through, which reads a number written as zero as an absent
-    // record where the readable one keeps the two apart.
+    // Where a deployment sends these records: its serializer tries this one first, and this one writes a number
+    // of zero as nothing and reads nothing back as an absent record, where the readable one keeps the two apart.
     private readonly IEntityStorage _rateLimitStore = new DistributedCacheStorage(
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
         new ProtobufSerializer());
