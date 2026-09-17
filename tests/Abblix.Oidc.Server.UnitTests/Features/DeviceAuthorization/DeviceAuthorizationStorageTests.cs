@@ -324,7 +324,7 @@ public class DeviceAuthorizationStorageTests
     [Fact]
     public async Task AStoredRequest_IsFoundByEitherCode_UntilItIsClaimed()
     {
-        var entities = new DistributedCacheStorage(RealCache(), new JsonBinarySerializer());
+        var entities = new DistributedCacheStorage(RealCache(), new ProtobufSerializer());
         var storage = StorageOver(entities);
         var request = NewRequest(_now.AddMinutes(10));
 

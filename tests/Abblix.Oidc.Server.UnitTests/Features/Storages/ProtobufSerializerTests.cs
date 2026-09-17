@@ -83,6 +83,59 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
+    /// The name of a user code's current life survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_RateLimitGeneration_RoundTrip()
+    {
+        var result = _serializer.Deserialize<RateLimitGeneration>(
+            _serializer.Serialize(new RateLimitGeneration { Id = "a-life" }));
+
+        Assert.NotNull(result);
+        Assert.Equal("a-life", result.Id);
+    }
+
+    /// <summary>
+    /// A record left by the build that stored a count in this message reads as a record naming no life, which
+    /// is the answer a code no verification has cleared gives - so nothing in a store has to be cleared before
+    /// deploying.
+    /// </summary>
+    /// <remarks>
+    /// The bytes are what that build wrote for a count of two, rather than a message this build could produce:
+    /// a message of this build's own with nothing set is empty, and an empty payload never reaches the parser
+    /// at all, so a row built on one would be about the reader's shortcut instead of about the upgrade.
+    /// </remarks>
+    [Fact]
+    public void ARecordFromTheBuildThatCounted_ReadsAsNamingNoLife()
+    {
+        var counted = new byte[] { 0x08, 0x02 };
+
+        var result = _serializer.Deserialize<RateLimitGeneration>(counted);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.Id);
+    }
+
+    /// <summary>
+    /// And a record naming no life is written as nothing at all and read back as no record, which is the same
+    /// answer an absent one gives.
+    /// </summary>
+    /// <remarks>
+    /// The empty payload is the wire format: a field at its default value is not written, and the field this
+    /// message used to carry is reserved rather than reused. Reading an empty payload back as absent is this
+    /// serializer's own decision, taken for every shape at once, so a deployment that supplies its own storage
+    /// need not share it.
+    /// </remarks>
+    [Fact]
+    public void ARateLimitGenerationNamingNoLife_IsWrittenAsNothingAndReadBackAsNoRecord()
+    {
+        var bytes = _serializer.Serialize(new RateLimitGeneration());
+
+        Assert.Empty(bytes);
+        Assert.Null(_serializer.Deserialize<RateLimitGeneration>(bytes));
+    }
+
+    /// <summary>
     /// A recorded client of a session and the generation it belongs to survive a round trip.
     /// </summary>
     [Fact]
@@ -101,16 +154,27 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// Neither shape reaches the JSON fallback, which is the reason they have definitions at all.
+    /// The shapes named here do not reach the JSON fallback, which is the reason they have definitions at all.
     /// </summary>
     /// <remarks>
     /// The fallback works and would carry them, so a round trip alone says nothing here - it passes either
     /// way. What it costs is a warning carrying an exception on every write, and one of these is written on
     /// every poll of every device and every decoupled authentication. A warning an operator sees that often
     /// is a warning they stop reading.
+    /// <para>
+    /// Every value here is a non-default one, because a message at its defaults is written as nothing and read
+    /// back without the reader ever being consulted - so a row built on defaults would say nothing about the
+    /// half it looks like it covers.
+    /// </para>
+    /// <para>
+    /// What it does not say is that the list is complete: a shape added to the serializer without a line here
+    /// leaves this green and reaches the fallback in a deployment. Deriving the list from the serializer's own
+    /// registry does not answer that either - it was tried, and an entry deleted from the registry took its own
+    /// expectation with it. Answering it needs a population neither side owns, which is its own piece of work.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheNewShapes_DoNotReachTheJsonFallback()
+    public void TheShapesNamedHere_DoNotReachTheJsonFallback()
     {
         var recorder = new RecordingLoggerFactory();
         var composite = new CompositeBinarySerializer(
@@ -120,10 +184,14 @@ public class ProtobufSerializerTests
 
         var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
 
+        composite.Deserialize<RevocationCutoff>(
+            composite.Serialize(new RevocationCutoff { Cutoff = instant.ToTimestamp() }));
         composite.Deserialize<PollSchedule>(
             composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
         composite.Deserialize<RateLimitAttempt>(
             composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitGeneration>(
+            composite.Serialize(new RateLimitGeneration { Id = "a-life" }));
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(

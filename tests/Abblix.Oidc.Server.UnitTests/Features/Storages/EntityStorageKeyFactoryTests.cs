@@ -124,7 +124,7 @@ public class EntityStorageKeyFactoryTests
             Factory.BackChannelAuthenticationRequestKey(identifier),
             Factory.BackChannelAuthenticationNextPollKey(identifier),
             Factory.DeviceAuthorizationUserCodeKey(identifier),
-            Factory.UserCodeRateLimitAttemptKey(identifier, generation: 1, attempt: 1),
+            Factory.UserCodeRateLimitAttemptKey(identifier, life: "a-life", attempt: 1),
             Factory.AddressRateLimitAttemptKey(identifier, 1, 1),
             Factory.AuthorizedGrantKey(identifier),
             Factory.JsonWebTokenStatusKey(identifier),
