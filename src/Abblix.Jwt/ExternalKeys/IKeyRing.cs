@@ -39,12 +39,20 @@ public interface IKeyRing
     /// <remarks>
     /// A ring whose rotation has stopped looks exactly like one that is working: it keeps serving the keys it
     /// already holds, every signature still verifies, and nothing goes red - while it drifts away from what the
-    /// other instances hold. The age of the newest key is the one observation that tells the two apart, because
-    /// past a rotation period plus the propagation window a rotation was due and did not happen.
+    /// other instances hold. The age of the newest key is what tells the two apart, and it tells them apart only
+    /// for a role this ring actually rotates. A role served by a key the host adopted, or by one that names no
+    /// role and therefore serves every role, has no rotation to be late for: its answer stands still by design,
+    /// and read as a schedule it says "stopped" forever.
     /// <para>
-    /// Answered from the ring rather than from the store behind it, so a health check that asks this does not
-    /// turn a custodian being briefly unreachable into an unhealthy instance - which is the coupling the refresh
-    /// loop already avoids by logging and carrying on.
+    /// Answered from what the ring holds rather than from the store behind it, so a custodian that goes briefly
+    /// unreachable does not turn into an unhealthy instance - which is the coupling the refresh loop avoids by
+    /// logging and carrying on. A ring that has never loaded holds nothing and answers null, which is the same
+    /// answer as a role it has no key for: null says the ring cannot speak about this role, never that the role
+    /// is healthy or that it is not.
+    /// </para>
+    /// <para>
+    /// A ring that rotates only when asked for a key - the in-box one that mints in this process does - answers
+    /// about what it has been asked for. Reading it as a schedule needs a ring something keeps current.
     /// </para>
     /// </remarks>
     DateTimeOffset? NewestKeyCreatedAt(string usage);

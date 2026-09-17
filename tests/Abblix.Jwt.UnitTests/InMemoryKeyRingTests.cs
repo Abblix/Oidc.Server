@@ -88,12 +88,23 @@ public class InMemoryKeyRingTests
     /// Asking how stale the ring is does not freshen it: a caller that only reads must not be the thing that
     /// mints, or a health check would report health it created itself.
     /// </summary>
+    /// <remarks>
+    /// Read off what the ring holds AFTERWARDS rather than off the answer, because a body that minted and then
+    /// reported what it had before minting answers the same thing while doing the forbidden work. The clock moves
+    /// in between, so the key the ring ends up with dates from the call that was allowed to mint.
+    /// </remarks>
     [Fact]
     public void ReportingItsFreshness_MintsNothing()
     {
-        var ring = CreateRing(new FakeTimeProvider());
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time);
 
         Assert.Null(ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+
+        time.Advance(TimeSpan.FromDays(1));
+        ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false);
+
+        Assert.Equal(time.GetUtcNow(), ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
     }
 
     /// <summary>
