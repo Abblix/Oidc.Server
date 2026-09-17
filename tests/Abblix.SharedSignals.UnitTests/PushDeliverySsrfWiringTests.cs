@@ -33,6 +33,35 @@ public class PushDeliverySsrfWiringTests
         return services.BuildServiceProvider().GetRequiredService<IHttpMessageHandlerFactory>();
     }
 
+    /// <summary>
+    /// The transmitter builds its address policy itself rather than letting the container choose its constructor
+    /// arguments.
+    /// </summary>
+    /// <remarks>
+    /// The policy takes an optional name resolution so a test can say what a name stands for. Registered by type,
+    /// the container would fill that parameter from any registration of that delegate, and a host that registered
+    /// one for something else would silently decide what every delivery address resolves to, with the guard still
+    /// in place. What this row holds is that the registration carries a factory, and not what the factory hands
+    /// in. A host that registers the policy itself is a different matter: it is saying it builds the policy, and
+    /// gets what it asked for.
+    /// </remarks>
+    [Fact]
+    public void TheAddressPolicy_IsBuiltByTheLibrary_NotByTheContainersChoiceOfConstructor()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSecurityEvents();
+        services.AddSharedSignalsTransmitter(
+            new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" });
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(ReceiverAddressPolicy));
+
+        Assert.NotNull(registration.ImplementationFactory);
+    }
+
     private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler handler)
     {
         for (var current = handler; current is not null;)
@@ -46,10 +75,11 @@ public class PushDeliverySsrfWiringTests
     public void ThePushClientRoutesThroughTheValidatingHandler_WithRedirectsDisabled()
     {
         using var handler = HandlerFactory().CreateHandler(PushDeliveryTransport.HttpClientName);
-        var chain = Chain(handler).ToList();
 
-        var guard = Assert.IsType<ReceiverAddressValidatingHandler>(
-            chain.Find(link => link is ReceiverAddressValidatingHandler));
+        // One guard, not the first of several: with a second one chained on, the outer one's inner handler is the
+        // other guard, and the row below would refuse it for the wrong reason - a type that does not match rather
+        // than a chain carrying two.
+        var guard = Assert.Single(Chain(handler).OfType<ReceiverAddressValidatingHandler>());
 
         // The redirect-following that would carry a delivery to an unvetted second address is off, so a receiver's
         // 3xx comes back as an ordinary non-success response instead.
