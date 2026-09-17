@@ -9,13 +9,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -136,8 +134,7 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// None of the shapes stored as they are reaches the JSON fallback, which is the reason they have
-    /// definitions at all.
+    /// The shapes named here do not reach the JSON fallback, which is the reason they have definitions at all.
     /// </summary>
     /// <remarks>
     /// The fallback works and would carry them, so a round trip alone says nothing here - it passes either
@@ -149,9 +146,15 @@ public class ProtobufSerializerTests
     /// back without the reader ever being consulted - so a row built on defaults would say nothing about the
     /// half it looks like it covers.
     /// </para>
+    /// <para>
+    /// What it does not say is that the list is complete: a shape added to the serializer without a line here
+    /// leaves this green and reaches the fallback in a deployment. Deriving the list from the serializer's own
+    /// registry does not answer that either - it was tried, and an entry deleted from the registry took its own
+    /// expectation with it. Answering it needs a population neither side owns, which is its own piece of work.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheShapesStoredAsThemselves_DoNotReachTheJsonFallback()
+    public void TheShapesNamedHere_DoNotReachTheJsonFallback()
     {
         var recorder = new RecordingLoggerFactory();
         var composite = new CompositeBinarySerializer(

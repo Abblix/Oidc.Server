@@ -42,7 +42,9 @@ public class LogoutConfirmationStoreTests
 
     public LogoutConfirmationStoreTests()
     {
-        // The in-box storage over an in-memory cache, which is the production path for a single-node deployment.
+        // The in-box storage over an in-memory cache, and the serializer a deployment's own sends these records
+        // to: it tries this one first and falls back to the readable one only for a shape this one has no
+        // definition for, which this is not.
         var storage = new DistributedCacheStorage(
             new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
             new ProtobufSerializer());
