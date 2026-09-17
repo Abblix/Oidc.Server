@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
+    <ProjectReference Include="..\Abblix.Utils\Abblix.Utils.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -45,6 +45,10 @@ Custom `System.Text.Json` converters for the shapes protocol messages actually u
 
 `DistributedCacheExtensions` adds the operation `IDistributedCache` lacks for security bookkeeping: `TryAddAsync`, an add-if-absent that expresses first-sighting checks - replay caches and similar - over any cache backend. It is Get-then-Set, because the interface exposes no compare-and-set, so the guarantee is probabilistic under concurrency; a domain needing strict exactly-once takes a backend-native atomic (`SET NX EX`, `INSERT ... ON CONFLICT DO NOTHING`) instead.
 
+### Outbound addresses a caller did not choose
+
+`PrivateNetworks` states which addresses are internal - loopback, the private and link-local ranges, and the rest a server must not be talked into reaching on somebody else's behalf. `AddressValidatingHttpMessageHandler` is the message-handler half: it follows no redirect, carries no ambient credentials, decompresses nothing, and judges the address on the send itself rather than when the request was scheduled, leaving only the policy to the handler derived from it. `ResolveHostDelegate` names the answer a derived handler needs about a hostname, so one function serves every guard built on this base.
+
 ### Collections and enums
 
 `ArrayExtensions`, `EnumerableExtensions`, `EnumFlagExtensions` and `ObjectExtensions` carry the small operations that otherwise get re-implemented per project.
