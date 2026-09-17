@@ -216,6 +216,42 @@ public sealed class KeyRingTests : IDisposable
         Assert.False(published.HasPrivateKey);
     }
 
+    /// <summary>
+    /// The ring reports when its newest key appeared, which is the one observation separating a ring whose
+    /// rotation has stopped from one that is working: a stopped ring keeps serving what it holds, every
+    /// signature it produced still verifies, and nothing else goes red.
+    /// </summary>
+    [Fact]
+    public async Task ReportsWhenItsNewestKeyAppeared()
+    {
+        var (ring, _) = CreateRing();
+
+        // Before it has loaded anything there is no key and so no such moment, which is not the same answer as
+        // a moment long past: a host asking at startup must not read it as a rotation that stopped.
+        Assert.Null(ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(Now, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
+    /// <summary>
+    /// A custodian that cannot be reached leaves the answer as it was, rather than turning into a ring with no
+    /// keys - which is the coupling the refresh loop avoids by logging and carrying on.
+    /// </summary>
+    [Fact]
+    public async Task AnUnreachableStore_DoesNotChangeWhatTheRingReports()
+    {
+        var (ring, store) = CreateRing();
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.FailWith = new InvalidOperationException("the custodian is unreachable");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(Now, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
     [Fact]
     public async Task MintsNothingNew_WhenThePeriodAlreadyHasAKey()
     {

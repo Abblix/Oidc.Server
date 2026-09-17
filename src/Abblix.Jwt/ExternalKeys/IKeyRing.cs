@@ -33,6 +33,23 @@ public interface IKeyRing
     IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys);
 
     /// <summary>
+    /// When the newest key serving a role appeared, or null while the ring holds none for it.
+    /// </summary>
+    /// <param name="usage">Which role to report on, signature or encryption.</param>
+    /// <remarks>
+    /// A ring whose rotation has stopped looks exactly like one that is working: it keeps serving the keys it
+    /// already holds, every signature still verifies, and nothing goes red - while it drifts away from what the
+    /// other instances hold. The age of the newest key is the one observation that tells the two apart, because
+    /// past a rotation period plus the propagation window a rotation was due and did not happen.
+    /// <para>
+    /// Answered from the ring rather than from the store behind it, so a health check that asks this does not
+    /// turn a custodian being briefly unreachable into an unhealthy instance - which is the coupling the refresh
+    /// loop already avoids by logging and carrying on.
+    /// </para>
+    /// </remarks>
+    DateTimeOffset? NewestKeyCreatedAt(string usage);
+
+    /// <summary>
     /// Brings the ring up to date: mints what the current period lacks, retires what has expired, and reloads
     /// what other instances have minted.
     /// </summary>

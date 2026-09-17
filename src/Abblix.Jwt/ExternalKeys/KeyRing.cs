@@ -54,6 +54,16 @@ internal sealed class KeyRing(
             .ProduceFirst(opened => opened.CreatedAt, timeProvider.GetUtcNow(), options.Value.KeyRolloverPropagation)
             .Select(opened => opened.Key.Sanitize(includePrivateKeys));
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Read off the keys this instance has opened, which is what it would serve if asked right now, rather than
+    /// off the store: a custodian that cannot be reached must not read as a ring that has stopped rotating.
+    /// </remarks>
+    public DateTimeOffset? NewestKeyCreatedAt(string usage)
+        => _keys
+            .Where(opened => Serves(opened.Key, usage))
+            .Max(opened => (DateTimeOffset?)opened.CreatedAt);
+
     /// <summary>
     /// Whether a key may serve a role: either it names that role, or it names none and is therefore unrestricted.
     /// </summary>
