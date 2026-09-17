@@ -85,39 +85,33 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// A rate-limit generation survives a round trip.
+    /// The name of a user code's current life survives a round trip.
     /// </summary>
-    /// <remarks>
-    /// One is the value a reader gets for a generation nobody has written yet, so it is the boundary the row
-    /// below sits against; three hundred is past the first byte a number occupies on the wire, which the small
-    /// values never reach.
-    /// </remarks>
-    [Theory]
-    [InlineData(1)]
-    [InlineData(300)]
-    public void Serialize_RateLimitGeneration_RoundTrip(int value)
+    [Fact]
+    public void Serialize_RateLimitGeneration_RoundTrip()
     {
         var result = _serializer.Deserialize<RateLimitGeneration>(
-            _serializer.Serialize(new RateLimitGeneration { Value = value }));
+            _serializer.Serialize(new RateLimitGeneration { Id = "a-life" }));
 
         Assert.NotNull(result);
-        Assert.Equal(value, result.Value);
+        Assert.Equal("a-life", result.Id);
     }
 
     /// <summary>
-    /// A generation of zero is written as nothing at all, and this serializer reads nothing as no record - so the
-    /// two are one state, and a fixture that keeps them apart is holding behavior no deployment has.
+    /// A record naming no life is written as nothing at all and read back as no record, which is the same
+    /// answer an absent one gives - so a record left by a build that stored a count here reads as a code no
+    /// verification has cleared, and nothing stored has to be cleared before deploying.
     /// </summary>
     /// <remarks>
-    /// The empty payload is the wire format: a number at its default value is not written. Reading it back as
-    /// absent is this serializer's own decision, taken for every shape at once, so a deployment that supplies its
-    /// own storage need not share it. Nothing writes a zero here in any case - generations start at one and only
-    /// climb - which is why the rows that matter are the fixtures, not this one.
+    /// The empty payload is the wire format: a field at its default value is not written, and the field this
+    /// message used to carry is reserved rather than reused. Reading an empty payload back as absent is this
+    /// serializer's own decision, taken for every shape at once, so a deployment that supplies its own storage
+    /// need not share it.
     /// </remarks>
     [Fact]
-    public void ARateLimitGenerationOfZero_IsWrittenAsNothingAndReadBackAsNoRecord()
+    public void ARateLimitGenerationNamingNoLife_IsWrittenAsNothingAndReadBackAsNoRecord()
     {
-        var bytes = _serializer.Serialize(new RateLimitGeneration { Value = 0 });
+        var bytes = _serializer.Serialize(new RateLimitGeneration());
 
         Assert.Empty(bytes);
         Assert.Null(_serializer.Deserialize<RateLimitGeneration>(bytes));
@@ -174,7 +168,7 @@ public class ProtobufSerializerTests
         composite.Deserialize<RateLimitAttempt>(
             composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
         composite.Deserialize<RateLimitGeneration>(
-            composite.Serialize(new RateLimitGeneration { Value = 2 }));
+            composite.Serialize(new RateLimitGeneration { Id = "a-life" }));
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
             composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
         composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(

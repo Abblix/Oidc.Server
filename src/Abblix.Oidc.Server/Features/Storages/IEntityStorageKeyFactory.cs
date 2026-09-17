@@ -115,18 +115,20 @@ public interface IEntityStorageKeyFactory
     /// these exist, so failures arriving together are counted separately.
     /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
-    /// <param name="generation">Which life of that code the attempt belongs to, from
-    /// <see cref="UserCodeRateLimitGenerationKey"/>.</param>
+    /// <param name="life">Which life of that code the attempt belongs to, named by the verification that
+    /// started it and read from <see cref="UserCodeRateLimitGenerationKey"/>.</param>
     /// <param name="attempt">Which attempt against that code this key stands for, counted from one.</param>
     /// <returns>A formatted storage key for that attempt.</returns>
-    string UserCodeRateLimitAttemptKey(string userCode, int generation, int attempt);
+    string UserCodeRateLimitAttemptKey(string userCode, string life, int attempt);
 
     /// <summary>
     /// Generates a storage key for which life of a user code its attempt records belong to.
     /// </summary>
     /// <remarks>
     /// A verified code starts a new life rather than having its records removed, because removing them is
-    /// what lets an attempt that began earlier land above the gap.
+    /// what lets an attempt that began earlier land above the gap. The life is named by the instant of that
+    /// verification rather than counted, so a life this record no longer names cannot be handed out again
+    /// while its attempt records are still stored.
     /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
     /// <returns>A formatted storage key for that code's current generation.</returns>
