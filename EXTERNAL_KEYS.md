@@ -114,6 +114,16 @@ With `UseKeysInProcess` the server rotates on its own schedule: it mints the nex
 
 The `/jwks` response carries a `Cache-Control` max-age derived from the propagation window, so publication and signing cannot drift apart. Set the window to your slowest client's JWKS cache lifetime. Either way, every pod derives the same active version from the version creation times and this window, so the deployment needs no coordination beyond the store `UseKeysInProcess` already relies on.
 
+### Watching that rotation is still happening
+
+A ring that has stopped rotating looks exactly like one that is working. It keeps serving the keys it already holds, every signature still verifies, and nothing goes red, while it drifts away from what the other pods hold. So the ring reports when its newest key for a role appeared, and the age of that key is what separates the two: past the rotation period plus the propagation window, a rotation was due and did not happen.
+
+Read it for a role the ring actually rotates. A role served by a key you adopted, or by one that names no role and so serves every role, has no rotation to be late for, and its age grows without bound while the deployment is perfectly healthy. And it answers about the ring rather than the store, so a custodian that goes briefly unreachable does not make the pod unhealthy - deliberately, because the refresh loop already treats that as a condition to log and carry on from.
+
+No answer at all means the ring holds no key for that role: a pod that has not loaded yet, a custodian that has never answered, and a role nothing mints for are one answer between them. It says the ring cannot speak about the role, not that the role is well or unwell.
+
+With `UseKeysInProcess` the ring mints when it is asked for a key rather than on a timer, so the age it reports is the age of what it has been asked for. A health check reading it as a schedule wants the custodian placement, where a background service keeps the ring current.
+
 ## Bringing your own custodian
 
 The seam is public. If your keys live somewhere these packages do not cover, implement `IKeyCustodian` and wire it the same way:

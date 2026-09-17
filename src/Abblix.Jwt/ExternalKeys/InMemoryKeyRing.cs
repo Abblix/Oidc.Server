@@ -71,6 +71,21 @@ public sealed class InMemoryKeyRing : IKeyRing
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Nothing is minted or retired on the way: this answers what the ring holds, and a caller asking how stale
+    /// the ring is must not be the thing that freshens it.
+    /// </remarks>
+    public DateTimeOffset? NewestKeyCreatedAt(string usage)
+    {
+        using (_gate.EnterScope())
+        {
+            return _keys
+                .Where(minted => minted.Key.Usage == usage)
+                .Max(minted => (DateTimeOffset?)minted.CreatedAt);
+        }
+    }
+
+    /// <inheritdoc />
     public Task RefreshAsync(CancellationToken cancellationToken)
     {
         using (_gate.EnterScope())

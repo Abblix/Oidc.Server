@@ -52,6 +52,62 @@ public class InMemoryKeyRingTests
     }
 
     /// <summary>
+    /// The ring reports when its newest key for a role appeared, which is what tells a stopped rotation from a
+    /// working one: a ring that has stopped keeps serving what it holds and looks healthy from every other angle.
+    /// </summary>
+    [Fact]
+    public async Task ReportsWhenItsNewestKeyAppeared()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time);
+        ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false);
+
+        var minted = time.GetUtcNow();
+        time.Advance(Policy.RotateEvery);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // The rotation that just happened, not the one before it: an age read off the oldest key would keep
+        // growing while rotation worked, and would say nothing when it stopped.
+        Assert.Equal(minted + Policy.RotateEvery, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
+    /// <summary>
+    /// A role the ring holds nothing for has no such moment, which is not the same answer as an old one.
+    /// </summary>
+    [Fact]
+    public void ReportsNothing_ForARoleItHoldsNoKeyFor()
+    {
+        var ring = CreateRing(new FakeTimeProvider());
+        ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false);
+
+        // The policy names no encryption algorithm, so the ring mints nothing for that role.
+        Assert.Null(ring.NewestKeyCreatedAt(PublicKeyUsages.Encryption));
+    }
+
+    /// <summary>
+    /// Asking how stale the ring is does not freshen it: a caller that only reads must not be the thing that
+    /// mints, or a health check would report health it created itself.
+    /// </summary>
+    /// <remarks>
+    /// Read off what the ring holds AFTERWARDS rather than off the answer, because a body that minted and then
+    /// reported what it had before minting answers the same thing while doing the forbidden work. The clock moves
+    /// in between, so the key the ring ends up with dates from the call that was allowed to mint.
+    /// </remarks>
+    [Fact]
+    public void ReportingItsFreshness_MintsNothing()
+    {
+        var time = new FakeTimeProvider();
+        var ring = CreateRing(time);
+
+        Assert.Null(ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+
+        time.Advance(TimeSpan.FromDays(1));
+        ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false);
+
+        Assert.Equal(time.GetUtcNow(), ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
+    /// <summary>
     /// Nothing is minted for a role the policy did not ask for.
     /// </summary>
     [Fact]
