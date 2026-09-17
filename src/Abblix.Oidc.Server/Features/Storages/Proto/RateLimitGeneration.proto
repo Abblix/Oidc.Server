@@ -2,15 +2,28 @@ syntax = "proto3";
 
 option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
-// Which life of a user code its attempt records belong to.
+// Which life of a user code its attempt records belong to, named by the verification that started it.
 //
 // A verified code starts a new one instead of having its records removed: removal is what lets a
 // concurrent attempt land above the gap it leaves, and the reader of those records may not meet a
-// gap. Nothing is ever removed, so within one generation the claimed records are an unbroken run
-// from the first by construction.
+// gap. Nothing is ever removed, so within one life the claimed records are an unbroken run from the
+// first by construction.
 //
-// A message rather than a bare number for the reason RevocationCutoff states.
+// Named rather than counted, because a count is read before it is written and therefore restarts
+// whenever this record expires - and the life it then hands out is one whose attempt records may
+// still be stored, so the next holder of that code value inherits failures that were cleared. The
+// name is drawn at random rather than taken from the clock: what it has to be is unrepeatable, and
+// two verifications sharing an instant would otherwise share a life and clear nothing.
+//
+// A message rather than a bare string so the record can gain a field later without every stored one
+// having to be read as something else.
 message RateLimitGeneration {
-  // Counted from one; absence means the first.
-  int32 value = 1;
+  // Field 1 held the count this record replaced. A record written by an earlier build therefore reads
+  // with no name, which is the life before any verification - the same answer that build's absent
+  // record would have given, so nothing stored has to be cleared.
+  reserved 1;
+  reserved "value";
+
+  // What this life is called. Nothing reads it but the keys of its own attempt records.
+  string id = 2;
 }

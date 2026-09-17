@@ -60,10 +60,15 @@ public class UserCodeRateLimiterTests
     public UserCodeRateLimiterTests()
     {
         _time = new FakeTimeProvider(_now);
+        // Where a deployment sends these records: its serializer tries this one first and falls back to the
+        // readable one only for a shape this one has no definition for, which these are not. It is not
+        // interchangeable with the readable one: a number written as zero occupies no bytes, and this one reads
+        // an empty payload as no record, so a stored zero and a missing record are one state in a deployment and
+        // two under the readable format - which is behavior a row here would otherwise be free to lean on.
         _storage = new DistributedCacheStorage(
             new MemoryDistributedCache(
                 Options.Create(new MemoryDistributedCacheOptions { Clock = new StoreClock(_time) })),
-            new JsonBinarySerializer());
+            new ProtobufSerializer());
 
         _rateLimiter = new UserCodeRateLimiter(
             _logs.CreateLogger<UserCodeRateLimiter>(),
@@ -402,6 +407,62 @@ public class UserCodeRateLimiterTests
         _time.Advance(CodeLifetime - OneTick);
 
         Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A verified code forgets its failures however long its history has been going on, and not only while the
+    /// record naming that history happens to be around.
+    /// </summary>
+    /// <remarks>
+    /// The record saying which life a code's attempts belong to is written when the code is verified and lives
+    /// the code's lifetime from there. Its attempts are written later and live that lifetime from each of them,
+    /// so the newest of them outlive it. Once it is gone a reader counts from the first life again, and the next
+    /// verification declares a life whose attempt records are still lying around - whereupon the holder of that
+    /// value inherits failures that were cleared. Narrow, because it needs the value to be in use that long, and
+    /// silent, because everything involved is doing what it was told.
+    /// </remarks>
+    [Fact]
+    public async Task AVerifiedCode_ForgetsItsFailures_EvenWhenItsHistoryOutlivesTheRecordNamingIt()
+    {
+        await Fail(5);
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        // Failures in the life just started, written late enough in it to outlive the record that named it.
+        _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
+        await Fail(5);
+
+        // Past the record's own end, while those failures are still stored.
+        _time.Advance(TimeSpan.FromMinutes(2));
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A code told to wait the rest of its life is still waiting a moment later: its allowance is not handed out
+    /// again because the record naming the life those attempts belong to went first.
+    /// </summary>
+    /// <remarks>
+    /// That record is written when the code is verified and the attempts under it later, each keeping the code's
+    /// lifetime from itself, so a record kept for one lifetime dies while its own rungs are still stored. A
+    /// reader then finds the ladder of the life before any verification, which is empty, and a code that had
+    /// just been refused for five minutes is allowed again after one.
+    /// </remarks>
+    [Fact]
+    public async Task ASpentCode_StaysSpent_AfterTheRecordNamingItsLifeWouldHaveExpired()
+    {
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        // Late in the life the verification started, so the rungs outlast a record kept for one lifetime.
+        _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
+        await Fail(5);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+
+        // Past that record's own end, with the rungs it names still stored.
+        _time.Advance(TimeSpan.FromMinutes(2));
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
     }
 
     /// <summary>

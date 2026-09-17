@@ -94,8 +94,8 @@ public class EntityStorageKeyFactory : IEntityStorageKeyFactory
         => $"Abblix.Oidc.Server:UserCode:{userCode}";
 
     /// <inheritdoc />
-    public string UserCodeRateLimitAttemptKey(string userCode, int generation, int attempt)
-        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:{generation}:Attempt:{attempt}";
+    public string UserCodeRateLimitAttemptKey(string userCode, string life, int attempt)
+        => $"Abblix.Oidc.Server:RateLimit:UserCode:{userCode}:{life}:Attempt:{attempt}";
 
     /// <inheritdoc />
     public string UserCodeRateLimitGenerationKey(string userCode)

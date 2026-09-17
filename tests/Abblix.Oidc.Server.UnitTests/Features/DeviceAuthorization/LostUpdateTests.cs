@@ -27,6 +27,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using StoredLife = Abblix.Oidc.Server.Features.Storages.Proto.RateLimitGeneration;
 using StoredDeviceRequest = Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DeviceAuthorization;
@@ -55,7 +56,7 @@ public class LostUpdateTests
     private readonly DateTimeOffset _now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private static IEntityStorage RealStorage(IDistributedCache cache)
-        => new DistributedCacheStorage(cache, new JsonBinarySerializer());
+        => new DistributedCacheStorage(cache, new ProtobufSerializer());
 
     private static IDistributedCache RealCache()
         => new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -134,7 +135,8 @@ public class LostUpdateTests
     public async Task TwoFailuresArrivingTogether_AreBothCounted()
     {
         var cache = RealCache();
-        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: 1);
+        var firstAttemptKey = new EntityStorageKeyFactory()
+            .UserCodeRateLimitAttemptKey(UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         storage.OnNextClaimOf(() => LimiterOver(RealStorage(cache))
@@ -171,7 +173,8 @@ public class LostUpdateTests
     public async Task AFailureArrivingWhileACodeIsCleared_DoesNotInflateLaterCounts()
     {
         var cache = RealCache();
-        var firstAttemptKey = new EntityStorageKeyFactory().UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: 1);
+        var firstAttemptKey = new EntityStorageKeyFactory()
+            .UserCodeRateLimitAttemptKey(UserCode, UserCodeRateLimiter.BeforeAnyVerification, attempt: 1);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), firstAttemptKey);
 
         // Two failures are already on record, so the clearing has a range to walk.
@@ -217,11 +220,21 @@ public class LostUpdateTests
         var cache = RealCache();
         var keys = new EntityStorageKeyFactory();
 
+        // Verified once first, so the code is in a life a verification named rather than the one absence
+        // names. The two are not the same case: only here is there a record for a failing caller's own read
+        // to go stale against, and a caller that put what it read back would then be restoring a life the
+        // verification below has already replaced.
+        await LimiterOver(RealStorage(cache)).RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        var named = await RealStorage(cache).GetAsync<StoredLife>(
+            keys.UserCodeRateLimitGenerationKey(UserCode), removeOnRetrieval: false);
+        var life = Assert.IsType<StoredLife>(named).Id;
+
         // Rung 2 rather than rung 1: the reader halves the range, so with two rungs taken it reads 16, 8,
         // 4 and 2, and never touches the first.
         var watched = armOnRung == 0
             ? keys.UserCodeRateLimitGenerationKey(UserCode)
-            : keys.UserCodeRateLimitAttemptKey(UserCode, generation: 1, attempt: armOnRung);
+            : keys.UserCodeRateLimitAttemptKey(UserCode, life, attempt: armOnRung);
 
         Assert.NotEmpty(ordering);
         var storage = new LetsAnotherCallerIn(RealStorage(cache), watched);

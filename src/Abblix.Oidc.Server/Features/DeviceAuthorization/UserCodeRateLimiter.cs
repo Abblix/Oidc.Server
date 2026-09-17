@@ -61,14 +61,20 @@ public partial class UserCodeRateLimiter(
     /// </remarks>
     internal const int AttemptLadderLength = 32;
 
+    /// <summary>
+    /// The life a code's attempts belong to before any verification has started one, which is why no record is
+    /// written for it: absence says it. A verification draws its name at random and cannot land on this one.
+    /// </summary>
+    internal const string BeforeAnyVerification = "first";
+
     /// <inheritdoc />
     public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        var generation = await CurrentGenerationAsync(userCode);
-        var (attempts, firstAttemptAt, lastAttemptAt) = await FindHighestAttemptAsync(userCode, generation);
+        var life = await CurrentLifeAsync(userCode);
+        var (attempts, firstAttemptAt, lastAttemptAt) = await FindHighestAttemptAsync(userCode, life);
 
         // Every guess this code allows is spent, so there is nothing left to wait for: what the client is
         // told covers the rest of the code's life. The first attempt happened after the code was issued, so
@@ -139,14 +145,14 @@ public partial class UserCodeRateLimiter(
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        // Read before the claim, so an attempt whose claim began before a verification declared the next
-        // generation lands in the generation it read - the one being left behind - rather than on top of an
-        // empty ladder it never saw. That attempt is then not counted, which is the same loss as before:
-        // the code has just been verified and its own history says nothing any more.
-        var generation = await CurrentGenerationAsync(userCode);
+        // Read before the claim, so an attempt whose claim began before a verification started the next
+        // life lands in the life it read - the one being left behind - rather than on top of an empty
+        // ladder it never saw. That attempt is then not counted, which is the same loss as before: the
+        // code has just been verified and its own history says nothing any more.
+        var life = await CurrentLifeAsync(userCode);
 
         var attempts = await ClaimAttemptAsync(
-            rung => keyFactory.UserCodeRateLimitAttemptKey(userCode, generation, rung),
+            rung => keyFactory.UserCodeRateLimitAttemptKey(userCode, life, rung),
             AttemptLadderLength,
             now,
             // Every rung outlives the code it belongs to: the lifetime is counted from this attempt, which
@@ -201,36 +207,50 @@ public partial class UserCodeRateLimiter(
     /// <inheritdoc />
     public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
     {
-        // The verified code leaves its attempt history behind by starting the next generation, and nothing
-        // is removed. Removal is what let an attempt that began earlier land above the gap it left, and the
-        // reader of these records may not meet a gap: it finds the highest rung by halving the range. The
-        // records left behind expire on their own, with the code's lifetime from each attempt.
+        // The verified code leaves its attempt history behind by starting a new life, and nothing is removed.
+        // Removal is what let an attempt that began earlier land above the gap it left, and the reader of
+        // these records may not meet a gap: it finds the highest rung by halving the range. The records left
+        // behind expire on their own, with the code's lifetime from each attempt.
+        //
+        // The life is named rather than counted. A count is read before it is written, so it restarts whenever
+        // the record holding it expires - and the life it then hands out is one whose attempt records may still
+        // be stored, which is how a later holder of this code value would inherit failures that were cleared.
+        // A name is not read from anywhere, so nothing that expires can send it backwards. Drawn fresh rather
+        // than taken from the clock, because two verifications sharing an instant would share a life and clear
+        // nothing, which is the whole of what this call is for.
         //
         // The per-address count and the server's budget are deliberately untouched: they bound a source and
         // a search across codes (RFC 8628 section 5.1), and one successful verification must not clear what
         // an attacker spent of either.
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
-        var generation = await CurrentGenerationAsync(userCode);
 
-        // Two verifications of one code can write the same next generation, which costs nothing: both are
-        // saying the same thing, that whatever came before is no longer this code's history.
+        // Kept longer than the rungs it names, the way the session client list keeps the record naming its own
+        // generation: a rung is written with the code's lifetime counted from the attempt that wrote it, and an
+        // attempt against a live code happens within the code's own life, so twice that lifetime from here
+        // covers the newest rung this life can acquire. Kept for the code's lifetime only, the record goes
+        // first, a reader finds the ladder of the life before any verification - empty - and hands out the whole
+        // allowance a second time, minutes after telling the client to wait the rest of the code's life.
         await storage.SetAsync(
             keyFactory.UserCodeRateLimitGenerationKey(userCode),
-            new RateLimitGeneration { Value = generation + 1 },
-            new StorageOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime });
+            new RateLimitGeneration { Id = Guid.NewGuid().ToString("N") },
+            new StorageOptions
+            {
+                AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
+            });
 
         LogUserCodeVerified(userCode, clientIdentifier);
     }
 
     /// <summary>
-    /// Which life of this code its attempt records belong to. Absence is the first.
+    /// Which life of this code its attempt records belong to, named by the verification that started it.
+    /// Nothing written means no verification has, which is the life before any.
     /// </summary>
-    private async Task<int> CurrentGenerationAsync(string userCode)
+    private async Task<string> CurrentLifeAsync(string userCode)
     {
-        var generation = await storage.GetAsync<RateLimitGeneration>(
+        var started = await storage.GetAsync<RateLimitGeneration>(
             keyFactory.UserCodeRateLimitGenerationKey(userCode), removeOnRetrieval: false);
 
-        return generation?.Value ?? 1;
+        return started?.Id is { Length: > 0 } id ? id : BeforeAnyVerification;
     }
 
     /// <summary>
@@ -285,20 +305,20 @@ public partial class UserCodeRateLimiter(
     /// Found by halving the range rather than walking it, which answers correctly only while the claimed
     /// rungs are one unbroken run from the first. Within one generation they are, by construction: a rung is
     /// only ever added, and only above the ones already taken, and nothing is ever removed - a verified code
-    /// starts a new generation instead. What remains is expiry, and it cannot open a gap either while the
+    /// starts a new life instead. What remains is expiry, and it cannot open a gap either while the
     /// code can be verified, because each rung is given the code's own lifetime from a moment already inside
     /// it. After the code is gone the lower rungs do expire first, and then the halving reads a short run or
     /// none - which forgives attempts against a value nobody can verify any more.
     /// </remarks>
     private async Task<(int Attempts, DateTimeOffset? FirstAt, DateTimeOffset? LastAt)>
-        FindHighestAttemptAsync(string userCode, int generation)
+        FindHighestAttemptAsync(string userCode, string life)
     {
         // The first rung decides whether there is anything to search for at all, and its absence is the
         // ordinary case: every verification of a correct code asks this question with nothing on record.
         // Halving an empty range costs as many reads as a full one, which would put that cost on the path
         // people actually take.
         var first = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.UserCodeRateLimitAttemptKey(userCode, generation, 1), removeOnRetrieval: false);
+            keyFactory.UserCodeRateLimitAttemptKey(userCode, life, 1), removeOnRetrieval: false);
 
         if (first == null)
             return (0, null, null);
@@ -311,7 +331,7 @@ public partial class UserCodeRateLimiter(
         {
             var middle = low + (high - low) / 2;
             var attempt = await storage.GetAsync<RateLimitAttempt>(
-                keyFactory.UserCodeRateLimitAttemptKey(userCode, generation, middle),
+                keyFactory.UserCodeRateLimitAttemptKey(userCode, life, middle),
                 removeOnRetrieval: false);
 
             if (attempt != null)
