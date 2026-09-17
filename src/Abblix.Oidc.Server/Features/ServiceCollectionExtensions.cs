@@ -583,7 +583,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// Judged here as well as by <see cref="PairwiseSubjectSettings.Salt"/>, and the two answer about different
     /// instances rather than about one fact twice. The property covers every instance somebody WRITES - an
-    /// object initialiser, a <c>with</c> expression - and it is the only place that can, since the extension
+    /// object initializer, a <c>with</c> expression - and it is the only place that can, since the extension
     /// registers with <c>TryAddSingleton</c> and a host's own instance wins.
     ///
     /// It cannot cover an instance the configuration binder BUILDS. <c>required</c> is a compiler rule: the
@@ -885,7 +885,13 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<SecureHttpFetchOptions>, SecureHttpFetchOptionsValidator>());
 
         services.TryAddSingleton<ISecureUriValidator, SecureUriValidator>();
-        services.TryAddTransient<SsrfValidatingHttpMessageHandler>();
+        // Built here rather than by the container's own constructor selection, which would fill the handler's
+        // optional resolution parameter from any registration of that delegate - a registration a host may well
+        // have made for something else entirely, silently deciding what every outbound address of this server
+        // resolves to. A host that means to replace the resolution registers this handler itself.
+        services.TryAddTransient(serviceProvider => new SsrfValidatingHttpMessageHandler(
+            serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+            serviceProvider.GetRequiredService<ISecureUriValidator>()));
 
         services.AddSsrfHttpClient<ISecureHttpFetcher, SecureHttpFetcher>((serviceProvider, client) =>
         {
@@ -929,7 +935,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to add the registration to.</param>
     /// <param name="consumer">The consumer's key, from <see cref="KeySetOwners"/>.</param>
     /// <param name="duration">Reads the consumer's lifetime out of the options. Resolved through a factory
-    /// rather than captured here, so a host configuring options after this call is still honoured.</param>
+    /// rather than captured here, so a host configuring options after this call is still honored.</param>
     private static void AddCachedSecureHttpFetcher(
         this IServiceCollection services,
         string consumer,

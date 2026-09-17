@@ -80,10 +80,15 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<PollEndpointHandler>();
 
         // A receiver names the address its stream is delivered to, so that address is input from outside. The
-        // policy judges it, and the validating handler puts that judgement on the connection itself - refusing
+        // policy judges it, and the validating handler puts that judgment on the connection itself - refusing
         // redirects and re-checking the address before every send - so a redirect or a DNS rebinding cannot carry
         // a delivery past the check.
-        services.TryAddSingleton<ReceiverAddressPolicy>();
+        // Built here rather than by the container's own constructor selection, which would fill the policy's
+        // optional resolution parameter from any registration of that delegate - and a host that registered one
+        // for something else would silently decide what every delivery address resolves to. A host that means to
+        // replace the resolution registers this policy itself.
+        services.TryAddSingleton(serviceProvider => new ReceiverAddressPolicy(
+            serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>()));
         services.TryAddTransient<ReceiverAddressValidatingHandler>();
         services
             .AddHttpClient<PushDeliverySender>()

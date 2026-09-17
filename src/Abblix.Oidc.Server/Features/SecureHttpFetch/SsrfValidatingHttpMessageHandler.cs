@@ -36,10 +36,21 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 4. HTTP request: Without this handler, request would go to localhost
 /// 5. With this handler: DNS is re-validated, private IP detected, request blocked
 /// </remarks>
+/// <param name="options">The deployment's outbound fetch settings.</param>
+/// <param name="uriValidator">Applies the synchronous scheme, hostname and IP-literal rules.</param>
+/// <param name="resolveHost">
+/// Resolves a hostname to its addresses; defaults to <see cref="Dns.GetHostAddressesAsync(string,
+/// CancellationToken)"/>. It exists so the resolved-address branch, the only part of this handler that is not a
+/// string comparison, can be driven in both directions without a live DNS. What this server resolves through is
+/// a security decision, so the library's own registration always passes the default: only a caller that builds
+/// this handler itself decides otherwise.</param>
 public class SsrfValidatingHttpMessageHandler(
     IOptions<SecureHttpFetchOptions> options,
-    ISecureUriValidator uriValidator) : AddressValidatingHttpMessageHandler
+    ISecureUriValidator uriValidator,
+    ResolveHostDelegate? resolveHost = null) : AddressValidatingHttpMessageHandler
 {
+    private readonly ResolveHostDelegate _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+
     /// <summary>
     /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,
     /// hostname and IP-literal rules, then a DNS re-resolution that catches rebinding. The base handler owns the
@@ -61,7 +72,7 @@ public class SsrfValidatingHttpMessageHandler(
         // above), re-resolve immediately before the request and reject if any address is private.
         //
         // A destination the host named is exempt here as well as above, and it has to be: such a service is
-        // reached at a private address by definition, so honouring the permission only in the validator
+        // reached at a private address by definition, so honoring the permission only in the validator
         // would let the URI pass and then refuse it here, one line before the request. There is no rebinding
         // to defend against either - the permission names the host, and an attacker who could change what it
         // resolves to already owns the name.
@@ -69,10 +80,10 @@ public class SsrfValidatingHttpMessageHandler(
             !SecureUriValidator.IsAllowedDestination(uri, options.Value.AllowedDestinations) &&
             !IPAddress.TryParse(uri.Host, out _))
         {
-            IPHostEntry hostEntry;
+            IPAddress[] addresses;
             try
             {
-                hostEntry = await Dns.GetHostEntryAsync(uri.Host, cancellationToken);
+                addresses = await _resolveHost(uri.Host, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -81,7 +92,7 @@ public class SsrfValidatingHttpMessageHandler(
                     ex);
             }
 
-            var privateAddress = hostEntry.AddressList.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
+            var privateAddress = addresses.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
             if (privateAddress != null)
             {
                 throw new HttpRequestException(
