@@ -15,7 +15,8 @@ option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 // name is drawn at random rather than taken from the clock: what it has to be is unrepeatable, and
 // two verifications sharing an instant would otherwise share a life and clear nothing.
 //
-// A message rather than a bare string for the reason RevocationCutoff states.
+// A message rather than a bare string so the record can gain a field later without every stored one
+// having to be read as something else.
 message RateLimitGeneration {
   // Field 1 held the count this record replaced. A record written by an earlier build therefore reads
   // with no name, which is the life before any verification - the same answer that build's absent

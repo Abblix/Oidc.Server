@@ -96,9 +96,29 @@ public class ProtobufSerializerTests
     }
 
     /// <summary>
-    /// A record naming no life is written as nothing at all and read back as no record, which is the same
-    /// answer an absent one gives - so a record left by a build that stored a count here reads as a code no
-    /// verification has cleared, and nothing stored has to be cleared before deploying.
+    /// A record left by the build that stored a count in this message reads as a record naming no life, which
+    /// is the answer a code no verification has cleared gives - so nothing in a store has to be cleared before
+    /// deploying.
+    /// </summary>
+    /// <remarks>
+    /// The bytes are what that build wrote for a count of two, rather than a message this build could produce:
+    /// a message of this build's own with nothing set is empty, and an empty payload never reaches the parser
+    /// at all, so a row built on one would be about the reader's shortcut instead of about the upgrade.
+    /// </remarks>
+    [Fact]
+    public void ARecordFromTheBuildThatCounted_ReadsAsNamingNoLife()
+    {
+        var counted = new byte[] { 0x08, 0x02 };
+
+        var result = _serializer.Deserialize<RateLimitGeneration>(counted);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.Id);
+    }
+
+    /// <summary>
+    /// And a record naming no life is written as nothing at all and read back as no record, which is the same
+    /// answer an absent one gives.
     /// </summary>
     /// <remarks>
     /// The empty payload is the wire format: a field at its default value is not written, and the field this

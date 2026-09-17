@@ -126,12 +126,12 @@ public interface IEntityStorageKeyFactory
     /// </summary>
     /// <remarks>
     /// A verified code starts a new life rather than having its records removed, because removing them is
-    /// what lets an attempt that began earlier land above the gap. The life is named by the instant of that
-    /// verification rather than counted, so a life this record no longer names cannot be handed out again
-    /// while its attempt records are still stored.
+    /// what lets an attempt that began earlier land above the gap. The life carries a name drawn when the
+    /// verification happens rather than a count: a count is read before it is written, so it restarts whenever
+    /// this record expires and hands back a life whose attempt records may still be stored.
     /// </remarks>
     /// <param name="userCode">The user code being verified.</param>
-    /// <returns>A formatted storage key for that code's current generation.</returns>
+    /// <returns>A formatted storage key for the name of that code's current life.</returns>
     string UserCodeRateLimitGenerationKey(string userCode);
 
     /// <summary>

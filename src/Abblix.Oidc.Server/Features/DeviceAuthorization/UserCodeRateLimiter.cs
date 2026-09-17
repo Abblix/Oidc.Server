@@ -145,10 +145,10 @@ public partial class UserCodeRateLimiter(
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        // Read before the claim, so an attempt whose claim began before a verification declared the next
-        // generation lands in the generation it read - the one being left behind - rather than on top of an
-        // empty ladder it never saw. That attempt is then not counted, which is the same loss as before:
-        // the code has just been verified and its own history says nothing any more.
+        // Read before the claim, so an attempt whose claim began before a verification started the next
+        // life lands in the life it read - the one being left behind - rather than on top of an empty
+        // ladder it never saw. That attempt is then not counted, which is the same loss as before: the
+        // code has just been verified and its own history says nothing any more.
         var life = await CurrentLifeAsync(userCode);
 
         var attempts = await ClaimAttemptAsync(
@@ -224,10 +224,19 @@ public partial class UserCodeRateLimiter(
         // an attacker spent of either.
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
+        // Kept longer than the rungs it names, the way the session client list keeps the record naming its own
+        // generation: a rung is written with the code's lifetime counted from the attempt that wrote it, and an
+        // attempt against a live code happens within the code's own life, so twice that lifetime from here
+        // covers the newest rung this life can acquire. Kept for the code's lifetime only, the record goes
+        // first, a reader finds the ladder of the life before any verification - empty - and hands out the whole
+        // allowance a second time, minutes after telling the client to wait the rest of the code's life.
         await storage.SetAsync(
             keyFactory.UserCodeRateLimitGenerationKey(userCode),
             new RateLimitGeneration { Id = Guid.NewGuid().ToString("N") },
-            new StorageOptions { AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime });
+            new StorageOptions
+            {
+                AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
+            });
 
         LogUserCodeVerified(userCode, clientIdentifier);
     }
@@ -296,7 +305,7 @@ public partial class UserCodeRateLimiter(
     /// Found by halving the range rather than walking it, which answers correctly only while the claimed
     /// rungs are one unbroken run from the first. Within one generation they are, by construction: a rung is
     /// only ever added, and only above the ones already taken, and nothing is ever removed - a verified code
-    /// starts a new generation instead. What remains is expiry, and it cannot open a gap either while the
+    /// starts a new life instead. What remains is expiry, and it cannot open a gap either while the
     /// code can be verified, because each rung is given the code's own lifetime from a moment already inside
     /// it. After the code is gone the lower rungs do expire first, and then the halving reads a short run or
     /// none - which forgives attempts against a value nobody can verify any more.

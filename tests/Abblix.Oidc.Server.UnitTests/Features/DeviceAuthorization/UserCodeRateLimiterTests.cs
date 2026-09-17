@@ -439,6 +439,33 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// A code told to wait the rest of its life is still waiting a moment later: its allowance is not handed out
+    /// again because the record naming the life those attempts belong to went first.
+    /// </summary>
+    /// <remarks>
+    /// That record is written when the code is verified and the attempts under it later, each keeping the code's
+    /// lifetime from itself, so a record kept for one lifetime dies while its own rungs are still stored. A
+    /// reader then finds the ladder of the life before any verification, which is empty, and a code that had
+    /// just been refused for five minutes is allowed again after one.
+    /// </remarks>
+    [Fact]
+    public async Task ASpentCode_StaysSpent_AfterTheRecordNamingItsLifeWouldHaveExpired()
+    {
+        await _rateLimiter.RecordSuccessAsync(UserCode, ClientIdentifier);
+
+        // Late in the life the verification started, so the rungs outlast a record kept for one lifetime.
+        _time.Advance(CodeLifetime - TimeSpan.FromMinutes(1));
+        await Fail(5);
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+
+        // Past that record's own end, with the rungs it names still stored.
+        _time.Advance(TimeSpan.FromMinutes(2));
+
+        Assert.True((await _rateLimiter.CheckAsync(UserCode, ClientIdentifier)).TryGetFailure(out _));
+    }
+
+    /// <summary>
     /// The per-address cap holds to the last instant of the window it was reached in.
     /// </summary>
     [Fact]
