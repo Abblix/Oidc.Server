@@ -214,29 +214,46 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures services for logout notification mechanisms within the application. This method
-    /// sets up both front-channel and back-channel logout capabilities, allowing the application to notify
-    /// clients about logout events through direct user agent redirection or server-to-server communication, respectively.
-    /// It integrates a composite logout notifier that aggregates both mechanisms to provide a unified approach to logout notifications.
+    /// Configures the logout notification machinery and composes whatever logout channels the host has chosen
+    /// into a single notifier. The channels themselves are opt-in: a host serves front-channel logout by calling
+    /// <see cref="AddFrontChannelLogout"/> and back-channel logout by calling <see cref="AddBackChannelLogout"/>,
+    /// at any point before the provider is built.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the logout notification services to.</param>
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    /// <remarks>
+    /// A deployment that chooses neither channel notifies nobody on logout and advertises neither channel in its
+    /// discovery document, which is what such a deployment does. Registering both channels here instead would
+    /// decide that for every host: the composite reports a channel as supported when any member supports it, and
+    /// the configuration endpoint publishes that as <c>frontchannel_logout_supported</c> and
+    /// <c>backchannel_logout_supported</c>, so every provider would announce channels its operator never asked
+    /// for, and back-channel logout carries an outbound HTTP client with it.
+    /// </remarks>
     public static IServiceCollection AddLogoutNotification(this IServiceCollection services)
     {
-        // The two channel calls go away in the next major, leaving each one an opt-in the host makes (#344).
-        // Registering both unconditionally decides for the deployment what it supports, and the discovery
-        // document then says so: CompositeLogoutNotifier reports a channel as supported when any member
-        // supports it, and ConfigurationHandler publishes that as frontchannel_logout_supported and
-        // backchannel_logout_supported. So every provider advertises both channels whether or not its
-        // operator wants either, and back-channel logout carries an outbound HTTP client with it.
-        // Removing them here is a breaking change for a host that relies on the default, hence the major.
         services.TryAddScoped<ISessionLogoutNotifier, SessionLogoutNotifier>();
         services.TryAddScoped<IAuthSessionTerminator, AuthSessionTerminator>();
         services.TryAddSingleton<ILogoutConfirmationStore, LogoutConfirmationStore>();
-        return services
-            .AddFrontChannelLogout()
-            .AddBackChannelLogout()
-            .Compose<ILogoutNotifier, CompositeLogoutNotifier>();
+
+        // The end-session response formatter renders whatever front-channel URIs the response carries, so it is
+        // a constructor dependency of that formatter whether or not this host serves the channel. Leaving it to
+        // AddFrontChannelLogout would make a host that serves no front channel unable to answer ANY logout
+        // request. It advertises nothing and reaches nobody: with no front-channel notifier there are no URIs
+        // to render, and it renders none.
+        services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
+
+        // The family has to hold a member even when the host serves no channel: an empty family composes to
+        // nothing, so everything that resolves the notifier singly would fail to resolve rather than read
+        // "neither". A member that supports no channel answers that question and changes no answer for a host
+        // that did choose a channel, which is cheaper than teaching each such consumer to resolve the family
+        // as a collection and decide what its absence means.
+        // Scoped is not an idle choice for a class holding nothing: a composite adopts the shortest lifetime
+        // among its members and refuses a member shorter-lived than itself, so a singleton here would compose
+        // a singleton for a host serving no channel, and its later opt-in into a scoped channel would throw.
+        services.Decompose<ILogoutNotifier>()
+            .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, NoLogoutNotifier>());
+
+        return services.Compose<ILogoutNotifier, CompositeLogoutNotifier>();
     }
 
     /// <summary>
@@ -270,7 +287,6 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
-        services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
         services.Decompose<ILogoutNotifier>()
             .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;

@@ -355,6 +355,13 @@ public class ServiceCollectionOverrideTests
         services.AddCheckSession();
         services.AddDynamicClientRegistration();
 
+        // Both logout channels, or the full-surface host would be the one host serving neither, and the
+        // descriptors a channel adds - the notifiers and the logout token service - would have their call
+        // sites validated nowhere. The outbound client the back channel registers is not among them: a
+        // typed-client factory has no dependency graph for this to walk.
+        services.AddFrontChannelLogout();
+        services.AddBackChannelLogout();
+
         services.AddOidcServices(_ => { });
         services.AddRichAuthorizationRequests();
 
