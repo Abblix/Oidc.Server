@@ -355,6 +355,12 @@ public class ServiceCollectionOverrideTests
         services.AddCheckSession();
         services.AddDynamicClientRegistration();
 
+        // Both logout channels, or the full-surface host would be the one host serving neither, and the
+        // graph of everything a back channel brings with it - the logout token service and its outbound
+        // client - would be validated nowhere.
+        services.AddFrontChannelLogout();
+        services.AddBackChannelLogout();
+
         services.AddOidcServices(_ => { });
         services.AddRichAuthorizationRequests();
 

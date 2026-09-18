@@ -64,10 +64,15 @@ dotnet add package Abblix.OIDC.Server.MVC
 
 ```csharp
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
+
+// The logout channels your application serves, and the ones its configuration document advertises
+builder.Services.AddFrontChannelLogout();
+builder.Services.AddBackChannelLogout();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>

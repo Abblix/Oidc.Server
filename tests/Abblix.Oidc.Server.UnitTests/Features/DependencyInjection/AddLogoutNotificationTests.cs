@@ -76,13 +76,14 @@ public class AddLogoutNotificationTests
     {
         using var provider = BuildProvider(_ => { });
 
-        // What answers a logout request is this formatter, and it takes the front-channel page builder whether
-        // or not the host serves that channel. Resolving the formatter is one assertion - it throws when the
-        // builder is missing - and the builder's own presence is the other, which says which dependency the
-        // row is about rather than leaving that to a stack trace.
-        var services = provider.CreateScope().ServiceProvider;
-        services.GetRequiredService<IEndSessionResponseFormatter>();
-        Assert.NotNull(services.GetService<IFrontChannelLogoutService>());
+        using var scope = provider.CreateScope();
+
+        // The page builder first, because it is the dependency this row is about: asked for after the
+        // formatter, its absence would arrive as the formatter's own activation failure and say nothing about
+        // which service was missing. The formatter second, because it is what answers a logout request, and
+        // nothing else proves it can be built by a host that serves no channel.
+        Assert.NotNull(scope.ServiceProvider.GetService<IFrontChannelLogoutService>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IEndSessionResponseFormatter>());
     }
 
     [Fact]

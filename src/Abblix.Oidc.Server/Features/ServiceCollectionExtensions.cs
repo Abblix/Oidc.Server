@@ -243,10 +243,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
 
         // The family has to hold a member even when the host serves no channel: an empty family composes to
-        // nothing, and the configuration endpoint and the session notifier resolve it singly, so each would
-        // fail to resolve rather than read "neither". A member that supports no channel answers that question
-        // and changes no answer for a host that did choose a channel, which is cheaper than teaching those two
-        // to resolve the family as a collection and decide what its absence means.
+        // nothing, so everything that resolves the notifier singly would fail to resolve rather than read
+        // "neither". A member that supports no channel answers that question and changes no answer for a host
+        // that did choose a channel, which is cheaper than teaching each such consumer to resolve the family
+        // as a collection and decide what its absence means.
         // Scoped is not an idle choice for a class holding nothing: a composite adopts the shortest lifetime
         // among its members and refuses a member shorter-lived than itself, so a singleton here would compose
         // a singleton for a host serving no channel, and its later opt-in into a scoped channel would throw.
