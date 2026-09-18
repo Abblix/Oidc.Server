@@ -243,9 +243,13 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
 
         // The family has to hold a member even when the host serves no channel: an empty family composes to
-        // nothing, and the configuration endpoint resolves ILogoutNotifier to answer what this provider
-        // supports - it would fail to resolve rather than answer "neither". This member supports no channel,
-        // so it changes no answer for a host that did choose one.
+        // nothing, and both consumers of the notifier resolve it singly, so they would fail to resolve rather
+        // than read "neither". A member that supports no channel answers that question and changes no answer
+        // for a host that did choose a channel, which is cheaper than teaching each consumer to resolve the
+        // family as a collection and decide what its absence means.
+        // Scoped is not an idle choice for a class holding nothing: a composite adopts the shortest lifetime
+        // among its members and refuses a member shorter-lived than itself, so a singleton here would compose
+        // a singleton for a host serving no channel, and its later opt-in into a scoped channel would throw.
         services.Decompose<ILogoutNotifier>()
             .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, NoLogoutNotifier>());
 
@@ -283,8 +287,6 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
-        // As in AddBackChannelLogout, the member joins the family through the cursor, so the call works both
-        // before and after AddLogoutNotification has composed it.
         services.Decompose<ILogoutNotifier>()
             .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;

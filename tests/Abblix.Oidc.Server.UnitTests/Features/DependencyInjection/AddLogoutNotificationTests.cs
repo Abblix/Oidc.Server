@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -68,6 +69,19 @@ public class AddLogoutNotificationTests
         Assert.IsType<CompositeLogoutNotifier>(notifier);
         Assert.False(notifier.FrontChannelLogoutSupported);
         Assert.False(notifier.BackChannelLogoutSupported);
+    }
+
+    [Fact]
+    public void AHostThatChoseNoChannel_StillAnswersLogoutRequests()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        // The formatter that writes the end-session response takes the front-channel page builder whether or
+        // not this host serves that channel, so the builder belongs to the machinery rather than to the
+        // channel. Registered with the channel instead, a host that serves none would fail to resolve the
+        // formatter - that is, answer no logout request at all - and no channel test would notice.
+        var formatter = provider.CreateScope().ServiceProvider.GetRequiredService<IEndSessionResponseFormatter>();
+        Assert.NotNull(formatter);
     }
 
     [Fact]
