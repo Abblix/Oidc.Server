@@ -155,6 +155,8 @@ For convenience, the certification information is provided in the tables below:
 |Back-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=5kbQfVOWmJV76) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=VWmk225h0coIZ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=YzDOT2LFWi4X7) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RxPPCdLI7LlcR) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=x73qpcrHcFWv0) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=uYoYs5BFAZkgr)|12|
 |**Total**||**102**|
 
+Your application chooses which of these logout channels it serves, and its configuration document then advertises those. Add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, beside `AddOidcServices`.
+
 ## 📦 How to Install
 
 Add the adapter that matches your ASP.NET Core hosting model from NuGet.

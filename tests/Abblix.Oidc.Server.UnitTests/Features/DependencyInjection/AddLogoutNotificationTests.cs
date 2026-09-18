@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
-using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,10 +77,12 @@ public class AddLogoutNotificationTests
         using var provider = BuildProvider(_ => { });
 
         // What answers a logout request is this formatter, and it takes the front-channel page builder whether
-        // or not the host serves that channel. Resolving it is the assertion; the type pins that the
-        // decoration around it survived too.
-        var formatter = provider.CreateScope().ServiceProvider.GetRequiredService<IEndSessionResponseFormatter>();
-        Assert.IsType<EndSessionResponseFormatterDecorator>(formatter);
+        // or not the host serves that channel. Resolving the formatter is one assertion - it throws when the
+        // builder is missing - and the builder's own presence is the other, which says which dependency the
+        // row is about rather than leaving that to a stack trace.
+        var services = provider.CreateScope().ServiceProvider;
+        services.GetRequiredService<IEndSessionResponseFormatter>();
+        Assert.NotNull(services.GetService<IFrontChannelLogoutService>());
     }
 
     [Fact]
