@@ -243,7 +243,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IFrontChannelLogoutService, FrontChannelLogoutService>();
 
         // The family has to hold a member even when the host serves no channel: an empty family composes to
-        // nothing, and both consumers of the notifier resolve it singly, so they would fail to resolve rather
+        // nothing, and every consumer of the notifier injects it singly, so each would fail to resolve rather
         // than read "neither". A member that supports no channel answers that question and changes no answer
         // for a host that did choose a channel, which is cheaper than teaching each consumer to resolve the
         // family as a collection and decide what its absence means.
@@ -287,6 +287,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddFrontChannelLogout(this IServiceCollection services)
     {
+        // Through the cursor, so the call works after AddLogoutNotification has composed the family too.
         services.Decompose<ILogoutNotifier>()
             .AddLast(ServiceDescriptor.Scoped<ILogoutNotifier, FrontChannelLogoutNotifier>());
         return services;
