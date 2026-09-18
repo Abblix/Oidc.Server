@@ -64,15 +64,10 @@ dotnet add package Abblix.OIDC.Server.MVC
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
-
-// The logout channels your application serves, and the ones its configuration document advertises
-builder.Services.AddFrontChannelLogout();
-builder.Services.AddBackChannelLogout();
 
 // Turn your ASP.NET Core app into an OpenID Connect provider
 builder.Services.AddOidcServices(options =>
@@ -82,7 +77,7 @@ builder.Services.AddOidcServices(options =>
 });
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+That registers the full set of certified OpenID Connect endpoints. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
 
 ## ✨ What's New
 

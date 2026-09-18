@@ -78,10 +78,8 @@ public class AddLogoutNotificationTests
 
         using var scope = provider.CreateScope();
 
-        // The page builder first, because it is the dependency this row is about: asked for after the
-        // formatter, its absence would arrive as the formatter's own activation failure and say nothing about
-        // which service was missing. The formatter second, because it is what answers a logout request, and
-        // nothing else proves it can be built by a host that serves no channel.
+        // The page builder is the dependency this row is about, and the formatter is what answers a logout
+        // request: nothing else proves a host serving no channel can build it.
         Assert.NotNull(scope.ServiceProvider.GetService<IFrontChannelLogoutService>());
         Assert.NotNull(scope.ServiceProvider.GetService<IEndSessionResponseFormatter>());
     }
