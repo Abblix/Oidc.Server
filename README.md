@@ -14,6 +14,7 @@
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
+[![migrating from IdentityServer](https://img.shields.io/badge/migrating_from_IdentityServer-guide-1D76DB)](https://docs.abblix.com/docs/migrate-from-identityserver)
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_under_%241M_revenue-brightgreen)](#-license)
 
