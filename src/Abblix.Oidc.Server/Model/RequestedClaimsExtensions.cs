@@ -102,8 +102,8 @@ public static class RequestedClaimsExtensions
     /// <para>
     /// The two qualifiers bind together, as they do for <c>sub</c> above and for the same reason, and a
     /// request whose qualifiers accept no level at all - an empty choice, or a <c>value</c> outside its own
-    /// <c>values</c> - is a failure rather than a set nothing matches, which is the same answer stated as
-    /// what it is.
+    /// <c>values</c> - is a failure rather than an empty set, because an empty set is how this answer says
+    /// that nothing was required.
     /// </para>
     /// </remarks>
     public static Result<string[], string> RequiredAuthContextClassRefs(this RequestedClaims? claims)

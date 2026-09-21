@@ -959,6 +959,29 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// The qualifiers narrow each other rather than one replacing the other, and this row is what says so
+    /// in the direction the others cannot: the session holds a level the choice lists, so a reader keeping
+    /// only <c>values</c> would issue a token. What the request accepts is the one level both qualifiers
+    /// name, which this session does not hold.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseQualifiersAgreeOnAnotherLevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa2" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "urn:example:loa3",
+                Values = ["urn:example:loa2", "urn:example:loa3"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
     /// The qualifiers are matched against each other by the same equality section 5.5.1 prescribes for
     /// matching a claim value, so a <c>value</c> differing from its own choice only in case is outside it.
     /// The session holds that very value, which is what separates this from the comparison the identity
