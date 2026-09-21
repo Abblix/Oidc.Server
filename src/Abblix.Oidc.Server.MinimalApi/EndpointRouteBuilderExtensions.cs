@@ -87,10 +87,10 @@ public static class EndpointRouteBuilderExtensions
         // without exception. See RequireHttpsAsync for the redirect/refuse behavior.
         oidcGroup.AddEndpointFilter(RequireHttpsAsync);
 
-        // Registered next, so it wraps every filter and handler below: a custodian failure raised anywhere
-        // under the group becomes a status the library chose rather than whatever the host's environment
-        // makes of an unhandled exception. It sits inside the HTTPS gate on purpose - a request refused for
-        // cleartext never reaches the keys at all.
+        // Registered next, so it wraps every filter and handler below: a refusal the library decides for
+        // itself, raised anywhere under the group, becomes a status the library chose rather than whatever the
+        // host's environment makes of an unhandled exception. It sits inside the HTTPS gate on purpose - a
+        // request refused for cleartext never reaches the keys, or anybody's budget, at all.
         oidcGroup.AddEndpointFilter(new LibraryRefusalFilter());
 
         // RFC 6749 section 5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,

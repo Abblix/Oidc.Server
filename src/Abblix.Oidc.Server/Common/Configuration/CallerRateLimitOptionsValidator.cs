@@ -49,8 +49,8 @@ public sealed class CallerRateLimitOptionsValidator : IValidateOptions<OidcOptio
         {
             return ValidateOptionsResult.Fail(
                 $"{nameof(options.AuthenticationFailureLimit)}.{nameof(failureLimit.PermitLimit)} is " +
-                $"{failureLimit.PermitLimit}, so the introspection and revocation endpoints would look at no " +
-                "credential from anywhere, and no client could authenticate at all. Set it to the number of " +
+                $"{failureLimit.PermitLimit}, so no credential would be looked at anywhere and no client could " +
+                "authenticate at all - not at the token endpoint, nor at any other. Set it to the number of " +
                 "failures one source may make, or to null to count none.");
         }
 

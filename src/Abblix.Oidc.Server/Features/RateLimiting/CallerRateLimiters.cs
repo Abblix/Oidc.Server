@@ -12,8 +12,9 @@ using Abblix.Oidc.Server.Common.Configuration;
 namespace Abblix.Oidc.Server.Features.RateLimiting;
 
 /// <summary>
-/// The per-caller budgets the token-reading endpoints spend, kept as <see cref="PartitionedRateLimiter{TResource}"/>
-/// instances registered under the keys below, one per endpoint, partitioned by client identifier.
+/// The budgets this server spends, kept as <see cref="PartitionedRateLimiter{TResource}"/> instances registered
+/// under the keys below. Each key says what its budget is partitioned by, because that is what decides who a
+/// refusal reaches.
 /// </summary>
 /// <remarks>
 /// The type is the one from <c>System.Threading.RateLimiting</c> rather than an interface of ours, so a host that
@@ -34,19 +35,23 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 public static class CallerRateLimiters
 {
     /// <summary>
-    /// The dependency-injection key of the budget spent by RFC 7662 introspection requests.
+    /// The dependency-injection key of the budget spent by RFC 7662 introspection requests, partitioned by the
+    /// identifier of the client that authenticated.
     /// </summary>
     public const string Introspection = "Abblix.Oidc.Server.Introspection.CallerRateLimit";
 
     /// <summary>
-    /// The dependency-injection key of the budget spent by RFC 7009 revocation requests.
+    /// The dependency-injection key of the budget spent by RFC 7009 revocation requests, partitioned by the
+    /// identifier of the client that authenticated - and, for a public client, by that identifier together with
+    /// the address the request came from, since the identifier alone is not that client's own.
     /// </summary>
     public const string Revocation = "Abblix.Oidc.Server.Revocation.CallerRateLimit";
 
     /// <summary>
-    /// The dependency-injection key of the budget of failed client authentications one source address gets.
-    /// Both token-reading endpoints spend the same one, because a sender hammering either of them is the same
-    /// sender, and the budget is about the sender rather than about what it asked for.
+    /// The dependency-injection key of the budget of failed client authentications one source address gets,
+    /// partitioned by that address. Every endpoint that authenticates a client spends the same one, because a
+    /// sender hammering any of them is the same sender, and the budget is about the sender rather than about
+    /// what it asked for.
     /// </summary>
     public const string AuthenticationFailures = "Abblix.Oidc.Server.AuthenticationFailures.RateLimit";
 

@@ -7,8 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt.ExternalKeys;
-using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;

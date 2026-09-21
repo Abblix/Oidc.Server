@@ -53,6 +53,11 @@ public class RevocationRequestValidatorTests
     private static readonly IPAddress Source = IPAddress.Parse("203.0.113.7");
 
     /// <summary>
+    /// A second address, so a flood from one can be told from a user of the same client at another.
+    /// </summary>
+    private static readonly IPAddress AnotherSource = IPAddress.Parse("203.0.113.8");
+
+    /// <summary>
     /// A client registered to authenticate with nothing but its identifier, which is what the revocation
     /// endpoint admits and the introspection endpoint refuses.
     /// </summary>
@@ -80,17 +85,13 @@ public class RevocationRequestValidatorTests
     private RevocationRequestValidator CreateValidator(CallerRateLimitOptions rateLimit)
         => CreateValidator(CallerRateLimiters.Create(rateLimit));
 
-    private RevocationRequestValidator CreateValidator(
-        PartitionedRateLimiter<string> rateLimiter,
-        AuthenticationFailureLimitOptions? failureLimit = null)
+    private RevocationRequestValidator CreateValidator(PartitionedRateLimiter<string> rateLimiter)
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
             _jwtValidator.Object,
             rateLimiter,
-            new AuthenticationFailureBudget(
-                CallerRateLimiters.Create(failureLimit ?? new AuthenticationFailureLimitOptions()),
-                _requestInfoProvider.Object));
+            _requestInfoProvider.Object);
 
     private static RevocationRequest CreateRevocationRequest(string token = "token_value")
     {
@@ -486,45 +487,15 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// A public client's budget is never spent, however much anybody asks under its name. Its only claim to its
-    /// identity is a client_id anybody can read out of a browser, so a budget charged to that name would be
-    /// spent by whoever wanted to - and what they would take away is the ability of that client's real users to
-    /// revoke a token they believe is stolen.
+    /// What a public client's request spends is a budget in its name together with the address it came from.
+    /// Reading the token it names verifies a signature, so the work is real and has to be charged somewhere -
+    /// and the address is the half of that pair the sender cannot choose.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldNotSpendThatClientsBudget()
+    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedlyFromOneSource_ShouldRefuseThatSource()
     {
         // Arrange
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(CreateValidJsonWebToken());
-
-        // Act, Assert
-        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-        {
-            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-            Assert.True(result.TryGetSuccess(out _), $"a public client was refused on attempt {attempt + 1}");
-        }
-    }
-
-    /// <summary>
-    /// What such a request spends instead is the budget of the address it came from, once a deployment has
-    /// turned that one on. Reading the token it names verifies a signature, so the work is real and has to be
-    /// charged somewhere that the sender cannot choose.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldSpendTheSourceBudget()
-    {
-        // Arrange
-        var validator = CreateValidator(
-            CallerRateLimiters.Create(new CallerRateLimitOptions()),
-            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
@@ -545,6 +516,66 @@ public class RevocationRequestValidatorTests
 
         // The token in the second request was never read, which is the work this is protecting.
         _jwtValidator.Verify(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()), Times.Once);
+    }
+
+    /// <summary>
+    /// And the client's other users keep their logout. A stranger flooding under a public client's identifier
+    /// spends what it sent from and nothing else, which is the whole reason the address is half of the budget's
+    /// name.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenOneSourceFloodsAPublicClient_ShouldStillAnswerAnotherSource()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var flooded = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
+        var elsewhere = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(flooded.TryGetFailure(out var error));
+        Assert.IsType<TooManyRequestsError>(error);
+        Assert.True(elsewhere.TryGetSuccess(out _), "a user of that client elsewhere lost their logout");
+    }
+
+    /// <summary>
+    /// A server that cannot see where a request came from has no second half to charge, and the first half
+    /// alone is the identifier a stranger could spend. Such a request is charged nothing rather than charged to
+    /// something anybody can claim.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenAPublicClientsSourceCannotBeNamed_ShouldChargeNothing()
+    {
+        // Arrange
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns((IPAddress?)null);
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act, Assert
+        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
+        {
+            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+            Assert.True(result.TryGetSuccess(out _), $"a public client was refused on attempt {attempt + 1}");
+        }
     }
 
     /// <summary>

@@ -43,7 +43,8 @@ public record AuthenticationFailureLimitOptions
 {
     /// <summary>
     /// How many authentications may fail from one address within <see cref="Window"/>. Null, the default,
-    /// counts nothing and every request has its credentials looked at however many have failed.
+    /// counts nothing and every request has its credentials looked at however many have failed - unless the
+    /// host registered a limiter of its own for this, which decides instead of these numbers.
     /// </summary>
     /// <remarks>
     /// Counted inside one instance of this server, like every other budget here, so a deployment running

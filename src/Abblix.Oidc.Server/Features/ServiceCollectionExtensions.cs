@@ -112,6 +112,8 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<AuthenticationFailureBudget>();
 
+        // Registered with TryAdd, so a host that put its own limiter under this key keeps it - and then the
+        // budget is live whatever the settings say, including while they say to count nothing.
         services.TryAddKeyedSingleton<PartitionedRateLimiter<string>>(
             CallerRateLimiters.AuthenticationFailures,
             (serviceProvider, _) => CallerRateLimiters.Create(

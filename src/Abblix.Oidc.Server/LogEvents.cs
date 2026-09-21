@@ -182,7 +182,6 @@ internal static class LogEvents
             public const int TokenIssuedToAnotherClient = Base + 1;
             public const int TokenValidationFailed = Base + 2;
             public const int CallerRateLimited = Base + 3;
-            public const int SourceRateLimited = Base + 4;
         }
     }
 

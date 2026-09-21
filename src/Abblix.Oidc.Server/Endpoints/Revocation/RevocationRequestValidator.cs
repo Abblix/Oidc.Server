@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -41,16 +42,15 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// <param name="rateLimiter">
 /// The budget of revocation requests one client gets, spent once the caller is known to be that client.
 /// </param>
-/// <param name="failureBudget">
-/// The budget of failed client authentications the request's source gets, which bounds what a sender that never
-/// authenticates can cost this endpoint.
+/// <param name="requestInfoProvider">
+/// Names the address a request came from, which is half of what a public client's budget is charged to.
 /// </param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Revocation)] PartitionedRateLimiter<string> rateLimiter,
-	AuthenticationFailureBudget failureBudget)
+	IRequestInfoProvider requestInfoProvider)
 	: IRevocationRequestValidator
 {
 	/// <summary>
@@ -96,23 +96,18 @@ public partial class RevocationRequestValidator(
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
 		//
-		// A public client presents a client_id and no credential, so anyone who read that identifier out of a
-		// browser can send this request under it. Charging the client's budget would hand them a way to silence
-		// its logout, so what such a request spends is the budget of the address it came from - the same one
-		// that counts failed authentications, and for the same reason: nothing else about the sender is its
-		// own. Introspection has no such case, because it refuses a public client outright.
-		if (clientInfo.ClientType == ClientType.Public)
-		{
-			if (failureBudget.Spend() is not { } sourceRefusal)
-				return await ReadTokenAsync(revocationRequest, clientInfo);
-
-			LogSourceRateLimited(clientInfo.ClientId);
-			return sourceRefusal;
-		}
+		// What it is charged to depends on what the caller proved. A confidential client proved which client it
+		// is, so the budget is that client's. A public client proved nothing: it presents a client_id anyone can
+		// read out of a browser, so a budget in that name alone would be spent by strangers and its own users
+		// would lose their logout. Such a request is charged to the client AND the address together, which
+		// leaves a flood spending only what it sent from, and leaves the client answering everywhere else.
+		// Introspection has no such case, because it refuses a public client outright.
+		if (BudgetFor(clientInfo) is not { } budgetKey)
+			return await ReadTokenAsync(revocationRequest, clientInfo);
 
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.
-		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+		using var lease = rateLimiter.AttemptAcquire(budgetKey);
 		if (!lease.IsAcquired)
 		{
 			LogCallerRateLimited(clientInfo.ClientId);
@@ -123,6 +118,27 @@ public partial class RevocationRequestValidator(
 
 		return await ReadTokenAsync(revocationRequest, clientInfo);
 	}
+
+	/// <summary>
+	/// Names the budget this caller's request is charged to, or null when it is charged to none.
+	/// </summary>
+	/// <remarks>
+	/// A request in a public client's name is charged to that name together with the address it came from, so
+	/// that one sender's flood cannot reach the client's other users. When the server cannot see an address,
+	/// nothing is charged: the alternative is a budget in the client's name alone, which is the thing a
+	/// stranger could spend to silence its logout, and an endpoint doing unbounded work is what this endpoint
+	/// did before budgets existed.
+	/// </remarks>
+	private string? BudgetFor(ClientInfo clientInfo)
+		=> clientInfo.ClientType switch
+		{
+			ClientType.Confidential => clientInfo.ClientId,
+			ClientType.Public => requestInfoProvider.RemoteIpAddress is { } source
+				? $"{clientInfo.ClientId}@{source}"
+				: null,
+			_ => throw new InvalidOperationException(
+				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
+		};
 
 	/// <summary>
 	/// Reads the token the request names and decides whether it belongs to the client that asked.

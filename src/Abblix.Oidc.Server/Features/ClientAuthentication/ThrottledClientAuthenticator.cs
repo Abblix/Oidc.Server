@@ -7,10 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Utils;
-using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 

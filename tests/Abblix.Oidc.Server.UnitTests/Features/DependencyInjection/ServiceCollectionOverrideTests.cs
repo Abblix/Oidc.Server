@@ -20,6 +20,8 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using System.Threading.RateLimiting;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -161,6 +163,45 @@ public class ServiceCollectionOverrideTests
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
 
         Assert.IsType<ThrottledClientAuthenticator>(authenticator);
+    }
+
+    /// <summary>
+    /// And the profile decorator is still in the chain underneath, which the type of the outermost layer cannot
+    /// say. Without this, removing that decoration leaves every suite green while a deployment holding its
+    /// clients to a profile silently stops holding them to anything.
+    /// </summary>
+    [Fact]
+    public async Task AddClientAuthentication_AClientThatCannotSatisfyTheProfile_IsStillRefused()
+    {
+        var services = new ServiceCollection();
+        services.AddClientAuthentication();
+
+        // A client authenticating with nothing cannot satisfy FAPI 2, which is what the decorator answers.
+        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+
+        var clients = new Mock<IClientInfoProvider>();
+        clients.Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+
+        services.AddLogging();
+        services.Configure<OidcOptions>(options => options.DefaultSecurityProfile = ClientSecurityProfile.Fapi2);
+        services.AddSingleton(clients.Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
+        services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
+        services.AddSingleton(new Mock<IClientJwtValidator>().Object);
+        services.AddSingleton(new Mock<IIssuerProvider>().Object);
+        services.AddSingleton(new Mock<IReplayCache>().Object);
+
+        var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
+
+        var authenticated = await authenticator.TryAuthenticateClientAsync(
+            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+
+        Assert.Null(authenticated);
     }
 
     [Fact]

@@ -9,6 +9,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.RateLimiting;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
@@ -165,7 +166,55 @@ public sealed class CallerBudgetShapeTests
     public async Task ASourceWhoseCredentialsKeepFailingStopsBeingAuthenticated()
     {
         using var factory = new TestFactory();
-        using var client = factory
+        using var client = ClientWhoseSourceMayFailOnce(factory);
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+
+        using var first = await PostWrongSecretAsync(client, discovery.IntrospectionEndpoint);
+        using var second = await PostWrongSecretAsync(client, discovery.IntrospectionEndpoint);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+
+        // And it is told when to come back, which is the whole difference between a refusal it can act on and
+        // one that leaves it retrying immediately into the same wall.
+        Assert.NotNull(second.Headers.RetryAfter?.Delta);
+    }
+
+    /// <summary>
+    /// The same refusal at the token endpoint, which every deployment exposes while few expose introspection -
+    /// and where a failing credential costs exactly as much. This is what the budget sitting around client
+    /// authentication buys over one that each endpoint had to ask for.
+    /// </summary>
+    [Fact]
+    public async Task ASourceWhoseCredentialsKeepFailingIsRefusedAtTheTokenEndpointToo()
+    {
+        using var factory = new TestFactory();
+        using var client = ClientWhoseSourceMayFailOnce(factory);
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.TokenEndpoint);
+
+        using var first = await PostWrongSecretAsync(client, discovery.TokenEndpoint);
+        using var second = await PostWrongSecretAsync(client, discovery.TokenEndpoint);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+        Assert.NotNull(second.Headers.RetryAfter?.Delta);
+    }
+
+    /// <summary>
+    /// The address the requests of those tests appear to come from. Any address will do; this one is from the
+    /// range RFC 5737 sets aside for documentation, so it can never be a real one.
+    /// </summary>
+    private static readonly IPAddress SomeSource = IPAddress.Parse("203.0.113.7");
+
+    /// <summary>
+    /// A client of a host that sees an address on every request and allows one failed authentication from it.
+    /// The budget is registered rather than configured, because the test server leaves a request without an
+    /// address and a budget nobody can be charged to would refuse nothing.
+    /// </summary>
+    private static HttpClient ClientWhoseSourceMayFailOnce(TestFactory factory)
+        => factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IStartupFilter>(new GiveEveryRequestASource(SomeSource));
@@ -188,32 +237,21 @@ public sealed class CallerBudgetShapeTests
                 BaseAddress = TestServerAddress.BaseAddress,
             });
 
-        var discovery = await FetchDiscoveryAsync(client);
-        Assert.NotNull(discovery.IntrospectionEndpoint);
-
-        using var first = await PostTokenAsync(
-            client,
-            discovery.IntrospectionEndpoint,
-            IntrospectionRequest.Parameters.Token,
-            TestConstants.ConfidentialClientId,
-            clientSecret: "not-the-secret");
-
-        using var second = await PostTokenAsync(
-            client,
-            discovery.IntrospectionEndpoint,
-            IntrospectionRequest.Parameters.Token,
-            TestConstants.ConfidentialClientId,
-            clientSecret: "not-the-secret");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
-    }
-
     /// <summary>
-    /// The address the requests of the test above appear to come from. Any address will do; this one is from
-    /// the range RFC 5737 sets aside for documentation, so it can never be a real one.
+    /// Presents a registered client's identifier with a secret that is not its own, which is the cheapest
+    /// credential a sender can get wrong, and the same at either endpoint.
     /// </summary>
-    private static readonly IPAddress SomeSource = IPAddress.Parse("203.0.113.7");
+    private static Task<HttpResponseMessage> PostWrongSecretAsync(HttpClient client, Uri endpoint)
+        => client.PostAsync(
+            endpoint,
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = "not-the-secret",
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [IntrospectionRequest.Parameters.Token] = "not-a-token",
+            }),
+            TestContext.Current.CancellationToken);
 
     /// <summary>
     /// Puts a source address on every request, which the test server otherwise leaves unset.
