@@ -1040,6 +1040,28 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// A choice mixing a level the session does hold with a qualifier that is no level at all is refused
+    /// for the malformed member, not accepted for the sound one. The session is the match deliberately: a
+    /// reader that skipped what it could not parse would find the level it holds and issue the token.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AnEssentialAcr_MixingALevelWithSomethingElse_IssuesNoToken(bool throughTheStore)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+        var stored = new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3", 42] };
+        var readInline = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            """{"essential": true, "values": ["urn:example:loa3", 42]}""")!;
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            throughTheStore ? stored : readInline);
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
     /// A session that records no authentication level at all - the shape a host produces when it never
     /// assigns one - meets no request that names the levels it accepts, and the token would otherwise go
     /// out stating no level for a request that demanded a particular one.
@@ -1057,34 +1079,38 @@ public class IdentityTokenServiceTests
         Assert.Null(token);
     }
 
-    /// <summary>
-    /// The same of the single qualifier, which is read by its own line: a <c>value</c> that is not a string
-    /// names no level either.
-    /// </summary>
-    [Fact]
-    public async Task AnEssentialAcr_WhoseSingleValueIsNotALevel_IssuesNoToken()
-    {
-        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
-
-        var token = await CreateTokenForRequestedAcrAsync(
-            authSession,
-            new RequestedClaimDetails { Essential = true, Value = 42 });
-
-        Assert.Null(token);
-    }
 
     /// <summary>
     /// A qualifier that is not a string states a level no authentication can hold, so it is unmet rather
-    /// than ignored.
+    /// than ignored - in either qualifier, and in either shape the request arrives in. A request read
+    /// inline holds <see cref="JsonElement"/> values, because the model types them as <c>object</c>; one
+    /// retrieved by <c>request_uri</c> was round-tripped through the store and holds boxed primitives.
+    /// Driving only the second would leave every inline request unchecked with nothing failing to say so.
     /// </summary>
-    [Fact]
-    public async Task AnEssentialAcr_NamingSomethingThatIsNotALevel_IssuesNoToken()
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task AnEssentialAcr_NamingSomethingThatIsNotALevel_IssuesNoToken(
+        bool inTheChoice,
+        bool throughTheStore)
     {
         var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+        var member = inTheChoice ? "values\": [42]" : "value\": 42";
+        object? notALevel = inTheChoice ? null : 42;
+        object[]? choiceOfNotALevel = inTheChoice ? [42] : null;
+        var stored = new RequestedClaimDetails
+        {
+            Essential = true,
+            Value = notALevel,
+            Values = choiceOfNotALevel,
+        };
+        var readInline = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            $"{{\"essential\": true, \"{member}}}")!;
+        var requested = throughTheStore ? stored : readInline;
 
-        var token = await CreateTokenForRequestedAcrAsync(
-            authSession,
-            new RequestedClaimDetails { Essential = true, Values = [42] });
+        var token = await CreateTokenForRequestedAcrAsync(authSession, requested);
 
         Assert.Null(token);
     }
