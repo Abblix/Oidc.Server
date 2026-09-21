@@ -91,7 +91,7 @@ public static class EndpointRouteBuilderExtensions
         // under the group becomes a status the library chose rather than whatever the host's environment
         // makes of an unhandled exception. It sits inside the HTTPS gate on purpose - a request refused for
         // cleartext never reaches the keys at all.
-        oidcGroup.AddEndpointFilter(new KeyCustodianFailureFilter());
+        oidcGroup.AddEndpointFilter(new LibraryRefusalFilter());
 
         // RFC 6749 section 5.1 no-store, applied group-wide so every OIDC response (token, PAR, CIBA, device, userinfo,
         // introspection, authorize, checksession, discovery, JWKS) carries it - matching the MVC controllers'

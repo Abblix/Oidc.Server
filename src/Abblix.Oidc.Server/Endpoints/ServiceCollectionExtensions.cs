@@ -537,14 +537,6 @@ public static class ServiceCollectionExtensions
             key,
             (serviceProvider, _) => CallerRateLimiters.Create(
                 serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.CallerRateLimit));
-
-        // One budget for both endpoints, because it counts a sender rather than what the sender asked for.
-        services.TryAddKeyedSingleton<PartitionedRateLimiter<string>>(
-            CallerRateLimiters.AuthenticationFailures,
-            (serviceProvider, _) => CallerRateLimiters.Create(
-                serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.AuthenticationFailureLimit));
-
-        services.TryAddScoped<AuthenticationFailureBudget>();
     }
 
     /// <summary>

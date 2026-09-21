@@ -52,6 +52,15 @@ public class RevocationRequestValidatorTests
     /// </summary>
     private static readonly IPAddress Source = IPAddress.Parse("203.0.113.7");
 
+    /// <summary>
+    /// A client registered to authenticate with nothing but its identifier, which is what the revocation
+    /// endpoint admits and the introspection endpoint refuses.
+    /// </summary>
+    private static ClientInfo PublicClient => new(TestConstants.DefaultClientId)
+    {
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+    };
+
     private readonly Mock<ILogger<RevocationRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
@@ -477,24 +486,20 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// A public client is never counted here, however much it asks. Its only claim to its identity is a
-    /// client_id anybody can read out of a browser, so a budget charged to that name would be spent by whoever
-    /// wanted to - and what they would take away is the ability of that client's real users to revoke a token
-    /// they believe is stolen.
+    /// A public client's budget is never spent, however much anybody asks under its name. Its only claim to its
+    /// identity is a client_id anybody can read out of a browser, so a budget charged to that name would be
+    /// spent by whoever wanted to - and what they would take away is the ability of that client's real users to
+    /// revoke a token they believe is stolen.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldKeepAnsweringIt()
+    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldNotSpendThatClientsBudget()
     {
         // Arrange
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
-        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
-        {
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
-        };
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(publicClient));
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
@@ -506,6 +511,40 @@ public class RevocationRequestValidatorTests
             var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
             Assert.True(result.TryGetSuccess(out _), $"a public client was refused on attempt {attempt + 1}");
         }
+    }
+
+    /// <summary>
+    /// What such a request spends instead is the budget of the address it came from, once a deployment has
+    /// turned that one on. Reading the token it names verifies a signature, so the work is real and has to be
+    /// charged somewhere that the sender cannot choose.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldSpendTheSourceBudget()
+    {
+        // Arrange
+        var validator = CreateValidator(
+            CallerRateLimiters.Create(new CallerRateLimitOptions()),
+            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(first.TryGetSuccess(out _));
+        Assert.True(second.TryGetFailure(out var error));
+        Assert.IsType<TooManyRequestsError>(error);
+
+        // The token in the second request was never read, which is the work this is protecting.
+        _jwtValidator.Verify(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -537,95 +576,6 @@ public class RevocationRequestValidatorTests
         // Assert
         Assert.True(last.TryGetFailure(out var error), "a client past the default budget was still answered");
         Assert.IsType<TooManyRequestsError>(error);
-    }
-
-    /// <summary>
-    /// A sender whose credentials keep failing is stopped before the next one is looked at. Looking at a client
-    /// assertion means verifying a signature, so a sender that never authenticates would otherwise buy one per
-    /// request forever: the per-client budget cannot reach it, because that one is charged to a client it never
-    /// proves to be.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WhenTheSourceKeepsFailingToAuthenticate_ShouldStopLookingAtItsCredentials()
-    {
-        // Arrange
-        var validator = CreateValidator(
-            CallerRateLimiters.Create(new CallerRateLimitOptions()),
-            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
-
-        // Act
-        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-
-        // Assert
-        Assert.True(first.TryGetFailure(out var firstError));
-        Assert.Equal(ErrorCodes.InvalidClient, firstError.Error);
-
-        Assert.True(second.TryGetFailure(out var secondError));
-        Assert.IsType<TooManyRequestsError>(secondError);
-
-        // The credential in the second request was never looked at, which is the whole point of counting.
-        _clientAuthenticator.Verify(
-            a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()),
-            Times.Once);
-    }
-
-    /// <summary>
-    /// Nothing successful is counted, so a busy client that authenticates correctly never approaches a budget
-    /// meant for senders whose credentials do not verify.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WhenTheSourceAuthenticatesSuccessfully_ShouldNotCountAnything()
-    {
-        // Arrange
-        var validator = CreateValidator(
-            CallerRateLimiters.Create(new CallerRateLimitOptions()),
-            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(CreateValidJsonWebToken());
-
-        // Act, Assert
-        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-        {
-            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-            Assert.True(result.TryGetSuccess(out _), $"a working client was refused on attempt {attempt + 1}");
-        }
-    }
-
-    /// <summary>
-    /// A request whose source cannot be named is not counted, because one bucket shared by every such request
-    /// would let a single sender close the endpoint to everybody else arriving the same way.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WhenTheSourceCannotBeNamed_ShouldKeepLookingAtCredentials()
-    {
-        // Arrange
-        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns((IPAddress?)null);
-        var validator = CreateValidator(
-            CallerRateLimiters.Create(new CallerRateLimitOptions()),
-            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
-
-        // Act, Assert
-        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-        {
-            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-            Assert.True(result.TryGetFailure(out var error));
-            Assert.Equal(ErrorCodes.InvalidClient, error.Error);
-        }
     }
 
     /// <summary>

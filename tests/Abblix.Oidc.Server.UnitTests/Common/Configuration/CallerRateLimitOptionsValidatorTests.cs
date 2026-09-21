@@ -64,6 +64,63 @@ public class CallerRateLimitOptionsValidatorTests
     }
 
     /// <summary>
+    /// The budget counting failed authentications is checked by the same validator, and its own refusal is
+    /// reached only when the budget above is sound - so it needs cases of its own or both its branches ship
+    /// unexercised.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_failure_budget_that_permits_nothing_is_refused(int permitLimit)
+    {
+        var refused = new CallerRateLimitOptionsValidator().Validate(
+            null,
+            new OidcOptions
+            {
+                AuthenticationFailureLimit = new AuthenticationFailureLimitOptions { PermitLimit = permitLimit },
+            });
+
+        Assert.True(refused.Failed);
+        Assert.Contains(nameof(OidcOptions.AuthenticationFailureLimit), refused.FailureMessage);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_failure_window_of_no_length_is_refused(int seconds)
+    {
+        var refused = new CallerRateLimitOptionsValidator().Validate(
+            null,
+            new OidcOptions
+            {
+                AuthenticationFailureLimit = new AuthenticationFailureLimitOptions
+                {
+                    PermitLimit = 1,
+                    Window = TimeSpan.FromSeconds(seconds),
+                },
+            });
+
+        Assert.True(refused.Failed);
+        Assert.Contains(nameof(AuthenticationFailureLimitOptions.Window), refused.FailureMessage);
+    }
+
+    /// <summary>
+    /// Off is the default for that budget, which is the opposite of the one above, and nothing about an unset
+    /// limit may refuse a start.
+    /// </summary>
+    [Fact]
+    public void The_default_failure_budget_is_off_and_accepted()
+    {
+        var defaults = new AuthenticationFailureLimitOptions();
+
+        Assert.Null(defaults.PermitLimit);
+        Assert.False(
+            new CallerRateLimitOptionsValidator()
+                .Validate(null, new OidcOptions { AuthenticationFailureLimit = defaults })
+                .Failed);
+    }
+
+    /// <summary>
     /// The shipped composition refuses the value too, which a validator nobody registers would not. Both
     /// endpoints register it, so the check is asked for through each of them.
     /// </summary>

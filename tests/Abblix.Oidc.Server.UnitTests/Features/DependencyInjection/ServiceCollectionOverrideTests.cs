@@ -134,11 +134,13 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public void AddClientAuthentication_ProfileEnforcementIsOutermost()
+    public void AddClientAuthentication_ThrottlingIsOutermost()
     {
-        // The profile decorator is the only place a client already in the store meets its profile,
-        // so it has to be what the singular contract resolves to - and outside the composite, or
-        // the credential form would decide whether the profile is applied at all.
+        // A source past its budget of failed authentications is refused before anything below looks at what it
+        // sent, which is what makes the refusal cheap - so the throttle is what the singular contract resolves
+        // to. Directly beneath it sits the profile decorator, the only place a client already in the store
+        // meets its profile, itself outside the composite so that the credential form cannot decide whether
+        // the profile is applied at all.
         var services = new ServiceCollection();
 
         services.AddClientAuthentication();
@@ -158,7 +160,7 @@ public class ServiceCollectionOverrideTests
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
 
-        Assert.IsType<SecurityProfileClientAuthenticator>(authenticator);
+        Assert.IsType<ThrottledClientAuthenticator>(authenticator);
     }
 
     [Fact]

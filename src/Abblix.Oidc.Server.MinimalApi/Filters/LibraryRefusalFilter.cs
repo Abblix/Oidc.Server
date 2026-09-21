@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Http;
 
@@ -33,7 +34,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Filters;
 /// here, where the custodian's own answer is still in hand.
 /// </para>
 /// </remarks>
-internal sealed class KeyCustodianFailureFilter : IEndpointFilter
+internal sealed class LibraryRefusalFilter : IEndpointFilter
 {
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -54,6 +55,15 @@ internal sealed class KeyCustodianFailureFilter : IEndpointFilter
         catch (KeyCustodianFailedException)
         {
             return Results.StatusCode(StatusCodes.Status500InternalServerError);
+        }
+        catch (TooManyAuthenticationFailuresException exception)
+        {
+            if (exception.RetryAfter is { } retryAfter)
+            {
+                context.HttpContext.Response.SetRetryAfter(retryAfter);
+            }
+
+            return Results.StatusCode(StatusCodes.Status429TooManyRequests);
         }
     }
 }

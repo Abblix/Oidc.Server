@@ -24,22 +24,33 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// instance retrying - which is why it is stated per minute rather than per second.
 /// </para>
 /// <para>
-/// Two things a deployment has to know. Behind a reverse proxy the source address is the proxy's unless the
-/// host configures forwarded headers, and then every caller shares one budget: a stranger's failures are then
-/// charged to the same address as everyone else's, and once it is spent nobody's credentials are looked at
-/// until the window turns. A deployment in that shape configures forwarded headers, raises the number, or sets
-/// it to null. And a sender that rotates addresses is not bounded by this at all - as with any count against an
-/// address, what it buys is a cost on the cheapest form of the attack, not an answer to every form.
+/// It is OFF until a deployment turns it on, which is the opposite of the budget one client gets, and the
+/// reason is what an address means where this server runs. A server whose callers reach it through a load
+/// balancer, an ingress or a NAT gateway sees one address for all of them, and then this budget is one bucket
+/// for the whole deployment: anybody on the internet could spend it with a hundred wrong secrets a minute and
+/// leave every honest client refused until the window turned. Turning it on is a statement that this server
+/// sees the addresses its callers actually come from - which usually means it terminates their connections
+/// itself, or its proxy is trusted to say so and nobody else is.
+/// </para>
+/// <para>
+/// What it does not answer: a sender that rotates addresses is not bounded by it, as with any count against an
+/// address, and a sender that can choose the address this server sees - which is what trusting a forwarded
+/// header from anyone amounts to - can both evade it and spend somebody else's budget. What it buys is a price
+/// on the cheapest form of the attack, from a deployment that knows what an address means to it.
 /// </para>
 /// </remarks>
 public record AuthenticationFailureLimitOptions
 {
     /// <summary>
-    /// How many authentications may fail from one address within <see cref="Window"/>. Null lifts the limit,
-    /// and every request has its credentials looked at however many have failed, as versions before this
-    /// setting did.
+    /// How many authentications may fail from one address within <see cref="Window"/>. Null, the default,
+    /// counts nothing and every request has its credentials looked at however many have failed.
     /// </summary>
-    public int? PermitLimit { get; set; } = 100;
+    /// <remarks>
+    /// Counted inside one instance of this server, like every other budget here, so a deployment running
+    /// several multiplies it, and the number is read once when the limiter is first needed rather than on a
+    /// configuration reload.
+    /// </remarks>
+    public int? PermitLimit { get; set; }
 
     /// <summary>
     /// The window failures are counted over. A minute by default, long enough that a deployment's own noise

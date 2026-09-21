@@ -169,7 +169,6 @@ internal static class LogEvents
             public const int InvalidJwt = Base + 1;
             public const int PublicClientRejected = Base + 2;
             public const int CallerRateLimited = Base + 3;
-            public const int SourceRateLimited = Base + 4;
         }
 
         /// <summary>
@@ -887,6 +886,24 @@ internal static class LogEvents
             private const int Base = 10300;
 
             public const int SessionClientsExhausted = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 10400-10499: <c>Features/RateLimiting</c> - what a budget refuses. A window of its own rather
+    /// than a number inside <see cref="ClientAuth"/>, whose range is allocated to its last id.
+    /// </summary>
+    public static class RateLimiting
+    {
+        /// <summary>
+        /// <c>Features/ClientAuthentication/ThrottledClientAuthenticator.cs</c> - a source whose failed
+        /// authentications are over budget (sub-range 10400-10419).
+        /// </summary>
+        public static class ThrottledClientAuthenticator
+        {
+            private const int Base = 10400;
+
+            public const int SourceRefused = Base;
         }
     }
 }

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
@@ -83,20 +84,9 @@ public partial class RevocationRequestValidator(
 		// used than revoked. The protection the spec actually mandates is the token-ownership
 		// check below. Do not re-add a public-client rejection here: it slipped in once and
 		// left every SPA and native client unable to revoke its own refresh token on logout.
-		// A sender whose credentials never verify is never charged the per-client budget below, because that one
-		// is charged to a client it has not proven to be. Its failures are counted against the address instead,
-		// and a source that has spent them is refused here - before the credential in this request is looked at,
-		// which for a signed assertion means before a signature is verified.
-		if (failureBudget.RefuseIfSpent() is { } refusal)
-		{
-			LogSourceRateLimited();
-			return refusal;
-		}
-
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
-			failureBudget.RecordFailure();
 			return new OidcError(
 				ErrorCodes.InvalidClient,
 				"The client is not authorized");
@@ -106,20 +96,24 @@ public partial class RevocationRequestValidator(
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
 		//
-		// A public client is exempt, because it presents a client_id and no credential: anyone who read that
-		// identifier out of a browser can send this request under it, so a budget charged to the name would be
-		// spent by strangers and the client's real users would lose the operation a person reaches for when
-		// they believe a token is stolen. What the exemption leaves open is the work such a request costs -
-		// unchanged from before budgets existed, and the price of not handing anybody a way to silence a
-		// client's logout. Introspection has no such case, because it refuses a public client outright.
-		//
+		// A public client presents a client_id and no credential, so anyone who read that identifier out of a
+		// browser can send this request under it. Charging the client's budget would hand them a way to silence
+		// its logout, so what such a request spends is the budget of the address it came from - the same one
+		// that counts failed authentications, and for the same reason: nothing else about the sender is its
+		// own. Introspection has no such case, because it refuses a public client outright.
+		if (clientInfo.ClientType == ClientType.Public)
+		{
+			if (failureBudget.Spend() is not { } sourceRefusal)
+				return await ReadTokenAsync(revocationRequest, clientInfo);
+
+			LogSourceRateLimited(clientInfo.ClientId);
+			return sourceRefusal;
+		}
+
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.
-		using var lease = clientInfo.ClientType != ClientType.Public
-			? rateLimiter.AttemptAcquire(clientInfo.ClientId)
-			: null;
-
-		if (lease is { IsAcquired: false })
+		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+		if (!lease.IsAcquired)
 		{
 			LogCallerRateLimited(clientInfo.ClientId);
 			return new TooManyRequestsError(
@@ -127,6 +121,16 @@ public partial class RevocationRequestValidator(
 				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
 		}
 
+		return await ReadTokenAsync(revocationRequest, clientInfo);
+	}
+
+	/// <summary>
+	/// Reads the token the request names and decides whether it belongs to the client that asked.
+	/// </summary>
+	private async Task<Result<ValidRevocationRequest, OidcError>> ReadTokenAsync(
+		RevocationRequest revocationRequest,
+		ClientInfo clientInfo)
+	{
 		// The audience is deliberately not required to name this server. RFC 7009 Section 2.1 has the client
 		// revoke a token it holds, and what settles the request is whether the token belongs to that client -
 		// the check below. A token minted for a resource indicator names that resource in its audience, and

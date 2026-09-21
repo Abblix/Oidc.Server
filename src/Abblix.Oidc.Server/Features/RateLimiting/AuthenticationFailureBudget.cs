@@ -64,5 +64,29 @@ public sealed class AuthenticationFailureBudget(
             limiter.AttemptAcquire(source).Dispose();
     }
 
-    private string? Source => requestInfoProvider.RemoteIpAddress?.ToString();
+    /// <summary>
+    /// Charges this request to its source and answers whether that was possible, for a request that presented
+    /// no credential at all and so was never going to fail an authentication.
+    /// </summary>
+    /// <returns>The refusal to return to the caller, or null when the request may be answered.</returns>
+    /// <remarks>
+    /// The revocation endpoint admits a client that authenticates with nothing but its identifier, which anyone
+    /// can copy, so a budget charged to that identifier would be a way to silence the client. The work such a
+    /// request costs is real - the token it names is read, and reading it verifies a signature - so it is
+    /// charged to where it came from instead.
+    /// </remarks>
+    public TooManyRequestsError? Spend()
+    {
+        if (RefuseIfSpent() is { } refusal)
+            return refusal;
+
+        RecordFailure();
+        return null;
+    }
+
+    /// <summary>
+    /// The address this request came from, or null when the server cannot name one - which is also when
+    /// nothing is counted.
+    /// </summary>
+    public string? Source => requestInfoProvider.RemoteIpAddress?.ToString();
 }

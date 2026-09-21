@@ -1,0 +1,155 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Net;
+using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RateLimiting;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
+
+/// <summary>
+/// What a sender that never authenticates successfully costs. Verifying a credential is not free - a client
+/// assertion is a signature this server checks before it can say the credential is wrong - and no budget
+/// charged to a client can reach such a sender, because it never proves to be one.
+/// </summary>
+public class ThrottledClientAuthenticatorTests
+{
+    /// <summary>
+    /// Long enough that nothing replenishes a budget mid-test: what is being checked is the refusal, not the
+    /// clock.
+    /// </summary>
+    private static readonly TimeSpan OneMinute = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Enough attempts that a budget of one would have refused long ago, so a run that answers every one of
+    /// them says nothing was counted rather than that the sender stayed inside its allowance.
+    /// </summary>
+    private const int RequestsWellPastTheBudget = 10;
+
+    private static readonly IPAddress Source = IPAddress.Parse("203.0.113.7");
+
+    private readonly Mock<IClientAuthenticator> _inner = new(MockBehavior.Strict);
+    private readonly Mock<IRequestInfoProvider> _requestInfoProvider = new();
+
+    public ThrottledClientAuthenticatorTests()
+    {
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
+    }
+
+    private ThrottledClientAuthenticator CreateAuthenticator(int? permitLimit)
+        => new(
+            NullLogger<ThrottledClientAuthenticator>.Instance,
+            _inner.Object,
+            new AuthenticationFailureBudget(
+                CallerRateLimiters.Create(
+                    new AuthenticationFailureLimitOptions { PermitLimit = permitLimit, Window = OneMinute }),
+                _requestInfoProvider.Object));
+
+    private static ClientRequest CreateRequest() => new() { ClientId = TestConstants.DefaultClientId };
+
+    [Fact]
+    public async Task ASourcePastItsBudget_HasNoFurtherCredentialLookedAt()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+        var refusal = await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.TryAuthenticateClientAsync(CreateRequest()));
+
+        // Assert
+        Assert.NotNull(refusal.RetryAfter);
+
+        // The credential in the second request never reached the authenticator, which is the whole point.
+        _inner.Verify(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Nothing successful is counted, so a busy client whose credentials verify never approaches a budget meant
+    /// for senders whose credentials do not.
+    /// </summary>
+    [Fact]
+    public async Task ASourceThatAuthenticates_IsNeverCounted()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+
+        // Act, Assert
+        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
+            Assert.Same(clientInfo, await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
+    /// A request whose source cannot be named is not counted, because one bucket shared by every such request
+    /// would let a single sender close every endpoint to everybody else arriving the same way.
+    /// </summary>
+    [Fact]
+    public async Task ASourceThatCannotBeNamed_IsNeverCounted()
+    {
+        // Arrange
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns((IPAddress?)null);
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act, Assert
+        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
+            Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
+    /// Off is the default, and off means every credential is looked at however many have failed. A deployment
+    /// turns this on when it knows that an address means one sender to it.
+    /// </summary>
+    [Fact]
+    public async Task WithNoLimitConfigured_EveryCredentialIsStillLookedAt()
+    {
+        // Arrange
+        Assert.Null(new AuthenticationFailureLimitOptions().PermitLimit);
+        var authenticator = CreateAuthenticator(new AuthenticationFailureLimitOptions().PermitLimit);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act, Assert
+        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
+            Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
+    /// The decorator answers for the authenticator it wraps about which methods it supports, so a host reading
+    /// the discovery document sees what the credentials can actually be.
+    /// </summary>
+    [Fact]
+    public void TheSupportedMethods_AreTheOnesItWraps()
+    {
+        var methods = new[] { "client_secret_basic", "private_key_jwt" };
+        _inner.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(methods);
+
+        Assert.Equal(methods, CreateAuthenticator(permitLimit: 1).ClientAuthenticationMethodsSupported);
+    }
+}

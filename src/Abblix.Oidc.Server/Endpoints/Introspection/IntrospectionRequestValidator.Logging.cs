@@ -31,10 +31,4 @@ partial class IntrospectionRequestValidator
 		Level = LogLevel.Warning,
 		Message = "Introspection refused for client {ClientId}: it is over its budget of requests")]
 	private partial void LogCallerRateLimited(Sanitized ClientId);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.SourceRateLimited,
-		Level = LogLevel.Warning,
-		Message = "Introspection refused without reading a credential: the source is over its budget of failed client authentications")]
-	private partial void LogSourceRateLimited();
 }
