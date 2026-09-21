@@ -18,7 +18,10 @@ using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using System.Threading.RateLimiting;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.RateLimiting;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -330,6 +333,59 @@ public class ServiceCollectionOverrideTests
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
         Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    /// <summary>
+    /// The per-caller budget is the platform's own type under a published key, so a host counting requests its
+    /// own way - across several nodes, on a sliding window - registers that and the endpoint spends it. Without
+    /// this, the settings would be the only policy available and a deployment needing another would have to do
+    /// without one.
+    /// </summary>
+    [Theory]
+    [InlineData(CallerRateLimiters.Introspection)]
+    [InlineData(CallerRateLimiters.Revocation)]
+    public void AnEndpoint_HostPreregisteredCallerRateLimiter_Wins(string key)
+    {
+        var services = new ServiceCollection();
+        var hostLimiter = CallerRateLimiters.Create(new CallerRateLimitOptions { PermitLimit = null });
+        services.AddKeyedSingleton(key, hostLimiter);
+
+        services.AddIntrospection();
+        services.AddRevocation();
+
+        var descriptor = Assert.Single(
+            services,
+            d => d.ServiceType == typeof(PartitionedRateLimiter<string>) && Equals(d.ServiceKey, key));
+
+        Assert.Same(hostLimiter, descriptor.KeyedImplementationInstance);
+    }
+
+    /// <summary>
+    /// The two endpoints get budgets of their own, so a client flooding introspection can still revoke a token
+    /// it believes is stolen - the one request that must not be refused because of the caller's other traffic.
+    /// </summary>
+    [Fact]
+    public void TheTwoEndpoints_EachSpendTheirOwnBudget()
+    {
+        var services = new ServiceCollection();
+        services.AddIntrospection();
+        services.AddRevocation();
+        services.AddOidcCore(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
+
+            // Resolving a limiter reads the options, and the options refuse a server that could issue no token
+            // at all - so the composition needs a signing key before it will hand out anything.
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var introspection = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.Introspection);
+        var revocation = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.Revocation);
+
+        Assert.NotSame(introspection, revocation);
     }
 
     [Fact]

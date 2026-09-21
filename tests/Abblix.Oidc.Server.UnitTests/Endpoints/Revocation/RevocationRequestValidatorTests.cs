@@ -451,8 +451,8 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// A public client is refused like any other once it is over its budget. RFC 7009 has public clients revoke
-    /// their own tokens with nothing but a client identifier, so they reach this endpoint where introspection
+    /// A public client is refused like any other once it is over its budget. This endpoint deliberately lets
+    /// public clients through, as the comment on its client check explains, so they reach it where introspection
     /// turns them away - which makes them the callers a budget most needs to cover.
     /// </summary>
     [Fact]
