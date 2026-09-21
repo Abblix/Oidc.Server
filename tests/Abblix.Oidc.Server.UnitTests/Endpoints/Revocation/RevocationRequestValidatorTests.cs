@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -57,11 +58,14 @@ public class RevocationRequestValidatorTests
     }
 
     private RevocationRequestValidator CreateValidator(CallerRateLimitOptions rateLimit)
+        => CreateValidator(CallerRateLimiters.Create(rateLimit));
+
+    private RevocationRequestValidator CreateValidator(PartitionedRateLimiter<string> rateLimiter)
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
             _jwtValidator.Object,
-            CallerRateLimiters.Create(rateLimit));
+            rateLimiter);
 
     private static RevocationRequest CreateRevocationRequest(string token = "token_value")
     {
@@ -490,14 +494,14 @@ public class RevocationRequestValidatorTests
 
     /// <summary>
     /// The budget is on out of the box: a host that configures nothing is still protected from a client that
-    /// loops. The number itself is read from the defaults rather than written here, so raising it stays a
-    /// one-line change.
+    /// loops. The limit is read from the defaults rather than written here, so raising it stays a one-line
+    /// change; only the window is stated, and only to keep a clock out of the criterion.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithTheDefaultBudget_ShouldEventuallyRefuseAClientThatLoops()
+    public async Task ValidateAsync_WithTheDefaultBudget_ShouldRefuseAClientThatLoopsPastIt()
     {
         // Arrange
-        var defaults = new CallerRateLimitOptions();
+        var defaults = new CallerRateLimitOptions { Window = OneMinute };
         Assert.True(defaults.PermitLimit.HasValue, "the budget must be on without a host configuring one");
         var validator = CreateValidator(defaults);
 
@@ -510,17 +514,64 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        // Twice the budget and one more: the calls take microseconds, so they land in at most two windows, and
-        // one of those two must then hold more than the budget permits whatever the window boundary does.
-        var refusals = 0;
-        for (var attempt = 0; attempt < 2 * defaults.PermitLimit!.Value + 1; attempt++)
-        {
-            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-            if (result.TryGetFailure(out var error) && error is TooManyRequestsError)
-                refusals++;
-        }
+        var last = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        for (var attempt = 1; attempt <= defaults.PermitLimit!.Value; attempt++)
+            last = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
-        Assert.True(refusals > 0, "a client looping past twice the default budget was never refused");
+        Assert.True(last.TryGetFailure(out var error), "a client past the default budget was still answered");
+        Assert.IsType<TooManyRequestsError>(error);
+    }
+
+    /// <summary>
+    /// The budget is held for as long as the request is being answered, not just long enough to count it. A
+    /// host whose limiter counts requests in flight - the platform's concurrency limiter is one - is bounding
+    /// the token validation below, and a budget released the moment it was taken bounds nothing: its second
+    /// caller arrives to find the permit free again while the first is still working.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhileTheTokenIsBeingRead_ShouldStillHoldTheBudget()
+    {
+        // Arrange
+        var validator = CreateValidator(
+            PartitionedRateLimiter.Create<string, string>(
+                clientId => RateLimitPartition.GetConcurrencyLimiter(
+                    clientId,
+                    _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 })));
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        // The second request is made from inside the first one's token validation, which is the only moment
+        // that tells a budget held across the work from one released as soon as it was taken.
+        // Re-entered once and only once: a budget released too early lets the inner request through to this
+        // same callback, and without the guard the failure arrives as a stack overflow that takes the whole
+        // suite with it rather than as one red row.
+        var reentered = false;
+        OidcError? reentrantError = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Returns(async () =>
+            {
+                if (!reentered)
+                {
+                    reentered = true;
+                    var reentrant = await validator.ValidateAsync(
+                        CreateRevocationRequest(),
+                        CreateClientRequest());
+
+                    reentrantError = reentrant.TryGetFailure(out var failure) ? failure : null;
+                }
+
+                return CreateValidJsonWebToken();
+            });
+
+        // Act
+        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(first.TryGetSuccess(out _));
+        Assert.IsType<TooManyRequestsError>(reentrantError);
     }
 }

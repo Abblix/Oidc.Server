@@ -26,7 +26,8 @@ namespace Abblix.Oidc.Server.Common;
 /// <c>slow_down</c> is defined for a client polling for an authorization that is still pending and tells it to
 /// poll at a longer interval; <c>temporarily_unavailable</c> exists because a status code cannot travel through
 /// an authorization redirect, and a client reading it may send its end user through the browser again. The code
-/// this record carries is what the server logs the refusal as, and never what a caller is told.
+/// and the description this record carries are never sent to a caller; they are what a host reads if it wraps
+/// one of the validators in a decorator of its own and inspects what came back.
 /// </remarks>
 public sealed record TooManyRequestsError(string ErrorDescription, TimeSpan? RetryAfter)
     : OidcError(ErrorCodes.TemporarilyUnavailable, ErrorDescription);

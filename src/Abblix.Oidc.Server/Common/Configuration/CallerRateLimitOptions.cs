@@ -20,9 +20,9 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// the revocation endpoint and is turned away outright at introspection.
 /// <para>
 /// It is on out of the box, with a limit far above what a working deployment reaches, because the request it
-/// refuses is the one a compromised or looping client makes thousands of times a second - and nobody switches a
-/// protection on before they need it. A deployment whose own numbers are higher raises
-/// <see cref="PermitLimit"/>; one that wants no limit at all sets it to null.
+/// refuses is the one a compromised or looping client repeats without pause - and nobody switches a protection
+/// on before they need it. A deployment whose own numbers are higher raises <see cref="PermitLimit"/>; one that
+/// wants no limit at all sets it to null.
 /// </para>
 /// <para>
 /// These numbers are read once, when the limiter for an endpoint is first needed, so a change to them takes
@@ -37,9 +37,12 @@ public record CallerRateLimitOptions
     /// then answer every request the caller can send, as versions before this setting did.
     /// </summary>
     /// <remarks>
-    /// The budget belongs to a registered client, so every instance of one resource server shares it: a fleet of
-    /// gateways introspecting under a single <c>client_id</c> spends one budget between them, and the default is
-    /// sized for that rather than for a single process.
+    /// Two things decide what this number means in a deployment. It belongs to a registered client, so every
+    /// instance of one resource server spends it together: a fleet of gateways introspecting under a single
+    /// <c>client_id</c> shares one budget rather than holding one each. And it is counted inside one instance of
+    /// this server, so a client's requests are divided by however many instances answer them. The default is
+    /// sized for the first of those and cannot know the second, which is what a deployment adjusts when its own
+    /// numbers are higher.
     /// </remarks>
     public int? PermitLimit { get; set; } = 10_000;
 

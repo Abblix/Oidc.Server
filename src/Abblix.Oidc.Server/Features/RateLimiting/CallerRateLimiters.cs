@@ -23,10 +23,10 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// caller is still whoever holds the socket, and the whole point of this budget is that it is charged to the
 /// client the request authenticated as.
 /// <para>
-/// A budget is taken with a single attempt that never waits, so a substituted limiter configured to queue does
-/// not queue here: a caller it would have held is refused instead. An endpoint holding a request open is the
-/// thing this feature exists to stop, so the queue a host configured for its own callers is deliberately not
-/// honoured on this path.
+/// A budget is taken with a single attempt that never waits, and held until the request is answered. So a
+/// limiter counting requests in flight bounds the work rather than the count, and one configured to queue does
+/// not queue here: a caller it would have held is refused instead. An endpoint holding a request open is what
+/// this feature exists to stop, so the waiting half of any policy is deliberately not honored.
 /// </para>
 /// </remarks>
 public static class CallerRateLimiters
@@ -50,9 +50,9 @@ public static class CallerRateLimiters
     /// <see cref="CallerRateLimitOptions.PermitLimit"/> is null.
     /// </returns>
     /// <remarks>
-    /// Nothing is queued: a caller over its budget is told so immediately with a <c>Retry-After</c>, because the
-    /// alternative is holding its request open and spending this server's own capacity on the client that is
-    /// already using too much of it.
+    /// Its queue is empty by construction, for the reason stated on the type: a caller over its budget is told
+    /// so immediately with a <c>Retry-After</c>, rather than held open at the expense of the server it is
+    /// already asking too much of.
     /// </remarks>
     internal static PartitionedRateLimiter<string> Create(CallerRateLimitOptions options)
         => PartitionedRateLimiter.Create<string, string>(

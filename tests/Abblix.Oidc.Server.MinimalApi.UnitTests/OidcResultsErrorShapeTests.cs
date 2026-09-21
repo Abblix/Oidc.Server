@@ -245,6 +245,10 @@ public class OidcResultsErrorShapeTests
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
         Assert.Equal("1", response.Headers[HeaderNames.RetryAfter].ToString());
+
+        // And it carries no challenge: a spent budget says nothing about how the caller authenticated, so a
+        // challenge here would invite it to try another scheme for a refusal no scheme can lift.
+        Assert.False(response.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
     }
 
     /// <summary>

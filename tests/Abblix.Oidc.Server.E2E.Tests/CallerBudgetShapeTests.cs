@@ -42,6 +42,12 @@ public sealed class CallerBudgetShapeTests
     /// </summary>
     private static readonly TimeSpan LongerThanAnyTest = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Enough requests that a budget of one would have refused long ago, so a run that answers every one of them
+    /// says the caller was never counted rather than that it stayed inside its allowance.
+    /// </summary>
+    private const int RequestsWellPastABudgetOfOne = 5;
+
     private static HttpClient ClientWhoseBudgetIsOneRequest(TestFactory factory, string limiterKey)
         => factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -120,6 +126,33 @@ public sealed class CallerBudgetShapeTests
         Assert.Equal(HttpStatusCode.OK, revocation.StatusCode);
     }
 
+    /// <summary>
+    /// A client that presented no credential keeps being answered however often it asks. Anyone can send a
+    /// revocation request under a public client's identifier, so a budget charged to that name would be spent by
+    /// strangers and the client's own users would lose the request a person makes when they believe a token is
+    /// stolen.
+    /// </summary>
+    [Fact]
+    public async Task APublicClientIsAnsweredHoweverOftenItAsks()
+    {
+        using var factory = new TestFactory();
+        using var client = ClientWhoseBudgetIsOneRequest(factory, CallerRateLimiters.Revocation);
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.RevocationEndpoint);
+
+        for (var attempt = 0; attempt < RequestsWellPastABudgetOfOne; attempt++)
+        {
+            using var response = await PostTokenAsync(
+                client,
+                discovery.RevocationEndpoint,
+                RevocationRequest.Parameters.Token,
+                TestConstants.DPoPPublicClientId,
+                clientSecret: null);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
     private static async Task<DiscoveryDocument> FetchDiscoveryAsync(HttpClient client)
     {
         var document = await client.GetFromJsonAsync<DiscoveryDocument>(
@@ -137,19 +170,29 @@ public sealed class CallerBudgetShapeTests
         => PostTokenAsync(client, endpoint, RevocationRequest.Parameters.Token);
 
     /// <summary>
-    /// Posts a token to one of the two endpoints as the confidential test client. The two name their token
-    /// parameter in contracts of their own, so each caller supplies the name its endpoint publishes rather than
-    /// borrowing the neighbour's.
+    /// Posts a token to one of the two endpoints, as the confidential test client unless another is named. The
+    /// two endpoints name their token parameter in contracts of their own, so each caller supplies the name its
+    /// endpoint publishes rather than borrowing its neighbor's.
     /// </summary>
     private static Task<HttpResponseMessage> PostTokenAsync(
-        HttpClient client, Uri endpoint, string tokenParameterName)
-        => client.PostAsync(
+        HttpClient client,
+        Uri endpoint,
+        string tokenParameterName,
+        string clientId = TestConstants.ConfidentialClientId,
+        string? clientSecret = TestConstants.ConfidentialClientSecret)
+    {
+        var form = new Dictionary<string, string>
+        {
+            [ClientRequest.Parameters.ClientId] = clientId,
+            [tokenParameterName] = "not-a-token",
+        };
+
+        if (clientSecret is not null)
+            form[ClientRequest.Parameters.ClientSecret] = clientSecret;
+
+        return client.PostAsync(
             endpoint,
-            new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-                [tokenParameterName] = "not-a-token",
-            }),
+            new FormUrlEncodedContent(form),
             TestContext.Current.CancellationToken);
+    }
 }

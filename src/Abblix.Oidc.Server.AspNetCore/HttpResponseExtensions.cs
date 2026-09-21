@@ -71,8 +71,9 @@ public static class HttpResponseExtensions
     }
 
     /// <summary>
-    /// Tells the caller how long a refusal lasts, for every refusal that names an interval - a key custodian
-    /// that is temporarily unable, a caller over its budget of requests.
+    /// Tells the caller how long a refusal lasts, for a refusal written straight onto the response - what a key
+    /// custodian that is temporarily unable produces. A refusal formatted as a result carries the header through
+    /// <see cref="RetryAfterHeaderValue"/> instead.
     /// </summary>
     /// <param name="response">The HTTP response to modify.</param>
     /// <param name="interval">How long the caller should wait.</param>
