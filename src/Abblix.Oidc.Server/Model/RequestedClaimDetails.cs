@@ -21,7 +21,7 @@ public record RequestedClaimDetails
     /// as what the relying party tells the end user: releasing it "will ensure a smooth authorization for the
     /// specific task requested by the End-User". The same section forbids answering with an error when the
     /// claim is not returned, essential or voluntary alike, unless the description of that specific claim says
-    /// otherwise - so this is not a condition a response has to meet. The one claim whose description does say
+    /// otherwise - so this is not a condition a response has to meet. The claims whose description does say
     /// otherwise are <c>sub</c>, whose mismatch fails the authentication, <c>auth_time</c>, which this
     /// server writes on every ID token, and <c>acr</c>, under section 5.5.1.1.
     /// </summary>

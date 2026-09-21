@@ -80,11 +80,11 @@ internal class IdentityTokenService(
 		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
 		// a failed authentication attempt. This token states the session's own acr, so a session at another
 		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
-		// unacceptable. Issuing nothing is not the failed attempt the section asks for either: the token
-		// endpoint then answers with an access token and no id_token, and the authorization endpoint with a
-		// redirect carrying no token at all. The failure belongs where the request can still be answered or
-		// the end user sent to authenticate again, and until it lives there this is what keeps the token from
-		// stating something the client refused.
+		// unacceptable. Issuing nothing is not the failed attempt the section asks for either: the response
+		// goes out carrying whatever else it holds - an access token, an authorization code - with the
+		// id_token missing and nothing saying why. The failure belongs where the request can still be
+		// answered or the end user sent to authenticate again, and until it lives there this is what keeps
+		// the token from stating something the client refused.
 		if (RequiresAnAuthenticationLevelTheSessionLacks(authSession, authContext))
 			return null;
 

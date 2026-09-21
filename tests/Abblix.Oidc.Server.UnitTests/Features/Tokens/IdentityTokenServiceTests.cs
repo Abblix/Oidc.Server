@@ -921,8 +921,7 @@ public class IdentityTokenServiceTests
 
     /// <summary>
     /// A request whose qualifiers accept no level at all cannot be met by any authentication, so the rule of
-    /// section 5.5.1.1 applies to it whatever the session holds. The empty choice is answered the same way
-    /// the same release answers it for <c>sub</c>.
+    /// section 5.5.1.1 applies to it whatever the session holds.
     /// </summary>
     [Fact]
     public async Task AnEssentialAcr_NamingAnEmptyChoice_IssuesNoToken()
@@ -938,12 +937,14 @@ public class IdentityTokenServiceTests
 
     /// <summary>
     /// Both qualifiers bind, as they do for <c>sub</c>: a request naming a value outside its own choice
-    /// accepts nothing, even when the session holds one of the two.
+    /// accepts nothing, so it is unmet even by the session that holds that very value. The session is the
+    /// one named by <c>value</c> deliberately - a reader that dropped <c>values</c> and kept <c>value</c>
+    /// would issue a token here, and a session holding neither could not tell the two apart.
     /// </summary>
     [Fact]
     public async Task AnEssentialAcr_WhoseValueIsOutsideItsOwnChoice_IssuesNoToken()
     {
-        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
 
         var token = await CreateTokenForRequestedAcrAsync(
             authSession,
@@ -952,6 +953,29 @@ public class IdentityTokenServiceTests
                 Essential = true,
                 Value = "urn:example:loa3",
                 Values = ["urn:example:loa1"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// The qualifiers are matched against each other by the same equality section 5.5.1 prescribes for
+    /// matching a claim value, so a <c>value</c> differing from its own choice only in case is outside it.
+    /// The session holds that very value, which is what separates this from the comparison the identity
+    /// token makes afterwards.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseValueMatchesItsChoiceOnlyInCase_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "URN:EXAMPLE:LOA3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "URN:EXAMPLE:LOA3",
+                Values = ["urn:example:loa3"],
             });
 
         Assert.Null(token);

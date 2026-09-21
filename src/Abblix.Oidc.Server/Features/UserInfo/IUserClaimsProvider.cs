@@ -40,8 +40,9 @@ public interface IUserClaimsProvider
     /// simply does not hold is left out of the object rather than a reason to answer null, because OpenID
     /// Connect Core 1.0 section 5.5.1 forbids answering with an error over a claim that was not returned - and
     /// because null costs more than an error does here: the user-information endpoint reports the caller's
-    /// token invalid, the token endpoint answers without an ID Token, and the authorization endpoint answers a
-    /// request for one with a redirect carrying no token. None of the three says why.</returns>
+    /// token invalid, and everything that mints an ID token answers without one - the token endpoint, the
+    /// authorization endpoint and a decoupled authentication's push notification alike - while still
+    /// carrying whatever else that response holds, and saying nothing about why.</returns>
     Task<JsonObject?> GetUserClaimsAsync(
         AuthSession authSession,
         ICollection<string> scope,
