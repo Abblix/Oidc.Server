@@ -276,7 +276,7 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
         bool throughRequestUri)
     {
         var parameters = await RequestAsync(client, discovery, claims, interactive, throughRequestUri);
-        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters!);
+        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters);
 
         var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
 
