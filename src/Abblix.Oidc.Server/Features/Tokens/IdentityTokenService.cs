@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -75,15 +76,16 @@ internal class IdentityTokenService(
 		string? accessToken,
 		PushDeliveryBindings? pushBindings = null)
 	{
-		// OpenID Connect Core 1.0 section 5.5.1.1: when the claims parameter asks for acr as an essential
-		// claim of the ID token AND names the values it accepts, the server "MUST return an acr Claim Value
-		// that matches one of the requested values", and "MUST treat that outcome as a failed authentication
-		// attempt" when it cannot. The token carries the session's own acr, so a session below the level asked
-		// for cannot satisfy such a request; issuing anyway would state a level the request declared
-		// unacceptable, which is the one thing worse than issuing nothing. Withholding is not the failed
-		// attempt the section asks for - that belongs where the request is still answerable, at the
-		// authorization endpoint - and until it lives there, this is what keeps the token honest.
-		if (RequestsAnUnmetAuthenticationLevel(authSession, authContext))
+		// OpenID Connect Core 1.0 section 5.5.1.1: a request requiring specific authentication levels of the
+		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
+		// a failed authentication attempt. This token states the session's own acr, so a session at another
+		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
+		// unacceptable. Issuing nothing is not the failed attempt the section asks for either: the token
+		// endpoint then answers with an access token and no id_token, and the authorization endpoint with a
+		// redirect carrying no token at all. The failure belongs where the request can still be answered or
+		// the end user sent to authenticate again, and until it lives there this is what keeps the token from
+		// stating something the client refused.
+		if (RequiresAnAuthenticationLevelTheSessionLacks(authSession, authContext))
 			return null;
 
 		var scope = authContext.Scope;
@@ -218,29 +220,22 @@ internal class IdentityTokenService(
 	}
 
 	/// <summary>
-	/// Whether the request names authentication levels it will accept, as essential claims of the ID token,
-	/// and the session holds none of them.
+	/// Whether the request requires an authentication level the session does not hold.
 	/// </summary>
 	/// <remarks>
-	/// The three conditions are section 5.5.1.1's own: the claim is essential, it belongs to the ID token half
-	/// of the claims parameter, and it names values. A request that marks acr essential without naming values
-	/// accepts whatever the session has, and a voluntary one takes the ordinary rule of section 5.5.1, under
-	/// which a claim that is not returned is never a reason to refuse.
+	/// What the request requires is read by <see cref="RequestedClaimsExtensions.RequiredAuthContextClassRefs"/>,
+	/// which carries the conditions section 5.5.1.1 states and the shapes a qualifier arrives in. A refusal from
+	/// it names qualifiers no authentication could satisfy, which is unmet by construction.
 	/// </remarks>
-	private static bool RequestsAnUnmetAuthenticationLevel(
+	private static bool RequiresAnAuthenticationLevelTheSessionLacks(
 		AuthSession authSession,
 		AuthorizationContext authContext)
 	{
-		if (authContext.RequestedClaims?.IdToken is not { } requestedClaims ||
-			!requestedClaims.TryGetValue(JwtClaimTypes.AuthContextClassRef, out var acr) ||
-			acr is not { Essential: true })
-		{
-			return false;
-		}
+		var required = authContext.RequestedClaims.RequiredAuthContextClassRefs();
+		if (!required.TryGetSuccess(out var levels))
+			return true;
 
-		var acceptable = acr.Values ?? (acr.Value is { } single ? [single] : null);
-		return acceptable is { Length: > 0 } &&
-		       !acceptable.Any(value => string.Equals(
-			       value?.ToString(), authSession.AuthContextClassRef, StringComparison.Ordinal));
+		return levels is { Length: > 0 } &&
+		       !levels.Contains(authSession.AuthContextClassRef, StringComparer.Ordinal);
 	}
 }

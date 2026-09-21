@@ -32,10 +32,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
 /// and expect the same answer from each.
 /// </summary>
 /// <remarks>
-/// Two claims carry a description that does impose a condition, and neither is answered here: a <c>sub</c> the
-/// session does not match fails the authentication where the request is read, and an <c>acr</c> the request
-/// will not accept is answered where the ID token is built, which is the only place that knows what level the
-/// token is about to state.
+/// The claims carrying a description of their own are answered elsewhere, every one of them: a <c>sub</c> the
+/// session does not match fails the authentication where the request is read, <c>auth_time</c> is written on
+/// every ID token from the session, and an <c>acr</c> the request will not accept is answered where the ID
+/// token is built, the only place that knows what level the token is about to state.
 /// </remarks>
 public class UserClaimsProviderTests
 {

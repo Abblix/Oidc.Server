@@ -10,6 +10,7 @@ using System;
 using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -896,6 +897,115 @@ public class IdentityTokenServiceTests
         var token = await CreateTokenAsync(authSession, authContext);
 
         Assert.NotNull(token);
+    }
+
+    /// <summary>
+    /// The same request as it actually arrives. <see cref="RequestedClaimDetails.Values"/> is typed as
+    /// <c>object[]</c>, so a request read off the wire holds <see cref="JsonElement"/> values, while one
+    /// retrieved by <c>request_uri</c> was round-tripped through the store and holds strings. A reader
+    /// handling only strings would leave every wire request unchecked with nothing failing to say so.
+    /// </summary>
+    [Theory]
+    [InlineData("urn:example:loa1", false)]
+    [InlineData("urn:example:loa3", true)]
+    public async Task AnEssentialAcrReadOffTheWire_IsComparedLikeAnyOther(string sessionAcr, bool expectToken)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = sessionAcr };
+        var requestedFromJson = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            """{"essential": true, "values": ["urn:example:loa3"]}""");
+
+        var token = await CreateTokenForRequestedAcrAsync(authSession, requestedFromJson!);
+
+        Assert.Equal(expectToken, token is not null);
+    }
+
+    /// <summary>
+    /// A request whose qualifiers accept no level at all cannot be met by any authentication, so the rule of
+    /// section 5.5.1.1 applies to it whatever the session holds. The empty choice is answered the same way
+    /// the same release answers it for <c>sub</c>.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_NamingAnEmptyChoice_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = [] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// Both qualifiers bind, as they do for <c>sub</c>: a request naming a value outside its own choice
+    /// accepts nothing, even when the session holds one of the two.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseValueIsOutsideItsOwnChoice_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "urn:example:loa3",
+                Values = ["urn:example:loa1"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// A single <c>value</c> requests a level as much as a one-element <c>values</c> does - section 5.5.1
+    /// defines the two qualifiers together - so a session that does not hold it cannot meet the request.
+    /// </summary>
+    [Theory]
+    [InlineData("urn:example:loa1", false)]
+    [InlineData("urn:example:loa3", true)]
+    public async Task AnEssentialAcr_NamingASingleValue_IsComparedLikeAChoice(string sessionAcr, bool expectToken)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = sessionAcr };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Value = "urn:example:loa3" });
+
+        Assert.Equal(expectToken, token is not null);
+    }
+
+    /// <summary>
+    /// The comparison is by equality, which section 5.5.1 states outright: "An equality comparison is used
+    /// to determine whether the requested Claim values match". A level differing only in case is a
+    /// different level.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_DifferingOnlyInCase_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:LOA3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3"] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// A qualifier that is not a string states a level no authentication can hold, so it is unmet rather
+    /// than ignored.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_NamingSomethingThatIsNotALevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = [42] });
+
+        Assert.Null(token);
     }
 
     private Task<EncodedJsonWebToken?> CreateTokenForRequestedAcrAsync(
