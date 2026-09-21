@@ -71,6 +71,20 @@ public class AuthorizationRequestProcessor(
 			case (_, Prompts.Create):
 				return new RegistrationRequired(model);
 
+			// A request requiring an authentication level, forbidding interaction and left with no session is
+			// the failed authentication attempt section 5.5.1.1 demands, and the OpenID Foundation gives it a
+			// code of its own: unmet_authentication_requirements "SHALL be used if the Relying Party wants the
+			// OP to conform to a certain Authentication Context Class Reference value using an essential claim
+			// acr claim ... and the OP is unable to meet this requirement". Saying login_required instead would
+			// send the client to retry an interaction that cannot change the answer.
+			case (0, Prompts.None) when request.RequiredAuthContextClassRefs is { Length: > 0 }:
+				return new AuthorizationError(
+					model,
+					ErrorCodes.UnmetAuthenticationRequirements,
+					"The authentication the request requires could not be performed.",
+					request.ResponseMode,
+					model.RedirectUri);
+
 			// If no sessions exist and the prompt forbids user interaction,
 			// respond that login is required without allowing user interaction.
 			case (0, Prompts.None):
@@ -293,6 +307,20 @@ public class AuthorizationRequestProcessor(
 		{
 			authSessions = authSessions.Where(
 				session => session.AuthContextClassRef.HasValue() && acrValues.Contains(session.AuthContextClassRef));
+		}
+
+		// An essential acr naming acceptable values is the same question with an obligation attached:
+		// section 5.5.1.1 says the server "MUST return an acr Claim Value that matches one of the requested
+		// values", and that an outcome which cannot meet it is "a failed authentication attempt". Filtering
+		// here rather than refusing takes the latitude the same sentence grants - it "MAY ask the End-User to
+		// re-authenticate with additional factors" - so a request no current session satisfies reaches the
+		// login page, and only one forbidding interaction is refused. A session recording no level is dropped
+		// exactly as acr_values drops it: an absent level meets no named one.
+		if (request.RequiredAuthContextClassRefs is { Length: > 0 } requiredAcrValues)
+		{
+			authSessions = authSessions.Where(
+				session => session.AuthContextClassRef.HasValue() &&
+				           requiredAcrValues.Contains(session.AuthContextClassRef, StringComparer.Ordinal));
 		}
 
 		// OpenID Connect Core 1.0 Sections 3.1.2.1 and 3.1.2.2: when a request names an end user, a

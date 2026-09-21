@@ -104,4 +104,16 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// </para>
 	/// </remarks>
 	public string[]? RequestedSubjects { get; set; }
+
+	/// <summary>
+	/// The authentication levels this request requires of the ID token, or null when it requires none.
+	/// </summary>
+	/// <remarks>
+	/// OpenID Connect Core 1.0 Section 5.5.1.1 makes an essential <c>acr</c> naming acceptable values a
+	/// requirement the server "MUST" meet, and an outcome that cannot meet it "a failed authentication
+	/// attempt". Recorded here so the session filter reads it beside <c>acr_values</c>, which asks the same
+	/// question without the obligation, and so the endpoint can tell a request nothing satisfies from one
+	/// nobody is signed in for.
+	/// </remarks>
+	public string[]? RequiredAuthContextClassRefs { get; set; }
 }

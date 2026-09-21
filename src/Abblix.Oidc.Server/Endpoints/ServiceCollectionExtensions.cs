@@ -195,6 +195,10 @@ public static class ServiceCollectionExtensions
             // specification names for it, and it inherits the placement reasoning above for the same reason.
             ServiceDescriptor.Singleton<IAuthorizationContextValidator,
                 Authorization.Validation.RequestedSubjectValidator>(),
+            // And beside both, because section 5.5.1.1 reads the same parameter for the other claim whose
+            // description imposes a condition, and a refusal over it travels the same way.
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator,
+                Authorization.Validation.RequiredAuthContextClassRefValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
