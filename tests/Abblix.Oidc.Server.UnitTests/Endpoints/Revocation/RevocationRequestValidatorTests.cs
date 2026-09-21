@@ -9,10 +9,13 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -28,6 +31,12 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Revocation;
 /// </summary>
 public class RevocationRequestValidatorTests
 {
+    /// <summary>
+    /// A window long enough that nothing in a test run replenishes a budget mid-test: what is being checked is
+    /// the refusal, not the clock.
+    /// </summary>
+    private static readonly TimeSpan OneMinute = TimeSpan.FromMinutes(1);
+
     private readonly Mock<ILogger<RevocationRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
@@ -38,11 +47,15 @@ public class RevocationRequestValidatorTests
         _logger = new Mock<ILogger<RevocationRequestValidator>>();
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
-        _validator = new RevocationRequestValidator(
+        _validator = CreateValidator(new CallerRateLimitOptions());
+    }
+
+    private RevocationRequestValidator CreateValidator(CallerRateLimitOptions rateLimit)
+        => new(
             _logger.Object,
             _clientAuthenticator.Object,
-            _jwtValidator.Object);
-    }
+            _jwtValidator.Object,
+            CallerRateLimiters.Create(rateLimit));
 
     private static RevocationRequest CreateRevocationRequest(string token = "token_value")
     {
@@ -402,5 +415,70 @@ public class RevocationRequestValidatorTests
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.NotNull(validRequest.Token);
         Assert.Equal(clientInfo.ClientId, validRequest.Token.Payload.ClientId);
+    }
+
+    /// <summary>
+    /// A client that has spent its budget of requests is refused before the token is read, and told how long the
+    /// refusal lasts. Reading the token is what costs this server a signature verification per call, so a caller
+    /// over its budget must not reach it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenTheClientIsOverItsBudget_ShouldRefuseBeforeReadingTheToken()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(first.TryGetSuccess(out _));
+        Assert.True(second.TryGetFailure(out var error));
+        var refusal = Assert.IsType<TooManyRequestsError>(error);
+        Assert.Equal(ErrorCodes.TemporarilyUnavailable, refusal.Error);
+        Assert.NotNull(refusal.RetryAfter);
+        _jwtValidator.Verify(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A public client is refused like any other once it is over its budget. RFC 7009 has public clients revoke
+    /// their own tokens with nothing but a client identifier, so they reach this endpoint where introspection
+    /// turns them away - which makes them the callers a budget most needs to cover.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenAPublicClientIsOverItsBudget_ShouldRefuseIt()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(publicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(second.TryGetFailure(out var error));
+        Assert.IsType<TooManyRequestsError>(error);
     }
 }

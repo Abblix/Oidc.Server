@@ -6,8 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Globalization;
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.MinimalApi.Filters;
@@ -46,11 +46,7 @@ internal sealed class KeyCustodianFailureFilter : IEndpointFilter
         {
             if (exception.RetryAfter is { } retryAfter)
             {
-                // Retry-After counts whole seconds (RFC 9110 section 10.2.3), and rounding up is what keeps the
-                // advice honest: a client told to wait less than the custodian asked for arrives to the same
-                // refusal.
-                context.HttpContext.Response.Headers.RetryAfter =
-                    ((long)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+                context.HttpContext.Response.SetRetryAfter(retryAfter);
             }
 
             return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);

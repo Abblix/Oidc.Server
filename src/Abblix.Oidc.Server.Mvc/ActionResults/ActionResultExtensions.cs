@@ -87,6 +87,15 @@ public static class ActionResultExtensions
 			});
 
 	/// <summary>
+	/// Decorates an <see cref="ActionResult"/> with the <c>Retry-After</c> header when the refusal named an
+	/// interval, and leaves it alone when it named none - a header saying nothing is worse than no header.
+	/// </summary>
+	private static ActionResult WithRetryAfter(this ActionResult innerResult, TimeSpan? retryAfter)
+		=> retryAfter is { } interval
+			? innerResult.WithHeader(HeaderNames.RetryAfter, RetryAfter.HeaderValue(interval))
+			: innerResult;
+
+	/// <summary>
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
@@ -104,6 +113,13 @@ public static class ActionResultExtensions
 
 		return (error.Error, fallbackStatusCode) switch
 		{
+			// A caller over its budget of requests: 429, with the interval the limiter named, and the same
+			// {error, error_description} body every other refusal from these endpoints carries.
+			_ when error is TooManyRequestsError { RetryAfter: var retryAfter }
+				=> new ObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+						{ StatusCode = StatusCodes.Status429TooManyRequests }
+					.WithRetryAfter(retryAfter),
+
 			(ErrorCodes.InvalidToken, _) => new UnauthorizedResult()
 				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
 

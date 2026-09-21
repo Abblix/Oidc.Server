@@ -6,14 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 
@@ -31,10 +34,15 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
 /// <param name="jwtValidator">The JWT validator to validate the token.</param>
+/// <param name="rateLimiter">
+/// The budget of introspection requests one client gets, spent once the caller is known to be that client.
+/// </param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
+	IAuthServiceJwtValidator jwtValidator,
+	[FromKeyedServices(CallerRateLimiters.Introspection)] PartitionedRateLimiter<string> rateLimiter)
+	: IIntrospectionRequestValidator
 {
 	/// <summary>
 	/// Validates the introspection request properties and authenticates a client that initiated the request.
@@ -62,6 +70,18 @@ public partial class IntrospectionRequestValidator(
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+		}
+
+		// The budget is charged here, after the caller has proven which client it is and before the token is
+		// read: a client that loops makes this the most expensive endpoint in the deployment, since every call
+		// verifies a signature, and the caller is only chargeable once it is identified.
+		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+		if (!lease.IsAcquired)
+		{
+			LogCallerRateLimited(clientInfo.ClientId);
+			return new TooManyRequestsError(
+				"Too many introspection requests from this client",
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
 		}
 
 		// The audience is deliberately not required to name this server. Introspection reports on a token, it

@@ -210,4 +210,39 @@ public class ActionResultErrorShapeTests
         Assert.Contains(errorCode, response.Body);
         Assert.Contains(TokenTypes.DPoP, Challenge(response));
     }
+
+    /// <summary>
+    /// A caller over its budget of requests is answered 429 and told how long to wait, in whole seconds rounded
+    /// up: a client told to wait less than the server asked for comes back to the same refusal.
+    /// </summary>
+    [Fact]
+    public async Task A_caller_over_its_budget_answers_429_and_says_how_long_to_wait()
+    {
+        var error = new TooManyRequestsError(
+            "Too many introspection requests from this client",
+            TimeSpan.FromMilliseconds(1500));
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status401Unauthorized, Realm));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.Equal("2", response.Headers[HeaderNames.RetryAfter].ToString());
+        Assert.Contains(ErrorCodes.TemporarilyUnavailable, response.Body);
+    }
+
+    /// <summary>
+    /// A limiter that names no interval leaves the header off entirely, rather than stating a wait of zero -
+    /// which would send every refused client straight back.
+    /// </summary>
+    [Fact]
+    public async Task A_refusal_naming_no_interval_carries_no_retry_after_header()
+    {
+        var error = new TooManyRequestsError("Too many requests from this client", RetryAfter: null);
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status400BadRequest, Realm));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.False(response.Headers.ContainsKey(HeaderNames.RetryAfter));
+    }
 }

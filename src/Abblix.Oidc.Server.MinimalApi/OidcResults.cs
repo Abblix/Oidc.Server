@@ -33,6 +33,15 @@ public static class OidcResults
 
         return (error.Error, fallbackStatusCode) switch
         {
+            // A caller over its budget of requests: 429, with the interval the limiter named, and the same
+            // {error, error_description} body every other refusal from these endpoints carries.
+            _ when error is TooManyRequestsError { RetryAfter: var retryAfter }
+                => Results
+                    .Json(
+                        new ErrorResponse(error.Error, error.ErrorDescription),
+                        statusCode: StatusCodes.Status429TooManyRequests)
+                    .WithRetryAfter(retryAfter),
+
             (ErrorCodes.InvalidToken, _) => Results
                 .StatusCode(StatusCodes.Status401Unauthorized)
                 .WithHeader(HeaderNames.WWWAuthenticate, challenge),
@@ -109,6 +118,15 @@ public static class OidcResults
             foreach (var value in values)
                 response.Headers.Append(name, value);
         });
+
+    /// <summary>
+    /// Decorates a result with the <c>Retry-After</c> header when the refusal named an interval, and leaves it
+    /// alone when it named none - a header saying nothing is worse than no header.
+    /// </summary>
+    private static IResult WithRetryAfter(this IResult inner, TimeSpan? retryAfter)
+        => retryAfter is { } interval
+            ? inner.WithHeader(HeaderNames.RetryAfter, RetryAfter.HeaderValue(interval))
+            : inner;
 
     /// <summary>
     /// Decorates a self-rendered HTML result (the form_post auto-submit page) with the anti-framing headers so it

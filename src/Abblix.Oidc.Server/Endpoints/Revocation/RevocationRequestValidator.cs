@@ -6,14 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 
@@ -34,10 +37,15 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// The JWT validator to be used for validating the token included in the revocation request. Ensures that
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
+/// <param name="rateLimiter">
+/// The budget of revocation requests one client gets, spent once the caller is known to be that client.
+/// </param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator) : IRevocationRequestValidator
+	IAuthServiceJwtValidator jwtValidator,
+	[FromKeyedServices(CallerRateLimiters.Revocation)] PartitionedRateLimiter<string> rateLimiter)
+	: IRevocationRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a revocation request against the OAuth 2.0 revocation request specifications.
@@ -76,6 +84,19 @@ public partial class RevocationRequestValidator(
 			return new OidcError(
 				ErrorCodes.InvalidClient,
 				"The client is not authorized");
+		}
+
+		// The budget is charged here, after the caller has proven which client it is and before the token is
+		// read: verifying a signature is what a looping client makes this server repeat, and the caller is only
+		// chargeable once it is identified. The budget is this endpoint's own, so a client flooding
+		// introspection can still revoke a token it believes is stolen.
+		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+		if (!lease.IsAcquired)
+		{
+			LogCallerRateLimited(clientInfo.ClientId);
+			return new TooManyRequestsError(
+				"Too many revocation requests from this client",
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
 		}
 
 		// The audience is deliberately not required to name this server. RFC 7009 Section 2.1 has the client
