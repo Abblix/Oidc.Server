@@ -14,6 +14,7 @@
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
+[![migrating from IdentityServer](https://img.shields.io/badge/migrating_from_IdentityServer-guide-1D76DB)](https://docs.abblix.com/docs/migrate-from-identityserver)
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_under_%241M_revenue-brightgreen)](#-license)
 
@@ -35,7 +36,6 @@
 - [What's New](#-whats-new)
 - [Certification](#-certification)
 - [How to Install](#-how-to-install)
-- [How to Build](#-how-to-build)
 - [Documentation](#-documentation)
 - [Abblix Account](#-abblix-account)
 - [Feedback and Contributions](#-feedback-and-contributions)
@@ -88,42 +88,7 @@ That registers the full set of certified OpenID Connect endpoints. Logout notifi
 - **External signing keys**: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
 - **Security events and Shared Signals**: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
 
-### Version 2.3
-
-🚀 **Features**
-- **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
-- **Token Exchange (RFC 8693)**: impersonation and delegation with multiple subject- and actor-token formats and a per-client allow-list of subject-token types
-- **DPoP sender-constrained tokens (RFC 9449)**: signature-based proof of possession for public clients that cannot use mTLS, binding access and refresh tokens to the client key
-- **Certificate-bound access tokens (RFC 8705 Section 3)**: resource-server verification that a presented token matches the client certificate on the TLS connection
-- **JARM**: the authorization response returned as a signed, optionally encrypted JWT, protecting it against tampering, mix-up, and parameter injection
-- **JWT-secured token introspection (RFC 9701)**: signed, optionally encrypted introspection responses via content negotiation
-- **JWE-encrypted request objects (RFC 9101)**: confidential request parameters in the front channel and by reference
-- **Signed authorization server metadata (RFC 8414)**: opt-in, integrity-protected discovery document
-
-🔒 **Security hardening**
-- Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token (RFC 7591)
-- JOSE critical-header handling (RFC 7515): well-formed critical parameters are rejected until a host registers a handler bound to each parameter name
-- Token-class confusion defense via opt-in token-type pinning (RFC 8725)
-- JWS verification key pinned to its declared algorithm (RFC 7517) and enforced HMAC key length (RFC 7518)
-- Pairwise subject identifier (PPID) derivation reimplemented as HMAC-based and key-rotatable, replacing the prior string-concatenation scheme (configurable hash and salt)
-- Authorization-response issuer parameter (RFC 9207) now advertised in discovery, so clients can require and verify the mix-up defense
-
-✏️ **Improvements**
-- Structured logging via a source generator across the whole server: named events with stable numeric identifiers, ready for audit pipelines
-- Unified client-addressed JWT signing and encryption across UserInfo, identity-token, JARM, and introspection responses
-- JWT validation returns errors instead of throwing on unsupported algorithm or key combinations
-- Dependency-injection registrations normalized so host pre-registrations win the resolution race
-
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details of 2.4, and [2.3](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for the release before it.
-
-### ⚠️ Breaking Changes (upgrading from 2.2)
-
-Most deployments need only the first two; the rest apply if you use the named feature.
-
-- **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed, and success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
-- **Implicit Flow is opt-in.** Implicit and hybrid response types are rejected at client registration unless you call `EnableImplicitFlow()` on the OIDC builder. Authorization Code Flow is the default; no action otherwise.
-- **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 Section 3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
-- **Back-channel logout endpoint validated at registration.** A `backchannel_logout_uri` with a non-`https` scheme, internal hostname, or private/loopback address is rejected with `invalid_client_metadata` under the secure default. Register public `https` endpoints, or relax `SecureHttpFetchOptions` for trusted internal deployments: set `BlockPrivateNetworks` to `false` and state `AllowedSchemes` in full, `https` included - the list replaces the default rather than extending it.
+> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details.
 
 ## 🎓 Certification
 
@@ -175,38 +140,14 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
-## 📝 How to Build
-
-To build the packages, follow these steps:
-
-```shell
-# Open a terminal (Command Prompt or PowerShell for Windows, Terminal for macOS or Linux)
-
-# Ensure Git is installed
-# Visit https://git-scm.com to download and install console Git if not already installed
-
-# Clone the repository
-git clone https://github.com/Abblix/Oidc.Server.git
-
-# Navigate to the project directory
-cd Oidc.Server
-
-# Check if .NET SDK is installed
-dotnet --version  # Check the installed version of .NET SDK
-# Visit the official Microsoft website to install or update it if necessary
-
-# Restore dependencies
-dotnet restore
-
-# Compile the project
-dotnet build
-
-```
 ## 📚 Documentation
 
 ### Getting Started
 Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
+
+### Migrating from IdentityServer
+[Migrating from IdentityServer4 or Duende](https://docs.abblix.com/docs/migrate-from-identityserver) walks through a real migration end to end: dotnet/eShop's Identity.API moved from Duende IdentityServer onto Abblix OIDC Server, every decision named along the way.
 
 ### Shared Signals
 [A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) shows two hosts exchanging a signed Security Event Token over HTTPS, each verifying the other.
