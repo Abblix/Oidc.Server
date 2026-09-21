@@ -1040,6 +1040,24 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// A session that records no authentication level at all - the shape a host produces when it never
+    /// assigns one - meets no request that names the levels it accepts, and the token would otherwise go
+    /// out stating no level for a request that demanded a particular one.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_AgainstASessionRecordingNoLevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession();
+        Assert.Null(authSession.AuthContextClassRef);
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3"] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
     /// The same of the single qualifier, which is read by its own line: a <c>value</c> that is not a string
     /// names no level either.
     /// </summary>
