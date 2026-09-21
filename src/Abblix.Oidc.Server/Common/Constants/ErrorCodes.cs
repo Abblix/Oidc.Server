@@ -102,6 +102,21 @@ public static class ErrorCodes
 	public const string AccountSelectionRequired = "account_selection_required";
 
 	/// <summary>
+	/// The authentication the request required could not be performed. Defined by the OpenID Foundation
+	/// specification "OpenID Connect Core Error Code unmet_authentication_requirements 1.0", which says it
+	/// "SHALL be used if the Relying Party wants the OP to conform to a certain Authentication Context Class
+	/// Reference value using an essential claim acr claim as specified in Section 5.5.1.1. of OpenID Connect
+	/// Core and the OP is unable to meet this requirement and MAY be used in other cases, if appropriate", and
+	/// gives the authorization endpoint as its usage location.
+	/// </summary>
+	/// <remarks>
+	/// That specification announces a registration in the IANA OAuth Extensions Error registry which has not
+	/// happened: the registry lists the neighbouring Core codes and not this one. The value is the one the
+	/// specification defines, so a client implementing it reads what it expects.
+	/// </remarks>
+	public const string UnmetAuthenticationRequirements = "unmet_authentication_requirements";
+
+	/// <summary>
 	/// The Authorization Server requires End-User consent. This error MAY be returned when the prompt parameter value in the Authentication Request is none,
 	/// but the Authentication Request cannot be completed without displaying a user interface for End-User consent.
 	/// </summary>

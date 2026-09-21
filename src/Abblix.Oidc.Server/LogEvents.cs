@@ -745,7 +745,6 @@ internal static class LogEvents
             private const int Base = 9040;
 
             public const int UserClaimsNotFound = Base + 1;
-            public const int MissingClaims = Base + 2;
         }
 
         /// <summary>

@@ -35,9 +35,14 @@ public interface IUserClaimsProvider
     /// adaptiveness of claim retrieval.</param>
     /// <param name="clientInfo">Information about the client application making the request, which may influence
     /// the processing and filtering of claims based on client-specific settings or requirements.</param>
-    /// <returns>A task that resolves to a <see cref="JsonObject"/> encapsulating the user claims in a structured JSON
-    /// format suitable for further processing, or null if the necessary claims cannot be retrieved or are not
-    /// applicable based on the session details.</returns>
+    /// <returns>A task that resolves to a <see cref="JsonObject"/> encapsulating the user claims in a structured
+    /// JSON format suitable for further processing, or null when the host knows no such user. A claim the host
+    /// simply does not hold is left out of the object rather than a reason to answer null, because OpenID
+    /// Connect Core 1.0 section 5.5.1 forbids answering with an error over a claim that was not returned - and
+    /// because null costs more than an error does here: the user-information endpoint reports the caller's
+    /// token invalid, and everything that mints an ID token answers without a usable one - a response body
+    /// carries it as null, a redirect leaves the parameter out - while still carrying whatever else that
+    /// response holds and saying nothing about why.</returns>
     Task<JsonObject?> GetUserClaimsAsync(
         AuthSession authSession,
         ICollection<string> scope,

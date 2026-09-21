@@ -14,7 +14,8 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Reading the end users a <c>claims</c> request will accept for <c>sub</c>.
+/// Reading what a <c>claims</c> request will accept: the end users for <c>sub</c>, and the authentication
+/// levels for <c>acr</c>.
 /// </summary>
 public static class RequestedClaimsExtensions
 {
@@ -52,7 +53,7 @@ public static class RequestedClaimsExtensions
             return Array.Empty<string>();
 
         string? value = null;
-        if (details.Value is not null && !TryReadSubject(details.Value, out value))
+        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
             return MalformedSubject;
 
         string[]? values = null;
@@ -61,7 +62,7 @@ public static class RequestedClaimsExtensions
             values = new string[requestedValues.Length];
             for (var i = 0; i < requestedValues.Length; i++)
             {
-                if (!TryReadSubject(requestedValues[i], out var subject))
+                if (!TryReadQualifier(requestedValues[i], out var subject))
                     return MalformedSubject;
 
                 values[i] = subject;
@@ -80,13 +81,79 @@ public static class RequestedClaimsExtensions
         };
     }
 
+    /// <summary>
+    /// The authentication levels this request requires of the ID token: an empty array when it requires
+    /// none, or a failure when its qualifiers name a level nobody can hold.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 5.5.1.1 conditions its rule on three things the request states: the
+    /// <c>acr</c> claim is essential, it is asked of the ID token, and it carries "a value or values
+    /// parameter requesting specific Authentication Context Class Reference values". Given those, the server
+    /// "MUST return an acr Claim Value that matches one of the requested values", and "MUST treat that
+    /// outcome as a failed authentication attempt" when it cannot. A fourth condition of that sentence, that
+    /// the implementation supports the <c>claims</c> parameter, this server meets everywhere: its
+    /// authorization metadata publishes <c>claims_parameter_supported</c> as true.
+    /// <para>
+    /// A voluntary <c>acr</c> is read as requiring nothing, which the same section says outright: the
+    /// relying party "MAY request the acr Claim as a Voluntary Claim ... by not including
+    /// <c>"essential": true</c>", and an unmet voluntary claim is not a failed authentication. So is an
+    /// essential one naming no values: it accepts whatever the session holds.
+    /// </para>
+    /// <para>
+    /// The two qualifiers bind together, as they do for <c>sub</c> above and for the same reason, and a
+    /// request whose qualifiers accept no level at all - an empty choice, or a <c>value</c> outside its own
+    /// <c>values</c> - is a failure rather than an empty set, because an empty set is how this answer says
+    /// that nothing was required.
+    /// </para>
+    /// </remarks>
+    public static Result<string[], string> RequiredAuthContextClassRefs(this RequestedClaims? claims)
+    {
+        if (claims?.IdToken is not { } requested ||
+            !requested.TryGetValue(IanaClaimTypes.Acr, out var details) ||
+            details is not { Essential: true })
+            return Array.Empty<string>();
+
+        string? value = null;
+        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
+            return MalformedAcr;
+
+        string[]? values = null;
+        if (details.Values is { } requestedValues)
+        {
+            values = new string[requestedValues.Length];
+            for (var i = 0; i < requestedValues.Length; i++)
+            {
+                if (!TryReadQualifier(requestedValues[i], out var level))
+                    return MalformedAcr;
+
+                values[i] = level;
+            }
+        }
+
+        return (value, values) switch
+        {
+            (null, null) => Array.Empty<string>(),
+            (null, []) => NoAcceptableAcr,
+            (null, { } many) => many,
+            ({ } one, null) => new[] { one },
+            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
+                ? new[] { one }
+                : NoAcceptableAcr,
+        };
+    }
+
+    private const string MalformedAcr = "The acr claim was requested with a value that is not a string";
+
+    private const string NoAcceptableAcr =
+        "The acr claim was requested with qualifiers no authentication can satisfy";
+
     private const string MalformedSubject = "The sub claim was requested with a value that is not a string";
 
     private const string NoAcceptableSubject =
         "The sub claim was requested with qualifiers no end user can satisfy";
 
     /// <summary>
-    /// Reads a requested <c>sub</c> value, failing when the qualifier is not a string.
+    /// Reads one qualifier of a requested claim, failing when it is not a string.
     /// </summary>
     /// <remarks>
     /// Two shapes arrive here because the same property carries both. A request read off the wire holds a
@@ -102,7 +169,7 @@ public static class RequestedClaimsExtensions
     /// outright instead of refusing as though nobody were logged in.
     /// </para>
     /// </remarks>
-    private static bool TryReadSubject(object? requested, [NotNullWhen(true)] out string? subject)
+    private static bool TryReadQualifier(object? requested, [NotNullWhen(true)] out string? subject)
     {
         switch (requested)
         {

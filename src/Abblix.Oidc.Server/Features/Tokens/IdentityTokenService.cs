@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -75,6 +76,23 @@ internal class IdentityTokenService(
 		string? accessToken,
 		PushDeliveryBindings? pushBindings = null)
 	{
+		// OpenID Connect Core 1.0 section 5.5.1.1: a request requiring specific authentication levels of the
+		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
+		// a failed authentication attempt. This token states the session's own acr, so a session at another
+		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
+		// unacceptable.
+		//
+		// The authorization endpoint answers that request properly - it chooses a session against the
+		// requirement, sends the end user to authenticate when none meets it, and refuses with a code of its
+		// own where the request forbids interaction - so every grant it issues arrives here already at a
+		// level the request accepts. What reaches this line is a grant nothing checked: a decoupled
+		// authentication carries the claims parameter and chooses its session elsewhere. Withholding the
+		// token is not the failed attempt the section asks for, and it costs the client no explanation: the
+		// notification goes out with a null id_token beside the request identifier. Refusing there is its own
+		// decision, which is why this stops at not stating a level the client refused.
+		if (RequiresAnAuthenticationLevelTheSessionLacks(authSession, authContext))
+			return null;
+
 		var scope = authContext.Scope;
 		if (!includeUserClaims && !clientInfo.ForceUserClaimsInIdentityToken)
 		{
@@ -204,5 +222,25 @@ internal class IdentityTokenService(
 		var hash = HashCalculator.Compute(signingAlgorithm, sourceValue);
 		if (hash is not null)
 			identityToken.Payload[claimType] = hash;
+	}
+
+	/// <summary>
+	/// Whether the request requires an authentication level the session does not hold.
+	/// </summary>
+	/// <remarks>
+	/// What the request requires is read by <see cref="RequestedClaimsExtensions.RequiredAuthContextClassRefs"/>,
+	/// which carries the conditions section 5.5.1.1 states and the shapes a qualifier arrives in. A refusal from
+	/// it names qualifiers no authentication could satisfy, which is unmet by construction.
+	/// </remarks>
+	private static bool RequiresAnAuthenticationLevelTheSessionLacks(
+		AuthSession authSession,
+		AuthorizationContext authContext)
+	{
+		var required = authContext.RequestedClaims.RequiredAuthContextClassRefs();
+		if (!required.TryGetSuccess(out var levels))
+			return true;
+
+		return levels is { Length: > 0 } &&
+		       !levels.Contains(authSession.AuthContextClassRef, StringComparer.Ordinal);
 	}
 }

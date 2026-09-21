@@ -59,7 +59,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// Retrieves any available user authentication sessions, filtered by the request’s parameters.
-		var authSessions = await GetAvailableAuthSessionsAsync(request);
+		var (authSessions, authenticationLevelUnmet) = await GetAvailableAuthSessionsAsync(request);
 
 		AuthSession authSession;
 		switch (authSessions.Count, model.Prompt)
@@ -70,6 +70,20 @@ public class AuthorizationRequestProcessor(
 			// value falls through to the generic branches and the registration intent is lost.
 			case (_, Prompts.Create):
 				return new RegistrationRequired(model);
+
+			// A request requiring an authentication level, forbidding interaction and left with no session is
+			// the failed authentication attempt section 5.5.1.1 demands, and the OpenID Foundation gives it a
+			// code of its own: unmet_authentication_requirements "SHALL be used if the Relying Party wants the
+			// OP to conform to a certain Authentication Context Class Reference value using an essential claim
+			// acr claim ... and the OP is unable to meet this requirement". Saying login_required instead would
+			// send the client to retry an interaction that cannot change the answer.
+			case (0, Prompts.None) when authenticationLevelUnmet:
+				return new AuthorizationError(
+					model,
+					ErrorCodes.UnmetAuthenticationRequirements,
+					"The authentication the request requires could not be performed.",
+					request.ResponseMode,
+					model.RedirectUri);
 
 			// If no sessions exist and the prompt forbids user interaction,
 			// respond that login is required without allowing user interaction.
@@ -266,8 +280,11 @@ public class AuthorizationRequestProcessor(
 	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
 	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
 	/// <c>id_token_hint</c> named.</param>
-	/// <returns>A list of valid authentication sessions that match the request's criteria.</returns>
-	private ValueTask<List<AuthSession>> GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
+	/// <returns>The sessions matching the request's criteria, and whether an authentication level the
+	/// request required is what left none of them - which is a different answer to the client than having
+	/// nobody signed in.</returns>
+	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet)>
+		GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
 	{
 		var model = request.Model;
 		var clientInfo = request.ClientInfo;
@@ -302,6 +319,9 @@ public class AuthorizationRequestProcessor(
 		// login_required while anything else reaches the login page, which is where "is logged in as a
 		// result of the request" happens.
 		//
+		// A request requiring an authentication level takes one more arm: where that requirement is what
+		// left no session, the refusal names it rather than saying login_required.
+		//
 		// That last part is the host's to finish, and it is worth saying because the failure is a loop
 		// rather than an error: a login page that returns the session it already has, without prompting,
 		// arrives back here to be filtered out again. The same is true of max_age and acr_values, and a
@@ -326,7 +346,30 @@ public class AuthorizationRequestProcessor(
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
 		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
 		// lookup.
-		return KeepUnrevokedAsync(authSessions);
+		var candidates = await KeepUnrevokedAsync(authSessions);
+
+		// An essential acr naming acceptable values is the same question acr_values asks, with an obligation
+		// attached: section 5.5.1.1 says the server "MUST return an acr Claim Value that matches one of the
+		// requested values", and that an outcome which cannot meet it is "a failed authentication attempt".
+		// Filtering rather than refusing takes the latitude the same sentence grants - it "MAY ask the
+		// End-User to re-authenticate with additional factors" - so a request no current session satisfies
+		// reaches the login page. A session recording no level is dropped exactly as acr_values drops it: an
+		// absent level meets no named one.
+		//
+		// Last, and over the materialised list, because the endpoint has to tell what THIS requirement
+		// removed from what every other filter removed. Answering the dedicated error code off the final
+		// count would report an unmet authentication level to a request that has none signed in at all, or
+		// one whose session holds exactly the level asked for and was dropped by max_age - and in both of
+		// those, interaction is what changes the answer, which is what login_required tells the client to
+		// try.
+		if (request.RequiredAuthContextClassRefs is not { Length: > 0 } requiredAcrValues)
+			return (candidates, false);
+
+		var atRequiredLevel = candidates.FindAll(
+			session => session.AuthContextClassRef.HasValue() &&
+			           requiredAcrValues.Contains(session.AuthContextClassRef, StringComparer.Ordinal));
+
+		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0);
 	}
 
 	/// <summary>
