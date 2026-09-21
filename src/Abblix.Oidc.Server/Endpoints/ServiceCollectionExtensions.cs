@@ -522,7 +522,9 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// Registered with <c>TryAdd</c>, so a host that put its own limiter under this key before calling this
     /// library keeps it: the endpoint then spends whatever policy that limiter implements, and the settings here
-    /// are not consulted at all.
+    /// decide nothing. The startup check on them still runs, because a host reading its numbers from
+    /// configuration can supply a limiter from code and still have the numbers read by something else later; a
+    /// deployment that has finished with them removes them from its configuration.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <param name="key">The key the endpoint resolves its limiter by, from <see cref="CallerRateLimiters"/>.</param>

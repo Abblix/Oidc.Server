@@ -37,6 +37,12 @@ public class RevocationRequestValidatorTests
     /// </summary>
     private static readonly TimeSpan OneMinute = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Enough attempts that a budget of one would have refused long ago, so a run that answers every one of them
+    /// says the caller was never counted rather than that it stayed inside its allowance.
+    /// </summary>
+    private const int RequestsWellPastTheBudget = 10;
+
     private readonly Mock<ILogger<RevocationRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
@@ -451,12 +457,13 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// A public client is refused like any other once it is over its budget. This endpoint deliberately lets
-    /// public clients through, as the comment on its client check explains, so they reach it where introspection
-    /// turns them away - which makes them the callers a budget most needs to cover.
+    /// A public client is never counted here, however much it asks. Its only claim to its identity is a
+    /// client_id anybody can read out of a browser, so a budget charged to that name would be spent by whoever
+    /// wanted to - and what they would take away is the ability of that client's real users to revoke a token
+    /// they believe is stolen.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WhenAPublicClientIsOverItsBudget_ShouldRefuseIt()
+    public async Task ValidateAsync_WhenAPublicClientAsksRepeatedly_ShouldKeepAnsweringIt()
     {
         // Arrange
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
@@ -473,12 +480,47 @@ public class RevocationRequestValidatorTests
             .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
+        // Act, Assert
+        for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
+        {
+            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+            Assert.True(result.TryGetSuccess(out _), $"a public client was refused on attempt {attempt + 1}");
+        }
+    }
+
+    /// <summary>
+    /// The budget is on out of the box: a host that configures nothing is still protected from a client that
+    /// loops. The number itself is read from the defaults rather than written here, so raising it stays a
+    /// one-line change.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithTheDefaultBudget_ShouldEventuallyRefuseAClientThatLoops()
+    {
+        // Arrange
+        var defaults = new CallerRateLimitOptions();
+        Assert.True(defaults.PermitLimit.HasValue, "the budget must be on without a host configuring one");
+        var validator = CreateValidator(defaults);
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
         // Act
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        // Twice the budget and one more: the calls take microseconds, so they land in at most two windows, and
+        // one of those two must then hold more than the budget permits whatever the window boundary does.
+        var refusals = 0;
+        for (var attempt = 0; attempt < 2 * defaults.PermitLimit!.Value + 1; attempt++)
+        {
+            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+            if (result.TryGetFailure(out var error) && error is TooManyRequestsError)
+                refusals++;
+        }
 
         // Assert
-        Assert.True(second.TryGetFailure(out var error));
-        Assert.IsType<TooManyRequestsError>(error);
+        Assert.True(refusals > 0, "a client looping past twice the default budget was never refused");
     }
 }

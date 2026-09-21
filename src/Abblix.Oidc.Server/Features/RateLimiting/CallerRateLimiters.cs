@@ -22,6 +22,12 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// Core's rate-limiting middleware cannot serve here: it runs before the request reaches the endpoint, where the
 /// caller is still whoever holds the socket, and the whole point of this budget is that it is charged to the
 /// client the request authenticated as.
+/// <para>
+/// A budget is taken with a single attempt that never waits, so a substituted limiter configured to queue does
+/// not queue here: a caller it would have held is refused instead. An endpoint holding a request open is the
+/// thing this feature exists to stop, so the queue a host configured for its own callers is deliberately not
+/// honoured on this path.
+/// </para>
 /// </remarks>
 public static class CallerRateLimiters
 {

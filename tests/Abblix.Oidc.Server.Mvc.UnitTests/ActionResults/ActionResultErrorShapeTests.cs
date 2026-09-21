@@ -213,7 +213,9 @@ public class ActionResultErrorShapeTests
 
     /// <summary>
     /// A caller over its budget of requests is answered 429 and told how long to wait, in whole seconds rounded
-    /// up: a client told to wait less than the server asked for comes back to the same refusal.
+    /// up: a client told to wait less than the server asked for comes back to the same refusal. The body stays
+    /// empty, because no registered error code means "you asked too often" and one that means something else
+    /// would have the client act on it.
     /// </summary>
     [Fact]
     public async Task A_caller_over_its_budget_answers_429_and_says_how_long_to_wait()
@@ -227,7 +229,24 @@ public class ActionResultErrorShapeTests
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
         Assert.Equal("2", response.Headers[HeaderNames.RetryAfter].ToString());
-        Assert.Contains(ErrorCodes.TemporarilyUnavailable, response.Body);
+        Assert.Empty(response.Body);
+    }
+
+    /// <summary>
+    /// The refusal keeps its status through the overload that advertises DPoP as well. An endpoint whose errors
+    /// carry a scheme challenge would otherwise answer a spent budget with the status it uses for a bad request,
+    /// and the caller would read a refusal about its token.
+    /// </summary>
+    [Fact]
+    public async Task A_caller_over_its_budget_answers_429_under_the_dpop_overload_too()
+    {
+        var error = new TooManyRequestsError("Too many requests from this client", TimeSpan.FromSeconds(1));
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status400BadRequest, Realm, DPoPAlgs, advertiseBearer: true));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.Equal("1", response.Headers[HeaderNames.RetryAfter].ToString());
     }
 
     /// <summary>

@@ -21,11 +21,12 @@ namespace Abblix.Oidc.Server.Common;
 /// interval, and then the response carries no <c>Retry-After</c>.
 /// </param>
 /// <remarks>
-/// The body says <c>temporarily_unavailable</c>, which states what happened to this request - the server is not
-/// handling it because of load it attributes to this caller - and is a code every OAuth client library already
-/// knows. The one alternative, <c>slow_down</c>, means something else: it is defined for a client polling for an
-/// authorization that is still pending, and tells it to keep polling at a longer interval. Nothing is pending
-/// here, and a client acting on that reading would poll an endpoint that answers in one call.
+/// The status and the header carry the whole answer: the response has no body, because no registered OAuth error
+/// code describes a caller that has asked too often, and a code that means something else is worse than none.
+/// <c>slow_down</c> is defined for a client polling for an authorization that is still pending and tells it to
+/// poll at a longer interval; <c>temporarily_unavailable</c> exists because a status code cannot travel through
+/// an authorization redirect, and a client reading it may send its end user through the browser again. The code
+/// this record carries is what the server logs the refusal as, and never what a caller is told.
 /// </remarks>
 public sealed record TooManyRequestsError(string ErrorDescription, TimeSpan? RetryAfter)
     : OidcError(ErrorCodes.TemporarilyUnavailable, ErrorDescription);

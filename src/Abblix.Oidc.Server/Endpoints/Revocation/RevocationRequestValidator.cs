@@ -86,17 +86,25 @@ public partial class RevocationRequestValidator(
 				"The client is not authorized");
 		}
 
-		// The budget is charged here, after the caller has proven which client it is and before the token is
-		// read: verifying a signature is what a looping client makes this server repeat, and the caller is only
-		// chargeable once it is identified. The budget is this endpoint's own, so a client flooding
-		// introspection can still revoke a token it believes is stolen.
-		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
-		if (!lease.IsAcquired)
+		// A public client presents a client_id and no credential, so anyone can send this request under its
+		// name. Charging a budget to that name would let a stranger spend it and leave the client's real users
+		// unable to revoke their own tokens - a denial of the one operation a person reaches for when they
+		// believe a token is stolen. Such a caller is therefore not counted at all, which is what this endpoint
+		// did before budgets existed. Introspection has no such case: it turns a public client away above,
+		// before any budget is charged.
+		if (clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.None)
 		{
-			LogCallerRateLimited(clientInfo.ClientId);
-			return new TooManyRequestsError(
-				"Too many revocation requests from this client",
-				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+			// Charged after the caller has proven which client it is and before the token is read: reading it
+			// verifies a signature, which is what a looping client makes this server repeat. The budget is this
+			// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
+			using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+			if (!lease.IsAcquired)
+			{
+				LogCallerRateLimited(clientInfo.ClientId);
+				return new TooManyRequestsError(
+					"Too many revocation requests from this client",
+					lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+			}
 		}
 
 		// The audience is deliberately not required to name this server. RFC 7009 Section 2.1 has the client

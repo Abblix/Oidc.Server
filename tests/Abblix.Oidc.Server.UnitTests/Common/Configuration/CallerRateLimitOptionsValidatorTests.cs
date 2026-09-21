@@ -31,7 +31,7 @@ public class CallerRateLimitOptionsValidatorTests
     }
 
     /// <summary>
-    /// No limit at all is a deliberate choice, not a misconfiguration: it is how a host keeps the behaviour of
+    /// No limit at all is a deliberate choice, not a misconfiguration: it is how a host keeps the behavior of
     /// versions before this setting. The window is then not consulted, so nothing about it can refuse startup.
     /// </summary>
     [Fact]

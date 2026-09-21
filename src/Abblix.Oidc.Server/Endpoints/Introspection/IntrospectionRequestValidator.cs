@@ -74,7 +74,9 @@ public partial class IntrospectionRequestValidator(
 
 		// The budget is charged here, after the caller has proven which client it is and before the token is
 		// read: a client that loops makes this the most expensive endpoint in the deployment, since every call
-		// verifies a signature, and the caller is only chargeable once it is identified.
+		// verifies a signature, and the caller is only chargeable once it is identified. What authenticating
+		// the caller itself costs is not covered - a client authenticating with a signed assertion pays a
+		// verification before reaching this line, and a caller that fails authentication never reaches it.
 		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
 		if (!lease.IsAcquired)
 		{

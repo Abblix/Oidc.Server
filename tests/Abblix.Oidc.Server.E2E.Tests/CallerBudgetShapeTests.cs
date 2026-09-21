@@ -71,8 +71,8 @@ public sealed class CallerBudgetShapeTests
         var discovery = await FetchDiscoveryAsync(client);
         Assert.NotNull(discovery.IntrospectionEndpoint);
 
-        using var answered = await PostTokenAsync(client, discovery.IntrospectionEndpoint);
-        using var refused = await PostTokenAsync(client, discovery.IntrospectionEndpoint);
+        using var answered = await IntrospectAsync(client, discovery.IntrospectionEndpoint);
+        using var refused = await IntrospectAsync(client, discovery.IntrospectionEndpoint);
 
         Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
@@ -91,8 +91,8 @@ public sealed class CallerBudgetShapeTests
         var discovery = await FetchDiscoveryAsync(client);
         Assert.NotNull(discovery.RevocationEndpoint);
 
-        using var answered = await PostTokenAsync(client, discovery.RevocationEndpoint);
-        using var refused = await PostTokenAsync(client, discovery.RevocationEndpoint);
+        using var answered = await RevokeAsync(client, discovery.RevocationEndpoint);
+        using var refused = await RevokeAsync(client, discovery.RevocationEndpoint);
 
         Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
@@ -112,9 +112,9 @@ public sealed class CallerBudgetShapeTests
         Assert.NotNull(discovery.IntrospectionEndpoint);
         Assert.NotNull(discovery.RevocationEndpoint);
 
-        await PostTokenAsync(client, discovery.IntrospectionEndpoint);
-        using var introspection = await PostTokenAsync(client, discovery.IntrospectionEndpoint);
-        using var revocation = await PostTokenAsync(client, discovery.RevocationEndpoint);
+        await IntrospectAsync(client, discovery.IntrospectionEndpoint);
+        using var introspection = await IntrospectAsync(client, discovery.IntrospectionEndpoint);
+        using var revocation = await RevokeAsync(client, discovery.RevocationEndpoint);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, introspection.StatusCode);
         Assert.Equal(HttpStatusCode.OK, revocation.StatusCode);
@@ -130,14 +130,26 @@ public sealed class CallerBudgetShapeTests
         return document;
     }
 
-    private static Task<HttpResponseMessage> PostTokenAsync(HttpClient client, Uri endpoint)
+    private static Task<HttpResponseMessage> IntrospectAsync(HttpClient client, Uri endpoint)
+        => PostTokenAsync(client, endpoint, IntrospectionRequest.Parameters.Token);
+
+    private static Task<HttpResponseMessage> RevokeAsync(HttpClient client, Uri endpoint)
+        => PostTokenAsync(client, endpoint, RevocationRequest.Parameters.Token);
+
+    /// <summary>
+    /// Posts a token to one of the two endpoints as the confidential test client. The two name their token
+    /// parameter in contracts of their own, so each caller supplies the name its endpoint publishes rather than
+    /// borrowing the neighbour's.
+    /// </summary>
+    private static Task<HttpResponseMessage> PostTokenAsync(
+        HttpClient client, Uri endpoint, string tokenParameterName)
         => client.PostAsync(
             endpoint,
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-                [IntrospectionRequest.Parameters.Token] = "not-a-token",
+                [tokenParameterName] = "not-a-token",
             }),
             TestContext.Current.CancellationToken);
 }
