@@ -77,7 +77,7 @@ builder.Services.AddOidcServices(options =>
 });
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+That registers the full set of certified OpenID Connect endpoints. Logout notification is the one thing your application chooses: add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, from `Abblix.Oidc.Server.Features`, and your configuration document advertises what you chose. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
 
 ## ✨ What's New
 
@@ -119,6 +119,8 @@ For convenience, the certification information is provided in the tables below:
 |Front-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=FCIMtfChd8JUR) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=UPqVQppkBai8Q) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=TK2z4lTRgeU0O) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=ntjIMSdbzeBJN) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=0SfPTdERrzANP) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RLQm9h40E4j1k)|12|
 |Back-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=5kbQfVOWmJV76) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=VWmk225h0coIZ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=YzDOT2LFWi4X7) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RxPPCdLI7LlcR) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=x73qpcrHcFWv0) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=uYoYs5BFAZkgr)|12|
 |**Total**||**102**|
+
+Your application chooses which of these logout channels it serves, and its configuration document then advertises those. Add `AddFrontChannelLogout()`, `AddBackChannelLogout()`, or both, beside `AddOidcServices`.
 
 ## 📦 How to Install
 

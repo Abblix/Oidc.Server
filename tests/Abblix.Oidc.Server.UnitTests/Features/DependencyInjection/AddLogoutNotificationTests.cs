@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -22,14 +23,15 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
 /// <summary>
-/// Locks the composed shape of the <see cref="ILogoutNotifier"/> family.
-/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddLogoutNotification"/> composes it,
-/// while <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddBackChannelLogout"/> and
-/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddFrontChannelLogout"/> are public and
-/// contribute a member each, so a
-/// host may call one after the composition has already happened. The member must join the family: landing beside
-/// the composite it would win the singular resolve, and then RP-initiated logout would notify one channel while
-/// the discovery document kept advertising both.
+/// Locks the composed shape of the <see cref="ILogoutNotifier"/> family and the channels a provider serves.
+/// Each channel is the host's own choice, made by calling
+/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddFrontChannelLogout"/> or
+/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddBackChannelLogout"/>, and both are
+/// public, so the call may arrive after
+/// <see cref="Abblix.Oidc.Server.Features.ServiceCollectionExtensions.AddLogoutNotification"/> has already
+/// composed the family. The member must join it: landing beside the composite it would win the singular
+/// resolve, and then RP-initiated logout would notify one channel while the discovery document described
+/// another.
 /// </summary>
 public class AddLogoutNotificationTests
 {
@@ -48,25 +50,73 @@ public class AddLogoutNotificationTests
             services, descriptor => descriptor.ServiceType == typeof(ILogoutNotifier) && !descriptor.IsKeyedService);
         Assert.Equal(typeof(CompositeLogoutNotifier), plain.ResolveImplementationType());
 
-        // Both channels are still inside it.
-        Assert.Equal(2, services.Count(
-            descriptor => descriptor.ServiceType == typeof(ILogoutNotifier) && descriptor.IsKeyedService));
+        // Both channels joined the member the composition always holds.
+        Assert.Equal(
+            [typeof(NoLogoutNotifier), typeof(BackChannelLogoutNotifier), typeof(FrontChannelLogoutNotifier)],
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(ILogoutNotifier) && descriptor.IsKeyedService)
+                .Select(descriptor => descriptor.ResolveImplementationType()));
     }
 
     [Fact]
-    public void BackChannelAddedAfterTheFullRegistrationLeavesBothChannelsServed()
-        => AssertBothChannelsSurvive(services => services.AddBackChannelLogout());
+    public void AHostThatChoseNoChannel_AnswersThatItServesNone()
+    {
+        using var provider = BuildProvider(_ => { });
+        var notifier = provider.CreateScope().ServiceProvider.GetRequiredService<ILogoutNotifier>();
+
+        // The question is asked of a live provider rather than of the collection, because what the discovery
+        // handler meets is a resolve: a family left empty would compose to nothing and throw here.
+        Assert.IsType<CompositeLogoutNotifier>(notifier);
+        Assert.False(notifier.FrontChannelLogoutSupported);
+        Assert.False(notifier.BackChannelLogoutSupported);
+    }
 
     [Fact]
-    public void FrontChannelAddedAfterTheFullRegistrationLeavesBothChannelsServed()
-        => AssertBothChannelsSurvive(services => services.AddFrontChannelLogout());
+    public void AHostThatChoseNoChannel_CanResolveTheEndSessionResponseFormatter()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        using var scope = provider.CreateScope();
+
+        // The page builder is the dependency this row is about, and the formatter is what answers a logout
+        // request: nothing else proves a host serving no channel can build it.
+        Assert.NotNull(scope.ServiceProvider.GetService<IFrontChannelLogoutService>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IEndSessionResponseFormatter>());
+    }
+
+    [Fact]
+    public void TheBackChannelChosenAfterTheFullRegistration_IsTheOnlyChannelServed()
+        => AssertOnlyTheChosenChannelIsServed(
+            services => services.AddBackChannelLogout(),
+            frontChannelServed: false,
+            backChannelServed: true);
+
+    [Fact]
+    public void TheFrontChannelChosenAfterTheFullRegistration_IsTheOnlyChannelServed()
+        => AssertOnlyTheChosenChannelIsServed(
+            services => services.AddFrontChannelLogout(),
+            frontChannelServed: true,
+            backChannelServed: false);
 
     /// <summary>
-    /// The host asks for one channel explicitly after the whole server is already registered. The call is
-    /// redundant - AddOidcServices registered both - and it used to be destructive, replacing the composite
-    /// with the single notifier it re-registered.
+    /// The host chooses one channel after the whole server is already registered. The choice has to reach the
+    /// composite - the call used to be destructive, replacing it with the single notifier it registered - and
+    /// it must not carry the other channel in with it.
     /// </summary>
-    private static void AssertBothChannelsSurvive(Action<IServiceCollection> hostCall)
+    private static void AssertOnlyTheChosenChannelIsServed(
+        Action<IServiceCollection> hostCall,
+        bool frontChannelServed,
+        bool backChannelServed)
+    {
+        using var provider = BuildProvider(hostCall);
+        var notifier = provider.CreateScope().ServiceProvider.GetRequiredService<ILogoutNotifier>();
+
+        Assert.IsType<CompositeLogoutNotifier>(notifier);
+        Assert.Equal(frontChannelServed, notifier.FrontChannelLogoutSupported);
+        Assert.Equal(backChannelServed, notifier.BackChannelLogoutSupported);
+    }
+
+    private static ServiceProvider BuildProvider(Action<IServiceCollection> hostCall)
     {
         var services = new ServiceCollection();
         services.AddDistributedMemoryCache();
@@ -81,11 +131,6 @@ public class AddLogoutNotificationTests
 
         hostCall(services);
 
-        using var provider = services.BuildServiceProvider();
-        var notifier = provider.CreateScope().ServiceProvider.GetRequiredService<ILogoutNotifier>();
-
-        Assert.IsType<CompositeLogoutNotifier>(notifier);
-        Assert.True(notifier.FrontChannelLogoutSupported);
-        Assert.True(notifier.BackChannelLogoutSupported);
+        return services.BuildServiceProvider();
     }
 }

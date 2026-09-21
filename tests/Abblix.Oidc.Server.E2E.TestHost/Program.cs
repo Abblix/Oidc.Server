@@ -50,6 +50,10 @@ builder.Services.AddIntrospection();
 builder.Services.AddCheckSession();
 builder.Services.AddDynamicClientRegistration();
 
+// Each logout channel is the host's own choice. This host serves both, because the suite drives both.
+builder.Services.AddFrontChannelLogout();
+builder.Services.AddBackChannelLogout();
+
 builder.Services.AddOidcServices(options =>
 {
     options.Issuer = TestConstants.Issuer;

@@ -49,6 +49,10 @@ builder.Services.AddIntrospection();
 builder.Services.AddCheckSession();
 builder.Services.AddDynamicClientRegistration();
 
+// Each logout channel is the host's own choice. This host serves both, because the suite drives both.
+builder.Services.AddFrontChannelLogout();
+builder.Services.AddBackChannelLogout();
+
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
