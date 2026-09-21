@@ -117,6 +117,22 @@ public class RequestedSubjectValidatorTests
     }
 
     /// <summary>
+    /// The qualifiers are compared to each other by the equality section 5.5.1 prescribes for matching a
+    /// claim value, so a <c>value</c> differing from its own choice only in case is outside it and the two
+    /// accept nobody.
+    /// </summary>
+    [Fact]
+    public async Task BothQualifiersAgreeingOnlyInCase_IsAnInvalidRequest()
+    {
+        var context = Context("""{"id_token":{"sub":{"value":"ALICE","values":["alice"]}}}""");
+
+        var error = await _validator.ValidateAsync(context);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error!.Error);
+    }
+
+    /// <summary>
     /// Both qualifiers disagreeing is refused outright, since no end user can satisfy them at once.
     /// </summary>
     /// <remarks>

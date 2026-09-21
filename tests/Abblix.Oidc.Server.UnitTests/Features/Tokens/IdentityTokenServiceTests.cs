@@ -1040,6 +1040,22 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
+    /// The same of the single qualifier, which is read by its own line: a <c>value</c> that is not a string
+    /// names no level either.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseSingleValueIsNotALevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Value = 42 });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
     /// A qualifier that is not a string states a level no authentication can hold, so it is unmet rather
     /// than ignored.
     /// </summary>
