@@ -31,4 +31,10 @@ partial class RevocationRequestValidator
 		Level = LogLevel.Warning,
 		Message = "Revocation refused for client {ClientId}: it is over its budget of requests")]
 	private partial void LogCallerRateLimited(Sanitized ClientId);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.RevocationRequestValidator.SourceRateLimited,
+		Level = LogLevel.Warning,
+		Message = "Revocation refused without reading a credential: the source is over its budget of failed client authentications")]
+	private partial void LogSourceRateLimited();
 }

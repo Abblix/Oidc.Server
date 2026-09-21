@@ -44,6 +44,13 @@ public static class CallerRateLimiters
     public const string Revocation = "Abblix.Oidc.Server.Revocation.CallerRateLimit";
 
     /// <summary>
+    /// The dependency-injection key of the budget of failed client authentications one source address gets.
+    /// Both token-reading endpoints spend the same one, because a sender hammering either of them is the same
+    /// sender, and the budget is about the sender rather than about what it asked for.
+    /// </summary>
+    public const string AuthenticationFailures = "Abblix.Oidc.Server.AuthenticationFailures.RateLimit";
+
+    /// <summary>
     /// Builds the limiter a single endpoint spends, giving every client identifier its own fixed window.
     /// </summary>
     /// <param name="options">The budget one client gets within one window.</param>
@@ -57,16 +64,31 @@ public static class CallerRateLimiters
     /// already asking too much of.
     /// </remarks>
     internal static PartitionedRateLimiter<string> Create(CallerRateLimitOptions options)
+        => Create(options.PermitLimit, options.Window);
+
+    /// <summary>
+    /// Builds the limiter both endpoints spend for failed client authentications, giving every source address
+    /// its own fixed window.
+    /// </summary>
+    /// <param name="options">The failures one address gets within one window.</param>
+    /// <returns>
+    /// A limiter that refuses once an address is over its budget, or one that permits everything when
+    /// <see cref="AuthenticationFailureLimitOptions.PermitLimit"/> is null.
+    /// </returns>
+    internal static PartitionedRateLimiter<string> Create(AuthenticationFailureLimitOptions options)
+        => Create(options.PermitLimit, options.Window);
+
+    private static PartitionedRateLimiter<string> Create(int? permitLimit, TimeSpan window)
         => PartitionedRateLimiter.Create<string, string>(
-            clientId => options.PermitLimit is { } permitLimit
+            key => permitLimit is { } limit
                 ? RateLimitPartition.GetFixedWindowLimiter(
-                    clientId,
+                    key,
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = permitLimit,
-                        Window = options.Window,
+                        PermitLimit = limit,
+                        Window = window,
                         QueueLimit = 0,
                         AutoReplenishment = true,
                     })
-                : RateLimitPartition.GetNoLimiter(clientId));
+                : RateLimitPartition.GetNoLimiter(key));
 }

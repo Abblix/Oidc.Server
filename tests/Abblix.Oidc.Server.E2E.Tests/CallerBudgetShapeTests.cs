@@ -14,6 +14,8 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -151,6 +153,84 @@ public sealed class CallerBudgetShapeTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
+    }
+
+    /// <summary>
+    /// A sender whose credentials never verify stops having them looked at. The test server leaves a request
+    /// without a source address, so one is put there first: what is being checked is that the endpoint reads
+    /// the address of the request it is answering and stops before authenticating, which no test of the
+    /// validator alone can see.
+    /// </summary>
+    [Fact]
+    public async Task ASourceWhoseCredentialsKeepFailingStopsBeingAuthenticated()
+    {
+        using var factory = new TestFactory();
+        using var client = factory
+            .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<IStartupFilter>(new GiveEveryRequestASource(SomeSource));
+                services.AddKeyedSingleton(
+                    CallerRateLimiters.AuthenticationFailures,
+                    PartitionedRateLimiter.Create<string, string>(
+                        source => RateLimitPartition.GetFixedWindowLimiter(
+                            source,
+                            _ => new FixedWindowRateLimiterOptions
+                            {
+                                PermitLimit = OneRequest,
+                                Window = LongerThanAnyTest,
+                                QueueLimit = 0,
+                                AutoReplenishment = true,
+                            })));
+            }))
+            .CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = TestServerAddress.BaseAddress,
+            });
+
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+
+        using var first = await PostTokenAsync(
+            client,
+            discovery.IntrospectionEndpoint,
+            IntrospectionRequest.Parameters.Token,
+            TestConstants.ConfidentialClientId,
+            clientSecret: "not-the-secret");
+
+        using var second = await PostTokenAsync(
+            client,
+            discovery.IntrospectionEndpoint,
+            IntrospectionRequest.Parameters.Token,
+            TestConstants.ConfidentialClientId,
+            clientSecret: "not-the-secret");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+    }
+
+    /// <summary>
+    /// The address the requests of the test above appear to come from. Any address will do; this one is from
+    /// the range RFC 5737 sets aside for documentation, so it can never be a real one.
+    /// </summary>
+    private static readonly IPAddress SomeSource = IPAddress.Parse("203.0.113.7");
+
+    /// <summary>
+    /// Puts a source address on every request, which the test server otherwise leaves unset.
+    /// </summary>
+    private sealed class GiveEveryRequestASource(IPAddress source) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+            => builder =>
+            {
+                builder.Use(async (context, proceed) =>
+                {
+                    context.Connection.RemoteIpAddress = source;
+                    await proceed();
+                });
+
+                next(builder);
+            };
     }
 
     private static async Task<DiscoveryDocument> FetchDiscoveryAsync(HttpClient client)

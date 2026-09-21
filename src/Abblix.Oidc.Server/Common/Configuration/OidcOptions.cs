@@ -329,6 +329,13 @@ public record OidcOptions
 	public CallerRateLimitOptions CallerRateLimit { get; set; } = new();
 
 	/// <summary>
+	/// How many client authentications may fail from one source address within a window before the introspection
+	/// and revocation endpoints stop looking at credentials from it. It bounds what a sender that never
+	/// authenticates successfully can cost, which the per-client budget cannot reach.
+	/// </summary>
+	public AuthenticationFailureLimitOptions AuthenticationFailureLimit { get; set; } = new();
+
+	/// <summary>
 	/// Specifies the length of session identifiers used by the OIDC server.
 	/// The length determines the uniqueness and security of the session identifiers.
 	/// </summary>

@@ -7,11 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Net;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -44,9 +46,16 @@ public class IntrospectionRequestValidatorTests
 
     private const string OtherClientId = "another_client";
 
+    /// <summary>
+    /// The address every request in this file appears to come from, so the budget counting failures per source
+    /// has one to count against.
+    /// </summary>
+    private static readonly IPAddress Source = IPAddress.Parse("203.0.113.7");
+
     private readonly Mock<ILogger<IntrospectionRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
+    private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly IntrospectionRequestValidator _validator;
 
     public IntrospectionRequestValidatorTests()
@@ -54,15 +63,22 @@ public class IntrospectionRequestValidatorTests
         _logger = new Mock<ILogger<IntrospectionRequestValidator>>();
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+        _requestInfoProvider = new Mock<IRequestInfoProvider>();
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
         _validator = CreateValidator(new CallerRateLimitOptions());
     }
 
-    private IntrospectionRequestValidator CreateValidator(CallerRateLimitOptions rateLimit)
+    private IntrospectionRequestValidator CreateValidator(
+        CallerRateLimitOptions rateLimit,
+        AuthenticationFailureLimitOptions? failureLimit = null)
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
             _jwtValidator.Object,
-            CallerRateLimiters.Create(rateLimit));
+            CallerRateLimiters.Create(rateLimit),
+            new AuthenticationFailureBudget(
+                CallerRateLimiters.Create(failureLimit ?? new AuthenticationFailureLimitOptions()),
+                _requestInfoProvider.Object));
 
     private static IntrospectionRequest CreateIntrospectionRequest(string token = "token_value")
     {
@@ -476,6 +492,41 @@ public class IntrospectionRequestValidatorTests
             var result = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
             Assert.True(result.TryGetSuccess(out _));
         }
+    }
+
+    /// <summary>
+    /// A sender whose credentials keep failing is stopped before the next one is looked at. Looking at a client
+    /// assertion means verifying a signature, so a sender that never authenticates would otherwise buy one per
+    /// request forever: the per-client budget cannot reach it, because that one is charged to a client it never
+    /// proves to be.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenTheSourceKeepsFailingToAuthenticate_ShouldStopLookingAtItsCredentials()
+    {
+        // Arrange
+        var validator = CreateValidator(
+            new CallerRateLimitOptions(),
+            new AuthenticationFailureLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        var first = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(first.TryGetFailure(out var firstError));
+        Assert.Equal(ErrorCodes.InvalidClient, firstError.Error);
+
+        Assert.True(second.TryGetFailure(out var secondError));
+        Assert.IsType<TooManyRequestsError>(secondError);
+
+        // The credential in the second request was never looked at, which is the whole point of counting.
+        _clientAuthenticator.Verify(
+            a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()),
+            Times.Once);
     }
 
     /// <summary>

@@ -43,6 +43,25 @@ public sealed class CallerRateLimitOptionsValidator : IValidateOptions<OidcOptio
                 "default.");
         }
 
+        var failureLimit = options.AuthenticationFailureLimit;
+
+        if (failureLimit.PermitLimit is <= 0)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(options.AuthenticationFailureLimit)}.{nameof(failureLimit.PermitLimit)} is " +
+                $"{failureLimit.PermitLimit}, so the introspection and revocation endpoints would look at no " +
+                "credential from anywhere, and no client could authenticate at all. Set it to the number of " +
+                "failures one source may make, or to null to count none.");
+        }
+
+        if (failureLimit.PermitLimit.HasValue && failureLimit.Window <= TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(options.AuthenticationFailureLimit)}.{nameof(failureLimit.Window)} is " +
+                $"{failureLimit.Window}, which is no span of time to count failures over. Set it to how long the " +
+                "limit applies for, one minute by default.");
+        }
+
         return ValidateOptionsResult.Success;
     }
 }

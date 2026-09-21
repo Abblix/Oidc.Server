@@ -37,11 +37,16 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="rateLimiter">
 /// The budget of introspection requests one client gets, spent once the caller is known to be that client.
 /// </param>
+/// <param name="failureBudget">
+/// The budget of failed client authentications the request's source gets, which bounds what a sender that never
+/// authenticates can cost this endpoint.
+/// </param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
-	[FromKeyedServices(CallerRateLimiters.Introspection)] PartitionedRateLimiter<string> rateLimiter)
+	[FromKeyedServices(CallerRateLimiters.Introspection)] PartitionedRateLimiter<string> rateLimiter,
+	AuthenticationFailureBudget failureBudget)
 	: IIntrospectionRequestValidator
 {
 	/// <summary>
@@ -57,9 +62,20 @@ public partial class IntrospectionRequestValidator(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
+		// A sender whose credentials never verify is never charged the per-client budget below, because that one
+		// is charged to a client it has not proven to be. Its failures are counted against the address instead,
+		// and a source that has spent them is refused here - before the credential in this request is looked at,
+		// which for a signed assertion means before a signature is verified.
+		if (failureBudget.RefuseIfSpent() is { } refusal)
+		{
+			LogSourceRateLimited();
+			return refusal;
+		}
+
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
 		if (clientInfo == null)
 		{
+			failureBudget.RecordFailure();
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
