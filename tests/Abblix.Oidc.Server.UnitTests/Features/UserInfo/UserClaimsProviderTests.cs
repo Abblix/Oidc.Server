@@ -24,17 +24,24 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
 
 /// <summary>
-/// What a claim marked essential does to the response, per OpenID Connect Core 1.0 section 5.5.1: "the
+/// What an individual claims request does to the response, per OpenID Connect Core 1.0 section 5.5.1: "the
 /// Authorization Server MUST NOT generate an error when Claims are not returned, whether they are Essential or
 /// Voluntary, unless otherwise specified in the description of the specific claim". Essential states what the
 /// relying party tells the end user about releasing a claim; it is not a condition the host's provider has to
-/// satisfy, and the three claims whose own description does impose one - sub, auth_time and acr - are answered
-/// elsewhere, on the request rather than on the response.
+/// satisfy, so nothing here may read it - which is why the rows below drive it through all three of its values
+/// and expect the same answer from each.
 /// </summary>
+/// <remarks>
+/// One claim's own description does impose a condition, and section 5.5.1.1 is what 5.5.1 exempts: an essential
+/// <c>acr</c> the server cannot match is a failed authentication attempt. It is the one claim that still
+/// withholds the response here, and the row saying so is what keeps the exemption from being swept away with
+/// the rule.
+/// </remarks>
 public class UserClaimsProviderTests
 {
     private const string ClientId = "test_client_123";
-    private const string UserId = "user_456";
+    private const string SessionSubject = "user_456";
+    private const string ClientFacingSubject = "pseudonym-for-this-client";
 
     private readonly Mock<IUserInfoProvider> _userInfoProvider = new(MockBehavior.Strict);
     private readonly UserClaimsProvider _provider;
@@ -44,13 +51,14 @@ public class UserClaimsProviderTests
         var scopeClaimsProvider = new Mock<IScopeClaimsProvider>(MockBehavior.Strict);
         scopeClaimsProvider
             .Setup(p => p.GetRequestedClaims(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>?>()))
-            .Returns<IEnumerable<string>, IEnumerable<string>?>(
-                (_, requested) => requested ?? []);
+            .Returns<IEnumerable<string>, IEnumerable<string>?>((_, requested) => requested ?? []);
 
+        // A converter that answers something other than the session's subject, so the row asserting the subject
+        // proves the converter was consulted rather than passing on a value production could have copied.
         var subjectTypeConverter = new Mock<ISubjectTypeConverter>(MockBehavior.Strict);
         subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns<string, ClientInfo>((subject, _) => subject);
+            .Setup(c => c.Convert(SessionSubject, It.IsAny<ClientInfo>()))
+            .Returns(ClientFacingSubject);
 
         _provider = new UserClaimsProvider(
             NullLogger<UserClaimsProvider>.Instance,
@@ -59,29 +67,62 @@ public class UserClaimsProviderTests
             subjectTypeConverter.Object);
     }
 
-    [Fact]
-    public async Task AnEssentialClaimTheProviderDidNotReturn_CostsTheResponseNothing()
+    /// <summary>
+    /// The two claim names are the ones the specification's own example carries (section 5.5): <c>email</c>,
+    /// which a provider may or may not hold, and <c>auth_time</c>, which no provider returns because the
+    /// identity token writes it from the session - so the example's own request is what refusing on an absent
+    /// claim broke first.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtClaimTypes.Email, true)]
+    [InlineData(JwtClaimTypes.Email, false)]
+    [InlineData(JwtClaimTypes.Email, null)]
+    [InlineData(JwtClaimTypes.AuthenticationTime, true)]
+    [InlineData(JwtClaimTypes.AuthenticationTime, false)]
+    [InlineData(JwtClaimTypes.AuthenticationTime, null)]
+    public async Task AClaimTheProviderDidNotReturn_CostsTheResponseNothing(string claimName, bool? essential)
     {
-        // The host's provider holds no email for this user. The request asked for it as essential, which is
-        // what the client tells the end user, not a promise the host made.
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
-            requested: Essential(JwtClaimTypes.Email));
+            requested: Requested(claimName, essential));
 
         Assert.NotNull(claims);
         Assert.Equal("Jane", (string?)claims![IanaClaimTypes.Name]);
-        Assert.False(claims.ContainsKey(JwtClaimTypes.Email));
+        Assert.False(claims.ContainsKey(claimName));
     }
 
     [Fact]
-    public async Task TheClaimTheSpecificationItselfDemonstrates_CostsTheResponseNothing()
+    public async Task ARequestNamingNoIndividualClaims_IsAnsweredLikeAnyOther()
     {
-        // Section 5.5 shows "auth_time": {"essential": true} as its example of an individual claims request.
-        // The provider never returns auth_time - the identity token service writes it from the session - so
-        // this is the request that refusing on an absent essential claim breaks first.
         var claims = await GetClaimsAsync(
-            userInfo: new JsonObject(),
-            requested: Essential(JwtClaimTypes.AuthenticationTime));
+            userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
+            requested: null);
+
+        Assert.NotNull(claims);
+    }
+
+    [Fact]
+    public async Task AnEssentialAcr_IsTheOneClaimThatStillWithholdsTheResponse()
+    {
+        // Section 5.5.1.1 requires the server to return an acr matching one of the requested values, and to
+        // "treat that outcome as a failed authentication attempt" when it cannot. Nothing here evaluates the
+        // requested values yet, and the identity token writes acr from the session whatever the provider
+        // returned - so answering would assert an authentication level the request declared unacceptable.
+        var claims = await GetClaimsAsync(
+            userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
+            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential: true));
+
+        Assert.Null(claims);
+    }
+
+    [Fact]
+    public async Task AVoluntaryAcr_CostsTheResponseNothing()
+    {
+        // The same section says the relying party may request acr as a voluntary claim by leaving
+        // "essential": true out of it, and a voluntary one takes the ordinary rule.
+        var claims = await GetClaimsAsync(
+            userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
+            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential: null));
 
         Assert.NotNull(claims);
     }
@@ -95,7 +136,7 @@ public class UserClaimsProviderTests
                 [JwtClaimTypes.Email] = "jane@example.com",
                 [JwtClaimTypes.EmailVerified] = true,
             },
-            requested: Essential(JwtClaimTypes.Email));
+            requested: Requested(JwtClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
         Assert.Equal("jane@example.com", (string?)claims![JwtClaimTypes.Email]);
@@ -107,28 +148,32 @@ public class UserClaimsProviderTests
     {
         // The one absence that is not a claim's: the host found no user at all. It stays distinct from a claim
         // the host does not hold, because the endpoints above read it as a failure rather than as a shape.
-        var claims = await GetClaimsAsync(userInfo: null, requested: Essential(JwtClaimTypes.Email));
+        var claims = await GetClaimsAsync(
+            userInfo: null,
+            requested: Requested(JwtClaimTypes.Email, essential: true));
 
         Assert.Null(claims);
     }
 
     [Fact]
-    public async Task TheSubjectComesFromTheSession_WhateverTheProviderSaid()
+    public async Task TheSubjectIsTheOneTheConverterGives()
     {
+        // What a client sees as sub is the converter's answer - a pairwise client gets a pseudonym - and it
+        // replaces whatever the provider wrote under that name.
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject { [JwtClaimTypes.Subject] = "whatever-the-provider-says" },
-            requested: Essential(JwtClaimTypes.Email));
+            requested: Requested(JwtClaimTypes.Email, essential: true));
 
         Assert.NotNull(claims);
-        Assert.Equal(UserId, (string?)claims![JwtClaimTypes.Subject]);
+        Assert.Equal(ClientFacingSubject, (string?)claims![JwtClaimTypes.Subject]);
     }
 
     private async Task<JsonObject?> GetClaimsAsync(
         JsonObject? userInfo,
-        ICollection<KeyValuePair<string, RequestedClaimDetails>> requested)
+        ICollection<KeyValuePair<string, RequestedClaimDetails>>? requested)
     {
         var authSession = new AuthSession(
-            Subject: UserId,
+            Subject: SessionSubject,
             SessionId: "session_789",
             AuthenticationTime: new DateTimeOffset(2024, 1, 15, 11, 50, 0, TimeSpan.Zero),
             IdentityProvider: "local");
@@ -144,9 +189,11 @@ public class UserClaimsProviderTests
             new ClientInfo(ClientId));
     }
 
-    private static ICollection<KeyValuePair<string, RequestedClaimDetails>> Essential(string claimName)
+    private static ICollection<KeyValuePair<string, RequestedClaimDetails>> Requested(
+        string claimName,
+        bool? essential)
         => new Dictionary<string, RequestedClaimDetails>
         {
-            [claimName] = new() { Essential = true },
+            [claimName] = new() { Essential = essential },
         };
 }

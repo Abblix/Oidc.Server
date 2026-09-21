@@ -801,53 +801,6 @@ public class IdentityTokenServiceTests
         return clientInfo;
     }
 
-    /// <summary>
-    /// The example OpenID Connect Core 1.0 section 5.5 gives for an individual claims request asks for
-    /// <c>auth_time</c> as essential, and section 2 makes it REQUIRED when asked for that way. No user-info
-    /// provider returns it - this service writes it from the session - so the request the specification
-    /// demonstrates must still produce a token, carrying the time the session says.
-    /// </summary>
-    [Fact]
-    public async Task CreateIdentityToken_WithEssentialAuthTime_WritesTheSessionsAuthenticationTime()
-    {
-        // Arrange
-        var authSession = CreateAuthSession();
-        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId], null)
-        {
-            RequestedClaims = new RequestedClaims
-            {
-                IdToken = new Dictionary<string, RequestedClaimDetails>
-                {
-                    [JwtClaimTypes.AuthenticationTime] = new() { Essential = true },
-                },
-            },
-        };
-        var clientInfo = CreateClientInfo();
-
-        _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(
-                authSession,
-                authContext.Scope,
-                It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(),
-                clientInfo))
-            .ReturnsAsync(CreateUserClaims());
-
-        JsonWebToken? capturedToken = null;
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
-            .ReturnsAsync(EncodedToken);
-
-        // Act
-        var token = await _service.CreateIdentityTokenAsync(
-            authSession, authContext, clientInfo, true, null, null);
-
-        // Assert
-        Assert.NotNull(token);
-        Assert.NotNull(capturedToken);
-        Assert.Equal(authSession.AuthenticationTime, capturedToken!.Payload.AuthenticationTime);
-    }
-
     private static JsonObject CreateUserClaims() => new()
     {
         ["sub"] = UserId,

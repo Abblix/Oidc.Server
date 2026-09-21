@@ -43,8 +43,9 @@ public partial class UserClaimsProvider(
     /// </summary>
     /// <param name="authSession">The authentication session providing the context for user claims retrieval.</param>
     /// <param name="scope">A collection of scopes defining the categories of claims required.</param>
-    /// <param name="requestedClaims">A collection detailing specific claims requested by the client, including any
-    /// requirements for essential claims.</param>
+    /// <param name="requestedClaims">The individual claims the client named. Their names widen what is asked of
+    /// the host's provider; whether the client called one essential decides nothing here, except for
+    /// <c>acr</c>.</param>
     /// <param name="clientInfo">Information about the client application making the request, which may influence how
     /// claims are processed and returned.</param>
     /// <returns>A task that when completed returns a <see cref="JsonObject"/> representing the user claims,
@@ -63,6 +64,19 @@ public partial class UserClaimsProvider(
         if (userInfo == null)
         {
             LogUserClaimsNotFound();
+            return null;
+        }
+
+        // The one claim whose own description imposes a condition, which is what section 5.5.1 exempts from
+        // the rule above: section 5.5.1.1 requires an acr matching one of the requested values, and says the
+        // server "MUST treat that outcome as a failed authentication attempt" when the requirement cannot be
+        // met. Nothing evaluates those values yet, and the identity token writes acr from the session
+        // whatever this returns, so answering would assert an authentication level the request declared
+        // unacceptable. Withholding is not the failed attempt the section asks for; it is what keeps the
+        // server from asserting something false until the comparison exists.
+        if (requestedClaims != null &&
+            requestedClaims.Any(claim => claim is { Key: JwtClaimTypes.AuthContextClassRef, Value.Essential: true }))
+        {
             return null;
         }
 

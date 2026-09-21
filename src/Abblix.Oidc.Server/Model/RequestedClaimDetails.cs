@@ -17,8 +17,12 @@ namespace Abblix.Oidc.Server.Model;
 public record RequestedClaimDetails
 {
     /// <summary>
-    /// Indicates whether the claim is essential for the authorization process.
-    /// If true, the claim is essential and should be provided by the user for successful authorization.
+    /// Whether the client declared this claim essential, which OpenID Connect Core 1.0 section 5.5.1 defines
+    /// as what the relying party tells the end user: releasing it "will ensure a smooth authorization for the
+    /// specific task requested by the End-User". The same section forbids answering with an error when the
+    /// claim is not returned, essential or voluntary alike, unless the description of that specific claim says
+    /// otherwise - so this is not a condition a response has to meet. The one claim whose description does say
+    /// otherwise is <c>acr</c>, under section 5.5.1.1.
     /// </summary>
     [JsonPropertyName("essential")]
     public bool? Essential { get; init; }
