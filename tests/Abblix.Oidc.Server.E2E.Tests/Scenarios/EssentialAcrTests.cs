@@ -91,6 +91,147 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// Nobody signed in is not an unmet authentication level, whatever the request requires: signing in is
+    /// exactly what would answer it, and <c>login_required</c> is what tells the client to try.
+    /// </summary>
+    [Fact]
+    public async Task No_session_at_all_is_still_login_required()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel();
+
+        var error = await AuthorizeAndExtractErrorAsync(
+            client,
+            discovery,
+            await RequestAsync(client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false));
+
+        Assert.Equal(ErrorCodes.LoginRequired, error);
+    }
+
+    /// <summary>
+    /// A session holding exactly the level the request requires, dropped by another condition, is not an
+    /// unmet level either. Reporting one would tell the client the authentication could not reach a level
+    /// it did reach, and stop it retrying the interaction that would succeed.
+    /// </summary>
+    [Fact]
+    public async Task A_session_at_the_required_level_dropped_by_max_age_is_login_required()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel((Alice, Loa3));
+
+        var request = await RequestAsync(
+            client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false);
+        request[AuthorizationRequest.Parameters.MaxAge] = "0";
+
+        var error = await AuthorizeAndExtractErrorAsync(client, discovery, request);
+
+        Assert.Equal(ErrorCodes.LoginRequired, error);
+    }
+
+    /// <summary>
+    /// Levels are matched by the equality section 5.5.1 prescribes, so a session differing only in case
+    /// does not hold the level asked for, and the request reaches the login page rather than completing
+    /// with a token the identity token service would then withhold.
+    /// </summary>
+    [Fact]
+    public async Task A_session_whose_level_differs_only_in_case_does_not_hold_it()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel((Alice, "URN:EXAMPLE:LOA3"));
+
+        var error = await AuthorizeAndExtractErrorAsync(
+            client,
+            discovery,
+            await RequestAsync(client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false));
+
+        Assert.Equal(ErrorCodes.UnmetAuthenticationRequirements, error);
+    }
+
+    /// <summary>
+    /// A host that records no level for its sessions cannot meet a request that names one, which is what
+    /// selection by <c>acr_values</c> already answers for the same session. The issue left this open; the
+    /// two mechanisms answering one question differently is what settles it.
+    /// </summary>
+    [Fact]
+    public async Task A_session_recording_no_level_meets_no_requirement()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel((Alice, null));
+
+        var error = await AuthorizeAndExtractErrorAsync(
+            client,
+            discovery,
+            await RequestAsync(client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false));
+
+        Assert.Equal(ErrorCodes.UnmetAuthenticationRequirements, error);
+    }
+
+    /// <summary>
+    /// The refusal names the code the OpenID Foundation defines, spelled the way a client reads it off the
+    /// wire - asserted as a literal, because every other row compares two copies of the same constant.
+    /// </summary>
+    [Fact]
+    public async Task The_refusal_carries_the_code_the_specification_defines()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel((Alice, Loa1));
+
+        var error = await AuthorizeAndExtractErrorAsync(
+            client,
+            discovery,
+            await RequestAsync(client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false));
+
+        Assert.Equal("unmet_authentication_requirements", error);
+    }
+
+    /// <summary>
+    /// A single <c>value</c> the session does hold is met, which is the other half of the qualifier a
+    /// refusing row alone would leave unproven.
+    /// </summary>
+    [Fact]
+    public async Task A_single_requested_value_the_session_holds_completes()
+    {
+        await using var host = CreateHost(out var sessions);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        sessions.SignedInAtLevel((Alice, Loa3));
+
+        var (verifier, challenge) = GeneratePkcePair();
+        var request = await RequestAsync(
+            client, discovery, RequiringValue(Loa3), false, throughRequestUri: false, challenge);
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, request);
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        Assert.Equal(Loa3, DecodeJwtPayload(idToken)[IanaClaimTypes.Acr]!.GetValue<string>());
+    }
+
+    /// <summary>
     /// A single <c>value</c> requires a level as much as a one-member <c>values</c> does, which is what
     /// section 5.5.1 means by naming the two qualifiers together.
     /// </summary>

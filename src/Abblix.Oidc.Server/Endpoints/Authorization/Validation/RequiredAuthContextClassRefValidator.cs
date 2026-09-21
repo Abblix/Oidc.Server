@@ -43,8 +43,9 @@ public class RequiredAuthContextClassRefValidator : SyncAuthorizationContextVali
         if (required.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 
-        // An empty set means the request requires no particular level, and the session filter reads an absent
-        // requirement rather than an empty one - an empty array there would accept no session at all.
+        // An empty set means the request requires no particular level, said as the absence the filter reads.
+        // An empty array would say the same thing there, because the filter checks its length - but then the
+        // two would disagree about what an empty requirement is, and only one of them would be read.
         context.RequiredAuthContextClassRefs = required.GetSuccess() is { Length: > 0 } levels ? levels : null;
         return null;
     }

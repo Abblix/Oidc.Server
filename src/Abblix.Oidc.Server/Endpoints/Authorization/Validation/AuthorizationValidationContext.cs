@@ -112,8 +112,9 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// OpenID Connect Core 1.0 Section 5.5.1.1 makes an essential <c>acr</c> naming acceptable values a
 	/// requirement the server "MUST" meet, and an outcome that cannot meet it "a failed authentication
 	/// attempt". Recorded here so the session filter reads it beside <c>acr_values</c>, which asks the same
-	/// question without the obligation, and so the endpoint can tell a request nothing satisfies from one
-	/// nobody is signed in for.
+	/// question without the obligation. What the endpoint answers when nothing is left is decided by what
+	/// this requirement removed, not by this member: a request with nobody signed in at all is told to sign
+	/// in, because that is what would answer it.
 	/// </remarks>
 	public string[]? RequiredAuthContextClassRefs { get; set; }
 }
