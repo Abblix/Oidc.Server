@@ -332,8 +332,8 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     public override string ToString()
         => Value switch
         {
-            TSuccess success => success?.ToString() ?? string.Empty,
-            TFailure failure => failure?.ToString() ?? string.Empty,
+            TSuccess success => success.ToString() ?? string.Empty,
+            TFailure failure => failure.ToString() ?? string.Empty,
             _ => "a result carrying neither case",
         };
     /// <summary>
