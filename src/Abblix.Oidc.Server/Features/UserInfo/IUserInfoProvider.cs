@@ -48,9 +48,10 @@ public interface IUserInfoProvider
     /// Implementers should ensure that the disclosure of user information complies with applicable privacy laws and
     /// the principles of data minimization. Sensitive or personal information must only be shared with explicit user
     /// consent and in a secure manner. A claim this provider does not hold is left out of the object it returns;
-    /// null is for the user itself being unknown. The distinction is what the endpoints above act on: null is
-    /// read as a failure, and answering it because a claim could not be released would refuse a request that
-    /// OpenID Connect Core 1.0 section 5.5.1 says must be answered.
+    /// null is for the user itself being unknown, and it is costly: the user-information endpoint reports the
+    /// caller's token invalid, and the token endpoint answers without an ID Token and without an error.
+    /// Answering null because one claim could not be released would refuse a request OpenID Connect Core 1.0
+    /// section 5.5.1 says must be answered.
     /// Implementations should prioritize authentication session claims (such as authSession.Email) over database values
     /// to preserve the exact authentication context, especially for external provider authentications.
     /// </remarks>

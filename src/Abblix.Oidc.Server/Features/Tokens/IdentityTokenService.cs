@@ -75,6 +75,17 @@ internal class IdentityTokenService(
 		string? accessToken,
 		PushDeliveryBindings? pushBindings = null)
 	{
+		// OpenID Connect Core 1.0 section 5.5.1.1: when the claims parameter asks for acr as an essential
+		// claim of the ID token AND names the values it accepts, the server "MUST return an acr Claim Value
+		// that matches one of the requested values", and "MUST treat that outcome as a failed authentication
+		// attempt" when it cannot. The token carries the session's own acr, so a session below the level asked
+		// for cannot satisfy such a request; issuing anyway would state a level the request declared
+		// unacceptable, which is the one thing worse than issuing nothing. Withholding is not the failed
+		// attempt the section asks for - that belongs where the request is still answerable, at the
+		// authorization endpoint - and until it lives there, this is what keeps the token honest.
+		if (RequestsAnUnmetAuthenticationLevel(authSession, authContext))
+			return null;
+
 		var scope = authContext.Scope;
 		if (!includeUserClaims && !clientInfo.ForceUserClaimsInIdentityToken)
 		{
@@ -204,5 +215,32 @@ internal class IdentityTokenService(
 		var hash = HashCalculator.Compute(signingAlgorithm, sourceValue);
 		if (hash is not null)
 			identityToken.Payload[claimType] = hash;
+	}
+
+	/// <summary>
+	/// Whether the request names authentication levels it will accept, as essential claims of the ID token,
+	/// and the session holds none of them.
+	/// </summary>
+	/// <remarks>
+	/// The three conditions are section 5.5.1.1's own: the claim is essential, it belongs to the ID token half
+	/// of the claims parameter, and it names values. A request that marks acr essential without naming values
+	/// accepts whatever the session has, and a voluntary one takes the ordinary rule of section 5.5.1, under
+	/// which a claim that is not returned is never a reason to refuse.
+	/// </remarks>
+	private static bool RequestsAnUnmetAuthenticationLevel(
+		AuthSession authSession,
+		AuthorizationContext authContext)
+	{
+		if (authContext.RequestedClaims?.IdToken is not { } requestedClaims ||
+			!requestedClaims.TryGetValue(JwtClaimTypes.AuthContextClassRef, out var acr) ||
+			acr is not { Essential: true })
+		{
+			return false;
+		}
+
+		var acceptable = acr.Values ?? (acr.Value is { } single ? [single] : null);
+		return acceptable is { Length: > 0 } &&
+		       !acceptable.Any(value => string.Equals(
+			       value?.ToString(), authSession.AuthContextClassRef, StringComparison.Ordinal));
 	}
 }

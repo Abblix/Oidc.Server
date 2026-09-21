@@ -32,10 +32,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.UserInfo;
 /// and expect the same answer from each.
 /// </summary>
 /// <remarks>
-/// One claim's own description does impose a condition, and section 5.5.1.1 is what 5.5.1 exempts: an essential
-/// <c>acr</c> the server cannot match is a failed authentication attempt. It is the one claim that still
-/// withholds the response here, and the row saying so is what keeps the exemption from being swept away with
-/// the rule.
+/// Two claims carry a description that does impose a condition, and neither is answered here: a <c>sub</c> the
+/// session does not match fails the authentication where the request is read, and an <c>acr</c> the request
+/// will not accept is answered where the ID token is built, which is the only place that knows what level the
+/// token is about to state.
 /// </remarks>
 public class UserClaimsProviderTests
 {
@@ -101,28 +101,20 @@ public class UserClaimsProviderTests
         Assert.NotNull(claims);
     }
 
-    [Fact]
-    public async Task AnEssentialAcr_IsTheOneClaimThatStillWithholdsTheResponse()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task AnAcrRequest_CostsTheResponseNothingHere(bool? essential)
     {
-        // Section 5.5.1.1 requires the server to return an acr matching one of the requested values, and to
-        // "treat that outcome as a failed authentication attempt" when it cannot. Nothing here evaluates the
-        // requested values yet, and the identity token writes acr from the session whatever the provider
-        // returned - so answering would assert an authentication level the request declared unacceptable.
+        // acr is the claim whose own description imposes a condition (section 5.5.1.1), and that condition is
+        // about the level the ID token states. It is answered where the token is built, from the session's own
+        // acr and the values the request named; this provider knows neither, so it treats acr like any other
+        // claim. A rule enforced here would also reach the user-information response, which 5.5.1.1 does not
+        // speak about at all.
         var claims = await GetClaimsAsync(
             userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
-            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential: true));
-
-        Assert.Null(claims);
-    }
-
-    [Fact]
-    public async Task AVoluntaryAcr_CostsTheResponseNothing()
-    {
-        // The same section says the relying party may request acr as a voluntary claim by leaving
-        // "essential": true out of it, and a voluntary one takes the ordinary rule.
-        var claims = await GetClaimsAsync(
-            userInfo: new JsonObject { [IanaClaimTypes.Name] = "Jane" },
-            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential: null));
+            requested: Requested(JwtClaimTypes.AuthContextClassRef, essential));
 
         Assert.NotNull(claims);
     }
@@ -147,7 +139,7 @@ public class UserClaimsProviderTests
     public async Task AProviderThatKnowsNobody_StillAnswersNothing()
     {
         // The one absence that is not a claim's: the host found no user at all. It stays distinct from a claim
-        // the host does not hold, because the endpoints above read it as a failure rather than as a shape.
+        // the host does not hold, because there is no response to shape rather than one claim to leave out.
         var claims = await GetClaimsAsync(
             userInfo: null,
             requested: Requested(JwtClaimTypes.Email, essential: true));
