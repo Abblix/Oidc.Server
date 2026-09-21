@@ -80,12 +80,16 @@ internal class IdentityTokenService(
 		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
 		// a failed authentication attempt. This token states the session's own acr, so a session at another
 		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
-		// unacceptable. Issuing nothing is not the failed attempt the section asks for either, and it costs
-		// the client no explanation anywhere: a response body carries a null id_token beside whatever else
-		// it holds, and a redirect simply drops the parameter, so a request for an id_token alone comes back
-		// as a redirect with no credential in it. The failure belongs where the request can still be
-		// answered or the end user sent to authenticate again, and until it lives there this is what keeps
-		// the token from stating something the client refused.
+		// unacceptable.
+		//
+		// The authorization endpoint answers that request properly - it chooses a session against the
+		// requirement, sends the end user to authenticate when none meets it, and refuses with a code of its
+		// own where the request forbids interaction - so every grant it issues arrives here already at a
+		// level the request accepts. What reaches this line is a grant nothing checked: a decoupled
+		// authentication carries the claims parameter and chooses its session elsewhere. Withholding the
+		// token is not the failed attempt the section asks for, and it costs the client no explanation: the
+		// notification goes out with a null id_token beside the request identifier. Refusing there is its own
+		// decision, which is why this stops at not stating a level the client refused.
 		if (RequiresAnAuthenticationLevelTheSessionLacks(authSession, authContext))
 			return null;
 
