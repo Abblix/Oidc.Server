@@ -40,9 +40,11 @@ public record CallerRateLimitOptions
     /// Two things decide what this number means in a deployment. It belongs to a registered client, so every
     /// instance of one resource server spends it together: a fleet of gateways introspecting under a single
     /// <c>client_id</c> shares one budget rather than holding one each. And it is counted inside one instance of
-    /// this server, so a client's requests are divided by however many instances answer them. The default is
-    /// sized for the first of those and cannot know the second, which is what a deployment adjusts when its own
-    /// numbers are higher.
+    /// this server, so a deployment running several multiplies it: with four instances behind a load balancer,
+    /// a client that spreads its requests evenly is answered four times this number. A deployment that wants a
+    /// ceiling of its own across the whole fleet therefore divides that ceiling by the number of instances and
+    /// sets the result here; raising this number is for a client whose honest traffic is higher, not for a
+    /// deployment that grew.
     /// </remarks>
     public int? PermitLimit { get; set; } = 10_000;
 

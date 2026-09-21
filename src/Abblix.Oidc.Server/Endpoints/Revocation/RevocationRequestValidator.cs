@@ -95,7 +95,7 @@ public partial class RevocationRequestValidator(
 		// spent by strangers and the client's real users would lose the operation a person reaches for when
 		// they believe a token is stolen. What the exemption leaves open is the work such a request costs -
 		// unchanged from before budgets existed, and the price of not handing anybody a way to silence a
-		// client's logout. Introspection has no such case: it turns a public client away above.
+		// client's logout. Introspection has no such case, because it refuses a public client outright.
 		//
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.

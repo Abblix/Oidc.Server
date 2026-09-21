@@ -23,10 +23,12 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// caller is still whoever holds the socket, and the whole point of this budget is that it is charged to the
 /// client the request authenticated as.
 /// <para>
-/// A budget is taken with a single attempt that never waits, and held until the request is answered. So a
-/// limiter counting requests in flight bounds the work rather than the count, and one configured to queue does
-/// not queue here: a caller it would have held is refused instead. An endpoint holding a request open is what
-/// this feature exists to stop, so the waiting half of any policy is deliberately not honored.
+/// A budget is taken with a single attempt that never waits, and held for as long as the request is being
+/// validated - which covers reading the token and stops there, before the endpoint's processor writes anything.
+/// So a limiter counting requests in flight bounds the signature verification rather than only the count, and a
+/// deployment that needs the work after validation bounded too wraps the endpoint's handler itself. A limiter
+/// configured to queue does not queue here either: a caller it would have held is refused instead, because an
+/// endpoint holding a request open is what this feature exists to stop.
 /// </para>
 /// </remarks>
 public static class CallerRateLimiters
