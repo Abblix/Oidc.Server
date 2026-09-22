@@ -140,6 +140,31 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
+    /// And the identifier of an interface does not buy that sender a second budget, because on a mapped
+    /// address it names the mapping rather than the address inside it: the same peer arrives carrying one
+    /// and then without, and the second request finds the first one's failure already counted.
+    /// </summary>
+    [Fact]
+    public async Task ASourceArrivingUnderAMappedFormWithAnInterface_SpendsOneBudget()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}%5"));
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
+
+        // Assert
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
     /// Nothing successful is counted, so a busy client whose credentials verify never approaches a budget meant
     /// for senders whose credentials do not.
     /// </summary>

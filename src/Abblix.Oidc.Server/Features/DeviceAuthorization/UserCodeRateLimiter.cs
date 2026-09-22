@@ -80,8 +80,8 @@ public partial class UserCodeRateLimiter(
     /// thing they spend, so one sender the server cannot see refuses every verification, including callers
     /// whose address is in plain sight. Sharing one allowance holds the refusal to the senders that arrive
     /// the same way. Where the server sees no address at all - a socket that carries none, and no
-    /// forwarded header resolved into one - those senders are every caller, and the page is then bounded by
-    /// this cap rather than by that budget, which is the narrower of the two numbers.
+    /// forwarded header resolved into one - those senders are every caller, and what bounds the page is
+    /// then this cap rather than that budget, which on the numbers this library ships is the narrower.
     /// </para>
     /// </remarks>
     internal const string SourceNotSeen = "(no-address)";

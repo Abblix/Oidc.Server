@@ -725,4 +725,35 @@ public class UserCodeRateLimiterTests
         Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsWhiteSpace);
         Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsControl);
     }
+
+    /// <summary>
+    /// And that name is the one the limiter counts an unseen attempt under, which is what makes the row
+    /// above about the key that is written rather than about a constant nothing has to use.
+    /// </summary>
+    [Fact]
+    public async Task AnUnseenAttempt_SpendsTheAllowanceOfThatVeryName()
+    {
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
+
+        await limiter.RecordUnknownCodeAsync(null);
+
+        var underThatName = await limiter.CheckAsync(UserCode, UserCodeRateLimiter.SourceNotSeen);
+
+        Assert.True(underThatName.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// The record written when a code is verified names an unseen caller the way the records about limits
+    /// name it, so one caller reads as one caller across the three.
+    /// </summary>
+    [Fact]
+    public async Task TheRecordOfAVerification_NamesAnUnseenCallerAsTheLimitsDo()
+    {
+        await _rateLimiter.RecordSuccessAsync(UserCode, null);
+
+        Assert.Contains(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeVerified &&
+                     entry.Message.Contains(UserCodeRateLimiter.SourceNotSeen));
+    }
 }
