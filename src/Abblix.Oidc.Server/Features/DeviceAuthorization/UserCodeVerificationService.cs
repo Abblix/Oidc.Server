@@ -42,7 +42,7 @@ public partial class UserCodeVerificationService(
         // dash variations cannot be used to multiply the per-code brute-force budget.
         userCode = normalizer.Normalize(userCode);
 
-        var clientIp = requestInfoProvider.SourceName() ?? "unknown";
+        var clientIp = requestInfoProvider.SourceName();
 
         // Check rate limiting before attempting verification
         var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);
@@ -104,7 +104,7 @@ public partial class UserCodeVerificationService(
         // The same limits as verification, because this takes the same thing - a user code as a string -
         // and answers whether it names a live authorization, which is the question a guesser is asking.
         // Without this it is the same oracle with no counting at all, and the one that grants.
-        var clientIp = requestInfoProvider.SourceName() ?? "unknown";
+        var clientIp = requestInfoProvider.SourceName();
         if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
             return false;
 
@@ -179,7 +179,7 @@ public partial class UserCodeVerificationService(
         userCode = normalizer.Normalize(userCode);
 
         // Counted like verification and approval: this answers the same question about the same input.
-        var clientIp = requestInfoProvider.SourceName() ?? "unknown";
+        var clientIp = requestInfoProvider.SourceName();
         if ((await rateLimiter.CheckAsync(userCode, clientIp)).TryGetFailure(out _))
             return false;
 

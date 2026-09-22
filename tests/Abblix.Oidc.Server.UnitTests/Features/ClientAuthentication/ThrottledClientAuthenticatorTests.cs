@@ -43,6 +43,12 @@ public class ThrottledClientAuthenticatorTests
 
     private static readonly IPAddress Source = IPAddress.Parse("203.0.113.7");
 
+    /// <summary>
+    /// A second address, so a budget that stopped separating senders can be told from one that separates
+    /// them.
+    /// </summary>
+    private static readonly IPAddress AnotherSource = IPAddress.Parse("203.0.113.8");
+
     private readonly Mock<IClientAuthenticator> _inner = new(MockBehavior.Strict);
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider = new();
 
@@ -81,6 +87,57 @@ public class ThrottledClientAuthenticatorTests
 
         // The credential in the second request never reached the authenticator, which is the whole point.
         _inner.Verify(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()), Times.Once);
+    }
+
+    /// <summary>
+    /// And two senders have two budgets. The address is what separates them, so a name that stopped
+    /// separating them would turn a budget meant to price one sender's guessing into one bucket for
+    /// everybody: a single sender could then close client authentication to every client of the server.
+    /// </summary>
+    [Fact]
+    public async Task ASourceThatSpentItsBudget_LeavesAnotherSourceItsOwn()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.TryAuthenticateClientAsync(CreateRequest()));
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
+
+        // Assert
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
+    /// Two peers that share a link-local address on different interfaces are two senders, and the
+    /// identifier of the interface is the only thing that says so. They arrive here in the mapped form,
+    /// which is the one this server folds - so the fold has to stop where the identifier begins, or it
+    /// spends one sender's budget on the other's traffic, which is the error the fold exists to avoid,
+    /// inverted.
+    /// </summary>
+    [Fact]
+    public async Task TwoPeersUnderOneLinkLocalAddress_KeepTheirOwnBudgets()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse("::ffff:169.254.1.1%3"));
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse("::ffff:169.254.1.1%7"));
+
+        // Assert
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
     }
 
     /// <summary>

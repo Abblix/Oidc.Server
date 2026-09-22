@@ -32,14 +32,14 @@ public interface IUserCodeRateLimiter
     ///   be made again and whether the refusal follows from attempts against this very code - which decides
     ///   whether a caller may be told anything at all.
     /// </returns>
-    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier);
+    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
     /// </summary>
     /// <param name="userCode">The user code that failed verification.</param>
     /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordFailureAsync(string userCode, string clientIdentifier);
+    Task RecordFailureAsync(string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed attempt at a user code that does not exist.
@@ -53,12 +53,12 @@ public interface IUserCodeRateLimiter
     /// </remarks>
     /// <param name="clientIdentifier">The client identifier (typically IP address) making the attempt.</param>
     /// <returns>A task that completes when the attempt has been recorded.</returns>
-    Task RecordUnknownCodeAsync(string clientIdentifier);
+    Task RecordUnknownCodeAsync(string? clientIdentifier);
 
     /// <summary>
     /// Records a successful verification to reset rate limiting counters.
     /// </summary>
     /// <param name="userCode">The user code that was successfully verified.</param>
     /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordSuccessAsync(string userCode, string clientIdentifier);
+    Task RecordSuccessAsync(string userCode, string? clientIdentifier);
 }

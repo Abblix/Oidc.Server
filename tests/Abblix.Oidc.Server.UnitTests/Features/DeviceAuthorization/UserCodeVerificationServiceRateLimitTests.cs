@@ -80,7 +80,7 @@ public class UserCodeVerificationServiceRateLimitTests
     /// </summary>
     private UserCodeVerificationService ServiceOver(
         DeviceAuthorizationRequest? request,
-        string address = Address,
+        string? address = Address,
         Action<DeviceAuthorizationOptions>? configure = null)
     {
         var deviceStorage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
@@ -96,7 +96,7 @@ public class UserCodeVerificationServiceRateLimitTests
             .ReturnsAsync(request);
 
         var requestInfo = new Mock<IRequestInfoProvider>(MockBehavior.Loose);
-        requestInfo.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse(address));
+        requestInfo.Setup(p => p.RemoteIpAddress).Returns(address is null ? null : IPAddress.Parse(address));
 
         var deviceOptions = DeviceOptions();
         configure?.Invoke(deviceOptions);
@@ -191,6 +191,44 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
         Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
+    }
+
+    /// <summary>
+    /// And two addresses have two allowances, which is what makes the cap about a source rather than about
+    /// everybody: a cap that stopped separating them would let one guesser close this page to every person
+    /// waiting to type a code.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressThatSpentItsAllowance_LeavesAnotherAddressItsOwn()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: Address, configure: OneAttempt).VerifyAsync("99990000");
+
+        var elsewhere = await ServiceOver(PendingCode(), address: "198.51.100.23", configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsNotType<TooManyUserCodeAttempts>(elsewhere);
+    }
+
+    /// <summary>
+    /// A request whose source the server cannot see is not counted against any address at all. One bucket
+    /// shared by every such request would let a single guesser close this page to everybody arriving the
+    /// same way, which is the harm the cap exists to prevent rather than a smaller version of it. What
+    /// still bounds it is the ladder on the code it names and the server's own budget.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressTheServerCannotSee_SpendsNoAddressAllowance()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990000");
+        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990001");
+
+        var stillAnswered = await ServiceOver(PendingCode(), address: null, configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsNotType<TooManyUserCodeAttempts>(stillAnswered);
     }
 
     /// <summary>

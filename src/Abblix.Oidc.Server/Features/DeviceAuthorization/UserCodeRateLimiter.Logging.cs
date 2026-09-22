@@ -22,7 +22,7 @@ partial class UserCodeRateLimiter
         EventId = LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
         Level = LogLevel.Warning,
         Message = "Client {ClientIdentifier} exceeded the per-address cap. Failed attempts in window: {FailureCount}")]
-    private partial void LogAddressCapReached(string ClientIdentifier, int FailureCount);
+    private partial void LogAddressCapReached(string? ClientIdentifier, int FailureCount);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeBlocked,
@@ -34,7 +34,7 @@ partial class UserCodeRateLimiter
         EventId = LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
         Level = LogLevel.Warning,
         Message = "Potential brute force attack detected. UserCode: {UserCode}, Client: {ClientIdentifier}, UserCodeFailures: {UserCodeFailures}, AddressFailures: {AddressFailures}")]
-    private partial void LogBruteForceDetected(string UserCode, string ClientIdentifier, int UserCodeFailures, int AddressFailures);
+    private partial void LogBruteForceDetected(string UserCode, string? ClientIdentifier, int UserCodeFailures, int AddressFailures);
 
     [LoggerMessage(
         EventId = LogEvents.Device.UserCodeRateLimiter.FailedAttemptBudgetSpent,
@@ -55,5 +55,5 @@ partial class UserCodeRateLimiter
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
         Level = LogLevel.Information,
         Message = "User code {UserCode} successfully verified from {ClientIdentifier}")]
-    private partial void LogUserCodeVerified(string UserCode, string ClientIdentifier);
+    private partial void LogUserCodeVerified(string UserCode, string? ClientIdentifier);
 }

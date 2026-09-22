@@ -68,7 +68,7 @@ public partial class UserCodeRateLimiter(
     internal const string BeforeAnyVerification = "first";
 
     /// <inheritdoc />
-    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier)
+    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -99,11 +99,18 @@ public partial class UserCodeRateLimiter(
         }
 
         // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
-        // the rung at the cap is the whole question and costs one read.
+        // the rung at the cap is the whole question and costs one read. A request whose source the server
+        // cannot see has no cap of its own: one bucket shared by every such request would let a single
+        // sender close this page to everybody arriving the same way, which is the harm the cap exists to
+        // prevent rather than a smaller version of it. What still bounds those requests is the ladder on
+        // the code they name and the server's own budget below.
         var window = WindowOf(now, deviceAuthOptions);
-        var capReached = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
-            removeOnRetrieval: false);
+        var capReached = clientIdentifier is null
+            ? null
+            : await storage.GetAsync<RateLimitAttempt>(
+                keyFactory.AddressRateLimitAttemptKey(
+                    clientIdentifier, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
+                removeOnRetrieval: false);
 
         if (capReached != null)
         {
@@ -129,7 +136,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordUnknownCodeAsync(string clientIdentifier)
+    public async Task RecordUnknownCodeAsync(string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -140,7 +147,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordFailureAsync(string userCode, string clientIdentifier)
+    public async Task RecordFailureAsync(string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -185,15 +192,17 @@ public partial class UserCodeRateLimiter(
     /// apart from the per-code ladder.
     /// </remarks>
     private async Task<int> RecordAgainstSourceAndBudgetAsync(
-        string clientIdentifier, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
+        string? clientIdentifier, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
     {
         var window = WindowOf(now, deviceAuthOptions);
 
-        var addressAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
-            deviceAuthOptions.MaxAddressFailuresPerWindow,
-            now,
-            deviceAuthOptions.RateLimitRetention);
+        var addressAttempts = clientIdentifier is null
+            ? 0
+            : await ClaimAttemptAsync(
+                rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
+                deviceAuthOptions.MaxAddressFailuresPerWindow,
+                now,
+                deviceAuthOptions.RateLimitRetention);
 
         await ClaimAttemptAsync(
             rung => keyFactory.FailedAttemptKey(window, rung),
@@ -205,7 +214,7 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
+    public async Task RecordSuccessAsync(string userCode, string? clientIdentifier)
     {
         // The verified code leaves its attempt history behind by starting a new life, and nothing is removed.
         // Removal is what let an attempt that began earlier land above the gap it left, and the reader of

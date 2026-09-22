@@ -30,9 +30,13 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.ActionResults;
 /// The controllers of this adapter are marked as APIs, and the framework replaces any result it recognizes as
 /// a client error with a problem document of its own. A status result is exactly that, so a refusal built
 /// from one reaches the caller with a body the library never wrote, while the Minimal API adapter sends the
-/// status alone - and the two adapters answer the same request. Three refusals shipped that way before this
-/// guard, each found separately, so what is checked here is the property rather than the site: no result
-/// leaving the formatter or the refusal filter may be one the framework can attach a body to.
+/// status alone - and the two adapters answer the same request. The caller refusal, the registration-size
+/// refusal and the key custodian's each shipped that way and were each found on their own, so what is
+/// checked here is the property rather than the site: no result leaving the formatter or the refusal filter
+/// may be one the framework can attach a body to. Most of what it enumerates is safe by construction - an
+/// error that states itself in the body is an object result, and a status wrapped for a header is not a
+/// client error either - so what the enumeration buys is that a new refusal written the wrong way is caught
+/// wherever it is added, not that every input here could fail.
 /// </remarks>
 public class RefusalsCarryNoSynthesizedBodyTests
 {
@@ -41,8 +45,8 @@ public class RefusalsCarryNoSynthesizedBodyTests
     private static readonly string[] DPoPAlgs = [SigningAlgorithms.RS256];
 
     /// <summary>
-    /// Every error code this library publishes, through both ways an endpoint formats an error and both
-    /// fallback statuses, since the arm taken depends on all three.
+    /// Every error code this library publishes, through both ways an endpoint formats an error and every
+    /// fallback status the adapter formats with, since the arm taken depends on all three.
     /// </summary>
     [Fact]
     public void NoFormattedError_IsAResultTheFrameworkWouldGiveABody()
@@ -123,7 +127,16 @@ public class RefusalsCarryNoSynthesizedBodyTests
 
     private static void AssertNoSynthesizedBody(OidcError error, string what)
     {
-        foreach (var fallback in new[] { StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized })
+        // The three an endpoint of this adapter passes: a request refused, a caller unauthenticated, and a
+        // client that was not found, which is the one that reaches the arm the other two step over.
+        var fallbacks = new[]
+        {
+            StatusCodes.Status400BadRequest,
+            StatusCodes.Status401Unauthorized,
+            StatusCodes.Status404NotFound,
+        };
+
+        foreach (var fallback in fallbacks)
         {
             Assert.False(
                 error.Format(fallback, Realm) is IClientErrorActionResult,
