@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -19,7 +20,28 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 /// NOT contain blind to whatever the exception carried - and a store's own fault routinely quotes the
 /// key it failed on.
 /// </remarks>
-internal sealed record LogRecord(LogLevel Level, EventId EventId, string Message, Exception? Exception = null);
+internal sealed record LogRecord(
+    LogLevel Level,
+    EventId EventId,
+    string Message,
+    Exception? Exception = null,
+    IReadOnlyList<KeyValuePair<string, object?>>? State = null)
+{
+    /// <summary>
+    /// What the record carries under one of its named values, or null when it carries none of that name.
+    /// </summary>
+    /// <remarks>
+    /// A name read here is the one a structured sink writes, which the formatted message cannot tell from
+    /// the same text arriving in another field.
+    /// </remarks>
+    public object? Value(string name)
+        => State?.FirstOrDefault(pair => pair.Key == name).Value;
+
+    /// <summary>
+    /// Whether the record names a value at all, which a null value cannot answer.
+    /// </summary>
+    public bool Names(string name) => State?.Any(pair => pair.Key == name) == true;
+}
 
 /// <summary>
 /// A factory whose loggers keep what was written, so a test can assert on the record itself.
@@ -56,6 +78,12 @@ internal sealed class RecordingLoggerFactory : ILoggerFactory
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception), exception));
+            => entries.Add(
+                new LogRecord(
+                    logLevel,
+                    eventId,
+                    formatter(state, exception),
+                    exception,
+                    state as IReadOnlyList<KeyValuePair<string, object?>>));
     }
 }

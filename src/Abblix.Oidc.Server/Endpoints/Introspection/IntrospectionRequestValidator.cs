@@ -75,8 +75,8 @@ public partial class IntrospectionRequestValidator(
 
 		// Charged after the caller has proven which client it is and before the token is read, which is where
 		// the signature verification this endpoint spends on a looping client sits. What authentication
-		// itself costs is bounded elsewhere, by the budget on failed authentications. The source half of the
-		// key is left unset: a public client is turned away above.
+		// itself costs is not charged here, and a caller that fails it never reaches this line. The source
+		// half of the key is left unset: a public client is turned away above.
 		using var lease = rateLimiter.AttemptAcquire((clientInfo.ClientId, null));
 		if (!lease.IsAcquired)
 		{

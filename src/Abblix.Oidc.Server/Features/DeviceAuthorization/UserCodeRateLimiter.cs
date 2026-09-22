@@ -77,8 +77,8 @@ public partial class UserCodeRateLimiter(
     /// <para>
     /// They share rather than go uncounted because what stands behind this cap is the server's own budget,
     /// which every caller spends from: uncounted, one sender the server cannot see refuses every
-    /// verification. Where no address is ever visible those senders are every caller, and this cap - the
-    /// narrower of the two on the numbers shipped - bounds the page instead.
+    /// verification. Where no address is ever visible those senders are every caller, and this cap bounds
+    /// the page instead - on the numbers shipped the narrower of the two, which no startup check relates.
     /// </para>
     /// </remarks>
     internal const string SourceNotSeen = "(no-address)";
@@ -165,8 +165,7 @@ public partial class UserCodeRateLimiter(
 
         // Read before the claim, so an attempt whose claim began before a verification started the next
         // life lands in the life it read - the one being left behind - rather than on top of an empty
-        // ladder it never saw. That attempt is then not counted, which is the same loss as before: the
-        // code has just been verified and its own history says nothing any more.
+        // ladder it never saw. That attempt is then not counted, the code having just been verified.
         var life = await CurrentLifeAsync(userCode);
 
         var attempts = await ClaimAttemptAsync(
@@ -225,9 +224,8 @@ public partial class UserCodeRateLimiter(
     /// <inheritdoc />
     public async Task RecordSuccessAsync(string userCode, string? clientIdentifier)
     {
-        // The verified code leaves its attempt history behind by starting a new life, and nothing is removed.
-        // Removal is what let an attempt that began earlier land above the gap it left, and the reader of
-        // these records may not meet a gap: it finds the highest rung by halving the range. The records left
+        // The verified code leaves its attempt history behind by starting a new life, and nothing is removed:
+        // the reader finds the highest rung by halving the range, so it may not meet a gap. The records left
         // behind expire on their own, with the code's lifetime from each attempt.
         //
         // The life is named rather than counted. A count is read before it is written, so it restarts whenever
@@ -382,8 +380,7 @@ public partial class UserCodeRateLimiter(
     /// </summary>
     /// <remarks>
     /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
-    /// can spend the cap twice. The record this replaced behaved the same way: it restarted the count once
-    /// the interval had passed since the first failure it held.
+    /// can spend the cap twice.
     /// </remarks>
     private static long WindowOf(DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
         => now.UtcTicks / deviceAuthOptions.RateLimitWindow.Ticks;

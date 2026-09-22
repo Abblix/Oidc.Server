@@ -38,7 +38,7 @@ public record CallerRateLimitOptions
 {
     /// <summary>
     /// How many requests one client may make within <see cref="Window"/>. Null lifts the limit, and the endpoints
-    /// then answer every request the caller can send, as versions before this setting did.
+    /// then answer every request the caller can send.
     /// </summary>
     /// <remarks>
     /// It belongs to a registered client, so a fleet of gateways introspecting under a single <c>client_id</c>

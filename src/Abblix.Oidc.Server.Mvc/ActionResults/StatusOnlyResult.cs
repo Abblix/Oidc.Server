@@ -18,6 +18,8 @@ namespace Abblix.Oidc.Server.Mvc.ActionResults;
 /// <see cref="Microsoft.AspNetCore.Mvc.Infrastructure.IClientErrorActionResult"/>, so on a controller carrying
 /// <see cref="ApiControllerAttribute"/> the framework replaces it with a synthesized
 /// <see cref="ProblemDetails"/> body, which the Minimal API adapter answering the same request does not send.
+/// Every refusal this library decides for itself goes out through this result, so the two adapters answer
+/// alike.
 /// </remarks>
 /// <param name="statusCode">The status the response carries.</param>
 internal sealed class StatusOnlyResult(int statusCode) : ActionResult

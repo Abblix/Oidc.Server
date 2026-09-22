@@ -49,6 +49,22 @@ public class UserCodeRateLimiterTests
     private const string OtherUserCode = "BDWD-HJKL";
     private const string ClientIdentifier = "203.0.113.7";
 
+    /// <summary>
+    /// The field a record names the caller in, which is what a structured sink writes it under.
+    /// </summary>
+    private const string CallerField = "ClientIdentifier";
+
+    /// <summary>
+    /// The records that name the caller. Kept by hand because the only other source is the class under
+    /// test, which would drop a record from the list by the same edit that drops the caller from it.
+    /// </summary>
+    private static readonly int[] RecordsNamingTheCaller =
+    [
+        LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
+        LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
+        LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
+    ];
+
     private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan OneTick = TimeSpan.FromTicks(1);
@@ -114,8 +130,8 @@ public class UserCodeRateLimiterTests
     /// <para>
     /// It stops at the failure before the last one the code allows, because the answer after that is not a
     /// pause at all - the code is spent, and <see cref="ACodeWhoseAttemptsAreSpent_IsRefusedForTheRestOfItsLife"/>
-    /// owns that. With the shipped numbers that leaves two doublings to see here, and where the doubling
-    /// stops is driven by <see cref="ThePause_NeverExceedsTheConfiguredMaximum"/>.
+    /// owns that. Where the doubling stops is driven by
+    /// <see cref="ThePause_NeverExceedsTheConfiguredMaximum"/>.
     /// </para>
     /// </remarks>
     [Theory]
@@ -758,8 +774,8 @@ public class UserCodeRateLimiterTests
     /// address, so an operator reading them sees one caller rather than one per record.
     /// </summary>
     /// <remarks>
-    /// The records are discovered rather than listed, so one added later and left undriven fails here
-    /// instead of passing under a name that says every.
+    /// The name is read from the field the record names it in rather than from the rendered line, which
+    /// cannot tell the caller's name from the same text arriving in another field.
     /// </remarks>
     [Fact]
     public async Task EveryRecordNamingTheCaller_NamesTheCallerTheSameWay()
@@ -769,8 +785,30 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// Drives every record that names a caller, for one caller, and asserts each carries the name expected
-    /// of it.
+    /// The list above is what this row drives, and this is what says it has gone stale: a record that gains
+    /// or loses the caller leaves the two sets disagreeing.
+    /// </summary>
+    /// <remarks>
+    /// A record naming the caller under some other field name is seen by neither, which is the reach this
+    /// pair has and no more.
+    /// </remarks>
+    [Fact]
+    public void TheRecordsDrivenAsNamingTheCaller_AreTheRecordsThatName()
+    {
+        var declared = typeof(UserCodeRateLimiter)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetParameters().Any(parameter => parameter.Name == CallerField))
+            .Select(method => method.GetCustomAttribute<LoggerMessageAttribute>())
+            .Where(attribute => attribute is not null)
+            .Select(attribute => attribute!.EventId)
+            .ToArray();
+
+        Assert.NotEmpty(declared);
+        Assert.Equal(RecordsNamingTheCaller.Order(), declared.Order());
+    }
+
+    /// <summary>
+    /// Drives the records that name a caller, for one caller, and asserts each names it as expected.
     /// </summary>
     private async Task AssertRecordsName(string userCode, string? clientIdentifier, string expected)
     {
@@ -781,21 +819,12 @@ public class UserCodeRateLimiterTests
         await limiter.CheckAsync(userCode, clientIdentifier);
         await limiter.RecordSuccessAsync(userCode, clientIdentifier);
 
-        var naming = typeof(UserCodeRateLimiter)
-            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(method => method.GetParameters().Any(parameter => parameter.Name == "ClientIdentifier"))
-            .Select(method => method.GetCustomAttribute<LoggerMessageAttribute>())
-            .Where(attribute => attribute is not null)
-            .Select(attribute => attribute!.EventId)
-            .ToArray();
-
-        Assert.NotEmpty(naming);
-
-        foreach (var eventId in naming)
+        foreach (var eventId in RecordsNamingTheCaller)
         {
-            Assert.Contains(
-                _logs.Entries,
-                entry => entry.EventId.Id == eventId && entry.Message.Contains(expected));
+            var record = Assert.Single(_logs.Entries, entry => entry.EventId.Id == eventId);
+
+            Assert.True(record.Names(CallerField));
+            Assert.Equal(expected, record.Value(CallerField));
         }
     }
 }

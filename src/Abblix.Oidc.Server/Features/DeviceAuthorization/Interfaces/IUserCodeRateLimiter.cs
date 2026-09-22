@@ -18,8 +18,9 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 /// </summary>
 /// <remarks>
 /// The client identifier every method takes is the address the request came from, absent whenever the
-/// server cannot see one. An implementation counts those attempts together, apart from any real address:
-/// left uncounted, one such sender spends whatever budget is shared with everybody else.
+/// server cannot see one. An implementation owes those attempts a count of their own, apart from any real
+/// address: spelled as an address it invents a sender, and left uncounted it lets one such sender spend
+/// whatever budget is shared with everybody else.
 /// </remarks>
 public interface IUserCodeRateLimiter
 {

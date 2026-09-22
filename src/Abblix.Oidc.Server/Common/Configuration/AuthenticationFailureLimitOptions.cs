@@ -24,7 +24,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// It is OFF until a deployment turns it on. A server whose callers reach it through a load balancer, an
 /// ingress or a NAT gateway sees one address for all of them, and this budget is then one bucket for the whole
 /// deployment, which anybody could spend with a hundred wrong secrets a minute. Turning it on states that this
-/// server sees the addresses its callers come from.
+/// server sees the addresses its callers come from: it terminates their connections itself, or its proxy is
+/// trusted to say so and nobody else is.
 /// </para>
 /// <para>
 /// A sender that rotates addresses is not bounded by it, and one that can choose the address this server sees
