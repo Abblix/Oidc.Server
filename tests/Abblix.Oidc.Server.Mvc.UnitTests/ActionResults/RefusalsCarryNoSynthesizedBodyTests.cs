@@ -161,7 +161,9 @@ public class RefusalsCarryNoSynthesizedBodyTests
     /// would read as a file of passing rows. This drives that check with the result it exists to catch and
     /// requires it to fail, which is as much as a row can say without a formatter that returns one. It
     /// covers every row because there is one check: a row holding a copy of it would keep its own answer,
-    /// and this would say nothing about that copy.
+    /// and this would say nothing about that copy. What it does not say is that a row still hands the check
+    /// the result it set out to ask about - a row that quietly asked about something else would keep this
+    /// green, and only the production mutations each row is driven with speak to that.
     /// </remarks>
     [Fact]
     public void TheCheckTheseRowsRun_RefusesAResultTheFrameworkWouldGiveABody()

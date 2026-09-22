@@ -112,8 +112,9 @@ public class UserCodeRateLimiterTests
     /// how long to wait, and that is what a caller can act on.
     /// <para>
     /// It stops at the failure before the last one the code allows, because the answer after that is not a
-    /// pause at all - the code is spent, and the row above owns that. With the shipped numbers that leaves
-    /// two doublings to see here; the far end of the ladder is driven below, against a cap raised to it.
+    /// pause at all - the code is spent, and <see cref="ACodeWhoseAttemptsAreSpent_IsRefusedForTheRestOfItsLife"/>
+    /// owns that. With the shipped numbers that leaves two doublings to see here; the far end of the ladder
+    /// is driven by <see cref="AnAllowanceAsLargeAsTheLadder_IsStillSpent"/>, against a cap raised to it.
     /// </para>
     /// </remarks>
     [Theory]
@@ -278,7 +279,8 @@ public class UserCodeRateLimiterTests
     /// Forgetting is done by starting the next generation of the ladder rather than by removing anything,
     /// so a failure has to be written into the generation the code is in NOW. Written into the one left
     /// behind, it would be invisible to every later read - the count would never rise again for that value,
-    /// and the row above, which only asks that the slate is clean, would pass either way.
+    /// and <see cref="AVerifiedCode_ForgetsItsFailures"/>, which only asks that the slate is clean, would
+    /// pass either way.
     /// </remarks>
     [Fact]
     public async Task AVerifiedCode_CountsTheFailuresThatComeAfter()
@@ -727,9 +729,14 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// And that name is the one the limiter counts an unseen attempt under, which is what makes the row
-    /// above about the key that is written rather than about a constant nothing has to use.
+    /// And that name is the one the limiter counts an unseen attempt under, which is what makes
+    /// <see cref="TheNameUnseenAttemptsShare_IsNoAddressAndNoStoreRefusesIt"/> about the key that is
+    /// written rather than about a constant nothing has to use.
     /// </summary>
+    /// <remarks>
+    /// The refusal is read by the record it writes rather than by its own shape, because the cap and the
+    /// server's budget both refuse the same way and only the record says which of them spoke.
+    /// </remarks>
     [Fact]
     public async Task AnUnseenAttempt_SpendsTheAllowanceOfThatVeryName()
     {
@@ -740,20 +747,45 @@ public class UserCodeRateLimiterTests
         var underThatName = await limiter.CheckAsync(UserCode, UserCodeRateLimiter.SourceNotSeen);
 
         Assert.True(underThatName.TryGetFailure(out _));
+        Assert.Contains(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.AddressCapReached);
     }
 
     /// <summary>
-    /// The record written when a code is verified names an unseen caller the way the records about limits
-    /// name it, so one caller reads as one caller across the three.
+    /// Every record naming the caller names an unseen one the same way, so an operator reading them sees
+    /// one caller rather than one per record - and a caller the server can see is named by its address.
     /// </summary>
     [Fact]
-    public async Task TheRecordOfAVerification_NamesAnUnseenCallerAsTheLimitsDo()
+    public async Task EveryRecordNamingTheCaller_NamesAnUnseenOneTheSameWay()
     {
-        await _rateLimiter.RecordSuccessAsync(UserCode, null);
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
+
+        await limiter.RecordFailureAsync(UserCode, null);
+        await limiter.CheckAsync(UserCode, null);
+        await limiter.RecordSuccessAsync(UserCode, null);
+
+        var naming = new[]
+        {
+            LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
+            LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
+            LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
+        };
+
+        foreach (var eventId in naming)
+        {
+            Assert.Contains(
+                _logs.Entries,
+                entry => entry.EventId.Id == eventId &&
+                         entry.Message.Contains(UserCodeRateLimiter.SourceNotSeen));
+        }
+
+        _logs.Entries.Clear();
+        await limiter.RecordSuccessAsync(OtherUserCode, ClientIdentifier);
 
         Assert.Contains(
             _logs.Entries,
             entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeVerified &&
-                     entry.Message.Contains(UserCodeRateLimiter.SourceNotSeen));
+                     entry.Message.Contains(ClientIdentifier));
     }
 }
