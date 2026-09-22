@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Routing;
+using Xunit.Sdk;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.ActionResults;
 
@@ -139,32 +140,37 @@ public class RefusalsCarryNoSynthesizedBodyTests
 
         foreach (var fallback in fallbacks)
         {
-            Assert.False(
-                error.Format(fallback, Realm) is IClientErrorActionResult,
+            AssertNoBodyWouldBeAttached(
+                error.Format(fallback, Realm),
                 $"{what} would come back with a body the library never wrote");
 
-            Assert.False(
-                error.Format(fallback, Realm, DPoPAlgs, advertiseBearer: true) is IClientErrorActionResult,
+            AssertNoBodyWouldBeAttached(
+                error.Format(fallback, Realm, DPoPAlgs, advertiseBearer: true),
                 $"{what} would come back with a body the library never wrote, under the DPoP overload");
         }
     }
 
+    private static void AssertNoBodyWouldBeAttached(ActionResult result, string whatWouldBeWrong)
+        => Assert.False(result is IClientErrorActionResult, whatWouldBeWrong);
+
     /// <summary>
-    /// The framework's own status result is one it attaches a body to, and the one this adapter returns in
-    /// its place is not.
+    /// The check every row above runs refuses the result a refusal written the ordinary way would be, and
+    /// accepts the one this adapter returns in its place.
     /// </summary>
     /// <remarks>
-    /// Every input the rows above build answers the same way, so a question that had stopped telling the
-    /// two apart would read as a file of passing rows. This is the pair that says it still can.
+    /// Every result the rows build answers the same way, so a check that had stopped refusing anything
+    /// would read as a file of passing rows. This drives that check with the result it exists to catch and
+    /// requires it to fail, which is as much as a row can say without a formatter that returns one.
     /// </remarks>
     [Fact]
-    public void TheQuestionTheseRowsAsk_TellsTheTwoKindsApart()
+    public void TheCheckTheseRowsRun_RefusesAResultTheFrameworkWouldGiveABody()
     {
-        ActionResult theFrameworksOwn = new StatusCodeResult(StatusCodes.Status400BadRequest);
-        ActionResult thisAdaptersOwn = new StatusOnlyResult(StatusCodes.Status400BadRequest);
+        Assert.ThrowsAny<XunitException>(
+            () => AssertNoBodyWouldBeAttached(
+                new StatusCodeResult(StatusCodes.Status400BadRequest), "a refusal built the ordinary way"));
 
-        Assert.True(theFrameworksOwn is IClientErrorActionResult);
-        Assert.False(thisAdaptersOwn is IClientErrorActionResult);
+        AssertNoBodyWouldBeAttached(
+            new StatusOnlyResult(StatusCodes.Status400BadRequest), "the result this adapter returns instead");
     }
 
     private static ExceptionContext ExceptionContextFor(Exception exception)

@@ -55,5 +55,5 @@ partial class UserCodeRateLimiter
         EventId = LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
         Level = LogLevel.Information,
         Message = "User code {UserCode} successfully verified from {ClientIdentifier}")]
-    private partial void LogUserCodeVerified(string UserCode, string? ClientIdentifier);
+    private partial void LogUserCodeVerified(string UserCode, string ClientIdentifier);
 }

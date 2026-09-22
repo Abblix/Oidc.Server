@@ -25,7 +25,11 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// <para>
 /// Only failures are counted, which is what keeps this away from working clients: their authentications succeed,
 /// so they never charge it however busy they are. A source whose address cannot be determined is not counted
-/// either, because one bucket for every such request would let a single sender close the endpoints to everybody.
+/// either, because nothing shared stands behind this budget for such a sender to spend: one bucket for all of
+/// them would buy no protection and would let a single sender close every endpoint that authenticates a client
+/// to everybody arriving the same way. Where the server sees no address at all, that is every caller and this
+/// budget bounds nothing, so a deployment behind a proxy resolves a forwarded header into an address before
+/// turning it on.
 /// </para>
 /// </remarks>
 /// <param name="limiter">The budget of failures one address gets, which a host may register itself.</param>

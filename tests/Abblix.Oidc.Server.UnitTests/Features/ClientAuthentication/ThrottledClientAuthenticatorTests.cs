@@ -159,8 +159,9 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
-    /// A request whose source cannot be named is not counted, because one bucket shared by every such request
-    /// would let a single sender close every endpoint to everybody else arriving the same way.
+    /// A request whose source cannot be named is not counted: nothing shared stands behind this budget for
+    /// such a sender to spend, so one bucket for all of them would buy no protection and would let a single
+    /// sender close every endpoint to everybody else arriving the same way.
     /// </summary>
     [Fact]
     public async Task ASourceThatCannotBeNamed_IsNeverCounted()

@@ -72,13 +72,19 @@ public partial class UserCodeRateLimiter(
     /// share one allowance.
     /// </summary>
     /// <remarks>
-    /// No address prints like this, so a caller at a real address never lands here. Sharing one allowance
-    /// lets a single such sender close this page to everybody else arriving the same way, which is the
-    /// lesser of the two errors: counting nothing against them instead leaves the server's own budget as
-    /// the only thing they spend, and that budget refuses every verification, including the callers whose
-    /// address is perfectly visible.
+    /// No address prints like this, and no space or control character is in it, so a caller at a real
+    /// address never lands here and a store that refuses either character still takes the key.
+    /// <para>
+    /// What decides the sharing is what sits behind this cap: the server's own budget for the window,
+    /// which every caller spends from. Counting these attempts against nothing leaves that budget the only
+    /// thing they spend, so one sender the server cannot see refuses every verification, including callers
+    /// whose address is in plain sight. Sharing one allowance holds the refusal to the senders that arrive
+    /// the same way. Where the server sees no address at all - a socket that carries none, and no
+    /// forwarded header resolved into one - those senders are every caller, and the page is then bounded by
+    /// this cap rather than by that budget, which is the narrower of the two numbers.
+    /// </para>
     /// </remarks>
-    internal const string SourceNotSeen = "(no address)";
+    internal const string SourceNotSeen = "(no-address)";
 
     /// <inheritdoc />
     public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
@@ -255,7 +261,7 @@ public partial class UserCodeRateLimiter(
                 AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
             });
 
-        LogUserCodeVerified(userCode, clientIdentifier);
+        LogUserCodeVerified(userCode, clientIdentifier ?? SourceNotSeen);
     }
 
     /// <summary>

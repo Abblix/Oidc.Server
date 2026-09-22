@@ -23,8 +23,10 @@ internal static class RequestInfoProviderExtensions
     /// address over one socket and as the IPv4-mapped IPv6 form over the other, and a proxy that resolves a
     /// forwarded header writes the plain form beside sockets that report the mapped one - so a name taken
     /// verbatim hands that sender one budget per spelling, which on the budgets that price guessing means
-    /// one allowance per spelling as well. The mapping is between two spellings of one address, never
-    /// between two addresses: anything that is not the mapped form is counted exactly as it arrived.
+    /// one allowance per spelling as well. What a budget counts by is therefore the canonical printing of
+    /// the address, taken from the mapped form where there is one: two spellings of one address reach the
+    /// same name, and so does a mapped address that carries an identifier of the interface it arrived on,
+    /// since that identifier belongs to the mapping rather than to the address inside it.
     /// </remarks>
     /// <param name="requestInfoProvider">The provider naming the request being answered.</param>
     /// <returns>The address, in the form every budget counts by, or null when there is none.</returns>

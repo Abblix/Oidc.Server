@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -709,5 +710,19 @@ public class UserCodeRateLimiterTests
     {
         for (var i = 0; i < times; i++)
             await _rateLimiter.RecordFailureAsync(UserCode, ClientIdentifier);
+    }
+
+    /// <summary>
+    /// No caller can be given the name that attempts with no visible source share, which is what keeps
+    /// that allowance theirs: a name an address could take would hand one real sender the allowance of
+    /// everybody the server cannot see. Nor may it carry a space or a control character, which some
+    /// stores refuse in a key.
+    /// </summary>
+    [Fact]
+    public void TheNameUnseenAttemptsShare_IsNoAddressAndNoStoreRefusesIt()
+    {
+        Assert.False(IPAddress.TryParse(UserCodeRateLimiter.SourceNotSeen, out _));
+        Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsWhiteSpace);
+        Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsControl);
     }
 }

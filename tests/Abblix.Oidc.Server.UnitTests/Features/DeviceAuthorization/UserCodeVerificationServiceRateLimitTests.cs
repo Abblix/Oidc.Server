@@ -228,13 +228,20 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
-    /// And no caller can be given the name they share, which is what keeps that allowance theirs alone:
-    /// a name an address could take would hand one real sender the allowance of everybody unseen.
+    /// And what they spend is the server's own budget too, because an attempt nobody can attribute is
+    /// still an attempt this server answered: the two counts are one rule, not one rule per source.
     /// </summary>
     [Fact]
-    public void TheNameUnseenAttemptsShare_IsNoAddress()
+    public async Task AnAttemptTheServerCannotSee_SpendsTheServersBudget()
     {
-        Assert.False(IPAddress.TryParse(UserCodeRateLimiter.SourceNotSeen, out _));
+        void OneOfTheBudget(DeviceAuthorizationOptions options) => options.MaxFailedAttemptsPerWindow = 1;
+
+        await ServiceOver(null, address: null, configure: OneOfTheBudget).VerifyAsync("99990000");
+
+        var visible = await ServiceOver(PendingCode(), address: Address, configure: OneOfTheBudget)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<TooManyUserCodeAttempts>(visible);
     }
 
     /// <summary>
