@@ -115,32 +115,6 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
-    /// Two peers that share a link-local address on different interfaces are two senders, and the
-    /// identifier of the interface is the only thing that says so. They arrive here in the mapped form,
-    /// which is the one this server folds - so the fold has to stop where the identifier begins, or it
-    /// spends one sender's budget on the other's traffic, which is the error the fold exists to avoid,
-    /// inverted.
-    /// </summary>
-    [Fact]
-    public async Task TwoPeersUnderOneLinkLocalAddress_KeepTheirOwnBudgets()
-    {
-        // Arrange
-        var authenticator = CreateAuthenticator(permitLimit: 1);
-        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse("::ffff:169.254.1.1%3"));
-        _inner
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
-
-        // Act
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
-
-        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse("::ffff:169.254.1.1%7"));
-
-        // Assert
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
-    }
-
-    /// <summary>
     /// One sender has one budget however its address is spelled. A dual-stack server reports the same peer as
     /// an IPv4 address over one socket and as the IPv4-mapped IPv6 form over the other, so a budget that took
     /// the spelling would give a sender guessing secrets one allowance per stack.

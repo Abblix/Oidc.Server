@@ -208,27 +208,56 @@ public class UserCodeVerificationServiceRateLimitTests
         var elsewhere = await ServiceOver(PendingCode(), address: "198.51.100.23", configure: OneAttempt)
             .VerifyAsync(TheCode);
 
-        Assert.IsNotType<TooManyUserCodeAttempts>(elsewhere);
+        Assert.IsType<ValidUserCode>(elsewhere);
     }
 
     /// <summary>
-    /// A request whose source the server cannot see is not counted against any address at all. One bucket
-    /// shared by every such request would let a single guesser close this page to everybody arriving the
-    /// same way, which is the harm the cap exists to prevent rather than a smaller version of it. What
-    /// still bounds it is the ladder on the code it names and the server's own budget.
+    /// Attempts whose source the server cannot see share one allowance, because nothing tells them apart.
     /// </summary>
     [Fact]
-    public async Task AnAddressTheServerCannotSee_SpendsNoAddressAllowance()
+    public async Task TwoAttemptsTheServerCannotSee_ShareOneAllowance()
     {
         void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
         await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990000");
-        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990001");
 
-        var stillAnswered = await ServiceOver(PendingCode(), address: null, configure: OneAttempt)
+        var next = await ServiceOver(PendingCode(), address: null, configure: OneAttempt)
             .VerifyAsync(TheCode);
 
-        Assert.IsNotType<TooManyUserCodeAttempts>(stillAnswered);
+        Assert.IsType<TooManyUserCodeAttempts>(next);
+    }
+
+    /// <summary>
+    /// And no caller can be given the name they share, which is what keeps that allowance theirs alone:
+    /// a name an address could take would hand one real sender the allowance of everybody unseen.
+    /// </summary>
+    [Fact]
+    public void TheNameUnseenAttemptsShare_IsNoAddress()
+    {
+        Assert.False(IPAddress.TryParse(UserCodeRateLimiter.SourceNotSeen, out _));
+    }
+
+    /// <summary>
+    /// And sharing one allowance is what keeps them off everybody else. Left uncounted, the only thing
+    /// they spend is the budget the whole server shares, and that budget refuses every verification -
+    /// including the callers whose address is in plain sight, who are the reason the page exists.
+    /// </summary>
+    [Fact]
+    public async Task AFloodTheServerCannotSee_LeavesACallerItCanSeeAnswered()
+    {
+        void SmallBudget(DeviceAuthorizationOptions options)
+        {
+            options.MaxAddressFailuresPerWindow = 1;
+            options.MaxFailedAttemptsPerWindow = 2;
+        }
+
+        for (var i = 0; i < 4; i++)
+            await ServiceOver(null, address: null, configure: SmallBudget).VerifyAsync("9999000" + i);
+
+        var visible = await ServiceOver(PendingCode(), address: Address, configure: SmallBudget)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<ValidUserCode>(visible);
     }
 
     /// <summary>

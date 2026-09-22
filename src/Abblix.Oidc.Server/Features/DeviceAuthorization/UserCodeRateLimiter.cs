@@ -67,6 +67,19 @@ public partial class UserCodeRateLimiter(
     /// </summary>
     internal const string BeforeAnyVerification = "first";
 
+    /// <summary>
+    /// The name every attempt whose source the server cannot see is counted under, so that all of them
+    /// share one allowance.
+    /// </summary>
+    /// <remarks>
+    /// No address prints like this, so a caller at a real address never lands here. Sharing one allowance
+    /// lets a single such sender close this page to everybody else arriving the same way, which is the
+    /// lesser of the two errors: counting nothing against them instead leaves the server's own budget as
+    /// the only thing they spend, and that budget refuses every verification, including the callers whose
+    /// address is perfectly visible.
+    /// </remarks>
+    internal const string SourceNotSeen = "(no address)";
+
     /// <inheritdoc />
     public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
     {
@@ -99,23 +112,20 @@ public partial class UserCodeRateLimiter(
         }
 
         // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
-        // the rung at the cap is the whole question and costs one read. A request whose source the server
-        // cannot see has no cap of its own: one bucket shared by every such request would let a single
-        // sender close this page to everybody arriving the same way, which is the harm the cap exists to
-        // prevent rather than a smaller version of it. What still bounds those requests is the ladder on
-        // the code they name and the server's own budget below.
+        // the rung at the cap is the whole question and costs one read. An attempt whose source cannot be
+        // named is counted under a name of its own, shared with every other such attempt - see
+        // SourceNotSeen for which of the two harms that choice takes.
         var window = WindowOf(now, deviceAuthOptions);
-        var capReached = clientIdentifier is null
-            ? null
-            : await storage.GetAsync<RateLimitAttempt>(
-                keyFactory.AddressRateLimitAttemptKey(
-                    clientIdentifier, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
-                removeOnRetrieval: false);
+        var source = clientIdentifier ?? SourceNotSeen;
+        var capReached = await storage.GetAsync<RateLimitAttempt>(
+            keyFactory.AddressRateLimitAttemptKey(
+                source, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
+            removeOnRetrieval: false);
 
         if (capReached != null)
         {
             // The window this read is about is the one the clock is in, so its end is always still ahead.
-            LogAddressCapReached(clientIdentifier, deviceAuthOptions.MaxAddressFailuresPerWindow);
+            LogAddressCapReached(source, deviceAuthOptions.MaxAddressFailuresPerWindow);
             return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
@@ -179,7 +189,7 @@ public partial class UserCodeRateLimiter(
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(userCode, clientIdentifier, attempts, addressAttempts);
+            LogBruteForceDetected(userCode, clientIdentifier ?? SourceNotSeen, attempts, addressAttempts);
         }
     }
 
@@ -196,13 +206,11 @@ public partial class UserCodeRateLimiter(
     {
         var window = WindowOf(now, deviceAuthOptions);
 
-        var addressAttempts = clientIdentifier is null
-            ? 0
-            : await ClaimAttemptAsync(
-                rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
-                deviceAuthOptions.MaxAddressFailuresPerWindow,
-                now,
-                deviceAuthOptions.RateLimitRetention);
+        var addressAttempts = await ClaimAttemptAsync(
+            rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier ?? SourceNotSeen, window, rung),
+            deviceAuthOptions.MaxAddressFailuresPerWindow,
+            now,
+            deviceAuthOptions.RateLimitRetention);
 
         await ClaimAttemptAsync(
             rung => keyFactory.FailedAttemptKey(window, rung),

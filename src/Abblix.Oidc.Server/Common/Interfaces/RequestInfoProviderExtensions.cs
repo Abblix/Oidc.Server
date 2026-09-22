@@ -23,13 +23,8 @@ internal static class RequestInfoProviderExtensions
     /// address over one socket and as the IPv4-mapped IPv6 form over the other, and a proxy that resolves a
     /// forwarded header writes the plain form beside sockets that report the mapped one - so a name taken
     /// verbatim hands that sender one budget per spelling, which on the budgets that price guessing means
-    /// one allowance per spelling as well.
-    /// <para>
-    /// An address carrying a scope identifier is left alone, because that identifier is what tells two peers
-    /// apart that share a link-local address on different interfaces: folding it away would spend one
-    /// sender's budget on another's traffic, which is the worse of the two errors. The mapping is between
-    /// two spellings of one address, never between two addresses.
-    /// </para>
+    /// one allowance per spelling as well. The mapping is between two spellings of one address, never
+    /// between two addresses: anything that is not the mapped form is counted exactly as it arrived.
     /// </remarks>
     /// <param name="requestInfoProvider">The provider naming the request being answered.</param>
     /// <returns>The address, in the form every budget counts by, or null when there is none.</returns>
@@ -37,7 +32,7 @@ internal static class RequestInfoProviderExtensions
         => requestInfoProvider.RemoteIpAddress switch
         {
             null => null,
-            { IsIPv4MappedToIPv6: true, ScopeId: 0 } mapped => mapped.MapToIPv4().ToString(),
+            { IsIPv4MappedToIPv6: true } mapped => mapped.MapToIPv4().ToString(),
             var source => source.ToString(),
         };
 }

@@ -45,8 +45,9 @@ public class RefusalsCarryNoSynthesizedBodyTests
     private static readonly string[] DPoPAlgs = [SigningAlgorithms.RS256];
 
     /// <summary>
-    /// Every error code this library publishes, through both ways an endpoint formats an error and every
-    /// fallback status the adapter formats with, since the arm taken depends on all three.
+    /// Every error code this library publishes, through each way an endpoint formats an error and each
+    /// fallback status the adapter formats with, since the arm taken depends on the error, the way and
+    /// the status together.
     /// </summary>
     [Fact]
     public void NoFormattedError_IsAResultTheFrameworkWouldGiveABody()
@@ -127,7 +128,7 @@ public class RefusalsCarryNoSynthesizedBodyTests
 
     private static void AssertNoSynthesizedBody(OidcError error, string what)
     {
-        // The three an endpoint of this adapter passes: a request refused, a caller unauthenticated, and a
+        // What an endpoint of this adapter passes: a request refused, a caller unauthenticated, and a
         // client that was not found, which is the one that reaches the arm the other two step over.
         var fallbacks = new[]
         {
@@ -146,6 +147,24 @@ public class RefusalsCarryNoSynthesizedBodyTests
                 error.Format(fallback, Realm, DPoPAlgs, advertiseBearer: true) is IClientErrorActionResult,
                 $"{what} would come back with a body the library never wrote, under the DPoP overload");
         }
+    }
+
+    /// <summary>
+    /// The framework's own status result is one it attaches a body to, and the one this adapter returns in
+    /// its place is not.
+    /// </summary>
+    /// <remarks>
+    /// Every input the rows above build answers the same way, so a question that had stopped telling the
+    /// two apart would read as a file of passing rows. This is the pair that says it still can.
+    /// </remarks>
+    [Fact]
+    public void TheQuestionTheseRowsAsk_TellsTheTwoKindsApart()
+    {
+        ActionResult theFrameworksOwn = new StatusCodeResult(StatusCodes.Status400BadRequest);
+        ActionResult thisAdaptersOwn = new StatusOnlyResult(StatusCodes.Status400BadRequest);
+
+        Assert.True(theFrameworksOwn is IClientErrorActionResult);
+        Assert.False(thisAdaptersOwn is IClientErrorActionResult);
     }
 
     private static ExceptionContext ExceptionContextFor(Exception exception)
