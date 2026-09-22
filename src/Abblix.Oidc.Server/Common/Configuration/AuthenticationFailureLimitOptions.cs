@@ -9,8 +9,8 @@
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// How many client authentications may fail from one source address within a window before the token-reading
-/// endpoints stop trying to authenticate callers from it.
+/// How many client authentications may fail from one source address within a window before this server stops
+/// trying to authenticate callers from it, at every endpoint that authenticates a client.
 /// </summary>
 /// <remarks>
 /// The budget one client gets cannot cover this: it is charged once the caller has proven which client it is,

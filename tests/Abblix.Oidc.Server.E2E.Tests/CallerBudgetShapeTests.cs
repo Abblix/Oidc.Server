@@ -51,21 +51,36 @@ public sealed class CallerBudgetShapeTests
     /// </summary>
     private const int RequestsWellPastABudgetOfOne = 5;
 
-    private static HttpClient ClientWhoseBudgetIsOneRequest(TestFactory factory, string limiterKey)
+    /// <summary>
+    /// A client of a host that allows one request per caller at the named endpoint. The test server leaves a
+    /// request without a source address, so a host that has to see one says <paramref name="seesTheSource"/>:
+    /// a public client's budget is named by the address as well, and nothing is charged where there is none.
+    /// </summary>
+    private static HttpClient ClientWhoseBudgetIsOneRequest(
+        TestFactory factory,
+        string limiterKey,
+        bool seesTheSource = false)
         => factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                if (seesTheSource)
+                {
+                    services.AddSingleton<IStartupFilter>(new GiveEveryRequestASource(SomeSource));
+                }
+
                 services.AddKeyedSingleton(
                     limiterKey,
-                    PartitionedRateLimiter.Create<string, string>(
-                        clientId => RateLimitPartition.GetFixedWindowLimiter(
-                            clientId,
+                    PartitionedRateLimiter.Create<(string ClientId, string? Source), (string, string?)>(
+                        caller => RateLimitPartition.GetFixedWindowLimiter(
+                            caller,
                             _ => new FixedWindowRateLimiterOptions
                             {
                                 PermitLimit = OneRequest,
                                 Window = LongerThanAnyTest,
                                 QueueLimit = 0,
                                 AutoReplenishment = true,
-                            })))))
+                            })));
+            }))
             .CreateClient(new WebApplicationFactoryClientOptions
             {
                 AllowAutoRedirect = false,
@@ -130,13 +145,40 @@ public sealed class CallerBudgetShapeTests
     }
 
     /// <summary>
-    /// A client that presented no credential keeps being answered however often it asks. Anyone can send a
-    /// revocation request under a public client's identifier, so a budget charged to that name would be spent by
-    /// strangers and the client's own users would lose the request a person makes when they believe a token is
-    /// stolen.
+    /// A flood under a public client's identifier is refused at the address it is sent from. Anyone can send a
+    /// revocation request under that identifier, so the budget is named by the identifier and the address
+    /// together: the sender spends what it sends from, and the client's users elsewhere keep the request a
+    /// person makes when they believe a token is stolen.
     /// </summary>
     [Fact]
-    public async Task APublicClientIsAnsweredHoweverOftenItAsks()
+    public async Task APublicClientFloodingFromOneSourceIsRefusedThere()
+    {
+        using var factory = new TestFactory();
+        using var client = ClientWhoseBudgetIsOneRequest(
+            factory,
+            CallerRateLimiters.Revocation,
+            seesTheSource: true);
+
+        var discovery = await FetchDiscoveryAsync(client);
+        Assert.NotNull(discovery.RevocationEndpoint);
+
+        using var answered = await RevokeAsPublicClientAsync(client, discovery.RevocationEndpoint);
+        using var refused = await RevokeAsPublicClientAsync(client, discovery.RevocationEndpoint);
+
+        Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.NotNull(refused.Headers.RetryAfter?.Delta);
+        await AssertNoBodyAsync(refused);
+    }
+
+    /// <summary>
+    /// A server that cannot see where a request came from has only the identifier left, and that is the half a
+    /// stranger can copy - so such a request is charged nothing rather than charged to a name anybody can
+    /// spend. A deployment in this shape gets what it had before budgets existed, which is why the address is
+    /// worth passing on.
+    /// </summary>
+    [Fact]
+    public async Task APublicClientIsAnsweredWhenNoSourceCanBeNamed()
     {
         using var factory = new TestFactory();
         using var client = ClientWhoseBudgetIsOneRequest(factory, CallerRateLimiters.Revocation);
@@ -145,15 +187,33 @@ public sealed class CallerBudgetShapeTests
 
         for (var attempt = 0; attempt < RequestsWellPastABudgetOfOne; attempt++)
         {
-            using var response = await PostTokenAsync(
-                client,
-                discovery.RevocationEndpoint,
-                RevocationRequest.Parameters.Token,
-                TestConstants.DPoPPublicClientId,
-                clientSecret: null);
-
+            using var response = await RevokeAsPublicClientAsync(client, discovery.RevocationEndpoint);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
+    }
+
+    /// <summary>
+    /// Revokes as a client registered to authenticate with nothing but its identifier, which is what makes the
+    /// address half of what its request is charged to.
+    /// </summary>
+    private static Task<HttpResponseMessage> RevokeAsPublicClientAsync(HttpClient client, Uri endpoint)
+        => PostTokenAsync(
+            client,
+            endpoint,
+            RevocationRequest.Parameters.Token,
+            TestConstants.DPoPPublicClientId,
+            clientSecret: null);
+
+    /// <summary>
+    /// A refusal the library decides for itself carries its answer in the status line and sends no body. The
+    /// MVC adapter is where this can silently stop being true: a plain status result counts as a client error
+    /// there, and a controller marked as an API replaces it with a synthesized problem document, which the
+    /// Minimal API adapter never does.
+    /// </summary>
+    private static async Task AssertNoBodyAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(string.Empty, body);
     }
 
     /// <summary>
@@ -200,6 +260,7 @@ public sealed class CallerBudgetShapeTests
         Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
         Assert.NotNull(second.Headers.RetryAfter?.Delta);
+        await AssertNoBodyAsync(second);
     }
 
     /// <summary>

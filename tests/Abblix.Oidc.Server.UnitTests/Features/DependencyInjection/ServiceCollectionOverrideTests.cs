@@ -398,7 +398,8 @@ public class ServiceCollectionOverrideTests
 
         var descriptor = Assert.Single(
             services,
-            d => d.ServiceType == typeof(PartitionedRateLimiter<string>) && Equals(d.ServiceKey, key));
+            d => d.ServiceType == typeof(PartitionedRateLimiter<(string ClientId, string? Source)>)
+                 && Equals(d.ServiceKey, key));
 
         Assert.Same(hostLimiter, descriptor.KeyedImplementationInstance);
     }
@@ -423,10 +424,12 @@ public class ServiceCollectionOverrideTests
         });
         using var provider = services.BuildServiceProvider();
 
-        var introspection = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
-            CallerRateLimiters.Introspection);
-        var revocation = provider.GetRequiredKeyedService<PartitionedRateLimiter<string>>(
-            CallerRateLimiters.Revocation);
+        var introspection = provider
+            .GetRequiredKeyedService<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+                CallerRateLimiters.Introspection);
+        var revocation = provider
+            .GetRequiredKeyedService<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+                CallerRateLimiters.Revocation);
 
         Assert.NotSame(introspection, revocation);
     }

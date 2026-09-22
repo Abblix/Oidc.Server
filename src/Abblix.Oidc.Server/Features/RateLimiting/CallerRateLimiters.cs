@@ -17,12 +17,19 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// refusal reaches.
 /// </summary>
 /// <remarks>
+/// A caller budget is keyed by a pair - the client identifier, and the source address where that identifier is
+/// not the caller's own - rather than by the two joined into one string. Nothing constrains the characters in a
+/// client identifier, so whatever character joined them would be legal inside the first half: a client
+/// registered as <c>spa-client@198.51.100.20</c> would name the very partition a public client of that name
+/// spends from that address, and could empty it from anywhere.
+/// <para>
 /// The type is the one from <c>System.Threading.RateLimiting</c> rather than an interface of ours, so a host that
 /// needs a different policy - a token bucket, a sliding window, a limiter that counts across several nodes -
 /// registers the platform's own abstraction under the same key and this server spends that budget instead. ASP.NET
 /// Core's rate-limiting middleware cannot serve here: it runs before the request reaches the endpoint, where the
 /// caller is still whoever holds the socket, and the whole point of this budget is that it is charged to the
 /// client the request authenticated as.
+/// </para>
 /// <para>
 /// A budget is taken with a single attempt that never waits, and held for as long as the request is being
 /// validated - which covers reading the token and stops there, before the endpoint's processor writes anything.
@@ -36,13 +43,14 @@ public static class CallerRateLimiters
 {
     /// <summary>
     /// The dependency-injection key of the budget spent by RFC 7662 introspection requests, partitioned by the
-    /// identifier of the client that authenticated.
+    /// identifier of the client that authenticated. The endpoint admits no public client, so the source half of
+    /// the key is never set here.
     /// </summary>
     public const string Introspection = "Abblix.Oidc.Server.Introspection.CallerRateLimit";
 
     /// <summary>
     /// The dependency-injection key of the budget spent by RFC 7009 revocation requests, partitioned by the
-    /// identifier of the client that authenticated - and, for a public client, by that identifier together with
+    /// identifier of the client that authenticated - and, for a public client, by that identifier paired with
     /// the address the request came from, since the identifier alone is not that client's own.
     /// </summary>
     public const string Revocation = "Abblix.Oidc.Server.Revocation.CallerRateLimit";
@@ -56,7 +64,7 @@ public static class CallerRateLimiters
     public const string AuthenticationFailures = "Abblix.Oidc.Server.AuthenticationFailures.RateLimit";
 
     /// <summary>
-    /// Builds the limiter a single endpoint spends, giving every client identifier its own fixed window.
+    /// Builds the limiter a single endpoint spends, giving every caller its own fixed window.
     /// </summary>
     /// <param name="options">The budget one client gets within one window.</param>
     /// <returns>
@@ -68,12 +76,12 @@ public static class CallerRateLimiters
     /// so immediately with a <c>Retry-After</c>, rather than held open at the expense of the server it is
     /// already asking too much of.
     /// </remarks>
-    internal static PartitionedRateLimiter<string> Create(CallerRateLimitOptions options)
-        => Create(options.PermitLimit, options.Window);
+    internal static PartitionedRateLimiter<(string ClientId, string? Source)> Create(CallerRateLimitOptions options)
+        => Create<(string, string?)>(options.PermitLimit, options.Window);
 
     /// <summary>
-    /// Builds the limiter both endpoints spend for failed client authentications, giving every source address
-    /// its own fixed window.
+    /// Builds the limiter every endpoint that authenticates a client spends for failed client authentications,
+    /// giving every source address its own fixed window.
     /// </summary>
     /// <param name="options">The failures one address gets within one window.</param>
     /// <returns>
@@ -81,10 +89,10 @@ public static class CallerRateLimiters
     /// <see cref="AuthenticationFailureLimitOptions.PermitLimit"/> is null.
     /// </returns>
     internal static PartitionedRateLimiter<string> Create(AuthenticationFailureLimitOptions options)
-        => Create(options.PermitLimit, options.Window);
+        => Create<string>(options.PermitLimit, options.Window);
 
-    private static PartitionedRateLimiter<string> Create(int? permitLimit, TimeSpan window)
-        => PartitionedRateLimiter.Create<string, string>(
+    private static PartitionedRateLimiter<TKey> Create<TKey>(int? permitLimit, TimeSpan window) where TKey : notnull
+        => PartitionedRateLimiter.Create<TKey, TKey>(
             key => permitLimit is { } limit
                 ? RateLimitPartition.GetFixedWindowLimiter(
                     key,

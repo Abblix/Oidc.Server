@@ -40,7 +40,8 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
 /// <param name="rateLimiter">
-/// The budget of revocation requests one client gets, spent once the caller is known to be that client.
+/// The budget of revocation requests one caller gets. A confidential client is a caller that proved which
+/// client it is; a public client is not, so its budget is the client identifier paired with the address.
 /// </param>
 /// <param name="requestInfoProvider">
 /// Names the address a request came from, which is half of what a public client's budget is charged to.
@@ -49,7 +50,8 @@ public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
-	[FromKeyedServices(CallerRateLimiters.Revocation)] PartitionedRateLimiter<string> rateLimiter,
+	[FromKeyedServices(CallerRateLimiters.Revocation)]
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
 	IRequestInfoProvider requestInfoProvider)
 	: IRevocationRequestValidator
 {
@@ -110,7 +112,7 @@ public partial class RevocationRequestValidator(
 		using var lease = rateLimiter.AttemptAcquire(budgetKey);
 		if (!lease.IsAcquired)
 		{
-			LogCallerRateLimited(clientInfo.ClientId);
+			LogCallerRateLimited(clientInfo.ClientId, Sanitized.Value(requestInfoProvider.RemoteIpAddress));
 			return new TooManyRequestsError(
 				"Too many revocation requests from this client",
 				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
@@ -123,18 +125,23 @@ public partial class RevocationRequestValidator(
 	/// Names the budget this caller's request is charged to, or null when it is charged to none.
 	/// </summary>
 	/// <remarks>
-	/// A request in a public client's name is charged to that name together with the address it came from, so
+	/// A request in a public client's name is charged to that name paired with the address it came from, so
 	/// that one sender's flood cannot reach the client's other users. When the server cannot see an address,
 	/// nothing is charged: the alternative is a budget in the client's name alone, which is the thing a
 	/// stranger could spend to silence its logout, and an endpoint doing unbounded work is what this endpoint
 	/// did before budgets existed.
+	/// <para>
+	/// The last arm cannot be entered while <see cref="ClientInfo.ClientType"/> derives its answer from the
+	/// authentication method and has only these two to give. It would speak if that property gained a third
+	/// answer, which is the change that has to decide what such a caller proved before this line can charge it.
+	/// </para>
 	/// </remarks>
-	private string? BudgetFor(ClientInfo clientInfo)
+	private (string ClientId, string? Source)? BudgetFor(ClientInfo clientInfo)
 		=> clientInfo.ClientType switch
 		{
-			ClientType.Confidential => clientInfo.ClientId,
+			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
 			ClientType.Public => requestInfoProvider.RemoteIpAddress is { } source
-				? $"{clientInfo.ClientId}@{source}"
+				? (clientInfo.ClientId, (string?)source.ToString())
 				: null,
 			_ => throw new InvalidOperationException(
 				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),

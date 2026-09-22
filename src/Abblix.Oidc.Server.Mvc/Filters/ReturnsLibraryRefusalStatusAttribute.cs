@@ -9,6 +9,7 @@
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -29,8 +30,9 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// the authorization endpoint alone, and the codes RFC 6749 section 5.2 enumerates all say what was wrong with the
 /// request. So each refusal maps to the HTTP status that already means it (RFC 9110 sections 15.6.1 and 15.6.4):
 /// 503 for a custodian that is temporarily unable, 500 for a failure that waiting will not resolve, and 429 for
-/// a source over its budget. The two that pass with an interval carry <c>Retry-After</c>. No response derives a
-/// body from the exception.
+/// a source over its budget. The two that pass with an interval carry <c>Retry-After</c>. No response carries a
+/// body at all, which is what <see cref="StatusOnlyResult"/> is for: the status code alone travels, as it does
+/// through the Minimal API counterpart.
 /// <para>
 /// It recognizes the library's own refusals and nothing else, so an exception that never passed through one of
 /// those seams keeps traveling to whatever the host has around it. Applied as a controller attribute for the
@@ -52,12 +54,12 @@ internal sealed class ReturnsLibraryRefusalStatusAttribute : Attribute, IExcepti
 					context.HttpContext.Response.SetRetryAfter(interval);
 				}
 
-				context.Result = new StatusCodeResult(StatusCodes.Status503ServiceUnavailable);
+				context.Result = new StatusOnlyResult(StatusCodes.Status503ServiceUnavailable);
 				context.ExceptionHandled = true;
 				break;
 
 			case KeyCustodianFailedException:
-				context.Result = new StatusCodeResult(StatusCodes.Status500InternalServerError);
+				context.Result = new StatusOnlyResult(StatusCodes.Status500InternalServerError);
 				context.ExceptionHandled = true;
 				break;
 
@@ -67,7 +69,7 @@ internal sealed class ReturnsLibraryRefusalStatusAttribute : Attribute, IExcepti
 					context.HttpContext.Response.SetRetryAfter(wait);
 				}
 
-				context.Result = new StatusCodeResult(StatusCodes.Status429TooManyRequests);
+				context.Result = new StatusOnlyResult(StatusCodes.Status429TooManyRequests);
 				context.ExceptionHandled = true;
 				break;
 		}

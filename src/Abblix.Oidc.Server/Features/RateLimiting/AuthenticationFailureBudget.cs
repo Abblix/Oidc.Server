@@ -14,7 +14,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.RateLimiting;
 
 /// <summary>
-/// Bounds what a sender that never authenticates successfully can cost the token-reading endpoints, by counting
+/// Bounds what a sender that never authenticates successfully can cost every endpoint that authenticates a
+/// client, by counting
 /// failed client authentications against the address they came from.
 /// </summary>
 /// <remarks>

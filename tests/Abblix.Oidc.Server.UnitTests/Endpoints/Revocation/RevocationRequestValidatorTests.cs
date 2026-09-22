@@ -66,6 +66,15 @@ public class RevocationRequestValidatorTests
         TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
     };
 
+    /// <summary>
+    /// A second public client, so a flood under one identifier can be told from a request under another one at
+    /// the same address.
+    /// </summary>
+    private static ClientInfo AnotherPublicClient => new(TestConstants.AlternativeClientId)
+    {
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+    };
+
     private readonly Mock<ILogger<RevocationRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
@@ -85,7 +94,8 @@ public class RevocationRequestValidatorTests
     private RevocationRequestValidator CreateValidator(CallerRateLimitOptions rateLimit)
         => CreateValidator(CallerRateLimiters.Create(rateLimit));
 
-    private RevocationRequestValidator CreateValidator(PartitionedRateLimiter<string> rateLimiter)
+    private RevocationRequestValidator CreateValidator(
+        PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
@@ -551,6 +561,80 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
+    /// And the address is only half of what a public client's request is charged to. Two public clients behind
+    /// one gateway arrive from the same address, so a budget named by the address alone would let a flood under
+    /// one identifier take away the other's logout.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenOneSourceFloodsAPublicClient_ShouldStillAnswerAnotherClientThere()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var flooded = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
+
+        var neighbour = await validator.ValidateAsync(
+            CreateRevocationRequest(),
+            CreateClientRequest(TestConstants.AlternativeClientId));
+
+        // Assert
+        Assert.True(flooded.TryGetFailure(out var error));
+        Assert.IsType<TooManyRequestsError>(error);
+        Assert.True(
+            neighbour.TryGetSuccess(out _),
+            "another public client at the same address lost its logout");
+    }
+
+    /// <summary>
+    /// A confidential client proved which client it is, so its budget is that client's wherever it asks from.
+    /// A fleet of instances revoking under one registration shares one budget rather than holding one each,
+    /// which is what the number a deployment configures is chosen against.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenAConfidentialClientAsksFromTwoSources_ShouldSpendOneBudget()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
+        var fromAnotherInstance = await validator.ValidateAsync(
+            CreateRevocationRequest(),
+            CreateClientRequest());
+
+        // Assert
+        Assert.True(first.TryGetSuccess(out _));
+        Assert.True(
+            fromAnotherInstance.TryGetFailure(out var error),
+            "one registration held a budget per address it asked from");
+        Assert.IsType<TooManyRequestsError>(error);
+    }
+
+    /// <summary>
     /// A server that cannot see where a request came from has no second half to charge, and the first half
     /// alone is the identifier a stranger could spend. Such a request is charged nothing rather than charged to
     /// something anybody can claim.
@@ -620,9 +704,9 @@ public class RevocationRequestValidatorTests
     {
         // Arrange
         var validator = CreateValidator(
-            PartitionedRateLimiter.Create<string, string>(
-                clientId => RateLimitPartition.GetConcurrencyLimiter(
-                    clientId,
+            PartitionedRateLimiter.Create<(string ClientId, string? Source), (string, string?)>(
+                caller => RateLimitPartition.GetConcurrencyLimiter(
+                    caller,
                     _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 })));
 
         _clientAuthenticator

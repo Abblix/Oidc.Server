@@ -14,10 +14,19 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// </summary>
 /// <remarks>
 /// The budget is per client and per endpoint: a resource server that starts looping does not spend the budget of
-/// the next one, and a flood of introspection calls leaves revocation answering. Only a caller that presented a
-/// credential is counted, so nobody can spend a budget by naming a client they do not hold - which is why a
-/// public client, whose only claim to its identity is a <c>client_id</c> anyone can copy, is never counted at
-/// the revocation endpoint and is turned away outright at introspection.
+/// the next one, and a flood of introspection calls leaves revocation answering. A caller that proved which
+/// client it is holds that client's budget by itself. A public client proves nothing - its <c>client_id</c> is
+/// there for anyone to copy - so introspection turns it away outright, and revocation counts it by that
+/// identifier paired with the address the request came from, which leaves a stranger's flood spending only the
+/// share of the address it sends from.
+/// <para>
+/// That pairing is worth only what an address is worth where this server runs. Behind a load balancer, an
+/// ingress or a NAT gateway every caller arrives from one address, so all the users of one public client share
+/// a single budget, and a number chosen for one user's logout will refuse theirs. A deployment in that shape
+/// sizes <see cref="PermitLimit"/> for the crowd behind the gateway, or has the gateway pass the caller's
+/// address on. A sender that changes address on every request is not bounded by the pairing at all, as with
+/// anything counted per address; what the pairing buys is a price on the cheapest form of the flood.
+/// </para>
 /// <para>
 /// It is on out of the box, with a limit far above what a working deployment reaches, because the request it
 /// refuses is the one a compromised or looping client repeats without pause - and nobody switches a protection

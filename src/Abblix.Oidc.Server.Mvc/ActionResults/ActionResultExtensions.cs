@@ -99,10 +99,10 @@ public static class ActionResultExtensions
 		=> error switch
 		{
 			TooManyRequestsError { RetryAfter: { } interval }
-				=> new StatusCodeResult(StatusCodes.Status429TooManyRequests)
+				=> new StatusOnlyResult(StatusCodes.Status429TooManyRequests)
 					.WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
 
-			TooManyRequestsError => new StatusCodeResult(StatusCodes.Status429TooManyRequests),
+			TooManyRequestsError => new StatusOnlyResult(StatusCodes.Status429TooManyRequests),
 
 			_ => null,
 		};

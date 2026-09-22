@@ -41,7 +41,8 @@ public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
-	[FromKeyedServices(CallerRateLimiters.Introspection)] PartitionedRateLimiter<string> rateLimiter)
+	[FromKeyedServices(CallerRateLimiters.Introspection)]
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
 	: IIntrospectionRequestValidator
 {
 	/// <summary>
@@ -77,7 +78,9 @@ public partial class IntrospectionRequestValidator(
 		// verifies a signature, and the caller is only chargeable once it is identified. What authenticating
 		// the caller itself costs is not covered - a client authenticating with a signed assertion pays a
 		// verification before reaching this line, and a caller that fails authentication never reaches it.
-		using var lease = rateLimiter.AttemptAcquire(clientInfo.ClientId);
+		// The source half of the key is left unset: this endpoint turns a public client away above, so the
+		// identifier that reaches this line is one the caller proved it holds.
+		using var lease = rateLimiter.AttemptAcquire((clientInfo.ClientId, null));
 		if (!lease.IsAcquired)
 		{
 			LogCallerRateLimited(clientInfo.ClientId);

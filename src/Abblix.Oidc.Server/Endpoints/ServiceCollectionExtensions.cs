@@ -533,7 +533,7 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
 
-        services.TryAddKeyedSingleton<PartitionedRateLimiter<string>>(
+        services.TryAddKeyedSingleton<PartitionedRateLimiter<(string ClientId, string? Source)>>(
             key,
             (serviceProvider, _) => CallerRateLimiters.Create(
                 serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.CallerRateLimit));
