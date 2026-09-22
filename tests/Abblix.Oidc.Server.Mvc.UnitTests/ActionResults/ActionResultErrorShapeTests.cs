@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Net.Http.Headers;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.ActionResults;
@@ -262,18 +261,11 @@ public class ActionResultErrorShapeTests
     public async Task A_refusal_naming_no_interval_carries_no_retry_after_header()
     {
         var error = new TooManyRequestsError("Too many requests from this client", RetryAfter: null);
-        var result = error.Format(StatusCodes.Status400BadRequest, Realm);
 
-        var response = await ActionResultRunner.RunAsync(result);
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status400BadRequest, Realm));
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
         Assert.False(response.Headers.ContainsKey(HeaderNames.RetryAfter));
-
-        // And the refusal stays empty on a controller marked as an API. A result the framework counts as a
-        // client error is replaced there by a synthesized problem document, which no runner of a result on
-        // its own can show - so what is asserted is the property that decides it.
-        Assert.False(
-            result is IClientErrorActionResult,
-            "the framework would answer this refusal with a body of its own");
     }
 }

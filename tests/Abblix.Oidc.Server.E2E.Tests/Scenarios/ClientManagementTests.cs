@@ -635,8 +635,9 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
 
-        // And the refusal carries the status alone, as the same refusal does on the other adapter, which
-        // enforces the bound as endpoint metadata and writes nothing.
+        // And the refusal carries the status alone. The other adapter leaves the bound to the server as
+        // endpoint metadata, which its own suite asserts, since an in-memory server enforces no such bound
+        // and a test demanding this status there could never fail.
         Assert.Equal(
             string.Empty,
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
@@ -698,12 +699,13 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A body that declares a length over the bound is refused on the declaration alone, without being read.
-    /// The other cases all arrive chunked, so this is the only one that reaches that comparison - and its
-    /// refusal owes the same shape as the measured one: the status, and nothing after it.
+    /// A body that declares a length over the bound is refused, and the refusal carries the status and
+    /// nothing after it. Every other case here arrives chunked, so this is the only one that reaches the
+    /// comparison against a declared length at all; that the body goes unread is what the declaration buys
+    /// and is not visible from this side of the connection, so what is asserted is the answer.
     /// </summary>
     [Fact]
-    public async Task A_body_declaring_a_length_over_the_bound_is_refused_unread()
+    public async Task A_body_declaring_a_length_over_the_bound_is_refused()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);

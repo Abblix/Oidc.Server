@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using System.Threading.RateLimiting;
@@ -605,6 +606,70 @@ public class RevocationRequestValidatorTests
         Assert.True(
             neighbor.TryGetSuccess(out _),
             "another public client at the same address lost its logout");
+    }
+
+    /// <summary>
+    /// The refusal is recorded under the budget it belongs to. A client over its own budget is one record
+    /// and a client over the budget it holds at one address is another, because the answer an operator owes
+    /// differs: one client is asking too often wherever it runs, the other is asking too often from one
+    /// place, and the address is what the second record has to carry.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenACallerIsRefused_ShouldRecordTheBudgetItSpent()
+    {
+        // Arrange
+        var recorded = new RecordingLoggerFactory();
+        var validator = new RevocationRequestValidator(
+            new Logger<RevocationRequestValidator>(recorded),
+            _clientAuthenticator.Object,
+            _jwtValidator.Object,
+            CallerRateLimiters.Create(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute }),
+            _requestInfoProvider.Object);
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
+
+        await validator.ValidateAsync(
+            CreateRevocationRequest(),
+            CreateClientRequest(TestConstants.AlternativeClientId));
+
+        await validator.ValidateAsync(
+            CreateRevocationRequest(),
+            CreateClientRequest(TestConstants.AlternativeClientId));
+
+        // Assert
+        var refusals = recorded.Entries
+            .Where(entry => entry.EventId.Id is
+                LogEvents.Endpoints.RevocationRequestValidator.CallerRateLimited or
+                LogEvents.Endpoints.RevocationRequestValidator.CallerAndSourceRateLimited)
+            .ToArray();
+
+        var forTheClient = Assert.Single(
+            refusals,
+            entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.CallerRateLimited);
+
+        Assert.Contains(TestConstants.DefaultClientId, forTheClient.Message);
+
+        var forThePair = Assert.Single(
+            refusals,
+            entry => entry.EventId.Id ==
+                     LogEvents.Endpoints.RevocationRequestValidator.CallerAndSourceRateLimited);
+
+        Assert.Contains(TestConstants.AlternativeClientId, forThePair.Message);
+        Assert.Contains(Source.ToString(), forThePair.Message);
     }
 
     /// <summary>

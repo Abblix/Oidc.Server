@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
 using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Utils;
@@ -41,15 +40,12 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
 /// <param name="rateLimiter">
-/// The budget of revocation requests one caller gets, under the name <c>BudgetFor</c> gives it.
+/// The budget of revocation requests one caller gets: a confidential client's own, and for a public client
+/// one held jointly by its identifier and the address the request came from.
 /// </param>
 /// <param name="requestInfoProvider">
 /// Names the address a request came from, which is half of what a public client's budget is charged to.
 /// </param>
-/// <remarks>
-/// What each caller's budget is named by, and why a public client's carries the address, is stated once on
-/// <c>BudgetFor</c> rather than repeated here.
-/// </remarks>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
@@ -101,13 +97,6 @@ public partial class RevocationRequestValidator(
 		// Charged after the caller has proven which client it is and before the token is read: reading it
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
-		//
-		// What it is charged to depends on what the caller proved. A confidential client proved which client it
-		// is, so the budget is that client's. A public client proved nothing: it presents a client_id anyone can
-		// read out of a browser, so a budget in that name alone would be spent by strangers and its own users
-		// would lose their logout. Such a request is charged to the client AND the address together, which
-		// leaves a flood spending only what it sent from, and leaves the client answering everywhere else.
-		// Introspection has no such case, because it refuses a public client outright.
 		if (BudgetFor(clientInfo) is not { } budgetKey)
 			return await ReadTokenAsync(revocationRequest, clientInfo);
 
@@ -116,9 +105,9 @@ public partial class RevocationRequestValidator(
 		using var lease = rateLimiter.AttemptAcquire(budgetKey);
 		if (!lease.IsAcquired)
 		{
-			// The refusal names the budget that was spent rather than the request that met it. A client over
-			// its own budget is looping wherever it runs; a client refused at one address is being flooded
-			// there under its name. The two call for opposite answers, and only the key tells them apart.
+			// The refusal names the budget that was spent rather than the request that met it: a budget one
+			// client holds everywhere is not the one it holds at a single address, and an operator reading
+			// the second has to know which address it was before the line means anything.
 			if (budgetKey.Source is { } source)
 			{
 				LogCallerAndSourceRateLimited(clientInfo.ClientId, source);
@@ -155,20 +144,12 @@ public partial class RevocationRequestValidator(
 		=> clientInfo.ClientType switch
 		{
 			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
-			ClientType.Public => requestInfoProvider.RemoteIpAddress is { } source
-				? (clientInfo.ClientId, (string?)NameOf(source))
+			ClientType.Public => requestInfoProvider.SourceName() is { } source
+				? (clientInfo.ClientId, (string?)source)
 				: null,
 			_ => throw new InvalidOperationException(
 				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
 		};
-
-	/// <summary>
-	/// Names an address the way a budget has to see it. One sender reaching a dual-stack server is reported
-	/// in an IPv4 form over one socket and an IPv4-mapped IPv6 form over the other, and two names would hand
-	/// that sender two budgets where the pairing means it to have one.
-	/// </summary>
-	private static string NameOf(IPAddress source)
-		=> (source.IsIPv4MappedToIPv6 ? source.MapToIPv4() : source).ToString();
 
 	/// <summary>
 	/// Reads the token the request names and decides whether it belongs to the client that asked.

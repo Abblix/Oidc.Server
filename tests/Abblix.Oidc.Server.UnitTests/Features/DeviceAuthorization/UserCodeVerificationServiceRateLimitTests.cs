@@ -194,6 +194,24 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     /// <summary>
+    /// One sender has one allowance however its address is spelled. A dual-stack server reports the same
+    /// peer as an IPv4 address over one socket and as the IPv4-mapped IPv6 form over the other, so a cap
+    /// that counted the spelling would give somebody guessing user codes one allowance per stack.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressArrivingUnderBothForms_SpendsOneAllowance()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: $"::ffff:{Address}", configure: OneAttempt).VerifyAsync("99990000");
+
+        var result = await ServiceOver(PendingCode(), address: Address, configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<TooManyUserCodeAttempts>(result);
+    }
+
+    /// <summary>
     /// A refusal that IS about the code is still indistinguishable from an unknown code.
     /// </summary>
     /// <remarks>

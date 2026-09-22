@@ -84,6 +84,31 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
+    /// One sender has one budget however its address is spelled. A dual-stack server reports the same peer as
+    /// an IPv4 address over one socket and as the IPv4-mapped IPv6 form over the other, so a budget that took
+    /// the spelling would give a sender guessing secrets one allowance per stack.
+    /// </summary>
+    [Fact]
+    public async Task ASourceArrivingUnderBothAddressForms_SpendsOneBudget()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}"));
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        // Act
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
+
+        // Assert
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
     /// Nothing successful is counted, so a busy client whose credentials verify never approaches a budget meant
     /// for senders whose credentials do not.
     /// </summary>

@@ -68,5 +68,5 @@ public sealed class AuthenticationFailureBudget(
     /// The address this request came from, or null when the server cannot name one - which is also when
     /// nothing is counted.
     /// </summary>
-    internal string? Source => requestInfoProvider.RemoteIpAddress?.ToString();
+    internal string? Source => requestInfoProvider.SourceName();
 }
