@@ -14,9 +14,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.RateLimiting;
 
 /// <summary>
-/// Bounds what a sender that never authenticates successfully can cost every endpoint that authenticates a
-/// client, by counting
-/// failed client authentications against the address they came from.
+/// Bounds what a sender that never authenticates successfully can cost every endpoint that authenticates
+/// a client, by counting failed client authentications against the address they came from.
 /// </summary>
 /// <remarks>
 /// The per-client budget cannot reach this: it is charged once the caller has proven which client it is, and a

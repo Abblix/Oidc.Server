@@ -70,7 +70,15 @@ public class RevocationRequestValidatorTests
     /// A second public client, so a flood under one identifier can be told from a request under another one at
     /// the same address.
     /// </summary>
-    private static ClientInfo AnotherPublicClient => new(TestConstants.AlternativeClientId)
+    private static ClientInfo AnotherPublicClient => PublicClientNamed(TestConstants.AlternativeClientId);
+
+    /// <summary>
+    /// The identifier a crafted registration would imitate: short enough that another name can be built by
+    /// appending the address to it.
+    /// </summary>
+    private const string NamedClientId = "spa-client";
+
+    private static ClientInfo PublicClientNamed(string clientId) => new(clientId)
     {
         TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
     };
@@ -587,7 +595,7 @@ public class RevocationRequestValidatorTests
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
             .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
 
-        var neighbour = await validator.ValidateAsync(
+        var neighbor = await validator.ValidateAsync(
             CreateRevocationRequest(),
             CreateClientRequest(TestConstants.AlternativeClientId));
 
@@ -595,8 +603,81 @@ public class RevocationRequestValidatorTests
         Assert.True(flooded.TryGetFailure(out var error));
         Assert.IsType<TooManyRequestsError>(error);
         Assert.True(
-            neighbour.TryGetSuccess(out _),
+            neighbor.TryGetSuccess(out _),
             "another public client at the same address lost its logout");
+    }
+
+    /// <summary>
+    /// The two halves of the key cannot be spelled into one another. Nothing constrains the characters in a
+    /// client identifier, so a registration can take a name that reads like another caller's budget - and if
+    /// the halves were joined into one string, spending that name would empty the budget of a public client
+    /// of the shorter name arriving from that address.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenAClientIsNamedLikeAnothersBudget_ShouldNotSpendIt()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo($"{NamedClientId}@{Source}")));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        var spender = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClientNamed(NamedClientId)));
+
+        var impersonated = await validator.ValidateAsync(
+            CreateRevocationRequest(),
+            CreateClientRequest(NamedClientId));
+
+        // Assert
+        Assert.True(spender.TryGetSuccess(out _));
+        Assert.True(
+            impersonated.TryGetSuccess(out _),
+            "a client named after another caller's budget spent it");
+    }
+
+    /// <summary>
+    /// One sender has one budget however its address is spelled. A dual-stack server reports the same peer
+    /// as an IPv4 address over one socket and as the IPv4-mapped IPv6 form over the other, and two names
+    /// would hand that sender twice what the pairing means it to have.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WhenOneSourceArrivesUnderBothAddressForms_ShouldSpendOneBudget()
+    {
+        // Arrange
+        var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}"));
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        var overIpv6 = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
+        var overIpv4 = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.True(overIpv6.TryGetSuccess(out _));
+        Assert.True(
+            overIpv4.TryGetFailure(out var error),
+            "the same sender held two budgets, one per spelling of its address");
+        Assert.IsType<TooManyRequestsError>(error);
     }
 
     /// <summary>

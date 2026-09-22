@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Utils;
@@ -40,12 +41,15 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
 /// <param name="rateLimiter">
-/// The budget of revocation requests one caller gets. A confidential client is a caller that proved which
-/// client it is; a public client is not, so its budget is the client identifier paired with the address.
+/// The budget of revocation requests one caller gets, under the name <c>BudgetFor</c> gives it.
 /// </param>
 /// <param name="requestInfoProvider">
 /// Names the address a request came from, which is half of what a public client's budget is charged to.
 /// </param>
+/// <remarks>
+/// What each caller's budget is named by, and why a public client's carries the address, is stated once on
+/// <c>BudgetFor</c> rather than repeated here.
+/// </remarks>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
@@ -112,7 +116,18 @@ public partial class RevocationRequestValidator(
 		using var lease = rateLimiter.AttemptAcquire(budgetKey);
 		if (!lease.IsAcquired)
 		{
-			LogCallerRateLimited(clientInfo.ClientId, Sanitized.Value(requestInfoProvider.RemoteIpAddress));
+			// The refusal names the budget that was spent rather than the request that met it. A client over
+			// its own budget is looping wherever it runs; a client refused at one address is being flooded
+			// there under its name. The two call for opposite answers, and only the key tells them apart.
+			if (budgetKey.Source is { } source)
+			{
+				LogCallerAndSourceRateLimited(clientInfo.ClientId, source);
+			}
+			else
+			{
+				LogCallerRateLimited(clientInfo.ClientId);
+			}
+
 			return new TooManyRequestsError(
 				"Too many revocation requests from this client",
 				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
@@ -141,11 +156,19 @@ public partial class RevocationRequestValidator(
 		{
 			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
 			ClientType.Public => requestInfoProvider.RemoteIpAddress is { } source
-				? (clientInfo.ClientId, (string?)source.ToString())
+				? (clientInfo.ClientId, (string?)NameOf(source))
 				: null,
 			_ => throw new InvalidOperationException(
 				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
 		};
+
+	/// <summary>
+	/// Names an address the way a budget has to see it. One sender reaching a dual-stack server is reported
+	/// in an IPv4 form over one socket and an IPv4-mapped IPv6 form over the other, and two names would hand
+	/// that sender two budgets where the pairing means it to have one.
+	/// </summary>
+	private static string NameOf(IPAddress source)
+		=> (source.IsIPv4MappedToIPv6 ? source.MapToIPv4() : source).ToString();
 
 	/// <summary>
 	/// Reads the token the request names and decides whether it belongs to the client that asked.

@@ -29,7 +29,13 @@ partial class RevocationRequestValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.RevocationRequestValidator.CallerRateLimited,
 		Level = LogLevel.Warning,
-		Message = "Revocation refused for client {ClientId} asking from {Source}: it is over its budget " +
-		          "of requests")]
-	private partial void LogCallerRateLimited(Sanitized ClientId, Sanitized Source);
+		Message = "Revocation refused for client {ClientId}: it is over its budget of requests")]
+	private partial void LogCallerRateLimited(Sanitized ClientId);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.RevocationRequestValidator.CallerAndSourceRateLimited,
+		Level = LogLevel.Warning,
+		Message = "Revocation refused for public client {ClientId} asking from {Source}: that pair is over " +
+		          "its budget of requests")]
+	private partial void LogCallerAndSourceRateLimited(Sanitized ClientId, string Source);
 }

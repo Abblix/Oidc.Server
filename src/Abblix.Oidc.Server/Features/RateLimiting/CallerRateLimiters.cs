@@ -66,9 +66,9 @@ public static class CallerRateLimiters
     /// <summary>
     /// Builds the limiter a single endpoint spends, giving every caller its own fixed window.
     /// </summary>
-    /// <param name="options">The budget one client gets within one window.</param>
+    /// <param name="options">The budget one caller gets within one window.</param>
     /// <returns>
-    /// A limiter that refuses once a client is over its budget, or one that permits everything when
+    /// A limiter that refuses once a caller is over its budget, or one that permits everything when
     /// <see cref="CallerRateLimitOptions.PermitLimit"/> is null.
     /// </returns>
     /// <remarks>
