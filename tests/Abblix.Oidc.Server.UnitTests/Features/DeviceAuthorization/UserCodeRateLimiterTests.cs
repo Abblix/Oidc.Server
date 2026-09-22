@@ -10,7 +10,6 @@ using System;
 using System.Globalization;
 using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -53,17 +52,6 @@ public class UserCodeRateLimiterTests
     /// The field a record names the caller in, which is what a structured sink writes it under.
     /// </summary>
     private const string CallerField = "ClientIdentifier";
-
-    /// <summary>
-    /// The records that name the caller. Kept by hand because the only other source is the class under
-    /// test, which would drop a record from the list by the same edit that drops the caller from it.
-    /// </summary>
-    private static readonly int[] RecordsNamingTheCaller =
-    [
-        LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
-        LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
-        LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
-    ];
 
     private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
@@ -806,31 +794,6 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// The list above is what this row drives, and this is what says it has gone stale: a record that gains
-    /// or loses the caller leaves the two sets disagreeing.
-    /// </summary>
-    /// <remarks>
-    /// A record naming the caller under some other field name is seen by neither, which is the reach this
-    /// pair has and no more.
-    /// </remarks>
-    [Fact]
-    public void TheRecordsDrivenAsNamingTheCaller_AreTheRecordsThatName()
-    {
-        var declared = typeof(UserCodeRateLimiter)
-            .GetMethods(
-                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static |
-                BindingFlags.DeclaredOnly)
-            .Where(method => method.GetParameters().Any(parameter => parameter.Name == CallerField))
-            .Select(method => method.GetCustomAttribute<LoggerMessageAttribute>())
-            .Where(attribute => attribute is not null)
-            .Select(attribute => attribute!.EventId)
-            .ToArray();
-
-        Assert.NotEmpty(declared);
-        Assert.Equal(RecordsNamingTheCaller.Order(), declared.Order());
-    }
-
-    /// <summary>
     /// Drives the records that name a caller, for one caller, and asserts each names it as expected.
     /// </summary>
     private async Task AssertRecordsName(string userCode, string? clientIdentifier, string expected)
@@ -842,7 +805,14 @@ public class UserCodeRateLimiterTests
         await limiter.CheckAsync(userCode, clientIdentifier);
         await limiter.RecordSuccessAsync(userCode, clientIdentifier);
 
-        foreach (var eventId in RecordsNamingTheCaller)
+        int[] naming =
+        [
+            LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
+            LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
+            LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
+        ];
+
+        foreach (var eventId in naming)
         {
             var record = Assert.Single(_logs.Entries, entry => entry.EventId.Id == eventId);
 

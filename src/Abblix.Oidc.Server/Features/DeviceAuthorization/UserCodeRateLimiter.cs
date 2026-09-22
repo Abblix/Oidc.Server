@@ -82,6 +82,12 @@ public partial class UserCodeRateLimiter(
     /// </remarks>
     internal const string SourceNotSeen = "(no-address)";
 
+    /// <summary>
+    /// The name this attempt is counted and recorded under, which is where an absent address becomes the
+    /// shared one: every method that takes a caller passes through here first.
+    /// </summary>
+    private static string SourceOf(string? clientIdentifier) => clientIdentifier ?? SourceNotSeen;
+
     /// <inheritdoc />
     public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
     {
@@ -116,7 +122,7 @@ public partial class UserCodeRateLimiter(
         // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
         // the rung at the cap is the whole question and costs one read.
         var window = WindowOf(now, deviceAuthOptions);
-        var source = clientIdentifier ?? SourceNotSeen;
+        var source = SourceOf(clientIdentifier);
         var capReached = await storage.GetAsync<RateLimitAttempt>(
             keyFactory.AddressRateLimitAttemptKey(
                 source, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
@@ -153,7 +159,7 @@ public partial class UserCodeRateLimiter(
 
         // No per-code count: there is no code. Charging this to the value that was typed would count the
         // one thing a guesser never repeats, and would let it spend the allowance of a code issued later.
-        await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
+        await RecordAgainstSourceAndBudgetAsync(SourceOf(clientIdentifier), now, deviceAuthOptions);
     }
 
     /// <inheritdoc />
@@ -183,12 +189,13 @@ public partial class UserCodeRateLimiter(
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
             LogUserCodeBlocked(userCode, BackoffAfter(attempts, deviceAuthOptions), attempts);
 
-        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
+        var source = SourceOf(clientIdentifier);
+        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(source, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(userCode, clientIdentifier ?? SourceNotSeen, attempts, addressAttempts);
+            LogBruteForceDetected(userCode, source, attempts, addressAttempts);
         }
     }
 
@@ -201,12 +208,12 @@ public partial class UserCodeRateLimiter(
     /// apart from the per-code ladder.
     /// </remarks>
     private async Task<int> RecordAgainstSourceAndBudgetAsync(
-        string? clientIdentifier, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
+        string source, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
     {
         var window = WindowOf(now, deviceAuthOptions);
 
         var addressAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier ?? SourceNotSeen, window, rung),
+            rung => keyFactory.AddressRateLimitAttemptKey(source, window, rung),
             deviceAuthOptions.MaxAddressFailuresPerWindow,
             now,
             deviceAuthOptions.RateLimitRetention);
@@ -253,7 +260,7 @@ public partial class UserCodeRateLimiter(
                 AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
             });
 
-        LogUserCodeVerified(userCode, clientIdentifier ?? SourceNotSeen);
+        LogUserCodeVerified(userCode, SourceOf(clientIdentifier));
     }
 
     /// <summary>
