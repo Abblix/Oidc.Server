@@ -14,12 +14,10 @@ namespace Abblix.Oidc.Server.Mvc.ActionResults;
 /// Answers with a status code and no body at all.
 /// </summary>
 /// <remarks>
-/// <see cref="StatusCodeResult"/> cannot be used where the body has to stay empty: it is an
+/// <see cref="StatusCodeResult"/> cannot serve where the body has to stay empty: it is an
 /// <see cref="Microsoft.AspNetCore.Mvc.Infrastructure.IClientErrorActionResult"/>, so on a controller carrying
 /// <see cref="ApiControllerAttribute"/> the framework replaces it with a synthesized
-/// <see cref="ProblemDetails"/> body. The Minimal API adapter sends a status and nothing, and the two adapters
-/// owe the same answer to the same request, so the refusals this library decides for itself go out through
-/// this result instead.
+/// <see cref="ProblemDetails"/> body, which the Minimal API adapter answering the same request does not send.
 /// </remarks>
 /// <param name="statusCode">The status the response carries.</param>
 internal sealed class StatusOnlyResult(int statusCode) : ActionResult

@@ -17,26 +17,18 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// refusal reaches.
 /// </summary>
 /// <remarks>
-/// A caller budget is keyed by a pair - the client identifier, and the source address where that identifier is
-/// not the caller's own - rather than by the two joined into one string. Nothing constrains the characters in a
-/// client identifier, so whatever character joined them would be legal inside the first half: a client
-/// registered as <c>spa-client@198.51.100.20</c> would name the very partition a public client of that name
-/// spends from that address, and could empty it from anywhere.
+/// A caller budget is keyed by a pair rather than by the two halves joined into one string, because nothing
+/// constrains the characters in a client identifier and a registration could otherwise take a name spelled
+/// like another caller's key.
 /// <para>
-/// The type is the one from <c>System.Threading.RateLimiting</c> rather than an interface of ours, so a host that
-/// needs a different policy - a token bucket, a sliding window, a limiter that counts across several nodes -
-/// registers the platform's own abstraction under the same key and this server spends that budget instead. ASP.NET
-/// Core's rate-limiting middleware cannot serve here: it runs before the request reaches the endpoint, where the
-/// caller is still whoever holds the socket, and the whole point of this budget is that it is charged to the
-/// client the request authenticated as.
+/// The type is the platform's rather than an interface of ours, so a host registers its own policy under the
+/// same key. ASP.NET Core's rate-limiting middleware cannot serve here: it runs before the request reaches the
+/// endpoint, where the caller is still whoever holds the socket.
 /// </para>
 /// <para>
-/// A budget is taken with a single attempt that never waits, and held for as long as the request is being
-/// validated - which covers reading the token and stops there, before the endpoint's processor writes anything.
-/// So a limiter counting requests in flight bounds the signature verification rather than only the count, and a
-/// deployment that needs the work after validation bounded too wraps the endpoint's handler itself. A limiter
-/// configured to queue does not queue here either: a caller it would have held is refused instead, because an
-/// endpoint holding a request open is what this feature exists to stop.
+/// A budget is taken with a single attempt that never waits and held until validation ends, so a limiter
+/// counting requests in flight bounds the signature verification rather than only the count. A caller a
+/// queueing limiter would have held is refused instead.
 /// </para>
 /// </remarks>
 public static class CallerRateLimiters
@@ -57,9 +49,8 @@ public static class CallerRateLimiters
 
     /// <summary>
     /// The dependency-injection key of the budget of failed client authentications one source address gets,
-    /// partitioned by that address. Every endpoint that authenticates a client spends the same one, because a
-    /// sender hammering any of them is the same sender, and the budget is about the sender rather than about
-    /// what it asked for.
+    /// partitioned by that address and spent by every endpoint that authenticates a client, since a sender
+    /// hammering any of them is the same sender.
     /// </summary>
     public const string AuthenticationFailures = "Abblix.Oidc.Server.AuthenticationFailures.RateLimit";
 
@@ -71,11 +62,6 @@ public static class CallerRateLimiters
     /// A limiter that refuses once a caller is over its budget, or one that permits everything when
     /// <see cref="CallerRateLimitOptions.PermitLimit"/> is null.
     /// </returns>
-    /// <remarks>
-    /// Its queue is empty by construction, for the reason stated on the type: a caller over its budget is told
-    /// so immediately with a <c>Retry-After</c>, rather than held open at the expense of the server it is
-    /// already asking too much of.
-    /// </remarks>
     internal static PartitionedRateLimiter<(string ClientId, string? Source)> Create(CallerRateLimitOptions options)
         => Create<(string, string?)>(options.PermitLimit, options.Window);
 

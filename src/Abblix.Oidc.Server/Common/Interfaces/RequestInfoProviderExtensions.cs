@@ -18,15 +18,11 @@ internal static class RequestInfoProviderExtensions
     /// cannot see an address at all.
     /// </summary>
     /// <remarks>
-    /// Every budget this server counts per address goes through here, because the name is what decides
-    /// whether two requests share a budget. A sender reaching a dual-stack server is reported as an IPv4
-    /// address over one socket and as the IPv4-mapped IPv6 form over the other, and a proxy that resolves a
-    /// forwarded header writes the plain form beside sockets that report the mapped one - so a name taken
-    /// verbatim hands that sender one budget per spelling, which on the budgets that price guessing means
-    /// one allowance per spelling as well. What a budget counts by is therefore the canonical printing of
-    /// the address, taken from the mapped form where there is one: two spellings of one address reach the
-    /// same name, and so does a mapped address that carries an identifier of the interface it arrived on,
-    /// since that identifier belongs to the mapping rather than to the address inside it.
+    /// Every budget counted per address goes through here, because the name decides whether two requests
+    /// share one. A sender reaching a dual-stack server arrives as an IPv4 address over one socket and as
+    /// the mapped IPv6 form over the other, so a name taken verbatim hands it one allowance per spelling.
+    /// The name is the canonical printing, taken from the mapped form where there is one, which an
+    /// identifier of the arrival interface on that form does not change.
     /// </remarks>
     /// <param name="requestInfoProvider">The provider naming the request being answered.</param>
     /// <returns>The address, in the form every budget counts by, or null when there is none.</returns>

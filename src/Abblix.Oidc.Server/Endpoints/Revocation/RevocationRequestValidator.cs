@@ -130,14 +130,11 @@ public partial class RevocationRequestValidator(
 	/// </summary>
 	/// <remarks>
 	/// A request in a public client's name is charged to that name paired with the address it came from, so
-	/// that one sender's flood cannot reach the client's other users. When the server cannot see an address,
-	/// nothing is charged: the alternative is a budget in the client's name alone, which is the thing a
-	/// stranger could spend to silence its logout, and an endpoint doing unbounded work is what this endpoint
-	/// did before budgets existed.
+	/// that one sender's flood cannot reach the client's other users. With no address, nothing is charged:
+	/// the only key left is the name alone, which a stranger could spend to silence that client's logout.
 	/// <para>
 	/// The last arm cannot be entered while <see cref="ClientInfo.ClientType"/> derives its answer from the
-	/// authentication method and has only these two to give. It would speak if that property gained a third
-	/// answer, which is the change that has to decide what such a caller proved before this line can charge it.
+	/// authentication method and has only these two to give.
 	/// </para>
 	/// </remarks>
 	private (string ClientId, string? Source)? BudgetFor(ClientInfo clientInfo)

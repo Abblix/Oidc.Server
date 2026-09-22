@@ -21,13 +21,11 @@ namespace Abblix.Oidc.Server.Common;
 /// interval, and then the response carries no <c>Retry-After</c>.
 /// </param>
 /// <remarks>
-/// The status and the header carry the whole answer: the response has no body, because no registered OAuth error
-/// code describes a caller that has asked too often, and a code that means something else is worse than none.
-/// <c>slow_down</c> is defined for a client polling for an authorization that is still pending and tells it to
-/// poll at a longer interval; <c>temporarily_unavailable</c> exists because a status code cannot travel through
-/// an authorization redirect, and a client reading it may send its end user through the browser again. The code
-/// and the description this record carries are never sent to a caller; they are what a host reads if it wraps
-/// one of the validators in a decorator of its own and inspects what came back.
+/// The status and the header carry the whole answer: no registered OAuth error code describes a caller that has
+/// asked too often, and the nearest two say something else - <c>slow_down</c> tells a client polling for a
+/// pending authorization to poll less often, and <c>temporarily_unavailable</c> may send an end user through
+/// the browser again. The code and the description here never reach a caller; a host reads them if it decorates
+/// one of the validators.
 /// </remarks>
 public sealed record TooManyRequestsError(string ErrorDescription, TimeSpan? RetryAfter)
     : OidcError(ErrorCodes.TemporarilyUnavailable, ErrorDescription);

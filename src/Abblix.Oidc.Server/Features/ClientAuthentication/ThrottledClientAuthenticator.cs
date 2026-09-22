@@ -19,18 +19,15 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// against the address it came from.
 /// </summary>
 /// <remarks>
-/// Verifying a credential is not free: a client assertion is a signature this server checks before it can say
-/// the credential is wrong, so a sender that never authenticates successfully buys one verification per request
-/// for as long as it cares to send them. No budget charged to a client can reach such a sender, because it
-/// never proves to be one.
+/// Verifying a credential costs a signature check before this server can say the credential is wrong, and no
+/// budget charged to a client reaches a sender that never proves to be one.
 /// <para>
-/// It wraps the authenticator rather than standing in each endpoint, so every endpoint that authenticates a
-/// client is covered by one decision - the token endpoint most of all, since every deployment exposes it while
-/// few expose introspection, and a failing credential costs the same at either.
+/// It wraps the authenticator rather than standing in each endpoint, so one decision covers every endpoint
+/// that authenticates a client, the token endpoint included.
 /// </para>
 /// <para>
-/// The budget is off until a deployment turns it on, and then this decorator refuses nothing until a source has
-/// spent it: <see cref="AuthenticationFailureBudget"/> says what an address has to mean for that to be safe.
+/// The budget is off until a deployment turns it on: <see cref="AuthenticationFailureBudget"/> says what an
+/// address has to mean for that to be safe.
 /// </para>
 /// </remarks>
 /// <param name="logger">Records a refusal, naming the address it was charged to.</param>

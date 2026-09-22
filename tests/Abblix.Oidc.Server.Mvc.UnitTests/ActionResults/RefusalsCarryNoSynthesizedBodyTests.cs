@@ -153,17 +153,14 @@ public class RefusalsCarryNoSynthesizedBodyTests
         => Assert.False(result is IClientErrorActionResult, whatWouldBeWrong);
 
     /// <summary>
-    /// The one check every row above runs refuses the result a refusal written the ordinary way would be,
-    /// and accepts the one this adapter returns in its place.
+    /// The one check the rows of this class run refuses the result a refusal written the ordinary way would
+    /// be, and accepts the one this adapter returns in its place.
     /// </summary>
     /// <remarks>
     /// Every result the rows build answers the same way, so a check that had stopped refusing anything
     /// would read as a file of passing rows. This drives that check with the result it exists to catch and
-    /// requires it to fail, which is as much as a row can say without a formatter that returns one. It
-    /// covers every row because there is one check: a row holding a copy of it would keep its own answer,
-    /// and this would say nothing about that copy. What it does not say is that a row still hands the check
-    /// the result it set out to ask about - a row that quietly asked about something else would keep this
-    /// green, and only the production mutations each row is driven with speak to that.
+    /// requires it to fail. It covers every row because there is one check, and says nothing about what a
+    /// row hands that check.
     /// </remarks>
     [Fact]
     public void TheCheckTheseRowsRun_RefusesAResultTheFrameworkWouldGiveABody()

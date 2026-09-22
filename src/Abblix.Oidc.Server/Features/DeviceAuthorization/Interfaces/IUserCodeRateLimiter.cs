@@ -17,11 +17,9 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 /// is what makes the entropy argument in that section hold.
 /// </summary>
 /// <remarks>
-/// The client identifier every method takes is the address the request came from, and it is absent
-/// whenever the server cannot see one. Absence is not a caller: an implementation that spells it as an
-/// address of its own invents a sender, and one that leaves those attempts uncounted lets a single such
-/// sender spend whatever budget is shared with everybody else. Counting them together, apart from any
-/// real address, is what the in-box implementation does.
+/// The client identifier every method takes is the address the request came from, absent whenever the
+/// server cannot see one. An implementation counts those attempts together, apart from any real address:
+/// left uncounted, one such sender spends whatever budget is shared with everybody else.
 /// </remarks>
 public interface IUserCodeRateLimiter
 {

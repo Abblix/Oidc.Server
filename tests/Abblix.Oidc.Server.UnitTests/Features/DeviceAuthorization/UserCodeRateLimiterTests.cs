@@ -10,6 +10,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -113,8 +114,8 @@ public class UserCodeRateLimiterTests
     /// <para>
     /// It stops at the failure before the last one the code allows, because the answer after that is not a
     /// pause at all - the code is spent, and <see cref="ACodeWhoseAttemptsAreSpent_IsRefusedForTheRestOfItsLife"/>
-    /// owns that. With the shipped numbers that leaves two doublings to see here; the far end of the ladder
-    /// is driven by <see cref="AnAllowanceAsLargeAsTheLadder_IsStillSpent"/>, against a cap raised to it.
+    /// owns that. With the shipped numbers that leaves two doublings to see here, and where the doubling
+    /// stops is driven by <see cref="ThePause_NeverExceedsTheConfiguredMaximum"/>.
     /// </para>
     /// </remarks>
     [Theory]
@@ -734,8 +735,8 @@ public class UserCodeRateLimiterTests
     /// written rather than about a constant nothing has to use.
     /// </summary>
     /// <remarks>
-    /// The refusal is read by the record it writes rather than by its own shape, because the cap and the
-    /// server's budget both refuse the same way and only the record says which of them spoke.
+    /// Which limit refused is read from the record, because the cap and the server's budget return the same
+    /// shape.
     /// </remarks>
     [Fact]
     public async Task AnUnseenAttempt_SpendsTheAllowanceOfThatVeryName()
@@ -753,39 +754,48 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
-    /// Every record naming the caller names an unseen one the same way, so an operator reading them sees
-    /// one caller rather than one per record - and a caller the server can see is named by its address.
+    /// Every record naming the caller names an unseen one by the shared name and a visible one by its
+    /// address, so an operator reading them sees one caller rather than one per record.
     /// </summary>
+    /// <remarks>
+    /// The records are discovered rather than listed, so one added later and left undriven fails here
+    /// instead of passing under a name that says every.
+    /// </remarks>
     [Fact]
-    public async Task EveryRecordNamingTheCaller_NamesAnUnseenOneTheSameWay()
+    public async Task EveryRecordNamingTheCaller_NamesTheCallerTheSameWay()
+    {
+        await AssertRecordsName(UserCode, null, UserCodeRateLimiter.SourceNotSeen);
+        await AssertRecordsName(OtherUserCode, ClientIdentifier, ClientIdentifier);
+    }
+
+    /// <summary>
+    /// Drives every record that names a caller, for one caller, and asserts each carries the name expected
+    /// of it.
+    /// </summary>
+    private async Task AssertRecordsName(string userCode, string? clientIdentifier, string expected)
     {
         var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
+        _logs.Entries.Clear();
 
-        await limiter.RecordFailureAsync(UserCode, null);
-        await limiter.CheckAsync(UserCode, null);
-        await limiter.RecordSuccessAsync(UserCode, null);
+        await limiter.RecordFailureAsync(userCode, clientIdentifier);
+        await limiter.CheckAsync(userCode, clientIdentifier);
+        await limiter.RecordSuccessAsync(userCode, clientIdentifier);
 
-        var naming = new[]
-        {
-            LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
-            LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
-            LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
-        };
+        var naming = typeof(UserCodeRateLimiter)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetParameters().Any(parameter => parameter.Name == "ClientIdentifier"))
+            .Select(method => method.GetCustomAttribute<LoggerMessageAttribute>())
+            .Where(attribute => attribute is not null)
+            .Select(attribute => attribute!.EventId)
+            .ToArray();
+
+        Assert.NotEmpty(naming);
 
         foreach (var eventId in naming)
         {
             Assert.Contains(
                 _logs.Entries,
-                entry => entry.EventId.Id == eventId &&
-                         entry.Message.Contains(UserCodeRateLimiter.SourceNotSeen));
+                entry => entry.EventId.Id == eventId && entry.Message.Contains(expected));
         }
-
-        _logs.Entries.Clear();
-        await limiter.RecordSuccessAsync(OtherUserCode, ClientIdentifier);
-
-        Assert.Contains(
-            _logs.Entries,
-            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.UserCodeVerified &&
-                     entry.Message.Contains(ClientIdentifier));
     }
 }

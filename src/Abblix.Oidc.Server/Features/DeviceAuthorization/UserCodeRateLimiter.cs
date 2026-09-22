@@ -72,17 +72,13 @@ public partial class UserCodeRateLimiter(
     /// share one allowance.
     /// </summary>
     /// <remarks>
-    /// No address prints like this, and no space or control character is in it, so a caller at a real
-    /// address never lands here and a store that refuses either character still takes the key.
+    /// No address prints like this, and it carries no space or control character, which a store may refuse
+    /// in a key.
     /// <para>
-    /// What decides the sharing is what sits behind this cap: the server's own budget for the window,
-    /// which every caller spends from. Counting these attempts against nothing leaves that budget the only
-    /// thing they spend, so one sender the server cannot see refuses every verification, including callers
-    /// whose address is in plain sight. Sharing one allowance holds the refusal to the senders that arrive
-    /// the same way. Where the server sees no address at all - a socket that carries none, and no
-    /// forwarded header resolved into one - those senders are every caller, and what bounds the page is
-    /// then this cap rather than that budget - on the numbers this library ships, the cap is the narrower
-    /// of the two, and nothing in the startup checks relates them.
+    /// They share rather than go uncounted because what stands behind this cap is the server's own budget,
+    /// which every caller spends from: uncounted, one sender the server cannot see refuses every
+    /// verification. Where no address is ever visible those senders are every caller, and this cap - the
+    /// narrower of the two on the numbers shipped - bounds the page instead.
     /// </para>
     /// </remarks>
     internal const string SourceNotSeen = "(no-address)";
@@ -119,9 +115,7 @@ public partial class UserCodeRateLimiter(
         }
 
         // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
-        // the rung at the cap is the whole question and costs one read. An attempt whose source cannot be
-        // named is counted under a name of its own, shared with every other such attempt - see
-        // SourceNotSeen for which of the two harms that choice takes.
+        // the rung at the cap is the whole question and costs one read.
         var window = WindowOf(now, deviceAuthOptions);
         var source = clientIdentifier ?? SourceNotSeen;
         var capReached = await storage.GetAsync<RateLimitAttempt>(

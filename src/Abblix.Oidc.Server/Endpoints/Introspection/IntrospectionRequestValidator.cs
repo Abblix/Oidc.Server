@@ -73,13 +73,10 @@ public partial class IntrospectionRequestValidator(
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
-		// The budget is charged here, after the caller has proven which client it is and before the token is
-		// read: a client that loops makes this the most expensive endpoint in the deployment, since every call
-		// verifies a signature, and the caller is only chargeable once it is identified. What authenticating
-		// the caller itself costs is not covered - a client authenticating with a signed assertion pays a
-		// verification before reaching this line, and a caller that fails authentication never reaches it.
-		// The source half of the key is left unset: this endpoint turns a public client away above, so the
-		// identifier that reaches this line is one the caller proved it holds.
+		// Charged after the caller has proven which client it is and before the token is read, which is where
+		// the signature verification this endpoint spends on a looping client sits. What authentication
+		// itself costs is bounded elsewhere, by the budget on failed authentications. The source half of the
+		// key is left unset: a public client is turned away above.
 		using var lease = rateLimiter.AttemptAcquire((clientInfo.ClientId, null));
 		if (!lease.IsAcquired)
 		{

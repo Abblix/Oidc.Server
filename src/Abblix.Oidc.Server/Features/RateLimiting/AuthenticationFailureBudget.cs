@@ -19,17 +19,14 @@ namespace Abblix.Oidc.Server.Features.RateLimiting;
 /// </summary>
 /// <remarks>
 /// The per-client budget cannot reach this: it is charged once the caller has proven which client it is, and a
-/// sender whose credentials never verify never gets that far. Its requests are not free - a client assertion is
-/// a signature this server verifies before it can say the credential is wrong - so the failures are counted and
-/// a source over its budget is refused before its next credential is looked at.
+/// sender whose credentials never verify never gets that far, while a client assertion costs this server a
+/// signature verification before it can say the credential is wrong.
 /// <para>
-/// Only failures are counted, which is what keeps this away from working clients: their authentications succeed,
-/// so they never charge it however busy they are. A source whose address cannot be determined is not counted
-/// either, because nothing shared stands behind this budget for such a sender to spend: one bucket for all of
-/// them would buy no protection and would let a single sender close every endpoint that authenticates a client
-/// to everybody arriving the same way. Where the server sees no address at all, that is every caller and this
-/// budget bounds nothing, so a deployment behind a proxy resolves a forwarded header into an address before
-/// turning it on.
+/// Only failures are counted, so a working client never charges it however busy it is. A source whose address
+/// cannot be determined is not counted either: nothing shared stands behind this budget for such a sender to
+/// spend, while one bucket for all of them would close every endpoint that authenticates a client to everybody
+/// arriving the same way. Where no address is ever visible this budget bounds nothing, so a deployment behind a
+/// proxy resolves a forwarded header into an address before turning it on.
 /// </para>
 /// </remarks>
 /// <param name="limiter">The budget of failures one address gets, which a host may register itself.</param>

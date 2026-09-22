@@ -14,24 +14,19 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// </summary>
 /// <remarks>
 /// The budget is per client and per endpoint: a resource server that starts looping does not spend the budget of
-/// the next one, and a flood of introspection calls leaves revocation answering. A caller that proved which
-/// client it is holds that client's budget by itself. A public client proves nothing - its <c>client_id</c> is
-/// there for anyone to copy - so introspection turns it away outright, and revocation counts it by that
-/// identifier paired with the address the request came from, which leaves a stranger's flood spending only the
-/// share of the address it sends from.
+/// the next one, and a flood of introspection calls leaves revocation answering. A public client proves nothing,
+/// its <c>client_id</c> being there for anyone to copy, so introspection turns it away outright and revocation
+/// counts it by that identifier paired with the address the request came from.
 /// <para>
 /// That pairing is worth only what an address is worth where this server runs. Behind a load balancer, an
 /// ingress or a NAT gateway every caller arrives from one address, so all the users of one public client share
 /// a single budget, and a number chosen for one user's logout will refuse theirs. A deployment in that shape
 /// sizes <see cref="PermitLimit"/> for the crowd behind the gateway, or has the gateway pass the caller's
-/// address on. A sender that changes address on every request is not bounded by the pairing at all, as with
-/// anything counted per address; what the pairing buys is a price on the cheapest form of the flood.
+/// address on. A sender that changes address on every request is not bounded by the pairing at all.
 /// </para>
 /// <para>
-/// It is on out of the box, with a limit far above what a working deployment reaches, because the request it
-/// refuses is the one a compromised or looping client repeats without pause - and nobody switches a protection
-/// on before they need it. A deployment whose own numbers are higher raises <see cref="PermitLimit"/>; one that
-/// wants no limit at all sets it to null.
+/// It is on out of the box, with a limit far above what a working deployment reaches. A deployment whose own
+/// numbers are higher raises <see cref="PermitLimit"/>; one that wants no limit at all sets it to null.
 /// </para>
 /// <para>
 /// These numbers are read once, when the limiter for an endpoint is first needed, so a change to them takes
@@ -46,14 +41,10 @@ public record CallerRateLimitOptions
     /// then answer every request the caller can send, as versions before this setting did.
     /// </summary>
     /// <remarks>
-    /// Two things decide what this number means in a deployment. It belongs to a registered client, so every
-    /// instance of one resource server spends it together: a fleet of gateways introspecting under a single
-    /// <c>client_id</c> shares one budget rather than holding one each. And it is counted inside one instance of
-    /// this server, so a deployment running several multiplies it: with four instances behind a load balancer,
-    /// a client that spreads its requests evenly is answered four times this number. A deployment that wants a
-    /// ceiling of its own across the whole fleet therefore divides that ceiling by the number of instances and
-    /// sets the result here; raising this number is for a client whose honest traffic is higher, not for a
-    /// deployment that grew.
+    /// It belongs to a registered client, so a fleet of gateways introspecting under a single <c>client_id</c>
+    /// shares one budget rather than holding one each. And it is counted inside one instance of this server, so
+    /// a deployment running several multiplies it: a ceiling meant to hold across the fleet is divided by the
+    /// number of instances before it is set here.
     /// </remarks>
     public int? PermitLimit { get; set; } = 10_000;
 

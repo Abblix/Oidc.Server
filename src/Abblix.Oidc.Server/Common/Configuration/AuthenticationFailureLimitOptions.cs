@@ -14,29 +14,21 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// </summary>
 /// <remarks>
 /// The budget one client gets cannot cover this: it is charged once the caller has proven which client it is,
-/// and a sender that never authenticates successfully never reaches it. What such a sender costs is real -
-/// a client authenticating with a signed assertion has its signature verified on every attempt, so a stream of
-/// well-formed rubbish naming a registered client buys one verification per request. Counting the failures is
-/// what puts a bound on it, and the source address is the only thing an unauthenticated sender cannot choose.
+/// and a sender whose credentials never verify never reaches it while still costing a signature verification
+/// per attempt. The source address is the only thing such a sender cannot choose.
 /// <para>
-/// A working client never approaches this: its authentications succeed, and nothing successful is counted. What
-/// the number has to clear is a deployment's own noise - a rotated secret, a clock skew, a misconfigured
-/// instance retrying - which is why it is stated per minute rather than per second.
+/// Nothing successful is counted, so what the number has to clear is a deployment's own noise - a rotated
+/// secret, a clock skew, a misconfigured instance retrying - which is why it is stated per minute.
 /// </para>
 /// <para>
-/// It is OFF until a deployment turns it on, which is the opposite of the budget one client gets, and the
-/// reason is what an address means where this server runs. A server whose callers reach it through a load
-/// balancer, an ingress or a NAT gateway sees one address for all of them, and then this budget is one bucket
-/// for the whole deployment: anybody on the internet could spend it with a hundred wrong secrets a minute and
-/// leave every honest client refused until the window turned. Turning it on is a statement that this server
-/// sees the addresses its callers actually come from - which usually means it terminates their connections
-/// itself, or its proxy is trusted to say so and nobody else is.
+/// It is OFF until a deployment turns it on. A server whose callers reach it through a load balancer, an
+/// ingress or a NAT gateway sees one address for all of them, and this budget is then one bucket for the whole
+/// deployment, which anybody could spend with a hundred wrong secrets a minute. Turning it on states that this
+/// server sees the addresses its callers come from.
 /// </para>
 /// <para>
-/// What it does not answer: a sender that rotates addresses is not bounded by it, as with any count against an
-/// address, and a sender that can choose the address this server sees - which is what trusting a forwarded
-/// header from anyone amounts to - can both evade it and spend somebody else's budget. What it buys is a price
-/// on the cheapest form of the attack, from a deployment that knows what an address means to it.
+/// A sender that rotates addresses is not bounded by it, and one that can choose the address this server sees
+/// can both evade it and spend somebody else's budget.
 /// </para>
 /// </remarks>
 public record AuthenticationFailureLimitOptions
