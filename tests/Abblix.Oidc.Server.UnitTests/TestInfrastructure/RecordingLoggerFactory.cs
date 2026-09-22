@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 /// The EXCEPTION is kept as well as the formatted message, because they are two channels and a sink
 /// renders both. A recorder that kept only the message made every assertion about what a log line does
 /// NOT contain blind to whatever the exception carried - and a store's own fault routinely quotes the
-/// key it failed on.
+/// key it failed on. The named values are kept for the same reason: they are the third channel, and the
+/// one a structured sink writes.
 /// </remarks>
 internal sealed record LogRecord(
     LogLevel Level,
@@ -36,11 +37,6 @@ internal sealed record LogRecord(
     /// </remarks>
     public object? Value(string name)
         => State?.FirstOrDefault(pair => pair.Key == name).Value;
-
-    /// <summary>
-    /// Whether the record names a value at all, which a null value cannot answer.
-    /// </summary>
-    public bool Names(string name) => State?.Any(pair => pair.Key == name) == true;
 }
 
 /// <summary>

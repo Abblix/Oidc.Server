@@ -53,10 +53,9 @@ public partial class UserCodeRateLimiter(
     /// is what a burst of wrong guesses against a single code deserves.
     /// <para>
     /// Each rung is written with the code's lifetime from the moment it is claimed and is never renewed, so
-    /// a sustained attack no longer extends the pause indefinitely - which is what a record rewritten on
-    /// every failure used to do. It does NOT mean the records die with the code: counted from an attempt
-    /// rather than from issuance, they outlive it by up to one lifetime, and nothing here asks whether a
-    /// code exists, so a pause can be served for a value that names nothing.
+    /// a sustained attack does not extend the pause indefinitely. It does NOT mean the records die with the
+    /// code: counted from an attempt rather than from issuance, they outlive it by up to one lifetime, and
+    /// nothing here asks whether a code exists, so a pause can be served for a value that names nothing.
     /// </para>
     /// </remarks>
     internal const int AttemptLadderLength = 32;

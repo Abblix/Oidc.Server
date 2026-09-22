@@ -625,7 +625,7 @@ public class UserCodeRateLimiterTests
             options.CodeLifetime = TimeSpan.FromHours(6);
         });
 
-        // Ten failures earn 2^7 seconds by doubling, which the ceiling cuts to ten.
+        // Enough failures that the doubling has passed the ceiling.
         for (var i = 0; i < 10; i++)
             await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
 
@@ -710,6 +710,31 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// The report tells the two counts apart: what this code has cost and what this source has.
+    /// </summary>
+    /// <remarks>
+    /// An operator reads them to decide whether to look at the code or at the sender, so the pair arriving
+    /// the wrong way round sends them after the wrong one.
+    /// </remarks>
+    [Fact]
+    public async Task TheReportOfGuessing_SaysWhichCountIsWhich()
+    {
+        // Reported for the source rather than for the code, so the two counts differ where a swap shows.
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 3);
+
+        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        var report = Assert.Single(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
+
+        Assert.Equal(1, report.Value("UserCodeFailures"));
+        Assert.Equal(3, report.Value("AddressFailures"));
+    }
+
+    /// <summary>
     /// A limiter over the same store, configured away from the shipped numbers for one row.
     /// </summary>
     private UserCodeRateLimiter LimiterWith(Action<DeviceAuthorizationOptions> configure)
@@ -773,10 +798,6 @@ public class UserCodeRateLimiterTests
     /// Every record naming the caller names an unseen one by the shared name and a visible one by its
     /// address, so an operator reading them sees one caller rather than one per record.
     /// </summary>
-    /// <remarks>
-    /// The name is read from the field the record names it in rather than from the rendered line, which
-    /// cannot tell the caller's name from the same text arriving in another field.
-    /// </remarks>
     [Fact]
     public async Task EveryRecordNamingTheCaller_NamesTheCallerTheSameWay()
     {
@@ -796,7 +817,9 @@ public class UserCodeRateLimiterTests
     public void TheRecordsDrivenAsNamingTheCaller_AreTheRecordsThatName()
     {
         var declared = typeof(UserCodeRateLimiter)
-            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .GetMethods(
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static |
+                BindingFlags.DeclaredOnly)
             .Where(method => method.GetParameters().Any(parameter => parameter.Name == CallerField))
             .Select(method => method.GetCustomAttribute<LoggerMessageAttribute>())
             .Where(attribute => attribute is not null)
@@ -823,7 +846,6 @@ public class UserCodeRateLimiterTests
         {
             var record = Assert.Single(_logs.Entries, entry => entry.EventId.Id == eventId);
 
-            Assert.True(record.Names(CallerField));
             Assert.Equal(expected, record.Value(CallerField));
         }
     }

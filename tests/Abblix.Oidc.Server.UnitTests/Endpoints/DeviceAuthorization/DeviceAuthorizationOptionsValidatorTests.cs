@@ -139,6 +139,28 @@ public class DeviceAuthorizationOptionsValidatorTests
         Assert.True(Validator.Validate(null, options).Succeeded);
     }
 
+    /// <summary>
+    /// The cap one address gets is the narrower of the two on the numbers shipped, and a host is free to
+    /// set it above the budget the whole server shares.
+    /// </summary>
+    /// <remarks>
+    /// Which of them binds first is what the limiter's own remark tells a reader, and it reads as a
+    /// property of the code where it is a property of two defaults nothing relates.
+    /// </remarks>
+    [Fact]
+    public void The_address_cap_is_the_narrower_shipped_number_and_nothing_holds_it_there()
+    {
+        var settings = ValidSettings();
+
+        Assert.True(settings.MaxAddressFailuresPerWindow < settings.MaxFailedAttemptsPerWindow);
+
+        settings.MaxAddressFailuresPerWindow = settings.MaxFailedAttemptsPerWindow + 1;
+
+        var options = new OidcOptions { EnabledEndpoints = OidcEndpoints.All, DeviceAuthorization = settings };
+
+        Assert.True(Validator.Validate(null, options).Succeeded);
+    }
+
     [Fact]
     public void Fails_when_device_endpoint_enabled_but_settings_absent()
     {
