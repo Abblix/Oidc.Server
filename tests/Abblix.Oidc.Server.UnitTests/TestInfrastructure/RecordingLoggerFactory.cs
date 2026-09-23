@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -17,9 +18,26 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 /// The EXCEPTION is kept as well as the formatted message, because they are two channels and a sink
 /// renders both. A recorder that kept only the message made every assertion about what a log line does
 /// NOT contain blind to whatever the exception carried - and a store's own fault routinely quotes the
-/// key it failed on.
+/// key it failed on. The named values are kept for the same reason: they are the third channel, and the
+/// one a structured sink writes.
 /// </remarks>
-internal sealed record LogRecord(LogLevel Level, EventId EventId, string Message, Exception? Exception = null);
+internal sealed record LogRecord(
+    LogLevel Level,
+    EventId EventId,
+    string Message,
+    Exception? Exception = null,
+    IReadOnlyList<KeyValuePair<string, object?>>? State = null)
+{
+    /// <summary>
+    /// What the record carries under one of its named values, or null when it carries none of that name.
+    /// </summary>
+    /// <remarks>
+    /// A name read here is the one a structured sink writes, which the formatted message cannot tell from
+    /// the same text arriving in another field.
+    /// </remarks>
+    public object? Value(string name)
+        => State?.FirstOrDefault(pair => pair.Key == name).Value;
+}
 
 /// <summary>
 /// A factory whose loggers keep what was written, so a test can assert on the record itself.
@@ -56,6 +74,12 @@ internal sealed class RecordingLoggerFactory : ILoggerFactory
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => entries.Add(new LogRecord(logLevel, eventId, formatter(state, exception), exception));
+            => entries.Add(
+                new LogRecord(
+                    logLevel,
+                    eventId,
+                    formatter(state, exception),
+                    exception,
+                    state as IReadOnlyList<KeyValuePair<string, object?>>));
     }
 }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading.RateLimiting;
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
@@ -21,6 +22,7 @@ using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifi
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
@@ -104,10 +106,25 @@ public static class ServiceCollectionExtensions
 
         services.Compose<IClientAuthenticator, CompositeClientAuthenticator>();
 
-        // Outermost, so it sees every client whichever credential form got it through. The
-        // configuration paths cannot: a client registered dynamically before a profile was turned
-        // on lives in the store and is re-read by nobody.
-        return services.Decorate<IClientAuthenticator, SecurityProfileClientAuthenticator>();
+        // Sees every client whichever credential form got it through. The configuration paths cannot: a client
+        // registered dynamically before a profile was turned on lives in the store and is re-read by nobody.
+        services.Decorate<IClientAuthenticator, SecurityProfileClientAuthenticator>();
+
+        services.TryAddSingleton<AuthenticationFailureBudget>();
+
+        // Registered with TryAdd, so a host that put its own limiter under this key keeps it - and then the
+        // budget is live whatever the settings say, including while they say to count nothing.
+        services.TryAddKeyedSingleton<PartitionedRateLimiter<string>>(
+            CallerRateLimiters.AuthenticationFailures,
+            (serviceProvider, _) => CallerRateLimiters.Create(
+                serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.AuthenticationFailureLimit));
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
+
+        // Outermost, so a source that has spent its budget of failures is refused before anything below it
+        // looks at the credential - which for a signed assertion means before a signature is verified.
+        return services.Decorate<IClientAuthenticator, ThrottledClientAuthenticator>();
     }
 
     /// <summary>

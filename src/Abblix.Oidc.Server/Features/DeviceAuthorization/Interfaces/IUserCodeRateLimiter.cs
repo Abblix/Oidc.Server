@@ -16,6 +16,12 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 /// lowercase, so this is a mitigation the server chooses rather than one it inherits - and the choice
 /// is what makes the entropy argument in that section hold.
 /// </summary>
+/// <remarks>
+/// The client identifier every method takes is the address the request came from, absent whenever the
+/// server cannot see one. An implementation owes those attempts a count of their own, apart from any real
+/// address: spelled as an address it invents a sender, and left uncounted it lets one such sender spend
+/// whatever budget is shared with everybody else.
+/// </remarks>
 public interface IUserCodeRateLimiter
 {
     /// <summary>
@@ -24,7 +30,8 @@ public interface IUserCodeRateLimiter
     /// prevent brute force attacks.
     /// </summary>
     /// <param name="userCode">The user code being verified.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
     /// <returns>
     /// A <see cref="Result{TSuccess, TFailure}"/> containing:
     /// - Success (<c>true</c>): The verification attempt is allowed to proceed.
@@ -32,14 +39,15 @@ public interface IUserCodeRateLimiter
     ///   be made again and whether the refusal follows from attempts against this very code - which decides
     ///   whether a caller may be told anything at all.
     /// </returns>
-    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier);
+    Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
     /// </summary>
     /// <param name="userCode">The user code that failed verification.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordFailureAsync(string userCode, string clientIdentifier);
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
+    Task RecordFailureAsync(string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed attempt at a user code that does not exist.
@@ -51,14 +59,16 @@ public interface IUserCodeRateLimiter
     /// their screen unable to use it. What this attempt belongs to is the source that made it and the
     /// server's own budget for the window.
     /// </remarks>
-    /// <param name="clientIdentifier">The client identifier (typically IP address) making the attempt.</param>
+    /// <param name="clientIdentifier">The address the attempt came from, or null when the server cannot
+    /// see one.</param>
     /// <returns>A task that completes when the attempt has been recorded.</returns>
-    Task RecordUnknownCodeAsync(string clientIdentifier);
+    Task RecordUnknownCodeAsync(string? clientIdentifier);
 
     /// <summary>
     /// Records a successful verification to reset rate limiting counters.
     /// </summary>
     /// <param name="userCode">The user code that was successfully verified.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordSuccessAsync(string userCode, string clientIdentifier);
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
+    Task RecordSuccessAsync(string userCode, string? clientIdentifier);
 }

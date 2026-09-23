@@ -45,8 +45,10 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using System.Threading.RateLimiting;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.PushedAuthorization;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -493,6 +495,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IRevocationHandler, RevocationHandler>();
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
         services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
+        services.AddCallerRateLimiter(CallerRateLimiters.Revocation);
         return services;
     }
 
@@ -508,7 +511,32 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IIntrospectionHandler, IntrospectionHandler>();
         services.TryAddScoped<IIntrospectionRequestValidator, IntrospectionRequestValidator>();
         services.TryAddScoped<IIntrospectionRequestProcessor, IntrospectionRequestProcessor>();
+        services.AddCallerRateLimiter(CallerRateLimiters.Introspection);
         return services;
+    }
+
+    /// <summary>
+    /// Registers the per-caller budget one endpoint spends, under the given key, and the startup check on the
+    /// numbers it is built from.
+    /// </summary>
+    /// <remarks>
+    /// Registered with <c>TryAdd</c>, so a host that put its own limiter under this key before calling this
+    /// library keeps it: the endpoint then spends whatever policy that limiter implements, and the settings here
+    /// decide nothing. The startup check on them still runs: it is one validator for the whole options type and
+    /// cannot see which keys a host pre-empted, so a deployment that has finished with these numbers takes them
+    /// out of its configuration rather than leaving a value nothing reads.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
+    /// <param name="key">The key the endpoint resolves its limiter by, from <see cref="CallerRateLimiters"/>.</param>
+    private static void AddCallerRateLimiter(this IServiceCollection services, string key)
+    {
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, CallerRateLimitOptionsValidator>());
+
+        services.TryAddKeyedSingleton<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+            key,
+            (serviceProvider, _) => CallerRateLimiters.Create(
+                serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.CallerRateLimit));
     }
 
     /// <summary>

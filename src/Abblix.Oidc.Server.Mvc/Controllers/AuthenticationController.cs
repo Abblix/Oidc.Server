@@ -40,7 +40,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// </remarks>
 [ApiController]
 [ReturnsOidcInvalidRequest]
-[ReturnsCustodianFailureStatus]
+[ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
 [RequireHttps]

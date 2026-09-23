@@ -322,6 +322,21 @@ public record OidcOptions
 	public DeviceAuthorizationOptions? DeviceAuthorization { get; set; }
 
 	/// <summary>
+	/// How many requests one authenticated client may make to the introspection and revocation endpoints within
+	/// a window. On by default with a high limit, so a client that starts looping is stopped before it costs
+	/// the deployment its capacity.
+	/// </summary>
+	public CallerRateLimitOptions CallerRateLimit { get; set; } = new();
+
+	/// <summary>
+	/// How many client authentications may fail from one source address within a window before this server stops
+	/// looking at credentials from it, at every endpoint that authenticates a client - the token endpoint
+	/// included. It bounds what a sender that never authenticates successfully can cost, which the per-client
+	/// budget cannot reach.
+	/// </summary>
+	public AuthenticationFailureLimitOptions AuthenticationFailureLimit { get; set; } = new();
+
+	/// <summary>
 	/// Specifies the length of session identifiers used by the OIDC server.
 	/// The length determines the uniqueness and security of the session identifiers.
 	/// </summary>

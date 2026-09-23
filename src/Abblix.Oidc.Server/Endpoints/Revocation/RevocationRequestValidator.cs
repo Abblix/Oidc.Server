@@ -6,14 +6,19 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading.RateLimiting;
 using Abblix.Jwt;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 
@@ -34,10 +39,21 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// The JWT validator to be used for validating the token included in the revocation request. Ensures that
 /// the token is valid and that it belongs to the client requesting revocation.
 /// </param>
+/// <param name="rateLimiter">
+/// The budget of revocation requests one caller gets: a confidential client's own, and for a public client
+/// one held jointly by its identifier and the address the request came from.
+/// </param>
+/// <param name="requestInfoProvider">
+/// Names the address a request came from, which is half of what a public client's budget is charged to.
+/// </param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator) : IRevocationRequestValidator
+	IAuthServiceJwtValidator jwtValidator,
+	[FromKeyedServices(CallerRateLimiters.Revocation)]
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
+	IRequestInfoProvider requestInfoProvider)
+	: IRevocationRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a revocation request against the OAuth 2.0 revocation request specifications.
@@ -78,6 +94,67 @@ public partial class RevocationRequestValidator(
 				"The client is not authorized");
 		}
 
+		// Charged after the caller has proven which client it is and before the token is read: reading it
+		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
+		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
+		if (BudgetFor(clientInfo) is not { } budgetKey)
+			return await ReadTokenAsync(revocationRequest, clientInfo);
+
+		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
+		// in flight bounds the token validation below rather than nothing at all.
+		using var lease = rateLimiter.AttemptAcquire(budgetKey);
+		if (!lease.IsAcquired)
+		{
+			// The refusal names the budget that was spent rather than the request that met it: a budget one
+			// client holds everywhere is not the one it holds at a single address, and an operator reading
+			// the second has to know which address it was before the line means anything.
+			if (budgetKey.Source is { } source)
+			{
+				LogCallerAndSourceRateLimited(clientInfo.ClientId, source);
+			}
+			else
+			{
+				LogCallerRateLimited(clientInfo.ClientId);
+			}
+
+			return new TooManyRequestsError(
+				"Too many revocation requests from this client",
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null);
+		}
+
+		return await ReadTokenAsync(revocationRequest, clientInfo);
+	}
+
+	/// <summary>
+	/// Names the budget this caller's request is charged to, or null when it is charged to none.
+	/// </summary>
+	/// <remarks>
+	/// A request in a public client's name is charged to that name paired with the address it came from, so
+	/// that one sender's flood cannot reach the client's other users. With no address, nothing is charged:
+	/// the only key left is the name alone, which a stranger could spend to silence that client's logout.
+	/// <para>
+	/// The last arm cannot be entered while <see cref="ClientInfo.ClientType"/> derives its answer from the
+	/// authentication method and has only these two to give.
+	/// </para>
+	/// </remarks>
+	private (string ClientId, string? Source)? BudgetFor(ClientInfo clientInfo)
+		=> clientInfo.ClientType switch
+		{
+			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
+			ClientType.Public => requestInfoProvider.SourceName() is { } source
+				? (clientInfo.ClientId, (string?)source)
+				: null,
+			_ => throw new InvalidOperationException(
+				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
+		};
+
+	/// <summary>
+	/// Reads the token the request names and decides whether it belongs to the client that asked.
+	/// </summary>
+	private async Task<Result<ValidRevocationRequest, OidcError>> ReadTokenAsync(
+		RevocationRequest revocationRequest,
+		ClientInfo clientInfo)
+	{
 		// The audience is deliberately not required to name this server. RFC 7009 Section 2.1 has the client
 		// revoke a token it holds, and what settles the request is whether the token belongs to that client -
 		// the check below. A token minted for a resource indicator names that resource in its audience, and

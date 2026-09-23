@@ -29,6 +29,9 @@ public static class OidcResults
     /// </summary>
     public static IResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
     {
+        if (FormatRefusal(error) is { } refusal)
+            return refusal;
+
         var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
 
         return (error.Error, fallbackStatusCode) switch
@@ -69,6 +72,9 @@ public static class OidcResults
         IEnumerable<string> dpopAlgs,
         bool advertiseBearer)
     {
+        if (FormatRefusal(error) is { } refusal)
+            return refusal;
+
         var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
         var result = error switch
@@ -109,6 +115,28 @@ public static class OidcResults
             foreach (var value in values)
                 response.Headers.Append(name, value);
         });
+
+    /// <summary>
+    /// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
+    /// body, because the status says the whole of it and no registered error code means "you asked too often".
+    /// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+    /// </summary>
+    /// <remarks>
+    /// Every way of formatting an error passes through here first, so a refusal cannot take the status of
+    /// whichever endpoint it happened to arrive at.
+    /// </remarks>
+    private static IResult? FormatRefusal(OidcError error)
+        => error switch
+        {
+            TooManyRequestsError { RetryAfter: { } interval }
+                => Results
+                    .StatusCode(StatusCodes.Status429TooManyRequests)
+                    .WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
+
+            TooManyRequestsError => Results.StatusCode(StatusCodes.Status429TooManyRequests),
+
+            _ => null,
+        };
 
     /// <summary>
     /// Decorates a self-rendered HTML result (the form_post auto-submit page) with the anti-framing headers so it

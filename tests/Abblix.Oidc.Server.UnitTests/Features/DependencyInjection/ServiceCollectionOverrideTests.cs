@@ -18,7 +18,12 @@ using Abblix.Jwt.Signing;
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using System.Threading.RateLimiting;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.RateLimiting;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -131,11 +136,13 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public void AddClientAuthentication_ProfileEnforcementIsOutermost()
+    public void AddClientAuthentication_ThrottlingIsOutermost()
     {
-        // The profile decorator is the only place a client already in the store meets its profile,
-        // so it has to be what the singular contract resolves to - and outside the composite, or
-        // the credential form would decide whether the profile is applied at all.
+        // A source past its budget of failed authentications is refused before anything below looks at what it
+        // sent, which is what makes the refusal cheap - so the throttle is what the singular contract resolves
+        // to. Directly beneath it sits the profile decorator, the only place a client already in the store
+        // meets its profile, itself outside the composite so that the credential form cannot decide whether
+        // the profile is applied at all.
         var services = new ServiceCollection();
 
         services.AddClientAuthentication();
@@ -155,7 +162,46 @@ public class ServiceCollectionOverrideTests
 
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
 
-        Assert.IsType<SecurityProfileClientAuthenticator>(authenticator);
+        Assert.IsType<ThrottledClientAuthenticator>(authenticator);
+    }
+
+    /// <summary>
+    /// And the profile decorator is still in the chain underneath, which the type of the outermost layer cannot
+    /// say. Without this, removing that decoration leaves every suite green while a deployment holding its
+    /// clients to a profile silently stops holding them to anything.
+    /// </summary>
+    [Fact]
+    public async Task AddClientAuthentication_AClientThatCannotSatisfyTheProfile_IsStillRefused()
+    {
+        var services = new ServiceCollection();
+        services.AddClientAuthentication();
+
+        // A client authenticating with nothing cannot satisfy FAPI 2, which is what the decorator answers.
+        var publicClient = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+
+        var clients = new Mock<IClientInfoProvider>();
+        clients.Setup(p => p.TryFindClientAsync(TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+
+        services.AddLogging();
+        services.Configure<OidcOptions>(options => options.DefaultSecurityProfile = ClientSecurityProfile.Fapi2);
+        services.AddSingleton(clients.Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
+        services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
+        services.AddSingleton(new Mock<IClientJwtValidator>().Object);
+        services.AddSingleton(new Mock<IIssuerProvider>().Object);
+        services.AddSingleton(new Mock<IReplayCache>().Object);
+
+        var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
+
+        var authenticated = await authenticator.TryAuthenticateClientAsync(
+            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+
+        Assert.Null(authenticated);
     }
 
     [Fact]
@@ -330,6 +376,62 @@ public class ServiceCollectionOverrideTests
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthSessionService));
         Assert.Same(stub, descriptor.ImplementationInstance);
+    }
+
+    /// <summary>
+    /// The per-caller budget is the platform's own type under a published key, so a host counting requests its
+    /// own way - across several nodes, on a sliding window - registers that and the endpoint spends it. Without
+    /// this, the settings would be the only policy available and a deployment needing another would have to do
+    /// without one.
+    /// </summary>
+    [Theory]
+    [InlineData(CallerRateLimiters.Introspection)]
+    [InlineData(CallerRateLimiters.Revocation)]
+    public void AnEndpoint_HostPreregisteredCallerRateLimiter_Wins(string key)
+    {
+        var services = new ServiceCollection();
+        var hostLimiter = CallerRateLimiters.Create(new CallerRateLimitOptions { PermitLimit = null });
+        services.AddKeyedSingleton(key, hostLimiter);
+
+        services.AddIntrospection();
+        services.AddRevocation();
+
+        var descriptor = Assert.Single(
+            services,
+            d => d.ServiceType == typeof(PartitionedRateLimiter<(string ClientId, string? Source)>)
+                 && Equals(d.ServiceKey, key));
+
+        Assert.Same(hostLimiter, descriptor.KeyedImplementationInstance);
+    }
+
+    /// <summary>
+    /// The two endpoints get budgets of their own, so a client flooding introspection can still revoke a token
+    /// it believes is stolen - the one request that must not be refused because of the caller's other traffic.
+    /// </summary>
+    [Fact]
+    public void TheTwoEndpoints_EachSpendTheirOwnBudget()
+    {
+        var services = new ServiceCollection();
+        services.AddIntrospection();
+        services.AddRevocation();
+        services.AddOidcCore(options =>
+        {
+            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
+
+            // Resolving a limiter reads the options, and the options refuse a server that could issue no token
+            // at all - so the composition needs a signing key before it will hand out anything.
+            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var introspection = provider
+            .GetRequiredKeyedService<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+                CallerRateLimiters.Introspection);
+        var revocation = provider
+            .GetRequiredKeyedService<PartitionedRateLimiter<(string ClientId, string? Source)>>(
+                CallerRateLimiters.Revocation);
+
+        Assert.NotSame(introspection, revocation);
     }
 
     [Fact]

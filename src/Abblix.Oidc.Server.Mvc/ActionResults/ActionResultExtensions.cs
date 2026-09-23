@@ -87,6 +87,27 @@ public static class ActionResultExtensions
 			});
 
 	/// <summary>
+	/// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
+	/// body, because the status says the whole of it and no registered error code means "you asked too often".
+	/// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+	/// </summary>
+	/// <remarks>
+	/// Every way of formatting an error passes through here first, so a refusal cannot take the status of
+	/// whichever endpoint it happened to arrive at.
+	/// </remarks>
+	private static ActionResult? FormatRefusal(OidcError error)
+		=> error switch
+		{
+			TooManyRequestsError { RetryAfter: { } interval }
+				=> new StatusOnlyResult(StatusCodes.Status429TooManyRequests)
+					.WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
+
+			TooManyRequestsError => new StatusOnlyResult(StatusCodes.Status429TooManyRequests),
+
+			_ => null,
+		};
+
+	/// <summary>
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
@@ -100,6 +121,9 @@ public static class ActionResultExtensions
 	/// <returns>An <see cref="ActionResult"/> with the appropriate status code and headers.</returns>
 	public static ActionResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
 	{
+		if (FormatRefusal(error) is { } refusal)
+			return refusal;
+
 		var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
 
 		return (error.Error, fallbackStatusCode) switch
@@ -143,6 +167,9 @@ public static class ActionResultExtensions
 		IEnumerable<string> dpopAlgs,
 		bool advertiseBearer)
 	{
+		if (FormatRefusal(error) is { } refusal)
+			return refusal;
+
 		var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
 		ActionResult result = error switch

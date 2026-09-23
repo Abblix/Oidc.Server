@@ -80,7 +80,7 @@ public class UserCodeVerificationServiceRateLimitTests
     /// </summary>
     private UserCodeVerificationService ServiceOver(
         DeviceAuthorizationRequest? request,
-        string address = Address,
+        string? address = Address,
         Action<DeviceAuthorizationOptions>? configure = null)
     {
         var deviceStorage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
@@ -96,7 +96,7 @@ public class UserCodeVerificationServiceRateLimitTests
             .ReturnsAsync(request);
 
         var requestInfo = new Mock<IRequestInfoProvider>(MockBehavior.Loose);
-        requestInfo.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse(address));
+        requestInfo.Setup(p => p.RemoteIpAddress).Returns(address is null ? null : IPAddress.Parse(address));
 
         var deviceOptions = DeviceOptions();
         configure?.Invoke(deviceOptions);
@@ -191,6 +191,98 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var limited = Assert.IsType<TooManyUserCodeAttempts>(result);
         Assert.Equal(TimeSpan.FromSeconds(40), limited.RetryAfter);
+    }
+
+    /// <summary>
+    /// And two addresses have two allowances, which is what makes the cap about a source rather than about
+    /// everybody: a cap that stopped separating them would let one guesser close this page to every person
+    /// waiting to type a code.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressThatSpentItsAllowance_LeavesAnotherAddressItsOwn()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: Address, configure: OneAttempt).VerifyAsync("99990000");
+
+        var elsewhere = await ServiceOver(PendingCode(), address: "198.51.100.23", configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<ValidUserCode>(elsewhere);
+    }
+
+    /// <summary>
+    /// Attempts whose source the server cannot see share one allowance, because nothing tells them apart.
+    /// </summary>
+    [Fact]
+    public async Task TwoAttemptsTheServerCannotSee_ShareOneAllowance()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync("99990000");
+
+        var next = await ServiceOver(PendingCode(), address: null, configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<TooManyUserCodeAttempts>(next);
+    }
+
+    /// <summary>
+    /// And what they spend is the server's own budget too, because an attempt nobody can attribute is
+    /// still an attempt this server answered: the two counts are one rule, not one rule per source.
+    /// </summary>
+    [Fact]
+    public async Task AnAttemptTheServerCannotSee_SpendsTheServersBudget()
+    {
+        void OneOfTheBudget(DeviceAuthorizationOptions options) => options.MaxFailedAttemptsPerWindow = 1;
+
+        await ServiceOver(null, address: null, configure: OneOfTheBudget).VerifyAsync("99990000");
+
+        var visible = await ServiceOver(PendingCode(), address: Address, configure: OneOfTheBudget)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<TooManyUserCodeAttempts>(visible);
+    }
+
+    /// <summary>
+    /// And sharing one allowance is what keeps them off everybody else. Left uncounted, the only thing
+    /// they spend is the budget the whole server shares, and that budget refuses every verification -
+    /// including the callers whose address is in plain sight, who are the reason the page exists.
+    /// </summary>
+    [Fact]
+    public async Task AFloodTheServerCannotSee_LeavesACallerItCanSeeAnswered()
+    {
+        void SmallBudget(DeviceAuthorizationOptions options)
+        {
+            options.MaxAddressFailuresPerWindow = 1;
+            options.MaxFailedAttemptsPerWindow = 2;
+        }
+
+        for (var i = 0; i < 4; i++)
+            await ServiceOver(null, address: null, configure: SmallBudget).VerifyAsync("9999000" + i);
+
+        var visible = await ServiceOver(PendingCode(), address: Address, configure: SmallBudget)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<ValidUserCode>(visible);
+    }
+
+    /// <summary>
+    /// One sender has one allowance however its address is spelled. A dual-stack server reports the same
+    /// peer as an IPv4 address over one socket and as the IPv4-mapped IPv6 form over the other, so a cap
+    /// that counted the spelling would give somebody guessing user codes one allowance per stack.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressArrivingUnderBothForms_SpendsOneAllowance()
+    {
+        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+
+        await ServiceOver(null, address: $"::ffff:{Address}", configure: OneAttempt).VerifyAsync("99990000");
+
+        var result = await ServiceOver(PendingCode(), address: Address, configure: OneAttempt)
+            .VerifyAsync(TheCode);
+
+        Assert.IsType<TooManyUserCodeAttempts>(result);
     }
 
     /// <summary>

@@ -53,10 +53,9 @@ public partial class UserCodeRateLimiter(
     /// is what a burst of wrong guesses against a single code deserves.
     /// <para>
     /// Each rung is written with the code's lifetime from the moment it is claimed and is never renewed, so
-    /// a sustained attack no longer extends the pause indefinitely - which is what a record rewritten on
-    /// every failure used to do. It does NOT mean the records die with the code: counted from an attempt
-    /// rather than from issuance, they outlive it by up to one lifetime, and nothing here asks whether a
-    /// code exists, so a pause can be served for a value that names nothing.
+    /// a sustained attack does not extend the pause indefinitely. It does NOT mean the records die with the
+    /// code: counted from an attempt rather than from issuance, they outlive it by up to one lifetime, and
+    /// nothing here asks whether a code exists, so a pause can be served for a value that names nothing.
     /// </para>
     /// </remarks>
     internal const int AttemptLadderLength = 32;
@@ -67,8 +66,30 @@ public partial class UserCodeRateLimiter(
     /// </summary>
     internal const string BeforeAnyVerification = "first";
 
+    /// <summary>
+    /// The name every attempt whose source the server cannot see is counted under, so that all of them
+    /// share one allowance.
+    /// </summary>
+    /// <remarks>
+    /// No address prints like this, and it carries no space or control character, which a store may refuse
+    /// in a key.
+    /// <para>
+    /// They share rather than go uncounted because what stands behind this cap is the server's own budget,
+    /// which every caller spends from: uncounted, one sender the server cannot see refuses every
+    /// verification. Where no address is ever visible those senders are every caller, and this cap bounds
+    /// the page instead - on the numbers shipped the narrower of the two, which no startup check relates.
+    /// </para>
+    /// </remarks>
+    internal const string SourceNotSeen = "(no-address)";
+
+    /// <summary>
+    /// The name this attempt is counted and recorded under, which is where an absent address becomes the
+    /// shared one: every method that takes a caller passes through here first.
+    /// </summary>
+    private static string SourceOf(string? clientIdentifier) => clientIdentifier ?? SourceNotSeen;
+
     /// <inheritdoc />
-    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string clientIdentifier)
+    public async Task<Result<bool, UserCodeRateLimited>> CheckAsync(string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -101,14 +122,16 @@ public partial class UserCodeRateLimiter(
         // Per-address cap. Attempts are claimed in ascending order within one window, so the presence of
         // the rung at the cap is the whole question and costs one read.
         var window = WindowOf(now, deviceAuthOptions);
+        var source = SourceOf(clientIdentifier);
         var capReached = await storage.GetAsync<RateLimitAttempt>(
-            keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
+            keyFactory.AddressRateLimitAttemptKey(
+                source, window, deviceAuthOptions.MaxAddressFailuresPerWindow),
             removeOnRetrieval: false);
 
         if (capReached != null)
         {
             // The window this read is about is the one the clock is in, so its end is always still ahead.
-            LogAddressCapReached(clientIdentifier, deviceAuthOptions.MaxAddressFailuresPerWindow);
+            LogAddressCapReached(source, deviceAuthOptions.MaxAddressFailuresPerWindow);
             return new UserCodeRateLimited(EndOf(window, deviceAuthOptions) - now, false);
         }
 
@@ -129,26 +152,25 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordUnknownCodeAsync(string clientIdentifier)
+    public async Task RecordUnknownCodeAsync(string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
         // No per-code count: there is no code. Charging this to the value that was typed would count the
         // one thing a guesser never repeats, and would let it spend the allowance of a code issued later.
-        await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
+        await RecordAgainstSourceAndBudgetAsync(SourceOf(clientIdentifier), now, deviceAuthOptions);
     }
 
     /// <inheritdoc />
-    public async Task RecordFailureAsync(string userCode, string clientIdentifier)
+    public async Task RecordFailureAsync(string userCode, string? clientIdentifier)
     {
         var now = timeProvider.GetUtcNow();
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
         // Read before the claim, so an attempt whose claim began before a verification started the next
         // life lands in the life it read - the one being left behind - rather than on top of an empty
-        // ladder it never saw. That attempt is then not counted, which is the same loss as before: the
-        // code has just been verified and its own history says nothing any more.
+        // ladder it never saw. That attempt is then not counted, the code having just been verified.
         var life = await CurrentLifeAsync(userCode);
 
         var attempts = await ClaimAttemptAsync(
@@ -167,12 +189,13 @@ public partial class UserCodeRateLimiter(
         if (attempts >= deviceAuthOptions.MaxFailuresBeforeBackoff)
             LogUserCodeBlocked(userCode, BackoffAfter(attempts, deviceAuthOptions), attempts);
 
-        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(clientIdentifier, now, deviceAuthOptions);
+        var source = SourceOf(clientIdentifier);
+        var addressAttempts = await RecordAgainstSourceAndBudgetAsync(source, now, deviceAuthOptions);
 
         if (deviceAuthOptions.MaxFailuresBeforeBackoff <= attempts ||
             deviceAuthOptions.MaxAddressFailuresPerWindow <= addressAttempts)
         {
-            LogBruteForceDetected(userCode, clientIdentifier, attempts, addressAttempts);
+            LogBruteForceDetected(userCode, source, attempts, addressAttempts);
         }
     }
 
@@ -185,12 +208,12 @@ public partial class UserCodeRateLimiter(
     /// apart from the per-code ladder.
     /// </remarks>
     private async Task<int> RecordAgainstSourceAndBudgetAsync(
-        string clientIdentifier, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
+        string source, DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
     {
         var window = WindowOf(now, deviceAuthOptions);
 
         var addressAttempts = await ClaimAttemptAsync(
-            rung => keyFactory.AddressRateLimitAttemptKey(clientIdentifier, window, rung),
+            rung => keyFactory.AddressRateLimitAttemptKey(source, window, rung),
             deviceAuthOptions.MaxAddressFailuresPerWindow,
             now,
             deviceAuthOptions.RateLimitRetention);
@@ -205,11 +228,10 @@ public partial class UserCodeRateLimiter(
     }
 
     /// <inheritdoc />
-    public async Task RecordSuccessAsync(string userCode, string clientIdentifier)
+    public async Task RecordSuccessAsync(string userCode, string? clientIdentifier)
     {
-        // The verified code leaves its attempt history behind by starting a new life, and nothing is removed.
-        // Removal is what let an attempt that began earlier land above the gap it left, and the reader of
-        // these records may not meet a gap: it finds the highest rung by halving the range. The records left
+        // The verified code leaves its attempt history behind by starting a new life, and nothing is removed:
+        // the reader finds the highest rung by halving the range, so it may not meet a gap. The records left
         // behind expire on their own, with the code's lifetime from each attempt.
         //
         // The life is named rather than counted. A count is read before it is written, so it restarts whenever
@@ -238,7 +260,7 @@ public partial class UserCodeRateLimiter(
                 AbsoluteExpirationRelativeToNow = deviceAuthOptions.CodeLifetime + deviceAuthOptions.CodeLifetime,
             });
 
-        LogUserCodeVerified(userCode, clientIdentifier);
+        LogUserCodeVerified(userCode, SourceOf(clientIdentifier));
     }
 
     /// <summary>
@@ -364,8 +386,7 @@ public partial class UserCodeRateLimiter(
     /// </summary>
     /// <remarks>
     /// Attempts are counted per window rather than over the last interval, so a burst spanning a boundary
-    /// can spend the cap twice. The record this replaced behaved the same way: it restarted the count once
-    /// the interval had passed since the first failure it held.
+    /// can spend the cap twice.
     /// </remarks>
     private static long WindowOf(DateTimeOffset now, DeviceAuthorizationOptions deviceAuthOptions)
         => now.UtcTicks / deviceAuthOptions.RateLimitWindow.Ticks;

@@ -9,6 +9,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -46,6 +47,11 @@ public class UserCodeRateLimiterTests
     private const string UserCode = "WDJB-MJHT";
     private const string OtherUserCode = "BDWD-HJKL";
     private const string ClientIdentifier = "203.0.113.7";
+
+    /// <summary>
+    /// The field a record names the caller in, which is what a structured sink writes it under.
+    /// </summary>
+    private const string CallerField = "ClientIdentifier";
 
     private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
@@ -111,8 +117,9 @@ public class UserCodeRateLimiterTests
     /// how long to wait, and that is what a caller can act on.
     /// <para>
     /// It stops at the failure before the last one the code allows, because the answer after that is not a
-    /// pause at all - the code is spent, and the row above owns that. With the shipped numbers that leaves
-    /// two doublings to see here; the far end of the ladder is driven below, against a cap raised to it.
+    /// pause at all - the code is spent, and <see cref="ACodeWhoseAttemptsAreSpent_IsRefusedForTheRestOfItsLife"/>
+    /// owns that. Where the doubling stops is driven by
+    /// <see cref="ThePause_NeverExceedsTheConfiguredMaximum"/>.
     /// </para>
     /// </remarks>
     [Theory]
@@ -277,7 +284,8 @@ public class UserCodeRateLimiterTests
     /// Forgetting is done by starting the next generation of the ladder rather than by removing anything,
     /// so a failure has to be written into the generation the code is in NOW. Written into the one left
     /// behind, it would be invisible to every later read - the count would never rise again for that value,
-    /// and the row above, which only asks that the slate is clean, would pass either way.
+    /// and <see cref="AVerifiedCode_ForgetsItsFailures"/>, which only asks that the slate is clean, would
+    /// pass either way.
     /// </remarks>
     [Fact]
     public async Task AVerifiedCode_CountsTheFailuresThatComeAfter()
@@ -605,7 +613,7 @@ public class UserCodeRateLimiterTests
             options.CodeLifetime = TimeSpan.FromHours(6);
         });
 
-        // Ten failures earn 2^7 seconds by doubling, which the ceiling cuts to ten.
+        // Enough failures that the doubling has passed the ceiling.
         for (var i = 0; i < 10; i++)
             await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
 
@@ -690,6 +698,31 @@ public class UserCodeRateLimiterTests
     }
 
     /// <summary>
+    /// The report tells the two counts apart: what this code has cost and what this source has.
+    /// </summary>
+    /// <remarks>
+    /// An operator reads them to decide whether to look at the code or at the sender, so the pair arriving
+    /// the wrong way round sends them after the wrong one.
+    /// </remarks>
+    [Fact]
+    public async Task TheReportOfGuessing_SaysWhichCountIsWhich()
+    {
+        // Reported for the source rather than for the code, so the two counts differ where a swap shows.
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 3);
+
+        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(OtherUserCode, ClientIdentifier);
+        await limiter.RecordFailureAsync(UserCode, ClientIdentifier);
+
+        var report = Assert.Single(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.BruteForceDetected);
+
+        Assert.Equal(1, report.Value("UserCodeFailures"));
+        Assert.Equal(3, report.Value("AddressFailures"));
+    }
+
+    /// <summary>
     /// A limiter over the same store, configured away from the shipped numbers for one row.
     /// </summary>
     private UserCodeRateLimiter LimiterWith(Action<DeviceAuthorizationOptions> configure)
@@ -709,5 +742,81 @@ public class UserCodeRateLimiterTests
     {
         for (var i = 0; i < times; i++)
             await _rateLimiter.RecordFailureAsync(UserCode, ClientIdentifier);
+    }
+
+    /// <summary>
+    /// No caller can be given the name that attempts with no visible source share, which is what keeps
+    /// that allowance theirs: a name an address could take would hand one real sender the allowance of
+    /// everybody the server cannot see. Nor may it carry a space or a control character, which some
+    /// stores refuse in a key.
+    /// </summary>
+    [Fact]
+    public void TheNameUnseenAttemptsShare_IsNoAddressAndNoStoreRefusesIt()
+    {
+        Assert.False(IPAddress.TryParse(UserCodeRateLimiter.SourceNotSeen, out _));
+        Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsWhiteSpace);
+        Assert.DoesNotContain(UserCodeRateLimiter.SourceNotSeen, char.IsControl);
+    }
+
+    /// <summary>
+    /// And that name is the one the limiter counts an unseen attempt under, which is what makes
+    /// <see cref="TheNameUnseenAttemptsShare_IsNoAddressAndNoStoreRefusesIt"/> about the key that is
+    /// written rather than about a constant nothing has to use.
+    /// </summary>
+    /// <remarks>
+    /// Which limit refused is read from the record, because the cap and the server's budget return the same
+    /// shape.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnseenAttempt_SpendsTheAllowanceOfThatVeryName()
+    {
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
+
+        await limiter.RecordUnknownCodeAsync(null);
+
+        var underThatName = await limiter.CheckAsync(UserCode, UserCodeRateLimiter.SourceNotSeen);
+
+        Assert.True(underThatName.TryGetFailure(out _));
+        Assert.Contains(
+            _logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.UserCodeRateLimiter.AddressCapReached);
+    }
+
+    /// <summary>
+    /// Every record naming the caller names an unseen one by the shared name and a visible one by its
+    /// address, so an operator reading them sees one caller rather than one per record.
+    /// </summary>
+    [Fact]
+    public async Task EveryRecordNamingTheCaller_NamesTheCallerTheSameWay()
+    {
+        await AssertRecordsName(UserCode, null, UserCodeRateLimiter.SourceNotSeen);
+        await AssertRecordsName(OtherUserCode, ClientIdentifier, ClientIdentifier);
+    }
+
+    /// <summary>
+    /// Drives the records that name a caller, for one caller, and asserts each names it as expected.
+    /// </summary>
+    private async Task AssertRecordsName(string userCode, string? clientIdentifier, string expected)
+    {
+        var limiter = LimiterWith(options => options.MaxAddressFailuresPerWindow = 1);
+        _logs.Entries.Clear();
+
+        await limiter.RecordFailureAsync(userCode, clientIdentifier);
+        await limiter.CheckAsync(userCode, clientIdentifier);
+        await limiter.RecordSuccessAsync(userCode, clientIdentifier);
+
+        int[] naming =
+        [
+            LogEvents.Device.UserCodeRateLimiter.BruteForceDetected,
+            LogEvents.Device.UserCodeRateLimiter.AddressCapReached,
+            LogEvents.Device.UserCodeRateLimiter.UserCodeVerified,
+        ];
+
+        foreach (var eventId in naming)
+        {
+            var record = Assert.Single(_logs.Entries, entry => entry.EventId.Id == eventId);
+
+            Assert.Equal(expected, record.Value(CallerField));
+        }
     }
 }

@@ -634,6 +634,13 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             discovery.RegistrationEndpoint, metadata, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+
+        // And the refusal carries the status alone. The other adapter leaves the bound to the server as
+        // endpoint metadata, which its own suite asserts, since an in-memory server enforces no such bound
+        // and a test demanding this status there could never fail.
+        Assert.Equal(
+            string.Empty,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 #endif
 
@@ -689,6 +696,44 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A body that declares a length over the bound is refused, and the refusal carries the status and
+    /// nothing after it. Every other case here arrives chunked, so this is the only one that reaches the
+    /// comparison against a declared length at all; that the body goes unread is what the declaration buys
+    /// and is not visible from this side of the connection, so what is asserted is the answer.
+    /// </summary>
+    [Fact]
+    public async Task A_body_declaring_a_length_over_the_bound_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var limit = Factory.Services.GetRequiredService<IOptions<OidcOptions>>()
+            .Value.MaxRegistrationRequestSize;
+        Assert.NotNull(limit);
+
+        var metadata = NewClientMetadata("declares-too-much");
+        metadata[VendorPad] = new string('a', (int)limit.Value);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.RegistrationEndpoint)
+        {
+            Content = new StringContent(
+                metadata.ToJsonString(),
+                Encoding.UTF8,
+                MediaTypeNames.Application.Json),
+        };
+
+        // What separates this case from the boundary theory above, which strips the header on purpose.
+        Assert.NotNull(request.Content.Headers.ContentLength);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal(
+            string.Empty,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 #endif
 
