@@ -29,7 +29,7 @@ public class BackChannelLogoutHandlerTests
     /// Accepts whatever it is given and reports the token it was asked about, so a case can say
     /// which string reached validation rather than only that one did.
     /// </summary>
-    private sealed class StubValidator(string? refuseWith = null) : ILogoutTokenValidator
+    private sealed class StubValidator(string? refuseWith = null, string? tokenId = "jti-1") : ILogoutTokenValidator
     {
         public string? Received { get; private set; }
 
@@ -39,7 +39,7 @@ public class BackChannelLogoutHandlerTests
             Received = logoutToken;
 
             return refuseWith is null
-                ? Task.FromResult(new LogoutNotification(Issuer, "user-1", "session-1", "jti-1"))
+                ? Task.FromResult(new LogoutNotification(Issuer, "user-1", "session-1", tokenId))
                 : throw new LogoutTokenValidationException(refuseWith);
         }
     }
@@ -373,11 +373,35 @@ public class BackChannelLogoutHandlerTests
     }
 
     /// <summary>
-    /// A cancelled request is one of the failures the release answers, so the release does not carry
-    /// the request's cancellation: a store that honours it would refuse the release at once.
+    /// A notification naming no token identifier, which only a host's own validator can produce, had
+    /// nothing reserved under it, so nothing is released and no reservation is reported kept.
     /// </summary>
     [Fact]
-    public async Task AReleaseAfterACancelledRequest_IsNotCancelledWithIt()
+    public async Task ANotificationWithNoTokenIdentifier_ReleasesNothing()
+    {
+        var logger = new RecordingLogger();
+        var cache = new ReleasingCache();
+        var handler = new BackChannelLogoutHandler(
+            logger,
+            new StubValidator(tokenId: null),
+            new RecordingSink("The session store is unreachable."),
+            cache);
+
+        await handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(cache.Released);
+        Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, Assert.Single(logger.Warnings).EventId.Id);
+    }
+
+    /// <summary>
+    /// A canceled request is one of the failures the release answers, so the release does not carry
+    /// the request's cancellation: a store that honors it would refuse the release at once.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseAfterACanceledRequest_IsNotCanceledWithIt()
     {
         using var request = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);

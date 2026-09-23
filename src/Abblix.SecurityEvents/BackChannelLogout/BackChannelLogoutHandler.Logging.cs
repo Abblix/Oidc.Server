@@ -20,6 +20,6 @@ partial class BackChannelLogoutHandler
     [LoggerMessage(
         EventId = LogEvents.BackChannelLogout.ReservationKept,
         Level = LogLevel.Warning,
-        Message = "The Logout Token {TokenId} from {Issuer} was not acted on and stays reserved: a retransmission of it will be refused as a replay until it expires")]
+        Message = "The sink did not report success for the Logout Token {TokenId} from {Issuer}, and the token stays reserved: a retransmission of it will be refused as a replay until it expires")]
     private partial void LogReservationKept(Exception exception, string issuer, string tokenId);
 }

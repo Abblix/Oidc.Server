@@ -65,9 +65,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// given - a deployment-wide profile is a floor and a client may only tighten it. So this
     /// narrows and never widens.
     ///
-    /// Placed before the identifier is reserved, because a reservation is spent and cannot be given
-    /// back: a refusal after it would burn the assertion's own identifier on a request this check
-    /// was going to reject.
+    /// Placed before the identifier is reserved, because this path never gives a reservation back:
+    /// a refusal after it would burn the assertion's own identifier on a request this check was
+    /// going to reject.
     /// </remarks>
     /// <param name="timestamps">The assertion's timestamps, already read.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>

@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
 /// The server's replay cache: the storage primitive from Abblix.JWT wearing this deployment's
-/// policy - the configured clock skew on top of every retention window, and the two log events
-/// an operator's runbook keys off.
+/// policy - the configured clock skew on top of every retention window, and the log events an
+/// operator's runbook keys off.
 /// </summary>
 /// <remarks>
 /// The retention is the WIDEST window in which the thing an entry names could still be accepted,
@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// costs an entry held a while longer and cannot be a hole, which is what settles the direction to
 /// err in.
 /// </remarks>
-/// <param name="logger">Records the two replay events.</param>
+/// <param name="logger">Records what happens to each identifier.</param>
 /// <param name="inner">The storage the reservation actually lands in.</param>
 /// <param name="options">Where the clock skew is read from, re-read per call so a live
 /// configuration change takes effect without a restart.</param>
@@ -84,6 +84,9 @@ internal sealed partial class ConfiguredReplayCache(
     }
 
     /// <inheritdoc />
-    public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
-        => inner.ReleaseAsync(identifier, cancellationToken);
+    public async Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        await inner.ReleaseAsync(identifier, cancellationToken);
+        LogReleased(identifier);
+    }
 }

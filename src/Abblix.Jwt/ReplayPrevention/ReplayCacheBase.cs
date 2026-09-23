@@ -28,9 +28,10 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// and only one of them can be relied on to refuse.
 /// </para>
 /// <para>
-/// What a subclass must NOT do is as fixed as what it must: no read before the write, no retry. Whether the reservation is indivisible is the store's promise, and it is the whole of
-/// what distinguishes a strict cache from <see cref="DistributedReplayCache"/>; a subclass that
-/// read first would hand back the very race the shape exists to close.
+/// What a subclass must NOT do is as fixed as what it must: no read before the write, no retry.
+/// Whether the reservation is indivisible is the store's promise, and it is the whole of what
+/// distinguishes a strict cache from <see cref="DistributedReplayCache"/>; a subclass that read
+/// first would hand back the very race the shape exists to close.
 /// </para>
 /// <para>
 /// <b>Redis.</b> One command, and the condition is evaluated by the server inside the write that

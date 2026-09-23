@@ -109,7 +109,7 @@ public sealed partial class BackChannelLogoutHandler(
     /// Gives back the reservation validation made for this token.
     /// </summary>
     /// <remarks>
-    /// Not cancellable, because a cancelled request is one of the failures it answers. A release that
+    /// Not cancelable, because a canceled request is one of the failures it answers. A release that
     /// fails is logged rather than thrown: the provider is owed the outcome of the logout, and the
     /// entry that stays only expires as it would have without the release.
     /// </remarks>

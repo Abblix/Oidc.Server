@@ -23,4 +23,10 @@ partial class ConfiguredReplayCache
         Level = LogLevel.Debug,
         Message = "Marked jti {JwtId} as used, remembered until {ExpiresAt}")]
     private partial void LogMarkedAsUsed(string JwtId, DateTimeOffset ExpiresAt);
+
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.DistributedJwtReplayCache.Released,
+        Level = LogLevel.Debug,
+        Message = "Released jti {JwtId}, so it reads as fresh again")]
+    private partial void LogReleased(string JwtId);
 }

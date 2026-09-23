@@ -53,7 +53,7 @@ public class BackChannelLogoutRetryTests
     {
         Refuses,
         Throws,
-        IsCancelled,
+        IsCanceled,
     }
 
     /// <summary>Fails its first call in the way it was told to and ends the sessions on every later one.</summary>
@@ -75,7 +75,7 @@ public class BackChannelLogoutRetryTests
                 case Failure.Throws:
                     throw new InvalidOperationException("The session store did not answer.");
 
-                case Failure.IsCancelled:
+                case Failure.IsCanceled:
                     request.Cancel();
                     throw new OperationCanceledException(request.Token);
 
@@ -129,7 +129,7 @@ public class BackChannelLogoutRetryTests
     [Theory]
     [InlineData(Failure.Refuses)]
     [InlineData(Failure.Throws)]
-    [InlineData(Failure.IsCancelled)]
+    [InlineData(Failure.IsCanceled)]
     public async Task ATokenTheSinkFailedOn_ReachesTheSinkWhenDeliveredAgain(Failure failure)
     {
         using var firstRequest = CancellationTokenSource.CreateLinkedTokenSource(
@@ -137,15 +137,17 @@ public class BackChannelLogoutRetryTests
         var sink = new SinkFailingOnce(failure, firstRequest);
         var handler = Handler(sink);
 
-        try
+        if (failure is Failure.Refuses)
         {
             var first = await handler.HandleAsync(
                 MediaTypeNames.Application.FormUrlEncoded, Body, firstRequest.Token);
             Assert.Equal(HttpStatusCode.BadRequest, first.StatusCode);
         }
-        catch (Exception exception) when (failure is not Failure.Refuses)
+        else
         {
-            Assert.IsNotType<LogoutTokenValidationException>(exception);
+            var thrown = await Assert.ThrowsAnyAsync<Exception>(() => handler.HandleAsync(
+                MediaTypeNames.Application.FormUrlEncoded, Body, firstRequest.Token));
+            Assert.IsNotType<LogoutTokenValidationException>(thrown);
         }
 
         var second = await handler.HandleAsync(
@@ -157,7 +159,7 @@ public class BackChannelLogoutRetryTests
 
     /// <summary>
     /// And a token the sink acted on stays reserved, so what a failure gives back is not given on
-    /// success too.
+    /// success too - nor by a replay refused at validation, which never reserved anything to give.
     /// </summary>
     [Fact]
     public async Task ATokenTheSinkActedOn_IsRefusedWhenDeliveredAgain()
@@ -170,9 +172,11 @@ public class BackChannelLogoutRetryTests
         await handler.HandleAsync(MediaTypeNames.Application.FormUrlEncoded, Body, request.Token);
         var acted = await handler.HandleAsync(MediaTypeNames.Application.FormUrlEncoded, Body, request.Token);
         var replayed = await handler.HandleAsync(MediaTypeNames.Application.FormUrlEncoded, Body, request.Token);
+        var replayedAgain = await handler.HandleAsync(MediaTypeNames.Application.FormUrlEncoded, Body, request.Token);
 
         Assert.Equal(HttpStatusCode.OK, acted.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, replayedAgain.StatusCode);
         Assert.Equal(2, sink.Calls);
     }
 }

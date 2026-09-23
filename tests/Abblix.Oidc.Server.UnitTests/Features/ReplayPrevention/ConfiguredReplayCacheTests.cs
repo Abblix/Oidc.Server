@@ -14,6 +14,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -37,8 +39,7 @@ public class ConfiguredReplayCacheTests
     private static readonly DateTimeOffset Expiry = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
-    /// Records the deadline it was handed, which is what these cases are about. The class also emits
-    /// the two events an operator's runbook keys off, and nothing here holds it to those.
+    /// Records the deadline it was handed and the identifier it was asked to release.
     /// </summary>
     private sealed class RecordingCache : IReplayCache
     {
@@ -85,12 +86,20 @@ public class ConfiguredReplayCacheTests
     public async Task AReleaseReachesTheStore()
     {
         var inner = new RecordingCache();
+        var logs = new RecordingLoggerFactory();
         var cache = new ConfiguredReplayCache(
-            NullLogger<ConfiguredReplayCache>.Instance, inner, new OptionsMonitorStub(new OidcOptions()));
+            new Logger<ConfiguredReplayCache>(logs), inner, new OptionsMonitorStub(new OidcOptions()));
 
         await cache.ReleaseAsync("jti", TestContext.Current.CancellationToken);
 
         Assert.Equal("jti", inner.Released);
+
+        // Without a line of its own, a debug log shows the same identifier reserved twice with
+        // nothing between, which reads as the guard letting a replay through.
+        Assert.Contains(
+            logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Tokens.DistributedJwtReplayCache.Released
+                     && entry.Message.Contains("jti", StringComparison.Ordinal));
     }
 
     /// <summary>
