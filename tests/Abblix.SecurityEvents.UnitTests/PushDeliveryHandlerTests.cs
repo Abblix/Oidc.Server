@@ -67,6 +67,9 @@ public class PushDeliveryHandlerTests
             DateTimeOffset expiresAt,
             CancellationToken cancellationToken = default)
             => Task.FromResult(_seen.Add(identifier));
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     [Fact]

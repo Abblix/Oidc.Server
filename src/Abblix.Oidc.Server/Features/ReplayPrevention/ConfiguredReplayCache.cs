@@ -82,4 +82,8 @@ internal sealed partial class ConfiguredReplayCache(
         LogMarkedAsUsed(identifier, skewed);
         return true;
     }
+
+    /// <inheritdoc />
+    public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+        => inner.ReleaseAsync(identifier, cancellationToken);
 }

@@ -52,4 +52,8 @@ public sealed class DistributedReplayCache(
         TimeSpan timeToLive,
         CancellationToken cancellationToken)
         => cache.TryAddAsync(key, timeToLive, cancellationToken);
+
+    /// <inheritdoc />
+    protected override Task RemoveAsync(string key, CancellationToken cancellationToken)
+        => cache.RemoveAsync(key, cancellationToken);
 }

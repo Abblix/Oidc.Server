@@ -28,8 +28,7 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// and only one of them can be relied on to refuse.
 /// </para>
 /// <para>
-/// What a subclass must NOT do is as fixed as what it must: no read before the write, no release,
-/// no retry. Whether the reservation is indivisible is the store's promise, and it is the whole of
+/// What a subclass must NOT do is as fixed as what it must: no read before the write, no retry. Whether the reservation is indivisible is the store's promise, and it is the whole of
 /// what distinguishes a strict cache from <see cref="DistributedReplayCache"/>; a subclass that
 /// read first would hand back the very race the shape exists to close.
 /// </para>
@@ -47,6 +46,9 @@ namespace Abblix.Jwt.ReplayPrevention;
 ///     protected override Task<bool> ReserveIfAbsentAsync(
 ///         string key, TimeSpan timeToLive, CancellationToken cancellationToken)
 ///         => _database.StringSetAsync(key, 1, timeToLive, When.NotExists)
+///
+///     protected override Task RemoveAsync(string key, CancellationToken cancellationToken)
+///         => _database.KeyDeleteAsync(key)
 /// }
 /// ]]></code>
 /// <para>
@@ -63,6 +65,8 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// INSERT INTO replay_reservations (reservation_key, expires_at)
 /// VALUES (@key, @expiresAt)
 /// ON CONFLICT (reservation_key) DO NOTHING
+///
+/// DELETE FROM replay_reservations WHERE reservation_key = @key
 /// ]]></code>
 /// <para>
 /// A row count of one is a first sighting, zero is a replay - the same answer Redis gives, from the
@@ -129,6 +133,14 @@ public abstract class ReplayCacheBase(TimeProvider clock, string keyPrefix) : IR
         return await ReserveIfAbsentAsync(_keyPrefix + identifier, timeToLive, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        // Refused for the same reason as a reservation of it: the bare prefix is no token's key.
+        ArgumentException.ThrowIfNullOrEmpty(identifier);
+        return RemoveAsync(_keyPrefix + identifier, cancellationToken);
+    }
+
     /// <summary>
     /// Stores something under <paramref name="key"/> only if nothing is there, and answers whether
     /// it was absent.
@@ -148,4 +160,11 @@ public abstract class ReplayCacheBase(TimeProvider clock, string keyPrefix) : IR
         string key,
         TimeSpan timeToLive,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes whatever is stored under <paramref name="key"/>; a key that is not there is not an error.
+    /// </summary>
+    /// <param name="key">The identifier with this cache's prefix already composed onto it.</param>
+    /// <param name="cancellationToken">Cancels the store round trip.</param>
+    protected abstract Task RemoveAsync(string key, CancellationToken cancellationToken);
 }

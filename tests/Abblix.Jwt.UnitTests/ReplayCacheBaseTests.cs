@@ -44,6 +44,9 @@ public class ReplayCacheBaseTests
             Calls++;
             return Task.FromResult(answer);
         }
+
+        protected override Task RemoveAsync(string key, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
     }
 
     private static RecordingCache NewCache(bool answer = true, string prefix = "replay:")

@@ -50,6 +50,14 @@ public class ConfiguredReplayCacheTests
             Reserved = expiresAt;
             return Task.FromResult(true);
         }
+
+        public string? Released { get; private set; }
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+        {
+            Released = identifier;
+            return Task.CompletedTask;
+        }
     }
 
     private static async Task<DateTimeOffset> ReservedDeadline(TimeSpan? configured)
@@ -66,6 +74,23 @@ public class ConfiguredReplayCacheTests
         Assert.True(await cache.TryReserveAsync("jti", Expiry, TestContext.Current.CancellationToken));
 
         return inner.Reserved!.Value;
+    }
+
+    /// <summary>
+    /// A release reaches the store. A host running this server beside a back-channel logout receiver
+    /// shares this cache with it, and a release stopped here leaves every Logout Token the application
+    /// failed on refused as a replay when the provider sends it again.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseReachesTheStore()
+    {
+        var inner = new RecordingCache();
+        var cache = new ConfiguredReplayCache(
+            NullLogger<ConfiguredReplayCache>.Instance, inner, new OptionsMonitorStub(new OidcOptions()));
+
+        await cache.ReleaseAsync("jti", TestContext.Current.CancellationToken);
+
+        Assert.Equal("jti", inner.Released);
     }
 
     /// <summary>

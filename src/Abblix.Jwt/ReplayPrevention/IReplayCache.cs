@@ -47,4 +47,16 @@ public interface IReplayCache
         string identifier,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gives back a reservation, so the same identifier reads as fresh again.
+    /// </summary>
+    /// <remarks>
+    /// For the caller whose own <see cref="TryReserveAsync"/> answered true and whose work on that
+    /// token then failed: without it a retry of the token is refused as a replay of work that never
+    /// happened. Any other caller that releases an identifier opens it to replay.
+    /// </remarks>
+    /// <param name="identifier">The value that was reserved.</param>
+    /// <param name="cancellationToken">Cancels the cache round trip.</param>
+    Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default);
 }
