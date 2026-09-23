@@ -28,7 +28,7 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// <para>
 /// A caller that gives a reservation back after its work failed widens the same race: when two
 /// instances both hear "new" for one identifier and one of them releases, the entry the other
-/// one's success rests on is gone, and the token passes as fresh until it expires.
+/// one's success rests on is gone, and the next presentation of the token passes as fresh.
 /// </para>
 /// </remarks>
 /// <param name="cache">The distributed cache the host registered; the store is the host's choice.

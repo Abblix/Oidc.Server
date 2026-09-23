@@ -90,16 +90,16 @@ public class ConfiguredReplayCacheTests
         var cache = new ConfiguredReplayCache(
             new Logger<ConfiguredReplayCache>(logs), inner, new OptionsMonitorStub(new OidcOptions()));
 
-        await cache.ReleaseAsync("jti", TestContext.Current.CancellationToken);
+        await cache.ReleaseAsync("token-released", TestContext.Current.CancellationToken);
 
-        Assert.Equal("jti", inner.Released);
+        Assert.Equal("token-released", inner.Released);
 
         // Without a line of its own, a debug log shows the same identifier reserved twice with
         // nothing between, which reads as the guard letting a replay through.
         Assert.Contains(
             logs.Entries,
             entry => entry.EventId.Id == LogEvents.Tokens.DistributedJwtReplayCache.Released
-                     && entry.Message.Contains("jti", StringComparison.Ordinal));
+                     && entry.Message.Contains("token-released", StringComparison.Ordinal));
     }
 
     /// <summary>
