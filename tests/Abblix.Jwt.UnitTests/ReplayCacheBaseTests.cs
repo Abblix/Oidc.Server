@@ -44,6 +44,15 @@ public class ReplayCacheBaseTests
             Calls++;
             return Task.FromResult(answer);
         }
+
+        public string? RemovedKey { get; private set; }
+
+        protected override Task RemoveAsync(string key, CancellationToken cancellationToken)
+        {
+            RemovedKey = key;
+            Token = cancellationToken;
+            return Task.CompletedTask;
+        }
     }
 
     private static RecordingCache NewCache(bool answer = true, string prefix = "replay:")
@@ -121,5 +130,35 @@ public class ReplayCacheBaseTests
         // Nothing reached the backend: reserving the bare prefix would make the FIRST real token
         // under it read as a replay.
         Assert.Equal(0, cache.Calls);
+    }
+
+    /// <summary>
+    /// A release removes the key the reservation wrote, so it has to compose the same prefix: without
+    /// it the store deletes nothing and the token stays refused.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseRemovesTheKeyTheReservationWrote()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var cache = NewCache(prefix: "rollout-after:");
+
+        using var release = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        await cache.TryReserveAsync("jti-1", Now.AddMinutes(5), cancellationToken);
+        await cache.ReleaseAsync("jti-1", release.Token);
+
+        Assert.Equal(cache.Key, cache.RemovedKey);
+        Assert.Equal(release.Token, cache.Token);
+    }
+
+    [Fact]
+    public async Task AnEmptyIdentifier_IsNotReleased()
+    {
+        var cache = NewCache();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => cache.ReleaseAsync("", TestContext.Current.CancellationToken));
+
+        Assert.Null(cache.RemovedKey);
     }
 }

@@ -399,6 +399,7 @@ internal static class LogEvents
 
             public const int ReplayDetected = Base + 1;
             public const int MarkedAsUsed = Base + 2;
+            public const int Released = Base + 3;
         }
 
         /// <summary>

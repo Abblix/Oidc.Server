@@ -42,6 +42,9 @@ public class LogoutTokenReplayWindowTests
             ReservedUntil = expiresAt;
             return Task.FromResult(true);
         }
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     /// <summary>A profile that accepts whatever it is handed, so the case is about the guard alone.</summary>

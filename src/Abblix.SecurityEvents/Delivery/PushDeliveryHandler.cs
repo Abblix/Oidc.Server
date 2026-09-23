@@ -24,8 +24,7 @@ namespace Abblix.SecurityEvents.Delivery;
 /// a token the sink accepted is written to the replay cache. Nothing on this path READS that cache,
 /// so a redelivery reaches the sink again - RFC 8935 Section 2 lets a transmitter redeliver
 /// regardless of earlier responses, and <see cref="ISecurityEventSink"/> answers for it by
-/// requiring idempotent processing. Why the write cannot come earlier, and why that is the only
-/// correct order available here, is on <c>RecordAsync</c>.
+/// requiring idempotent processing. Why the write cannot come earlier is on <c>RecordAsync</c>.
 /// </para>
 /// <para>
 /// Nothing here knows which profile of SET it carries. RFC 8935 is a delivery specification and
@@ -127,9 +126,7 @@ public sealed class PushDeliveryHandler(
     /// <para>
     /// The consequence is that a repeat reaches the sink again rather than being short-circuited
     /// here. That is what <see cref="ISecurityEventSink"/> already requires of it - "Processing
-    /// must be idempotent" - and it is the only correct short-circuit available while
-    /// <see cref="IReplayCache"/> can reserve but not release: a cache entry cannot be undone when
-    /// the work it stands for failed, so it must not be written until that work has succeeded.
+    /// must be idempotent".
     /// </para>
     /// </remarks>
     private async Task RecordAsync(

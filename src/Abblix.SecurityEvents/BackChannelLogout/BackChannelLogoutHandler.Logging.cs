@@ -16,4 +16,10 @@ partial class BackChannelLogoutHandler
         Level = LogLevel.Warning,
         Message = "Back-channel logout refused: {Error} {Description}")]
     private partial void LogRefused(string error, string description);
+
+    [LoggerMessage(
+        EventId = LogEvents.BackChannelLogout.ReservationKept,
+        Level = LogLevel.Warning,
+        Message = "The sink did not report success for the Logout Token {TokenId} from {Issuer}, and the token stays reserved: a retransmission of it will be refused as a replay until it expires")]
+    private partial void LogReservationKept(Exception exception, string issuer, string tokenId);
 }

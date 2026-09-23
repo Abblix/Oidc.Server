@@ -40,5 +40,11 @@ public static class LogEvents
         /// that traveled back to the provider.
         /// </summary>
         public const int RequestRefused = Base + 1;
+
+        /// <summary>
+        /// A Logout Token the sink did not report success for could not be released from the replay
+        /// cache. The message carries its issuer and identifier, and the exception says why.
+        /// </summary>
+        public const int ReservationKept = Base + 2;
     }
 }
