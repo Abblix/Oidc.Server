@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -111,7 +112,7 @@ public class ClientMayTightenItselfTests
             issuerProvider.Object,
             serviceKeys.Object,
             Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile }),
-            new FixedClock(Now));
+            new FakeTimeProvider(Now));
 
         return await validator.ValidateAsync("header.payload.signature", options);
     }
@@ -289,10 +290,5 @@ public class ClientMayTightenItselfTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("iat", error.ErrorDescription, StringComparison.Ordinal);
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 using Xunit;
 
@@ -340,7 +341,7 @@ public class LicenseLoadingServiceTests
         var service = new LicenseLoadingService(
             records,
             new MockLicenseJwtProvider(null),
-            new FixedClock(new DateTimeOffset(2200, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+            new FakeTimeProvider(new DateTimeOffset(2200, 1, 1, 0, 0, 0, TimeSpan.Zero)));
 
         try
         {
@@ -406,11 +407,5 @@ public class LicenseLoadingServiceTests
             // the last one that may skip the restore.
             LicenseLogger.Instance.Init(NullLoggerFactory.Instance);
         }
-    }
-
-    /// <summary>A clock that answers one moment, so a test can stand anywhere on the timeline.</summary>
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

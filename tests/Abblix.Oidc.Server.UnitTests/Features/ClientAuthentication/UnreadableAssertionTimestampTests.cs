@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -142,16 +143,11 @@ public class UnreadableAssertionTimestampTests
             tokenValidator.Object,
             clientInfoProvider.Object,
             requestInfoProvider.Object,
-            new FixedClock(Now),
+            new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
             Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
 
         return (authenticator, replayCache);
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

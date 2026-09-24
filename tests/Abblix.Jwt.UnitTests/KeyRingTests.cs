@@ -125,17 +125,7 @@ public sealed class KeyRingTests : IDisposable
 
         // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
         // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
-        TimeProvider time;
-        if (timeProvider is not null)
-        {
-            time = timeProvider;
-        }
-        else
-        {
-            var stopped = new Mock<TimeProvider>();
-            stopped.Setup(t => t.GetUtcNow()).Returns(now ?? Now);
-            time = stopped.Object;
-        }
+        var time = timeProvider ?? new FakeTimeProvider(now ?? Now);
 
         var ring = new KeyRing(
             store,
@@ -624,15 +614,14 @@ public sealed class KeyRingTests : IDisposable
             with { KeyId = "from-certificate" };
 
         var store = new FakeStore();
-        var time = new Mock<TimeProvider>();
-        time.Setup(t => t.GetUtcNow()).Returns(Now);
+        var time = new FakeTimeProvider(Now);
 
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddSingleton(StubCustodian(_keyEncryptionKey));
         services.AddSingleton<IKeyRingStore>(store);
-        services.AddSingleton(time.Object);
+        services.AddSingleton<TimeProvider>(time);
         services.ComposeExternalKeyBackends();
         services
             .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName })
@@ -686,14 +675,14 @@ public sealed class KeyRingTests : IDisposable
     public async Task RefreshLoop_KeepsTicking_AfterTheStoreRefuses()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
+        var time = new FakeTimeProvider(Now);
         var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
             logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
         var served = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId;
 
         store.FailWith = new InvalidOperationException("the ring store is unreachable");
@@ -707,9 +696,13 @@ public sealed class KeyRingTests : IDisposable
         time.Advance(propagation / 2);
         await WaitForLoads(store, loadsBeforeOutage + 2);
 
+        // A load is counted as it starts and its failure is logged after it throws, so the second report can
+        // still be on its way when the count arrives.
+        await WaitForErrors(logger, 2);
+
         Assert.False(service.ExecuteTask!.IsFaulted);
         Assert.Equal(served, Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId);
-        Assert.Equal(2, logger.Entries.Count(entry => entry.Level == LogLevel.Error));
+        Assert.Equal(2, logger.Errors);
 
         await service.StopAsync(TestContext.Current.CancellationToken);
     }
@@ -723,14 +716,14 @@ public sealed class KeyRingTests : IDisposable
     public async Task RefreshLoop_ReportsNothing_WhenShutdownCancelsARefreshInFlight()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
+        var time = new FakeTimeProvider(Now);
         var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
             logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
 
         // The next load hangs, so the refresh is still running when the host stops and its token is canceled.
         store.BlockUntilCancelled = true;
@@ -741,7 +734,7 @@ public sealed class KeyRingTests : IDisposable
 
         await service.StopAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(logger.Entries);
+        Assert.Empty(logger.Snapshot);
     }
 
     /// <summary>
@@ -758,39 +751,45 @@ public sealed class KeyRingTests : IDisposable
         Assert.True(store.Loads >= expected, $"Expected at least {expected} loads, the store saw {store.Loads}.");
     }
 
+    /// <summary>Waits for the loop to have reported a given number of failures, bounded the same way.</summary>
+    private static async Task WaitForErrors<T>(RecordingLogger<T> logger, int expected)
+    {
+        var waited = Stopwatch.StartNew();
+        while (logger.Errors < expected && waited.Elapsed < TimeSpan.FromSeconds(10))
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+    }
+
     /// <summary>
-    /// A fake clock that says when the loop has armed its timer.
+    /// Brings the refresh loop to its await with its timer armed and no tick pending, before a case begins.
     /// </summary>
     /// <remarks>
-    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so
-    /// advancing the clock straight away can land before the timer exists - and a tick nobody is holding a timer
-    /// for is simply lost, which reads as a loop that died. Waiting for <see cref="TimerCreated"/> removes the
-    /// race outright: <see cref="PeriodicTimer"/> holds a tick that arrives with no waiter, so once the timer is
-    /// armed every advance is observed whether or not the loop has reached the await yet.
+    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so an
+    /// advance made straight away can land before the timer exists, and a tick no timer holds is simply lost. A
+    /// load arriving proves the timer exists; waiting until the count stops moving for 200 ms lets a tick held
+    /// while that load ran fire now rather than inside the case, so every later advance is one load for as long as
+    /// no refresh outlasts that wait. The advances are capped by count, not only by time: each one moves the ring's
+    /// clock too, and enough of them would carry it across a rotation boundary and mint a second key.
     /// </remarks>
-    private sealed class SignallingTimeProvider(FakeTimeProvider inner) : TimeProvider
+    private static async Task ArmTheLoop(FakeTimeProvider time, TimeSpan period, FakeStore store)
     {
-        private readonly TaskCompletionSource _timerCreated =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        const int MaxAdvances = 100;
 
-        public Task TimerCreated => _timerCreated.Task;
-
-        public void Advance(TimeSpan delta) => inner.Advance(delta);
-
-        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
-
-        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
-
-        public override long TimestampFrequency => inner.TimestampFrequency;
-
-        public override long GetTimestamp() => inner.GetTimestamp();
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        var loadsAtStart = store.Loads;
+        for (var advances = 0; store.Loads == loadsAtStart && advances < MaxAdvances; advances++)
         {
-            var timer = inner.CreateTimer(callback, state, dueTime, period);
-            _timerCreated.TrySetResult();
-            return timer;
+            time.Advance(period);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
+
+        Assert.True(store.Loads > loadsAtStart, "The refresh loop never loaded, so its timer was never armed.");
+
+        int seen;
+        do
+        {
+            seen = store.Loads;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        while (store.Loads != seen);
     }
 
     /// <summary>
@@ -799,7 +798,19 @@ public sealed class KeyRingTests : IDisposable
     /// </summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        private readonly List<(LogLevel Level, string Message)> _entries = [];
+
+        /// <summary>What was written so far, copied under the same lock the loop's thread writes under.</summary>
+        public IReadOnlyList<(LogLevel Level, string Message)> Snapshot
+        {
+            get
+            {
+                lock (_entries)
+                    return [.. _entries];
+            }
+        }
+
+        public int Errors => Snapshot.Count(entry => entry.Level == LogLevel.Error);
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -812,8 +823,8 @@ public sealed class KeyRingTests : IDisposable
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            lock (Entries)
-                Entries.Add((logLevel, formatter(state, exception)));
+            lock (_entries)
+                _entries.Add((logLevel, formatter(state, exception)));
         }
     }
 }

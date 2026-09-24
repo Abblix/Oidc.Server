@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -74,8 +75,8 @@ public class ClientAssertionMayTightenItselfTests
 
         Assert.Null(result);
 
-        // The refusal lands before the identifier is reserved: a reservation is spent and cannot be
-        // given back, so burning it on an assertion this pass rejects would refuse the client's next
+        // The refusal lands before the identifier is reserved: this path never gives a reservation
+        // back, so burning it on an assertion this pass rejects would refuse the client's next
         // attempt with the same identifier for the wrong reason.
         replayCache.Verify(
             r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
@@ -236,7 +237,7 @@ public class ClientAssertionMayTightenItselfTests
             tokenValidator.Object,
             clientInfoProvider.Object,
             requestInfoProvider.Object,
-            new FixedClock(Now),
+            new FakeTimeProvider(Now),
             replayCache.Object,
             Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
             Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
@@ -275,10 +276,5 @@ public class ClientAssertionMayTightenItselfTests
 
         token.Payload.Audiences = [Issuer];
         return token;
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

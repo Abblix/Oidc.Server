@@ -53,4 +53,40 @@
           <Link>Shared\FlakyOriginHandler.cs</Link>
         </Compile>
     </ItemGroup>
+  <!-- Every other project of the solution, built before this one and referenced for nothing else: the
+       architecture tests read the assemblies of the whole solution, and a project this one does not
+       reach would be read from an earlier build, or in continuous integration not at all.
+       NoHomemadeClockTests fails while a project of Abblix.Oidc.slnx is missing here. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.RISC\Abblix.SecurityEvents.RISC.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DependencyInjection.UnitTests\Abblix.DependencyInjection.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DocSamples\Abblix.DocSamples.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.Azure.UnitTests\Abblix.Jwt.Azure.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.UnitTests\Abblix.Jwt.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.Vault.UnitTests\Abblix.Jwt.Vault.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore.UnitTests\Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.E2E.Tests\Abblix.Oidc.Server.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.Tests\Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.UnitTests\Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.Mvc.UnitTests\Abblix.Oidc.Server.Mvc.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.CAEP.UnitTests\Abblix.SecurityEvents.CAEP.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.E2E.Tests\Abblix.SecurityEvents.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.RISC.UnitTests\Abblix.SecurityEvents.RISC.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.UnitTests\Abblix.SecurityEvents.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.E2E.Tests\Abblix.SharedSignals.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.Redis.UnitTests\Abblix.SharedSignals.Redis.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.UnitTests\Abblix.SharedSignals.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
 </Project>

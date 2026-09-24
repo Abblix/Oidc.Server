@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ReplayPrevention;
@@ -49,7 +50,7 @@ public class ReplayPreventionRegistrationTests
         services.AddLogging(builder => builder.AddProvider(recorder).SetMinimumLevel(LogLevel.Debug));
         services.AddDistributedMemoryCache();
         services.Configure<OidcOptions>(_ => { });
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
 
         for (var i = 0; i < calls; i++)
             services.AddReplayPrevention();
@@ -60,11 +61,6 @@ public class ReplayPreventionRegistrationTests
             "some-jti", Now.AddMinutes(5), TestContext.Current.CancellationToken));
 
         Assert.Equal(1, recorder.Count(LogEvents.Tokens.DistributedJwtReplayCache.MarkedAsUsed));
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider
