@@ -50,8 +50,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 [Collection(nameof(LicenseEnforcementTests))]
 public class LicenseLoadingServiceTests
 {
-    #region Helper Classes
-
     /// <summary>
     /// Mock provider that returns predefined license JWTs.
     /// </summary>
@@ -66,10 +64,6 @@ public class LicenseLoadingServiceTests
 
         public IAsyncEnumerable<string>? GetLicenseJwtAsync() => _licenses;
     }
-
-    #endregion
-
-    #region Service Lifecycle Tests
 
     /// <summary>
     /// Verifies that StartAsync completes when provider returns null.
@@ -225,10 +219,6 @@ public class LicenseLoadingServiceTests
         Assert.True(true);
     }
 
-    #endregion
-
-    #region Logger Initialization Tests
-
     /// <summary>
     /// Verifies that LicenseLogger is initialized with provided ILoggerFactory.
     /// </summary>
@@ -250,10 +240,6 @@ public class LicenseLoadingServiceTests
         // NullLogger always returns false
         Assert.False(isEnabled);
     }
-
-    #endregion
-
-    #region Integration Scenarios Tests
 
     /// <summary>
     /// Documents the typical usage patterns for LicenseLoadingService.
@@ -325,8 +311,6 @@ public class LicenseLoadingServiceTests
 
         Assert.True(true); // Documentation test
     }
-
-    #endregion
 
     /// <summary>
     /// Starting the service reports what the loaded licenses mean, at the clock it was given.

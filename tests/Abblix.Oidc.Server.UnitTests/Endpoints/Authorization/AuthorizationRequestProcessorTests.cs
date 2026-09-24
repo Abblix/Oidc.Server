@@ -160,7 +160,7 @@ public class AuthorizationRequestProcessorTests
         return new AuthSession(
             Subject: "user_123",
             SessionId: sessionId,
-            AuthenticationTime: authTime ?? DateTimeOffset.UtcNow,
+            AuthenticationTime: authTime ?? TimeProvider.System.GetUtcNow(),
             IdentityProvider: "local")
         {
             AuthContextClassRef = acr,
@@ -323,7 +323,7 @@ public class AuthorizationRequestProcessorTests
     }
 
     private static AuthSession Session(string subject)
-        => new(subject, $"session-of-{subject}", DateTimeOffset.UtcNow, "local");
+        => new(subject, $"session-of-{subject}", TimeProvider.System.GetUtcNow(), "local");
 
     /// <summary>
     /// Initiating User Registration via OpenID Connect 1.0: prompt=create yields the registration signal

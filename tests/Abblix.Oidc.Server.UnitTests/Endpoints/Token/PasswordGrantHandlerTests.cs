@@ -81,7 +81,7 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
@@ -175,7 +175,7 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
@@ -207,7 +207,7 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, scopes, null));
 
         _credentialsAuthenticator
@@ -239,7 +239,7 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, null!, null));
 
         _credentialsAuthenticator
@@ -285,7 +285,7 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         AuthorizationContext? capturedContext = null;

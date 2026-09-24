@@ -483,8 +483,8 @@ public class TlsClientAuthenticatorTests
             RSASignaturePadding.Pkcs1);
 
         var certificate = request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
 
         return certificate;
     }
@@ -501,8 +501,8 @@ public class TlsClientAuthenticatorTests
             HashAlgorithmName.SHA256);
 
         var certificate = request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
 
         return certificate;
     }

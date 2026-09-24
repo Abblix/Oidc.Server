@@ -51,7 +51,7 @@ public partial class LicenseManager
             //
             // What an insert needs is the refreshed value. The report belongs where the license is
             // consulted, on a list that has stopped growing.
-            _currentLicense = Scan(DateTimeOffset.UtcNow).InForce;
+            _currentLicense = Scan(TimeProvider.System.GetUtcNow()).InForce;
         }
         finally
         {

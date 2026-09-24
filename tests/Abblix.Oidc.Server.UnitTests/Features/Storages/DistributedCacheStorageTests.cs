@@ -134,7 +134,7 @@ public class DistributedCacheStorageTests
         // Arrange
         var key = "test_key";
         var value = CreateTestData();
-        var absoluteExpiration = DateTimeOffset.UtcNow.AddHours(1);
+        var absoluteExpiration = TimeProvider.System.GetUtcNow().AddHours(1);
         var relativeExpiration = TimeSpan.FromMinutes(30);
         var slidingExpiration = TimeSpan.FromMinutes(10);
         var options = CreateStorageOptions(
@@ -177,7 +177,7 @@ public class DistributedCacheStorageTests
         // Arrange
         var key = "test_key";
         var value = CreateTestData();
-        var absoluteExpiration = DateTimeOffset.UtcNow.AddDays(1);
+        var absoluteExpiration = TimeProvider.System.GetUtcNow().AddDays(1);
         var options = CreateStorageOptions(absoluteExpiration: absoluteExpiration);
         DistributedCacheEntryOptions? capturedOptions = null;
 
@@ -858,7 +858,7 @@ public class DistributedCacheStorageTests
         var bytes = new byte[] { 1, 2, 3 };
 
         var absoluteOptions = CreateStorageOptions(
-            absoluteExpiration: DateTimeOffset.UtcNow.AddHours(2));
+            absoluteExpiration: TimeProvider.System.GetUtcNow().AddHours(2));
 
         var relativeOptions = CreateStorageOptions(
             absoluteExpirationRelativeToNow: TimeSpan.FromMinutes(15));

@@ -57,7 +57,7 @@ public class RevocationHandlerTests
     private static TokenRevoked CreateTokenRevoked() => new(
         "token_id_123",
         "access_token",
-        DateTimeOffset.UtcNow);
+        TimeProvider.System.GetUtcNow());
 
     /// <summary>
     /// Verifies successful revocation flow: validate → process.

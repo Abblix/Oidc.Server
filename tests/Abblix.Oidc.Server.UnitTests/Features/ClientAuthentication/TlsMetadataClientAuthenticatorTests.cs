@@ -725,8 +725,8 @@ public class TlsMetadataClientAuthenticatorTests
             RSASignaturePadding.Pkcs1);
 
         return request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
     }
 
     /// <summary>
@@ -775,7 +775,7 @@ public class TlsMetadataClientAuthenticatorTests
         request.CertificateExtensions.Add(sanBuilder.Build());
 
         return request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
     }
 }

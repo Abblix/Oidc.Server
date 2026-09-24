@@ -60,8 +60,6 @@ public class SessionManagementServiceTests
         _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
     }
 
-    #region Enabled Property Tests
-
     /// <summary>
     /// Verifies that Enabled returns true when CheckSession endpoint is enabled.
     /// This is required per OIDC Session Management spec to indicate session management support.
@@ -133,10 +131,6 @@ public class SessionManagementServiceTests
         // Assert
         Assert.False(result);
     }
-
-    #endregion
-
-    #region GetSessionCookie Tests
 
     /// <summary>
     /// Verifies that GetSessionCookie returns a cookie with the name configured in options.
@@ -326,10 +320,6 @@ public class SessionManagementServiceTests
         Assert.NotSame(cookie1, cookie2);
         Assert.NotSame(cookie1.Options, cookie2.Options);
     }
-
-    #endregion
-
-    #region GetSessionState Tests
 
     /// <summary>
     /// Verifies that GetSessionState generates session state with correct format "hash.salt".
@@ -578,10 +568,6 @@ public class SessionManagementServiceTests
         Assert.Throws<InvalidOperationException>(() => service.GetSessionState(request, SessionId));
     }
 
-    #endregion
-
-    #region GetCheckSessionResponseAsync Tests
-
     /// <summary>
     /// Verifies that GetCheckSessionResponseAsync returns CheckSessionResponse.
     /// Response type is required for the check session endpoint per OIDC spec.
@@ -756,10 +742,6 @@ public class SessionManagementServiceTests
         Assert.Contains(JavaScriptStringEncode("CookieName2", true), response2.HtmlContent);
     }
 
-    #endregion
-
-    #region Helper Methods
-
     private static AuthorizationRequest CreateRequest(
         string? clientId = null,
         Uri? redirectUri = null)
@@ -770,6 +752,4 @@ public class SessionManagementServiceTests
             RedirectUri = redirectUri ?? new Uri(RedirectUriString),
         };
     }
-
-    #endregion
 }

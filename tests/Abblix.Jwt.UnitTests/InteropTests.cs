@@ -65,8 +65,6 @@ public class InteropTests
 		MapInboundClaims = false
 	};
 
-	#region Unsigned JWT Tests
-
 	[Fact]
 	public async Task Create_AbblixUnsignedJwt_MicrosoftValidates_Success()
 	{
@@ -195,7 +193,7 @@ public class InteropTests
 				Subject = TestUser,
 				Issuer = AbblixIssuer,
 				Audiences = ["aud1", "aud2", "aud3"],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -213,10 +211,6 @@ public class InteropTests
 		Assert.Contains("aud2", audiences);
 		Assert.Contains("aud3", audiences);
 	}
-
-	#endregion
-
-	#region RSA Signing Tests
 
 	public static TheoryData<string, string> RsaSigningAlgorithms => new()
 	{
@@ -245,7 +239,7 @@ public class InteropTests
 				Subject = TestUser,
 				Issuer = AbblixIssuer,
 				Audiences = [TestAudience],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -295,7 +289,7 @@ public class InteropTests
 			]),
 			Issuer = MicrosoftIssuer,
 			Audience = AbblixApp,
-			Expires = DateTime.UtcNow.AddHours(1),
+			Expires = TimeProvider.System.GetUtcNow().UtcDateTime.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
 				microsoftAlgorithm),
@@ -319,10 +313,6 @@ public class InteropTests
 			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
 		Assert.Equal(MicrosoftUser, token.Payload.Subject);
 	}
-
-	#endregion
-
-	#region EC Signing Tests
 
 	public static TheoryData<string, string, string> EcSigningAlgorithms => new()
 	{
@@ -349,7 +339,7 @@ public class InteropTests
 				Subject = "ec-test-user",
 				Issuer = AbblixIssuer,
 				Audiences = [TestAudience],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -400,7 +390,7 @@ public class InteropTests
 			]),
 			Issuer = MicrosoftIssuer,
 			Audience = AbblixApp,
-			Expires = DateTime.UtcNow.AddHours(1),
+			Expires = TimeProvider.System.GetUtcNow().UtcDateTime.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
 				microsoftAlgorithm),
@@ -424,10 +414,6 @@ public class InteropTests
 			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
 		Assert.Equal("microsoft-ec-user", token.Payload.Subject);
 	}
-
-	#endregion
-
-	#region HMAC Signing Tests
 
 	public static TheoryData<string, string> HmacSigningAlgorithms => new()
 	{
@@ -453,7 +439,7 @@ public class InteropTests
 				Subject = "hmac-test-user",
 				Issuer = AbblixIssuer,
 				Audiences = [TestAudience],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -503,7 +489,7 @@ public class InteropTests
 			]),
 			Issuer = MicrosoftIssuer,
 			Audience = AbblixApp,
-			Expires = DateTime.UtcNow.AddHours(1),
+			Expires = TimeProvider.System.GetUtcNow().UtcDateTime.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
 				microsoftAlgorithm),
@@ -527,10 +513,6 @@ public class InteropTests
 			result.TryGetFailure(out var error) ? $"Validation failed for {abblixAlgorithm}: {error.Error} - {error.ErrorDescription}" : ValidationFailed);
 		Assert.Equal("microsoft-hmac-user", token.Payload.Subject);
 	}
-
-	#endregion
-
-	#region JWE Encryption Tests
 
 	public static TheoryData<string, string, string, string> JweEncryptionAlgorithms => new()
 	{
@@ -599,7 +581,7 @@ public class InteropTests
 				Subject = TestUser,
 				Issuer = AbblixIssuer,
 				Audiences = [TestAudience],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -671,7 +653,7 @@ public class InteropTests
 			Subject = new System.Security.Claims.ClaimsIdentity(claims),
 			Issuer = "https://microsoft.example.com",
 			Audience = AbblixApp,
-			Expires = DateTime.UtcNow.AddHours(1),
+			Expires = TimeProvider.System.GetUtcNow().UtcDateTime.AddHours(1),
 			SigningCredentials = new SigningCredentials(
 				signingKey.ToSecurityKey(),
 				SecurityAlgorithms.RsaSha256),
@@ -728,7 +710,7 @@ public class InteropTests
 				Subject = TestUser,
 				Issuer = AbblixIssuer,
 				Audiences = [TestAudience],
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 			},
 		};
 
@@ -767,6 +749,4 @@ public class InteropTests
 		Assert.Equal(FullName, token.Payload.Json["name"]?.GetValue<string>());
 		Assert.Equal(AdminRole, token.Payload.Json["role"]?.GetValue<string>());
 	}
-
-	#endregion
 }

@@ -45,8 +45,6 @@ public class LicenseCheckerTests
     }
 
 
-    #region CheckClientLicense Tests
-
     /// <summary>
     /// Verifies that CheckClientLicense returns null when clientInfo parameter is null.
     /// </summary>
@@ -114,7 +112,6 @@ public class LicenseCheckerTests
         Assert.Equal(clientId, result2.ClientId);
     }
 
-
     /// <summary>
     /// Verifies that CheckClientLicense allows unlimited clients when ClientLimit is null.
     /// </summary>
@@ -125,8 +122,8 @@ public class LicenseCheckerTests
         var unlimitedLicense = new License
         {
             ClientLimit = null, // No limit
-            NotBefore = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+            NotBefore = TimeProvider.System.GetUtcNow().AddMinutes(-10),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10)
         };
         LicenseChecker.AddLicense(unlimitedLicense);
 
@@ -179,8 +176,6 @@ public class LicenseCheckerTests
         // Assert
         Assert.Null(result);
     }
-
-    #endregion
 
     // CheckIssuer is exercised in LicenseEnforcementTests, which runs alone and starts from a known point -
     // the only way to reach an issuer limit deliberately, since the checker keeps what it has seen in

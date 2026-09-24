@@ -61,7 +61,7 @@ public class SameCookieAuthorizationLogoutTests
             services.GetRequiredService<IAuthSessionService>().SignInAsync(new AuthSession(
                 Subject: "user",
                 SessionId: "session",
-                AuthenticationTime: DateTimeOffset.UtcNow,
+                AuthenticationTime: TimeProvider.System.GetUtcNow(),
                 IdentityProvider: "local")));
 
         // Both tabs send the cookie the browser holds before either response has come back.

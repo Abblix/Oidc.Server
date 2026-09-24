@@ -104,7 +104,7 @@ public class EndSessionRequestProcessorTests
         return new AuthSession(
             subject,
             sessionId,
-            DateTimeOffset.UtcNow,
+            TimeProvider.System.GetUtcNow(),
             "local");
     }
 

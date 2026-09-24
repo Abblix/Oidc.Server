@@ -54,7 +54,7 @@ public class UserInfoHandlerTests
         var authSession = new Abblix.Oidc.Server.Features.UserAuthentication.AuthSession(
             "user_123",
             "session_123",
-            DateTimeOffset.UtcNow,
+            TimeProvider.System.GetUtcNow(),
             "local");
 
         var authContext = new AuthorizationContext(

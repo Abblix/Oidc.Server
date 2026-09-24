@@ -227,9 +227,9 @@ public class ClientJwtFormatterTests
                 Subject = "user123",
                 Issuer = "https://auth.example.com",
                 Audiences = [ClientId],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-                AuthenticationTime = DateTimeOffset.UtcNow.AddMinutes(-1),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),
+                AuthenticationTime = TimeProvider.System.GetUtcNow().AddMinutes(-1),
             }
         };
 
@@ -272,8 +272,8 @@ public class ClientJwtFormatterTests
                 Subject = "user123",
                 Issuer = "https://auth.example.com",
                 Audiences = [ClientId],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),
             }
         };
 

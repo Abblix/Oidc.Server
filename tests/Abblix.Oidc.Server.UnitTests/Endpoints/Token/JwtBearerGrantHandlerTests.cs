@@ -663,8 +663,8 @@ public class JwtBearerGrantHandlerTests
 			{
 				Subject = Subject,
 				Issuer = Issuer,
-				IssuedAt = DateTimeOffset.UtcNow,
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				IssuedAt = TimeProvider.System.GetUtcNow(),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 				Audiences = ["https://authorization-server.example.com/token"]
 			}
 		};
@@ -684,7 +684,7 @@ public class JwtBearerGrantHandlerTests
 			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(new JwtValidationError(JwtError.InvalidToken, "Token expired")));
 	}
 
-	#region Security Tests - RFC 7523 Compliance
+	// Security Tests - RFC 7523 Compliance
 
 	/// <summary>
 	/// Verifies that JWTs signed with disallowed algorithms are rejected.
@@ -1124,8 +1124,6 @@ public class JwtBearerGrantHandlerTests
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(Subject, grant.AuthSession.Subject);
 	}
-
-	#endregion
 
 	private static void SetupTrustedIssuer(
 		Mock<IJwtBearerIssuerProvider> issuerProvider,

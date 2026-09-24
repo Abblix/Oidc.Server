@@ -53,7 +53,7 @@ public class TokenRequestValidatorTests
         new Abblix.Oidc.Server.Features.UserAuthentication.AuthSession(
             "user_123",
             "session_123",
-            DateTimeOffset.UtcNow,
+            TimeProvider.System.GetUtcNow(),
             "local"),
         new AuthorizationContext(
             TestConstants.DefaultClientId,

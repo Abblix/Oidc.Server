@@ -65,7 +65,7 @@ public class TokenRequestProcessorTests
     private static AuthSession CreateAuthSession() => new(
         "user_123",
         "session_123",
-        DateTimeOffset.UtcNow,
+        TimeProvider.System.GetUtcNow(),
         "local");
 
     private static AuthorizedGrant CreateAuthorizedGrant(string[] scopes) => new(

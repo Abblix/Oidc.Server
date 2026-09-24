@@ -300,7 +300,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_unknown_jwt";
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -333,7 +333,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_used_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -366,7 +366,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_revoked_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(30);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddDays(30);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -399,7 +399,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "key_format_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         var expectedKey = $"Abblix.Oidc.Server:JWT:{jwtId}";
 
         _storage
@@ -466,7 +466,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "single_set_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -499,7 +499,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "store_status_jwt";
         var expectedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
         JsonWebTokenStatus? capturedStatus = null;
 
         _storage
@@ -530,7 +530,7 @@ public class TokenRegistryTests
         var jwtId1 = "jwt_alpha";
         var jwtId2 = "jwt_beta";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -579,7 +579,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "update_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -615,8 +615,8 @@ public class TokenRegistryTests
         var jwtId1 = "short_exp_jwt";
         var jwtId2 = "long_exp_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var shortExpiration = DateTimeOffset.UtcNow.AddMinutes(5);
-        var longExpiration = DateTimeOffset.UtcNow.AddDays(30);
+        var shortExpiration = TimeProvider.System.GetUtcNow().AddMinutes(5);
+        var longExpiration = TimeProvider.System.GetUtcNow().AddDays(30);
         var expirations = new System.Collections.Generic.List<DateTimeOffset?>();
 
         _storage
@@ -649,7 +649,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_unknown_jwt";
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -684,7 +684,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_used_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(15);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -719,7 +719,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_revoked_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddDays(7);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -755,7 +755,7 @@ public class TokenRegistryTests
         var jwtId = "overwrite_jwt";
         var usedStatus = JsonWebTokenStatus.Used;
         var revokedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -791,7 +791,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "early_exp_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(30);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddSeconds(30);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -821,7 +821,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "late_exp_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddYears(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddYears(1);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -852,7 +852,7 @@ public class TokenRegistryTests
         var jwt1 = "multi_jwt_1";
         var jwt2 = "multi_jwt_2";
         var jwt3 = "multi_jwt_3";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -923,7 +923,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "status_transition_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -961,7 +961,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "same_key_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         var keys = new System.Collections.Generic.List<string>();
 
         _storage
@@ -994,7 +994,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = string.Empty;
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1030,7 +1030,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = new string('a', 1000);
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1065,7 +1065,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "jwt-id_with.special:chars@2025!#$%";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1100,7 +1100,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "past_exp_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(-1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(-1);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -1195,7 +1195,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "options_structure_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(3);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(3);
         StorageOptions? capturedOptions = null;
 
         _storage
@@ -1228,7 +1228,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "key_consistency_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         string? setKey = null;
         string? getKey = null;
 
@@ -1273,7 +1273,7 @@ public class TokenRegistryTests
         var jwt1 = "concurrent_jwt_1";
         var jwt2 = "concurrent_jwt_2";
         var jwt3 = "concurrent_jwt_3";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1331,7 +1331,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "immediate_retrieval_jwt";
         var expectedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
 
         _storage
             .Setup(s => s.SetAsync(

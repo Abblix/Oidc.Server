@@ -40,6 +40,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     private readonly ISessionIdGenerator _sessionIdGenerator;
 ///     private readonly IMyPushNotificationService _pushService;
 ///     private readonly IBackChannelLongPollingService? _longPolling;
+///     private readonly TimeProvider _clock;
 ///
 ///     public async Task&lt;Result&lt;AuthSession, OidcError&gt;&gt; InitiateAuthenticationAsync(
 ///         ValidBackChannelAuthenticationRequest request)
@@ -67,7 +68,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         var authSession = new AuthSession(
 ///             userId,
 ///             SessionId: _sessionIdGenerator.GenerateSessionId(),
-///             AuthenticationTime: DateTimeOffset.UtcNow,
+///             AuthenticationTime: _clock.GetUtcNow(),
 ///             IdentityProvider: "local");
 ///
 ///         // Carry the end user's answer on the grant. AuthorizedGrant is a positional member of the

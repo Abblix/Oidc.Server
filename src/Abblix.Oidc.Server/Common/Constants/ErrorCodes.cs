@@ -13,183 +13,6 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// </summary>
 public static class ErrorCodes
 {
-	#region RFC 6749: OAuth 2.0 error codes
-
-	/// <summary>
-	/// The request is missing a parameter, includes an unsupported parameter value (other than grant type),
-	/// repeats a parameter, includes multiple credentials, utilizes more than one mechanism for authenticating the
-	/// client, or is otherwise malformed.
-	/// </summary>
-	public const string InvalidRequest = "invalid_request";
-
-	/// <summary>
-	/// Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).
-	/// The authorization server MAY return an HTTP 401 (Unauthorized) status code to indicate which HTTP authentication schemes are supported.
-	/// If the client attempted to authenticate via the "Authorization" request header field, the authorization server MUST respond with an
-	/// HTTP 401 (Unauthorized) status code and include the "WWW-Authenticate" response header field matching the authentication scheme used by the client.
-	/// </summary>
-	public const string InvalidClient = "invalid_client";
-
-	/// <summary>
-	/// The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked,
-	/// does not match the redirection URI used in the authorization request, or was issued to another client.
-	/// </summary>
-	public const string InvalidGrant = "invalid_grant";
-
-	/// <summary>
-	/// The authenticated client is not authorized to use this authorization grant type.
-	/// </summary>
-	public const string UnauthorizedClient = "unauthorized_client";
-
-	/// <summary>
-	/// The authorization grant type is not supported by the authorization server.
-	/// </summary>
-	public const string UnsupportedGrantType = "unsupported_grant_type";
-
-	/// <summary>
-	/// The requested scope is invalid, unknown, malformed, or exceeds the scope granted by the resource owner.
-	/// </summary>
-	public const string InvalidScope = "invalid_scope";
-
-	/// <summary>
-	/// The resource owner or authorization server denied the request.
-	/// </summary>
-	public const string AccessDenied = "access_denied";
-
-	/// <summary>
-	/// The authorization server does not support obtaining a response using this method.
-	/// </summary>
-	public const string UnsupportedResponseType = "unsupported_response_type";
-
-	/// <summary>
-	/// The authorization server encountered an unexpected condition that prevented it from fulfilling the request.
-	/// </summary>
-	/// <remarks>
-	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
-	/// </remarks>
-	public const string ServerError = "server_error";
-
-	/// <summary>
-	/// The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.
-	/// </summary>
-	/// <remarks>
-	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
-	/// </remarks>
-	public const string TemporarilyUnavailable = "temporarily_unavailable";
-
-	#endregion
-
-	#region OpenID Connect Core error codes
-
-	/// <summary>
-	/// The Authorization Server requires End-User interaction of some form to proceed. This error MAY be returned when the prompt parameter value in
-	/// the Authentication Request is none, but the Authentication Request cannot be completed without displaying a user interface for End-User interaction.
-	/// </summary>
-	public const string InteractionRequired = "interaction_required";
-
-	/// <summary>
-	/// The Authorization Server requires End-User authentication. This error MAY be returned when the prompt parameter value in the Authentication Request
-	/// is none, but the Authentication Request cannot be completed without displaying a user interface for End-User authentication.
-	/// </summary>
-	public const string LoginRequired = "login_required";
-
-	/// <summary>
-	/// The End-User is REQUIRED to select a session at the Authorization Server. The End-User MAY be authenticated at the Authorization Server with
-	/// different associated accounts, but the End-User did not select a session.
-	/// This error MAY be returned when the prompt parameter value in the Authentication Request is none, but the Authentication Request cannot be completed
-	/// without displaying a user interface to prompt for a session to use.
-	/// </summary>
-	public const string AccountSelectionRequired = "account_selection_required";
-
-	/// <summary>
-	/// The authentication the request required could not be performed. Defined by the OpenID Foundation
-	/// specification "OpenID Connect Core Error Code unmet_authentication_requirements 1.0", which says it
-	/// "SHALL be used if the Relying Party wants the OP to conform to a certain Authentication Context Class
-	/// Reference value using an essential claim acr claim as specified in Section 5.5.1.1. of OpenID Connect
-	/// Core and the OP is unable to meet this requirement and MAY be used in other cases, if appropriate", and
-	/// gives the authorization endpoint as its usage location.
-	/// </summary>
-	/// <remarks>
-	/// That specification announces a registration in the IANA OAuth Extensions Error registry which has not
-	/// happened: the registry lists the neighbouring Core codes and not this one. The value is the one the
-	/// specification defines, so a client implementing it reads what it expects.
-	/// </remarks>
-	public const string UnmetAuthenticationRequirements = "unmet_authentication_requirements";
-
-	/// <summary>
-	/// The Authorization Server requires End-User consent. This error MAY be returned when the prompt parameter value in the Authentication Request is none,
-	/// but the Authentication Request cannot be completed without displaying a user interface for End-User consent.
-	/// </summary>
-	public const string ConsentRequired = "consent_required";
-
-	/// <summary>
-	/// The request_uri in the Authorization Request returns an error or contains invalid data.
-	/// </summary>
-	public const string InvalidRequestUri = "invalid_request_uri";
-
-	/// <summary>
-	/// The request parameter contains an invalid Request Object.
-	/// </summary>
-	public const string InvalidRequestObject = "invalid_request_object";
-
-	/// <summary>
-	/// The OpenId Provider does not support use of the request parameter defined in Section 6:
-	/// https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests
-	/// </summary>
-	public const string RequestNotSupported = "request_not_supported";
-
-	/// <summary>
-	/// The OpenId Provider does not support use of the request_uri parameter defined in Section 6:
-	/// https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests
-	/// </summary>
-	public const string RequestUriNotSupported = "request_uri_not_supported";
-
-	/// <summary>
-	/// The OpenId Provider does not support use of the registration parameter defined in Section 7.2.1:
-	/// https://openid.net/specs/openid-connect-core-1_0.html#RegistrationParameter
-	/// </summary>
-	public const string RegistrationNotSupported = "registration_not_supported";
-
-	#endregion
-
-	#region RFC 7009: OAuth 2.0 Token Revocation
-
-	/// <summary>
-	/// The authorization server does not support the revocation of the presented token type.
-	/// That is, the client tried to revoke an access token on a server not supporting this feature.
-	/// </summary>
-	public const string UnsupportedTokenType = "unsupported_token_type";
-
-	#endregion
-
-	#region OpenID Connect Dynamic Client Registration 1.0
-
-	/// <summary>
-	/// The value of one or more redirect_uris is invalid.
-	/// </summary>
-	public const string InvalidRedirectUri = "invalid_redirect_uri";
-
-	/// <summary>
-	/// The value of one of the Client Metadata fields is invalid and the server has rejected this request.
-	/// </summary>
-	/// <remarks>
-	/// Note that an Authorization Server MAY choose to substitute a valid value for any requested parameter of a Client's Metadata.
-	/// </remarks>
-	public const string InvalidClientMetadata = "invalid_client_metadata";
-
-	/// <summary>
-	/// The software statement presented is invalid per RFC 7591 Section 3.2.2.
-	/// </summary>
-	public const string InvalidSoftwareStatement = "invalid_software_statement";
-
-	/// <summary>
-	/// The software statement was valid but the software has not been approved
-	/// for use by this authorization server per RFC 7591 Section 3.2.2.
-	/// </summary>
-	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
-
-	#endregion
-
 	/// <summary>
 	/// The request requires additional confirmation from the resource owner or authorization server.
 	/// </summary>
@@ -278,4 +101,173 @@ public static class ErrorCodes
 	/// satisfy the per-type validator. The AS MUST refuse to process the request.
 	/// </summary>
 	public const string InvalidAuthorizationDetails = "invalid_authorization_details";
+
+	// RFC 6749: OAuth 2.0 error codes
+
+	/// <summary>
+	/// The request is missing a parameter, includes an unsupported parameter value (other than grant type),
+	/// repeats a parameter, includes multiple credentials, utilizes more than one mechanism for authenticating the
+	/// client, or is otherwise malformed.
+	/// </summary>
+	public const string InvalidRequest = "invalid_request";
+
+	/// <summary>
+	/// Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).
+	/// The authorization server MAY return an HTTP 401 (Unauthorized) status code to indicate which HTTP authentication schemes are supported.
+	/// If the client attempted to authenticate via the "Authorization" request header field, the authorization server MUST respond with an
+	/// HTTP 401 (Unauthorized) status code and include the "WWW-Authenticate" response header field matching the authentication scheme used by the client.
+	/// </summary>
+	public const string InvalidClient = "invalid_client";
+
+	/// <summary>
+	/// The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked,
+	/// does not match the redirection URI used in the authorization request, or was issued to another client.
+	/// </summary>
+	public const string InvalidGrant = "invalid_grant";
+
+	/// <summary>
+	/// The authenticated client is not authorized to use this authorization grant type.
+	/// </summary>
+	public const string UnauthorizedClient = "unauthorized_client";
+
+	/// <summary>
+	/// The authorization grant type is not supported by the authorization server.
+	/// </summary>
+	public const string UnsupportedGrantType = "unsupported_grant_type";
+
+	/// <summary>
+	/// The requested scope is invalid, unknown, malformed, or exceeds the scope granted by the resource owner.
+	/// </summary>
+	public const string InvalidScope = "invalid_scope";
+
+	/// <summary>
+	/// The resource owner or authorization server denied the request.
+	/// </summary>
+	public const string AccessDenied = "access_denied";
+
+	/// <summary>
+	/// The authorization server does not support obtaining a response using this method.
+	/// </summary>
+	public const string UnsupportedResponseType = "unsupported_response_type";
+
+	/// <summary>
+	/// The authorization server encountered an unexpected condition that prevented it from fulfilling the request.
+	/// </summary>
+	/// <remarks>
+	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
+	/// </remarks>
+	public const string ServerError = "server_error";
+
+	/// <summary>
+	/// The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.
+	/// </summary>
+	/// <remarks>
+	/// This error code is necessary because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.
+	/// </remarks>
+	public const string TemporarilyUnavailable = "temporarily_unavailable";
+
+	// OpenID Connect Core error codes
+
+	/// <summary>
+	/// The Authorization Server requires End-User interaction of some form to proceed. This error MAY be returned when the prompt parameter value in
+	/// the Authentication Request is none, but the Authentication Request cannot be completed without displaying a user interface for End-User interaction.
+	/// </summary>
+	public const string InteractionRequired = "interaction_required";
+
+	/// <summary>
+	/// The Authorization Server requires End-User authentication. This error MAY be returned when the prompt parameter value in the Authentication Request
+	/// is none, but the Authentication Request cannot be completed without displaying a user interface for End-User authentication.
+	/// </summary>
+	public const string LoginRequired = "login_required";
+
+	/// <summary>
+	/// The End-User is REQUIRED to select a session at the Authorization Server. The End-User MAY be authenticated at the Authorization Server with
+	/// different associated accounts, but the End-User did not select a session.
+	/// This error MAY be returned when the prompt parameter value in the Authentication Request is none, but the Authentication Request cannot be completed
+	/// without displaying a user interface to prompt for a session to use.
+	/// </summary>
+	public const string AccountSelectionRequired = "account_selection_required";
+
+	/// <summary>
+	/// The authentication the request required could not be performed. Defined by the OpenID Foundation
+	/// specification "OpenID Connect Core Error Code unmet_authentication_requirements 1.0", which says it
+	/// "SHALL be used if the Relying Party wants the OP to conform to a certain Authentication Context Class
+	/// Reference value using an essential claim acr claim as specified in Section 5.5.1.1. of OpenID Connect
+	/// Core and the OP is unable to meet this requirement and MAY be used in other cases, if appropriate", and
+	/// gives the authorization endpoint as its usage location.
+	/// </summary>
+	/// <remarks>
+	/// That specification announces a registration in the IANA OAuth Extensions Error registry which has not
+	/// happened: the registry lists the neighbouring Core codes and not this one. The value is the one the
+	/// specification defines, so a client implementing it reads what it expects.
+	/// </remarks>
+	public const string UnmetAuthenticationRequirements = "unmet_authentication_requirements";
+
+	/// <summary>
+	/// The Authorization Server requires End-User consent. This error MAY be returned when the prompt parameter value in the Authentication Request is none,
+	/// but the Authentication Request cannot be completed without displaying a user interface for End-User consent.
+	/// </summary>
+	public const string ConsentRequired = "consent_required";
+
+	/// <summary>
+	/// The request_uri in the Authorization Request returns an error or contains invalid data.
+	/// </summary>
+	public const string InvalidRequestUri = "invalid_request_uri";
+
+	/// <summary>
+	/// The request parameter contains an invalid Request Object.
+	/// </summary>
+	public const string InvalidRequestObject = "invalid_request_object";
+
+	/// <summary>
+	/// The OpenId Provider does not support use of the request parameter defined in Section 6:
+	/// https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests
+	/// </summary>
+	public const string RequestNotSupported = "request_not_supported";
+
+	/// <summary>
+	/// The OpenId Provider does not support use of the request_uri parameter defined in Section 6:
+	/// https://openid.net/specs/openid-connect-core-1_0.html#JWTRequests
+	/// </summary>
+	public const string RequestUriNotSupported = "request_uri_not_supported";
+
+	/// <summary>
+	/// The OpenId Provider does not support use of the registration parameter defined in Section 7.2.1:
+	/// https://openid.net/specs/openid-connect-core-1_0.html#RegistrationParameter
+	/// </summary>
+	public const string RegistrationNotSupported = "registration_not_supported";
+
+	// RFC 7009: OAuth 2.0 Token Revocation
+
+	/// <summary>
+	/// The authorization server does not support the revocation of the presented token type.
+	/// That is, the client tried to revoke an access token on a server not supporting this feature.
+	/// </summary>
+	public const string UnsupportedTokenType = "unsupported_token_type";
+
+	// OpenID Connect Dynamic Client Registration 1.0
+
+	/// <summary>
+	/// The value of one or more redirect_uris is invalid.
+	/// </summary>
+	public const string InvalidRedirectUri = "invalid_redirect_uri";
+
+	/// <summary>
+	/// The value of one of the Client Metadata fields is invalid and the server has rejected this request.
+	/// </summary>
+	/// <remarks>
+	/// Note that an Authorization Server MAY choose to substitute a valid value for any requested parameter of a Client's Metadata.
+	/// </remarks>
+	public const string InvalidClientMetadata = "invalid_client_metadata";
+
+	/// <summary>
+	/// The software statement presented is invalid per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string InvalidSoftwareStatement = "invalid_software_statement";
+
+	/// <summary>
+	/// The software statement was valid but the software has not been approved
+	/// for use by this authorization server per RFC 7591 Section 3.2.2.
+	/// </summary>
+	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
 }

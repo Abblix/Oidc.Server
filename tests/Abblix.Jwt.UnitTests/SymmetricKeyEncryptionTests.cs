@@ -398,7 +398,7 @@ public class SymmetricKeyEncryptionTests
 	/// </summary>
 	private static JsonWebToken CreateTestToken()
 	{
-		var issuedAt = DateTimeOffset.UtcNow;
+		var issuedAt = TimeProvider.System.GetUtcNow();
 
 		return new JsonWebToken
 		{

@@ -129,7 +129,7 @@ public class AuthorizationCodeGrantHandlerTests
 			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
 		var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -152,7 +152,7 @@ public class AuthorizationCodeGrantHandlerTests
 			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
 		var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -171,7 +171,7 @@ public class AuthorizationCodeGrantHandlerTests
 			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)
 					{
 						CodeChallenge = codeChallenge,

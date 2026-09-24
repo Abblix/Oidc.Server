@@ -148,7 +148,7 @@ public class MappersTests
     public void AuthSessionMapper_ToProto_PreservesAllOptionalFields()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "google")
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "google")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
             AuthenticationMethodReferences = ["pwd", "mfa", "face"],
@@ -187,7 +187,7 @@ public class MappersTests
     public void AuthSessionMapper_ToProto_HandlesMinimalFields()
     {
         // Arrange - only required fields
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, null!);
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), null!);
 
         // Act
         var proto = session.ToProto();
@@ -479,15 +479,15 @@ public class MappersTests
     public void AuthorizedGrantMapper_ToProto_HandlesIssuedTokens()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
             [
-                new TokenInfo("access-123", DateTimeOffset.UtcNow.AddHours(1)),
-                new TokenInfo("refresh-456", DateTimeOffset.UtcNow.AddDays(30)),
-                new TokenInfo("id-789", DateTimeOffset.UtcNow.AddHours(1))
+                new TokenInfo("access-123", TimeProvider.System.GetUtcNow().AddHours(1)),
+                new TokenInfo("refresh-456", TimeProvider.System.GetUtcNow().AddDays(30)),
+                new TokenInfo("id-789", TimeProvider.System.GetUtcNow().AddHours(1))
             ],
         };
 
@@ -508,7 +508,7 @@ public class MappersTests
     public void AuthorizedGrantMapper_ToProto_HandlesNullTokens()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context); // No IssuedTokens
 
@@ -666,10 +666,10 @@ public class MappersTests
         BackChannelAuthenticationStatus status)
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)) { Status = status };
+        var request = new BackChannelAuthenticationRequest(grant, TimeProvider.System.GetUtcNow().AddMinutes(5)) { Status = status };
 
         // Act
         var proto = request.ToProto();
@@ -700,10 +700,10 @@ public class MappersTests
     [MemberData(nameof(RequestedSubjectShapes))]
     public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequestedSubjects(string[]? subjects)
     {
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var request = new BackChannelAuthenticationRequest(
-            new AuthorizedGrant(session, context), DateTimeOffset.UtcNow.AddMinutes(5))
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             RequestedSubjects = subjects,
         };

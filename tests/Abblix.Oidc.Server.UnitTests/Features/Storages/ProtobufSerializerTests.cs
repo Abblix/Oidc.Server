@@ -345,14 +345,14 @@ public class ProtobufSerializerTests
     public void Serialize_AuthorizedGrant_RoundTrip()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
             [
-                new TokenInfo("access-token-1", DateTimeOffset.UtcNow.AddHours(1)),
-                new TokenInfo("refresh-token-1", DateTimeOffset.UtcNow.AddDays(30))
+                new TokenInfo("access-token-1", TimeProvider.System.GetUtcNow().AddHours(1)),
+                new TokenInfo("refresh-token-1", TimeProvider.System.GetUtcNow().AddDays(30))
             ],
         };
 
@@ -440,10 +440,10 @@ public class ProtobufSerializerTests
     public void Serialize_BackChannelAuthenticationRequest_RoundTrip(BackChannelAuthenticationStatus status)
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
-        var bcRequest = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
+        var bcRequest = new BackChannelAuthenticationRequest(grant, TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = status,
         };
@@ -518,7 +518,7 @@ public class ProtobufSerializerTests
     public void Serialize_AuthSession_MinimalFields_RoundTrip()
     {
         // Arrange - only required fields
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
 
         // Act
         var bytes = _serializer.Serialize(session);
@@ -543,7 +543,7 @@ public class ProtobufSerializerTests
     [Fact]
     public void Deserialize_AuthSessionStoredWithAClientList_StillReads()
     {
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         const string clientId = "client-1";
 
         // Field 6, wire type 2 (length-delimited): the tag byte is (6 << 3) | 2.
@@ -559,7 +559,7 @@ public class ProtobufSerializerTests
     public void Serialize_CompareWithJsonSerializer_ProducesSmaller()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local")
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local")
         {
             AuthenticationMethodReferences = ["pwd", "mfa", "otp"],
             Email = "user@example.com",
