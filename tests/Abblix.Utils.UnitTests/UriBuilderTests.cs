@@ -449,8 +449,6 @@ public class UriBuilderTests
         Assert.Equal("https://api.telegram.org/bot123/setWebhook?url=https%3a%2f%2fexample.com%2fwebhook", combined.ToString());
     }
 
-    #region Path Property Tests
-
     /// <summary>
     /// Verifies that Path property can be read from absolute URI.
     /// </summary>
@@ -528,10 +526,6 @@ public class UriBuilderTests
         Assert.Contains("#section=top", result.ToString());
     }
 
-    #endregion
-
-    #region Empty and Null Handling Tests
-
     /// <summary>
     /// Verifies that empty query parameters are handled correctly.
     /// </summary>
@@ -578,10 +572,6 @@ public class UriBuilderTests
         Assert.DoesNotContain("?", result.ToString());
         Assert.DoesNotContain("#", result.ToString());
     }
-
-    #endregion
-
-    #region OAuth/OIDC Implicit Flow Fragment Tests
 
     /// <summary>
     /// Verifies OAuth implicit flow fragment parameters (access_token in fragment).
@@ -660,10 +650,6 @@ public class UriBuilderTests
         Assert.Contains("token_type=Bearer", result.ToString());
     }
 
-    #endregion
-
-    #region Special Characters and URL Encoding Tests
-
     /// <summary>
     /// Verifies that special characters in query parameters are URL encoded.
     /// Note: Spaces are encoded as '+' (application/x-www-form-urlencoded standard).
@@ -724,10 +710,6 @@ public class UriBuilderTests
             $"Expected unicode to be preserved or encoded, but got: {resultString}");
     }
 
-    #endregion
-
-    #region Multiple Uri Property Access Tests
-
     /// <summary>
     /// Verifies that accessing Uri property multiple times returns consistent results.
     /// </summary>
@@ -782,10 +764,6 @@ public class UriBuilderTests
         Assert.DoesNotContain("section2=bottom", result1.ToString());
         Assert.Contains("section2=bottom", result2.ToString());
     }
-
-    #endregion
-
-    #region Edge Cases Tests
 
     /// <summary>
     /// Verifies that root path "/" is handled correctly for relative URIs.
@@ -880,10 +858,6 @@ public class UriBuilderTests
         Assert.Contains("filters%5bname%5d=test", result.ToString());
     }
 
-    #endregion
-
-    #region Comparison with System.UriBuilder Tests
-
     /// <summary>
     /// Verifies that our UriBuilder produces same results as System.UriBuilder for absolute URIs.
     /// </summary>
@@ -909,5 +883,4 @@ public class UriBuilderTests
         Assert.Equal(systemBuilder.Uri.PathAndQuery, ourBuilder.Uri.PathAndQuery);
     }
 
-    #endregion
 }

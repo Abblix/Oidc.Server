@@ -123,9 +123,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PingMode_UpdatesStorageAndSendsNotification()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -169,9 +169,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PollMode_OnlyUpdatesStorage()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
@@ -206,9 +206,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_NullToken_OnlyUpdatesStorage()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -243,9 +243,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_NullEndpoint_OnlyUpdatesStorage()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
@@ -280,9 +280,9 @@ public class AuthenticationCompletionHandlerTests
     {
         // Arrange
         var customExpiry = TimeSpan.FromMinutes(10);
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
         };
@@ -311,9 +311,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PassesCorrectNotificationParameters()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -350,9 +350,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PushMode_GeneratesAndDeliversTokens()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -491,9 +491,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PushMode_TokenGenerationFails_RemovesRequest()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = _notificationEndpoint,
@@ -545,10 +545,10 @@ public class AuthenticationCompletionHandlerTests
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_MissingEndpoint_RemovesRequest()
     {
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(
-            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+            new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,
@@ -588,10 +588,10 @@ public class AuthenticationCompletionHandlerTests
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_MissingToken_RemovesRequest()
     {
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
         var request = new BackChannelAuthenticationRequest(
-            new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+            new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = new Uri("https://client.example/ciba"),
@@ -630,9 +630,9 @@ public class AuthenticationCompletionHandlerTests
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
     {
         // Arrange
-        var authSession = new AuthSession(UserId, "session_123", DateTimeOffset.UtcNow, "backchannel");
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
         var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
-        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), DateTimeOffset.UtcNow.AddMinutes(5))
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             Status = BackChannelAuthenticationStatus.Pending,
             ClientNotificationEndpoint = null,

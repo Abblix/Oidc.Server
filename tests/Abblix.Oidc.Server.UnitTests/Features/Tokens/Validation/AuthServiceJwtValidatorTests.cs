@@ -53,8 +53,6 @@ public class AuthServiceJwtValidatorTests
             _serviceKeysProvider.Object);
     }
 
-    #region Issuer Validation Tests
-
     /// <summary>
     /// Verifies that ValidateAsync accepts JWT with valid issuer matching expected issuer.
     /// Issuer validation is critical per OpenID Connect Core Section 3.1.3.7 - prevents token substitution attacks.
@@ -166,10 +164,6 @@ public class AuthServiceJwtValidatorTests
         var issuerValidationResult = await capturedParams!.ValidateIssuer!(string.Empty);
         Assert.False(issuerValidationResult);
     }
-
-    #endregion
-
-    #region Audience Validation Tests
 
     /// <summary>
     /// The tokens this service issues for itself name it in the audience, so the issuer is what a valid one
@@ -305,10 +299,6 @@ public class AuthServiceJwtValidatorTests
         Assert.False(audienceValidationResult);
     }
 
-    #endregion
-
-    #region Validation Options Tests
-
     /// <summary>
     /// Verifies that ValidateAsync uses Default validation options when not specified.
     /// Default includes: ValidateIssuer, ValidateAudience, RequireSignedTokens, ValidateIssuerSigningKey, ValidateLifetime.
@@ -384,10 +374,6 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
         Assert.Equal(noOptions, capturedParams!.Options);
     }
-
-    #endregion
-
-    #region Key Resolution Tests
 
     /// <summary>
     /// Verifies that ValidateAsync resolves signing keys from service keys provider.
@@ -492,10 +478,6 @@ public class AuthServiceJwtValidatorTests
         var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
-
-    #endregion
-
-    #region Integration Tests
 
     /// <summary>
     /// Verifies complete validation flow for a valid signed JWT.
@@ -602,10 +584,6 @@ public class AuthServiceJwtValidatorTests
         Assert.Equal(ValidationOptions.Default, capturedParams.Options);
     }
 
-    #endregion
-
-    #region Helper Methods
-
     private static JsonWebToken CreateValidToken()
     {
         return new JsonWebToken
@@ -619,9 +597,9 @@ public class AuthServiceJwtValidatorTests
                 Issuer = ExpectedIssuer,
                 Audiences = [ValidClientId],
                 Subject = "user_123",
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-                NotBefore = DateTimeOffset.UtcNow,
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
+                NotBefore = TimeProvider.System.GetUtcNow(),
             }
         };
     }
@@ -645,5 +623,4 @@ public class AuthServiceJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
     }
 
-    #endregion
 }

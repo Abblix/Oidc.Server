@@ -755,7 +755,7 @@ public class RefreshTokenServiceTests
     private static AuthSession CreateAuthSession() => new(
         Subject: UserId,
         SessionId: SessionId,
-        AuthenticationTime: DateTimeOffset.UtcNow.AddMinutes(-5),
+        AuthenticationTime: TimeProvider.System.GetUtcNow().AddMinutes(-5),
         IdentityProvider: "test");
 
     private static AuthorizationContext CreateAuthorizationContext() => new(

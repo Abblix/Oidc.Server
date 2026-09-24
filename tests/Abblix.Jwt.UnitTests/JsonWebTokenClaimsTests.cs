@@ -565,7 +565,7 @@ public class JsonWebTokenClaimsTests
     public async Task StandardClaims_BuiltInProperties_RoundTrip_PreservesValues()
     {
         var token = CreateToken();
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
 
         token.Payload.JwtId = Guid.NewGuid().ToString("N");
         token.Payload.Issuer = "https://issuer.example.com";
@@ -639,7 +639,7 @@ public class JsonWebTokenClaimsTests
     public async Task ComplexScenario_AllClaimTypes_RoundTrip_PreservesAllValues()
     {
         var token = CreateToken();
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
 
         token.Payload.JwtId = Guid.NewGuid().ToString("N");
         token.Payload.Issuer = "https://issuer.example.com";
@@ -768,7 +768,7 @@ public class JsonWebTokenClaimsTests
 
     private static JsonWebToken CreateToken()
     {
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
         return new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },

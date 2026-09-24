@@ -66,7 +66,7 @@ public class AuthorizationGrantValidatorTests
         var authSession = new AuthSession(
             Subject: "user_123",
             SessionId: "session_123",
-            AuthenticationTime: DateTimeOffset.UtcNow,
+            AuthenticationTime: TimeProvider.System.GetUtcNow(),
             IdentityProvider: "local");
 
         var authContext = new AuthorizationContext(

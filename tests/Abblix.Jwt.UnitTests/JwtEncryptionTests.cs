@@ -57,7 +57,7 @@ public class JwtEncryptionTests
     [Fact]
     public async Task JwtFullCycleTest()
     {
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
         var expiresIn = TimeSpan.FromSeconds(10);
 
         var token = new JsonWebToken

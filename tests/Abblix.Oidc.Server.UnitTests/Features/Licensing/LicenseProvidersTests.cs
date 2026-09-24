@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </summary>
 public class LicenseProvidersTests
 {
-    #region StaticLicenseJwtProvider Tests
 
     /// <summary>
     /// Verifies that StaticLicenseJwtProvider returns the provided license JWT.
@@ -81,10 +80,6 @@ public class LicenseProvidersTests
         // Assert
         Assert.Equal(licenses1, licenses2);
     }
-
-    #endregion
-
-    #region OptionsLicenseJwtProvider Tests
 
     /// <summary>
     /// Verifies that OptionsLicenseJwtProvider returns license from configuration.
@@ -163,10 +158,6 @@ public class LicenseProvidersTests
         Assert.Equal(licenses1, licenses2);
     }
 
-    #endregion
-
-    #region Provider Comparison Tests
-
     /// <summary>
     /// Documents the differences between StaticLicenseJwtProvider and OptionsLicenseJwtProvider.
     /// </summary>
@@ -193,5 +184,4 @@ public class LicenseProvidersTests
         Assert.True(true); // Documentation test
     }
 
-    #endregion
 }

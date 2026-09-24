@@ -31,7 +31,7 @@ public class LicenseManagerTests
 {
     private static License CreateLicense(int? notBefore, int? expiresAt, int? gracePeriod = null)
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         return new License
         {
             NotBefore = notBefore.HasValue ? utcNow.AddDays(notBefore.Value) : null,
@@ -81,7 +81,7 @@ public class LicenseManagerTests
         manager.AddLicense(expiredLicense);
         manager.AddLicense(activeLicense);
 
-        var result = manager.GenerateActiveLicense(DateTimeOffset.UtcNow);
+        var result = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
 
         Assert.NotNull(result);
         Assert.Equal(activeLicense, result);
@@ -103,7 +103,7 @@ public class LicenseManagerTests
         manager.AddLicense(gracePeriodLicense);
         manager.AddLicense(activeLicense);
 
-        var result = manager.GenerateActiveLicense(DateTimeOffset.UtcNow);
+        var result = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
 
         // Active license should take precedence over grace period license
         Assert.NotNull(result);
@@ -123,7 +123,7 @@ public class LicenseManagerTests
 
         manager.AddLicense(nearExpiryLicense);
 
-        var result = manager.GenerateActiveLicense(DateTimeOffset.UtcNow);
+        var result = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
 
         // This test assumes the existence of a mechanism to verify log entries
         // Example assertion, depending on the logging framework used
@@ -149,7 +149,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_granting_fewer_clients_is_announced_with_the_day_it_takes_over()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -192,7 +192,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_naming_a_limit_where_there_was_none_is_announced()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10) });
         manager.AddLicense(new License
@@ -211,7 +211,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_dropping_an_issuer_names_the_issuer()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -252,7 +252,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_third_license_covering_the_day_is_counted_too()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -283,7 +283,7 @@ public class LicenseManagerTests
     [Fact]
     public void An_issuer_another_active_license_still_carries_is_not_announced_as_lost()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -326,7 +326,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_with_a_lower_issuer_limit_is_announced()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -354,7 +354,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_naming_an_issuer_set_where_there_was_none_names_the_set()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License { NotBefore = utcNow.AddDays(-1), ExpiresAt = utcNow.AddDays(10) });
         manager.AddLicense(new License
@@ -389,7 +389,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_loss_before_the_next_expiry_is_announced_on_its_own_day()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -432,7 +432,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_right_not_held_today_is_not_announced_as_a_loss_today()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -471,7 +471,7 @@ public class LicenseManagerTests
     [Fact]
     public void The_record_is_throttled_across_repeated_consults()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -522,7 +522,7 @@ public class LicenseManagerTests
     [Fact]
     public void The_end_of_a_grace_period_is_not_announced_as_a_narrowing()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -566,7 +566,7 @@ public class LicenseManagerTests
     [Fact]
     public void Nothing_is_announced_past_a_moment_with_no_license_in_force()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -627,7 +627,7 @@ public class LicenseManagerTests
     [InlineData(-5)]
     public void A_maximal_expiry_in_any_offset_does_not_fault(int offsetHours)
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var offset = TimeSpan.FromHours(offsetHours);
 
         // The two maxima are different values, and each row carries the one its offset can express: east
@@ -710,7 +710,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_maximal_expiry_with_a_perpetual_successor_does_not_fault()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -738,7 +738,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_granting_more_says_nothing()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -763,7 +763,7 @@ public class LicenseManagerTests
     [Fact]
     public void A_renewal_whose_only_narrowing_is_the_grace_period_says_nothing()
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var manager = new LicenseManager();
         manager.AddLicense(new License
         {
@@ -807,8 +807,6 @@ public class LicenseManagerTests
 
         return records.Entries;
     }
-
-    #region Thread Safety Tests
 
     /// <summary>
     /// Verifies that concurrent AddLicense calls from multiple threads are handled safely
@@ -857,7 +855,7 @@ public class LicenseManagerTests
             {
                 while (!cancellationSource.Token.IsCancellationRequested)
                 {
-                    var license = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+                    var license = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
                     Assert.NotNull(license);
                 }
             }
@@ -917,8 +915,8 @@ public class LicenseManagerTests
         {
             ClientLimit = 100,
             IssuerLimit = 50,
-            NotBefore = DateTimeOffset.UtcNow.AddDays(-1),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10)
+            NotBefore = TimeProvider.System.GetUtcNow().AddDays(-1),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(10)
         };
         manager.AddLicense(license);
 
@@ -928,7 +926,7 @@ public class LicenseManagerTests
         // Act - Multiple threads reading simultaneously
         Parallel.For(0, 10, _ =>
         {
-            var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+            var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
             lock (lockObj)
             {
                 results.Add(result!);
@@ -943,10 +941,6 @@ public class LicenseManagerTests
             Assert.Equal(50, r.IssuerLimit);
         });
     }
-
-    #endregion
-
-    #region Edge Case Tests
 
     /// <summary>
     /// #17 regression (deterministic, single-threaded): the license scan must not carry a cached start
@@ -977,7 +971,7 @@ public class LicenseManagerTests
         var manager = new LicenseManager();
 
         // Act
-        var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
 
         // Assert
         Assert.Null(result);
@@ -995,7 +989,7 @@ public class LicenseManagerTests
         manager.AddLicense(CreateLicense(-30, -20)); // Expired
 
         // Act
-        var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
 
         // Assert
         Assert.Null(result);
@@ -1014,7 +1008,7 @@ public class LicenseManagerTests
         manager.AddLicense(graceLicense);
 
         // Act
-        var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
 
         // Assert
         Assert.NotNull(result);
@@ -1035,8 +1029,8 @@ public class LicenseManagerTests
             ClientLimit = 10,
             IssuerLimit = 5,
             ValidIssuers = new HashSet<string>(StringComparer.Ordinal) { "https://issuer1.com" },
-            NotBefore = DateTimeOffset.UtcNow.AddDays(-5),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10)
+            NotBefore = TimeProvider.System.GetUtcNow().AddDays(-5),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(10)
         };
 
         var license2 = new License
@@ -1044,15 +1038,15 @@ public class LicenseManagerTests
             ClientLimit = 20,
             IssuerLimit = 10,
             ValidIssuers = new HashSet<string>(StringComparer.Ordinal) { "https://issuer2.com" },
-            NotBefore = DateTimeOffset.UtcNow.AddDays(-3),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(15)
+            NotBefore = TimeProvider.System.GetUtcNow().AddDays(-3),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(15)
         };
 
         manager.AddLicense(license1);
         manager.AddLicense(license2);
 
         // Act
-        var result = manager.GenerateActiveLicense(DateTimeOffset.UtcNow);
+        var result = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
 
         // Assert - Should take maximum limits and earliest expiration
         Assert.NotNull(result);
@@ -1076,7 +1070,7 @@ public class LicenseManagerTests
         manager.AddLicense(CreateLicense(1, 10)); // Starts tomorrow
 
         // Act
-        var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
 
         // Assert
         Assert.Null(result);
@@ -1090,7 +1084,7 @@ public class LicenseManagerTests
     {
         // Arrange
         var manager = new LicenseManager();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
 
         var license = new License
         {
@@ -1129,14 +1123,14 @@ public class LicenseManagerTests
         {
             ClientLimit = null, // Unlimited
             IssuerLimit = null, // Unlimited
-            NotBefore = DateTimeOffset.UtcNow.AddDays(-1),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10)
+            NotBefore = TimeProvider.System.GetUtcNow().AddDays(-1),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(10)
         };
 
         manager.AddLicense(unlimitedLicense);
 
         // Act
-        var result = manager.GenerateActiveLicense(DateTimeOffset.UtcNow);
+        var result = manager.GenerateActiveLicense(TimeProvider.System.GetUtcNow());
 
         // Assert
         Assert.NotNull(result);
@@ -1176,7 +1170,7 @@ public class LicenseManagerTests
 
         // Act - Create licenses with varying validity periods
         // All licenses span from past to future, ensuring at least some are currently active
-        var startTime = DateTimeOffset.UtcNow;
+        var startTime = TimeProvider.System.GetUtcNow();
         for (var i = 0; i < licenseCount; i++)
         {
             var offset = i - licenseCount / 2;
@@ -1184,11 +1178,11 @@ public class LicenseManagerTests
             var expiresAt = offset + 10;
             manager.AddLicense(CreateLicense(notBefore, expiresAt));
         }
-        var addDuration = DateTimeOffset.UtcNow - startTime;
+        var addDuration = TimeProvider.System.GetUtcNow() - startTime;
 
-        var retrieveStart = DateTimeOffset.UtcNow;
-        var result = manager.TryGetCurrentLicenseLimit(DateTimeOffset.UtcNow);
-        var retrieveDuration = DateTimeOffset.UtcNow - retrieveStart;
+        var retrieveStart = TimeProvider.System.GetUtcNow();
+        var result = manager.TryGetCurrentLicenseLimit(TimeProvider.System.GetUtcNow());
+        var retrieveDuration = TimeProvider.System.GetUtcNow() - retrieveStart;
 
         // Assert
         Assert.NotNull(result);
@@ -1198,8 +1192,6 @@ public class LicenseManagerTests
         Assert.True(addDuration.TotalSeconds < 5, $"Adding {licenseCount} licenses took {addDuration.TotalSeconds}s");
         Assert.True(retrieveDuration.TotalMilliseconds < 500, $"Retrieving license took {retrieveDuration.TotalMilliseconds}ms");
     }
-
-    #endregion
 
     /// <summary>
     /// A fixed instant the tests below measure against, so the day count a record carries is the one they

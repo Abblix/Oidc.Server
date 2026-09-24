@@ -71,8 +71,6 @@ public class LogoutTokenServiceTests
             Options.Create(new OidcOptions()));
     }
 
-    #region JWT Structure Tests
-
     /// <summary>
     /// Verifies that CreateLogoutTokenAsync generates JWT with correct header.
     /// Per OpenID Connect Back-Channel Logout Section 2.4, logout token must have type "logout+jwt".
@@ -248,10 +246,6 @@ public class LogoutTokenServiceTests
         Assert.NotEqual(token1.Payload.JwtId, token2.Payload.JwtId);
     }
 
-    #endregion
-
-    #region Timestamp Tests
-
     /// <summary>
     /// Verifies that CreateLogoutTokenAsync sets IssuedAt to current time.
     /// Per RFC 7519 Section 4.1.6, iat identifies when JWT was issued.
@@ -318,10 +312,6 @@ public class LogoutTokenServiceTests
         Assert.NotNull(capturedToken);
         Assert.Equal(_currentTime + expiresIn, capturedToken!.Payload.ExpiresAt);
     }
-
-    #endregion
-
-    #region Claims Tests
 
     /// <summary>
     /// Verifies that CreateLogoutTokenAsync sets subject claim from converted subject ID.
@@ -417,10 +407,6 @@ public class LogoutTokenServiceTests
         Assert.NotNull(capturedToken);
         Assert.Null(capturedToken!.Payload.Nonce);
     }
-
-    #endregion
-
-    #region Validation Tests
 
     /// <summary>
     /// Verifies that CreateLogoutTokenAsync throws when client has no BackChannelLogout configuration.
@@ -544,10 +530,6 @@ public class LogoutTokenServiceTests
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
-    #endregion
-
-    #region Integration Tests
-
     /// <summary>
     /// Verifies that CreateLogoutTokenAsync returns EncodedJsonWebToken with both token and encoded string.
     /// Tests complete flow from token generation to encoding.
@@ -610,10 +592,6 @@ public class LogoutTokenServiceTests
         _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
-    #endregion
-
-    #region Helper Methods
-
     private static ClientInfo CreateClientInfo(
         bool requiresSessionId = true,
         TimeSpan? logoutTokenExpiresIn = null)
@@ -656,5 +634,4 @@ public class LogoutTokenServiceTests
             .ReturnsAsync(EncodedJwt);
     }
 
-    #endregion
 }

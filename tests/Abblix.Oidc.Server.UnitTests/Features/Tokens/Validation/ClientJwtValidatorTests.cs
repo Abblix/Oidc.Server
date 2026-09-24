@@ -74,8 +74,6 @@ public class ClientJwtValidatorTests
             TimeProvider.System);
     }
 
-    #region Audience Validation Tests
-
     /// <summary>
     /// Verifies that ValidateAsync accepts JWT when audience matches the request URI.
     /// Per RFC 7523 Section 3, audience must identify the authorization server (token endpoint).
@@ -281,10 +279,6 @@ public class ClientJwtValidatorTests
         Assert.False(audienceValidationResult);
     }
 
-    #endregion
-
-    #region Issuer Validation Tests
-
     /// <summary>
     /// Verifies that ValidateAsync accepts JWT when issuer matches a known client ID.
     /// Per RFC 7523 Section 3, issuer must be the client_id of the OAuth client.
@@ -487,10 +481,6 @@ public class ClientJwtValidatorTests
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
-    #endregion
-
-    #region Key Resolution Tests
-
     /// <summary>
     /// Verifies that ValidateAsync resolves signing keys from client keys provider.
     /// Per RFC 7523, client must sign JWT with private key; server validates with public key.
@@ -655,10 +645,6 @@ public class ClientJwtValidatorTests
         Assert.Contains(_serverDecryptionKey, decryptionKeys);
     }
 
-    #endregion
-
-    #region Validation Options Tests
-
     /// <summary>
     /// Verifies that ValidateAsync uses Default validation options when not specified.
     /// Default includes: ValidateIssuer, ValidateAudience, RequireSignedTokens, ValidateIssuerSigningKey, ValidateLifetime.
@@ -736,10 +722,6 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
         Assert.Equal(customOptions, capturedParams!.Options);
     }
-
-    #endregion
-
-    #region Integration Tests
 
     /// <summary>
     /// Verifies complete validation flow for a valid client-signed JWT.
@@ -916,10 +898,6 @@ public class ClientJwtValidatorTests
         _tokenValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
     }
 
-    #endregion
-
-    #region Helper Methods
-
     private static JsonWebToken CreateValidToken()
     {
         return new JsonWebToken
@@ -933,9 +911,9 @@ public class ClientJwtValidatorTests
                 Issuer = ValidClientId,
                 Audiences = [RequestUri],
                 Subject = ValidClientId,
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-                NotBefore = DateTimeOffset.UtcNow,
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),
+                NotBefore = TimeProvider.System.GetUtcNow(),
             }
         };
     }
@@ -948,5 +926,4 @@ public class ClientJwtValidatorTests
         };
     }
 
-    #endregion
 }

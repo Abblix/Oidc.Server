@@ -74,7 +74,7 @@ public static partial class LicenseChecker
     {
         if (clientInfo != null)
         {
-            var utcNow = DateTimeOffset.UtcNow;
+            var utcNow = TimeProvider.System.GetUtcNow();
             var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
             if (currentLicense.ClientLimit.HasValue)
             {
@@ -116,7 +116,7 @@ public static partial class LicenseChecker
     /// <returns>The issuer if it complies with the licensing constraints; otherwise, logs an error.</returns>
     public static string CheckIssuer(string issuer)
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var currentLicense = LicenseManager.TryGetCurrentLicenseLimit(utcNow) ?? FreeLicense;
 
         if (currentLicense.ValidIssuers is { Count: > 0 } && !currentLicense.ValidIssuers.Contains(issuer))

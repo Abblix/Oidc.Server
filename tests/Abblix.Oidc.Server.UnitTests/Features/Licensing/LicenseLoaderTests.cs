@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </remarks>
 public class LicenseLoaderTests
 {
-    #region Invalid JWT Tests
 
     /// <summary>
     /// Verifies that LoadAsync throws InvalidOperationException for malformed JWT.
@@ -77,10 +76,6 @@ public class LicenseLoaderTests
             LicenseLoader.LoadAsync(nullJwt));
     }
 
-    #endregion
-
-    #region Invalid Issuer Tests
-
     /// <summary>
     /// Verifies that LoadAsync rejects JWT with invalid issuer.
     /// </summary>
@@ -105,10 +100,6 @@ public class LicenseLoaderTests
 
         Assert.Contains("can't be validated", exception.Message);
     }
-
-    #endregion
-
-    #region Invalid Signature Tests
 
     /// <summary>
     /// Verifies that LoadAsync rejects JWT with invalid signature.
@@ -155,10 +146,6 @@ public class LicenseLoaderTests
         Assert.Contains("can't be validated", exception.Message);
     }
 
-    #endregion
-
-    #region Invalid JWT Type Tests
-
     /// <summary>
     /// Verifies that LoadAsync rejects JWT with wrong type in header.
     /// </summary>
@@ -185,10 +172,6 @@ public class LicenseLoaderTests
         // Will fail at validation stage before type check
         Assert.Contains("can't be validated", exception.Message);
     }
-
-    #endregion
-
-    #region Expired Token Tests
 
     /// <summary>
     /// Verifies that LoadAsync accepts expired license tokens.
@@ -218,10 +201,6 @@ public class LicenseLoaderTests
         Assert.Contains("can't be validated", exception.Message);
         Assert.DoesNotContain("expired", exception.Message.ToLower());
     }
-
-    #endregion
-
-    #region Design Documentation Tests
 
     /// <summary>
     /// Documents the validation flow and requirements of LicenseLoader.
@@ -310,5 +289,4 @@ public class LicenseLoaderTests
         Assert.True(true); // Documentation test always passes
     }
 
-    #endregion
 }

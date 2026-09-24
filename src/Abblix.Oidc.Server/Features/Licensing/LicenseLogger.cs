@@ -44,7 +44,7 @@ internal class LicenseLogger: ILogger
     private static void CleanupExpiredEntries(object? state)
     {
         var nextAllowedTimes = (ConcurrentDictionary<object, DateTimeOffset>)state.NotNull(nameof(state));
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
 
         var keysToRemove = nextAllowedTimes
             .Where(kvp => kvp.Value < utcNow)

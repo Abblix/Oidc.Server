@@ -149,7 +149,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task ExpiredToken_FailsLifetimeValidation()
     {
-        var issuedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var issuedAt = TimeProvider.System.GetUtcNow().AddMinutes(-10);
         var token = CreateValidToken();
         token.Payload.IssuedAt = issuedAt;
         token.Payload.NotBefore = issuedAt;
@@ -178,7 +178,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task NotYetValidToken_FailsLifetimeValidation()
     {
-        var futureTime = DateTimeOffset.UtcNow.AddHours(1);
+        var futureTime = TimeProvider.System.GetUtcNow().AddHours(1);
         var token = CreateValidToken();
         token.Payload.IssuedAt = futureTime;
         token.Payload.NotBefore = futureTime;
@@ -204,7 +204,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task ExpiredToken_WithLifetimeValidationDisabled_Validates()
     {
-        var issuedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var issuedAt = TimeProvider.System.GetUtcNow().AddMinutes(-10);
         var token = CreateValidToken();
         token.Payload.IssuedAt = issuedAt;
         token.Payload.NotBefore = issuedAt;
@@ -672,7 +672,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenWithFutureIssuedAt_FailsValidation()
     {
-        var futureTime = DateTimeOffset.UtcNow.AddHours(1);
+        var futureTime = TimeProvider.System.GetUtcNow().AddHours(1);
         var token = CreateValidToken();
         token.Payload.IssuedAt = futureTime;
         token.Payload.NotBefore = futureTime;
@@ -698,12 +698,12 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenExpiringNow_WithClockSkewTolerance_Validates()
     {
-        var issuedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var issuedAt = TimeProvider.System.GetUtcNow().AddMinutes(-5);
         var token = CreateValidToken();
         token.Payload.IssuedAt = issuedAt;
         token.Payload.NotBefore = issuedAt;
         // Token expired 30 seconds ago, but should still validate due to clock skew tolerance
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-30);
+        token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddSeconds(-30);
 
         var jwt = await IssueToken(token, SigningKey);
 
@@ -729,7 +729,7 @@ public class JsonWebTokenValidationTests
         token.Payload.Scope = ["openid", "profile"];
         token.Payload.ClientId = "client123";
         token.Payload.SessionId = "session456";
-        token.Payload.AuthenticationTime = DateTimeOffset.UtcNow.AddMinutes(-5);
+        token.Payload.AuthenticationTime = TimeProvider.System.GetUtcNow().AddMinutes(-5);
         token.Payload.Nonce = "nonce789";
         token.Payload.AuthenticationMethodReferences = ["pwd", "mfa"];
         token.Payload.IdentityProvider = "https://idp.example.com";
@@ -754,7 +754,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenWithMinimalClaims_Validates()
     {
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
@@ -787,7 +787,7 @@ public class JsonWebTokenValidationTests
     public async Task TokenWithVeryLongExpiration_Validates()
     {
         var token = CreateValidToken();
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddYears(10);
+        token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddYears(10);
 
         var jwt = await IssueToken(token, SigningKey);
 
@@ -818,7 +818,7 @@ public class JsonWebTokenValidationTests
                 "iss":"https://issuer.example.com",
                 "aud":"test-audience",
                 "exp":-62135596801,
-                "iat":{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}},
+                "iat":{{TimeProvider.System.GetUtcNow().ToUnixTimeSeconds()}},
                 "sub":"test-user"
             }
             """);
@@ -856,7 +856,7 @@ public class JsonWebTokenValidationTests
             {
                 "iss":"https://issuer.example.com",
                 "aud":"test-audience",
-                "exp":{{DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()}},
+                "exp":{{TimeProvider.System.GetUtcNow().AddHours(1).ToUnixTimeSeconds()}},
                 "iat":100,
                 "sub":"test-user"
             }
@@ -899,7 +899,7 @@ public class JsonWebTokenValidationTests
                 "iss":"https://issuer.example.com",
                 "aud":"test-audience",
                 "exp":{{farFutureTimestamp}},
-                "iat":{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}},
+                "iat":{{TimeProvider.System.GetUtcNow().ToUnixTimeSeconds()}},
                 "sub":"test-user"
             }
             """);
@@ -980,7 +980,7 @@ public class JsonWebTokenValidationTests
 
     private static JsonWebToken CreateValidToken()
     {
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
         return new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
@@ -1131,7 +1131,7 @@ public class JsonWebTokenValidationTests
     {
         var token = CreateValidToken();
         token.Payload.NotBefore = null;
-        token.Payload.ExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        token.Payload.ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         var jwt = await IssueToken(token, SigningKey);
 
@@ -1153,7 +1153,7 @@ public class JsonWebTokenValidationTests
     {
         var token = CreateValidToken();
         token.Payload.ExpiresAt = null;
-        token.Payload.NotBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
+        token.Payload.NotBefore = TimeProvider.System.GetUtcNow().AddMinutes(-5);
 
         var jwt = await IssueToken(token, SigningKey);
 
@@ -1174,7 +1174,7 @@ public class JsonWebTokenValidationTests
     [Fact]
     public async Task TokenWithExpiredExpOnly_FailsValidation()
     {
-        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var baseTime = TimeProvider.System.GetUtcNow().AddMinutes(-10);
         var token = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
@@ -1214,7 +1214,7 @@ public class JsonWebTokenValidationTests
             {
                 Issuer = IssuerUri,
                 Audiences = [TestAudience],
-                NotBefore = DateTimeOffset.UtcNow.AddHours(1),
+                NotBefore = TimeProvider.System.GetUtcNow().AddHours(1),
             },
         };
 

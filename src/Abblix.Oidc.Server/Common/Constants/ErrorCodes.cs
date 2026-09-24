@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// </summary>
 public static class ErrorCodes
 {
-	#region RFC 6749: OAuth 2.0 error codes
+	// RFC 6749: OAuth 2.0 error codes
 
 	/// <summary>
 	/// The request is missing a parameter, includes an unsupported parameter value (other than grant type),
@@ -77,9 +77,7 @@ public static class ErrorCodes
 	/// </remarks>
 	public const string TemporarilyUnavailable = "temporarily_unavailable";
 
-	#endregion
-
-	#region OpenID Connect Core error codes
+	// OpenID Connect Core error codes
 
 	/// <summary>
 	/// The Authorization Server requires End-User interaction of some form to proceed. This error MAY be returned when the prompt parameter value in
@@ -150,9 +148,7 @@ public static class ErrorCodes
 	/// </summary>
 	public const string RegistrationNotSupported = "registration_not_supported";
 
-	#endregion
-
-	#region RFC 7009: OAuth 2.0 Token Revocation
+	// RFC 7009: OAuth 2.0 Token Revocation
 
 	/// <summary>
 	/// The authorization server does not support the revocation of the presented token type.
@@ -160,9 +156,7 @@ public static class ErrorCodes
 	/// </summary>
 	public const string UnsupportedTokenType = "unsupported_token_type";
 
-	#endregion
-
-	#region OpenID Connect Dynamic Client Registration 1.0
+	// OpenID Connect Dynamic Client Registration 1.0
 
 	/// <summary>
 	/// The value of one or more redirect_uris is invalid.
@@ -187,8 +181,6 @@ public static class ErrorCodes
 	/// for use by this authorization server per RFC 7591 Section 3.2.2.
 	/// </summary>
 	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
-
-	#endregion
 
 	/// <summary>
 	/// The request requires additional confirmation from the resource owner or authorization server.

@@ -79,7 +79,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(refreshToken);
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
@@ -113,7 +113,7 @@ public class RefreshTokenGrantHandlerTests
 
         // Token belongs to different client
         var grantForDifferentClient = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(DifferentClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
@@ -283,8 +283,8 @@ public class RefreshTokenGrantHandlerTests
                 Subject = "user123",
                 ClientId = clientId,
                 Audiences = ["test-audience"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(30),
             },
         };
     }
@@ -303,8 +303,8 @@ public class RefreshTokenGrantHandlerTests
                 Issuer = "https://issuer.example.com",
                 Subject = "user123",
                 Audiences = ["test-audience"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
             },
         };
     }

@@ -96,7 +96,7 @@ public class UserInfoRequestValidatorTests
         return new AuthSession(
             Subject: subject,
             SessionId: "session_123",
-            AuthenticationTime: DateTimeOffset.UtcNow,
+            AuthenticationTime: TimeProvider.System.GetUtcNow(),
             IdentityProvider: "local");
     }
 

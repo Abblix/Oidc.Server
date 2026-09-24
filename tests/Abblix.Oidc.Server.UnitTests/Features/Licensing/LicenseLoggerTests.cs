@@ -37,7 +37,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </remarks>
 public class LicenseLoggerTests
 {
-    #region Basic Throttling Tests
 
     /// <summary>
     /// Verifies that IsAllowed returns true on first call with a new key.
@@ -48,7 +47,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid(); // Unique key to avoid interference
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -67,7 +66,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid(); // Unique key
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -88,7 +87,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid(); // Unique key
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromSeconds(1);
 
         // Act
@@ -111,7 +110,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid(); // Unique key
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -123,10 +122,6 @@ public class LicenseLoggerTests
         Assert.False(secondResult);
     }
 
-    #endregion
-
-    #region Multiple Keys Tests
-
     /// <summary>
     /// Verifies that different keys are tracked independently.
     /// </summary>
@@ -137,7 +132,7 @@ public class LicenseLoggerTests
         var logger = LicenseLogger.Instance;
         var key1 = Guid.NewGuid();
         var key2 = Guid.NewGuid();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -158,7 +153,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var keyValue = Guid.NewGuid().ToString();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act - Use same key value multiple times
@@ -172,10 +167,6 @@ public class LicenseLoggerTests
         Assert.False(result3);
     }
 
-    #endregion
-
-    #region Period Variation Tests
-
     /// <summary>
     /// Verifies that shorter periods allow logging sooner.
     /// </summary>
@@ -185,7 +176,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var shortPeriod = TimeSpan.FromSeconds(10);
 
         // Act
@@ -213,7 +204,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var zeroPeriod = TimeSpan.Zero;
 
         // Act
@@ -236,7 +227,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var longPeriod = TimeSpan.FromDays(1);
 
         // Act
@@ -250,10 +241,6 @@ public class LicenseLoggerTests
         Assert.True(afterDay); // Allowed after 1 day
     }
 
-    #endregion
-
-    #region Thread Safety Tests
-
     /// <summary>
     /// Verifies that concurrent calls with same key result in only one allowed call.
     /// </summary>
@@ -263,7 +250,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = Guid.NewGuid();
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         var results = new List<bool>();
@@ -292,7 +279,7 @@ public class LicenseLoggerTests
     {
         // Arrange
         var logger = LicenseLogger.Instance;
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         var results = new List<bool>();
@@ -313,10 +300,6 @@ public class LicenseLoggerTests
         Assert.All(results, r => Assert.True(r));
     }
 
-    #endregion
-
-    #region Key Type Tests
-
     /// <summary>
     /// Verifies that string keys work correctly.
     /// </summary>
@@ -326,7 +309,7 @@ public class LicenseLoggerTests
         // Arrange
         var logger = LicenseLogger.Instance;
         var key = $"string-key-{Guid.NewGuid()}";
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -348,7 +331,7 @@ public class LicenseLoggerTests
         var logger = LicenseLogger.Instance;
         var uniqueId = Guid.NewGuid();
         var key = new { license = "test", status = "active", id = uniqueId };
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -377,7 +360,7 @@ public class LicenseLoggerTests
         var uniqueValue = Guid.NewGuid().ToString();
         var key1 = new { license = uniqueValue, status = "active" };
         var key2 = new { license = uniqueValue, status = "active" };
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = TimeProvider.System.GetUtcNow();
         var period = TimeSpan.FromMinutes(5);
 
         // Act
@@ -388,10 +371,6 @@ public class LicenseLoggerTests
         Assert.True(result1);
         Assert.False(result2); // Throttled because key1 and key2 are structurally equal
     }
-
-    #endregion
-
-    #region Logger Interface Tests
 
     /// <summary>
     /// Verifies that LicenseLogger.Instance is a singleton.
@@ -461,10 +440,6 @@ public class LicenseLoggerTests
         Assert.Null(exception);
     }
 
-    #endregion
-
-    #region Documentation Tests
-
     /// <summary>
     /// Documents the throttling mechanism and cleanup timer.
     /// </summary>
@@ -530,8 +505,6 @@ public class LicenseLoggerTests
 
         Assert.True(true); // Documentation test
     }
-
-    #endregion
 
     /// <summary>
     /// The timer callback that keeps the throttle dictionary from growing without bound drops the entries whose
