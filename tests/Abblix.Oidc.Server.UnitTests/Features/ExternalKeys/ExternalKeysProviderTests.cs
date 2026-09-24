@@ -18,6 +18,7 @@ using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -327,10 +328,5 @@ public class ExternalKeysProviderTests
         return list;
     }
 
-    private static TimeProvider TimeAt(DateTimeOffset now)
-    {
-        var timeProvider = new Mock<TimeProvider>();
-        timeProvider.Setup(t => t.GetUtcNow()).Returns(now);
-        return timeProvider.Object;
-    }
+    private static TimeProvider TimeAt(DateTimeOffset now) => new FakeTimeProvider(now);
 }

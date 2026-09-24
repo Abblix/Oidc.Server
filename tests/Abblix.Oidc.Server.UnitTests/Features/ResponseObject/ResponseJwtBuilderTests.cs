@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -42,7 +43,7 @@ public class ResponseJwtBuilderTests
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
     private readonly Mock<IIssuerProvider> _issuerProvider = new(MockBehavior.Strict);
-    private readonly Mock<TimeProvider> _timeProvider = new(MockBehavior.Strict);
+    private readonly FakeTimeProvider _timeProvider;
 
     private readonly ResponseJwtBuilder _builder;
     private readonly ClientInfo _client = new(ClientId);
@@ -55,7 +56,7 @@ public class ResponseJwtBuilderTests
     {
         _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
         _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
+        _timeProvider = new FakeTimeProvider(_now);
         _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
@@ -69,7 +70,7 @@ public class ResponseJwtBuilderTests
             _clientInfoProvider.Object,
             clientJwtFormatter,
             _issuerProvider.Object,
-            _timeProvider.Object,
+            _timeProvider,
             Options.Create(new OidcOptions()));
     }
 
@@ -204,7 +205,7 @@ public class ResponseJwtBuilderTests
             new ClientJwtFormatter(
                 _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object),
             _issuerProvider.Object,
-            _timeProvider.Object,
+            _timeProvider,
             options);
 
         await builder.BuildAsync(ClientId, [("code", "auth-code")]);
