@@ -51,10 +51,7 @@ public class RegisterClientRequestProcessor(
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
         var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
 
-        // lent deliberately RedirectUris, EffectiveGrantTypes, EffectiveResponseTypes, AllowedScopes,
-        // Contacts, RequestUris, AuthorizationDetailsTypes, TokenExchangeAllowedSubjectTokenTypes,
-        // TokenExchangeAllowedAudiences:
-        // the response echoes the registered metadata, so what the store now holds is the answer -
+        // The response echoes the registered metadata, so what the store now holds is the answer -
         // RFC 7591 section 3.2.1 asks for the server-assigned defaults to be visible to the client.
         await clientInfoManager.AddClientAsync(clientInfo);
 

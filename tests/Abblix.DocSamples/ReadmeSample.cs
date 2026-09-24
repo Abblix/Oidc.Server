@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Abblix.DocSamples;
 
@@ -227,24 +230,27 @@ public static class ReadmeSampleReader
     }
 
     /// <summary>
-    /// The namespace a line imports, or null where the line is not a using directive at all.
+    /// What the using directives in this source import, as the compiler reads them.
     /// </summary>
     /// <remarks>
-    /// A using STATEMENT opens a scope and belongs to the body; only a directive names a namespace, and
-    /// the difference is the parenthesis rather than the keyword. Shared with the row that compares a
-    /// copy's imports, which would otherwise read <c>using var scope = provider.CreateScope();</c> as a
-    /// namespace and report a mismatch nobody could act on.
+    /// Shared by the README block and its copy, so both sides are read by the same parser. A
+    /// <c>using</c> statement such as <c>using var scope = provider.CreateScope();</c> is code, not a
+    /// directive, and the syntax tree never counts it as an import.
     /// </remarks>
-    public static string? NamespaceOf(string line)
+    public static IReadOnlyList<string> NamespacesIn(string source)
+        => Directives(CSharpSyntaxTree.ParseText(source)).Select(Imported).ToArray();
+
+    private static IEnumerable<UsingDirectiveSyntax> Directives(SyntaxTree tree)
+        => tree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>();
+
+    private static string Imported(UsingDirectiveSyntax directive)
     {
-        const string Directive = "using ";
+        var imported = directive.NamespaceOrType.ToString();
 
-        var trimmed = line.Trim();
+        if (directive.Alias is { } alias)
+            imported = $"{alias.Name} = {imported}";
 
-        if (!trimmed.StartsWith(Directive, StringComparison.Ordinal) || !trimmed.EndsWith(';'))
-            return null;
-
-        return trimmed.Contains('(') ? null : trimmed[..^1][Directive.Length..].Trim();
+        return directive.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) ? $"static {imported}" : imported;
     }
 
     /// <summary>
@@ -255,26 +261,24 @@ public static class ReadmeSampleReader
     /// legal inside the method body a copy wraps its sample in, and an import the snippet omits is a
     /// defect the body comparison cannot see. So the copy carries the imports at file scope, where the
     /// compiler resolves them, and the body between markers, where the text is compared.
+    /// <para>
+    /// The imports end at the first directive with anything but blank space around it - a comment, a
+    /// pragma - and the body starts right after the last import's semicolon. So whatever stands among
+    /// the imports lands in the body, where the comparison with the copy sees it.
+    /// </para>
     /// </remarks>
-    private static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
+    internal static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
         IReadOnlyList<string> block)
     {
-        var usings = new List<string>();
-        var index = 0;
+        var source = string.Join('\n', block);
+        var imports = Directives(CSharpSyntaxTree.ParseText(source))
+            .TakeWhile(directive => directive.GetLeadingTrivia().Concat(directive.GetTrailingTrivia()).All(IsBlank))
+            .ToArray();
 
-        for (; index < block.Count; index++)
-        {
-            var line = block[index].Trim();
-
-            if (line.Length == 0)
-                continue;
-
-            if (NamespaceOf(line) is not { } imported)
-                break;
-
-            usings.Add(imported);
-        }
-
-        return (usings, block.Skip(index).ToArray());
+        var bodyStart = imports.Length == 0 ? 0 : imports[^1].Span.End;
+        return (imports.Select(Imported).ToArray(), source[bodyStart..].Split('\n'));
     }
+
+    private static bool IsBlank(SyntaxTrivia trivia)
+        => trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia);
 }

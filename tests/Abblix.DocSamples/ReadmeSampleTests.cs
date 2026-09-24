@@ -77,8 +77,9 @@ public class ReadmeSampleTests
             var (documented, _) = ReadmeSampleReader.Read(root, sample);
             var copy = CopyOf(root, sample);
 
-            var ambient = Namespaces(Region(copy, "ambient"));
-            var declared = Namespaces(File.ReadAllLines(copy)).Except(ambient, StringComparer.Ordinal);
+            var ambient = ReadmeSampleReader.NamespacesIn(string.Join('\n', Region(copy, "ambient")));
+            var declared = ReadmeSampleReader.NamespacesIn(File.ReadAllText(copy))
+                .Except(ambient, StringComparer.Ordinal);
 
             if (!documented.OrderBy(name => name, StringComparer.Ordinal)
                     .SequenceEqual(declared.OrderBy(name => name, StringComparer.Ordinal)))
@@ -150,23 +151,31 @@ public class ReadmeSampleTests
     }
 
     /// <summary>
-    /// The namespaces named by the using directives among these lines.
-    /// </summary>
-    /// <remarks>
-    /// Through the same rule the reader applies to a README block, so a <c>using</c> that opens a scope
-    /// is not counted as an import on one side and skipped on the other.
-    /// </remarks>
-    private static IReadOnlyList<string> Namespaces(IEnumerable<string> lines) => lines
-        .Select(ReadmeSampleReader.NamespaceOf)
-        .Where(name => name is not null)
-        .Select(name => name!)
-        .ToArray();
-
-    /// <summary>
     /// The lines that carry meaning: trimmed, with blank ones dropped.
     /// </summary>
     private static IReadOnlyList<string> Meaningful(IEnumerable<string> lines)
         => lines.Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+
+    /// <summary>
+    /// Whatever stands among a block's imports is kept for the body, so the comparison with the copy
+    /// sees it; only imports with nothing around them are taken as imports.
+    /// </summary>
+    [Theory]
+    [InlineData("using A;\nusing B;\nCall();", "A,B", "Call();")]
+    [InlineData("using A; // why\nusing B;\nCall();", "", "using A; // why|using B;|Call();")]
+    [InlineData("using A; /* why */\nusing B;\nCall();", "", "using A; /* why */|using B;|Call();")]
+    [InlineData("using A;\n#pragma warning disable CS0618\nusing B;\nCall();", "A", "#pragma warning disable CS0618|using B;|Call();")]
+    [InlineData("using A;\n// why\nusing B;\nCall();", "A", "// why|using B;|Call();")]
+    [InlineData("using A;\nusing B; // why\nCall();", "A", "using B; // why|Call();")]
+    [InlineData("using A;\nusing B; Call();", "A,B", "Call();")]
+    [InlineData("using A;\nusing var scope = Create();", "A", "using var scope = Create();")]
+    public void OnlyImportsWithNothingAroundThemAreImports(string block, string imports, string body)
+    {
+        var (usings, rest) = ReadmeSampleReader.Split(block.Split('\n'));
+
+        Assert.Equal(imports.Split(',', StringSplitOptions.RemoveEmptyEntries), usings);
+        Assert.Equal(body.Split('|'), Meaningful(rest));
+    }
 
     /// <summary>
     /// Where the compiled copy of a README sample lives.
