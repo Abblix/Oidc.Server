@@ -157,6 +157,27 @@ public class ReadmeSampleTests
         => lines.Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
 
     /// <summary>
+    /// Whatever stands among a block's imports is kept for the body, so the comparison with the copy
+    /// sees it; only imports with nothing around them are taken as imports.
+    /// </summary>
+    [Theory]
+    [InlineData("using A;\nusing B;\nCall();", "A,B", "Call();")]
+    [InlineData("using A; // why\nusing B;\nCall();", "", "using A; // why|using B;|Call();")]
+    [InlineData("using A; /* why */\nusing B;\nCall();", "", "using A; /* why */|using B;|Call();")]
+    [InlineData("using A;\n#pragma warning disable CS0618\nusing B;\nCall();", "A", "#pragma warning disable CS0618|using B;|Call();")]
+    [InlineData("using A;\n// why\nusing B;\nCall();", "A", "// why|using B;|Call();")]
+    [InlineData("using A;\nusing B; // why\nCall();", "A", "using B; // why|Call();")]
+    [InlineData("using A;\nusing B; Call();", "A,B", "Call();")]
+    [InlineData("using A;\nusing var scope = Create();", "A", "using var scope = Create();")]
+    public void OnlyImportsWithNothingAroundThemAreImports(string block, string imports, string body)
+    {
+        var (usings, rest) = ReadmeSampleReader.Split(block.Split('\n'));
+
+        Assert.Equal(imports.Split(',', StringSplitOptions.RemoveEmptyEntries), usings);
+        Assert.Equal(body.Split('|'), Meaningful(rest));
+    }
+
+    /// <summary>
     /// Where the compiled copy of a README sample lives.
     /// </summary>
     private static string CopyOf(string repositoryRoot, ReadmeSample sample) => Path.Combine(

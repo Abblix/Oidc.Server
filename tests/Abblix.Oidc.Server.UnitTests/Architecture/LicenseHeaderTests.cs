@@ -134,7 +134,7 @@ public class LicenseHeaderTests
         var comments = HeaderComments(source);
 
         if (!comments.Any(comment => comment.Contains(HeaderTitle, StringComparison.Ordinal)))
-            return "no license header before the first token";
+            return $"no '{HeaderTitle}' line comment before the first token";
 
         if (!comments.Any(comment => comment.Contains(Copyright, StringComparison.Ordinal)))
             return "no copyright line naming Abblix LLP";
@@ -207,10 +207,11 @@ public class LicenseHeaderTests
     [InlineData("// Abblix OIDC Server Library\n// SPDX-License-Identifier: Apache-2.0\nnamespace A;", "no copyright line naming Abblix LLP")]
     [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\n" + Open + "namespace A;", "the license header appears 2 times")]
     [InlineData("// LICENSE RESTRICTIONS\n" + Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;", "carries the superseded proprietary notice")]
-    [InlineData("namespace A;\n" + Open + "// SPDX-License-Identifier: Apache-2.0\n", "no license header before the first token")]
+    [InlineData("namespace A;\n" + Open + "// SPDX-License-Identifier: Apache-2.0\n", "no 'Abblix OIDC Server Library' line comment before the first token")]
     [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;\n" + Open, "the license header appears 2 times")]
     [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;\n// LICENSE RESTRICTIONS\n", "carries the superseded proprietary notice")]
-    [InlineData("/*\n * Abblix OIDC Server Library\n * SPDX-FileCopyrightText: Copyright (c) Abblix LLP\n * SPDX-License-Identifier: Apache-2.0\n */\nnamespace A;", "no license header before the first token")]
-    public void AHeaderIsJudgedByTheCommentsBeforeTheFirstToken(string source, string? expected)
+    [InlineData("/*\n * Abblix OIDC Server Library\n * SPDX-FileCopyrightText: Copyright (c) Abblix LLP\n * SPDX-License-Identifier: Apache-2.0\n */\nnamespace A;", "no 'Abblix OIDC Server Library' line comment before the first token")]
+    [InlineData("// SPDX-FileCopyrightText: Copyright (c) Abblix LLP\n// SPDX-License-Identifier: Apache-2.0\nnamespace A;", "no 'Abblix OIDC Server Library' line comment before the first token")]
+    public void AHeaderIsJudgedByTheFileComments(string source, string? expected)
         => Assert.Equal(expected, ProblemWith(source, "src/Abblix.Jwt/Any.cs"));
 }

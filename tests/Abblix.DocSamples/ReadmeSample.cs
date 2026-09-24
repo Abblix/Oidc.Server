@@ -262,23 +262,23 @@ public static class ReadmeSampleReader
     /// defect the body comparison cannot see. So the copy carries the imports at file scope, where the
     /// compiler resolves them, and the body between markers, where the text is compared.
     /// <para>
-    /// The imports end at the first directive a comment stands above, and the body starts right after the
-    /// last import's semicolon. So a comment among the imports, or anything after one on its line, lands
-    /// in the body, where the comparison with the copy sees it.
+    /// The imports end at the first directive with anything but blank space around it - a comment, a
+    /// pragma - and the body starts right after the last import's semicolon. So whatever stands among
+    /// the imports lands in the body, where the comparison with the copy sees it.
     /// </para>
     /// </remarks>
-    private static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
+    internal static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
         IReadOnlyList<string> block)
     {
         var source = string.Join('\n', block);
         var imports = Directives(CSharpSyntaxTree.ParseText(source))
-            .TakeWhile(directive => !directive.GetLeadingTrivia().Any(IsComment))
+            .TakeWhile(directive => directive.GetLeadingTrivia().Concat(directive.GetTrailingTrivia()).All(IsBlank))
             .ToArray();
 
         var bodyStart = imports.Length == 0 ? 0 : imports[^1].Span.End;
         return (imports.Select(Imported).ToArray(), source[bodyStart..].Split('\n'));
     }
 
-    private static bool IsComment(SyntaxTrivia trivia)
-        => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia);
+    private static bool IsBlank(SyntaxTrivia trivia)
+        => trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia);
 }
