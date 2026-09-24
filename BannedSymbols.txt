@@ -1,0 +1,2 @@
+P:System.DateTime.UtcNow;Read the time from an injected TimeProvider, so a test can move it
+P:System.DateTimeOffset.UtcNow;Read the time from an injected TimeProvider, so a test can move it

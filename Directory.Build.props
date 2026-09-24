@@ -105,4 +105,14 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- Members the compiler refuses, listed in BannedSymbols.txt, so no text search over the sources
+       has to refuse them. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+
 </Project>
