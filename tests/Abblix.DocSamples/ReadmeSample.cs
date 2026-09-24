@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Abblix.DocSamples;
 
@@ -227,24 +230,27 @@ public static class ReadmeSampleReader
     }
 
     /// <summary>
-    /// The namespace a line imports, or null where the line is not a using directive at all.
+    /// What the using directives in this source import, as the compiler reads them.
     /// </summary>
     /// <remarks>
-    /// A using STATEMENT opens a scope and belongs to the body; only a directive names a namespace, and
-    /// the difference is the parenthesis rather than the keyword. Shared with the row that compares a
-    /// copy's imports, which would otherwise read <c>using var scope = provider.CreateScope();</c> as a
-    /// namespace and report a mismatch nobody could act on.
+    /// Shared by the README block and its copy, so both sides are read by the same parser. A
+    /// <c>using</c> statement such as <c>using var scope = provider.CreateScope();</c> is code, not a
+    /// directive, and the syntax tree never counts it as an import.
     /// </remarks>
-    public static string? NamespaceOf(string line)
+    public static IReadOnlyList<string> NamespacesIn(string source)
+        => Directives(CSharpSyntaxTree.ParseText(source)).Select(Imported).ToArray();
+
+    private static IEnumerable<UsingDirectiveSyntax> Directives(SyntaxTree tree)
+        => tree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>();
+
+    private static string Imported(UsingDirectiveSyntax directive)
     {
-        const string Directive = "using ";
+        var imported = directive.NamespaceOrType.ToString();
 
-        var trimmed = line.Trim();
+        if (directive.Alias is { } alias)
+            imported = $"{alias.Name} = {imported}";
 
-        if (!trimmed.StartsWith(Directive, StringComparison.Ordinal) || !trimmed.EndsWith(';'))
-            return null;
-
-        return trimmed.Contains('(') ? null : trimmed[..^1][Directive.Length..].Trim();
+        return directive.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) ? $"static {imported}" : imported;
     }
 
     /// <summary>
@@ -259,22 +265,13 @@ public static class ReadmeSampleReader
     private static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
         IReadOnlyList<string> block)
     {
-        var usings = new List<string>();
-        var index = 0;
+        var tree = CSharpSyntaxTree.ParseText(string.Join('\n', block));
+        var directives = Directives(tree).ToArray();
 
-        for (; index < block.Count; index++)
-        {
-            var line = block[index].Trim();
+        if (directives.Length == 0)
+            return ([], block);
 
-            if (line.Length == 0)
-                continue;
-
-            if (NamespaceOf(line) is not { } imported)
-                break;
-
-            usings.Add(imported);
-        }
-
-        return (usings, block.Skip(index).ToArray());
+        var bodyStart = tree.GetLineSpan(directives[^1].Span).EndLinePosition.Line + 1;
+        return (directives.Select(Imported).ToArray(), block.Skip(bodyStart).ToArray());
     }
 }

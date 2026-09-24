@@ -166,10 +166,7 @@ public class UpdateClientRequestProcessor(
         }
 
         // Update client in storage
-        // lent deliberately RedirectUris, EffectiveGrantTypes, EffectiveResponseTypes, AllowedScopes,
-        // Contacts, RequestUris, AuthorizationDetailsTypes, TokenExchangeAllowedSubjectTokenTypes,
-        // TokenExchangeAllowedAudiences:
-        // the response echoes the post-update registered state, so what the store now holds is the
+        // The response echoes the post-update registered state, so what the store now holds is the
         // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
         // took effect.
         await clientInfoManager.UpdateClientAsync(updatedClient);

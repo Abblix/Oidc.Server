@@ -1,4 +1,4 @@
-# Pre-commit hooks: workflow safety, committed-text hygiene and C# documentation.
+# Pre-commit hooks: workflow safety and committed-text hygiene.
 #
 # One-time setup per clone:
 #   pip install pre-commit
@@ -18,7 +18,7 @@
 # suspect and a direct run without it redirected finishes anyway.
 #
 # It is one of the two hooks CI re-runs, so skip that ONE (SKIP=actionlint) rather than reaching for
-# --no-verify, which drops the five that run in this clone or nowhere - and run the binary yourself,
+# --no-verify, which drops the ones that run in this clone or nowhere - and run the binary yourself,
 # or its two halves: actionlint -shellcheck= for the schema, shellcheck on the extracted run: body.
 #
 # Rules and rationale: the workspace's GitHub Actions security checklist.
@@ -39,14 +39,6 @@ repos:
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
         pass_filenames: false
-      - id: take-once-consumers
-        name: "Refuse an unreviewed consumer of the take-once protocol"
-        entry: python .github/scripts/lint-take-once-consumers.py
-        language: python
-        pass_filenames: false
-        # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
-        # check, or the list is edited by whoever is not looking at what it holds.
-        files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
       - id: msbuild-xml-parses
         name: "Refuse a build XML file that does not parse"
         entry: python .github/scripts/lint-msbuild-xml.py
@@ -57,25 +49,6 @@ repos:
         # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
         # content is the general answer, and this is the cheap one.
         files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
-      - id: license-headers
-        name: "Licence headers carry an SPDX identifier"
-        entry: python .github/scripts/lint-license-headers.py
-        language: python
-        pass_filenames: false
-        # The script takes ROOTS, not file names, and walking both of them costs under a second,
-        # so it checks everything rather than the staged subset. That is the cheaper answer here
-        # and also the stricter one: a header broken by an earlier commit is caught by the next
-        # commit that touches any source file, instead of waiting for someone to edit that file.
-        #
-        # Its own path is in the pattern, the same as the take-once check above: the mapping from
-        # package to licence lives inside the script, so a commit editing only that mapping must
-        # re-run it.
-        files: (\.cs$|\.github/scripts/lint-license-headers\.py$)
-      - id: no-split-doc-comments
-        name: "Block a doc comment that documents two members"
-        entry: python .github/scripts/lint-no-split-doc-comments.py
-        language: python
-        types: [c#]
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py

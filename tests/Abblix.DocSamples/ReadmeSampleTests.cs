@@ -77,8 +77,9 @@ public class ReadmeSampleTests
             var (documented, _) = ReadmeSampleReader.Read(root, sample);
             var copy = CopyOf(root, sample);
 
-            var ambient = Namespaces(Region(copy, "ambient"));
-            var declared = Namespaces(File.ReadAllLines(copy)).Except(ambient, StringComparer.Ordinal);
+            var ambient = ReadmeSampleReader.NamespacesIn(string.Join('\n', Region(copy, "ambient")));
+            var declared = ReadmeSampleReader.NamespacesIn(File.ReadAllText(copy))
+                .Except(ambient, StringComparer.Ordinal);
 
             if (!documented.OrderBy(name => name, StringComparer.Ordinal)
                     .SequenceEqual(declared.OrderBy(name => name, StringComparer.Ordinal)))
@@ -148,19 +149,6 @@ public class ReadmeSampleTests
 
         return lines[(begin + 1)..end];
     }
-
-    /// <summary>
-    /// The namespaces named by the using directives among these lines.
-    /// </summary>
-    /// <remarks>
-    /// Through the same rule the reader applies to a README block, so a <c>using</c> that opens a scope
-    /// is not counted as an import on one side and skipped on the other.
-    /// </remarks>
-    private static IReadOnlyList<string> Namespaces(IEnumerable<string> lines) => lines
-        .Select(ReadmeSampleReader.NamespaceOf)
-        .Where(name => name is not null)
-        .Select(name => name!)
-        .ToArray();
 
     /// <summary>
     /// The lines that carry meaning: trimmed, with blank ones dropped.
