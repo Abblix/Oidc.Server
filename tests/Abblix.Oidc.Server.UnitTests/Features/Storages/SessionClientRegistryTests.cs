@@ -234,7 +234,9 @@ public class SessionClientRegistryTests
     [Fact]
     public async Task A_client_recorded_by_an_instance_with_a_slower_clock_stays_listed_with_the_list()
     {
-        var aheadByAMinute = new ShiftedClock(_time, TimeSpan.FromMinutes(1));
+        // Another instance's clock, a minute ahead of the store's; the store's does not move until both
+        // instances have written.
+        var aheadByAMinute = new FakeTimeProvider(_time.GetUtcNow() + TimeSpan.FromMinutes(1));
         await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "a", Ct);
         await Registry().AddClientAsync(SessionId, "b", Ct);
         await Registry(clock: aheadByAMinute).AddClientAsync(SessionId, "c", Ct);
@@ -242,14 +244,6 @@ public class SessionClientRegistryTests
         _time.Advance(Retention + TimeSpan.FromSeconds(30));
 
         Assert.Equal(["a", "b", "c"], await Registry().GetClientsAsync(SessionId, Ct));
-    }
-
-    /// <summary>
-    /// Another instance's clock, a fixed distance from the store's.
-    /// </summary>
-    private sealed class ShiftedClock(TimeProvider store, TimeSpan shift) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => store.GetUtcNow() + shift;
     }
 
     /// <summary>

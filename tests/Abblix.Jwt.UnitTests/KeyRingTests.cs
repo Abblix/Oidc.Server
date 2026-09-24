@@ -686,14 +686,14 @@ public sealed class KeyRingTests : IDisposable
     public async Task RefreshLoop_KeepsTicking_AfterTheStoreRefuses()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
+        var time = new FakeTimeProvider(Now);
         var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
             logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
         var served = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId;
 
         store.FailWith = new InvalidOperationException("the ring store is unreachable");
@@ -723,14 +723,14 @@ public sealed class KeyRingTests : IDisposable
     public async Task RefreshLoop_ReportsNothing_WhenShutdownCancelsARefreshInFlight()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
+        var time = new FakeTimeProvider(Now);
         var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
             logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
 
         // The next load hangs, so the refresh is still running when the host stops and its token is canceled.
         store.BlockUntilCancelled = true;
@@ -759,38 +759,33 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// A fake clock that says when the loop has armed its timer.
+    /// Brings the refresh loop to its await with its timer armed and no tick pending, before a case begins.
     /// </summary>
     /// <remarks>
-    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so
-    /// advancing the clock straight away can land before the timer exists - and a tick nobody is holding a timer
-    /// for is simply lost, which reads as a loop that died. Waiting for <see cref="TimerCreated"/> removes the
-    /// race outright: <see cref="PeriodicTimer"/> holds a tick that arrives with no waiter, so once the timer is
-    /// armed every advance is observed whether or not the loop has reached the await yet.
+    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so an
+    /// advance made straight away can land before the timer exists, and a tick no timer holds is simply lost. A
+    /// load arriving proves the timer exists; waiting until the count stops moving lets a tick held while that
+    /// load ran fire now rather than inside the case, so every later advance is exactly one load.
     /// </remarks>
-    private sealed class SignallingTimeProvider(FakeTimeProvider inner) : TimeProvider
+    private static async Task ArmTheLoop(FakeTimeProvider time, TimeSpan period, FakeStore store)
     {
-        private readonly TaskCompletionSource _timerCreated =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public Task TimerCreated => _timerCreated.Task;
-
-        public void Advance(TimeSpan delta) => inner.Advance(delta);
-
-        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
-
-        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
-
-        public override long TimestampFrequency => inner.TimestampFrequency;
-
-        public override long GetTimestamp() => inner.GetTimestamp();
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        var loadsAtStart = store.Loads;
+        var waited = Stopwatch.StartNew();
+        while (store.Loads == loadsAtStart && waited.Elapsed < TimeSpan.FromSeconds(10))
         {
-            var timer = inner.CreateTimer(callback, state, dueTime, period);
-            _timerCreated.TrySetResult();
-            return timer;
+            time.Advance(period);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         }
+
+        Assert.True(store.Loads > loadsAtStart, "The refresh loop never loaded, so its timer was never armed.");
+
+        int seen;
+        do
+        {
+            seen = store.Loads;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        while (store.Loads != seen);
     }
 
     /// <summary>

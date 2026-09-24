@@ -9,6 +9,7 @@ using System.Buffers.Text;
 using System.Text;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
@@ -32,7 +33,7 @@ public class UnreadableTimestampTests
     private static IServiceProvider CreateServiceProvider()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddLogging();
         services.AddJsonWebTokens();
         return services.BuildServiceProvider();
@@ -115,10 +116,5 @@ public class UnreadableTimestampTests
         var result = await Validate($$"""{"exp": {{Now.AddHours(1).ToUnixTimeSeconds()}}}""");
 
         Assert.True(result.TryGetSuccess(out _));
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }
