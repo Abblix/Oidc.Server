@@ -752,5 +752,4 @@ public class SessionManagementServiceTests
             RedirectUri = redirectUri ?? new Uri(RedirectUriString),
         };
     }
-
 }

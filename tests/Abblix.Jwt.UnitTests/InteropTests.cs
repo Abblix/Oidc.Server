@@ -749,5 +749,4 @@ public class InteropTests
 		Assert.Equal(FullName, token.Payload.Json["name"]?.GetValue<string>());
 		Assert.Equal(AdminRole, token.Payload.Json["role"]?.GetValue<string>());
 	}
-
 }

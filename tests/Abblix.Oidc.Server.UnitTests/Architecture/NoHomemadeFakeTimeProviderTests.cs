@@ -9,6 +9,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
 
@@ -37,12 +38,32 @@ public class NoHomemadeFakeTimeProviderTests
 
         var homemade = assemblies
             .SelectMany(TypesOf)
-            .Where(type => type.Name == Name || type.Name.StartsWith(Name + "`", StringComparison.Ordinal))
+            .Where(type => IsNamedFakeTimeProvider(type.Name))
             .Select(type => $"{type.FullName} in {type.Assembly.GetName().Name}")
             .ToArray();
 
         Assert.True(homemade.Length == 0, string.Join(Environment.NewLine, homemade));
     }
+
+    /// <summary>
+    /// Whether a metadata name is the one a type declared as FakeTimeProvider compiles to.
+    /// </summary>
+    /// <remarks>
+    /// A generic type carries its arity after a backtick, and a file-local type is emitted under a name
+    /// prefixed with its file and a hash, so neither ever equals the plain name.
+    /// </remarks>
+    private static bool IsNamedFakeTimeProvider(string metadataName)
+        => Regex.IsMatch(metadataName, $"^(<[^>]*>F[0-9A-F]+__)?{Name}(`[0-9]+)?$");
+
+    [Theory]
+    [InlineData("FakeTimeProvider", true)]
+    [InlineData("FakeTimeProvider`1", true)]
+    [InlineData("<Plant>F715B6F1C7E68__FakeTimeProvider", true)]
+    [InlineData("<Plant>F715B6F1C7E68__FakeTimeProvider`2", true)]
+    [InlineData("FakeTimeProviderTests", false)]
+    [InlineData("MyFakeTimeProvider", false)]
+    public void EveryShapeTheCompilerGivesTheNameIsRecognized(string metadataName, bool expected)
+        => Assert.Equal(expected, IsNamedFakeTimeProvider(metadataName));
 
     private static Type[] TypesOf(Assembly assembly)
     {

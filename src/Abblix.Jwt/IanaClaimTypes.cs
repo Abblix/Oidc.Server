@@ -594,6 +594,8 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Jcard = "jcard";
 
+    // ETSI GS NFV-SEC 022 - API Request Number
+
     /// <summary>
     /// Indicates the number of API requests for which the access token can be used.
     /// </summary>
@@ -718,6 +720,8 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Entitlements = "entitlements";
 
+    // OAuth JWT Introspection
+
     /// <summary>
     /// Contains the response from an OAuth 2.0 token introspection request.
     /// </summary>
@@ -809,6 +813,8 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string SigValClaims = "sig_val_claims";
 
+    // OAuth Rich Authorization Requests (RAR)
+
     /// <summary>
     /// JSON array representing the authorization requirements for a specific resource or set of resources.
     /// </summary>
@@ -817,5 +823,4 @@ public static class IanaClaimTypes
     /// for a transaction, enabling fine-grained access control and tailored authorization experiences.
     /// </remarks>
     public const string AuthorizationDetails = "authorization_details";
-
 }

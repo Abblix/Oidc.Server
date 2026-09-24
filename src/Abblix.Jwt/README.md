@@ -39,7 +39,7 @@ var jwt = await creator.IssueAsync(
         {
             Issuer = "https://issuer.example.com",
             Audiences = ["https://api.example.com"],
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            ExpiresAt = timeProvider.GetUtcNow().AddMinutes(5),
         },
     },
     key);

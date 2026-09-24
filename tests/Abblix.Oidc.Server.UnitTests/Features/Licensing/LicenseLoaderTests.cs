@@ -33,7 +33,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </remarks>
 public class LicenseLoaderTests
 {
-
     /// <summary>
     /// Verifies that LoadAsync throws InvalidOperationException for malformed JWT.
     /// </summary>
@@ -288,5 +287,4 @@ public class LicenseLoaderTests
 
         Assert.True(true); // Documentation test always passes
     }
-
 }

@@ -13,6 +13,95 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// </summary>
 public static class ErrorCodes
 {
+	/// <summary>
+	/// The request requires additional confirmation from the resource owner or authorization server.
+	/// </summary>
+	public const string ConfirmationRequired = "confirmation_required";
+
+	/// <summary>
+	/// The target resource or identifier provided in the request is invalid.
+	/// </summary>
+	public const string InvalidTarget = "invalid_target";
+
+	/// <summary>
+	/// The authorization request is still pending as the end-user has not yet been authenticated.
+	/// </summary>
+	public const string AuthorizationPending = "authorization_pending";
+
+	/// <summary>
+	/// A variant of "authorization_pending", the authorization request is still pending and polling should continue,
+	/// but the interval MUST be increased by at least 5 seconds for this and all further requests.
+	/// </summary>
+	public const string SlowDown = "slow_down";
+
+	/// <summary>
+	/// The auth_req_id has expired. The Client will need to make a new Authentication Request.
+	/// </summary>
+	public const string ExpiredToken = "expired_token";
+
+	/// <summary>
+	/// The login_hint_token provided in the authentication request is not valid because it has expired.
+	/// </summary>
+	public const string ExpiredLoginHintToken = "expired_login_hint_token";
+
+	/// <summary>
+	/// The OpenID Provider is not able to identify which end-user the Client wishes to be authenticated by the hint
+	/// provided in the request (login_hint_token, id_token_hint, or login_hint).
+	/// </summary>
+	public const string UnknownUserId = "unknown_user_id";
+
+	/// <summary>
+	/// User code is required but was missing from the request.
+	/// </summary>
+	public const string MissingUserCode = "missing_user_code";
+
+	/// <summary>
+	/// The user code was invalid.
+	/// </summary>
+	public const string InvalidUserCode = "invalid_user_code";
+
+	/// <summary>
+	/// The binding message is invalid or unacceptable for use in the context of the given request.
+	/// </summary>
+	public const string InvalidBindingMessage = "invalid_binding_message";
+
+	/// <summary>
+	/// The access token provided is expired, revoked, malformed, or invalid for other reasons.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
+	/// </summary>
+	public const string InvalidToken = "invalid_token";
+
+	/// <summary>
+	/// The DPoP proof JWT presented with the request is invalid (RFC 9449 section 7.1). This is the
+	/// OAuth-protocol-level error code returned to the client for ANY structural,
+	/// algorithmic, claim-binding, signature, or replay-protection failure of a DPoP proof.
+	/// The fine-grained internal reason (used in logs and metrics) is carried separately.
+	/// </summary>
+	public const string InvalidDPoPProof = "invalid_dpop_proof";
+
+	/// <summary>
+	/// The authorization server or resource server requires a DPoP-Nonce in the proof
+	/// (RFC 9449 section 8). The response carries a <c>DPoP-Nonce</c> header with the nonce value
+	/// the client must include in subsequent proofs.
+	/// </summary>
+	public const string UseDPoPNonce = "use_dpop_nonce";
+
+	/// <summary>
+	/// The request requires higher privileges than provided by the access token.
+	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 403 (Forbidden)
+	/// and SHOULD include the <c>scope</c> attribute in the <c>WWW-Authenticate</c> header
+	/// listing the required scopes.
+	/// </summary>
+	public const string InsufficientScope = "insufficient_scope";
+
+	/// <summary>
+	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 section 5:
+	/// an entry's <c>type</c> is unknown to the AS, fields do not match the registered per-type
+	/// schema, field values are out of the wrong JSON type, or the request otherwise fails to
+	/// satisfy the per-type validator. The AS MUST refuse to process the request.
+	/// </summary>
+	public const string InvalidAuthorizationDetails = "invalid_authorization_details";
+
 	// RFC 6749: OAuth 2.0 error codes
 
 	/// <summary>
@@ -181,93 +270,4 @@ public static class ErrorCodes
 	/// for use by this authorization server per RFC 7591 Section 3.2.2.
 	/// </summary>
 	public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
-
-	/// <summary>
-	/// The request requires additional confirmation from the resource owner or authorization server.
-	/// </summary>
-	public const string ConfirmationRequired = "confirmation_required";
-
-	/// <summary>
-	/// The target resource or identifier provided in the request is invalid.
-	/// </summary>
-	public const string InvalidTarget = "invalid_target";
-
-	/// <summary>
-	/// The authorization request is still pending as the end-user has not yet been authenticated.
-	/// </summary>
-	public const string AuthorizationPending = "authorization_pending";
-
-	/// <summary>
-	/// A variant of "authorization_pending", the authorization request is still pending and polling should continue,
-	/// but the interval MUST be increased by at least 5 seconds for this and all further requests.
-	/// </summary>
-	public const string SlowDown = "slow_down";
-
-	/// <summary>
-	/// The auth_req_id has expired. The Client will need to make a new Authentication Request.
-	/// </summary>
-	public const string ExpiredToken = "expired_token";
-
-	/// <summary>
-	/// The login_hint_token provided in the authentication request is not valid because it has expired.
-	/// </summary>
-	public const string ExpiredLoginHintToken = "expired_login_hint_token";
-
-	/// <summary>
-	/// The OpenID Provider is not able to identify which end-user the Client wishes to be authenticated by the hint
-	/// provided in the request (login_hint_token, id_token_hint, or login_hint).
-	/// </summary>
-	public const string UnknownUserId = "unknown_user_id";
-
-	/// <summary>
-	/// User code is required but was missing from the request.
-	/// </summary>
-	public const string MissingUserCode = "missing_user_code";
-
-	/// <summary>
-	/// The user code was invalid.
-	/// </summary>
-	public const string InvalidUserCode = "invalid_user_code";
-
-	/// <summary>
-	/// The binding message is invalid or unacceptable for use in the context of the given request.
-	/// </summary>
-	public const string InvalidBindingMessage = "invalid_binding_message";
-
-	/// <summary>
-	/// The access token provided is expired, revoked, malformed, or invalid for other reasons.
-	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 401 (Unauthorized).
-	/// </summary>
-	public const string InvalidToken = "invalid_token";
-
-	/// <summary>
-	/// The DPoP proof JWT presented with the request is invalid (RFC 9449 section 7.1). This is the
-	/// OAuth-protocol-level error code returned to the client for ANY structural,
-	/// algorithmic, claim-binding, signature, or replay-protection failure of a DPoP proof.
-	/// The fine-grained internal reason (used in logs and metrics) is carried separately.
-	/// </summary>
-	public const string InvalidDPoPProof = "invalid_dpop_proof";
-
-	/// <summary>
-	/// The authorization server or resource server requires a DPoP-Nonce in the proof
-	/// (RFC 9449 section 8). The response carries a <c>DPoP-Nonce</c> header with the nonce value
-	/// the client must include in subsequent proofs.
-	/// </summary>
-	public const string UseDPoPNonce = "use_dpop_nonce";
-
-	/// <summary>
-	/// The request requires higher privileges than provided by the access token.
-	/// Per RFC 6750 Section 3.1, the resource server MUST respond with HTTP 403 (Forbidden)
-	/// and SHOULD include the <c>scope</c> attribute in the <c>WWW-Authenticate</c> header
-	/// listing the required scopes.
-	/// </summary>
-	public const string InsufficientScope = "insufficient_scope";
-
-	/// <summary>
-	/// The <c>authorization_details</c> parameter in the request is invalid per RFC 9396 section 5:
-	/// an entry's <c>type</c> is unknown to the AS, fields do not match the registered per-type
-	/// schema, field values are out of the wrong JSON type, or the request otherwise fails to
-	/// satisfy the per-type validator. The AS MUST refuse to process the request.
-	/// </summary>
-	public const string InvalidAuthorizationDetails = "invalid_authorization_details";
 }

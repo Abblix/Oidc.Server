@@ -20,7 +20,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 /// </summary>
 public class JsonNodeExtensionsTests
 {
-
     [Fact]
     public void ObjectToProtoValue_Null_ReturnsNull()
     {

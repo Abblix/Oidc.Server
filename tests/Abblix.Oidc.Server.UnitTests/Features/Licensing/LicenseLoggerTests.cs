@@ -37,7 +37,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </remarks>
 public class LicenseLoggerTests
 {
-
     /// <summary>
     /// Verifies that IsAllowed returns true on first call with a new key.
     /// </summary>

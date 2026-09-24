@@ -206,5 +206,4 @@ public class JsonWebKeyOperationsTests
         Assert.False(keyWithoutValue.HasPrivateKey);
         Assert.Throws<InvalidOperationException>(() => keyWithoutValue.Sanitize(includePrivateKeys: true));
     }
-
 }

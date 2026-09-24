@@ -20,7 +20,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </summary>
 public class AggregationExtensionsTests
 {
-
     /// <summary>
     /// Verifies that Greater returns null when both values are null, treating null as positive infinity.
     /// </summary>
@@ -427,5 +426,4 @@ public class AggregationExtensionsTests
         // Assert - Unlimited (null) should win
         Assert.Null(result);
     }
-
 }

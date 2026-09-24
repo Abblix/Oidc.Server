@@ -50,7 +50,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 [Collection(nameof(LicenseEnforcementTests))]
 public class LicenseLoadingServiceTests
 {
-
     /// <summary>
     /// Mock provider that returns predefined license JWTs.
     /// </summary>

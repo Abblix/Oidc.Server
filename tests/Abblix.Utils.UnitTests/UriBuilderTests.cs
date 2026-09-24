@@ -882,5 +882,4 @@ public class UriBuilderTests
         Assert.Equal(systemBuilder.Uri.Scheme, ourBuilder.Uri.Scheme);
         Assert.Equal(systemBuilder.Uri.PathAndQuery, ourBuilder.Uri.PathAndQuery);
     }
-
 }

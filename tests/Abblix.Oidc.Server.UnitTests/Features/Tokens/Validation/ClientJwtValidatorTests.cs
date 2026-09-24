@@ -925,5 +925,4 @@ public class ClientJwtValidatorTests
             ClientSecrets = [],
         };
     }
-
 }

@@ -23,7 +23,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </summary>
 public class LicenseProvidersTests
 {
-
     /// <summary>
     /// Verifies that StaticLicenseJwtProvider returns the provided license JWT.
     /// </summary>
@@ -183,5 +182,4 @@ public class LicenseProvidersTests
 
         Assert.True(true); // Documentation test
     }
-
 }

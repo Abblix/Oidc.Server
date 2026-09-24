@@ -622,5 +622,4 @@ public class AuthServiceJwtValidatorTests
             .Setup(p => p.GetEncryptionKeys(true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
     }
-
 }

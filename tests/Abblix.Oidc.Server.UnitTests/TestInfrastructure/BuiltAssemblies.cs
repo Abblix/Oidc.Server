@@ -81,8 +81,8 @@ internal static class BuiltAssemblies
             }
             catch (Exception)
             {
-                // A file that cannot be loaded is reported by the floor each caller asserts rather than
-                // swallowed here: naming each one would turn this into a list nobody keeps current.
+                // A file that cannot be loaded is skipped, and every walk over this list is then blind
+                // to it; only an assembly a caller names in its own floor is missed loudly.
             }
         }
 

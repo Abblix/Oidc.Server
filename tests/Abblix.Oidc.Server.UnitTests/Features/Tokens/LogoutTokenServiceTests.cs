@@ -633,5 +633,4 @@ public class LogoutTokenServiceTests
             .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => captureToken(token))
             .ReturnsAsync(EncodedJwt);
     }
-
 }
