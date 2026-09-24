@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 /// </summary>
 /// <remarks>
 /// This repository ships some packages under Apache-2.0 and the rest under the commercial agreement, and
-/// the build does not read comments. A file added from a neighbour in another package, or moved between
+/// the build does not read comments. A file added from a neighbor in another package, or moved between
 /// packages, keeps the header it came with, and nothing else reports it.
 /// </remarks>
 public class LicenseHeaderTests
@@ -87,14 +87,27 @@ public class LicenseHeaderTests
     }
 
     /// <summary>
-    /// The comments before a file's first token, which is what the file header is.
+    /// The line comments before a file's first token, which is what the file header is.
     /// </summary>
     /// <remarks>
-    /// Read by the compiler's own lexer, so a comment is whatever the compiler says is one, however the
-    /// file is laid out: a directive ahead of the header, a block comment, or none at all.
+    /// Read by the compiler's own lexer, so a directive ahead of the header or an indented header reads
+    /// the same as any other.
     /// </remarks>
     private static IReadOnlyList<string> HeaderComments(string source)
         => SyntaxFactory.ParseLeadingTrivia(source)
+            .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia))
+            .Select(trivia => trivia.ToString())
+            .ToArray();
+
+    /// <summary>
+    /// Every comment in the file, wherever it sits.
+    /// </summary>
+    /// <remarks>
+    /// A second header or the superseded notice is a defect below the first line of code as much as
+    /// above it.
+    /// </remarks>
+    private static IReadOnlyList<string> AllComments(string source)
+        => CSharpSyntaxTree.ParseText(source).GetRoot().DescendantTrivia(descendIntoTrivia: true)
             .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)
                              || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia))
             .Select(trivia => trivia.ToString())
@@ -109,14 +122,19 @@ public class LicenseHeaderTests
     /// </remarks>
     private static string? ProblemWith(string source, string relativePath)
     {
-        var comments = HeaderComments(source);
+        var everywhere = AllComments(source);
 
-        if (comments.Any(comment => comment.Contains(SupersededNotice, StringComparison.Ordinal)))
+        if (everywhere.Any(comment => comment.Contains(SupersededNotice, StringComparison.Ordinal)))
             return "carries the superseded proprietary notice";
 
-        var titles = comments.Count(comment => comment.Contains(HeaderTitle, StringComparison.Ordinal));
+        var titles = everywhere.Count(comment => comment.Contains(HeaderTitle, StringComparison.Ordinal));
         if (titles > 1)
             return $"the license header appears {titles} times";
+
+        var comments = HeaderComments(source);
+
+        if (!comments.Any(comment => comment.Contains(HeaderTitle, StringComparison.Ordinal)))
+            return "no license header before the first token";
 
         if (!comments.Any(comment => comment.Contains(Copyright, StringComparison.Ordinal)))
             return "no copyright line naming Abblix LLP";
@@ -189,7 +207,10 @@ public class LicenseHeaderTests
     [InlineData("// Abblix OIDC Server Library\n// SPDX-License-Identifier: Apache-2.0\nnamespace A;", "no copyright line naming Abblix LLP")]
     [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\n" + Open + "namespace A;", "the license header appears 2 times")]
     [InlineData("// LICENSE RESTRICTIONS\n" + Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;", "carries the superseded proprietary notice")]
-    [InlineData("namespace A;\n" + Open + "// SPDX-License-Identifier: Apache-2.0\n", "no copyright line naming Abblix LLP")]
+    [InlineData("namespace A;\n" + Open + "// SPDX-License-Identifier: Apache-2.0\n", "no license header before the first token")]
+    [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;\n" + Open, "the license header appears 2 times")]
+    [InlineData(Open + "// SPDX-License-Identifier: Apache-2.0\nnamespace A;\n// LICENSE RESTRICTIONS\n", "carries the superseded proprietary notice")]
+    [InlineData("/*\n * Abblix OIDC Server Library\n * SPDX-FileCopyrightText: Copyright (c) Abblix LLP\n * SPDX-License-Identifier: Apache-2.0\n */\nnamespace A;", "no license header before the first token")]
     public void AHeaderIsJudgedByTheCommentsBeforeTheFirstToken(string source, string? expected)
         => Assert.Equal(expected, ProblemWith(source, "src/Abblix.Jwt/Any.cs"));
 }

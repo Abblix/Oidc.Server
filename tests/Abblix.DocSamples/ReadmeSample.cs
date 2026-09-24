@@ -261,17 +261,24 @@ public static class ReadmeSampleReader
     /// legal inside the method body a copy wraps its sample in, and an import the snippet omits is a
     /// defect the body comparison cannot see. So the copy carries the imports at file scope, where the
     /// compiler resolves them, and the body between markers, where the text is compared.
+    /// <para>
+    /// The imports end at the first directive a comment stands above, and the body starts right after the
+    /// last import's semicolon. So a comment among the imports, or anything after one on its line, lands
+    /// in the body, where the comparison with the copy sees it.
+    /// </para>
     /// </remarks>
     private static (IReadOnlyList<string> Usings, IReadOnlyList<string> Body) Split(
         IReadOnlyList<string> block)
     {
-        var tree = CSharpSyntaxTree.ParseText(string.Join('\n', block));
-        var directives = Directives(tree).ToArray();
+        var source = string.Join('\n', block);
+        var imports = Directives(CSharpSyntaxTree.ParseText(source))
+            .TakeWhile(directive => !directive.GetLeadingTrivia().Any(IsComment))
+            .ToArray();
 
-        if (directives.Length == 0)
-            return ([], block);
-
-        var bodyStart = tree.GetLineSpan(directives[^1].Span).EndLinePosition.Line + 1;
-        return (directives.Select(Imported).ToArray(), block.Skip(bodyStart).ToArray());
+        var bodyStart = imports.Length == 0 ? 0 : imports[^1].Span.End;
+        return (imports.Select(Imported).ToArray(), source[bodyStart..].Split('\n'));
     }
+
+    private static bool IsComment(SyntaxTrivia trivia)
+        => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia);
 }
