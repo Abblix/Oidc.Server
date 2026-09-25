@@ -37,11 +37,23 @@ internal static class AnalyzerRun
     /// A sample that does not compile would leave the analyzer looking at error symbols, and silence
     /// over a broken sample reads exactly like silence over a clean one.
     /// </remarks>
-    public static async Task<ImmutableArray<Diagnostic>> DiagnosticsOf(DiagnosticAnalyzer analyzer, string source)
+    public static Task<ImmutableArray<Diagnostic>> DiagnosticsOf(DiagnosticAnalyzer analyzer, string source)
+        => DiagnosticsOf(analyzer, ("Sample.cs", source));
+
+    /// <summary>
+    /// The same over several files, each under its own name, since the compiler decides by a file's name
+    /// or header whether it is generated.
+    /// </summary>
+    public static async Task<ImmutableArray<Diagnostic>> DiagnosticsOf(
+        DiagnosticAnalyzer analyzer,
+        params (string Path, string Source)[] files)
     {
         var compilation = CSharpCompilation.Create(
             "Sample",
-            [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest))],
+            files.Select(file => CSharpSyntaxTree.ParseText(
+                file.Source,
+                new CSharpParseOptions(LanguageVersion.Latest),
+                file.Path)),
             Framework,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 

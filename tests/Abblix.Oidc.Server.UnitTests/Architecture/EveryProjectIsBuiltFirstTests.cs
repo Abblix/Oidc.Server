@@ -10,6 +10,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 
@@ -23,6 +25,9 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 /// Continuous integration builds and runs each test project on its own, and a walk can only read what
 /// that build produced. A project this one does not reach through its references would be read from an
 /// earlier build on a developer's machine, and not at all in continuous integration.
+/// The references are the ones the build itself resolved rather than a reading of project files: the
+/// direct ones as MSBuild evaluated them for this project, conditions applied, and the ones reached
+/// through them as NuGet's restore recorded them.
 /// </remarks>
 public class EveryProjectIsBuiltFirstTests
 {
@@ -37,7 +42,14 @@ public class EveryProjectIsBuiltFirstTests
             .Select(project => Path.GetFullPath(Path.Combine(root, (string)project.Attribute("Path")!)))
             .ToHashSet(StringComparer.Ordinal);
 
-        var reached = ReachedFrom(self, root);
+        var direct = DirectReferences();
+
+        // The control: an attribute written from an item group placed above the references, or under a
+        // renamed key, carries nothing, and every project would then read as unreached for the wrong
+        // reason - or, were the check inverted, as reached.
+        Assert.Contains(Path.Combine(root, "src", "Abblix.Analyzers", "Abblix.Analyzers.csproj"), direct);
+
+        var reached = direct.Concat(RestoredReferences(self)).ToHashSet(StringComparer.Ordinal);
 
         var unreached = solution
             .Where(project => !string.Equals(project, self, StringComparison.Ordinal) && !reached.Contains(project))
@@ -49,41 +61,29 @@ public class EveryProjectIsBuiltFirstTests
             $"in Abblix.Oidc.slnx but not reached through this project's references: {string.Join(", ", unreached)}");
     }
 
+    /// <summary>The project references MSBuild evaluated for this project, written into the assembly.</summary>
+    private static string[] DirectReferences()
+        => typeof(EveryProjectIsBuiltFirstTests).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "ProjectReferences")
+            .Value!
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Path.GetFullPath)
+            .ToArray();
+
     /// <summary>
-    /// Every project a project file reaches through its references, directly or through another, and
-    /// through the ones the repository-wide Directory.Build.props gives every project.
+    /// The projects NuGet's restore resolved for this project, directly or through another one.
     /// </summary>
-    private static HashSet<string> ReachedFrom(string projectFile, string root)
+    private static IEnumerable<string> RestoredReferences(string projectFile)
     {
-        var reached = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<string>([projectFile]);
+        var directory = Path.GetDirectoryName(projectFile)!;
+        using var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json")));
 
-        foreach (var shared in ReferencesIn(Path.Combine(root, "Directory.Build.props"), root))
-        {
-            if (reached.Add(shared))
-                pending.Push(shared);
-        }
-
-        while (pending.TryPop(out var current))
-        {
-            foreach (var path in ReferencesIn(current, Path.GetDirectoryName(current)!))
-            {
-                if (reached.Add(path))
-                    pending.Push(path);
-            }
-        }
-
-        return reached;
+        return assets.RootElement.GetProperty("libraries").EnumerateObject()
+            .Where(library => library.Value.GetProperty("type").GetString() == "project")
+            .Select(library => Path.GetFullPath(Path.Combine(directory, library.Value.GetProperty("path").GetString()!)))
+            .ToArray();
     }
-
-    private static IEnumerable<string> ReferencesIn(string file, string directory)
-        => XDocument.Load(file)
-            .Descendants("ProjectReference")
-            .Select(reference => (string?)reference.Attribute("Include"))
-            .OfType<string>()
-            .Select(include => Path.GetFullPath(Path.Combine(directory,
-                include.Replace("$(MSBuildThisFileDirectory)", string.Empty, StringComparison.Ordinal)
-                    .Replace('\\', Path.DirectorySeparatorChar))));
 
     private static string RepositoryRoot()
     {

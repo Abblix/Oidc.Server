@@ -39,6 +39,8 @@ public sealed class NoRegionsAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
+        // Generated code is left alone: generators such as the gRPC tooling emit regions of their own,
+        // and nobody reads or edits that output.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxTreeAction(Analyze);

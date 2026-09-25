@@ -41,7 +41,9 @@ public sealed class NoHomemadeClockAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated code is checked too: a clock is a clock whoever wrote it, and a partial class whose
+        // generated part is reported first would otherwise hide the base class written by hand.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {

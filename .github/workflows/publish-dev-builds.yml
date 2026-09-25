@@ -41,6 +41,9 @@ on:
       - '**/*.slnx'
       - '**/*.sln'
       - 'NuGet.config'
+      # The analyzer package carries rule data in files none of the patterns above match - the banned
+      # member list and its severity - and every Abblix repository takes that data from this feed.
+      - 'src/Abblix.Analyzers/**'
       - '.github/workflows/publish-dev-builds.yml'
   # Deleting a package entry to change its published casing leaves every floating
   # reference with nothing to resolve until the next push. A manual run closes that

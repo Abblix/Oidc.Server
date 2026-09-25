@@ -10,8 +10,12 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
-    <IsPackable>true</IsPackable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <!-- Packed by the dev builds only, which publish to the GitHub feed the Abblix repositories restore
+         from. A release names its version through MinVerVersionOverride, and this package is not part of
+         what a release ships to nuget.org. -->
+    <IsPackable Condition="'$(MinVerVersionOverride)' == ''">true</IsPackable>
+    <IsPackable Condition="'$(MinVerVersionOverride)' != ''">false</IsPackable>
+    <GeneratePackageOnBuild>$(IsPackable)</GeneratePackageOnBuild>
     <!-- A build-time tool: a consumer's reference stays out of its own package's dependencies, and the
          analyzer assembly ships under analyzers/ rather than lib/. -->
     <DevelopmentDependency>true</DevelopmentDependency>

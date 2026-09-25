@@ -25,10 +25,7 @@
         </PackageReference>
     </ItemGroup>
 
-    <!-- The analyzers are the subject here, so they are referenced as a library to be called rather than
-         as analyzers of this project, which Directory.Build.props would otherwise add. -->
     <ItemGroup>
-      <ProjectReference Remove="$(MSBuildThisFileDirectory)..\..\src\Abblix.Analyzers\Abblix.Analyzers.csproj" />
       <ProjectReference Include="..\..\src\Abblix.Analyzers\Abblix.Analyzers.csproj" />
     </ItemGroup>
 

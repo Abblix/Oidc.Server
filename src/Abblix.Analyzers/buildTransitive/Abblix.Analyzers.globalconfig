@@ -1,4 +1,7 @@
 is_global = true
+# Below every configuration of the consumer's own, so a project that sets the same key keeps its value
+# instead of both being discarded as a conflict.
+global_level = -1
 
 # A banned member is an error, not the analyzer's default warning.
 dotnet_diagnostic.RS0030.severity = error

@@ -88,6 +88,18 @@
     <ProjectReference Include="..\Abblix.SharedSignals.Redis.UnitTests\Abblix.SharedSignals.Redis.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.SharedSignals.UnitTests\Abblix.SharedSignals.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.Mvc\Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.MinimalApi\Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <!-- The references MSBuild evaluated for this project, conditions applied, written into the assembly for
+       EveryProjectIsBuiltFirstTests. Last in the file, because an item transform sees only the items
+       defined above it. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectReferences</_Parameter1>
+      <_Parameter2>@(ProjectReference->'%(FullPath)')</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>
