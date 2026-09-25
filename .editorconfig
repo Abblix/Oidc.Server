@@ -16,10 +16,6 @@ trim_trailing_whitespace = false
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:suggestion
 
-# A banned member is an error, not the analyzer's default warning, so it reads the same with and
-# without TreatWarningsAsErrors.
-dotnet_diagnostic.RS0030.severity = error
-
 # One Sonar rule CRASHES on a union declaration rather than reporting anything: the analyzer throws
 # NullReferenceException, which arrives as AD0001 and fails the build here, where warnings are errors.
 # Reproduced on the newest analyzer available as well, so it is a gap in the tool rather than a stale

@@ -16,6 +16,7 @@
     <File Path="global.json" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Abblix.Analyzers/Abblix.Analyzers.csproj" />
     <Project Path="src/Abblix.Utils/Abblix.Utils.csproj" />
     <Project Path="src/Abblix.DependencyInjection/Abblix.DependencyInjection.csproj" />
     <Project Path="src/Abblix.Jwt/Abblix.Jwt.csproj" />
@@ -36,6 +37,7 @@
     <Project Path="src/Abblix.SharedSignals.Redis/Abblix.SharedSignals.Redis.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Abblix.Analyzers.UnitTests/Abblix.Analyzers.UnitTests.csproj" />
     <Project Path="tests/Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
     <Project Path="tests/Abblix.DependencyInjection.UnitTests/Abblix.DependencyInjection.UnitTests.csproj" />
     <Project Path="tests/Abblix.DocSamples/Abblix.DocSamples.csproj" />

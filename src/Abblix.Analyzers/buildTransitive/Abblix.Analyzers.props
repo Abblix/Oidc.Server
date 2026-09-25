@@ -1,0 +1,10 @@
+<Project>
+
+  <!-- Imported by NuGet into every project referencing the package, and by this repository's own
+       Directory.Build.props, so the list of banned members and its severity exist in one place. -->
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+    <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)Abblix.Analyzers.globalconfig" />
+  </ItemGroup>
+
+</Project>

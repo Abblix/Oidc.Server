@@ -43,6 +43,7 @@ public class LicenseHeaderTests
     /// </summary>
     private static readonly HashSet<string> OpenPackages = new(StringComparer.Ordinal)
     {
+        "Abblix.Analyzers",
         "Abblix.Utils",
         "Abblix.DependencyInjection",
         "Abblix.Jwt",

@@ -56,7 +56,7 @@
   <!-- Every other project of the solution, built before this one and referenced for nothing else: the
        architecture tests read the assemblies of the whole solution, and a project this one does not
        reach would be read from an earlier build, or in continuous integration not at all.
-       NoHomemadeClockTests fails while a project of Abblix.Oidc.slnx is missing here. -->
+       EveryProjectIsBuiltFirstTests fails while a project of Abblix.Oidc.slnx is missing here. -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" ReferenceOutputAssembly="false" Private="false" />
@@ -66,6 +66,7 @@
     <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Analyzers.UnitTests\Abblix.Analyzers.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.DependencyInjection.UnitTests\Abblix.DependencyInjection.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.DocSamples\Abblix.DocSamples.csproj" ReferenceOutputAssembly="false" Private="false" />

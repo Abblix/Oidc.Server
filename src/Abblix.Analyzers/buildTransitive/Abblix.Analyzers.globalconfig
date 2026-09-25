@@ -1,0 +1,4 @@
+is_global = true
+
+# A banned member is an error, not the analyzer's default warning.
+dotnet_diagnostic.RS0030.severity = error
