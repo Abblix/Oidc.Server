@@ -92,13 +92,21 @@
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.MinimalApi\Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
-  <!-- The references MSBuild evaluated for this project, conditions applied, written into the assembly for
-       EveryProjectIsBuiltFirstTests. Last in the file, because an item transform sees only the items
-       defined above it. -->
+  <!-- The references MSBuild evaluated for this project, conditions applied, and the restore file NuGet
+       wrote for it, both written into the assembly for EveryProjectIsBuiltFirstTests. Relative to this
+       project's folder, so a build moved or reached under another spelling of the path reads the same.
+       Last in the file, because an item transform sees only the items defined above it. -->
   <ItemGroup>
+    <_BuildOrderReference Include="@(ProjectReference)">
+      <RelativePath>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), %(FullPath)))</RelativePath>
+    </_BuildOrderReference>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>ProjectReferences</_Parameter1>
-      <_Parameter2>@(ProjectReference->'%(FullPath)')</_Parameter2>
+      <_Parameter2>@(_BuildOrderReference->'%(RelativePath)')</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectAssetsFile</_Parameter1>
+      <_Parameter2>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), $(ProjectAssetsFile)))</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 

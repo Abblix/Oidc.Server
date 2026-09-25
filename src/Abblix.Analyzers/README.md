@@ -12,7 +12,7 @@ RS0030 comes from Microsoft.CodeAnalysis.BannedApiAnalyzers, which this package 
 
 ## Use
 
-The package is published to the Abblix GitHub feed (`https://nuget.pkg.github.com/Abblix/index.json`) from every build of `develop`, and is not part of a library release.
+The package is published to the Abblix GitHub feed (`https://nuget.pkg.github.com/Abblix/index.json`) by every dev build, from `develop` and from release branches, and is not part of a library release.
 
 ```xml
 <PackageReference Include="Abblix.Analyzers" PrivateAssets="all" />

@@ -42,14 +42,22 @@ public class EveryProjectIsBuiltFirstTests
             .Select(project => Path.GetFullPath(Path.Combine(root, (string)project.Attribute("Path")!)))
             .ToHashSet(StringComparer.Ordinal);
 
-        var direct = DirectReferences();
+        var directory = Path.GetDirectoryName(self)!;
+        var direct = Written("ProjectReferences")
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(reference => Path.GetFullPath(Path.Combine(directory, reference)))
+            .ToArray();
 
-        // The control: an attribute written from an item group placed above the references, or under a
-        // renamed key, carries nothing, and every project would then read as unreached for the wrong
-        // reason - or, were the check inverted, as reached.
-        Assert.Contains(Path.Combine(root, "src", "Abblix.Analyzers", "Abblix.Analyzers.csproj"), direct);
+        // The control, on the LAST reference this project file declares: an attribute written from an item
+        // group placed above the references sees none of them, and every project would then read as
+        // unreached for the wrong reason.
+        Assert.Contains(
+            Path.Combine(root, "src", "Abblix.Oidc.Server.SourceGenerators.MinimalApi", "Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj"),
+            direct);
 
-        var reached = direct.Concat(RestoredReferences(self)).ToHashSet(StringComparer.Ordinal);
+        var reached = direct
+            .Concat(RestoredReferences(Path.GetFullPath(Path.Combine(directory, Written("ProjectAssetsFile"))), directory))
+            .ToHashSet(StringComparer.Ordinal);
 
         var unreached = solution
             .Where(project => !string.Equals(project, self, StringComparison.Ordinal) && !reached.Contains(project))
@@ -61,27 +69,28 @@ public class EveryProjectIsBuiltFirstTests
             $"in Abblix.Oidc.slnx but not reached through this project's references: {string.Join(", ", unreached)}");
     }
 
-    /// <summary>The project references MSBuild evaluated for this project, written into the assembly.</summary>
-    private static string[] DirectReferences()
+    /// <summary>A value MSBuild wrote into this assembly while building it, relative to the project folder.</summary>
+    private static string Written(string key)
         => typeof(EveryProjectIsBuiltFirstTests).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(attribute => attribute.Key == "ProjectReferences")
-            .Value!
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(Path.GetFullPath)
-            .ToArray();
+            .Single(attribute => attribute.Key == key)
+            .Value!;
 
     /// <summary>
-    /// The projects NuGet's restore resolved for this project, directly or through another one.
+    /// The projects NuGet's restore resolved for this project, directly or through another one, read from
+    /// the restore file the build named rather than from where one usually is.
     /// </summary>
-    private static IEnumerable<string> RestoredReferences(string projectFile)
+    /// <remarks>
+    /// The file records each project relative to the project it was restored for, which is where the
+    /// project file sits, not where the restore file does.
+    /// </remarks>
+    private static IEnumerable<string> RestoredReferences(string assetsFile, string projectDirectory)
     {
-        var directory = Path.GetDirectoryName(projectFile)!;
-        using var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json")));
+        using var assets = JsonDocument.Parse(File.ReadAllText(assetsFile));
 
         return assets.RootElement.GetProperty("libraries").EnumerateObject()
             .Where(library => library.Value.GetProperty("type").GetString() == "project")
-            .Select(library => Path.GetFullPath(Path.Combine(directory, library.Value.GetProperty("path").GetString()!)))
+            .Select(library => Path.GetFullPath(Path.Combine(projectDirectory, library.Value.GetProperty("path").GetString()!)))
             .ToArray();
     }
 
