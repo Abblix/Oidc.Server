@@ -76,11 +76,12 @@
          test asserts every referenced project put its documentation beside the output, and hand-
          parsing Include paths meant splitting them on a separator. The previous attempt did that
          with Path.GetFileNameWithoutExtension, which does not treat a backslash as one on Linux -
-         green here, red on the Ubuntu runner CI actually uses. -->
+         green here, red on the Ubuntu runner CI actually uses. The analyzer reference every project gets
+         from Directory.Build.props is left out too: it loads into the compiler and documents nothing. -->
     <ItemGroup>
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
             <_Parameter1>ReferencedProjects</_Parameter1>
-            <_Parameter2>@(ProjectReference->WithMetadataValue('ExcludeFromReferenceList', '')->'%(Filename)')</_Parameter2>
+            <_Parameter2>@(ProjectReference->WithMetadataValue('ExcludeFromReferenceList', '')->WithMetadataValue('OutputItemType', '')->'%(Filename)')</_Parameter2>
         </AssemblyAttribute>
     </ItemGroup>
 
