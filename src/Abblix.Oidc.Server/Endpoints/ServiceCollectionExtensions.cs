@@ -496,6 +496,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IRevocationRequestValidator, RevocationRequestValidator>();
         services.TryAddScoped<IRevocationRequestProcessor, RevocationRequestProcessor>();
         services.AddCallerRateLimiter(CallerRateLimiters.Revocation);
+        services.TryAddSingleton<UnnamedSourceNotice>();
         return services;
     }
 

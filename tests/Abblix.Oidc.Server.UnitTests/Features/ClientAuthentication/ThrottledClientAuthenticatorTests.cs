@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -16,7 +17,9 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -57,14 +60,17 @@ public class ThrottledClientAuthenticatorTests
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
     }
 
-    private ThrottledClientAuthenticator CreateAuthenticator(int? permitLimit)
-        => new(
+    private ThrottledClientAuthenticator CreateAuthenticator(int? permitLimit, RecordingLoggerFactory? recorded = null)
+    {
+        var limit = new AuthenticationFailureLimitOptions { PermitLimit = permitLimit, Window = OneMinute };
+        return new(
             NullLogger<ThrottledClientAuthenticator>.Instance,
             _inner.Object,
-            new AuthenticationFailureBudget(
-                CallerRateLimiters.Create(
-                    new AuthenticationFailureLimitOptions { PermitLimit = permitLimit, Window = OneMinute }),
-                _requestInfoProvider.Object));
+            new AuthenticationFailureBudget(CallerRateLimiters.Create(limit), _requestInfoProvider.Object),
+            new UnnamedSourceNotice(
+                new Logger<UnnamedSourceNotice>(recorded ?? new RecordingLoggerFactory()),
+                Options.Create(new OidcOptions { AuthenticationFailureLimit = limit })));
+    }
 
     private static ClientRequest CreateRequest() => new() { ClientId = TestConstants.DefaultClientId };
 
@@ -201,6 +207,34 @@ public class ThrottledClientAuthenticatorTests
         // Act, Assert
         for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
             Assert.Null(await authenticator.TryAuthenticateClientAsync(CreateRequest()));
+    }
+
+    /// <summary>
+    /// The budget that counts nothing for such a sender says so, once, so that a limit the operator turned
+    /// on is not silently refusing nobody - and says nothing while every request carries an address.
+    /// </summary>
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public async Task ASourceThatCannotBeNamed_IsReportedOnce(bool unnamed, int reported)
+    {
+        // Arrange
+        if (unnamed)
+            _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns((IPAddress?)null);
+
+        var recorded = new RecordingLoggerFactory();
+        var authenticator = CreateAuthenticator(permitLimit: 1, recorded);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        // Act
+        await authenticator.TryAuthenticateClientAsync(CreateRequest());
+        await authenticator.TryAuthenticateClientAsync(CreateRequest());
+
+        // Assert
+        Assert.Equal(reported, recorded.Entries.Count(
+            entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing));
     }
 
     /// <summary>

@@ -46,13 +46,16 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// <param name="requestInfoProvider">
 /// Names the address a request came from, which is half of what a public client's budget is charged to.
 /// </param>
+/// <param name="unnamedSource">Says, once, that a public client's request arrived from no address and so
+/// went uncharged.</param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Revocation)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
-	IRequestInfoProvider requestInfoProvider)
+	IRequestInfoProvider requestInfoProvider,
+	UnnamedSourceNotice unnamedSource)
 	: IRevocationRequestValidator
 {
 	/// <summary>
@@ -143,10 +146,20 @@ public partial class RevocationRequestValidator(
 			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
 			ClientType.Public => requestInfoProvider.SourceName() is { } source
 				? (clientInfo.ClientId, (string?)source)
-				: null,
+				: ChargedToNone(),
 			_ => throw new InvalidOperationException(
 				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
 		};
+
+	/// <summary>
+	/// A public client's request from no address this server can name, which no budget is charged for - and
+	/// which the operator is told about, since the budget is then on and refuses nobody.
+	/// </summary>
+	private (string ClientId, string? Source)? ChargedToNone()
+	{
+		unnamedSource.Report(CallerRateLimiters.Revocation);
+		return null;
+	}
 
 	/// <summary>
 	/// Reads the token the request names and decides whether it belongs to the client that asked.

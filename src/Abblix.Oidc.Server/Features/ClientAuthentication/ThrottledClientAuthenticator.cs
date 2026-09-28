@@ -33,10 +33,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Records a refusal, naming the address it was charged to.</param>
 /// <param name="inner">The authenticator whose credentials this one decides whether to look at.</param>
 /// <param name="budget">The failures one source address gets.</param>
+/// <param name="unnamedSource">Says, once, that a request arrived from no address and so went uncounted.</param>
 internal sealed partial class ThrottledClientAuthenticator(
     ILogger<ThrottledClientAuthenticator> logger,
     IClientAuthenticator inner,
-    AuthenticationFailureBudget budget) : IClientAuthenticator
+    AuthenticationFailureBudget budget,
+    UnnamedSourceNotice unnamedSource) : IClientAuthenticator
 {
     /// <inheritdoc />
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
@@ -44,6 +46,9 @@ internal sealed partial class ThrottledClientAuthenticator(
     /// <inheritdoc />
     public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
     {
+        if (budget.Source is null)
+            unnamedSource.Report(CallerRateLimiters.AuthenticationFailures);
+
         if (budget.RefuseIfSpent() is { } refusal)
         {
             LogSourceRefused(Sanitized.Value(budget.Source));

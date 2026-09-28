@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -104,13 +105,17 @@ public class RevocationRequestValidatorTests
         => CreateValidator(CallerRateLimiters.Create(rateLimit));
 
     private RevocationRequestValidator CreateValidator(
-        PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
+        PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
+        RecordingLoggerFactory? recorded = null)
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
             _jwtValidator.Object,
             rateLimiter,
-            _requestInfoProvider.Object);
+            _requestInfoProvider.Object,
+            new UnnamedSourceNotice(
+                new Logger<UnnamedSourceNotice>(recorded ?? new RecordingLoggerFactory()),
+                Options.Create(new OidcOptions())));
 
     private static RevocationRequest CreateRevocationRequest(string token = "token_value")
     {
@@ -614,6 +619,38 @@ public class RevocationRequestValidatorTests
     /// differs: one client is asking too often wherever it runs, the other is asking too often from one
     /// place, and the address is what the second record has to carry.
     /// </summary>
+    /// <summary>
+    /// A public client's request from no address the server can name is charged to no budget, and the
+    /// budget - on by default - says so once rather than silently refusing nobody. A confidential client's
+    /// budget does not depend on the address and has nothing to report.
+    /// </summary>
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public async Task ValidateAsync_WhenAPublicClientsAddressCannotBeNamed_ShouldReportItOnce(bool isPublic, int reported)
+    {
+        // Arrange
+        _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns((IPAddress?)null);
+        var recorded = new RecordingLoggerFactory();
+        var validator = CreateValidator(CallerRateLimiters.Create(new CallerRateLimitOptions()), recorded);
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(
+                isPublic ? PublicClientNamed(TestConstants.DefaultClientId) : new ClientInfo(TestConstants.DefaultClientId)));
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidJsonWebToken());
+
+        // Act
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+
+        // Assert
+        Assert.Equal(reported, recorded.Entries.Count(
+            entry => entry.EventId.Id == LogEvents.RateLimiting.UnnamedSourceNotice.BudgetCountsNothing));
+    }
+
     [Fact]
     public async Task ValidateAsync_WhenACallerIsRefused_ShouldRecordTheBudgetItSpent()
     {
@@ -624,7 +661,10 @@ public class RevocationRequestValidatorTests
             _clientAuthenticator.Object,
             _jwtValidator.Object,
             CallerRateLimiters.Create(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute }),
-            _requestInfoProvider.Object);
+            _requestInfoProvider.Object,
+            new UnnamedSourceNotice(
+                new Logger<UnnamedSourceNotice>(new RecordingLoggerFactory()),
+                Options.Create(new OidcOptions())));
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
