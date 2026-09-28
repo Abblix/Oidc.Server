@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// The parameter is optional; missing values pass through (clients that do not
 /// pre-bind don't pay the cost). The actual thumbprint comparison against a
 /// presented proof happens at the token endpoint inside
-/// <c>DPoPTokenEndpointValidator</c>; this step only enforces wire-format validity.
+/// <c>DPoPBindingValidator</c>; this step only enforces wire-format validity.
 /// </remarks>
 public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
 {

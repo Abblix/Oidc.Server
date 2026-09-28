@@ -75,10 +75,10 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateActorTokenPair)
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
-            .BindAsync(ResolveSubjectTokenAsync)
+            .BindAsync(ctx => ResolveSubjectTokenAsync(ctx, cancellationToken))
             .Bind(ValidateSubjectTokenOriginAndType)
             .Bind(ValidateForwardedAuthorizationDetails)
-            .BindAsync(ResolveActorTokenAsync)
+            .BindAsync(ctx => ResolveActorTokenAsync(ctx, cancellationToken))
             .Bind(ValidateActorTokenOriginAndType)
             .Bind(ValidateAudiences)
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
@@ -222,10 +222,12 @@ public class TokenExchangeGrantHandler(
     /// Resolves the <c>subject_token</c> through the keyed-DI resolver matching its declared
     /// type URI and stores the resolved <see cref="SubjectTokenContext"/> on the chain context.
     /// </summary>
-    private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(ValidationContext ctx)
+    private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(
+        ValidationContext ctx,
+        CancellationToken cancellationToken)
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
-        var result = await ResolveTokenAsync(ctx.Request.SubjectTokenType, subjectToken, CancellationToken.None);
+        var result = await ResolveTokenAsync(ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
@@ -293,12 +295,14 @@ public class TokenExchangeGrantHandler(
     /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
     /// error pinpoints which token was rejected.
     /// </summary>
-    private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(ValidationContext ctx)
+    private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
+        ValidationContext ctx,
+        CancellationToken cancellationToken)
     {
         if (ctx.Request.ActorToken is not { Length: > 0 } actorToken)
             return ctx;
 
-        var result = await ResolveTokenAsync(ctx.Request.ActorTokenType, actorToken, CancellationToken.None);
+        var result = await ResolveTokenAsync(ctx.Request.ActorTokenType, actorToken, cancellationToken);
         return result.Match<Result<ValidationContext, OidcError>>(
             actor => ctx with { Actor = actor },
             failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));

@@ -66,7 +66,7 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
     /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
-    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
+    /// <c>Endpoints.Token.Validation.DPoPBindingValidator</c>.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
 

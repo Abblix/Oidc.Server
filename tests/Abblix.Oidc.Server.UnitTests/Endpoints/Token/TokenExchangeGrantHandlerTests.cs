@@ -197,13 +197,19 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = TokenExchangeTokenTypes.AccessToken,
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        // A token of the caller's own, told apart from every other, so each resolution can be shown to have
+        // received it: an exchange spends nothing, so a resolver making a remote call may stop when the caller does.
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var result = await handler.AuthorizeAsync(request, clientInfo, caller.Token);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
         Assert.NotNull(grant.Context.Actor);
         Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
         Assert.Null(grant.Context.Actor["act"]);
+        resolverMock.Verify(r => r.ResolveAsync(SubjectTokenWire, caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(actorWire, caller.Token), Times.Once);
     }
 
     [Fact]

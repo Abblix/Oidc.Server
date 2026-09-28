@@ -23,12 +23,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 /// the protocol specifications. While the typical response includes an Access Token and, in the case of OpenID Connect,
 /// an ID Token, the exact contents of the response may vary based on the request parameters and server policies.
 /// <para>
-/// Processing takes no cancellation token, deliberately. It begins after the grant has been spent or starts by
-/// spending it - an authorization code, a device code or a backchannel authentication request is taken from
-/// storage, a refresh token is marked used - and none of that can be undone: RFC 6749 section 4.1.2 forbids a
-/// second use of a code. Abandoning past that point would destroy the grant and issue nothing, so once reached,
-/// issuance runs to completion and a response nobody waits for is discarded. An implementation that calls
-/// something taking a token passes <see cref="System.Threading.CancellationToken.None"/> for the same reason.
+/// Processing takes no cancellation token, deliberately. For most grants it runs after the grant is spent or while it
+/// is: a device code or a backchannel authentication request was taken from storage while the grant was resolved, an
+/// authorization code is taken as processing starts, and a rotated refresh token is marked used while it runs. None of
+/// that can be undone - RFC 6749 section 4.1.2 forbids a second use of a code - so abandoning past it would destroy the
+/// grant and issue nothing. The grants that spend nothing, such as client credentials, lose nothing by finishing
+/// either, since issuing is local work. Once reached, issuance runs to completion and a response nobody waits for is
+/// discarded. An implementation that calls something taking a token passes
+/// <see cref="System.Threading.CancellationToken.None"/> for the same reason.
 /// </para>
 /// </remarks>
 public interface ITokenRequestProcessor

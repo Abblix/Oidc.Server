@@ -1168,8 +1168,11 @@ public class BackChannelAuthenticationGrantHandlerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
+        // A token of the caller's own, told apart from every other, so the wait can be shown to have received it.
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, caller.Token);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -1178,8 +1181,10 @@ public class BackChannelAuthenticationGrantHandlerTests
 
         // Waited once and answered: the question is about the wait, not about how many times the
         // record was read - the pending arm reads it again so an arriving completion is answered at once.
+        // And the wait was handed the caller's token: nothing has been spent while the request is pending, so
+        // a client that stops waiting frees the wait instead of holding it for the whole timeout.
         statusNotifier.Verify(
-            n => n.WaitForStatusChangeAsync(AuthReqId, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            n => n.WaitForStatusChangeAsync(AuthReqId, It.IsAny<TimeSpan>(), caller.Token),
             Times.Once);
     }
 

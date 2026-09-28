@@ -10,15 +10,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
-partial class DPoPTokenEndpointValidator
+partial class DPoPBindingValidator
 {
-    /// <inheritdoc/>
-    [LoggerMessage(
-        EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.NonceChallengeIssued,
-        Level = LogLevel.Debug,
-        Message = "DPoP nonce challenge issued from token endpoint (use_dpop_nonce). Triggered by missing or stale nonce in proof.")]
-    protected override partial void LogNonceChallengeIssued();
-
     [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.ProofRequiredButMissing,
         Level = LogLevel.Information,
@@ -26,8 +19,8 @@ partial class DPoPTokenEndpointValidator
     private partial void LogProofRequiredButMissing(string triggerReason);
 
     [LoggerMessage(
-        EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.ProofRejected,
+        EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.ProofKeyMismatch,
         Level = LogLevel.Information,
-        Message = "DPoP proof rejected at token endpoint: {Reason}.")]
-    private partial void LogProofRejected(string reason);
+        Message = "DPoP proof key thumbprint {ActualThumbprint} does not match committed dpop_jkt {CommittedThumbprint} (RFC 9449 section 10).")]
+    private partial void LogProofKeyMismatch(string committedThumbprint, string actualThumbprint);
 }

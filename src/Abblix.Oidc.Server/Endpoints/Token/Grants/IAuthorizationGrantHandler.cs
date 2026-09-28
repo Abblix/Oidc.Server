@@ -38,7 +38,11 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <param name="cancellationToken">
 	/// Abandons the resolution when the caller stops waiting. CIBA holds this call open for the configured
 	/// long-polling timeout, so a handler that never receives the token goes on polling storage for a client
-	/// that disconnected.
+	/// that disconnected. A handler that spends the grant while resolving it - takes a device code or a
+	/// backchannel authentication request from storage - does not pass the token past that point: giving up
+	/// there would spend the grant and issue nothing (see <see cref="ITokenRequestProcessor"/>). For the same
+	/// reason, a refusal that the client is expected to cure by retrying belongs in a validator registered
+	/// before the one that calls this, not after it.
 	/// </param>
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
 		TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken);
