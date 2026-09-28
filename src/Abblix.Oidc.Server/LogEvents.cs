@@ -908,5 +908,16 @@ internal static class LogEvents
 
             public const int SourceRefused = Base;
         }
+
+        /// <summary>
+        /// <c>Features/RateLimiting/UnnamedSourceNotice.cs</c> - a budget counted per address that is on
+        /// while the server sees no address (sub-range 10420-10439).
+        /// </summary>
+        public static class UnnamedSourceNotice
+        {
+            private const int Base = 10420;
+
+            public const int BudgetLeavesUncharged = Base;
+        }
     }
 }
