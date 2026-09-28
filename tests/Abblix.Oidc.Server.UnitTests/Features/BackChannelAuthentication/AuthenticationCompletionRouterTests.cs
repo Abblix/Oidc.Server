@@ -146,6 +146,24 @@ public class AuthenticationCompletionRouterTests
                 .CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5)));
     }
 
+    /// <summary>
+    /// With nothing stored, a completion is refused as not pending even when the host's copy names a client
+    /// nobody registered: that is the refusal whose remedy exists, since registering the client would still
+    /// leave nothing to answer.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAsync_WhenNothingIsStored_RefusesAsNotPendingBeforeLookingForTheClient()
+    {
+        var storage = new Mock<IBackChannelRequestStorage>();
+        storage.Setup(s => s.TryGetAsync(AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
+                .CompleteAsync(AuthReqId, RequestFor("typo-client"), TimeSpan.FromMinutes(5)));
+
+        Assert.Contains("the stored record is not there", refusal.Message, StringComparison.Ordinal);
+    }
+
     private static AuthenticationCompletionRouter RouterOver(Mock<IBackChannelRequestStorage> storage, string mode)
     {
         var clients = new Mock<IClientInfoProvider>();

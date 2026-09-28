@@ -57,10 +57,17 @@ public partial class AuthenticationCompletionRouter(
         TimeSpan expiresIn)
     {
         // The client the stored request came from decides the delivery mode and whom the answer is judged
-        // for, not the one the host's answer names. With nothing stored there is no request to route, and the
-        // host's copy is used only so the handler can refuse it with the reason it gives for exactly that.
+        // for, not the one the host's answer names. With nothing stored there is nothing to answer, and that
+        // is the refusal given first: naming the host's client as unregistered would send an operator to
+        // register it, after which the request still could not be answered.
         var stored = await storage.TryGetAsync(authenticationRequestId);
-        var clientId = (stored ?? request).AuthorizedGrant.Context.ClientId;
+        if (stored is null)
+        {
+            LogNothingStored(authenticationRequestId, "completed");
+            throw AuthenticationCompletionHandler.NotPending("completed", null);
+        }
+
+        var clientId = stored.AuthorizedGrant.Context.ClientId;
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
 
         if (clientInfo == null)
@@ -83,7 +90,7 @@ public partial class AuthenticationCompletionRouter(
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is null)
         {
-            LogNothingToDeny(authenticationRequestId);
+            LogNothingStored(authenticationRequestId, "denied");
             throw AuthenticationCompletionHandler.NotPending("denied", null);
         }
 

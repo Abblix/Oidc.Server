@@ -1392,10 +1392,9 @@ public class AuthenticationCompletionHandlerTests
     /// A push-mode request that cannot be delivered is removed, not left denied.
     /// </summary>
     /// <remarks>
-    /// Reached when the notification endpoint or token is missing from the client's registration. It is the
-    /// same situation as a refused subject - nothing can be delivered and the client cannot poll - so it
-    /// leaves the same thing behind: nothing. Denying instead would strand a request its client can never
-    /// read until the entry expired.
+    /// Reached when the stored request carries no notification endpoint or token. Nothing can be delivered,
+    /// not even an error, and the client cannot poll, so nothing is left behind: denying instead would strand
+    /// a request its client can never read until the entry expired.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PushMode_WhenNotConfiguredForDelivery_RemovesTheRequest()

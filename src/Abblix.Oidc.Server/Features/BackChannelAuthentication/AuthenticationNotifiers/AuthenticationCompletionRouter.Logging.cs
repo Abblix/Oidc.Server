@@ -19,9 +19,9 @@ partial class AuthenticationCompletionRouter
     private partial void LogClientNotFound(string AuthReqId, string ClientId);
 
     [LoggerMessage(
-        EventId = LogEvents.Device.AuthenticationCompletionRouter.NothingToDeny,
+        EventId = LogEvents.Device.AuthenticationCompletionRouter.NothingStored,
         Level = LogLevel.Error,
-        Message = "auth_req_id {AuthReqId} could not be denied: no record was found, so there was no client " +
-                  "to route the denial to.")]
-    private partial void LogNothingToDeny(string AuthReqId);
+        Message = "auth_req_id {AuthReqId} could not be {Answered}: no record was found, so there was no " +
+                  "request to answer and no client to route it to.")]
+    private partial void LogNothingStored(string AuthReqId, string Answered);
 }
