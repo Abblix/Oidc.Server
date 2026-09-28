@@ -56,57 +56,50 @@ public partial class AuthenticationCompletionRouter(
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        // The client the stored request came from decides the delivery mode and whom the answer is judged
-        // for, not the one the host's answer names. With nothing stored there is nothing to answer, and that
-        // is the refusal given first: naming the host's client as unregistered would send an operator to
-        // register it, after which the request still could not be answered.
-        var stored = await storage.TryGetAsync(authenticationRequestId);
-        if (stored is null)
-        {
-            LogNothingStored(authenticationRequestId, "completed");
-            throw AuthenticationCompletionHandler.NotPending("completed", null);
-        }
-
-        var clientId = stored.AuthorizedGrant.Context.ClientId;
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
-
-        if (clientInfo == null)
-        {
-            LogClientNotFound(authenticationRequestId, clientId);
-            throw new InvalidOperationException(
-                $"The authentication request cannot be completed: its client {clientId} is not registered.");
-        }
-
-        var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
-        var handler = serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode);
+        var (handler, clientInfo) = await RouteAsync(authenticationRequestId, "completed");
         await handler.CompleteAuthenticationAsync(authenticationRequestId, request, clientInfo, expiresIn);
     }
 
     /// <inheritdoc />
     public async Task DenyAsync(string authenticationRequestId, TimeSpan expiresIn)
     {
-        // Routed by the stored request's client like a completion. With nothing stored there is no client to
-        // route by and nothing to deny, which is the refusal the handler would give.
+        var (handler, _) = await RouteAsync(authenticationRequestId, "denied");
+        await handler.DenyAuthenticationAsync(authenticationRequestId, expiresIn);
+    }
+
+    /// <summary>
+    /// The handler of the delivery mode registered by the client the STORED request came from, and that client.
+    /// </summary>
+    /// <remarks>
+    /// Never the client the host's answer names, which decides nothing. With nothing stored there is nothing to
+    /// answer, and that is the refusal given first: naming a client as unregistered would send an operator to
+    /// register it, after which the request still could not be answered. A client no longer registered is
+    /// refused rather than returned from, because the request would stay pending while the host believed its
+    /// answer had reached somebody.
+    /// </remarks>
+    /// <param name="authenticationRequestId">The request being answered.</param>
+    /// <param name="answered">What the caller is doing, for the refusals: completed or denied.</param>
+    private async Task<(AuthenticationCompletionHandler Handler, ClientInfo ClientInfo)> RouteAsync(
+        string authenticationRequestId,
+        string answered)
+    {
         var stored = await storage.TryGetAsync(authenticationRequestId);
         if (stored is null)
         {
-            LogNothingStored(authenticationRequestId, "denied");
-            throw AuthenticationCompletionHandler.NotPending("denied", null);
+            LogNothingStored(authenticationRequestId, answered);
+            throw AuthenticationCompletionHandler.NotPending(answered, null);
         }
 
-        // Refused rather than returned from: the request would stay pending while the host believed the end
-        // user's refusal had reached somebody.
         var clientId = stored.AuthorizedGrant.Context.ClientId;
         var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(authenticationRequestId, clientId);
             throw new InvalidOperationException(
-                $"The authentication request cannot be denied: its client {clientId} is not registered.");
+                $"The authentication request cannot be {answered}: its client {clientId} is not registered.");
         }
 
         var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
-        var handler = serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode);
-        await handler.DenyAuthenticationAsync(authenticationRequestId, expiresIn);
+        return (serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode), clientInfo);
     }
 }
