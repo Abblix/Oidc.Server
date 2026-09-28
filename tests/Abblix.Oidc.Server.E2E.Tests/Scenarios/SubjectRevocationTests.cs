@@ -154,7 +154,8 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     /// And with the option left off, the same logout leaves the same token working.
     /// </summary>
     /// <remarks>
-    /// The control the test above needs. Without it, a logout that broke refresh for some unrelated reason -
+    /// The control <see cref="Ending_a_session_revokes_its_tokens_when_the_option_is_on"/> needs. Without it,
+    /// a logout that broke refresh for some unrelated reason -
     /// ending the session the grant hangs on, say - would read as the option working.
     /// </remarks>
     [Fact]
@@ -240,7 +241,9 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     /// again once the suspension is lifted.
     /// </summary>
     /// <remarks>
-    /// The control that keeps the two tests above honest. Written as a boolean rather than a comparison,
+    /// The control that keeps <see cref="Revoking_a_subject_stops_its_session_from_minting_more"/> and
+    /// <see cref="Revoking_a_session_stops_that_session_from_minting_more"/> honest. Written as a boolean rather
+    /// than a comparison,
     /// the change would refuse here too - and since a fresh sign-in carries the same subject, the refusal
     /// would repeat for as long as the record is kept.
     /// </remarks>

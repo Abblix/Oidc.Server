@@ -72,7 +72,8 @@ public class StrictestRequirementsTests
     /// must hold. Named through <c>nameof</c> so a rename carries them.
     /// </summary>
     /// <remarks>
-    /// The case below walks EVERY property the type declares rather than only the booleans, because
+    /// <see cref="EveryControl_CarriesItsStrictestValue"/> walks EVERY property the type declares rather than only the
+    /// booleans, because
     /// a filter by type silently skips whatever is added in another shape - and the two controls
     /// carrying values, the ceiling and the tolerance, are exactly the ones a bundle can be short of
     /// while every boolean is set. A property this table does not mention has to be a boolean set to
@@ -111,8 +112,9 @@ public class StrictestRequirementsTests
         => typeof(SecurityProfileRequirements).GetProperties();
 
     /// <summary>
-    /// The enumeration above finds something, so an empty set cannot be what makes the first case
-    /// pass. A filter that matched nothing would report every control demanded over no controls.
+    /// The enumeration in <see cref="Controls"/> finds something, so an empty set cannot be what makes
+    /// <see cref="EveryControl_CarriesItsStrictestValue"/> pass. A filter that matched nothing would report every control
+    /// demanded over no controls.
     /// </summary>
     [Fact]
     public void TheControlsAreFound()
@@ -122,7 +124,7 @@ public class StrictestRequirementsTests
 
     /// <summary>
     /// And the table names only controls that exist, so a rename cannot leave an entry standing over
-    /// nothing while the case above goes on passing.
+    /// nothing while <see cref="EveryControl_CarriesItsStrictestValue"/> goes on passing.
     /// </summary>
     [Fact]
     public void TheTableNamesOnlyRealControls()

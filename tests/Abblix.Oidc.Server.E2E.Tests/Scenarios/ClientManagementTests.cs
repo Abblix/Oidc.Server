@@ -252,8 +252,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         // And that it names the member it refused. Asserting the status alone left the one refusal this
         // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
-        // redirect_uris in that message passed both suites. The whole-token form is copied from the theory
-        // below so the two rows cannot drift apart - not because this member sits in a containment
+        // redirect_uris in that message passed both suites. The whole-token form is copied from
+        // No_uri_member_accepts_a_relative_value so the two cannot drift apart - not because this member sits in a containment
         // pair, which it does not: no member name contains it and it contains none, so a plain
         // Contains would catch the same plant.
         var body = await ReadJsonAsync(response);
@@ -725,7 +725,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
                 MediaTypeNames.Application.Json),
         };
 
-        // What separates this case from the boundary theory above, which strips the header on purpose.
+        // What separates this case from A_body_at_the_boundary_is_decided_by_one_byte, which strips the
+        // header on purpose.
         Assert.NotNull(request.Content.Headers.ContentLength);
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

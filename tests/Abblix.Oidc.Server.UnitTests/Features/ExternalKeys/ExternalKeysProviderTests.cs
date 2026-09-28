@@ -208,9 +208,10 @@ public class ExternalKeysProviderTests
     [Fact]
     public async Task AColdStartHasNothingToServeAndSaysSo()
     {
-        // The control for the row above. Falling back to an empty set would publish a JWKS with no keys, which
-        // reads to a relying party as "this issuer signs nothing" rather than as an outage, and it would make
-        // the row above pass on a provider that swallows every failure.
+        // The control for ThePublishedSetSurvivesAnOutageOnceItHasBeenRead. Falling back to an empty set would
+        // publish a JWKS with no keys, which reads to a relying party as "this issuer signs nothing" rather than
+        // as an outage, and it would make ThePublishedSetSurvivesAnOutageOnceItHasBeenRead pass on a provider
+        // that swallows every failure.
         var custodian = new Mock<IKeyCustodian>();
         custodian
             .Setup(c => c.GetKeyVersionsAsync("sign-key", It.IsAny<CancellationToken>()))

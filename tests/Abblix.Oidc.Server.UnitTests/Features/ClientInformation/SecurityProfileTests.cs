@@ -50,12 +50,14 @@ public class SecurityProfileTests
 
     /// <summary>
     /// A deployment-wide profile is a FLOOR: a client can ask for more and never for less. The row
-    /// that carries the decision is the third - naming a profile that demands nothing, under a
-    /// deployment that demands the FAPI 2.0 bundle, leaves the client held to that bundle.
+    /// that carries the decision is the one whose client names the empty profile - naming a profile
+    /// that demands nothing, under a deployment that demands the FAPI 2.0 bundle, leaves the client
+    /// held to that bundle.
     /// </summary>
     /// <remarks>
-    /// The first two rows keep the case from being satisfied by a resolution that answers the
-    /// strictest bundle whatever it is asked, and the fourth by one that answers the deployment's.
+    /// The two rows whose client names no profile keep the case from being satisfied by a resolution
+    /// that answers the strictest bundle whatever it is asked, and the row whose client names Fapi2
+    /// under a deployment naming none by one that answers the deployment's.
     /// </remarks>
     [Theory]
     // clientProfile (null = unset), defaultProfile, expected effective
@@ -248,7 +250,8 @@ public class SecurityProfileTests
 
     /// <summary>
     /// The other control this walk owns, given its own case: a client authenticating with NOTHING is
-    /// the public client the profile excludes, and the floor reaches it too. The case above cannot
+    /// the public client the profile excludes, and the floor reaches it too.
+    /// <see cref="OptionsValidator_GlobalDefaultFapi2_ClientNamesNoneAndUsesASharedSecret_Fails"/> cannot
     /// stand for this one - it uses a shared secret, which is a confidential client by RFC 6749 and
     /// trips the key-based requirement alone, so removing the confidential-client arm would leave it
     /// green.
@@ -388,8 +391,9 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// The two methods the profile admits pass, which is what keeps the refusal above from being a
-    /// check that refuses everything.
+    /// The two methods the profile admits pass, which is what keeps the refusal in
+    /// <see cref="FindViolations_Fapi2SharedSecretAuthentication_Violation"/> from being a check that
+    /// refuses everything.
     /// </summary>
     [Theory]
     [InlineData(ClientAuthenticationMethods.TlsClientAuth)]
@@ -553,8 +557,9 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// Both defined profiles pass, which is what keeps the two refusals above from being a check that
-    /// refuses every configuration.
+    /// Both defined profiles pass, which is what keeps <see cref="Validate_UndefinedDefaultProfile_Fails"/>
+    /// and <see cref="Validate_UndefinedClientProfile_Fails"/> from being a check that refuses every
+    /// configuration.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.None)]
@@ -635,8 +640,9 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// Every profile that ships resolves, which is what keeps the refusal above from being a case
-    /// nobody meets: a value added to the enum without a bundle fails here and at startup.
+    /// Every profile that ships resolves, which is what keeps the refusal in
+    /// <see cref="Resolve_DefinedProfileWithNoBundle_Throws"/> from being a case nobody meets: a value added to the
+    /// enum without a bundle fails here and at startup.
     /// </summary>
     [Fact]
     public void Resolve_EveryShippedProfile_Resolves()

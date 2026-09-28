@@ -142,8 +142,8 @@ public class MalformedParameterBindingTests(TestFactory factory) : TestBase(fact
     }
 
     /// <summary>
-    /// A bearer token that is syntactically a header value but not a token this server issued. Sits beside the
-    /// case above to keep them apart: one fails to bind, the other binds and fails to validate, and both owe
+    /// A bearer token that is syntactically a header value but not a token this server issued. Sits beside
+    /// <see cref="An_authorization_header_naming_an_unknown_scheme_is_refused_with_a_challenge"/> to keep them apart: one fails to bind, the other binds and fails to validate, and both owe
     /// the caller the same shape of answer.
     /// </summary>
     [Fact]

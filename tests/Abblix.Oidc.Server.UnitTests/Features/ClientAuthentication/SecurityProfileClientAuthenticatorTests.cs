@@ -288,7 +288,8 @@ public class SecurityProfileClientAuthenticatorTests
 
     /// <summary>
     /// And a client that DOES satisfy the strictest bundle is served, which is what keeps the
-    /// refusal above from being "an undefined profile refuses everything" - a reading under which
+    /// refusal in <see cref="StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull"/> from
+    /// being "an undefined profile refuses everything" - a reading under which
     /// the value would be a denial of service rather than a constraint.
     /// </summary>
     [Fact]
@@ -308,8 +309,10 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
-    /// A registration the profile admits passes through untouched, which is what keeps the refusals
-    /// above from being a decorator that refuses everything.
+    /// A registration the profile admits passes through untouched, which is what keeps the refusals in
+    /// <see cref="StoredClientCannotSatisfyProfile_ShouldReturnNull"/> and
+    /// <see cref="StoredClientAllowsAForbiddenResponseType_ShouldReturnNull"/> from being a decorator that
+    /// refuses everything.
     /// </summary>
     [Fact]
     public async Task StoredClientSatisfiesProfile_ShouldAuthenticate()
@@ -378,7 +381,8 @@ public class SecurityProfileClientAuthenticatorTests
 
     /// <summary>
     /// And a shared-secret client under a server naming no profile is accepted, without which the
-    /// case above would be satisfied by a decorator refusing every shared-secret client.
+    /// <see cref="TheClientProfileAddsToTheDefaultRatherThanReplacingIt"/> would be satisfied by a decorator
+    /// refusing every shared-secret client.
     /// </summary>
     [Fact]
     public async Task NoProfileEitherSide_LeavesASharedSecretClientAlone()
@@ -419,9 +423,10 @@ public class SecurityProfileClientAuthenticatorTests
     ///
     /// The cast falls back to an empty list, which is what a case asserting a field is ABSENT would
     /// be satisfied by if the generator's state type ever stopped carrying the interface. What stops
-    /// that is the assertion beside it, naming a field that must be PRESENT on the same entry: it
-    /// goes red on an empty list, so it is the control for the absence rather than a repetition of
-    /// the case above it.
+    /// that is the assertion beside it in
+    /// <see cref="TheRefusal_ForAClientNamingNothing_CarriesNoProfileFieldAndItsOwnEventId"/>, naming a
+    /// field that must be PRESENT on the same entry: it goes red on an empty list, so it is the control
+    /// for the absence rather than a repetition of the assertion that the field is absent.
     /// </remarks>
     private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
     {

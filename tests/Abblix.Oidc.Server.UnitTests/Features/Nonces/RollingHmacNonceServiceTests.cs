@@ -177,7 +177,7 @@ public class RollingHmacNonceServiceTests
     [Fact]
     public async Task ValidateAsync_AcrossInstancesWithSeparateCaches_ReturnsBadSignature()
     {
-        // Sanity check the previous test: without a shared cache each instance
+        // Sanity check ValidateAsync_AcrossInstancesSharingCache_Succeeds: without a shared cache each instance
         // generates its own bucket secret, so the tag will not match.
         var (issuer, _, _) = BuildService();
         var (verifier, _, _) = BuildService();

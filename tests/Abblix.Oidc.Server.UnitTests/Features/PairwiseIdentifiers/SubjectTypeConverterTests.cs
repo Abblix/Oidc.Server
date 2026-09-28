@@ -466,8 +466,9 @@ public class SubjectTypeConverterTests
     /// not: a URI spelled <c>com.example.one:/keys</c> is absolute, and its Host is the EMPTY STRING rather
     /// than null - so a chain that reaches for the client id when the host is missing never gets there, and
     /// every client naming such a URI shares the one empty sector. Measured, not reasoned: before the
-    /// filter reached this arm these two clients sealed the identical pseudonym for one user. The row above
-    /// cannot see it, because it comes in through the redirect URIs.
+    /// filter reached this arm these two clients sealed the identical pseudonym for one user.
+    /// <see cref="Convert_NativeClientsSharingAJwksHost_StayInSeparateSectors"/> cannot see it, because it
+    /// comes in through the redirect URIs.
     /// </remarks>
     [Fact]
     public void Convert_BackchannelClientsWithNonWebKeyUris_StayInSeparateSectors()
@@ -488,7 +489,8 @@ public class SubjectTypeConverterTests
     }
 
     /// <summary>
-    /// The same for a relative REDIRECT URI, which is the arm that carried this exposure first.
+    /// The same as <see cref="Convert_BackchannelClientWithARelativeKeyUri_FallsBackRatherThanFaulting"/>, for a
+    /// relative REDIRECT URI, which is the arm that carried this exposure first.
     /// </summary>
     /// <remarks>
     /// The redirect arm gained its absoluteness guard by sharing the predicate rather than by being

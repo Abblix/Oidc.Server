@@ -281,7 +281,9 @@ public class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
-    /// Without a hint the same two sessions still refuse, which is what says the tests above measure the
+    /// Without a hint the same two sessions still refuse, which is what says
+    /// <see cref="ProcessAsync_WithPromptNoneAndAHintNamingOneOfTwoSessions_UsesThatOne"/> and
+    /// <see cref="ProcessAsync_WithPromptNoneAndAHintNamingNobodyLoggedIn_ShouldReturnLoginRequired"/> measure the
     /// hint and not some other change to how sessions are counted.
     /// </summary>
     [Fact]

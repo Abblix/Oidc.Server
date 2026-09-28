@@ -593,8 +593,9 @@ public class AuthenticationCompletionHandlerTests
     /// configuration error and marks the request Denied.
     /// </summary>
     /// <remarks>
-    /// Ping, not push: this builds the ping handler, and push removes instead of denying - the two
-    /// tests above are its clauses.
+    /// Ping, not push: this builds the ping handler, and push removes instead of denying -
+    /// <see cref="CompleteAuthenticationAsync_PushMode_MissingEndpoint_RemovesRequest"/> and
+    /// <see cref="CompleteAuthenticationAsync_PushMode_MissingToken_RemovesRequest"/> are its clauses.
     /// </remarks>
     [Fact]
     public async Task CompleteAuthenticationAsync_PingMode_MissingEndpoint_SetsStatusToDenied()
@@ -665,7 +666,8 @@ public class AuthenticationCompletionHandlerTests
     /// notifier. Without it a request the end user rejected in a second answers only when the waiter's
     /// long-poll window runs out, while the identical request they approved answers at once.
     /// <para>
-    /// The approval half is the row below, and the two of them together are what make the property
+    /// The approval half is <see cref="CompleteAuthenticationAsync_WhenApproved_NotifiesWaiters"/>, and the
+    /// two of them together are what make the property
     /// structural rather than a habit: a first version of this change wrote only this one, and deleting
     /// the notification from the approval path left the whole suite green.
     /// </para>
@@ -724,7 +726,8 @@ public class AuthenticationCompletionHandlerTests
         if (isPing)
         {
             // Without an endpoint to notify, ping refuses before it ever stores an approval, and the row
-            // would then be measuring the denial path the row above already holds.
+            // would then be measuring the denial path CompleteAuthenticationAsync_PollMode_WhenRefused_NotifiesWaiters
+            // already holds.
             request.ClientNotificationEndpoint = _notificationEndpoint;
             _notificationService
                 .Setup(s => s.SendAsync(
@@ -847,7 +850,11 @@ public class AuthenticationCompletionHandlerTests
     /// A request that named nobody is completed whoever authenticated.
     /// </summary>
     /// <remarks>
-    /// The control for the two cases above, and the guard against turning an optional parameter into a
+    /// The control for the refusals of an end user other than the one named -
+    /// <see cref="CompleteAuthenticationAsync_WhenAuthenticatedUserIsNotTheOneRequested_DeniesAndDoesNotDeliver"/>,
+    /// <see cref="CompleteAuthenticationAsync_PushMode_WhenAuthenticatedUserIsNotTheOneRequested_RemovesTheRequest"/>
+    /// and <see cref="CompleteAuthenticationAsync_PingMode_WhenAuthenticatedUserIsNotTheOneRequested_Denies"/> -
+    /// and the guard against turning an optional parameter into a
     /// requirement: a request identifying the end user by <c>login_hint</c> alone leaves nothing to compare.
     /// </remarks>
     [Fact]
@@ -1599,7 +1606,8 @@ public class AuthenticationCompletionHandlerTests
     /// A push client is not delivered a grant whose CONTENT the per-type validator refuses.
     /// </summary>
     /// <remarks>
-    /// The type comparison above cannot see this: the type was asked for, so a raised amount inside the
+    /// The type comparison <see cref="CompleteAuthenticationAsync_WhenTheGrantCarriesAnUnrequestedType_Denies"/>
+    /// drives cannot see this: the type was asked for, so a raised amount inside the
     /// entry passes every check the flow can make on its own. Push is the mode where that matters,
     /// because its tokens are minted at completion and posted to the client's notification endpoint, so
     /// it never reaches the token endpoint where the same question is asked at redemption.

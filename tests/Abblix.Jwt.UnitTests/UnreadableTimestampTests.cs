@@ -107,7 +107,8 @@ public class UnreadableTimestampTests
     }
 
     /// <summary>
-    /// And a token whose timestamps read is judged on them, or the cases above would be satisfied
+    /// And a token whose timestamps read is judged on them, or the rows of
+    /// <see cref="ATimestampThePayloadCannotRead_IsRefusedAsMalformedNamingTheClaim"/> would be satisfied
     /// by a validator refusing every token as malformed.
     /// </summary>
     [Fact]

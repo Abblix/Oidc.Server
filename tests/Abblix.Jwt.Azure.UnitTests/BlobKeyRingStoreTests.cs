@@ -160,8 +160,8 @@ public sealed class BlobKeyRingStoreTests : IDisposable
         // that never clear, and the caller is told never to come back from a condition that does end.
         //
         // This row answers the upload. The classification behind it is one and the same for every call, so
-        // the row below is not a second path being covered - it differs only in which SDK call raises and
-        // under which operation name the failure is reported.
+        // AContainerBeingDeletedIsTemporaryWhenTheContainerIsCreated is not a second path being covered - it
+        // differs only in which SDK call raises and under which operation name the failure is reported.
         var handler = Blob(_ => BlobError(HttpStatusCode.Conflict, "ContainerBeingDeleted"));
 
         await Assert.ThrowsAsync<KeyCustodianUnavailableException>(
@@ -186,9 +186,9 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     public async Task LoadAsync_Fails_WhenTheListingFindsNoContainer()
     {
         // The load creates the container, lists it, then reads each listed entry, and the listing was the
-        // call nothing drove: the row below answers the listing successfully and 404s the read. The listing
-        // is unguarded on purpose, so a guard added there later would swallow the same loss and hand back
-        // an empty ring, which is the signal that starts a mint.
+        // call nothing drove: LoadAsync_Fails_WhenTheContainerIsGone answers the listing successfully and 404s
+        // the read. The listing is unguarded on purpose, so a guard added there later would swallow the same
+        // loss and hand back an empty ring, which is the signal that starts a mint.
         var handler = Blob(_ => BlobError(HttpStatusCode.NotFound, "ContainerNotFound"));
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(
@@ -278,9 +278,10 @@ public sealed class BlobKeyRingStoreTests : IDisposable
     [Fact]
     public async Task RemoveAsync_Fails_WhenA404CarriesNoErrorCode()
     {
-        // The same stripped header as below, on the path that also reads the code. Without this row the
-        // two sides drift: the removal could be widened to treat a codeless 404 as an absent entry and
-        // the suite would not notice, while the identical widening on the load path is caught.
+        // The same stripped header as in LoadAsync_Fails_WhenA404CarriesNoErrorCode, on the path that also
+        // reads the code. Without this row the two sides drift: the removal could be widened to treat a
+        // codeless 404 as an absent entry and the suite would not notice, while the identical widening on the
+        // load path is caught.
         var handler = Blob(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
 
         await Assert.ThrowsAsync<KeyCustodianFailedException>(

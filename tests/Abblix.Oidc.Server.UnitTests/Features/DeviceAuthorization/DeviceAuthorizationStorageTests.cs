@@ -376,8 +376,8 @@ public class DeviceAuthorizationStorageTests
     }
 
     /// <summary>
-    /// A cache that fails one key's removal and passes everything else through, so the row above measures
-    /// the composition rather than a mocked answer.
+    /// A cache that fails one key's removal and passes everything else through, so the rows driving it
+    /// measure the composition rather than a mocked answer.
     /// </summary>
     private sealed class FailOnRemove(IDistributedCache inner, string failingKey) : IDistributedCache
     {

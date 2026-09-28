@@ -116,8 +116,8 @@ public class IdTokenHintParserTests
     /// The generic type an ID token carries, and no type at all, both pass.
     /// </summary>
     /// <remarks>
-    /// Stated because the theory above would hold equally over a parser that refused everything: what makes
-    /// it a discriminator is that these two get through.
+    /// Stated because <see cref="AnotherKindOfOwnIssuedToken_IsRefused"/> would hold equally over a parser
+    /// that refused everything: what makes it a discriminator is that these two get through.
     /// </remarks>
     [Theory]
     [InlineData(null)]

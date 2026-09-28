@@ -69,7 +69,8 @@ public sealed class VaultTransitClientTests : IDisposable
     [Fact]
     public async Task AFailureThatWillNotClearSaysSoInTheSameLine()
     {
-        // The control for the row above: without it the line could hard-code the word and still read as proof.
+        // The control for AFailureIsLoggedWhereTheVaultsAnswerIsStillVisible: without it the line could hard-code
+        // the word and still read as proof.
         var logger = new RecordingLogger<TransitCustodian>();
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
             HttpStatusCode.Forbidden, new { errors = new[] { "permission denied" } }));
@@ -267,8 +268,9 @@ public sealed class VaultTransitClientTests : IDisposable
     [Fact]
     public async Task TheCallersOwnCancellationIsNotACustodianFailure()
     {
-        // The control for the row above: cancelling is the caller getting what it asked for, so dressing it as the
-        // custodian being unavailable would report a shutdown as an outage for as long as the logs are read.
+        // The control for AFailureThatNeverReachedVaultIsAlsoTemporary: cancelling is the caller getting what it
+        // asked for, so dressing it as the custodian being unavailable would report a shutdown as an outage for as
+        // long as the logs are read.
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
         var handler = new StubHttpMessageHandler((_, _) => throw new OperationCanceledException());

@@ -561,7 +561,8 @@ public class JwksIssuerKeyResolverTests
 
     /// <summary>Loopback stays reachable over cleartext, so local development is not collateral.</summary>
     /// <remarks>
-    ///     The control for the case above: without it, the refusal test would also pass against a
+    ///     The control for <see cref="AMappedCleartextAddress_IsRefused"/>: without it, the refusal test
+    ///     would also pass against a
     ///     resolver that refused every mapped address, and the map would be unusable while the suite
     ///     read as green.
     /// </remarks>

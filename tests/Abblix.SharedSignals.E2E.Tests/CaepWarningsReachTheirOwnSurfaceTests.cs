@@ -51,7 +51,8 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
     }
 
     /// <summary>
-    /// The control for the row above: the same host DOES hear what the document itself is missing, so an
+    /// The control for <see cref="AHostMappingOnlyTheDocument_IsNotWarnedAboutTheManagementApi"/>: the same
+    /// host DOES hear what the document itself is missing, so an
     /// empty warning list cannot pass for "the right warnings were suppressed".
     /// </summary>
     [Fact]
@@ -86,7 +87,8 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
     /// A host with both surfaces hears each warning once. This is the row a later edit would break by
     /// duplicating the management checks under the document while leaving them where they are, so the
     /// host that maps both hears them twice. Moving them back is a different edit, caught by the two
-    /// single-surface rows above.
+    /// single-surface rows, <see cref="AHostMappingOnlyTheDocument_IsNotWarnedAboutTheManagementApi"/> and
+    /// <see cref="AHostMappingTheManagementApiWithoutTheDocument_IsWarnedAboutScopeChecking"/>.
     /// </summary>
     [Fact]
     public async Task AHostMappingBothSurfaces_HearsEachWarningOnce()
@@ -114,7 +116,7 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
             o.SigningKeySource = _ => Task.FromResult<JsonWebKey>(
                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
 
-        // Deliberately outside the profile on every count the checks look at, so each row below asserts
+        // Deliberately outside the profile on every count the checks look at, so each row in this class asserts
         // which warning ARRIVES rather than which configuration is clean: no jwks_uri, no scope selector,
         // and new streams covering no subject.
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions

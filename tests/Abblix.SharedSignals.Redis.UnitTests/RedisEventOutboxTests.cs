@@ -320,7 +320,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
     /// that by construction, so the refusal went with the condition it watched. Only <c>}</c> does
     /// anything at all, and only on the RECEIVER does it empty the tag rather than merely cut it - which
-    /// is why the rows below carry the other positions as their own controls. Dropping the escaping from
+    /// is why this theory's rows carry the other positions as their own controls. Dropping the escaping from
     /// the receiver half kills exactly the rows whose closing brace LEADS the receiver: everything else
     /// survives, including a closing brace that does not lead - it cuts the tag short without emptying
     /// it, and both keys are cut identically, so they stay together.

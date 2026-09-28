@@ -126,7 +126,8 @@ public class ClockOffsetTests
     /// <summary>
     /// The second half, which the first says nothing about: past the window the token is refused.
     /// The window here is the skew this case asks for, not a ceiling - a ceiling is what a profile
-    /// adds on top, and the cases for it are further down.
+    /// adds on top, and the cases for it are <see cref="UnderACeiling_AheadOfItIsRefusedWhateverSkewIsAsked"/>
+    /// and <see cref="UnderACeiling_PastExpiryIsBoundedToo"/>.
     /// </summary>
     [Theory]
     [InlineData(11)]
@@ -256,7 +257,8 @@ public class ClockOffsetTests
     /// <summary>
     /// And without one the skew is the whole answer, which is what a deployment outside a profile
     /// that bounds this is entitled to: RFC 7523 Section 3 allows for clock skew and names no bound.
-    /// Without this row the case above would be satisfied by a ceiling applied unconditionally.
+    /// Without this row <see cref="UnderACeiling_AheadOfItIsRefusedWhateverSkewIsAsked"/> would be
+    /// satisfied by a ceiling applied unconditionally.
     /// </summary>
     [Theory]
     [InlineData(61)]
@@ -290,8 +292,9 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// And without a ceiling the backward window is the whole skew, which is what keeps the case
-    /// above from being satisfied by a bound applied unconditionally: no specification in play says
+    /// And without a ceiling the backward window is the whole skew, which is what keeps
+    /// <see cref="UnderACeiling_PastExpiryIsBoundedToo"/> from being satisfied by a bound applied
+    /// unconditionally: no specification in play says
     /// how long an issued token stays usable past its expiry, so a caller asking for a window there
     /// gets the window it asked for.
     /// </summary>
@@ -306,7 +309,8 @@ public class ClockOffsetTests
     }
 
     /// <summary>
-    /// And the other end of that direction, without which the row above would be satisfied by a
+    /// And the other end of that direction, without which <see cref="PastExpiry_TheWholeSkewApplies"/>
+    /// would be satisfied by a
     /// backward window with no bound at all. Each direction needs both an acceptance and a refusal,
     /// at the default and at a value the caller asked for.
     /// </summary>

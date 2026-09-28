@@ -310,7 +310,8 @@ public class TokenRequestProcessorTests
     /// Without a push delivery the token service is handed no bindings at all.
     /// </summary>
     /// <remarks>
-    /// The control for the row above: the same scopes and the same refresh token, and the only difference
+    /// The control for <see cref="ProcessAsync_ForAPushDelivery_BindsTheRefreshTokenThatWasJustMinted"/>: the
+    /// same scopes and the same refresh token, and the only difference
     /// is that nobody declared a push. Section 10.3.1 requires these claims in push mode, and a poll or
     /// ping client holds the identifier already.
     /// <para>

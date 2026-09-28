@@ -86,7 +86,8 @@ public class RsaKeyFloorTests
     }
 
     /// <summary>
-    /// The control. Without it an encryptor that refused every key would pass the test above.
+    /// The control. Without it an encryptor that refused every key would pass
+    /// <see cref="EncryptKey_AKeyBelowTheFloor_IsRefused"/>.
     /// </summary>
     [Fact]
     public void EncryptKey_AKeyAtTheFloor_Encrypts()
@@ -199,7 +200,8 @@ public class RsaKeyFloorTests
 
     /// <summary>
     /// The control. Without it a reporter that named every failed verification as undersized would pass
-    /// the row above, and every ordinary bad signature would arrive carrying a key-size explanation.
+    /// <see cref="ValidateAsync_ACandidateKeyBelowTheFloor_IsNamedInTheLog"/>, and every ordinary bad
+    /// signature would arrive carrying a key-size explanation.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ASignatureThatSimplyDoesNotMatch_SaysNothingAboutSizes()

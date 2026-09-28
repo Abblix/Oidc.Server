@@ -197,7 +197,10 @@ public class IdentityTokenServiceTests
     }
 
     /// <summary>
-    /// The control, and it is what keeps the two rows above from being a rule about every ID Token: a
+    /// The control, and it is what keeps
+    /// <see cref="CreateIdentityToken_ForAPushDelivery_BindsTheRequestAndTheRefreshToken"/> and
+    /// <see cref="CreateIdentityToken_ForAPushDeliveryWithoutARefreshToken_OmitsOnlyThatHash"/> from being a rule
+    /// about every ID Token: a
     /// delivery that is not a push carries neither claim.
     /// </summary>
     /// <remarks>

@@ -135,8 +135,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same token from a client naming nothing is accepted, without which the case above
-    /// would be satisfied by a pass that refuses every token dated ahead at all.
+    /// And the same token from a client naming nothing is accepted, without which
+    /// <see cref="AClientNamingFapi2_IsHeldToItUnderADeploymentNamingNothing"/> would be satisfied by a pass
+    /// that refuses every token dated ahead at all.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsWindow()
@@ -151,8 +152,8 @@ public class ClientMayTightenItselfTests
 
     /// <summary>
     /// A client naming the empty profile is not heard either way: it cannot loosen what the
-    /// deployment demands, and it demands nothing of its own. The same token is accepted, which is
-    /// the floor working rather than the tightening.
+    /// deployment demands, and it demands nothing of its own. The token dated a minute ahead is accepted,
+    /// which is the floor working rather than the tightening.
     /// </summary>
     [Fact]
     public async Task AClientNamingTheEmptyProfile_IsTreatedAsNamingNothing()
@@ -166,8 +167,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And a token inside the tighter window passes for the FAPI client too, or the case above would
-    /// be satisfied by a pass that refuses every token from a client naming a profile.
+    /// And a token inside the tighter window passes for the FAPI client too, or
+    /// <see cref="AClientNamingFapi2_IsHeldToItUnderADeploymentNamingNothing"/> would be satisfied by a pass
+    /// that refuses every token from a client naming a profile.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsATokenInsideItsOwnWindow()
@@ -197,8 +199,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same expired token from a client naming nothing is accepted, which is what makes the
-    /// case above a statement about the profile rather than about expiry.
+    /// And the same expired token from a client naming nothing is accepted, which is what makes
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> a statement about the profile rather than about
+    /// expiry.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
@@ -228,7 +231,8 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same post-dated token from a client naming nothing is accepted.
+    /// And the post-dated token of <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> from a
+    /// client naming nothing is accepted.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsWindowOnNotBefore()
@@ -243,7 +247,8 @@ public class ClientMayTightenItselfTests
 
     /// <summary>
     /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
-    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// refusal in <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a
+    /// clause refusing on the mere presence of the claim.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()

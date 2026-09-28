@@ -504,7 +504,8 @@ public class JsonWebTokenValidationTests
     /// algorithms" for the alg:none downgrade - an answer that invites widening the list to admit an
     /// unsigned token, which is the one thing a signing policy exists to forbid. No allowlist can
     /// contain "none" and still be a policy, so that ordering also left this refusal unreachable for
-    /// every such caller: the row above passes either way, because it reads only the category.
+    /// every such caller: <see cref="UnsignedToken_WithSignatureRequired_FailsValidation"/> passes either way,
+    /// because it reads only the category.
     /// </remarks>
     [Fact]
     public async Task UnsignedToken_WithAnAllowlistAlsoSet_IsRefusedForBeingUnsigned()
@@ -1781,9 +1782,9 @@ public class JsonWebTokenValidationTests
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Well-known JWT attack catalog (OWASP WSTG-SESS-10 "Testing JSON Web Tokens" and
-    // the PortSwigger JWT attack corpus). The alg=none family is already covered above
+    // the PortSwigger JWT attack corpus). The alg=none family is already covered
     // (TokenWithCaseVariantNoneAlg_*, UnsignedToken_WithSignatureRequired_*,
-    // Jws_WithNoAlgInHeader_*, SignedJws_AlgStrippedToNone_*); the tests below add the
+    // Jws_WithNoAlgInHeader_*, SignedJws_AlgStrippedToNone_*); the tests in this section add the
     // remaining famous vectors: RS256->HS256 key confusion, jwk/jku/x5u header key
     // injection, and JWE ciphertext / tag / IV / AAD tampering plus nested-JWT forgery.
     // ─────────────────────────────────────────────────────────────────────────────

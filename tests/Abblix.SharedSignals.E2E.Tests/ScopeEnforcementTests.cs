@@ -182,7 +182,8 @@ public sealed class ScopeEnforcementTests
     }
 
     /// <summary>
-    /// The control for the row above: the same requests with the wider scope are not refused, so the 403
+    /// The control for <see cref="AReadScopedCaller_IsRefusedAnythingThatChangesAStream"/>: the same requests
+    /// with the wider scope are not refused, so the 403
     /// is the scope check rather than the request being malformed.
     /// </summary>
     [Theory]
@@ -217,7 +218,7 @@ public sealed class ScopeEnforcementTests
 
     /// <summary>
     /// A host that never set the selector gets what it had before this option existed. Without this row,
-    /// making the check unconditional would pass every test above and break every deployment that
+    /// making the check unconditional would pass every other test in this class and break every deployment that
     /// authorizes some other way.
     /// </summary>
     [Fact]

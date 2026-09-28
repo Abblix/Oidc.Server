@@ -195,8 +195,8 @@ public class ClockSkewCeilingValidatorTests
     }
 
     /// <summary>
-    /// And where the profile names no ceiling the same value comes back untouched, without which the
-    /// case above would be satisfied by a bound applied to everything.
+    /// And where the profile names no ceiling the same value comes back untouched, without which
+    /// <see cref="AValueAboveTheCeiling_ComesBackBounded"/> would be satisfied by a bound applied to everything.
     /// </summary>
     [Fact]
     public void WithNoCeiling_TheValueIsUntouched()

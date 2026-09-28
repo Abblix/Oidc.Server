@@ -645,8 +645,10 @@ public class PrivateKeyJwtAuthenticatorTests
 
     /// <summary>
     /// Without the profile the wider reading stands, so an assertion naming the token endpoint keeps
-    /// working. This is what makes the three cases above statements about the profile rather than
-    /// about the authenticator.
+    /// working. This is what makes <see cref="Fapi2AssertionAudienceIsNotTheIssuer_ShouldReturnNull"/>,
+    /// <see cref="Fapi2AssertionAudienceIsTheIssuer_ShouldAuthenticate"/> and
+    /// <see cref="Fapi2AssertionAudienceCarriesTheIssuerAmongOthers_ShouldReturnNull"/> statements about the
+    /// profile rather than about the authenticator.
     /// </summary>
     [Fact]
     public async Task NoProfileAssertionAudienceIsTheTokenEndpoint_ShouldAuthenticate()

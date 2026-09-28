@@ -61,7 +61,8 @@ public class CompositeSignerKeyFloorTests
     }
 
     /// <summary>
-    /// The control. Without it, a seam that refused every external key would pass the test above.
+    /// The control. Without it, a seam that refused every external key would pass
+    /// <see cref="SignAsync_AnExternalKeyBelowTheFloor_IsRefusedAtTheSeam"/>.
     /// </summary>
     [Fact]
     public async Task SignAsync_AnExternalKeyAtTheFloor_ReachesTheCustodian()

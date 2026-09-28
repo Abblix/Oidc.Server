@@ -162,7 +162,8 @@ public class TransmitterDeliveryTests
 
     /// <summary>An objection to the transmitter is its own event, and it holds the queue.</summary>
     /// <remarks>
-    /// The queue disposition is what an operator acts on, and it is the opposite of the case above: nothing
+    /// The queue disposition is what an operator acts on, and it is the opposite of
+    /// <see cref="Push_BadRequest_CarriesTheReceiversReasonIntoTheLog_OncePerPass"/>: nothing
     /// is lost, and the events go out once the credential or the grant is put right. Told apart by event id
     /// rather than by reading the sentence, because that is what a runbook keys on.
     /// </remarks>
@@ -219,7 +220,10 @@ public class TransmitterDeliveryTests
 
     /// <summary>The control: a delivery the receiver accepts writes nothing.</summary>
     /// <remarks>
-    /// Without it the assertions above are satisfied by a sender that logs on every pass, which would bury
+    /// Without it the assertions of <see cref="Push_BadRequest_CarriesTheReceiversReasonIntoTheLog_OncePerPass"/>,
+    /// <see cref="Push_BadRequestAboutTheTransmitter_SaysSoAndHoldsTheQueue"/> and
+    /// <see cref="Push_BadRequest_NeitherLetsTheReceiverWriteALineNorRunAway"/> are satisfied by a sender that
+    /// logs on every pass, which would bury
     /// the refusals it exists to surface.
     /// </remarks>
     [Fact]

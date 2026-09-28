@@ -426,7 +426,8 @@ public class SubjectTypeValidatorTests
     /// The control: an absolute https redirect URI still yields its host as the sector.
     /// </summary>
     /// <remarks>
-    /// Without it a validator that refused every redirect URI would pass the row above, and every
+    /// Without it a validator that refused every redirect URI would pass
+    /// <see cref="ValidateAsync_ARelativeRedirectUri_IsRefusedRatherThanFaulting"/>, and every
     /// pairwise web client would stop registering.
     /// </remarks>
     [Fact]
@@ -503,7 +504,9 @@ public class SubjectTypeValidatorTests
     /// <remarks>
     /// The requirement is written per mode, so making it unconditional would refuse a plain pairwise
     /// client that happens to publish a jwks_uri - which OIDC Core has never required to be listed.
-    /// This row is what stops the two arms above from widening into every registration.
+    /// This row is what stops the two per-mode arms
+    /// <see cref="ValidateAsync_CibaSectorDocument_MustListTheUriTheModeNames"/> drives from widening into
+    /// every registration.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_PairwiseWithNoDeliveryMode_DoesNotRequireTheCibaUris()
@@ -704,7 +707,9 @@ public class SubjectTypeValidatorTests
     /// The control: a document whose entries are all absolute https URIs still registers.
     /// </summary>
     /// <remarks>
-    /// Without it, an arm refusing every document would pass the row above and no pairwise client with a
+    /// Without it, an arm refusing every document would pass
+    /// <see cref="ValidateAsync_ARelativeUriInTheSectorDocument_IsRefusedRatherThanFaulting"/> and no pairwise
+    /// client with a
     /// sector identifier URI could register at all.
     /// </remarks>
     [Fact]

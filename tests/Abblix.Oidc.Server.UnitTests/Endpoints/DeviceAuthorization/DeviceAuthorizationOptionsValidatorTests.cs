@@ -78,7 +78,8 @@ public class DeviceAuthorizationOptionsValidatorTests
     /// A backoff ceiling and a polling interval of no length are deliberately NOT refused - those are
     /// choices, and one of them is what a scenario in this repository's own end-to-end suite sets so its
     /// polls need not wait. Measured: refusing them turned that suite red. What the validator must ACCEPT
-    /// is pinned by the row below, because a comment saying "deliberately not refused" cannot go red.
+    /// is pinned by <see cref="Succeeds_for_settings_that_only_look_like_mistakes"/>, because a comment saying
+    /// "deliberately not refused" cannot go red.
     /// </para>
     /// </remarks>
     [Theory]

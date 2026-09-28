@@ -408,7 +408,8 @@ public class SsrfValidatingHttpMessageHandlerTests
 
     /// <summary>
     /// Null is "not stated", so the HTTPS-only default applies: a plain-HTTP request is refused.
-    /// A host that means "no scheme restriction" states an empty list, which the next test covers.
+    /// A host that means "no scheme restriction" states an empty list, which
+    /// <see cref="Allows_Http_WhenTheStatedListIsEmpty"/> covers.
     /// </summary>
     [Fact]
     public async Task Refuses_Http_WhenNoSchemesAreStated()
@@ -494,8 +495,8 @@ public class SsrfValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
-    /// The control: an address this handler allows does reach the transport, so the refusal above is the decision
-    /// and not a send that never happens.
+    /// The control: an address this handler allows does reach the transport, so the refusal in
+    /// <see cref="TheSendPath_JudgesTheAddressOfItsOwnRequest"/> is the decision and not a send that never happens.
     /// </summary>
     [Fact]
     public async Task TheSendPath_CarriesAnAllowedAddressThrough()

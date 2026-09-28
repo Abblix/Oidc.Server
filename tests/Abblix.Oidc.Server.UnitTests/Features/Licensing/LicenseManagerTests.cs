@@ -21,8 +21,8 @@ using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
-// Joins the non-parallel collection because the tests below reach the same process-wide state it exists to
-// protect: LicenseLogger.Instance is a singleton, and ClearLogThrottle empties the whole shared window map
+// Joins the non-parallel collection because the tests in this class reach the same process-wide state it
+// exists to protect: LicenseLogger.Instance is a singleton, and ClearLogThrottle empties the whole shared window map
 // rather than one key. Running beside a class that asserts on the throttle, or on being the single writer,
 // would let this one wipe a window mid-assertion or capture a foreign write into its own recorder - rarely,
 // and therefore as an unreproducible failure in whichever class happened to be running.
@@ -274,7 +274,7 @@ public class LicenseManagerTests
     /// A second license still active on the day is counted too: what shrinks is what the merge loses.
     /// </summary>
     /// <remarks>
-    /// The sibling of the row above, and the one that shows the comparison is not merely "look at more
+    /// The sibling of <see cref="A_third_license_covering_the_day_is_counted_too"/>, and the one that shows the comparison is not merely "look at more
     /// licenses": on the day the first license expires, the issuer it contributed is still accepted,
     /// because another active license carries it. That issuer IS lost later, when the second expires
     /// too, and the record naming that later day is true - which is why this row filters by the day
@@ -606,7 +606,8 @@ public class LicenseManagerTests
     /// </para>
     /// <para>
     /// Driven through <c>ReportLoadedLicenses</c> rather than <c>TryGetCurrentLicenseLimit</c>, which is
-    /// the trap the row below already names and which caught the first version of THIS row: a license
+    /// the trap <see cref="A_maximal_expiry_with_a_perpetual_successor_does_not_fault"/> already names and
+    /// which caught the first version of THIS row: a license
     /// expiring in the year 9999 is cached and never stale, so that method returns before it scans
     /// anything and the row passes over a build that still throws. This path runs at startup through
     /// <c>LicenseLoadingService</c>, so it is also where a deployment would meet it first.
@@ -653,7 +654,8 @@ public class LicenseManagerTests
     /// announced.
     /// </summary>
     /// <remarks>
-    /// The rows above pin only that the guard does not throw, which every over-strict bound satisfies
+    /// The rows of <see cref="A_maximal_expiry_in_any_offset_does_not_fault"/> pin only that the guard does
+    /// not throw, which every over-strict bound satisfies
     /// too: moving it to <c>DateTime.MaxValue.AddYears(-500)</c> silences every expiry after the year
     /// 9499 and leaves the whole suite green, so the guard could drift five centuries into refusing
     /// moments that exist and nothing would say so. A bound needs a row on each side, and this is the
@@ -729,8 +731,9 @@ public class LicenseManagerTests
     /// is a shorter grace period.
     /// </summary>
     /// <remarks>
-    /// Without the first, a reporter that announced every covering successor would pass the rows above -
-    /// and every renewal would arrive with a warning nobody can act on. The second is the deliberate
+    /// Without the first, a reporter that announced every covering successor would pass every test here that
+    /// expects a narrowing to be announced, such as
+    /// <see cref="A_renewal_granting_fewer_clients_is_announced_with_the_day_it_takes_over"/> - and every renewal would arrive with a warning nobody can act on. The second is the deliberate
     /// exclusion: a grace period changes nothing on the day the successor takes over, only what happens
     /// after the successor itself expires, so counting it would fire on a renewal that is larger in every
     /// way a deployment can feel.
@@ -1194,7 +1197,7 @@ public class LicenseManagerTests
     }
 
     /// <summary>
-    /// A fixed instant the tests below measure against, so the day count a record carries is the one they
+    /// A fixed instant the tests using it measure against, so the day count a record carries is the one they
     /// arranged rather than whatever the clock says between building a license and judging it.
     /// </summary>
     private static readonly DateTimeOffset Moment = new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
@@ -1427,8 +1430,8 @@ public class LicenseManagerTests
     /// Every expired license is reported when nothing was left in force.
     /// </summary>
     /// <remarks>
-    /// The control for the silence above, and the reason that silence is a decision rather than the report
-    /// having been lost: the same three licenses, with the renewal removed, produce a record each. The
+    /// The control for the silence of <see cref="AddLicense_LoadingLicenses_ReportsNothing"/>, and the reason
+    /// that silence is a decision rather than the report having been lost: the same three licenses, with the renewal removed, produce a record each. The
     /// throttle keys on the license value paired with the status, so three licenses carrying distinct
     /// terms are three keys and three records.
     /// </remarks>
@@ -1511,8 +1514,8 @@ public class LicenseManagerTests
     /// A license in its grace period with no renewal behind it is reported when the license is consulted.
     /// </summary>
     /// <remarks>
-    /// The control for the silence above, and the reason that silence is a decision rather than the record
-    /// having been lost on the way to the recorder: the same license, with the renewal removed, produces
+    /// The control for the silence of <see cref="AddLicense_GraceLicenseBesideItsRenewal_ReportsNothing"/>, and
+    /// the reason that silence is a decision rather than the record having been lost on the way to the recorder: the same license, with the renewal removed, produces
     /// the record the operator needs.
     /// </remarks>
     [Fact]
@@ -1553,7 +1556,8 @@ public class LicenseManagerTests
     /// wrong about what is worth SAYING, which is the whole of this.
     ///
     /// The renewal starts before the current license expires on purpose. A gap between them is a real
-    /// interruption and the warning is then the truth, which the test below holds.
+    /// interruption and the warning is then the truth, which
+    /// <see cref="GenerateActiveLicense_ExpiringSoonWithARenewalStartingAfterTheGap_SaysSo"/> holds.
     /// </remarks>
     [Fact]
     public void GenerateActiveLicense_ExpiringSoonWithARenewalAlreadyLoaded_SaysNothing()
@@ -1585,7 +1589,9 @@ public class LicenseManagerTests
     /// A renewal that starts after the current license ends does not silence the warning.
     /// </summary>
     /// <remarks>
-    /// The control for the silence above, and the line the rule is drawn on. A successor beginning after
+    /// The control for the silence of
+    /// <see cref="GenerateActiveLicense_ExpiringSoonWithARenewalAlreadyLoaded_SaysNothing"/>, and the line the
+    /// rule is drawn on. A successor beginning after
     /// the gap is a successor the deployment will reach through an interruption, so "renew promptly" is
     /// exactly right and the operator is the only one who can close it.
     ///
