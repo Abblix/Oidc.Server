@@ -58,4 +58,16 @@ public interface IAuthenticationCompletionHandler
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn);
+
+    /// <summary>
+    /// Denies a pending request because the end user refused it on their device, and lets the client know
+    /// the way its delivery mode knows anything: a poll reads access_denied, a ping client is told to come
+    /// and read it, a push client is sent the error.
+    /// </summary>
+    /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
+    /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
+    /// <returns>A task representing the asynchronous denial.</returns>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier, the same condition <see cref="CompleteAsync"/> refuses on.</exception>
+    Task DenyAsync(string authenticationRequestId, TimeSpan expiresIn);
 }

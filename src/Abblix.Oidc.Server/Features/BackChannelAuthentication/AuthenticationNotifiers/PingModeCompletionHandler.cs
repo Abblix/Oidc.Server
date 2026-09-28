@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -37,6 +38,43 @@ public partial class PingModeCompletionHandler(
     : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
+
+    /// <summary>
+    /// Denies the request and tells the client to come and read it, as for an approval.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 section 10.2: the provider sends the ping "after a successful or failed end-user
+    /// authentication". A ping client polls only when told to, so a denial it is not told about is read only
+    /// when the request would have expired anyway. Nothing is sent where the client registered nowhere to
+    /// send it; the denial is still there for a poll.
+    /// </remarks>
+    /// <param name="authenticationRequestId">The request refused.</param>
+    /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
+    /// <param name="refusal">Why; a ping carries only the identifier, and the poll that follows reads
+    /// access_denied.</param>
+    /// <param name="expiresIn">How long the denied request stays readable.</param>
+    protected override async Task RefuseAsync(
+        string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        OidcError refusal,
+        TimeSpan expiresIn)
+    {
+        await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+
+        if (ValidateNotificationConfiguration(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                BackchannelTokenDeliveryModes.Ping,
+                request.AuthorizedGrant.Context.ClientId,
+                authenticationRequestId))
+        {
+            await notificationService.SendAsync(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                new BackChannelPingNotificationRequest { AuthenticationRequestId = authenticationRequestId },
+                BackchannelTokenDeliveryModes.Ping);
+        }
+    }
 
     /// <summary>
     /// Handles ping mode delivery by storing the authenticated request and sending a notification to the client.

@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -99,19 +100,7 @@ public abstract partial class AuthenticationCompletionHandler(
         // deciding, or push's own refusal path removed it after a configuration fault, where nothing was
         // answered at all. Naming one of them would send an operator who just fixed a client
         // registration looking for a second completion that never happened.
-        var stored = await storage.TryGetAsync(authenticationRequestId);
-        if (stored is not { Status: BackChannelAuthenticationStatus.Pending })
-        {
-            LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
-
-            throw new InvalidOperationException(
-                "The authentication request cannot be completed: the stored record "
-                + (stored is null
-                    ? "is not there"
-                    : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
-                + ". Only a pending request can be answered. Recovering from a failed delivery means "
-                + "asking the end user again rather than completing the same request twice.");
-        }
+        var stored = await ReadPendingAsync(authenticationRequestId, "completed");
 
         // What the request recorded when it arrived - whom it named, what it asked for, the levels it
         // required, and where and with which token the client is to be notified - is the STORED record's,
@@ -141,7 +130,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 StringComparison.Ordinal))
         {
             LogGrantNamesAnotherClient(authenticationRequestId, stored.AuthorizedGrant.Context.ClientId);
-            await RefuseAsync(authenticationRequestId, stored, expiresIn);
+            await RefuseAsync(authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
             return;
         }
 
@@ -156,7 +145,7 @@ public abstract partial class AuthenticationCompletionHandler(
             !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
             return;
         }
 
@@ -171,7 +160,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {
             LogAuthenticationLevelNotTheOneRequired(authenticationRequestId, clientInfo.ClientId);
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
             return;
         }
 
@@ -195,7 +184,7 @@ public abstract partial class AuthenticationCompletionHandler(
             LogGrantedAuthorizationDetailsExceedTheRequest(
                 authenticationRequestId, clientInfo.ClientId, string.Join(", ", escaped));
 
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(authenticationRequestId, request, WidensTheRequest, expiresIn);
             return;
         }
 
@@ -255,17 +244,81 @@ public abstract partial class AuthenticationCompletionHandler(
     }
 
     /// <summary>
-    /// Refuses a request whose authentication does not answer it: another end user, a level it does not
-    /// accept, or authorization_details it did not ask for.
+    /// Denies a pending request on the end user's behalf, because they refused it on their device.
+    /// </summary>
+    /// <remarks>
+    /// The refusal each mode makes of an answer it cannot accept, with the reason CIBA Core 1.0 gives the end
+    /// user's own: poll leaves the request denied for the client to read, ping also tells the client to come
+    /// and read it, push removes it and delivers the error.
+    /// </remarks>
+    /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
+    /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
+    public async Task DenyAuthenticationAsync(string authenticationRequestId, TimeSpan expiresIn)
+    {
+        var stored = await ReadPendingAsync(authenticationRequestId, "denied");
+        await RefuseAsync(authenticationRequestId, stored, EndUserDenied, expiresIn);
+    }
+
+    /// <summary>
+    /// The stored record, when it is still pending; otherwise the refusal every answer to a request gets.
+    /// </summary>
+    /// <param name="authenticationRequestId">The request being answered.</param>
+    /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
+    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(string authenticationRequestId, string answered)
+    {
+        var stored = await storage.TryGetAsync(authenticationRequestId);
+        if (stored is { Status: BackChannelAuthenticationStatus.Pending })
+            return stored;
+
+        LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
+
+        throw new InvalidOperationException(
+            $"The authentication request cannot be {answered}: the stored record "
+            + (stored is null
+                ? "is not there"
+                : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
+            + ". Only a pending request can be answered. Recovering from a failed delivery means "
+            + "asking the end user again rather than answering the same request twice.");
+    }
+
+    // The reasons a request is refused with. access_denied throughout: CIBA Core 1.0 defines it for the token
+    // endpoint and the push error payload alike, and it is the server or the end user denying the request.
+    // The descriptions stay inside the printable ASCII section 12 allows, without a double quote or backslash.
+    private static readonly OidcError EndUserDenied =
+        new(ErrorCodes.AccessDenied, "The end user denied the authorization request");
+
+    private static readonly OidcError NotTheRequestedEndUser =
+        new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+
+    private static readonly OidcError NotTheRequiredLevel =
+        new(ErrorCodes.AccessDenied, "The end user authenticated at a level the request does not accept");
+
+    private static readonly OidcError WidensTheRequest =
+        new(ErrorCodes.AccessDenied, "The grant carries authorization_details the request did not ask for");
+
+    private static readonly OidcError GrantForAnotherClient =
+        new(ErrorCodes.AccessDenied, "The grant names another client than the one the request came from");
+
+    /// <summary>
+    /// Refuses a request, for <paramref name="refusal"/>: the end user said no, or the answer does not answer
+    /// the request - another end user, a level it does not accept, authorization_details it did not ask for,
+    /// a grant for another client.
     /// </summary>
     /// <remarks>
     /// Denying and leaving the request behind is right for a mode whose client polls, since the poll is what
-    /// carries the outcome back. A mode that delivers instead of being polled overrides this, because a
-    /// denied request its client can never read is an orphan rather than an answer.
+    /// carries the outcome back. A mode that notifies or delivers overrides this, because its client learns
+    /// of the outcome only from what it is sent.
     /// </remarks>
+    /// <param name="authenticationRequestId">The request refused.</param>
+    /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
+    /// <param name="refusal">Why, in the terms a push-mode client is sent.</param>
+    /// <param name="expiresIn">How long a denied request stays readable.</param>
     protected virtual Task RefuseAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
+        OidcError refusal,
         TimeSpan expiresIn)
         => DenyRequestAsync(authenticationRequestId, request, expiresIn);
 

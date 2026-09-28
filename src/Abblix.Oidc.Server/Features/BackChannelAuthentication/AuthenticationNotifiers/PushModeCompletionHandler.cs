@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -42,20 +43,59 @@ public partial class PushModeCompletionHandler(
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
+    private static readonly OidcError RefusedGrant =
+        new(ErrorCodes.AccessDenied, "The grant carries authorization_details that were refused");
+
+    private static readonly OidcError TokensNotIssued =
+        new(ErrorCodes.TransactionFailed, "Tokens could not be issued for the authenticated request");
+
     /// <summary>
-    /// Removes the request rather than denying it, because a push client never polls.
+    /// Removes the request rather than denying it, because a push client never polls, and sends the client
+    /// the error.
     /// </summary>
     /// <remarks>
     /// A denied request this client cannot read is an orphan sitting in storage until it expires, which is
-    /// why the token-generation failure below removes one too. CIBA Core 1.0 Section 10.3.1 has the outcome
-    /// travel to a push client through the notification endpoint, and this server does not send an error
-    /// payload there - so nothing is delivered either way, and the difference is only what is left behind.
+    /// why the token-generation failure below removes one too. CIBA Core 1.0 section 12 has the outcome
+    /// travel to a push client through its notification endpoint, as an error payload.
     /// </remarks>
-    protected override Task RefuseAsync(
+    /// <param name="authenticationRequestId">The request refused.</param>
+    /// <param name="request">The request, carrying where and with which token the client is notified.</param>
+    /// <param name="refusal">The error sent: access_denied, or transaction_failed when tokens could not be
+    /// issued.</param>
+    /// <param name="expiresIn">Unused: nothing is left behind to expire.</param>
+    protected override async Task RefuseAsync(
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
+        OidcError refusal,
         TimeSpan expiresIn)
-        => TakeRequestAsync(authenticationRequestId);
+    {
+        // Sent only by whoever took the request, so a refusal racing a delivery cannot tell the client both.
+        if (await TakeRequestAsync(authenticationRequestId) is null)
+            return;
+
+        // CIBA Core 1.0 section 12: the only way a push client learns its request ended without tokens.
+        // Nothing is sent where the client registered nowhere to send it.
+        if (!ValidateNotificationConfiguration(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                BackchannelTokenDeliveryModes.Push,
+                request.AuthorizedGrant.Context.ClientId,
+                authenticationRequestId))
+        {
+            return;
+        }
+
+        await notificationService.SendAsync(
+            request.ClientNotificationEndpoint,
+            request.ClientNotificationToken,
+            new BackChannelPushErrorNotificationRequest
+            {
+                AuthenticationRequestId = authenticationRequestId,
+                Error = refusal.Error,
+                ErrorDescription = refusal.ErrorDescription,
+            },
+            BackchannelTokenDeliveryModes.Push);
+    }
 
     /// <summary>
     /// Handles push mode token delivery by generating tokens and delivering them directly to the client endpoint.
@@ -85,9 +125,9 @@ public partial class PushModeCompletionHandler(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            // Removed rather than denied, for the reason RefuseAsync above states: this client never
-            // polls, so a denied request it cannot read is an orphan waiting out its expiry.
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            // Removed rather than denied: this client never polls, so a denied request it cannot read is an
+            // orphan waiting out its expiry, and with nowhere to send it no error reaches the client either.
+            await TakeRequestAsync(authenticationRequestId);
             return;
         }
 
@@ -101,9 +141,9 @@ public partial class PushModeCompletionHandler(
         // to does not spend a validator's round trip, and so the log names the fault an operator has to
         // fix first. Both outcomes remove the request either way.
         //
-        // The refusal's own error code is discarded, unlike at the token endpoint: nothing carries an
-        // error to a push client. CIBA Core 1.0 Section 10.3.1 has the outcome travel through the
-        // notification endpoint, and this server sends no error payload there.
+        // The refusal's own error code is not what the client is sent, unlike at the token endpoint: CIBA
+        // Core 1.0 section 12 allows a push error payload only access_denied, expired_token and
+        // transaction_failed, and a grant refused by the server is the server denying the request.
         //
         // No cancellation token, because nothing on the path from the router down carries one.
         if (await authorizationDetailsPolicy.RefuseAsync(
@@ -112,7 +152,7 @@ public partial class PushModeCompletionHandler(
             LogGrantedAuthorizationDetailsRefused(
                 authenticationRequestId, clientInfo.ClientId, refusal.Reason);
 
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(authenticationRequestId, request, RefusedGrant, expiresIn);
             return;
         }
 
@@ -216,8 +256,8 @@ public partial class PushModeCompletionHandler(
 
                 // No tokens were minted, so there is nothing a second attempt could deliver and nothing
                 // for a host to complete again. Removed rather than marked denied, because a push client
-                // never polls and would never read the mark. Not a requirement of CIBA Core 1.0.
-                await TakeRequestAsync(authenticationRequestId);
+                // never polls and would never read the mark, and the client is told the transaction failed.
+                await RefuseAsync(authenticationRequestId, request, TokensNotIssued, expiresIn);
 
                 return null;
             });

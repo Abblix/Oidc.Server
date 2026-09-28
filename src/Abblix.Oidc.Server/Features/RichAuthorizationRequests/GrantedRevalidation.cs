@@ -27,8 +27,9 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// is not a sentence a client asking for a token should receive, and no other granted-phase refusal in this
 /// library reaches one - the authorization endpoint wraps its own in an exception.
 ///
-/// One caller has no client to answer and uses <c>Reason</c> alone: the CIBA push mode delivers through a
-/// notification endpoint this server sends no error payload to, so there is nowhere for <c>Error</c> to go.
+/// One caller sends neither: the CIBA push mode answers its client with the error payload of CIBA Core 1.0
+/// section 12, which allows only access_denied, expired_token and transaction_failed, so a refused grant is
+/// sent as access_denied and <c>Reason</c> goes to the log.
 /// </remarks>
 internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 

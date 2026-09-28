@@ -94,10 +94,10 @@ public interface IBackChannelLongPollingService
     ///   a ping client polls the token endpoint too, and the long-poll gate does not read the delivery
     ///   mode; push is not, because its token endpoint refuses the client outright, so no push client is
     ///   ever a waiter.</item>
-    ///   <item><strong>A status the host writes to storage itself</strong> is the host's to signal. The
-    ///   denial pattern documented on <see cref="IUserDeviceAuthenticationHandler"/> is exactly this
-    ///   case: it updates the stored record directly, so nothing in the library sees the change and a
-    ///   waiter sleeps until its own window runs out.</item>
+    ///   <item><strong>A status the host writes to storage itself</strong> is the host's to signal: nothing
+    ///   in the library sees the change, and a waiter sleeps until its own window runs out. An end user's
+    ///   refusal need not be written that way - <see cref="IAuthenticationCompletionHandler.DenyAsync"/>
+    ///   denies it and signals like a completion.</item>
     ///   <item><strong>Expiry</strong> is signalled by nobody, and a waiter is NOT told about it: when
     ///   its window runs out it is answered <c>authorization_pending</c>, and it learns the request
     ///   expired on the poll after that, from the record being gone. The grant handler does compare the

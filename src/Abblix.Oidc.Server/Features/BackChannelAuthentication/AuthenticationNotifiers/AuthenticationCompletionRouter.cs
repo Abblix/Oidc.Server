@@ -73,4 +73,27 @@ public partial class AuthenticationCompletionRouter(
         var handler = serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode);
         await handler.CompleteAuthenticationAsync(authenticationRequestId, request, clientInfo, expiresIn);
     }
+
+    /// <inheritdoc />
+    public async Task DenyAsync(string authenticationRequestId, TimeSpan expiresIn)
+    {
+        // Routed by the stored request's client like a completion. With nothing stored there is no client to
+        // route by and nothing to deny, which is the refusal the handler would give.
+        var stored = await storage.TryGetAsync(authenticationRequestId)
+            ?? throw new InvalidOperationException(
+                "The authentication request cannot be denied: the stored record is not there. Only a pending "
+                + "request can be answered.");
+
+        var clientId = stored.AuthorizedGrant.Context.ClientId;
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId);
+        if (clientInfo == null)
+        {
+            LogClientNotFound(authenticationRequestId, clientId);
+            return;
+        }
+
+        var deliveryMode = clientInfo.BackChannelTokenDeliveryMode.NotNull(nameof(clientInfo.BackChannelTokenDeliveryMode));
+        var handler = serviceProvider.GetRequiredKeyedService<AuthenticationCompletionHandler>(deliveryMode);
+        await handler.DenyAuthenticationAsync(authenticationRequestId, expiresIn);
+    }
 }
